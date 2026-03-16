@@ -3488,10 +3488,12 @@ app_info_loc_refs.each do |ref|
 
   name = title_map[locale_key] || title_map['en']
   subtitle = subtitle_map[locale_key] || subtitle_map['en']
+  current_name = instance.dig('attributes', 'name').to_s
+  current_subtitle = instance.dig('attributes', 'subtitle').to_s
 
   attributes = {}
-  attributes[:name] = name if name
-  attributes[:subtitle] = subtitle if subtitle
+  attributes[:name] = name if name && name.to_s != current_name
+  attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
   next if attributes.empty?
 
   puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
@@ -3509,6 +3511,31 @@ app_info_loc_refs.each do |ref|
       )
     rescue => error
       message = error.to_s
+      if attributes[:subtitle] && attributes[:name] &&
+         (message.include?("cannot be modified in the current state") ||
+          message.include?("can not be modified in the current state") ||
+          message.include?("cannot be edited at this time") ||
+          message.include?("can not be edited at this time"))
+        begin
+          client.patch(
+            "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+            {
+              data: {
+                type: 'appInfoLocalizations',
+                id: loc_id,
+                attributes: {
+                  subtitle: attributes[:subtitle]
+                }
+              }
+            }
+          )
+          app_info_loc_updates += 1
+          puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
+          next
+        rescue => subtitle_error
+          message = subtitle_error.to_s
+        end
+      end
       if message.include?("cannot be modified in the current state") ||
          message.include?("can not be modified in the current state") ||
          message.include?("cannot be edited at this time") ||
