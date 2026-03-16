@@ -552,7 +552,7 @@
     },
     "assets": {
       "iconPath": "assets/icon-512.png",
-      "featureGraphicPath": "",
+      "featureGraphicPath": "assets/feature-graphic.png",
       "phoneScreenshotsDir": "upload"
     },
     "storeListing": {
