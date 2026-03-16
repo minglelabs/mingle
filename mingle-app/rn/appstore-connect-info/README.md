@@ -21,6 +21,7 @@
 - `scripts/ios-appstore-upload.sh` reads from `upload/` by default.
 - `scripts/ios-appstore-sync-upload-assets.sh` removes local preview videos and downloads the preferred ASC iPhone screenshot set into `upload/`.
 - `scripts/devbox ios-appstore-sync-metadata` reads `appstore-connect-info.i18n.json` by default.
+- App Store Connect credentials default to `.credentials/appstore-connect/api-key.json`.
 ## Quick commands
 
 ```bash

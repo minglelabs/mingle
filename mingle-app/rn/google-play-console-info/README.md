@@ -18,6 +18,7 @@
 
 - `upload/` is currently a direct copy of `rn/appstore-connect-info/upload/`.
 - `scripts/google-play-console-sync.mjs` reads `google-play-console-info.i18n.json` and uploads Play app details, store listing text, icon, and phone screenshots from this workspace.
+- Google Play credentials default to `.credentials/google-play/service-account.json`, and Android upload signing defaults to `.credentials/android/`.
 
 ## Quick commands
 
@@ -35,7 +36,7 @@ scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-a
 - The Play app entry must already exist for the configured package name.
 - Google only allows the Publishing API on an existing app that already has at least one APK uploaded through the Play Console once.
 - A Google service account must be linked to Play Console with Android Publisher access.
-- If you want the generated `release` AAB to be Play-ready, configure an upload keystore through `android/keystore.properties` or the `ANDROID_UPLOAD_*` environment variables.
+- If you want the generated `release` AAB to be Play-ready, configure an upload keystore through `.credentials/android/keystore.properties` or the `ANDROID_UPLOAD_*` environment variables.
 - Some Play Console sections remain manual-only even after API sync:
   - privacy policy
   - app category / app type

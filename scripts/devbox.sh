@@ -3238,7 +3238,7 @@ cmd_ios_appstore_sync_metadata() {
   local default_copy_json="$appstore_connect_info_root/appstore-connect-info.i18n.json"
   local legacy_copy_json="$ROOT_DIR/mingle-app/rn/appstore-media/copy/screenshot-copy.i18n.json"
   local copy_json="${COPY_JSON:-$default_copy_json}"
-  local api_key_json="${API_KEY_JSON:-/tmp/asc_api_key.json}"
+  local api_key_json="${API_KEY_JSON:-$ROOT_DIR/.credentials/appstore-connect/api-key.json}"
   local app_identifier="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
   local dry_run="false"
   local no_fallback="false"

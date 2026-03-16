@@ -3,7 +3,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPLOAD_DIR="${UPLOAD_DIR:-$REPO_ROOT/mingle-app/rn/appstore-connect-info/upload}"
-API_KEY_JSON="${API_KEY_JSON:-/tmp/asc_api_key.json}"
+DEFAULT_ASC_API_KEY_JSON="$REPO_ROOT/.credentials/appstore-connect/api-key.json"
+API_KEY_JSON="${API_KEY_JSON:-$DEFAULT_ASC_API_KEY_JSON}"
 APP_IDENTIFIER="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
 PRESERVE_LOCALES="${PRESERVE_LOCALES:-ko,en-US}"
 PREFERRED_SCREENSHOT_TYPES="${PREFERRED_SCREENSHOT_TYPES:-APP_IPHONE_67,APP_IPHONE_65,APP_IPHONE_61,APP_IPHONE_58}"
@@ -70,6 +71,7 @@ if [[ ! -f "$API_KEY_JSON" ]]; then
   [[ -n "${ASC_ISSUER_ID:-}" ]] || { echo "Missing ASC_ISSUER_ID and API key JSON: $API_KEY_JSON" >&2; exit 1; }
   [[ -n "${ASC_KEY_PATH:-}" ]] || { echo "Missing ASC_KEY_PATH and API key JSON: $API_KEY_JSON" >&2; exit 1; }
   [[ -f "${ASC_KEY_PATH:-}" ]] || { echo "Missing ASC key file: ${ASC_KEY_PATH:-}" >&2; exit 1; }
+  mkdir -p "$(dirname "$API_KEY_JSON")"
 
   python3 - <<'PY' > "$API_KEY_JSON"
 from pathlib import Path

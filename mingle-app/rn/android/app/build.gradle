@@ -105,9 +105,8 @@ def readEnvOrDefault = { String key, String fallback ->
     return trimmed.isEmpty() ? fallback : trimmed
 }
 
-def loadOptionalProperties = { String relativePath ->
+def loadOptionalProperties = { File propertiesFile ->
     def properties = new Properties()
-    def propertiesFile = rootProject.file(relativePath)
     if (!propertiesFile.exists()) {
         return properties
     }
@@ -118,7 +117,7 @@ def loadOptionalProperties = { String relativePath ->
     return properties
 }
 
-def readSigningValue = { Properties properties, String envKey, String propertyKey ->
+def readSigningValue = { List<Properties> propertySources, String envKey, String propertyKey ->
     def value = System.getenv(envKey)
     if (value != null) {
         def trimmed = value.trim()
@@ -127,12 +126,16 @@ def readSigningValue = { Properties properties, String envKey, String propertyKe
         }
     }
 
-    def propertyValue = properties.getProperty(propertyKey)
-    if (propertyValue == null) {
-        return ""
+    for (properties in propertySources) {
+        def propertyValue = properties.getProperty(propertyKey)
+        if (propertyValue != null) {
+            def trimmedPropertyValue = propertyValue.trim()
+            if (!trimmedPropertyValue.isEmpty()) {
+                return trimmedPropertyValue
+            }
+        }
     }
-
-    return propertyValue.trim()
+    return ""
 }
 
 def resolveSigningStoreFile = { String rawPath ->
@@ -148,6 +151,11 @@ def resolveSigningStoreFile = { String rawPath ->
     def direct = file(trimmed)
     if (direct.exists() || new File(trimmed).isAbsolute()) {
         return direct
+    }
+
+    def repoRootCandidate = new File(rootProject.projectDir, "../../../${trimmed}")
+    if (repoRootCandidate.exists()) {
+        return repoRootCandidate
     }
 
     return rootProject.file(trimmed)
@@ -166,33 +174,40 @@ def runtimeApiNamespace = readEnvOrDefault("NEXT_PUBLIC_API_NAMESPACE", "android
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
 def allowCleartextTraffic = runtimeSiteUrl.toLowerCase().startsWith("http://")
-def androidSigningProperties = loadOptionalProperties("keystore.properties")
+def repoCredentialsDir = new File(rootProject.projectDir, "../../../.credentials/android")
+def repoAndroidSigningProperties = loadOptionalProperties(new File(repoCredentialsDir, "keystore.properties"))
+def localAndroidSigningProperties = loadOptionalProperties(rootProject.file("keystore.properties"))
 def uploadStorePath = readSigningValue(
-    androidSigningProperties,
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
     "ANDROID_UPLOAD_STORE_FILE",
     "storeFile",
 )
 def uploadStorePassword = readSigningValue(
-    androidSigningProperties,
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
     "ANDROID_UPLOAD_STORE_PASSWORD",
     "storePassword",
 )
 def uploadKeyAlias = readSigningValue(
-    androidSigningProperties,
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
     "ANDROID_UPLOAD_KEY_ALIAS",
     "keyAlias",
 )
 def uploadKeyPassword = readSigningValue(
-    androidSigningProperties,
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
     "ANDROID_UPLOAD_KEY_PASSWORD",
     "keyPassword",
 )
+def defaultRepoUploadStoreFile = new File(repoCredentialsDir, "mingle-upload.keystore")
+def finalUploadStorePath =
+    !uploadStorePath.isEmpty()
+        ? uploadStorePath
+        : (defaultRepoUploadStoreFile.exists() ? defaultRepoUploadStoreFile.absolutePath : "")
 def hasUploadSigning =
-    !uploadStorePath.isEmpty() &&
+    !finalUploadStorePath.isEmpty() &&
     !uploadStorePassword.isEmpty() &&
     !uploadKeyAlias.isEmpty() &&
     !uploadKeyPassword.isEmpty()
-def uploadStoreFile = hasUploadSigning ? resolveSigningStoreFile(uploadStorePath) : null
+def uploadStoreFile = hasUploadSigning ? resolveSigningStoreFile(finalUploadStorePath) : null
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)

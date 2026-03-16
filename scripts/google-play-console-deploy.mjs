@@ -8,6 +8,15 @@ import { spawnSync } from "node:child_process";
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
+const DEFAULT_CREDENTIALS_ROOT = path.join(REPO_ROOT, ".credentials");
+const DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = path.join(
+  DEFAULT_CREDENTIALS_ROOT,
+  "google-play/service-account.json",
+);
+const DEFAULT_ANDROID_CREDENTIALS_DIR = path.join(
+  DEFAULT_CREDENTIALS_ROOT,
+  "android",
+);
 const DEFAULT_CONFIG_JSON = path.join(
   REPO_ROOT,
   "mingle-app/rn/google-play-console-info/google-play-console-info.i18n.json",
@@ -49,15 +58,18 @@ Environment:
 
 Notes:
   - Google Play only allows the Publishing API for apps that already exist and have had at least one APK uploaded through Play Console once.
-  - Play App Signing still needs a local upload key. Configure it through android/keystore.properties or ANDROID_UPLOAD_* env vars before using --build.
+  - Play App Signing still needs a local upload key. Configure it through .credentials/android/keystore.properties or ANDROID_UPLOAD_* env vars before using --build.
+  - If present, ${DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON} is used automatically.
 `);
 }
 
 function parseArgs(argv) {
   const options = {
     configJson: DEFAULT_CONFIG_JSON,
-    serviceAccountJsonPath:
-      process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH ?? "",
+    serviceAccountJsonPath: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH
+      ?? (fs.existsSync(DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON)
+        ? DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+        : ""),
     packageName: "",
     aabPath: DEFAULT_AAB_PATH,
     track: "",
@@ -190,7 +202,10 @@ function readPropertiesFile(filePath) {
 }
 
 function readSigningConfig(androidDir) {
-  const properties = readPropertiesFile(path.join(androidDir, "keystore.properties"));
+  const properties = readPropertiesFile(
+    path.join(DEFAULT_ANDROID_CREDENTIALS_DIR, "keystore.properties"),
+  );
+  const legacyProperties = readPropertiesFile(path.join(androidDir, "keystore.properties"));
   const readValue = (envKey, propertyKey) => {
     const envValue = process.env[envKey];
     if (isNonEmptyString(envValue)) {
@@ -198,11 +213,18 @@ function readSigningConfig(androidDir) {
     }
 
     const propertyValue = properties[propertyKey];
-    return isNonEmptyString(propertyValue) ? propertyValue.trim() : "";
+    if (isNonEmptyString(propertyValue)) {
+      return propertyValue.trim();
+    }
+
+    const legacyPropertyValue = legacyProperties[propertyKey];
+    return isNonEmptyString(legacyPropertyValue) ? legacyPropertyValue.trim() : "";
   };
 
+  const defaultStoreFile = path.join(DEFAULT_ANDROID_CREDENTIALS_DIR, "mingle-upload.keystore");
   return {
-    storeFile: readValue("ANDROID_UPLOAD_STORE_FILE", "storeFile"),
+    storeFile: readValue("ANDROID_UPLOAD_STORE_FILE", "storeFile")
+      || (fs.existsSync(defaultStoreFile) ? defaultStoreFile : ""),
     storePassword: readValue("ANDROID_UPLOAD_STORE_PASSWORD", "storePassword"),
     keyAlias: readValue("ANDROID_UPLOAD_KEY_ALIAS", "keyAlias"),
     keyPassword: readValue("ANDROID_UPLOAD_KEY_PASSWORD", "keyPassword"),
@@ -217,7 +239,7 @@ function assertUploadSigningConfigured(androidDir) {
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing Play upload signing config: ${missing.join(", ")}. Configure android/keystore.properties or ANDROID_UPLOAD_* env vars.`,
+      `Missing Play upload signing config: ${missing.join(", ")}. Configure .credentials/android/keystore.properties or ANDROID_UPLOAD_* env vars.`,
     );
   }
 }

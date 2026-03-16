@@ -7,6 +7,11 @@ import process from "node:process";
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
+const DEFAULT_CREDENTIALS_ROOT = path.join(REPO_ROOT, ".credentials");
+const DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = path.join(
+  DEFAULT_CREDENTIALS_ROOT,
+  "google-play/service-account.json",
+);
 const DEFAULT_CONFIG_JSON = path.join(
   REPO_ROOT,
   "mingle-app/rn/google-play-console-info/google-play-console-info.i18n.json",
@@ -41,14 +46,17 @@ Environment:
 Notes:
   - The Play app must already exist and have had at least one binary uploaded once via Play Console.
   - Legal consents and other Play Console-only sections cannot be filled through the Publishing API.
+  - If present, ${DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON} is used automatically.
 `);
 }
 
 function parseArgs(argv) {
   const options = {
     configJson: DEFAULT_CONFIG_JSON,
-    serviceAccountJsonPath:
-      process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH ?? "",
+    serviceAccountJsonPath: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH
+      ?? (fs.existsSync(DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON)
+        ? DEFAULT_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+        : ""),
     packageName: "",
     languages: [],
     dryRun: false,

@@ -3,8 +3,9 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APPSTORE_MEDIA_ROOT="${APPSTORE_MEDIA_ROOT:-$REPO_ROOT/mingle-app/rn/appstore-connect-info}"
+DEFAULT_ASC_API_KEY_JSON="$REPO_ROOT/.credentials/appstore-connect/api-key.json"
 
-API_KEY_JSON="${API_KEY_JSON:-/tmp/asc_api_key.json}"
+API_KEY_JSON="${API_KEY_JSON:-$DEFAULT_ASC_API_KEY_JSON}"
 APP_IDENTIFIER="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
 MEDIA_DIR="${MEDIA_DIR:-$APPSTORE_MEDIA_ROOT/upload}"
 LOCALE="${LOCALE:-en-US}"
