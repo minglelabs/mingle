@@ -36,7 +36,13 @@ object NativeSttCapturePolicy {
       else -> NativeSttCaptureProfile(
         label = "priority_translation",
         audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-        audioMode = if (aecEnabled) AudioManager.MODE_IN_COMMUNICATION else AudioManager.MODE_NORMAL,
+        // Use MODE_NORMAL (not MODE_IN_COMMUNICATION) to avoid pausing background media audio (e.g. Spotify)
+        // while STT is active. MODE_IN_COMMUNICATION triggers system-level VoIP routing which silences
+        // media playback from other apps.
+        audioMode = AudioManager.MODE_NORMAL,
+        // privacySensitive=true gives Mingle highest mic priority on Android 11+, ensuring STT always
+        // receives audio even if another app (e.g. Discord) is also trying to capture.
+        // Trade-off: the other app's mic will be silenced while Mingle is recording.
         privacySensitive = true,
         foregroundServiceEnabled = true,
         aecEnabled = aecEnabled && AcousticEchoCanceler.isAvailable(),
