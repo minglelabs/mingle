@@ -9,6 +9,7 @@ type ScreenshotCopy = {
 
 type MetadataEntry = {
   promotionalText?: unknown
+  whatsNew?: unknown
   description?: unknown
   keywords?: unknown
   supportUrl?: unknown
@@ -208,6 +209,10 @@ describe('appstore-connect-info contract', () => {
       expect(
         isNonEmptyString(metadata.description),
         `missing description for metadata locale: ${locale}`,
+      ).toBe(true)
+      expect(
+        isNonEmptyString(metadata.whatsNew),
+        `missing whatsNew for metadata locale: ${locale}`,
       ).toBe(true)
       expect(
         isNonEmptyKeywords(metadata.keywords),

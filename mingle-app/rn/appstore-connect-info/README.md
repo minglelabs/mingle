@@ -12,7 +12,7 @@
 - `appstore-connect-info.i18n.json`: single source of truth
   - `ios.assets`: screenshot upload directory
   - `ios.submission.screenshots`: "iOS 앱 > 1.0.0 제출 준비 중" screenshot copy
-  - `ios.submission.appStoreInfo`: version metadata (promo text, description, keywords, URLs)
+  - `ios.submission.appStoreInfo`: version metadata (promo text, what's new, description, keywords, URLs)
   - `ios.generalInfo.appInfo`: app info metadata (title, subtitle)
 - `RUNBOOK.appstore-preview-localization.md`: appstore-preview API localization workflow
 

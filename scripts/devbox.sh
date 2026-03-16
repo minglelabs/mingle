@@ -3242,6 +3242,7 @@ cmd_ios_appstore_sync_metadata() {
   local app_identifier="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
   local dry_run="false"
   local no_fallback="false"
+  local only_app_info="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -3265,6 +3266,10 @@ cmd_ios_appstore_sync_metadata() {
         no_fallback="true"
         shift
         ;;
+      --only-app-info)
+        only_app_info="true"
+        shift
+        ;;
       -h|--help)
         cat <<EOF
 Usage: scripts/devbox ios-appstore-sync-metadata [options]
@@ -3275,6 +3280,7 @@ Options:
   --app-id <bundle-id>    App bundle identifier (default: $app_identifier)
   --dry-run               Print planned updates only (no ASC write)
   --no-fallback           Do not fallback metadata locale when target locale is missing
+  --only-app-info         Only sync app info localizations (title, subtitle); skip version localizations
   -h, --help              Show help
 EOF
         return 0
@@ -3299,7 +3305,7 @@ EOF
   PATH="/opt/homebrew/opt/ruby/bin:/opt/homebrew/Cellar/fastlane/2.232.2/libexec/bin:$PATH" \
   GEM_HOME="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}" \
   GEM_PATH="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}:/opt/homebrew/Cellar/fastlane/2.232.2/libexec" \
-  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" \
+  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" \
   ruby - <<'RUBY'
 require 'json'
 require 'spaceship'
@@ -3319,6 +3325,7 @@ api_key_json = ENV.fetch('API_KEY_JSON')
 app_identifier = ENV.fetch('APP_IDENTIFIER')
 dry_run = ENV.fetch('DRY_RUN') == 'true'
 no_fallback = ENV.fetch('NO_FALLBACK') == 'true'
+only_app_info = ENV.fetch('ONLY_APP_INFO') == 'true'
 
 payload = JSON.parse(File.read(copy_json))
 
@@ -3416,6 +3423,7 @@ version_loc_skips = 0
 app_info_loc_updates = 0
 app_info_loc_skips = 0
 
+unless only_app_info
 version.get_app_store_version_localizations.each do |loc|
   asc_locale = loc.locale
   locale_key = json_locale_key_for_asc(asc_locale)
@@ -3428,6 +3436,9 @@ version.get_app_store_version_localizations.each do |loc|
   attributes = {}
   if metadata.key?('promotionalText')
     attributes[:promotionalText] = metadata['promotionalText'].to_s
+  end
+  if metadata.key?('whatsNew')
+    attributes[:whatsNew] = metadata['whatsNew'].to_s
   end
   if metadata.key?('description')
     attributes[:description] = metadata['description'].to_s
@@ -3471,9 +3482,18 @@ version.get_app_store_version_localizations.each do |loc|
   end
   version_loc_updates += 1
 end
+end # unless only_app_info
 
 app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
-app_info_id = app_infos.first&.dig('id')
+raise "appInfo not found for app #{app.id}" if app_infos.empty?
+editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
+preferred_app_info = app_infos.min_by do |ai|
+  state = ai.dig('attributes', 'appStoreState').to_s
+  idx = editable_states.index(state)
+  idx ? idx : editable_states.length
+end
+app_info_id = preferred_app_info&.dig('id')
+puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
 raise "appInfo not found for app #{app.id}" unless app_info_id
 
 app_info_loc_refs = client.get(
