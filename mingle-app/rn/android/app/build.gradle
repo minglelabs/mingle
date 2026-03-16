@@ -105,6 +105,54 @@ def readEnvOrDefault = { String key, String fallback ->
     return trimmed.isEmpty() ? fallback : trimmed
 }
 
+def loadOptionalProperties = { String relativePath ->
+    def properties = new Properties()
+    def propertiesFile = rootProject.file(relativePath)
+    if (!propertiesFile.exists()) {
+        return properties
+    }
+
+    propertiesFile.withInputStream { stream ->
+        properties.load(stream)
+    }
+    return properties
+}
+
+def readSigningValue = { Properties properties, String envKey, String propertyKey ->
+    def value = System.getenv(envKey)
+    if (value != null) {
+        def trimmed = value.trim()
+        if (!trimmed.isEmpty()) {
+            return trimmed
+        }
+    }
+
+    def propertyValue = properties.getProperty(propertyKey)
+    if (propertyValue == null) {
+        return ""
+    }
+
+    return propertyValue.trim()
+}
+
+def resolveSigningStoreFile = { String rawPath ->
+    if (rawPath == null) {
+        return null
+    }
+
+    def trimmed = rawPath.trim()
+    if (trimmed.isEmpty()) {
+        return null
+    }
+
+    def direct = file(trimmed)
+    if (direct.exists() || new File(trimmed).isAbsolute()) {
+        return direct
+    }
+
+    return rootProject.file(trimmed)
+}
+
 def quoteBuildConfigString = { String value ->
     def escaped = value
         .replace("\\", "\\\\")
@@ -118,6 +166,33 @@ def runtimeApiNamespace = readEnvOrDefault("NEXT_PUBLIC_API_NAMESPACE", "android
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
 def allowCleartextTraffic = runtimeSiteUrl.toLowerCase().startsWith("http://")
+def androidSigningProperties = loadOptionalProperties("keystore.properties")
+def uploadStorePath = readSigningValue(
+    androidSigningProperties,
+    "ANDROID_UPLOAD_STORE_FILE",
+    "storeFile",
+)
+def uploadStorePassword = readSigningValue(
+    androidSigningProperties,
+    "ANDROID_UPLOAD_STORE_PASSWORD",
+    "storePassword",
+)
+def uploadKeyAlias = readSigningValue(
+    androidSigningProperties,
+    "ANDROID_UPLOAD_KEY_ALIAS",
+    "keyAlias",
+)
+def uploadKeyPassword = readSigningValue(
+    androidSigningProperties,
+    "ANDROID_UPLOAD_KEY_PASSWORD",
+    "keyPassword",
+)
+def hasUploadSigning =
+    !uploadStorePath.isEmpty() &&
+    !uploadStorePassword.isEmpty() &&
+    !uploadKeyAlias.isEmpty() &&
+    !uploadKeyPassword.isEmpty()
+def uploadStoreFile = hasUploadSigning ? resolveSigningStoreFile(uploadStorePath) : null
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -160,15 +235,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasUploadSigning) {
+            upload {
+                storeFile uploadStoreFile
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Keep local device release installs working when no upload key is configured.
+            signingConfig hasUploadSigning ? signingConfigs.upload : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

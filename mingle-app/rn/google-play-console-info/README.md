@@ -8,7 +8,7 @@
 - `assets/`: Play-specific shared graphics
   - `icon-512.png`: Play hi-res icon used by the upload sync script
 - `google-play-console-info.i18n.json`: prepared source file for Play Console metadata
-  - `googlePlay.release.screenshots`: Play listing screenshot copy
+  - `googlePlay.release`: default release track, release status, notes, and screenshot copy
   - `googlePlay.appDetails`: package name, default language, and Play contact details
   - `googlePlay.assets`: relative paths for Play listing graphics
   - `googlePlay.storeListing`: localized title, short description, promotional text, full description, keywords, and URLs
@@ -25,12 +25,17 @@
 scripts/google-play-console-sync.mjs --dry-run
 scripts/google-play-console-sync.mjs --service-account-json /path/to/service-account.json --validate-only
 scripts/google-play-console-sync.mjs --service-account-json /path/to/service-account.json
+scripts/google-play-console-deploy.mjs --dry-run
+scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-account.json --build --validate-only
+scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-account.json --build
 ```
 
 ## Prerequisites
 
 - The Play app entry must already exist for the configured package name.
+- Google only allows the Publishing API on an existing app that already has at least one APK uploaded through the Play Console once.
 - A Google service account must be linked to Play Console with Android Publisher access.
+- If you want the generated `release` AAB to be Play-ready, configure an upload keystore through `android/keystore.properties` or the `ANDROID_UPLOAD_*` environment variables.
 - Some Play Console sections remain manual-only even after API sync:
   - privacy policy
   - app category / app type

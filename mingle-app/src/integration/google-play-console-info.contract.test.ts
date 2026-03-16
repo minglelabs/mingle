@@ -50,6 +50,13 @@ const configJsonPath = path.resolve(
 const workspaceRoot = path.dirname(configJsonPath);
 const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
   googlePlay?: {
+    release?: {
+      defaultTrack?: unknown;
+      defaultReleaseStatus?: unknown;
+      changesNotSentForReview?: unknown;
+      releaseName?: unknown;
+      releaseNotes?: Record<string, unknown>;
+    };
     appDetails?: {
       packageName?: unknown;
       defaultLanguage?: unknown;
@@ -76,6 +83,16 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
 };
 
 describe("google-play-console-info contract", () => {
+  it("tracks a default Play release configuration in the same JSON", () => {
+    const release = payload.googlePlay?.release;
+
+    expect(isNonEmptyString(release?.defaultTrack)).toBe(true);
+    expect(isNonEmptyString(release?.defaultReleaseStatus)).toBe(true);
+    expect(typeof release?.changesNotSentForReview).toBe("boolean");
+    expect(isNonEmptyString(release?.releaseName)).toBe(true);
+    expect(isNonEmptyString(release?.releaseNotes?.["en-US"])).toBe(true);
+  });
+
   it("includes Play app details and screenshot workspace paths", () => {
     const appDetails = payload.googlePlay?.appDetails;
     const assets = payload.googlePlay?.assets;
