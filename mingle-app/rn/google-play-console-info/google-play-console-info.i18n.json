@@ -553,7 +553,6 @@
     "assets": {
       "iconPath": "assets/icon-512.png",
       "featureGraphicPath": "assets/feature-graphic.png",
-      "featureGraphicSourcePath": "../../../mingle-landing/public/og-image.png",
       "phoneScreenshotsDir": "upload"
     },
     "storeListing": {
@@ -592,23 +591,6 @@
         "zh-cn": "实时语音翻译器 · Mingle: Global Hangout",
         "zh-tw": "即時語音翻譯器 · Mingle: Global Hangout"
       },
-      "promotionalText": {
-        "en": "Language barriers are over. Continuous real-time interpreting, live captions, and 3+ language translation. The easiest way to befriend anyone, Mingle.",
-        "ar": "انتهت حواجز اللغة. ترجمة فورية مستمرة، وتسميات مباشرة، وترجمة لأكثر من 3 لغات. أسهل طريقة لتكوين صداقة مع أي شخص، Mingle.",
-        "de": "Sprachbarrieren sind vorbei. Mingle dolmetscht in Echtzeit mit Live-Untertiteln und Übersetzung in 3+ Sprachen. So schließen Sie weltweit leichter Freundschaften.",
-        "es": "Se acabaron las barreras del idioma. Mingle interpreta en tiempo real con subtítulos en vivo y traducción en 3+ idiomas. La forma más simple de conectar con cualquiera.",
-        "fr": "Les barrières linguistiques, c'est fini. Mingle interprète en temps réel avec sous-titres en direct et traduction en 3+ langues. Le moyen simple de créer du lien partout.",
-        "hi": "भाषा की दीवारें अब खत्म। लगातार रियल-टाइम दुभाषिया, लाइव कैप्शन और 3+ भाषाओं में अनुवाद। किसी से भी दोस्ती करने का सबसे आसान तरीका, Mingle.",
-        "it": "Le barriere linguistiche sono finite. Mingle offre interpretariato in tempo reale, sottotitoli live e traduzione in 3+ lingue. Per fare amicizia ovunque, usa Mingle.",
-        "pt": "As barreiras de idioma acabaram. Mingle traz interpretação em tempo real, legendas ao vivo e tradução em mais de 3 idiomas. A forma mais simples de se conectar.",
-        "ru": "Языковые барьеры в прошлом. Mingle дает синхронный перевод в реальном времени, живые субтитры и перевод на 3+ языках. Самый простой способ легче знакомиться.",
-        "ko": "언어 장벽은 이제 끝났습니다. 마치 동시 통역가를 대동한 듯한 대화 번역.\nMingle은 긴 대화도 끊김 없이 계속해서 통번역해요. 한 문장씩 멈추는 번역기는 그만 사용하세요.\n세 개 이상의 언어도 전방향 실시간 번역을 해드립니다.\n외국인과 친해지는 가장 쉬운 방법, Mingle.",
-        "zh-cn": "语言障碍到此为止。Mingle 可为长对话提供不中断的实时口译，支持三种以上语言的全方向翻译。",
-        "zh-tw": "語言隔閡就此結束。Mingle 為長對話提供不中斷的即時口譯，支援三種以上語言的全方向翻譯。",
-        "ja": "言語の壁はもう終わり。Mingleなら長い会話も途切れずリアルタイム通訳。3言語以上でも全方向に翻訳できます。",
-        "vi": "Rào cản ngôn ngữ đã kết thúc. Mingle phiên dịch thời gian thực liên tục cho hội thoại dài và hỗ trợ dịch đa chiều 3+ ngôn ngữ.",
-        "th": "จบปัญหากำแพงภาษา Mingle แปลและล่ามแบบเรียลไทม์ต่อเนื่องสำหรับบทสนทนายาว รองรับ 3+ ภาษาแบบทุกทิศทาง"
-      },
       "fullDescription": {
         "en": "• Mingle supports all-direction interpreting and translation across 3+ languages. Even when multiple languages are mixed in the same conversation, everything is translated in real time, so you do not need to manually choose or switch languages whenever speakers change.\n• Get uninterrupted translation with live transcripts. Instead of stopping after each sentence, Mingle continuously translates along the full flow of your conversation or meeting, helping you follow context naturally.\n• See real-time captions and translations even for audio from other apps. If you run voice apps such as phone calls, radio, or Discord in the background on speakerphone while Mingle is in the foreground, that audio is captured as Mingle input and shown instantly as transcripts and translations.\n• Listen to translation as real-time voice interpreting. Turn on voice output to hear translated content like having an interpreter beside you, so you can understand without looking at the screen, even while running.\n• Keep it running in the background and switch apps freely. Even if you lock your screen or move Mingle to the background, it stays active and continues writing live conversation logs and translations.",
         "ar": "• يدعم Mingle الترجمة الفورية والتحريرية في جميع الاتجاهات عبر أكثر من 3 لغات. حتى عند مزج عدة لغات في المحادثة نفسها، تتم ترجمة كل شيء في الوقت الحقيقي، لذلك لا تحتاج إلى اختيار اللغة أو تبديلها يدويًا عند تغير المتحدث.\n• احصل على ترجمة مستمرة مع نصوص مباشرة. بدلا من التوقف بعد كل جملة، يواصل Mingle الترجمة عبر كامل تدفق المحادثة أو الاجتماع، ما يساعدك على متابعة السياق بشكل طبيعي.\n• شاهد التسميات المباشرة والترجمة في الوقت الحقيقي حتى لصوت التطبيقات الأخرى. عند تشغيل تطبيقات الصوت مثل المكالمات أو الراديو أو Discord في الخلفية على مكبر الصوت بينما يكون Mingle في الواجهة، يتم التقاط هذا الصوت كمدخلات لـ Mingle ويعرض فورا كنص وترجمة.\n• استمع إلى الترجمة كتفسير صوتي فوري. فعل الإخراج الصوتي لتسمع المحتوى المترجم كما لو أن مترجما بجانبك، لتفهم دون النظر إلى الشاشة حتى أثناء الجري.\n• أبقه يعمل في الخلفية وبدل بين التطبيقات بحرية. حتى إذا قفلت الشاشة أو نقلت Mingle إلى الخلفية، يظل نشطا ويواصل كتابة سجلات المحادثة والترجمة مباشرة.",
@@ -625,57 +607,6 @@
         "ja": "• Mingleは3言語以上でも全方向の通訳・翻訳を提供します。複数言語が同時に混ざる会話でもリアルタイムで翻訳されるため、話者が変わるたびに言語を手動で選択・切り替えする必要はありません。\n• 途切れない翻訳とリアルタイム字幕を提供します。一文ごとに止まって翻訳するのではなく、会話や会議の流れ全体に沿って連続翻訳されるため、文脈まで自然に把握できます。\n• 他アプリの音声もリアルタイム字幕と翻訳で確認できます。スピーカーフォンで通話、ラジオ、Discordなどの音声アプリをバックグラウンドで動かし、Mingleをフォアグラウンドで開いておくと、その音声がMingle入力として取り込まれ、字幕と翻訳がすぐ表示されます。\n• 翻訳結果を音声でリアルタイム同時通訳できます。音声出力をオンにすると、通訳者がそばにいるように内容を聞けるため、画面を見なくても理解でき、ランニング中でも使えます。\n• バックグラウンド実行のままアプリを自由に切り替えできます。画面をロックしたりMingleをバックグラウンドにしても停止せず、会話ログと翻訳をリアルタイムで記録し続けます。",
         "vi": "• Mingle hỗ trợ phiên dịch và dịch thuật đa chiều với hơn 3 ngôn ngữ. Ngay cả khi nhiều ngôn ngữ được dùng xen kẽ trong cùng một cuộc trò chuyện, mọi nội dung vẫn được dịch theo thời gian thực, nên bạn không cần tự chọn hay chuyển ngôn ngữ mỗi khi đổi người nói.\n• Cung cấp bản dịch liên tục và transcript thời gian thực. Thay vì dừng lại sau từng câu, Mingle dịch liên tục theo toàn bộ mạch hội thoại hoặc cuộc họp để bạn nắm được ngữ cảnh tự nhiên.\n• Ngay cả âm thanh từ ứng dụng khác cũng có thể hiển thị phụ đề và bản dịch theo thời gian thực. Khi bật loa ngoài cho cuộc gọi, radio hoặc ứng dụng thoại như Discord chạy nền và giữ Mingle ở tiền cảnh, âm thanh đó sẽ đi vào Mingle để hiển thị transcript và bản dịch ngay lập tức.\n• Có thể phát bản dịch bằng giọng nói theo thời gian thực. Khi bật đầu ra giọng nói, nội dung dịch sẽ được đọc như có thông dịch viên bên cạnh, giúp bạn hiểu chỉ bằng nghe mà không cần nhìn màn hình, kể cả khi đang chạy bộ.\n• Chạy nền và chuyển ứng dụng tự do. Dù khóa màn hình hay đưa Mingle xuống nền, ứng dụng vẫn tiếp tục hoạt động và ghi lại hội thoại cùng bản dịch theo thời gian thực.",
         "th": "• Mingle รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด Mingle ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ Mingle และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• ทำงานต่อได้ในเบื้องหลังและสลับแอปได้อิสระ แม้ล็อกหน้าจอหรือย้าย Mingle ไปเบื้องหลัง ระบบก็ไม่หยุด และยังบันทึกบทสนทนากับคำแปลแบบเรียลไทม์ต่อเนื่อง"
-      },
-      "keywords": {
-        "en": "voice translator,live captions,call translation,simultaneous,multilingual,mingle",
-        "ar": "مترجم صوتي,ترجمة فورية,تسميات مباشرة,ترجمة متزامنة,متعدد اللغات,ترجمة المكالمات,mingle",
-        "de": "Sprachübersetzer,Live-Untertitel,Anrufübersetzung,Simultanübersetzung,mingle",
-        "es": "traductor voz,subtítulos vivos,trad. llamadas,intérprete simultáneo,mingle",
-        "fr": "traducteur vocal,sous-titres live,traduction appels,interprétation,mingle",
-        "hi": "वॉइसअनुवाद,लाइवकैप्शन,कॉलअनुवाद,तुरंतअनुवाद,mingle",
-        "it": "traduttore vocale,sottotitoli live,traduzione chiamate,simultaneo,mingle",
-        "pt": "tradutor voz,legendas ao vivo,tradução chamadas,interpretação,mingle",
-        "ru": "переводчик,живые субтитры,перевод звонков,синхроперевод,mingle",
-        "ko": "동시통역,대화통역,통화통역,실시간자막,자동언어감지,다국어번역,보이스번역,mingle",
-        "zh-cn": "同声传译,对话口译,通话口译,实时字幕,自动语言检测,多语言翻译,语音翻译,mingle",
-        "zh-tw": "同步口譯,對話口譯,通話口譯,即時字幕,自動語言偵測,多語翻譯,語音翻譯,mingle",
-        "ja": "同時通訳,会話通訳,通話通訳,リアルタイム字幕,自動言語検出,多言語翻訳,音声翻訳,mingle",
-        "vi": "dịchgiọngnói,phụđềtrực tiếp,dịchcuộcgọi,dịchtứcthì,mingle",
-        "th": "แปลเสียง,ซับสด,แปลสายโทร,แปลทันที,mingle"
-      },
-      "supportUrl": {
-        "en": "https://mingle-landing.vercel.app/normal",
-        "ar": "https://mingle-landing.vercel.app/normal",
-        "de": "https://mingle-landing.vercel.app/normal",
-        "es": "https://mingle-landing.vercel.app/normal",
-        "fr": "https://mingle-landing.vercel.app/normal",
-        "hi": "https://mingle-landing.vercel.app/normal",
-        "it": "https://mingle-landing.vercel.app/normal",
-        "pt": "https://mingle-landing.vercel.app/normal",
-        "ru": "https://mingle-landing.vercel.app/normal",
-        "ko": "https://mingle-landing.vercel.app/normal",
-        "zh-cn": "https://mingle-landing.vercel.app/normal",
-        "zh-tw": "https://mingle-landing.vercel.app/normal",
-        "ja": "https://mingle-landing.vercel.app/normal",
-        "vi": "https://mingle-landing.vercel.app/normal",
-        "th": "https://mingle-landing.vercel.app/normal"
-      },
-      "marketingUrl": {
-        "en": "https://mingle-landing.vercel.app/normal",
-        "ar": "https://mingle-landing.vercel.app/normal",
-        "de": "https://mingle-landing.vercel.app/normal",
-        "es": "https://mingle-landing.vercel.app/normal",
-        "fr": "https://mingle-landing.vercel.app/normal",
-        "hi": "https://mingle-landing.vercel.app/normal",
-        "it": "https://mingle-landing.vercel.app/normal",
-        "pt": "https://mingle-landing.vercel.app/normal",
-        "ru": "https://mingle-landing.vercel.app/normal",
-        "ko": "https://mingle-landing.vercel.app/normal",
-        "zh-cn": "https://mingle-landing.vercel.app/normal",
-        "zh-tw": "https://mingle-landing.vercel.app/normal",
-        "ja": "https://mingle-landing.vercel.app/normal",
-        "vi": "https://mingle-landing.vercel.app/normal",
-        "th": "https://mingle-landing.vercel.app/normal"
       }
     },
     "manualOnly": {

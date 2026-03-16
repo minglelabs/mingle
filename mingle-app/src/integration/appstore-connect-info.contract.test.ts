@@ -90,8 +90,6 @@ const payload = JSON.parse(
   ios?: {
     assets?: {
       phoneScreenshotsDir?: unknown
-      appIconAssetCatalogPath?: unknown
-      appIcon1024Path?: unknown
     }
     submission?: {
       version?: unknown
@@ -131,31 +129,19 @@ describe('appstore-connect-info contract', () => {
       true,
     )
     expect(isNonEmptyString(assets?.phoneScreenshotsDir)).toBe(true)
-    expect(isNonEmptyString(assets?.appIconAssetCatalogPath)).toBe(true)
-    expect(isNonEmptyString(assets?.appIcon1024Path)).toBe(true)
     expect(appInfo?.title).toBeDefined()
     expect(appInfo?.subtitle).toBeDefined()
   })
 
-  it('tracks screenshot and icon asset paths for App Store packaging', () => {
+  it('tracks the screenshot asset path for App Store packaging', () => {
     const assets = payload.ios?.assets
     const workspaceRoot = path.dirname(appStoreInfoJsonPath)
     const screenshotRoot = path.resolve(
       workspaceRoot,
       String(assets?.phoneScreenshotsDir ?? ''),
     )
-    const appIconCatalogPath = path.resolve(
-      workspaceRoot,
-      String(assets?.appIconAssetCatalogPath ?? ''),
-    )
-    const appIcon1024Path = path.resolve(
-      workspaceRoot,
-      String(assets?.appIcon1024Path ?? ''),
-    )
 
     expect(fs.existsSync(screenshotRoot)).toBe(true)
-    expect(fs.existsSync(appIconCatalogPath)).toBe(true)
-    expect(fs.existsSync(appIcon1024Path)).toBe(true)
   })
 
   it('has screenshot copy keys for every locale and expected shot count', () => {

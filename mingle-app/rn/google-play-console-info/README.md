@@ -7,12 +7,12 @@
 - `upload/<locale>/`: temporary Play asset workspace, currently mirrored from iOS upload assets
 - `assets/`: Play-specific shared graphics
   - `icon-512.png`: Play hi-res icon used by the upload sync script
-  - `feature-graphic.png`: 1024x500 Play feature graphic derived from `mingle-landing/public/og-image.png`
+  - `feature-graphic.png`: 1024x500 Play feature graphic used by the upload sync script
 - `google-play-console-info.i18n.json`: prepared source file for Play Console metadata
   - `googlePlay.release`: default release track, release status, notes, and screenshot copy
   - `googlePlay.appDetails`: package name, default language, and Play contact details
-  - `googlePlay.assets`: relative paths for Play listing graphics and the OG source reference
-  - `googlePlay.storeListing`: localized title, short description, promotional text, full description, keywords, and URLs
+  - `googlePlay.assets`: relative paths for Play listing graphics
+  - `googlePlay.storeListing`: localized title, short description, and full description
   - `googlePlay.manualOnly`: console-only items that must still be filled manually
 
 ## Default behavior

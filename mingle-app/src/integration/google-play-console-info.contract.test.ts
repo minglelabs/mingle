@@ -67,7 +67,6 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
     assets?: {
       iconPath?: unknown;
       featureGraphicPath?: unknown;
-      featureGraphicSourcePath?: unknown;
       phoneScreenshotsDir?: unknown;
     };
     storeListing?: {
@@ -118,21 +117,15 @@ describe("google-play-console-info contract", () => {
     expect(dimensions.height).toBe(512);
   });
 
-  it("keeps a Play feature graphic asset and records its OG source", () => {
+  it("keeps a Play feature graphic asset in the workspace", () => {
     const assets = payload.googlePlay?.assets;
     const featureGraphicPath = path.resolve(
       workspaceRoot,
       assets?.featureGraphicPath as string,
     );
-    const featureGraphicSourcePath = path.resolve(
-      workspaceRoot,
-      assets?.featureGraphicSourcePath as string,
-    );
 
     expect(isNonEmptyString(assets?.featureGraphicPath)).toBe(true);
-    expect(isNonEmptyString(assets?.featureGraphicSourcePath)).toBe(true);
     expect(fs.existsSync(featureGraphicPath)).toBe(true);
-    expect(fs.existsSync(featureGraphicSourcePath)).toBe(true);
 
     const dimensions = readPngDimensions(featureGraphicPath);
     expect(dimensions.width).toBe(1024);
