@@ -21,14 +21,14 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.0 (12)",
+      "releaseName": "1.0.1 (13)",
       "releaseNotes": {
-        "en-US": "Initial Android release.",
-        "ko-KR": "Android 첫 출시입니다."
+        "en-US": "Version 1.0.1 release.",
+        "ko-KR": "1.0.1 버전 출시입니다."
       },
       "screenshots": {
         "ko": [
