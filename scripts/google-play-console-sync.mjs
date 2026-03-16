@@ -158,6 +158,35 @@ function mapUploadLocaleToCopyLocale(uploadLocaleDirName) {
   return explicit[normalized] ?? normalized.split("-")[0];
 }
 
+function mapUploadLocaleToPlayLocale(uploadLocaleDirName) {
+  const normalized = uploadLocaleDirName.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return normalized;
+  }
+
+  const explicit = {
+    "ar-sa": "ar",
+    "de-de": "de-DE",
+    "en-us": "en-US",
+    "es-es": "es-ES",
+    "fr-ca": "fr-CA",
+    "fr-fr": "fr-FR",
+    hi: "hi-IN",
+    it: "it-IT",
+    ja: "ja-JP",
+    ko: "ko-KR",
+    "pt-br": "pt-BR",
+    "pt-pt": "pt-PT",
+    ru: "ru-RU",
+    th: "th",
+    vi: "vi",
+    "zh-hans": "zh-CN",
+    "zh-hant": "zh-TW",
+  };
+
+  return explicit[normalized] ?? uploadLocaleDirName;
+}
+
 function getLocalizedValue(map, copyLocale, fallbackLocale) {
   if (!map || typeof map !== "object") {
     return "";
@@ -336,17 +365,19 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
 
   const plans = localeDirectories.map((playLocale) => {
     const copyLocale = mapUploadLocaleToCopyLocale(playLocale);
+    const playListingLocale = mapUploadLocaleToPlayLocale(playLocale);
     const localeDir = path.join(uploadRoot, playLocale);
     const screenshots = listImageFiles(localeDir).map((fileName) =>
       path.join(localeDir, fileName),
     );
 
     return {
-      playLocale,
+      playLocale: playListingLocale,
+      uploadLocale: playLocale,
       copyLocale,
       localeDir,
       listing: {
-        language: playLocale,
+        language: playListingLocale,
         title: getLocalizedValue(storeListing.title, copyLocale, fallbackLocale),
         shortDescription: getLocalizedValue(
           storeListing.shortDescription,
@@ -436,7 +467,7 @@ function printPlan(packageName, planBundle, manualOnly, validateOnly) {
 
   for (const localePlan of planBundle.plans) {
     console.log(
-      `- ${localePlan.playLocale} <- ${localePlan.copyLocale} | screenshots=${localePlan.screenshots.length} | title="${localePlan.listing.title}"`,
+      `- ${localePlan.playLocale} <- ${localePlan.uploadLocale} <- ${localePlan.copyLocale} | screenshots=${localePlan.screenshots.length} | title="${localePlan.listing.title}"`,
     );
   }
 

@@ -437,7 +437,7 @@ async function uploadBundle(accessToken, packageName, editId, aabPath) {
   const payload = await googleApiRequest(
     accessToken,
     "POST",
-    `${ANDROID_PUBLISHER_UPLOAD_BASE}/applications/${encodeURIComponent(packageName)}/edits/${encodeURIComponent(editId)}/bundles`,
+    `${ANDROID_PUBLISHER_UPLOAD_BASE}/applications/${encodeURIComponent(packageName)}/edits/${encodeURIComponent(editId)}/bundles?uploadType=media`,
     data,
     {
       "Content-Type": "application/octet-stream",
