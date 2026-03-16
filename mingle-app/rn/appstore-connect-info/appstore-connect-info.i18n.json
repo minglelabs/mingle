@@ -678,14 +678,14 @@
           "fr": "Traducteur vocal en temps réel",
           "hi": "रीयल-टाइम वॉइस अनुवादक",
           "it": "Traduttore vocale live",
-          "ja": "リアルタイム音声翻訳機 · Global Hangout",
-          "ko": "실시간 음성 번역기 · Global Hangout",
+          "ja": "リアルタイム音声翻訳機",
+          "ko": "실시간 음성 번역기",
           "pt": "Tradutor de voz em tempo real",
           "ru": "Голосовой переводчик онлайн",
           "th": "เครื่องแปลเสียงแบบเรียลไทม์",
           "vi": "Dịch giọng nói trực tiếp",
-          "zh-cn": "实时语音翻译器 · Global Hangout",
-          "zh-tw": "即時語音翻譯器 · Global Hangout"
+          "zh-cn": "实时语音翻译器",
+          "zh-tw": "即時語音翻譯器"
         }
       }
     }
