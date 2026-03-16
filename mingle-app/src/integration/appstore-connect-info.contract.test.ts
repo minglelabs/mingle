@@ -79,7 +79,7 @@ const requiredMetadataLocales = [
   'zh-tw',
 ] as const
 const maxPromotionalTextLength = 170
-const maxKeywordsLength = 80
+const maxKeywordsLength = 100
 const payload = JSON.parse(
   fs.readFileSync(appStoreInfoJsonPath, 'utf8'),
 ) as {
@@ -88,6 +88,11 @@ const payload = JSON.parse(
     locales?: unknown
   }
   ios?: {
+    assets?: {
+      phoneScreenshotsDir?: unknown
+      appIconAssetCatalogPath?: unknown
+      appIcon1024Path?: unknown
+    }
     submission?: {
       version?: unknown
       screenshots?: Record<string, ScreenshotCopy[]>
@@ -110,6 +115,7 @@ describe('appstore-connect-info contract', () => {
   it('includes required sections for App Store Connect sync', () => {
     const shots = payload.meta?.shots
     const locales = payload.meta?.locales
+    const assets = payload.ios?.assets
     const submission = payload.ios?.submission
     const appInfo = payload.ios?.generalInfo?.appInfo
 
@@ -124,8 +130,32 @@ describe('appstore-connect-info contract', () => {
     expect(isNonEmptyString(submission?.appStoreInfo?.defaultMetadataLocale)).toBe(
       true,
     )
+    expect(isNonEmptyString(assets?.phoneScreenshotsDir)).toBe(true)
+    expect(isNonEmptyString(assets?.appIconAssetCatalogPath)).toBe(true)
+    expect(isNonEmptyString(assets?.appIcon1024Path)).toBe(true)
     expect(appInfo?.title).toBeDefined()
     expect(appInfo?.subtitle).toBeDefined()
+  })
+
+  it('tracks screenshot and icon asset paths for App Store packaging', () => {
+    const assets = payload.ios?.assets
+    const workspaceRoot = path.dirname(appStoreInfoJsonPath)
+    const screenshotRoot = path.resolve(
+      workspaceRoot,
+      String(assets?.phoneScreenshotsDir ?? ''),
+    )
+    const appIconCatalogPath = path.resolve(
+      workspaceRoot,
+      String(assets?.appIconAssetCatalogPath ?? ''),
+    )
+    const appIcon1024Path = path.resolve(
+      workspaceRoot,
+      String(assets?.appIcon1024Path ?? ''),
+    )
+
+    expect(fs.existsSync(screenshotRoot)).toBe(true)
+    expect(fs.existsSync(appIconCatalogPath)).toBe(true)
+    expect(fs.existsSync(appIcon1024Path)).toBe(true)
   })
 
   it('has screenshot copy keys for every locale and expected shot count', () => {

@@ -67,6 +67,7 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
     assets?: {
       iconPath?: unknown;
       featureGraphicPath?: unknown;
+      featureGraphicSourcePath?: unknown;
       phoneScreenshotsDir?: unknown;
     };
     storeListing?: {
@@ -115,6 +116,27 @@ describe("google-play-console-info contract", () => {
     const dimensions = readPngDimensions(resolvedPath);
     expect(dimensions.width).toBe(512);
     expect(dimensions.height).toBe(512);
+  });
+
+  it("keeps a Play feature graphic asset and records its OG source", () => {
+    const assets = payload.googlePlay?.assets;
+    const featureGraphicPath = path.resolve(
+      workspaceRoot,
+      assets?.featureGraphicPath as string,
+    );
+    const featureGraphicSourcePath = path.resolve(
+      workspaceRoot,
+      assets?.featureGraphicSourcePath as string,
+    );
+
+    expect(isNonEmptyString(assets?.featureGraphicPath)).toBe(true);
+    expect(isNonEmptyString(assets?.featureGraphicSourcePath)).toBe(true);
+    expect(fs.existsSync(featureGraphicPath)).toBe(true);
+    expect(fs.existsSync(featureGraphicSourcePath)).toBe(true);
+
+    const dimensions = readPngDimensions(featureGraphicPath);
+    expect(dimensions.width).toBe(1024);
+    expect(dimensions.height).toBe(500);
   });
 
   it("keeps listing text and screenshots aligned for every Play upload locale", () => {

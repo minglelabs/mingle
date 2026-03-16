@@ -20,6 +20,11 @@
     ]
   },
   "ios": {
+    "assets": {
+      "phoneScreenshotsDir": "upload",
+      "appIconAssetCatalogPath": "../ios/mingle/Images.xcassets/AppIcon.appiconset",
+      "appIcon1024Path": "../ios/mingle/Images.xcassets/AppIcon.appiconset/icon-1024.png"
+    },
     "submission": {
       "version": "1.0.1",
       "screenshots": {

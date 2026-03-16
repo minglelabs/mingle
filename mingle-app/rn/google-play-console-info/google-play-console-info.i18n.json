@@ -553,6 +553,7 @@
     "assets": {
       "iconPath": "assets/icon-512.png",
       "featureGraphicPath": "assets/feature-graphic.png",
+      "featureGraphicSourcePath": "../../../mingle-landing/public/og-image.png",
       "phoneScreenshotsDir": "upload"
     },
     "storeListing": {
