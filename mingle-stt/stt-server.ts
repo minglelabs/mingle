@@ -551,7 +551,6 @@ wss.on('connection', (clientWs) => {
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
-            console.log(`[conn:${connId}] soniox strategy=speaker-local`);
 
             const parseTokenTimeMs = (raw: unknown): number | null => {
                 if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
@@ -738,32 +737,6 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
-                    let joinedTokenTextForLog = '';
-                    const tokenTextByStateLanguageSpeaker = new Map<string, {
-                        finalState: string;
-                        language: string;
-                        speaker: string;
-                        text: string;
-                    }>();
-                    const appendGroupedTokenText = (
-                        finalState: string,
-                        language: string,
-                        speaker: string,
-                        tokenText: string,
-                    ) => {
-                        const key = `${finalState}\u0000${language}\u0000${speaker}`;
-                        const previousEntry = tokenTextByStateLanguageSpeaker.get(key);
-                        if (previousEntry) {
-                            previousEntry.text += tokenText;
-                            return;
-                        }
-                        tokenTextByStateLanguageSpeaker.set(key, {
-                            finalState,
-                            language,
-                            speaker,
-                            text: tokenText,
-                        });
-                    };
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
                     const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
                         const existing = speakerFrameUpdates.get(speaker);
@@ -797,19 +770,6 @@ wss.on('connection', (clientWs) => {
                         const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
                             ? token.speaker.trim()
                             : 'unknown';
-                        const tokenFinalState = token.is_final === true
-                            ? 'true'
-                            : token.is_final === false
-                                ? 'false'
-                                : 'unknown';
-
-                        joinedTokenTextForLog += tokenText;
-                        appendGroupedTokenText(
-                            tokenFinalState,
-                            tokenLanguage,
-                            tokenSpeaker,
-                            tokenText,
-                        );
 
                         const speakerState = getSpeakerState(tokenSpeaker);
                         if (tokenLanguage !== 'unknown') {
@@ -844,18 +804,6 @@ wss.on('connection', (clientWs) => {
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
-                    }
-
-                    if (tokenTextByStateLanguageSpeaker.size > 1 && joinedTokenTextForLog) {
-                        console.log(
-                            `[conn:${connId}] soniox text_all=${JSON.stringify(joinedTokenTextForLog)}`,
-                        );
-                    }
-                    for (const entry of tokenTextByStateLanguageSpeaker.values()) {
-                        if (!entry.text) continue;
-                        console.log(
-                            `[conn:${connId}] soniox text is_final=${entry.finalState} language=${entry.language} speaker=${entry.speaker} text=${JSON.stringify(entry.text)}`,
-                        );
                     }
 
                     const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
