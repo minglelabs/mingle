@@ -750,6 +750,7 @@ wss.on('connection', (clientWs) => {
                     let rawFinalTokenCount = 0;
                     let rawNonFinalTokenCount = 0;
                     let rawEndpointTokenCount = 0;
+                    let joinedTokenTextForLog = '';
                     let rawFinalStartMs: number | null = null;
                     let rawFinalEndMs: number | null = null;
                     let rawNonFinalStartMs: number | null = null;
@@ -831,6 +832,7 @@ wss.on('connection', (clientWs) => {
                             detectedLang = tokenLanguage;
                         }
 
+                        joinedTokenTextForLog += tokenText;
                         appendPairGroupedTokenText(
                             tokenTextByStateLanguagePair,
                             tokenFinalState,
@@ -888,6 +890,11 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
+                    if (tokenTextByStateLanguagePair.size > 1 && joinedTokenTextForLog) {
+                        console.log(
+                            `[conn:${connId}] soniox text_all=${JSON.stringify(joinedTokenTextForLog)}`,
+                        );
+                    }
                     for (const pairEntry of tokenTextByStateLanguagePair.values()) {
                         if (!pairEntry.text) continue;
                         console.log(
