@@ -755,8 +755,8 @@ wss.on('connection', (clientWs) => {
                     let rawFinalEndMs: number | null = null;
                     let rawNonFinalStartMs: number | null = null;
                     let rawNonFinalEndMs: number | null = null;
-                    const frameFinalStates = new Set<string>();
-                    const frameLanguages = new Set<string>();
+                    const tokenTextByFinalState = new Map<string, string>();
+                    const tokenTextByLanguage = new Map<string, string>();
                     const mergeTokenTimeRange = (
                         startMs: number | null,
                         endMs: number | null,
@@ -777,26 +777,18 @@ wss.on('connection', (clientWs) => {
                         }
                         return { nextStartMs, nextEndMs };
                     };
+                    const appendGroupedTokenText = (
+                        groupedText: Map<string, string>,
+                        key: string,
+                        tokenText: string,
+                    ) => {
+                        const previousText = groupedText.get(key) || '';
+                        groupedText.set(key, previousText + tokenText);
+                    };
 
                     for (const token of tokens) {
-                        if (token.is_final === true) {
-                            frameFinalStates.add('true');
-                        } else if (token.is_final === false) {
-                            frameFinalStates.add('false');
-                        } else {
-                            frameFinalStates.add('unknown');
-                        }
-
-                        if (typeof token.language === 'string' && token.language.trim()) {
-                            const tokenLanguage = token.language.trim();
-                            frameLanguages.add(tokenLanguage);
-                            detectedLang = tokenLanguage;
-                        } else {
-                            frameLanguages.add('unknown');
-                        }
                         const tokenText = typeof token.text === 'string' ? token.text : '';
                         if (!tokenText) continue;
-                        joinedTokenTextForLog += tokenText;
                         const tokenStartMs = parseTokenTimeMs(token.start_ms);
                         const tokenEndMs = parseTokenTimeMs(token.end_ms);
 
@@ -810,6 +802,22 @@ wss.on('connection', (clientWs) => {
                             }
                             continue;
                         }
+
+                        const tokenFinalState = token.is_final === true
+                            ? 'true'
+                            : token.is_final === false
+                                ? 'false'
+                                : 'unknown';
+                        const tokenLanguage = typeof token.language === 'string' && token.language.trim()
+                            ? token.language.trim()
+                            : 'unknown';
+                        if (tokenLanguage !== 'unknown') {
+                            detectedLang = tokenLanguage;
+                        }
+
+                        joinedTokenTextForLog += tokenText;
+                        appendGroupedTokenText(tokenTextByFinalState, tokenFinalState, tokenText);
+                        appendGroupedTokenText(tokenTextByLanguage, tokenLanguage, tokenText);
 
                         if (token.is_final === true) {
                             rawFinalText += tokenText;
@@ -868,10 +876,21 @@ wss.on('connection', (clientWs) => {
                             `[conn:${connId}] soniox text=${JSON.stringify(visibleJoinedTokenTextForLog)}`,
                         );
                     }
-                    if (frameFinalStates.size > 1 || frameLanguages.size > 1) {
-                        console.log(
-                            `[conn:${connId}] soniox token_variants is_final=${Array.from(frameFinalStates).join(',')} language=${Array.from(frameLanguages).join(',')}`,
-                        );
+                    if (tokenTextByFinalState.size > 1) {
+                        for (const [finalState, groupedText] of tokenTextByFinalState.entries()) {
+                            if (!groupedText) continue;
+                            console.log(
+                                `[conn:${connId}] soniox text_by_is_final=${finalState} text=${JSON.stringify(groupedText)}`,
+                            );
+                        }
+                    }
+                    if (tokenTextByLanguage.size > 1) {
+                        for (const [language, groupedText] of tokenTextByLanguage.entries()) {
+                            if (!groupedText) continue;
+                            console.log(
+                                `[conn:${connId}] soniox text_by_language=${language} text=${JSON.stringify(groupedText)}`,
+                            );
+                        }
                     }
 
                     const hasAnyPendingTextForEndpoint = hadPendingTextBeforeFrame
