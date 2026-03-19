@@ -194,6 +194,7 @@ export interface ParsedSttTranscriptMessage {
   text: string
   language: string
   isFinal: boolean
+  speaker: string
 }
 
 export function parseSttTranscriptMessage(
@@ -210,12 +211,16 @@ export function parseSttTranscriptMessage(
   const text = normalizeSttTurnText(rawText)
   const language = typeof utterance.language === 'string' ? utterance.language : 'unknown'
   const isFinal = data.is_final === true
+  const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
+    ? utterance.speaker.trim()
+    : 'unknown'
 
   return {
     rawText,
     text,
     language,
     isFinal,
+    speaker,
   }
 }
 
@@ -299,6 +304,14 @@ interface LocalFinalizeResult {
   text: string
   lang: string
   currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
+}
+
+interface PendingSpeakerTurn {
+  speaker: string
+  rawText: string
+  text: string
+  language: string
+  updatedAtMs: number
 }
 
 interface TranslateApiResult {
@@ -486,6 +499,8 @@ export default function useRealtimeSTT({
   const partialTranslationsRef = useRef<Record<string, string>>({})
   const partialTranscriptRef = useRef('')
   const partialLangRef = useRef<string | null>(null)
+  const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
+  const activePartialSpeakerRef = useRef<string | null>(null)
   const isStoppingRef = useRef(false)
   const onTtsRequestedRef = useRef(onTtsRequested)
   onTtsRequestedRef.current = onTtsRequested
@@ -700,7 +715,7 @@ export default function useRealtimeSTT({
     setConnectionStatus('idle')
   }, [cleanup])
 
-  const clearPartialBuffers = useCallback(() => {
+  const resetVisiblePartialState = useCallback(() => {
     setPartialTranslations({})
     partialTranslationsRef.current = {}
     setPartialTranscript('')
@@ -714,8 +729,43 @@ export default function useRealtimeSTT({
       partialTranslateControllerRef.current = null
     }
     lastPartialTranslationStateRef.current = null
-    turnStartedAtRef.current = null
   }, [])
+
+  const getLatestPendingTurn = useCallback((): PendingSpeakerTurn | null => {
+    const pendingTurns = Object.values(pendingTurnsBySpeakerRef.current)
+      .filter((turn) => turn.text.trim())
+      .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
+    return pendingTurns[0] || null
+  }, [])
+
+  const syncVisiblePendingTurn = useCallback((preferredSpeaker?: string | null) => {
+    const preferredTurn = preferredSpeaker
+      ? pendingTurnsBySpeakerRef.current[preferredSpeaker] || null
+      : null
+    const nextTurn = preferredTurn || getLatestPendingTurn()
+    const nextSpeaker = nextTurn?.speaker || null
+    const shouldPreserveVisibleState = Boolean(
+      nextSpeaker
+      && activePartialSpeakerRef.current === nextSpeaker,
+    )
+
+    if (!shouldPreserveVisibleState) {
+      resetVisiblePartialState()
+    }
+
+    activePartialSpeakerRef.current = nextSpeaker
+    setPartialTranscript(nextTurn?.text || '')
+    partialTranscriptRef.current = nextTurn?.text || ''
+    setPartialLang(nextTurn?.language || null)
+    partialLangRef.current = nextTurn?.language || null
+  }, [getLatestPendingTurn, resetVisiblePartialState])
+
+  const clearPartialBuffers = useCallback(() => {
+    pendingTurnsBySpeakerRef.current = {}
+    activePartialSpeakerRef.current = null
+    resetVisiblePartialState()
+    turnStartedAtRef.current = null
+  }, [resetVisiblePartialState])
 
   const buildRecentTurnContextPayload = useCallback((excludeUtteranceId?: string): RecentTurnContextPayload[] => {
     const now = Date.now()
@@ -948,9 +998,16 @@ export default function useRealtimeSTT({
     })
   }, [])
 
-
-
-  const finalizePendingLocally = useCallback((rawText: string, rawLang: string): LocalFinalizeResult | null => {
+  const finalizePendingLocally = useCallback((
+    rawText: string,
+    rawLang: string,
+    options?: {
+      partialTranslations?: Record<string, string>
+      previousStateSourceLanguage?: string
+      previousStateSourceText?: string
+      fallbackCurrentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
+    },
+  ): LocalFinalizeResult | null => {
     const text = normalizeSttTurnText(rawText)
     const lang = (rawLang || 'unknown').trim() || 'unknown'
     if (!text) return null
@@ -962,13 +1019,6 @@ export default function useRealtimeSTT({
       && stopFinalizeDedupRef.current.sig === sig
       && now < stopFinalizeDedupRef.current.expiresAt
     ) {
-      setPartialTranslations({})
-      partialTranslationsRef.current = {}
-      setPartialTranscript('')
-      partialTranscriptRef.current = ''
-      setPartialLang(null)
-      partialLangRef.current = null
-      lastPartialTranslationStateRef.current = null
       return null
     }
     stopFinalizeDedupRef.current = { sig, expiresAt: now + 5000 }
@@ -978,28 +1028,27 @@ export default function useRealtimeSTT({
       rawText,
       rawLanguage: rawLang,
       languages,
-      partialTranslations: partialTranslationsRef.current,
+      partialTranslations: options?.partialTranslations ?? partialTranslationsRef.current,
       utteranceSerial: utteranceIdRef.current,
       nowMs: now,
+      previousStateSourceLanguage: options?.previousStateSourceLanguage,
+      previousStateSourceText: options?.previousStateSourceText,
     })
     if (!localPayload) return null
     const fallbackCurrentTurnPreviousState = (
-      lastPartialTranslationStateRef.current
-      && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(lang)
-    ) ? lastPartialTranslationStateRef.current : null
+      options?.fallbackCurrentTurnPreviousState !== undefined
+        ? options.fallbackCurrentTurnPreviousState
+        : (
+          lastPartialTranslationStateRef.current
+          && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(lang)
+        ) ? lastPartialTranslationStateRef.current : null
+    )
     const currentTurnPreviousState = (
       localPayload.currentTurnPreviousState
       && Object.keys(localPayload.currentTurnPreviousState.translations).length > 0
     ) ? localPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || localPayload.currentTurnPreviousState)
 
     setUtterances(prev => [...prev, localPayload.utterance])
-    setPartialTranslations({})
-    partialTranslationsRef.current = {}
-    setPartialTranscript('')
-    partialTranscriptRef.current = ''
-    setPartialLang(null)
-    partialLangRef.current = null
-    lastPartialTranslationStateRef.current = null
     return {
       utteranceId: localPayload.utteranceId,
       text: localPayload.text,
@@ -1007,6 +1056,33 @@ export default function useRealtimeSTT({
       currentTurnPreviousState,
     }
   }, [languages])
+
+  const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
+    const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
+    const speakerLanguage = pendingTurn?.language || fallbackLanguage || 'unknown'
+    const isActiveSpeaker = activePartialSpeakerRef.current === speaker
+    const fallbackCurrentTurnPreviousState = (
+      isActiveSpeaker
+      && lastPartialTranslationStateRef.current
+      && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(speakerLanguage)
+    ) ? lastPartialTranslationStateRef.current : null
+
+    return {
+      pendingTurn,
+      options: {
+        partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
+        previousStateSourceLanguage: pendingTurn?.language || speakerLanguage,
+        previousStateSourceText: pendingTurn?.text || '',
+        fallbackCurrentTurnPreviousState,
+      },
+    }
+  }, [])
+
+  const getPendingTurnsForLocalFinalize = useCallback((): PendingSpeakerTurn[] => (
+    Object.values(pendingTurnsBySpeakerRef.current)
+      .filter((turn) => turn.text.trim())
+      .sort((left, right) => left.updatedAtMs - right.updatedAtMs)
+  ), [])
 
   const finalizeTurnWithTranslation = useCallback((
     localFinalizeResult: LocalFinalizeResult,
@@ -1102,14 +1178,28 @@ export default function useRealtimeSTT({
     stopAudioPipeline({ closeContext: false })
 
     const socket = socketRef.current
-    const pendingText = partialTranscriptRef.current.trim()
-    const pendingLang = partialLangRef.current || 'unknown'
-    let localFinalizeResult: LocalFinalizeResult | null = null
+    const activePendingTurn = (
+      activePartialSpeakerRef.current
+      ? pendingTurnsBySpeakerRef.current[activePartialSpeakerRef.current] || null
+      : getLatestPendingTurn()
+    )
+    const pendingText = activePendingTurn?.text.trim() || ''
+    const pendingLang = activePendingTurn?.language || 'unknown'
+    const localFinalizeResults: LocalFinalizeResult[] = []
 
-    // Finalize immediately in UI.
-    if (pendingText) {
-      localFinalizeResult = finalizePendingLocally(pendingText, pendingLang)
+    for (const pendingTurn of getPendingTurnsForLocalFinalize()) {
+      const { options } = buildLocalFinalizeOptionsForSpeaker(pendingTurn.speaker, pendingTurn.language)
+      const localFinalizeResult = finalizePendingLocally(
+        pendingTurn.rawText,
+        pendingTurn.language,
+        options,
+      )
+      if (localFinalizeResult) {
+        localFinalizeResults.push(localFinalizeResult)
+      }
     }
+    const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
+    clearPartialBuffers()
 
     if (useNativeStt) {
       nativeStopRequestedRef.current = true
@@ -1162,15 +1252,24 @@ export default function useRealtimeSTT({
       })
     }
 
-    if (localFinalizeResult) {
-      const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
-      turnStartedAtRef.current = null
+    turnStartedAtRef.current = null
+    for (const localFinalizeResult of localFinalizeResults) {
       finalizeTurnWithTranslation(localFinalizeResult, {
         sttDurationMs,
         reason: notifyLimitReached ? 'usage_limit_reached' : 'manual_stop',
       })
     }
-  }, [finalizePendingLocally, finalizeTurnWithTranslation, logClientEvent, sendNativeSttCommand, stopAudioPipeline])
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    clearPartialBuffers,
+    finalizePendingLocally,
+    finalizeTurnWithTranslation,
+    getLatestPendingTurn,
+    getPendingTurnsForLocalFinalize,
+    logClientEvent,
+    sendNativeSttCommand,
+    stopAudioPipeline,
+  ])
 
   const visualize = useCallback(() => {
     if (analyserRef.current) {
@@ -1227,17 +1326,26 @@ export default function useRealtimeSTT({
     const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
 
-    const remainingPartial = partialTranscriptRef.current.trim()
-    if (remainingPartial) {
-      const result = finalizePendingLocally(remainingPartial, partialLangRef.current || 'unknown')
+    const localFinalizeResults: LocalFinalizeResult[] = []
+    for (const pendingTurn of getPendingTurnsForLocalFinalize()) {
+      const { options } = buildLocalFinalizeOptionsForSpeaker(pendingTurn.speaker, pendingTurn.language)
+      const result = finalizePendingLocally(
+        pendingTurn.rawText,
+        pendingTurn.language,
+        options,
+      )
       if (result) {
-        const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
-        turnStartedAtRef.current = null
-        finalizeTurnWithTranslation(result, {
-          sttDurationMs,
-          reason: 'transport_error',
-        })
+        localFinalizeResults.push(result)
       }
+    }
+    const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
+    clearPartialBuffers()
+    turnStartedAtRef.current = null
+    for (const result of localFinalizeResults) {
+      finalizeTurnWithTranslation(result, {
+        sttDurationMs,
+        reason: 'transport_error',
+      })
     }
 
     if (wasActiveSession) {
@@ -1254,7 +1362,15 @@ export default function useRealtimeSTT({
     cleanup()
     setConnectionStatus('error')
     setTimeout(() => setConnectionStatus('idle'), 3000)
-  }, [cleanup, finalizePendingLocally, finalizeTurnWithTranslation, logClientEvent])
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    cleanup,
+    clearPartialBuffers,
+    finalizePendingLocally,
+    finalizeTurnWithTranslation,
+    getPendingTurnsForLocalFinalize,
+    logClientEvent,
+  ])
 
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.close', details)
@@ -1263,17 +1379,26 @@ export default function useRealtimeSTT({
     hasActiveSessionRef.current = false
 
     if (!isStoppingRef.current) {
-      const remainingPartial = partialTranscriptRef.current.trim()
-      if (remainingPartial) {
-        const result = finalizePendingLocally(remainingPartial, partialLangRef.current || 'unknown')
+      const localFinalizeResults: LocalFinalizeResult[] = []
+      for (const pendingTurn of getPendingTurnsForLocalFinalize()) {
+        const { options } = buildLocalFinalizeOptionsForSpeaker(pendingTurn.speaker, pendingTurn.language)
+        const result = finalizePendingLocally(
+          pendingTurn.rawText,
+          pendingTurn.language,
+          options,
+        )
         if (result) {
-          const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
-          turnStartedAtRef.current = null
-          finalizeTurnWithTranslation(result, {
-            sttDurationMs,
-            reason: 'transport_close',
-          })
+          localFinalizeResults.push(result)
         }
+      }
+      const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
+      clearPartialBuffers()
+      turnStartedAtRef.current = null
+      for (const result of localFinalizeResults) {
+        finalizeTurnWithTranslation(result, {
+          sttDurationMs,
+          reason: 'transport_close',
+        })
       }
     }
 
@@ -1289,7 +1414,15 @@ export default function useRealtimeSTT({
     }
 
     resetToIdle()
-  }, [finalizePendingLocally, finalizeTurnWithTranslation, logClientEvent, resetToIdle])
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    clearPartialBuffers,
+    finalizePendingLocally,
+    finalizeTurnWithTranslation,
+    getPendingTurnsForLocalFinalize,
+    logClientEvent,
+    resetToIdle,
+  ])
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
@@ -1331,7 +1464,7 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
-      const { rawText, text, language: lang, isFinal } = transcript
+      const { rawText, text, language: lang, isFinal, speaker } = transcript
 
       if (isStoppingRef.current && !isFinal) {
         return
@@ -1340,8 +1473,11 @@ export default function useRealtimeSTT({
       if (isFinal) {
         // Ignore non-meaningful turns (only "." / spaces) entirely.
         // No bubble, translation, or TTS should be produced.
+        const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
+        const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, lang)
+        delete pendingTurnsBySpeakerRef.current[speaker]
+        syncVisiblePendingTurn()
         if (!text) {
-          clearPartialBuffers()
           return
         }
         const sig = `${lang}::${text}`
@@ -1366,26 +1502,21 @@ export default function useRealtimeSTT({
           rawText,
           rawLanguage: lang,
           languages,
-          partialTranslations: partialTranslationsRef.current,
+          partialTranslations: options.partialTranslations,
           utteranceSerial: utteranceIdRef.current,
           nowMs: now,
-          previousStateSourceLanguage: partialLangRef.current || lang,
-          previousStateSourceText: partialTranscriptRef.current || text,
+          previousStateSourceLanguage: options.previousStateSourceLanguage || lang,
+          previousStateSourceText: options.previousStateSourceText || pendingTurn?.text || text,
         })
         if (!finalizedPayload) {
-          clearPartialBuffers()
           return
         }
-        const fallbackCurrentTurnPreviousState = (
-          lastPartialTranslationStateRef.current
-          && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(finalizedPayload.language)
-        ) ? lastPartialTranslationStateRef.current : null
+        const fallbackCurrentTurnPreviousState = options.fallbackCurrentTurnPreviousState
         const currentTurnPreviousState = (
           finalizedPayload.currentTurnPreviousState
           && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
         ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
         setUtterances(u => [...u, finalizedPayload.utterance])
-        clearPartialBuffers()
 
         finalizeTurnWithTranslation(
           {
@@ -1408,13 +1539,26 @@ export default function useRealtimeSTT({
             sourceText: text,
           })
         }
-        setPartialTranscript(text)
-        partialTranscriptRef.current = text
-        setPartialLang(lang)
-        partialLangRef.current = lang
+        pendingTurnsBySpeakerRef.current[speaker] = {
+          speaker,
+          rawText,
+          text,
+          language: lang,
+          updatedAtMs: Date.now(),
+        }
+        syncVisiblePendingTurn(speaker)
       }
     }
-  }, [clearPartialBuffers, finalizeTurnWithTranslation, languages, logClientEvent, normalizedUsageLimitSec, startAudioProcessing, stopRecordingGracefully])
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    finalizeTurnWithTranslation,
+    languages,
+    logClientEvent,
+    normalizedUsageLimitSec,
+    startAudioProcessing,
+    stopRecordingGracefully,
+    syncVisiblePendingTurn,
+  ])
 
   const startRecording = useCallback(async () => {
     if (isStoppingRef.current) return
@@ -1444,10 +1588,14 @@ export default function useRealtimeSTT({
       turnStartedAtRef.current = null
       lastPartialTranslationStateRef.current = null
       hasActiveSessionRef.current = false
+      pendingTurnsBySpeakerRef.current = {}
+      activePartialSpeakerRef.current = null
       setPartialTranscript('')
+      partialTranscriptRef.current = ''
       setPartialTranslations({})
       partialTranslationsRef.current = {}
       setPartialLang(null)
+      partialLangRef.current = null
       nativeStopRequestedRef.current = false
 
       if (useNativeStt) {
@@ -1661,12 +1809,14 @@ export default function useRealtimeSTT({
     // Capture the utterance counter at request time so we can discard stale responses
     // that arrive after a new utterance has started (prevents cross-utterance contamination).
     const requestUtteranceId = utteranceIdRef.current
+    const requestSpeaker = activePartialSpeakerRef.current
     translateViaApi(trimmed, currentLang, languages, {
       currentTurnPreviousState: lastPartialTranslationStateRef.current,
     })
       .then(result => {
         // Discard if a new utterance has started since this request was fired.
         if (utteranceIdRef.current !== requestUtteranceId) return
+        if (activePartialSpeakerRef.current !== requestSpeaker) return
         const filteredExisting = stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang)
         const filteredNew = stripSourceLanguageFromTranslations(result.translations, currentLang)
         const nextTranslations = { ...filteredExisting, ...filteredNew }

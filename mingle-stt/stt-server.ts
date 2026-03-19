@@ -754,11 +754,6 @@ wss.on('connection', (clientWs) => {
                             continue;
                         }
 
-                        const tokenFinalState = token.is_final === true
-                            ? 'true'
-                            : token.is_final === false
-                                ? 'false'
-                                : 'unknown';
                         const tokenLanguage = typeof token.language === 'string' && token.language.trim()
                             ? token.language.trim()
                             : 'unknown';
