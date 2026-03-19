@@ -728,6 +728,7 @@ wss.on('connection', (clientWs) => {
                         end_ms?: unknown;
                         is_final?: unknown;
                         language?: unknown;
+                        speaker?: unknown;
                     };
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
                     if (tokens.length === 0) {
@@ -758,6 +759,7 @@ wss.on('connection', (clientWs) => {
                     const tokenTextByStateLanguagePair = new Map<string, {
                         finalState: string;
                         language: string;
+                        speaker: string;
                         text: string;
                     }>();
                     const mergeTokenTimeRange = (
@@ -784,13 +786,15 @@ wss.on('connection', (clientWs) => {
                         groupedText: Map<string, {
                             finalState: string;
                             language: string;
+                            speaker: string;
                             text: string;
                         }>,
                         finalState: string,
                         language: string,
+                        speaker: string,
                         tokenText: string,
                     ) => {
-                        const key = `${finalState}\u0000${language}`;
+                        const key = `${finalState}\u0000${language}\u0000${speaker}`;
                         const previousEntry = groupedText.get(key);
                         if (previousEntry) {
                             previousEntry.text += tokenText;
@@ -799,6 +803,7 @@ wss.on('connection', (clientWs) => {
                         groupedText.set(key, {
                             finalState,
                             language,
+                            speaker,
                             text: tokenText,
                         });
                     };
@@ -828,6 +833,9 @@ wss.on('connection', (clientWs) => {
                         const tokenLanguage = typeof token.language === 'string' && token.language.trim()
                             ? token.language.trim()
                             : 'unknown';
+                        const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
+                            ? token.speaker.trim()
+                            : 'unknown';
                         if (tokenLanguage !== 'unknown') {
                             detectedLang = tokenLanguage;
                         }
@@ -837,6 +845,7 @@ wss.on('connection', (clientWs) => {
                             tokenTextByStateLanguagePair,
                             tokenFinalState,
                             tokenLanguage,
+                            tokenSpeaker,
                             tokenText,
                         );
 
@@ -898,7 +907,7 @@ wss.on('connection', (clientWs) => {
                     for (const pairEntry of tokenTextByStateLanguagePair.values()) {
                         if (!pairEntry.text) continue;
                         console.log(
-                            `[conn:${connId}] soniox text is_final=${pairEntry.finalState} language=${pairEntry.language} text=${JSON.stringify(pairEntry.text)}`,
+                            `[conn:${connId}] soniox text is_final=${pairEntry.finalState} language=${pairEntry.language} speaker=${pairEntry.speaker} text=${JSON.stringify(pairEntry.text)}`,
                         );
                     }
 
