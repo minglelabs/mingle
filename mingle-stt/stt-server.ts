@@ -769,6 +769,7 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
+                    console.log(`[conn:${connId}] soniox raw tokens ${JSON.stringify(tokens)}`);
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
