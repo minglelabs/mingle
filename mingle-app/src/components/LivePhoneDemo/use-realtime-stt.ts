@@ -516,9 +516,9 @@ export default function useRealtimeSTT({
   // preventing old (slow) translations from overwriting newer ones.
   const translateSeqRef = useRef(0)
   const lastAppliedSeqRef = useRef<Map<string, number>>(new Map()) // utteranceId -> last applied seq
-  // Track the partial transcript 10-char threshold last used for partial translation.
+  // Track the partial transcript 20-char threshold last used for partial translation.
   // A first partial translation fires immediately when the first transcript arrives,
-  // then subsequent calls fire when 10/20/30... thresholds are crossed.
+  // then subsequent calls fire when 20/40/60... thresholds are crossed.
   const hasFiredInitialPartialTranslateRef = useRef(false)
   const lastPartialTranslateLenRef = useRef(0)
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
@@ -1781,8 +1781,8 @@ export default function useRealtimeSTT({
     }
   }, [connectionStatus, startRecording, stopRecordingGracefully])
 
-  // ===== Partial translation: fire once immediately, then every 10-char threshold =====
-  const PARTIAL_TRANSLATE_STEP = 10
+  // ===== Partial translation: fire once immediately, then every 20-char threshold =====
+  const PARTIAL_TRANSLATE_STEP = 20
   useEffect(() => {
     const trimmed = partialTranscript.trim()
     const len = trimmed.length
@@ -1798,7 +1798,7 @@ export default function useRealtimeSTT({
     if (!hasFiredInitialPartialTranslateRef.current) {
       hasFiredInitialPartialTranslateRef.current = true
       // Prime the threshold tracker based on the first partial length so
-      // the next request is triggered at the next 10-char boundary.
+      // the next request is triggered at the next 20-char boundary.
       lastPartialTranslateLenRef.current = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
     } else {
       const nextThreshold = lastPartialTranslateLenRef.current + PARTIAL_TRANSLATE_STEP
