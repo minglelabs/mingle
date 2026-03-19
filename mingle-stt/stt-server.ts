@@ -680,9 +680,7 @@ wss.on('connection', (clientWs) => {
                 if (!isClientConnected) return;
 
                 try {
-                    const rawSonioxMessage = event.data.toString();
-                    console.log(`[conn:${connId}] soniox recv ${rawSonioxMessage}`);
-                    const msg = JSON.parse(rawSonioxMessage);
+                    const msg = JSON.parse(event.data.toString());
                     // Soniox raw token joined string logging is intentionally disabled.
                     // const logTokens = Array.isArray(msg.tokens)
                     //     ? (msg.tokens as Array<{ text?: unknown }>)
@@ -752,10 +750,13 @@ wss.on('connection', (clientWs) => {
                     let rawFinalTokenCount = 0;
                     let rawNonFinalTokenCount = 0;
                     let rawEndpointTokenCount = 0;
+                    let joinedTokenTextForLog = '';
                     let rawFinalStartMs: number | null = null;
                     let rawFinalEndMs: number | null = null;
                     let rawNonFinalStartMs: number | null = null;
                     let rawNonFinalEndMs: number | null = null;
+                    const frameFinalStates = new Set<string>();
+                    const frameLanguages = new Set<string>();
                     const mergeTokenTimeRange = (
                         startMs: number | null,
                         endMs: number | null,
@@ -778,11 +779,24 @@ wss.on('connection', (clientWs) => {
                     };
 
                     for (const token of tokens) {
+                        if (token.is_final === true) {
+                            frameFinalStates.add('true');
+                        } else if (token.is_final === false) {
+                            frameFinalStates.add('false');
+                        } else {
+                            frameFinalStates.add('unknown');
+                        }
+
                         if (typeof token.language === 'string' && token.language.trim()) {
-                            detectedLang = token.language;
+                            const tokenLanguage = token.language.trim();
+                            frameLanguages.add(tokenLanguage);
+                            detectedLang = tokenLanguage;
+                        } else {
+                            frameLanguages.add('unknown');
                         }
                         const tokenText = typeof token.text === 'string' ? token.text : '';
                         if (!tokenText) continue;
+                        joinedTokenTextForLog += tokenText;
                         const tokenStartMs = parseTokenTimeMs(token.start_ms);
                         const tokenEndMs = parseTokenTimeMs(token.end_ms);
 
@@ -845,6 +859,19 @@ wss.on('connection', (clientWs) => {
                                 hasTimestampedProgressBeyondWatermark = true;
                             }
                         }
+                    }
+
+                    const visibleJoinedTokenTextForLog = joinedTokenTextForLog
+                        .replace(/<\/?(?:end|fin)>/gi, '');
+                    if (visibleJoinedTokenTextForLog) {
+                        console.log(
+                            `[conn:${connId}] soniox text=${JSON.stringify(visibleJoinedTokenTextForLog)}`,
+                        );
+                    }
+                    if (frameFinalStates.size > 1 || frameLanguages.size > 1) {
+                        console.log(
+                            `[conn:${connId}] soniox token_variants is_final=${Array.from(frameFinalStates).join(',')} language=${Array.from(frameLanguages).join(',')}`,
+                        );
                     }
 
                     const hasAnyPendingTextForEndpoint = hadPendingTextBeforeFrame
