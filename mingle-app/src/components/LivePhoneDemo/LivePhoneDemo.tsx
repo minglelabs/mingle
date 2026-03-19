@@ -1200,7 +1200,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
                 className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors disabled:opacity-60"
-                style={{ backgroundColor: '#f3f4f6' }}
+                style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
                   <span
