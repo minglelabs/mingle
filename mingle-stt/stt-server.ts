@@ -1,6 +1,6 @@
 import { createServer } from 'http';
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
@@ -31,27 +31,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
-const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (() => {
-    const configuredPath = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
-    if (configuredPath) return resolve(configuredPath);
-    return resolve(process.cwd(), '..', '.devbox-logs', 'stt-raw.log');
-})();
-let sonioxInboundLogStream: ReturnType<typeof createWriteStream> | null = null;
-try {
-    mkdirSync(dirname(SONIOX_RAW_JOINED_TOKEN_LOG_FILE), { recursive: true });
-    sonioxInboundLogStream = createWriteStream(SONIOX_RAW_JOINED_TOKEN_LOG_FILE, { flags: 'a' });
-    sonioxInboundLogStream.on('error', (error) => {
-        console.error(`Soniox inbound log stream error: ${error.message}`);
-    });
-} catch (error) {
-    console.error(
-        `Failed to initialize Soniox inbound log: ${error instanceof Error ? error.message : String(error)}`,
-    );
-}
-
-const appendSonioxTokenTextLine = (text: string) => {
-    sonioxInboundLogStream?.write(`${text}\n`);
-};
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -568,7 +547,6 @@ wss.on('connection', (clientWs) => {
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
-            console.log(`[conn:${connId}] soniox strategy=speaker-local`);
 
             const parseTokenTimeMs = (raw: unknown): number | null => {
                 if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
@@ -725,24 +703,6 @@ wss.on('connection', (clientWs) => {
 
                 try {
                     const msg = JSON.parse(event.data.toString());
-                    // Soniox raw token joined string logging is intentionally disabled.
-                    // const logTokens = Array.isArray(msg.tokens)
-                    //     ? (msg.tokens as Array<{ text?: unknown }>)
-                    //     : [];
-                    // if (logTokens.length > 0) {
-                    //     const tokenLine = logTokens
-                    //         .map((token) => {
-                    //             const tokenText = typeof token.text === 'string' ? token.text : '';
-                    //             if (!tokenText) return '';
-                    //             return tokenText
-                    //                 .replace(/<\/?end>/gi, '<end>')
-                    //                 .replace(/<\/?fin>/gi, '<fin>');
-                    //         })
-                    //         .join('');
-                    //     if (tokenLine) {
-                    //         appendSonioxTokenTextLine(tokenLine);
-                    //     }
-                    // }
 
                     if (msg.error_code) {
                         console.error(`[Soniox] Error: ${msg.error_code} - ${msg.error_message}`);
@@ -769,39 +729,7 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
-                    let joinedTokenTextForLog = '';
-                    const tokenTextByStateLanguagePair = new Map<string, {
-                        finalState: string;
-                        language: string;
-                        speaker: string;
-                        text: string;
-                    }>();
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
-                    const appendPairGroupedTokenText = (
-                        groupedText: Map<string, {
-                            finalState: string;
-                            language: string;
-                            speaker: string;
-                            text: string;
-                        }>,
-                        finalState: string,
-                        language: string,
-                        speaker: string,
-                        tokenText: string,
-                    ) => {
-                        const key = `${finalState}\u0000${language}\u0000${speaker}`;
-                        const previousEntry = groupedText.get(key);
-                        if (previousEntry) {
-                            previousEntry.text += tokenText;
-                            return;
-                        }
-                        groupedText.set(key, {
-                            finalState,
-                            language,
-                            speaker,
-                            text: tokenText,
-                        });
-                    };
                     const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
                         const existing = speakerFrameUpdates.get(speaker);
                         if (existing) return existing;
@@ -838,14 +766,6 @@ wss.on('connection', (clientWs) => {
                             ? token.speaker.trim()
                             : 'unknown';
 
-                        joinedTokenTextForLog += tokenText;
-                        appendPairGroupedTokenText(
-                            tokenTextByStateLanguagePair,
-                            tokenFinalState,
-                            tokenLanguage,
-                            tokenSpeaker,
-                            tokenText,
-                        );
                         const speakerState = getSpeakerState(tokenSpeaker);
                         if (tokenLanguage !== 'unknown') {
                             speakerState.detectedLang = tokenLanguage;
@@ -866,18 +786,6 @@ wss.on('connection', (clientWs) => {
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
-                    }
-
-                    if (tokenTextByStateLanguagePair.size > 1 && joinedTokenTextForLog) {
-                        console.log(
-                            `[conn:${connId}] soniox text_all=${JSON.stringify(joinedTokenTextForLog)}`,
-                        );
-                    }
-                    for (const pairEntry of tokenTextByStateLanguagePair.values()) {
-                        if (!pairEntry.text) continue;
-                        console.log(
-                            `[conn:${connId}] soniox text is_final=${pairEntry.finalState} language=${pairEntry.language} speaker=${pairEntry.speaker} text=${JSON.stringify(pairEntry.text)}`,
-                        );
                     }
 
                     const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
@@ -1116,5 +1024,4 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(
         `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS}`,
     );
-    console.log('[stt-server] soniox_segmentation_strategy=speaker-local');
 });
