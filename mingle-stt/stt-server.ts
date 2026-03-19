@@ -58,12 +58,6 @@ const appendSonioxTokenTextLine = (text: string) => {
     sonioxInboundLogStream?.write(`${text}\n`);
 };
 
-const toLogPreview = (text: string, maxLen = 120): string => {
-    const singleLine = text.replace(/\s+/g, ' ').trim();
-    if (singleLine.length <= maxLen) return singleLine;
-    return `${singleLine.slice(0, maxLen - 1)}…`;
-};
-
 const server = createServer();
 const wss = new WebSocketServer({ server });
 
@@ -90,14 +84,9 @@ wss.on('connection', (clientWs) => {
     let isClientConnected = true;
     let abortController: AbortController | null = null;
     let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
-    let currentSampleRate: number | null = null;
     let selectedLanguages: string[] = [];
     let finalizePendingTurnFromProvider: (() => Promise<FinalTurnPayload | null>) | null = null;
     let sonioxStopRequested = false;
-    let sonioxInboundAudioFrames = 0;
-    let sonioxInboundAudioBytes = 0;
-    let sonioxInboundAudioStartedAt = 0;
-    let lastSonioxLoggedPreview = '';
     /** 활성 연결의 발화 분리 전략 객체 */
     let sonioxSegStrategy: SegmentationStrategy | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
@@ -121,28 +110,6 @@ wss.on('connection', (clientWs) => {
         }
         sonioxSegStrategy?.dispose();
         sonioxSegStrategy = null;
-    };
-
-    const logSonioxInboundAudio = (pcmBytes: number) => {
-        sonioxInboundAudioFrames += 1;
-        sonioxInboundAudioBytes += pcmBytes;
-
-        if (sonioxInboundAudioFrames === 1) {
-            sonioxInboundAudioStartedAt = Date.now();
-            console.log(
-                `[conn:${connId}] soniox audio ingress started sampleRate=${currentSampleRate ?? 'unknown'} langs=${selectedLanguages.join(',')} chunkBytes=${pcmBytes}`,
-            );
-            return;
-        }
-
-        if (sonioxInboundAudioFrames % 50 !== 0) return;
-
-        const elapsedMs = sonioxInboundAudioStartedAt > 0
-            ? Date.now() - sonioxInboundAudioStartedAt
-            : 0;
-        console.log(
-            `[conn:${connId}] soniox audio ingress frames=${sonioxInboundAudioFrames} bytes=${sonioxInboundAudioBytes} elapsedMs=${elapsedMs}`,
-        );
     };
 
     const resetSonioxSegmentState = () => {
@@ -672,10 +639,6 @@ wss.on('connection', (clientWs) => {
                     }));
                 }
 
-                console.log(
-                    `[conn:${connId}] soniox final lang=${cleanedLang} text="${toLogPreview(stripEndpointMarkers(cleanedText), 160)}"`,
-                );
-
                 return {
                     text: cleanedText,
                     language: cleanedLang,
@@ -718,6 +681,7 @@ wss.on('connection', (clientWs) => {
 
                 try {
                     const rawSonioxMessage = event.data.toString();
+                    console.log(`[conn:${connId}] soniox recv ${rawSonioxMessage}`);
                     const msg = JSON.parse(rawSonioxMessage);
                     // Soniox raw token joined string logging is intentionally disabled.
                     // const logTokens = Array.isArray(msg.tokens)
@@ -964,28 +928,6 @@ wss.on('connection', (clientWs) => {
                         latestNonFinalText = '';
                     }
 
-                    const currentPreview = toLogPreview(
-                        stripEndpointMarkers(composeTurnText(finalizedText, latestNonFinalText)),
-                    );
-                    if (
-                        rawFinalTokenCount > 0
-                        || rawNonFinalTokenCount > 0
-                        || rawEndpointTokenCount > 0
-                    ) {
-                        const shouldLogFrame = Boolean(currentPreview)
-                            && (
-                                currentPreview !== lastSonioxLoggedPreview
-                                || rawFinalTokenCount > 0
-                                || rawEndpointTokenCount > 0
-                            );
-                        if (shouldLogFrame) {
-                            console.log(
-                                `[conn:${connId}] soniox frame finalTokens=${rawFinalTokenCount} nonFinalTokens=${rawNonFinalTokenCount} endpointTokens=${rawEndpointTokenCount} lang=${detectedLang} preview="${currentPreview}"`,
-                            );
-                            lastSonioxLoggedPreview = currentPreview;
-                        }
-                    }
-
                     const previousMergedSnapshot = composeTurnText(previousFinalizedText, previousNonFinalText);
                     const mergedSnapshot = composeTurnText(finalizedText, latestNonFinalText);
                     // SilenceTimerStrategy는 currentMergedTextLen을 스스로 관리
@@ -1155,7 +1097,6 @@ wss.on('connection', (clientWs) => {
 
         if (data.sample_rate && data.languages) {
             currentModel = data.stt_model || 'gladia';
-            currentSampleRate = Number.isFinite(data.sample_rate) ? data.sample_rate : null;
             selectedLanguages = data.languages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
@@ -1180,9 +1121,6 @@ wss.on('connection', (clientWs) => {
                 // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
                     const pcmData = Buffer.from(data.data.chunk, 'base64');
-                    if (currentModel === 'soniox') {
-                        logSonioxInboundAudio(pcmData.byteLength);
-                    }
                     sttWs.send(pcmData);
                 }
             } else {
