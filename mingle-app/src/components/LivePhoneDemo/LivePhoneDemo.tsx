@@ -1201,8 +1201,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 aria-expanded={langSelectorOpen}
                 className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-gray-700 transition-colors disabled:opacity-60 ${
                   langSelectorOpen
-                    ? 'border-gray-300 bg-gray-100'
-                    : 'border-gray-200 bg-gray-50'
+                    ? 'border-gray-300 bg-gray-200'
+                    : 'border-gray-200 bg-gray-100'
                 }`}
               >
                 {selectedLanguages.map((lang) => (
@@ -1217,8 +1217,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <ChevronDown
                   size={14}
                   strokeWidth={2.4}
-                  className={`shrink-0 text-gray-500 transition-transform ${
-                    langSelectorOpen ? 'rotate-180 text-gray-600' : ''
+                  className={`shrink-0 text-black transition-transform ${
+                    langSelectorOpen ? 'rotate-180' : ''
                   }`}
                 />
               </button>
