@@ -3238,10 +3238,11 @@ cmd_ios_appstore_sync_metadata() {
   local default_copy_json="$appstore_connect_info_root/appstore-connect-info.i18n.json"
   local legacy_copy_json="$ROOT_DIR/mingle-app/rn/appstore-media/copy/screenshot-copy.i18n.json"
   local copy_json="${COPY_JSON:-$default_copy_json}"
-  local api_key_json="${API_KEY_JSON:-/tmp/asc_api_key.json}"
+  local api_key_json="${API_KEY_JSON:-$ROOT_DIR/.credentials/appstore-connect/api-key.json}"
   local app_identifier="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
   local dry_run="false"
   local no_fallback="false"
+  local only_app_info="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -3265,6 +3266,10 @@ cmd_ios_appstore_sync_metadata() {
         no_fallback="true"
         shift
         ;;
+      --only-app-info)
+        only_app_info="true"
+        shift
+        ;;
       -h|--help)
         cat <<EOF
 Usage: scripts/devbox ios-appstore-sync-metadata [options]
@@ -3275,6 +3280,7 @@ Options:
   --app-id <bundle-id>    App bundle identifier (default: $app_identifier)
   --dry-run               Print planned updates only (no ASC write)
   --no-fallback           Do not fallback metadata locale when target locale is missing
+  --only-app-info         Only sync app info localizations (title, subtitle); skip version localizations
   -h, --help              Show help
 EOF
         return 0
@@ -3299,7 +3305,7 @@ EOF
   PATH="/opt/homebrew/opt/ruby/bin:/opt/homebrew/Cellar/fastlane/2.232.2/libexec/bin:$PATH" \
   GEM_HOME="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}" \
   GEM_PATH="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}:/opt/homebrew/Cellar/fastlane/2.232.2/libexec" \
-  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" \
+  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" \
   ruby - <<'RUBY'
 require 'json'
 require 'spaceship'
@@ -3319,6 +3325,7 @@ api_key_json = ENV.fetch('API_KEY_JSON')
 app_identifier = ENV.fetch('APP_IDENTIFIER')
 dry_run = ENV.fetch('DRY_RUN') == 'true'
 no_fallback = ENV.fetch('NO_FALLBACK') == 'true'
+only_app_info = ENV.fetch('ONLY_APP_INFO') == 'true'
 
 payload = JSON.parse(File.read(copy_json))
 
@@ -3382,16 +3389,41 @@ client = Spaceship::ConnectAPI.client.tunes_request_client
 app = Spaceship::ConnectAPI::App.find(app_identifier)
 raise "app not found: #{app_identifier}" unless app
 
-version = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
-raise "editable iOS version not found for #{app_identifier}" unless version
+def choose_ios_version(client, app)
+  editable = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+  return editable if editable
+
+  versions = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=50").body['data'] || []
+  preferred = %w[READY_FOR_SALE PENDING_DEVELOPER_RELEASE PRE_ORDER_READY_FOR_SALE PREPARE_FOR_SUBMISSION]
+  versions.sort_by! do |version|
+    attrs = version['attributes'] || {}
+    state = attrs['appStoreState'].to_s
+    preferred_index = preferred.index(state) || preferred.length
+    created_at = attrs['createdDate'].to_s
+    [preferred_index, created_at.empty? ? '' : created_at]
+  end
+  selected = versions.reverse.find do |version|
+    attrs = version['attributes'] || {}
+    preferred.include?(attrs['appStoreState'].to_s)
+  end || versions.last
+  raise "iOS App Store version not found for #{app.bundle_id}" unless selected
+
+  selected_version_id = selected.respond_to?(:id) ? selected.id : selected['id']
+  Spaceship::ConnectAPI::AppStoreVersion.get(app_store_version_id: selected_version_id)
+end
+
+version = choose_ios_version(client, app)
 
 if expected_version && version.version_string != expected_version
   raise "editable version mismatch: expected #{expected_version}, actual #{version.version_string}"
 end
 
 version_loc_updates = 0
+version_loc_skips = 0
 app_info_loc_updates = 0
+app_info_loc_skips = 0
 
+unless only_app_info
 version.get_app_store_version_localizations.each do |loc|
   asc_locale = loc.locale
   locale_key = json_locale_key_for_asc(asc_locale)
@@ -3404,6 +3436,9 @@ version.get_app_store_version_localizations.each do |loc|
   attributes = {}
   if metadata.key?('promotionalText')
     attributes[:promotionalText] = metadata['promotionalText'].to_s
+  end
+  if metadata.key?('whatsNew')
+    attributes[:whatsNew] = metadata['whatsNew'].to_s
   end
   if metadata.key?('description')
     attributes[:description] = metadata['description'].to_s
@@ -3424,22 +3459,41 @@ version.get_app_store_version_localizations.each do |loc|
 
   puts "[version-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
   unless dry_run
-    client.patch(
-      "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/#{loc.id}",
-      {
-        data: {
-          type: 'appStoreVersionLocalizations',
-          id: loc.id,
-          attributes: attributes
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/#{loc.id}",
+        {
+          data: {
+            type: 'appStoreVersionLocalizations',
+            id: loc.id,
+            attributes: attributes
+          }
         }
-      }
-    )
+      )
+    rescue => error
+      message = error.to_s
+      if message.include?("cannot be edited at this time")
+        puts "[skip version-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+        version_loc_skips += 1
+        next
+      end
+      raise
+    end
   end
   version_loc_updates += 1
 end
+end # unless only_app_info
 
 app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
-app_info_id = app_infos.first&.dig('id')
+raise "appInfo not found for app #{app.id}" if app_infos.empty?
+editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
+preferred_app_info = app_infos.min_by do |ai|
+  state = ai.dig('attributes', 'appStoreState').to_s
+  idx = editable_states.index(state)
+  idx ? idx : editable_states.length
+end
+app_info_id = preferred_app_info&.dig('id')
+puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
 raise "appInfo not found for app #{app.id}" unless app_info_id
 
 app_info_loc_refs = client.get(
@@ -3454,24 +3508,64 @@ app_info_loc_refs.each do |ref|
 
   name = title_map[locale_key] || title_map['en']
   subtitle = subtitle_map[locale_key] || subtitle_map['en']
+  current_name = instance.dig('attributes', 'name').to_s
+  current_subtitle = instance.dig('attributes', 'subtitle').to_s
 
   attributes = {}
-  attributes[:name] = name if name
-  attributes[:subtitle] = subtitle if subtitle
+  attributes[:name] = name if name && name.to_s != current_name
+  attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
   next if attributes.empty?
 
   puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
   unless dry_run
-    client.patch(
-      "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
-      {
-        data: {
-          type: 'appInfoLocalizations',
-          id: loc_id,
-          attributes: attributes
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+        {
+          data: {
+            type: 'appInfoLocalizations',
+            id: loc_id,
+            attributes: attributes
+          }
         }
-      }
-    )
+      )
+    rescue => error
+      message = error.to_s
+      if attributes[:subtitle] && attributes[:name] &&
+         (message.include?("cannot be modified in the current state") ||
+          message.include?("can not be modified in the current state") ||
+          message.include?("cannot be edited at this time") ||
+          message.include?("can not be edited at this time"))
+        begin
+          client.patch(
+            "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+            {
+              data: {
+                type: 'appInfoLocalizations',
+                id: loc_id,
+                attributes: {
+                  subtitle: attributes[:subtitle]
+                }
+              }
+            }
+          )
+          app_info_loc_updates += 1
+          puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
+          next
+        rescue => subtitle_error
+          message = subtitle_error.to_s
+        end
+      end
+      if message.include?("cannot be modified in the current state") ||
+         message.include?("can not be modified in the current state") ||
+         message.include?("cannot be edited at this time") ||
+         message.include?("can not be edited at this time")
+        puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+        app_info_loc_skips += 1
+        next
+      end
+      raise
+    end
   end
   app_info_loc_updates += 1
 end
@@ -3479,22 +3573,31 @@ end
 if copyright_value
   puts "[version] set copyright on #{version.version_string}"
   unless dry_run
-    client.patch(
-      "https://api.appstoreconnect.apple.com/v1/appStoreVersions/#{version.id}",
-      {
-        data: {
-          type: 'appStoreVersions',
-          id: version.id,
-          attributes: {
-            copyright: copyright_value
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appStoreVersions/#{version.id}",
+        {
+          data: {
+            type: 'appStoreVersions',
+            id: version.id,
+            attributes: {
+              copyright: copyright_value
+            }
           }
         }
-      }
-    )
+      )
+    rescue => error
+      message = error.to_s
+      if message.include?("cannot be edited at this time")
+        puts "[skip version] #{message.lines.first.to_s.strip}"
+      else
+        raise
+      end
+    end
   end
 end
 
-puts "done: version_localizations=#{version_loc_updates}, app_info_localizations=#{app_info_loc_updates}, dry_run=#{dry_run}"
+puts "done: version_localizations=#{version_loc_updates}, skipped_version_localizations=#{version_loc_skips}, app_info_localizations=#{app_info_loc_updates}, skipped_app_info_localizations=#{app_info_loc_skips}, dry_run=#{dry_run}"
 RUBY
 }
 

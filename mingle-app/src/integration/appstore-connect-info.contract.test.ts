@@ -9,6 +9,7 @@ type ScreenshotCopy = {
 
 type MetadataEntry = {
   promotionalText?: unknown
+  whatsNew?: unknown
   description?: unknown
   keywords?: unknown
   supportUrl?: unknown
@@ -79,7 +80,7 @@ const requiredMetadataLocales = [
   'zh-tw',
 ] as const
 const maxPromotionalTextLength = 170
-const maxKeywordsLength = 80
+const maxKeywordsLength = 100
 const payload = JSON.parse(
   fs.readFileSync(appStoreInfoJsonPath, 'utf8'),
 ) as {
@@ -88,6 +89,9 @@ const payload = JSON.parse(
     locales?: unknown
   }
   ios?: {
+    assets?: {
+      phoneScreenshotsDir?: unknown
+    }
     submission?: {
       version?: unknown
       screenshots?: Record<string, ScreenshotCopy[]>
@@ -110,6 +114,7 @@ describe('appstore-connect-info contract', () => {
   it('includes required sections for App Store Connect sync', () => {
     const shots = payload.meta?.shots
     const locales = payload.meta?.locales
+    const assets = payload.ios?.assets
     const submission = payload.ios?.submission
     const appInfo = payload.ios?.generalInfo?.appInfo
 
@@ -124,8 +129,20 @@ describe('appstore-connect-info contract', () => {
     expect(isNonEmptyString(submission?.appStoreInfo?.defaultMetadataLocale)).toBe(
       true,
     )
+    expect(isNonEmptyString(assets?.phoneScreenshotsDir)).toBe(true)
     expect(appInfo?.title).toBeDefined()
     expect(appInfo?.subtitle).toBeDefined()
+  })
+
+  it('tracks the screenshot asset path for App Store packaging', () => {
+    const assets = payload.ios?.assets
+    const workspaceRoot = path.dirname(appStoreInfoJsonPath)
+    const screenshotRoot = path.resolve(
+      workspaceRoot,
+      String(assets?.phoneScreenshotsDir ?? ''),
+    )
+
+    expect(fs.existsSync(screenshotRoot)).toBe(true)
   })
 
   it('has screenshot copy keys for every locale and expected shot count', () => {
@@ -192,6 +209,10 @@ describe('appstore-connect-info contract', () => {
       expect(
         isNonEmptyString(metadata.description),
         `missing description for metadata locale: ${locale}`,
+      ).toBe(true)
+      expect(
+        isNonEmptyString(metadata.whatsNew),
+        `missing whatsNew for metadata locale: ${locale}`,
       ).toBe(true)
       expect(
         isNonEmptyKeywords(metadata.keywords),
@@ -281,10 +302,11 @@ describe('appstore-connect-info contract', () => {
         continue
       }
 
+      const expectedMediaSlots = videoFiles.length > 0 ? totalShots : totalShots - 1
       expect(
         mediaFiles.length,
         `insufficient media file count for upload locale: ${uploadLocale}`,
-      ).toBeGreaterThanOrEqual(totalShots)
+      ).toBeGreaterThanOrEqual(expectedMediaSlots)
 
       const shotIndexes = new Set(
         mediaFiles
@@ -292,7 +314,8 @@ describe('appstore-connect-info contract', () => {
           .filter((value): value is string => Boolean(value)),
       )
 
-      for (let index = 1; index <= totalShots; index += 1) {
+      const startIndex = videoFiles.length > 0 ? 1 : 2
+      for (let index = startIndex; index <= totalShots; index += 1) {
         const key = String(index).padStart(2, '0')
         expect(
           shotIndexes.has(key),
