@@ -526,6 +526,8 @@ wss.on('connection', (clientWs) => {
             };
             type SonioxSpeakerState = {
                 speaker: string;
+                providerFinalizedText: string;
+                providerFinalizedEndMs: number;
                 currentSnapshotText: string;
                 currentSnapshotEndMs: number;
                 lastConsumedEndMs: number;
@@ -534,7 +536,9 @@ wss.on('connection', (clientWs) => {
             };
             type SonioxSpeakerFrameUpdate = {
                 speaker: string;
-                snapshotText: string;
+                finalDeltaText: string;
+                nonFinalText: string;
+                maxFinalTokenEndMs: number;
                 maxSeenTokenEndMs: number;
                 lastDetectedLang: string | null;
             };
@@ -601,6 +605,8 @@ wss.on('connection', (clientWs) => {
             };
 
             const resetSpeakerTurn = (state: SonioxSpeakerState) => {
+                state.providerFinalizedText = '';
+                state.providerFinalizedEndMs = -1;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
                 state.strategy.resetState();
@@ -658,6 +664,8 @@ wss.on('connection', (clientWs) => {
                 });
                 const state: SonioxSpeakerState = {
                     speaker,
+                    providerFinalizedText: '',
+                    providerFinalizedEndMs: -1,
                     currentSnapshotText: '',
                     currentSnapshotEndMs: -1,
                     lastConsumedEndMs: -1,
@@ -762,7 +770,9 @@ wss.on('connection', (clientWs) => {
                         if (existing) return existing;
                         const created: SonioxSpeakerFrameUpdate = {
                             speaker,
-                            snapshotText: '',
+                            finalDeltaText: '',
+                            nonFinalText: '',
+                            maxFinalTokenEndMs: -1,
                             maxSeenTokenEndMs: -1,
                             lastDetectedLang: null,
                         };
@@ -817,7 +827,20 @@ wss.on('connection', (clientWs) => {
                         if (tokenLanguage !== 'unknown') {
                             frameUpdate.lastDetectedLang = tokenLanguage;
                         }
-                        frameUpdate.snapshotText += tokenText;
+                        if (token.is_final === true) {
+                            if (isTokenBeyondWatermark(
+                                tokenStartMs,
+                                tokenEndMs,
+                                speakerState.providerFinalizedEndMs,
+                            )) {
+                                frameUpdate.finalDeltaText += tokenText;
+                                if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxFinalTokenEndMs) {
+                                    frameUpdate.maxFinalTokenEndMs = tokenEndMs;
+                                }
+                            }
+                        } else {
+                            frameUpdate.nonFinalText += tokenText;
+                        }
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
@@ -839,7 +862,8 @@ wss.on('connection', (clientWs) => {
                     for (const frameUpdate of speakerFrameUpdates.values()) {
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
-                        const nextMergedSnapshot = frameUpdate.snapshotText.trim();
+                        const nextProviderFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
+                        const nextMergedSnapshot = `${nextProviderFinalizedText}${frameUpdate.nonFinalText}`.trim();
                         speakerFrameInfos.set(frameUpdate.speaker, {
                             speaker: frameUpdate.speaker,
                             previousMergedSnapshot,
@@ -885,7 +909,13 @@ wss.on('connection', (clientWs) => {
                         if (frameUpdate.lastDetectedLang) {
                             speakerState.detectedLang = frameUpdate.lastDetectedLang;
                         }
-                        speakerState.currentSnapshotText = frameUpdate.snapshotText.trim();
+                        if (frameUpdate.finalDeltaText) {
+                            speakerState.providerFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
+                        }
+                        if (frameUpdate.maxFinalTokenEndMs > speakerState.providerFinalizedEndMs) {
+                            speakerState.providerFinalizedEndMs = frameUpdate.maxFinalTokenEndMs;
+                        }
+                        speakerState.currentSnapshotText = `${speakerState.providerFinalizedText}${frameUpdate.nonFinalText}`.trim();
                         if (frameUpdate.maxSeenTokenEndMs > speakerState.currentSnapshotEndMs) {
                             speakerState.currentSnapshotEndMs = frameUpdate.maxSeenTokenEndMs;
                         }
