@@ -5,7 +5,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 DEVBOX_LOG_DIR="$ROOT_DIR/.devbox-logs"
-DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
@@ -18,6 +17,11 @@ MINGLE_IOS_TEST_SCRIPT="$MINGLE_IOS_DIR/scripts/test-ios.sh"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
 IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.0"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.0"
+DEVBOX_FIXED_WEB_PORT=3518
+DEVBOX_FIXED_STT_PORT=5518
+DEVBOX_FIXED_METRO_PORT=8518
+DEVBOX_FIXED_NGROK_API_PORT=10518
 
 if [[ -d "$LOCAL_TOOLS_BIN" ]]; then
   PATH="$LOCAL_TOOLS_BIN:$PATH"
@@ -61,7 +65,7 @@ NGROK_STT_URL=""
 NGROK_LAST_ERROR=""
 NGROK_LAST_ERROR_KIND=""
 
-# Values loaded from shell/vault/.env.local (and optionally .devbox.env when present).
+# Values loaded from shell/vault/.env.local.
 DEVBOX_WORKTREE_NAME=""
 DEVBOX_ROOT_DIR=""
 DEVBOX_WEB_PORT=""
@@ -78,6 +82,10 @@ DEVBOX_VAULT_APP_PATH=""
 DEVBOX_VAULT_STT_PATH=""
 DEVBOX_NGROK_API_PORT=""
 DEVBOX_TUNNEL_PROVIDER="${DEVBOX_TUNNEL_PROVIDER:-}"
+# NOTE:
+# Cloudflare named tunnel variables are commonly stored in shell startup files
+# (e.g. ~/.zshrc). read_app_setting_value() will look them up there when they
+# are not present in process env or local .env files.
 DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}"
 DEVBOX_CLOUDFLARE_WEB_HOSTNAME="${DEVBOX_CLOUDFLARE_WEB_HOSTNAME:-}"
 DEVBOX_CLOUDFLARE_STT_HOSTNAME="${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}"
@@ -116,34 +124,40 @@ Usage:
   scripts/devbox gateway [--openclaw-root PATH] [--mode dev|run] [--]
   scripts/devbox ios-native-build [--ios-configuration Debug|Release] [--ios-coredevice-id ID]
   scripts/devbox ios-native-uninstall [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-coredevice-id ID] [--bundle-id ID]
+  scripts/devbox ios-appstore-sync-metadata [--json PATH] [--api-key-json PATH] [--app-id BUNDLE_ID] [--dry-run] [--no-fallback]
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
   scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-runtime rn|native|both] [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-udid UDID] [--ios-coredevice-id ID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
   scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-runtime rn|native|both] [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-udid UDID] [--ios-coredevice-id ID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
-  scripts/devbox test [--target app|ios-native|all] [--ios-configuration Debug|Release] [vitest args...]
+  scripts/devbox test [--target app|ios-native|all] [--ios-configuration Debug|Release] [--with-live] [vitest args...]
   scripts/devbox status
 
 Commands:
-  init         Generate worktree-specific ports/config runtime files.
+  init         Generate fixed ports/config runtime files.
   bootstrap    Read-only for .env.local; install deps and optionally push local env keys to Vault.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
   gateway      Run OpenClaw gateway from configured openclaw root.
   ios-native-build Build mingle-ios only (no install).
   ios-native-uninstall Uninstall mingle-ios app from simulator/device.
+  ios-appstore-sync-metadata Sync App Store Connect metadata from appstore-connect-info.i18n.json.
   ios-rn-ipa   Archive/export RN iOS app to .xcarchive/.ipa for App Store/TestFlight.
   ios-rn-ipa-prod Same as ios-rn-ipa, defaulting to --device-app-env prod.
   mobile       Build/install RN/native iOS and Android apps (device/simulator).
   up           Start STT + Next app together (device profile includes tunnel startup).
   down         Stop devbox runtime processes (web/stt/metro/tunnels) for this repo.
-  test         Run mingle-app live tests and/or mingle-ios native test build.
+  test         Run mingle-app unit tests by default (live with --with-live) and/or mingle-ios native test build.
   status       Print current endpoints for PC/iOS/Android web and app targets.
 
 Global Options:
   --log-file PATH|auto  Save combined devbox stdout/stderr to PATH.
                         Relative paths resolve from repository root.
                         auto -> .devbox-logs/devbox-<worktree>-<timestamp>.log
+
+Default Shortcut:
+  scripts/devbox up
+    == scripts/devbox --log-file auto up --profile device --tunnel-provider cloudflare --with-ios-install --ios-runtime rn
 
 Environment:
   DEVBOX_NGROK_WEB_DOMAIN  Optional fixed ngrok domain for devbox_web tunnel.
@@ -152,12 +166,12 @@ Environment:
                            Default: ngrok
   DEVBOX_CLOUDFLARE_TUNNEL_TOKEN  Optional: when set with hostnames below,
                             cloudflare provider uses named tunnel mode.
+                           This can be defined in shell rc files
+                           (e.g. ~/.zshrc, ~/.zprofile).
   DEVBOX_CLOUDFLARE_WEB_HOSTNAME  Named tunnel web hostname (e.g. web-dev.example.com)
   DEVBOX_CLOUDFLARE_STT_HOSTNAME  Named tunnel stt hostname (e.g. stt-dev.example.com)
   DEVBOX_IOS_TEAM_ID       Optional iOS Team ID used by ios-rn-ipa exportOptions.
                            Example: 3RFBMN8TKZ
-  DEVBOX_PERSIST_ENV_FILE  Optional: set to true/1 to write .devbox.env during init/profile.
-                           Default is stateless (no .devbox.env writes).
 EOF
 }
 
@@ -555,15 +569,8 @@ read_app_setting_value() {
 }
 
 derive_worktree_name() {
-  local branch fallback hash
-  branch="$(git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true)"
-  if [[ -n "$branch" ]]; then
-    branch="${branch//\//-}"
-    branch="${branch// /-}"
-    printf '%s' "$branch"
-    return
-  fi
-
+  local fallback hash
+  # Keep this stable per worktree path (independent of current git branch).
   fallback="$(basename "$(dirname "$ROOT_CANON")")"
   hash="$(printf '%s' "$ROOT_CANON" | cksum | awk '{print $1}')"
   printf '%s-%s' "$fallback" "$((hash % 100000))"
@@ -571,71 +578,40 @@ derive_worktree_name() {
 
 collect_reserved_ports() {
   RESERVED_ALL_PORTS=""
-
-  if ! git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    return
-  fi
-
-  local worktree_path worktree_canon env_file port
-  while IFS= read -r worktree_path; do
-    [[ -n "$worktree_path" ]] || continue
-    if ! worktree_canon="$(cd "$worktree_path" 2>/dev/null && pwd -P)"; then
-      continue
-    fi
-    [[ "$worktree_canon" == "$ROOT_CANON" ]] && continue
-
-    env_file="$worktree_canon/.devbox.env"
-    [[ -f "$env_file" ]] || continue
-
-    for key in DEVBOX_WEB_PORT DEVBOX_STT_PORT DEVBOX_METRO_PORT DEVBOX_NGROK_API_PORT; do
-      port="$(read_env_value_from_file "$key" "$env_file")"
-      if is_numeric "$port"; then
-        RESERVED_ALL_PORTS="$(append_port "$RESERVED_ALL_PORTS" "$port")"
-      fi
-    done
-  done < <(git -C "$ROOT_DIR" worktree list --porcelain | awk '/^worktree /{print substr($0,10)}')
+  # .devbox.env is no longer used; port collision checks rely on active listeners.
 }
 
 calc_default_ports() {
   collect_reserved_ports
+  DEFAULT_WEB_PORT="$DEVBOX_FIXED_WEB_PORT"
+  DEFAULT_STT_PORT="$DEVBOX_FIXED_STT_PORT"
+  DEFAULT_METRO_PORT="$DEVBOX_FIXED_METRO_PORT"
+  DEFAULT_NGROK_API_PORT="$DEVBOX_FIXED_NGROK_API_PORT"
+}
 
-  local range seed_text seed slot web stt metro ngrok_api
-  range=800
-  seed_text="$ROOT_CANON|$DEVBOX_WORKTREE_NAME"
-  seed="$(printf '%s' "$seed_text" | cksum | awk '{print $1}')"
+enforce_fixed_ports() {
+  local requested_web="${DEVBOX_WEB_PORT:-}"
+  local requested_stt="${DEVBOX_STT_PORT:-}"
+  local requested_metro="${DEVBOX_METRO_PORT:-}"
+  local requested_ngrok_api="${DEVBOX_NGROK_API_PORT:-}"
 
-  for ((attempt = 0; attempt < range; attempt++)); do
-    slot=$(((seed + attempt) % range))
-    web=$((3200 + slot))
-    stt=$((5200 + slot))
-    metro=$((8200 + slot))
-    ngrok_api=$((10200 + slot))
+  if [[ -n "$requested_web" && "$requested_web" != "$DEFAULT_WEB_PORT" ]]; then
+    warn "DEVBOX_WEB_PORT override($requested_web) ignored; using fixed port $DEFAULT_WEB_PORT"
+  fi
+  if [[ -n "$requested_stt" && "$requested_stt" != "$DEFAULT_STT_PORT" ]]; then
+    warn "DEVBOX_STT_PORT override($requested_stt) ignored; using fixed port $DEFAULT_STT_PORT"
+  fi
+  if [[ -n "$requested_metro" && "$requested_metro" != "$DEFAULT_METRO_PORT" ]]; then
+    warn "DEVBOX_METRO_PORT override($requested_metro) ignored; using fixed port $DEFAULT_METRO_PORT"
+  fi
+  if [[ -n "$requested_ngrok_api" && "$requested_ngrok_api" != "$DEFAULT_NGROK_API_PORT" ]]; then
+    warn "DEVBOX_NGROK_API_PORT override($requested_ngrok_api) ignored; using fixed port $DEFAULT_NGROK_API_PORT"
+  fi
 
-    if port_list_contains "$RESERVED_ALL_PORTS" "$web"; then
-      continue
-    fi
-    if port_list_contains "$RESERVED_ALL_PORTS" "$stt"; then
-      continue
-    fi
-    if port_list_contains "$RESERVED_ALL_PORTS" "$metro"; then
-      continue
-    fi
-    if port_list_contains "$RESERVED_ALL_PORTS" "$ngrok_api"; then
-      continue
-    fi
-
-    if port_in_use "$web" || port_in_use "$stt" || port_in_use "$metro" || port_in_use "$ngrok_api"; then
-      continue
-    fi
-
-    DEFAULT_WEB_PORT="$web"
-    DEFAULT_STT_PORT="$stt"
-    DEFAULT_METRO_PORT="$metro"
-    DEFAULT_NGROK_API_PORT="$ngrok_api"
-    return
-  done
-
-  die "failed to allocate default ports (range exhausted: web 3200-3999, stt 5200-5999, metro 8200-8999, ngrok-api 10200-10999)"
+  DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
+  DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
+  DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
+  DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
 }
 
 ensure_file_parent() {
@@ -1120,74 +1096,8 @@ strip_env_keys() {
   normalize_file_spacing "$file"
 }
 
-write_devbox_env() {
-  ensure_single_line_value "DEVBOX_WORKTREE_NAME" "$DEVBOX_WORKTREE_NAME"
-  ensure_single_line_value "DEVBOX_ROOT_DIR" "$ROOT_CANON"
-  ensure_single_line_value "DEVBOX_WEB_PORT" "$DEVBOX_WEB_PORT"
-  ensure_single_line_value "DEVBOX_STT_PORT" "$DEVBOX_STT_PORT"
-  ensure_single_line_value "DEVBOX_METRO_PORT" "$DEVBOX_METRO_PORT"
-  ensure_single_line_value "DEVBOX_PROFILE" "$DEVBOX_PROFILE"
-  ensure_single_line_value "DEVBOX_LOCAL_HOST" "$DEVBOX_LOCAL_HOST"
-  ensure_single_line_value "DEVBOX_SITE_URL" "$DEVBOX_SITE_URL"
-  ensure_single_line_value "DEVBOX_RN_WS_URL" "$DEVBOX_RN_WS_URL"
-  ensure_single_line_value "DEVBOX_PUBLIC_WS_URL" "$DEVBOX_PUBLIC_WS_URL"
-  ensure_single_line_value "DEVBOX_TEST_API_BASE_URL" "$DEVBOX_TEST_API_BASE_URL"
-  ensure_single_line_value "DEVBOX_TEST_WS_URL" "$DEVBOX_TEST_WS_URL"
-  ensure_single_line_value "DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_APP_PATH"
-  ensure_single_line_value "DEVBOX_VAULT_STT_PATH" "$DEVBOX_VAULT_STT_PATH"
-  ensure_single_line_value "DEVBOX_NGROK_API_PORT" "$DEVBOX_NGROK_API_PORT"
-  ensure_single_line_value "DEVBOX_OPENCLAW_ROOT" "$DEVBOX_OPENCLAW_ROOT"
-  ensure_single_line_value "DEVBOX_IOS_TEAM_ID" "$DEVBOX_IOS_TEAM_ID"
-
-  cat > "$DEVBOX_ENV_FILE" <<EOF
-DEVBOX_WORKTREE_NAME=$DEVBOX_WORKTREE_NAME
-DEVBOX_ROOT_DIR=$ROOT_CANON
-DEVBOX_WEB_PORT=$DEVBOX_WEB_PORT
-DEVBOX_STT_PORT=$DEVBOX_STT_PORT
-DEVBOX_METRO_PORT=$DEVBOX_METRO_PORT
-DEVBOX_PROFILE=$DEVBOX_PROFILE
-DEVBOX_LOCAL_HOST=$DEVBOX_LOCAL_HOST
-DEVBOX_SITE_URL=$DEVBOX_SITE_URL
-DEVBOX_RN_WS_URL=$DEVBOX_RN_WS_URL
-DEVBOX_PUBLIC_WS_URL=$DEVBOX_PUBLIC_WS_URL
-DEVBOX_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL
-DEVBOX_TEST_WS_URL=$DEVBOX_TEST_WS_URL
-DEVBOX_VAULT_APP_PATH=$DEVBOX_VAULT_APP_PATH
-DEVBOX_VAULT_STT_PATH=$DEVBOX_VAULT_STT_PATH
-DEVBOX_NGROK_API_PORT=$DEVBOX_NGROK_API_PORT
-DEVBOX_OPENCLAW_ROOT=$DEVBOX_OPENCLAW_ROOT
-DEVBOX_IOS_TEAM_ID=$DEVBOX_IOS_TEAM_ID
-EOF
-}
-
-load_devbox_env() {
-  local line key value
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" ]] && continue
-    [[ "${line:0:1}" == "#" ]] && continue
-    [[ "$line" == *=* ]] || die "invalid line in $DEVBOX_ENV_FILE: $line"
-
-    key="${line%%=*}"
-    value="${line#*=}"
-    [[ "$key" =~ ^[A-Z0-9_]+$ ]] || die "invalid key in $DEVBOX_ENV_FILE: $key"
-
-    case "$key" in
-      DEVBOX_WORKTREE_NAME|DEVBOX_ROOT_DIR|DEVBOX_WEB_PORT|DEVBOX_STT_PORT|DEVBOX_METRO_PORT|DEVBOX_PROFILE|DEVBOX_LOCAL_HOST|DEVBOX_SITE_URL|DEVBOX_RN_WS_URL|DEVBOX_PUBLIC_WS_URL|DEVBOX_TEST_API_BASE_URL|DEVBOX_TEST_WS_URL|DEVBOX_VAULT_APP_PATH|DEVBOX_VAULT_STT_PATH|DEVBOX_NGROK_API_PORT|DEVBOX_OPENCLAW_ROOT|DEVBOX_IOS_TEAM_ID)
-        printf -v "$key" '%s' "$value"
-        ;;
-      *)
-        die "unknown key in $DEVBOX_ENV_FILE: $key"
-        ;;
-    esac
-  done < "$DEVBOX_ENV_FILE"
-}
-
 require_devbox_env() {
   local value=""
-
-  if is_truthy "${DEVBOX_PERSIST_ENV_FILE:-0}" && [[ -f "$DEVBOX_ENV_FILE" ]]; then
-    load_devbox_env
-  fi
 
   if [[ -z "$DEVBOX_WORKTREE_NAME" ]]; then
     DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
@@ -1213,26 +1123,7 @@ require_devbox_env() {
 
   calc_default_ports
 
-  if [[ -z "${DEVBOX_WEB_PORT:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_WEB_PORT || true)")"
-    [[ -n "$value" ]] && DEVBOX_WEB_PORT="$value"
-  fi
-  if [[ -z "${DEVBOX_STT_PORT:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_STT_PORT || true)")"
-    [[ -n "$value" ]] && DEVBOX_STT_PORT="$value"
-  fi
-  if [[ -z "${DEVBOX_METRO_PORT:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_METRO_PORT || true)")"
-    [[ -n "$value" ]] && DEVBOX_METRO_PORT="$value"
-  fi
-  if [[ -z "${DEVBOX_NGROK_API_PORT:-}" ]]; then
-    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_NGROK_API_PORT || true)")"
-    [[ -n "$value" ]] && DEVBOX_NGROK_API_PORT="$value"
-  fi
-
-  [[ -n "${DEVBOX_WEB_PORT:-}" ]] || DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
-  [[ -n "${DEVBOX_STT_PORT:-}" ]] || DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
-  [[ -n "${DEVBOX_METRO_PORT:-}" ]] || DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
+  enforce_fixed_ports
 
   if [[ -z "${DEVBOX_PROFILE:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PROFILE || true)")"
@@ -1276,9 +1167,6 @@ require_devbox_env() {
   : "${DEVBOX_WEB_PORT:?missing DEVBOX_WEB_PORT}"
   : "${DEVBOX_STT_PORT:?missing DEVBOX_STT_PORT}"
   : "${DEVBOX_METRO_PORT:?missing DEVBOX_METRO_PORT}"
-  if [[ -z "${DEVBOX_NGROK_API_PORT:-}" ]]; then
-    DEVBOX_NGROK_API_PORT="$((DEVBOX_WEB_PORT + 7000))"
-  fi
   : "${DEVBOX_PROFILE:?missing DEVBOX_PROFILE}"
   case "$DEVBOX_PROFILE" in
     local|device) ;;
@@ -1861,7 +1749,7 @@ resolve_ios_bundle_id() {
     awk -F'= ' '/PRODUCT_BUNDLE_IDENTIFIER = /{gsub(/;$/, "", $2); print $2; exit}' "$project_file"
     return 0
   fi
-  printf '%s' "com.mingle"
+  printf '%s' "com.minglelabs.mingle.rn"
 }
 
 resolve_rn_ios_development_team() {
@@ -1879,7 +1767,7 @@ resolve_android_application_id() {
     awk -F'"' '/applicationId[[:space:]]+"/{print $2; exit}' "$gradle_file"
     return 0
   fi
-  printf '%s' "com.mingle"
+  printf '%s' "com.minglelabs.mingle.rn"
 }
 
 resolve_ios_simulator_udid_for_uninstall() {
@@ -2143,6 +2031,7 @@ run_android_mobile_install() {
     ANDROID_SERIAL="$serial" \
     NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
     NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
+    NEXT_PUBLIC_API_NAMESPACE="$ANDROID_RN_REQUIRED_API_NAMESPACE" \
       ./gradlew "$gradle_task"
   )
 
@@ -2711,9 +2600,6 @@ resolve_device_app_env_override() {
 }
 
 save_and_refresh() {
-  if is_truthy "${DEVBOX_PERSIST_ENV_FILE:-0}"; then
-    write_devbox_env
-  fi
   refresh_runtime_files
 }
 
@@ -2915,10 +2801,23 @@ cmd_init() {
   DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
   calc_default_ports
 
-  [[ -n "$web_port" ]] || web_port="$DEFAULT_WEB_PORT"
-  [[ -n "$stt_port" ]] || stt_port="$DEFAULT_STT_PORT"
-  [[ -n "$metro_port" ]] || metro_port="$DEFAULT_METRO_PORT"
-  [[ -n "$ngrok_api_port" ]] || ngrok_api_port="$DEFAULT_NGROK_API_PORT"
+  if [[ -n "$web_port" && "$web_port" != "$DEFAULT_WEB_PORT" ]]; then
+    die "web port is fixed to $DEFAULT_WEB_PORT; remove --web-port override"
+  fi
+  if [[ -n "$stt_port" && "$stt_port" != "$DEFAULT_STT_PORT" ]]; then
+    die "stt port is fixed to $DEFAULT_STT_PORT; remove --stt-port override"
+  fi
+  if [[ -n "$metro_port" && "$metro_port" != "$DEFAULT_METRO_PORT" ]]; then
+    die "metro port is fixed to $DEFAULT_METRO_PORT; remove --metro-port override"
+  fi
+  if [[ -n "$ngrok_api_port" && "$ngrok_api_port" != "$DEFAULT_NGROK_API_PORT" ]]; then
+    die "ngrok api port is fixed to $DEFAULT_NGROK_API_PORT; remove --ngrok-api-port override"
+  fi
+
+  web_port="$DEFAULT_WEB_PORT"
+  stt_port="$DEFAULT_STT_PORT"
+  metro_port="$DEFAULT_METRO_PORT"
+  ngrok_api_port="$DEFAULT_NGROK_API_PORT"
 
   validate_port "web port" "$web_port"
   validate_port "stt port" "$stt_port"
@@ -3106,11 +3005,7 @@ cmd_ios_rn_ipa() {
   local device_app_env_path=""
   local temp_export_options_plist=""
 
-  if [[ -f "$DEVBOX_ENV_FILE" ]]; then
-    require_devbox_env
-  else
-    log "no .devbox.env found; ios-rn-ipa will use vault/.env.local/shell values only"
-  fi
+  require_devbox_env
 
   timestamp="$(date '+%Y%m%d-%H%M%S')"
   archive_path="/tmp/mingle-${timestamp}.xcarchive"
@@ -3338,6 +3233,374 @@ EOF
   log "next: Xcode Organizer -> Distribute App -> App Store Connect -> Upload"
 }
 
+cmd_ios_appstore_sync_metadata() {
+  local appstore_connect_info_root="${APPSTORE_CONNECT_INFO_ROOT:-$ROOT_DIR/mingle-app/rn/appstore-connect-info}"
+  local default_copy_json="$appstore_connect_info_root/appstore-connect-info.i18n.json"
+  local legacy_copy_json="$ROOT_DIR/mingle-app/rn/appstore-media/copy/screenshot-copy.i18n.json"
+  local copy_json="${COPY_JSON:-$default_copy_json}"
+  local api_key_json="${API_KEY_JSON:-$ROOT_DIR/.credentials/appstore-connect/api-key.json}"
+  local app_identifier="${APP_IDENTIFIER:-com.minglelabs.mingle.rn}"
+  local dry_run="false"
+  local no_fallback="false"
+  local only_app_info="false"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        copy_json="${2:-}"
+        shift 2
+        ;;
+      --api-key-json)
+        api_key_json="${2:-}"
+        shift 2
+        ;;
+      --app-id)
+        app_identifier="${2:-}"
+        shift 2
+        ;;
+      --dry-run)
+        dry_run="true"
+        shift
+        ;;
+      --no-fallback)
+        no_fallback="true"
+        shift
+        ;;
+      --only-app-info)
+        only_app_info="true"
+        shift
+        ;;
+      -h|--help)
+        cat <<EOF
+Usage: scripts/devbox ios-appstore-sync-metadata [options]
+
+Options:
+  --json <path>           i18n JSON path (default: $copy_json)
+  --api-key-json <path>   App Store Connect API key JSON path (default: $api_key_json)
+  --app-id <bundle-id>    App bundle identifier (default: $app_identifier)
+  --dry-run               Print planned updates only (no ASC write)
+  --no-fallback           Do not fallback metadata locale when target locale is missing
+  --only-app-info         Only sync app info localizations (title, subtitle); skip version localizations
+  -h, --help              Show help
+EOF
+        return 0
+        ;;
+      *)
+        die "unknown option for ios-appstore-sync-metadata: $1"
+        ;;
+    esac
+  done
+
+  if [[ ! -f "$copy_json" && "$copy_json" == "$default_copy_json" && -f "$legacy_copy_json" ]]; then
+    copy_json="$legacy_copy_json"
+  fi
+
+  [[ -f "$copy_json" ]] || die "missing JSON: $copy_json"
+  [[ -f "$api_key_json" ]] || die "missing API key JSON: $api_key_json"
+  require_cmd ruby
+
+  log "syncing App Store Connect metadata from: $copy_json"
+  log "target app id: $app_identifier (dry_run=$dry_run)"
+
+  PATH="/opt/homebrew/opt/ruby/bin:/opt/homebrew/Cellar/fastlane/2.232.2/libexec/bin:$PATH" \
+  GEM_HOME="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}" \
+  GEM_PATH="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}:/opt/homebrew/Cellar/fastlane/2.232.2/libexec" \
+  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" \
+  ruby - <<'RUBY'
+require 'json'
+require 'spaceship'
+
+def presence(value)
+  return nil if value.nil?
+  if value.is_a?(String)
+    text = value.strip
+    return nil if text.empty?
+    return text
+  end
+  value
+end
+
+copy_json = ENV.fetch('COPY_JSON')
+api_key_json = ENV.fetch('API_KEY_JSON')
+app_identifier = ENV.fetch('APP_IDENTIFIER')
+dry_run = ENV.fetch('DRY_RUN') == 'true'
+no_fallback = ENV.fetch('NO_FALLBACK') == 'true'
+only_app_info = ENV.fetch('ONLY_APP_INFO') == 'true'
+
+payload = JSON.parse(File.read(copy_json))
+
+ios = payload['ios'].is_a?(Hash) ? payload['ios'] : {}
+general_info = ios['generalInfo'].is_a?(Hash) ? ios['generalInfo'] : {}
+app_info = general_info['appInfo'].is_a?(Hash) ? general_info['appInfo'] : {}
+submission = ios['submission'].is_a?(Hash) ? ios['submission'] : {}
+submission_app_store_info = submission['appStoreInfo'].is_a?(Hash) ? submission['appStoreInfo'] : {}
+
+legacy_title_map = payload['title'].is_a?(Hash) ? payload['title'] : {}
+legacy_subtitle_map = payload['subtitle'].is_a?(Hash) ? payload['subtitle'] : {}
+legacy_app_store = payload['appStore'].is_a?(Hash) ? payload['appStore'] : {}
+
+title_map = app_info['title'].is_a?(Hash) ? app_info['title'] : legacy_title_map
+subtitle_map = app_info['subtitle'].is_a?(Hash) ? app_info['subtitle'] : legacy_subtitle_map
+metadata_map = submission_app_store_info['metadata'].is_a?(Hash) ? submission_app_store_info['metadata'] : (legacy_app_store['metadata'].is_a?(Hash) ? legacy_app_store['metadata'] : {})
+default_metadata_locale = no_fallback ? nil : (
+  presence(submission_app_store_info['defaultMetadataLocale']) ||
+  presence(legacy_app_store['defaultMetadataLocale']) ||
+  'en'
+)
+expected_version = presence(submission['version']) || presence(legacy_app_store['version'])
+copyright_value = presence(submission['copyright']) || presence(legacy_app_store['copyright'])
+
+api = JSON.parse(File.read(api_key_json))
+Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.create(
+  key_id: api.fetch('key_id'),
+  issuer_id: api.fetch('issuer_id'),
+  key: api.fetch('key'),
+  duration: 1200,
+  in_house: api['in_house']
+)
+
+def json_locale_key_for_asc(locale)
+  normalized = locale.to_s.strip.downcase
+  return '' if normalized.empty?
+
+  explicit = {
+    'en-us' => 'en',
+    'ko' => 'ko',
+    'ja' => 'ja',
+    'zh-hans' => 'zh-cn',
+    'zh-hant' => 'zh-tw',
+    'de-de' => 'de',
+    'es-es' => 'es',
+    'fr-fr' => 'fr',
+    'fr-ca' => 'fr',
+    'it' => 'it',
+    'pt-br' => 'pt',
+    'pt-pt' => 'pt',
+    'ru' => 'ru',
+    'ar-sa' => 'ar',
+    'hi' => 'hi',
+    'th' => 'th',
+    'vi' => 'vi'
+  }
+  return explicit.fetch(normalized, normalized.split('-').first.to_s)
+end
+
+client = Spaceship::ConnectAPI.client.tunes_request_client
+app = Spaceship::ConnectAPI::App.find(app_identifier)
+raise "app not found: #{app_identifier}" unless app
+
+def choose_ios_version(client, app)
+  editable = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+  return editable if editable
+
+  versions = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=50").body['data'] || []
+  preferred = %w[READY_FOR_SALE PENDING_DEVELOPER_RELEASE PRE_ORDER_READY_FOR_SALE PREPARE_FOR_SUBMISSION]
+  versions.sort_by! do |version|
+    attrs = version['attributes'] || {}
+    state = attrs['appStoreState'].to_s
+    preferred_index = preferred.index(state) || preferred.length
+    created_at = attrs['createdDate'].to_s
+    [preferred_index, created_at.empty? ? '' : created_at]
+  end
+  selected = versions.reverse.find do |version|
+    attrs = version['attributes'] || {}
+    preferred.include?(attrs['appStoreState'].to_s)
+  end || versions.last
+  raise "iOS App Store version not found for #{app.bundle_id}" unless selected
+
+  selected_version_id = selected.respond_to?(:id) ? selected.id : selected['id']
+  Spaceship::ConnectAPI::AppStoreVersion.get(app_store_version_id: selected_version_id)
+end
+
+version = choose_ios_version(client, app)
+
+if expected_version && version.version_string != expected_version
+  raise "editable version mismatch: expected #{expected_version}, actual #{version.version_string}"
+end
+
+version_loc_updates = 0
+version_loc_skips = 0
+app_info_loc_updates = 0
+app_info_loc_skips = 0
+
+unless only_app_info
+version.get_app_store_version_localizations.each do |loc|
+  asc_locale = loc.locale
+  locale_key = json_locale_key_for_asc(asc_locale)
+  metadata = metadata_map[locale_key]
+  if metadata.nil? && default_metadata_locale
+    metadata = metadata_map[default_metadata_locale]
+  end
+  metadata ||= {}
+
+  attributes = {}
+  if metadata.key?('promotionalText')
+    attributes[:promotionalText] = metadata['promotionalText'].to_s
+  end
+  if metadata.key?('whatsNew')
+    attributes[:whatsNew] = metadata['whatsNew'].to_s
+  end
+  if metadata.key?('description')
+    attributes[:description] = metadata['description'].to_s
+  end
+  if metadata.key?('keywords')
+    raw_keywords = metadata['keywords']
+    attributes[:keywords] = raw_keywords.is_a?(Array) ? raw_keywords.map(&:to_s).join(',') : raw_keywords.to_s
+  end
+  if metadata.key?('supportUrl')
+    attributes[:supportUrl] = metadata['supportUrl'].to_s
+  end
+  if metadata.key?('marketingUrl')
+    attributes[:marketingUrl] = metadata['marketingUrl'].to_s
+  end
+
+  attributes.delete_if { |_k, v| v.nil? }
+  next if attributes.empty?
+
+  puts "[version-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
+  unless dry_run
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/#{loc.id}",
+        {
+          data: {
+            type: 'appStoreVersionLocalizations',
+            id: loc.id,
+            attributes: attributes
+          }
+        }
+      )
+    rescue => error
+      message = error.to_s
+      if message.include?("cannot be edited at this time")
+        puts "[skip version-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+        version_loc_skips += 1
+        next
+      end
+      raise
+    end
+  end
+  version_loc_updates += 1
+end
+end # unless only_app_info
+
+app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
+raise "appInfo not found for app #{app.id}" if app_infos.empty?
+editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
+preferred_app_info = app_infos.min_by do |ai|
+  state = ai.dig('attributes', 'appStoreState').to_s
+  idx = editable_states.index(state)
+  idx ? idx : editable_states.length
+end
+app_info_id = preferred_app_info&.dig('id')
+puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
+raise "appInfo not found for app #{app.id}" unless app_info_id
+
+app_info_loc_refs = client.get(
+  "https://api.appstoreconnect.apple.com/v1/appInfos/#{app_info_id}/relationships/appInfoLocalizations"
+).body['data'] || []
+
+app_info_loc_refs.each do |ref|
+  loc_id = ref['id']
+  instance = client.get("https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}").body['data']
+  asc_locale = instance.dig('attributes', 'locale').to_s
+  locale_key = json_locale_key_for_asc(asc_locale)
+
+  name = title_map[locale_key] || title_map['en']
+  subtitle = subtitle_map[locale_key] || subtitle_map['en']
+  current_name = instance.dig('attributes', 'name').to_s
+  current_subtitle = instance.dig('attributes', 'subtitle').to_s
+
+  attributes = {}
+  attributes[:name] = name if name && name.to_s != current_name
+  attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
+  next if attributes.empty?
+
+  puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
+  unless dry_run
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+        {
+          data: {
+            type: 'appInfoLocalizations',
+            id: loc_id,
+            attributes: attributes
+          }
+        }
+      )
+    rescue => error
+      message = error.to_s
+      if attributes[:subtitle] && attributes[:name] &&
+         (message.include?("cannot be modified in the current state") ||
+          message.include?("can not be modified in the current state") ||
+          message.include?("cannot be edited at this time") ||
+          message.include?("can not be edited at this time"))
+        begin
+          client.patch(
+            "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+            {
+              data: {
+                type: 'appInfoLocalizations',
+                id: loc_id,
+                attributes: {
+                  subtitle: attributes[:subtitle]
+                }
+              }
+            }
+          )
+          app_info_loc_updates += 1
+          puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
+          next
+        rescue => subtitle_error
+          message = subtitle_error.to_s
+        end
+      end
+      if message.include?("cannot be modified in the current state") ||
+         message.include?("can not be modified in the current state") ||
+         message.include?("cannot be edited at this time") ||
+         message.include?("can not be edited at this time")
+        puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+        app_info_loc_skips += 1
+        next
+      end
+      raise
+    end
+  end
+  app_info_loc_updates += 1
+end
+
+if copyright_value
+  puts "[version] set copyright on #{version.version_string}"
+  unless dry_run
+    begin
+      client.patch(
+        "https://api.appstoreconnect.apple.com/v1/appStoreVersions/#{version.id}",
+        {
+          data: {
+            type: 'appStoreVersions',
+            id: version.id,
+            attributes: {
+              copyright: copyright_value
+            }
+          }
+        }
+      )
+    rescue => error
+      message = error.to_s
+      if message.include?("cannot be edited at this time")
+        puts "[skip version] #{message.lines.first.to_s.strip}"
+      else
+        raise
+      end
+    end
+  end
+end
+
+puts "done: version_localizations=#{version_loc_updates}, skipped_version_localizations=#{version_loc_skips}, app_info_localizations=#{app_info_loc_updates}, skipped_app_info_localizations=#{app_info_loc_skips}, dry_run=#{dry_run}"
+RUBY
+}
+
 cmd_mobile() {
   require_devbox_env
   require_cmd pnpm
@@ -3453,7 +3716,7 @@ cmd_mobile() {
       profile_already_saved=1
       ;;
     *)
-      die "unsupported DEVBOX_PROFILE in .devbox.env: $active_profile (expected local|device)"
+      die "unsupported DEVBOX_PROFILE: $active_profile (expected local|device)"
       ;;
   esac
   if [[ "$profile_already_saved" -eq 0 ]]; then
@@ -3840,6 +4103,25 @@ $(ngrok_plan_capacity_hint)"
     return 0
   fi
 
+  local stt_raw_log_file="$ROOT_DIR/.devbox-logs/stt-raw.log"
+  local shared_stt_raw_log_file=""
+  local git_common_dir=""
+  local repo_root_from_common=""
+  mkdir -p "$(dirname "$stt_raw_log_file")"
+  : > "$stt_raw_log_file"
+  if git_common_dir="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+    if repo_root_from_common="$(cd "$git_common_dir/.." 2>/dev/null && pwd -P)"; then
+      shared_stt_raw_log_file="$repo_root_from_common/.devbox-logs/stt-raw.log"
+      if [[ "$shared_stt_raw_log_file" != "$stt_raw_log_file" ]]; then
+        mkdir -p "$(dirname "$shared_stt_raw_log_file")"
+        ln -sfn "$stt_raw_log_file" "$shared_stt_raw_log_file"
+        log "stt soniox inbound log symlink: $shared_stt_raw_log_file -> $stt_raw_log_file"
+      fi
+    fi
+  fi
+  log "stt soniox inbound log: $stt_raw_log_file"
+  log "tail stt soniox log: tail -f $stt_raw_log_file"
+
   log "starting mingle-stt(port=$DEVBOX_STT_PORT) + mingle-app(port=$DEVBOX_WEB_PORT)"
   (
     cd "$ROOT_DIR/mingle-stt"
@@ -3850,7 +4132,7 @@ $(ngrok_plan_capacity_hint)"
       . "$runtime_stt_env_file"
       set +a
     fi
-    PORT="$DEVBOX_STT_PORT" pnpm dev
+    PORT="$DEVBOX_STT_PORT" SONIOX_RAW_JOINED_TOKEN_LOG_FILE="$stt_raw_log_file" pnpm dev
   ) &
   pids+=("$!")
 
@@ -4047,12 +4329,14 @@ cmd_test() {
   require_devbox_env
   local target="app"
   local ios_configuration="Debug"
+  local with_live=0
   local -a app_test_args=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --target) target="${2:-}"; shift 2 ;;
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
+      --with-live) with_live=1; shift ;;
       --) shift; app_test_args+=("$@"); break ;;
       *) app_test_args+=("$1"); shift ;;
     esac
@@ -4071,16 +4355,23 @@ cmd_test() {
 
   if [[ "$run_app" -eq 1 ]]; then
     require_cmd pnpm
+    local app_test_script="test:unit"
+    if [[ "$with_live" -eq 1 ]]; then
+      app_test_script="test:live"
+      log "running mingle-app live integration tests (--with-live)"
+    else
+      log "running mingle-app unit tests (live tests are disabled by default; add --with-live to enable)"
+    fi
     (
       cd "$ROOT_DIR/mingle-app"
       if ((${#app_test_args[@]} > 0)); then
         MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
         MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
-          pnpm test:live "${app_test_args[@]}"
+          pnpm "$app_test_script" "${app_test_args[@]}"
       else
         MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
         MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
-          pnpm test:live
+          pnpm "$app_test_script"
       fi
     )
   fi
@@ -4108,7 +4399,6 @@ cmd_status() {
   local cloudflare_mode="quick"
   local ngrok_line=""
   local ngrok_domain_line=""
-  local devbox_env_note="$DEVBOX_ENV_FILE (optional; write only when DEVBOX_PERSIST_ENV_FILE=true)"
   detected_ngrok_web_domain="$(resolve_ngrok_web_domain || true)"
   tunnel_provider="$(resolve_tunnel_provider "")"
   if [[ "$tunnel_provider" == "cloudflare" ]]; then
@@ -4139,7 +4429,7 @@ iOS Web     : $DEVBOX_SITE_URL
 Android Web : $DEVBOX_SITE_URL
 iOS App     : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
 iOS Native  : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL
-Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL
+Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$ANDROID_RN_REQUIRED_API_NAMESPACE
 Live Test   : MINGLE_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL | MINGLE_TEST_WS_URL=$DEVBOX_TEST_WS_URL
 Vault App   : ${DEVBOX_VAULT_APP_PATH:-"(unset)"}
 Vault STT   : ${DEVBOX_VAULT_STT_PATH:-"(unset)"}
@@ -4147,7 +4437,6 @@ OpenClaw    : root=${DEVBOX_OPENCLAW_ROOT:-$(resolve_openclaw_root)}
 iOS Team ID : ${DEVBOX_IOS_TEAM_ID:-"(auto: mingle.xcodeproj DEVELOPMENT_TEAM)"}
 
 Files:
-- $devbox_env_note
 - $APP_ENV_FILE
 - $STT_ENV_FILE
 - $NGROK_LOCAL_CONFIG
@@ -4175,6 +4464,7 @@ Run:
 - scripts/devbox mobile --platform ios --ios-runtime native --ios-native-target simulator --ios-simulator-name "iPhone 16"
 - scripts/devbox mobile --platform android
 - scripts/devbox test --target ios-native
+- scripts/devbox test --with-live
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
 EOF
@@ -4257,6 +4547,22 @@ main() {
     set --
   fi
 
+  local auto_up_defaults=0
+  local -a auto_up_default_args=(
+    --profile device
+    --tunnel-provider cloudflare
+    --with-ios-install
+    --ios-runtime rn
+  )
+  if [[ "$cmd" == "up" && "$#" -eq 0 ]]; then
+    auto_up_defaults=1
+    if [[ -z "$log_file_option" ]]; then
+      DEVBOX_LOG_FILE="$(default_log_file_path)"
+      enable_log_capture "$DEVBOX_LOG_FILE"
+    fi
+    log "no options for 'up'; applying defaults: --profile device --tunnel-provider cloudflare --with-ios-install --ios-runtime rn"
+  fi
+
   case "$cmd" in
     init) cmd_init "$@" ;;
     bootstrap) cmd_bootstrap "$@" ;;
@@ -4267,10 +4573,17 @@ main() {
     gateway|openclaw-gateway) cmd_gateway "$@" ;;
     ios-native-build|ios-build-native) cmd_ios_native_build "$@" ;;
     ios-native-uninstall|ios-uninstall-native|ios-native-remove) cmd_ios_native_uninstall "$@" ;;
+    ios-appstore-sync-metadata|ios-sync-appstore-metadata) cmd_ios_appstore_sync_metadata "$@" ;;
     ios-rn-ipa|ios-build-rn-ipa) cmd_ios_rn_ipa "$@" ;;
     ios-rn-ipa-prod|ios-build-rn-ipa-prod) cmd_ios_rn_ipa --device-app-env prod "$@" ;;
     mobile) cmd_mobile "$@" ;;
-    up) cmd_up "$@" ;;
+    up)
+      if [[ "$auto_up_defaults" -eq 1 ]]; then
+        cmd_up "${auto_up_default_args[@]}"
+      else
+        cmd_up "$@"
+      fi
+      ;;
     down) cmd_down "$@" ;;
     test|test-live) cmd_test "$@" ;;
     status) cmd_status "$@" ;;

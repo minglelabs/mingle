@@ -1,6 +1,6 @@
 import { createServer } from 'http';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
+import { createWriteStream, existsSync, mkdirSync } from 'fs';
+import { dirname, resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
@@ -33,6 +33,27 @@ const SONIOX_SPEAKER_IDLE_FINALIZE_MS = (() => {
     if (!Number.isFinite(raw)) return fallback;
     return Math.max(1200, Math.min(12000, Math.floor(raw)));
 })();
+const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (() => {
+    const configuredPath = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
+    if (configuredPath) return resolve(configuredPath);
+    return resolve(process.cwd(), '..', '.devbox-logs', 'stt-raw.log');
+})();
+let sonioxInboundLogStream: ReturnType<typeof createWriteStream> | null = null;
+try {
+    mkdirSync(dirname(SONIOX_RAW_JOINED_TOKEN_LOG_FILE), { recursive: true });
+    sonioxInboundLogStream = createWriteStream(SONIOX_RAW_JOINED_TOKEN_LOG_FILE, { flags: 'a' });
+    sonioxInboundLogStream.on('error', (error) => {
+        console.error(`Soniox inbound log stream error: ${error.message}`);
+    });
+} catch (error) {
+    console.error(
+        `Failed to initialize Soniox inbound log: ${error instanceof Error ? error.message : String(error)}`,
+    );
+}
+
+const appendSonioxTokenTextLine = (text: string) => {
+    sonioxInboundLogStream?.write(`${text}\n`);
+};
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -127,17 +148,14 @@ wss.on('connection', (clientWs) => {
             state.idleFinalizeDueAtMs = 0;
         }
     };
-
     const cleanup = () => {
         isClientConnected = false;
-        
-        // 진행 중인 fetch 요청 취소
+
         if (abortController) {
             abortController.abort();
             abortController = null;
         }
-        
-        // STT WebSocket 연결 정리 (모든 상태에서)
+
         if (sttWs) {
             if (sttWs.readyState === WebSocket.OPEN || sttWs.readyState === WebSocket.CONNECTING) {
                 sttWs.close();
@@ -204,10 +222,6 @@ wss.on('connection', (clientWs) => {
         }
 
         try {
-            // Capture snapshot of accumulated text length before sending
-            // finalize.  Tokens arriving after this point belong to the
-            // *next* utterance, even though Soniox may place them before
-            // the <fin> marker in its response.
             for (const state of sonioxSpeakerStates.values()) {
                 state.finalizeSnapshotTextLen = state.currentMergedTextLen;
             }
@@ -676,6 +690,7 @@ wss.on('connection', (clientWs) => {
 
         try {
             sttWs = new WebSocket(SONIOX_WS_URL);
+
             resetSonioxSegmentState();
 
             // 토큰 누적 상태 (Soniox는 토큰 단위로 반환)
@@ -701,13 +716,8 @@ wss.on('connection', (clientWs) => {
             ): boolean => {
                 if (tokenEndMs !== null) return tokenEndMs > watermarkMs;
                 if (tokenStartMs !== null) return tokenStartMs > watermarkMs;
-                // No timestamp -> keep text (don't drop words), but treat as
-                // non-timestamped progress for carry-promotion gating.
                 return true;
             };
-            // Returns true only when a token with an actual timestamp is beyond
-            // the watermark.  Used for carry-promotion gating to avoid false
-            // triggers from timestamp-less tokens.
             const isTokenTimestampedBeyondWatermark = (
                 tokenStartMs: number | null,
                 tokenEndMs: number | null,
@@ -967,6 +977,24 @@ wss.on('connection', (clientWs) => {
                 try {
                     const rawSonioxMessage = event.data.toString();
                     const msg = JSON.parse(rawSonioxMessage);
+                    // Soniox raw token joined string logging is intentionally disabled.
+                    // const logTokens = Array.isArray(msg.tokens)
+                    //     ? (msg.tokens as Array<{ text?: unknown }>)
+                    //     : [];
+                    // if (logTokens.length > 0) {
+                    //     const tokenLine = logTokens
+                    //         .map((token) => {
+                    //             const tokenText = typeof token.text === 'string' ? token.text : '';
+                    //             if (!tokenText) return '';
+                    //             return tokenText
+                    //                 .replace(/<\/?end>/gi, '<end>')
+                    //                 .replace(/<\/?fin>/gi, '<fin>');
+                    //         })
+                    //         .join('');
+                    //     if (tokenLine) {
+                    //         appendSonioxTokenTextLine(tokenLine);
+                    //     }
+                    // }
 
                     if (msg.error_code) {
                         console.error(`[Soniox] Error: ${msg.error_code} - ${msg.error_message}`);
@@ -1362,7 +1390,6 @@ wss.on('connection', (clientWs) => {
                     } else if (!sonioxHasPendingTranscript) {
                         clearSonioxManualFinalizeTimer();
                     }
-
                 } catch (parseError) {
                     console.error('Error parsing Soniox message:', parseError);
                 }

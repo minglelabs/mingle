@@ -20,18 +20,20 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Live STT/API Integration Test (included in `pnpm test`)
+## Live STT/API Integration Test (opt-in)
 
-`pnpm test` runs both unit tests and live integration tests that:
+`pnpm test` runs unit tests only by default.
+Live integration tests run only when explicitly invoked:
 
 1. Streams an audio fixture to local STT WebSocket server
 2. Sends the finalized transcript to `/api/translate/finalize` (or `/api/ios/v1.0.0/translate/finalize`)
 
 Useful commands:
 
-- `pnpm test` (unit + live integration)
+- `pnpm test` (unit only, default)
 - `pnpm test:unit` (unit only, excludes live integration)
-- `pnpm test:live` (all live `.live.test.ts` only)
+- `pnpm test:live` (all live `.live.test.ts` only, opt-in)
+- `pnpm test:all` (unit + live integration)
 
 Default local endpoints:
 
@@ -61,8 +63,9 @@ MINGLE_TEST_TTS_OUTPUT_DIR=/absolute/path/to/tts-output
 
 클라이언트는 런타임 분기 없이 `NEXT_PUBLIC_API_NAMESPACE`로 API 경로를 결정합니다.
 
-- 기본값(legacy): 빈 값(`''`) -> `/api/{기존경로}`
-- iOS versioned: `ios/v1.0.0` -> `/api/ios/v1.0.0/{기존경로}`
+- 기본값(legacy): 빈 값(`''`) -> `/api/{existing-path}`
+- iOS versioned: `ios/v1.0.0` -> `/api/ios/v1.0.0/{existing-path}`
+- Android versioned: `android/v1.0.0` -> `/api/android/v1.0.0/{existing-path}`
 
 Release build commands:
 
@@ -75,8 +78,8 @@ pnpm build:release:android
 URL override (optional):
 
 - 브라우저 URL 쿼리 `apiNamespace`(또는 `apiNs`)는 allow-list 값만 반영됩니다.
-- 허용값: `''`, `ios/v1.0.0`
-- 예: `https://your-app/ko?apiNamespace=ios/v1.0.0`
+- 허용값: `''`, `ios/v1.0.0`, `android/v1.0.0`
+- 예: `https://your-app/ko?apiNamespace=android/v1.0.0`
 - 허용되지 않은 값은 무시되고 env/default를 사용합니다.
 
 ### Client Version Policy
@@ -119,7 +122,7 @@ Translation/TTS behavior:
 
 ### Live E2E suites
 
-Always-on suites:
+Suites executed by `pnpm test:live` (or `pnpm test:all`):
 
 - `src/integration/live/stt-finalize.live.test.ts`
 - `src/integration/live/e2e.stop-chain.live.test.ts`
@@ -277,6 +280,7 @@ If you apply SQL manually to remote, use:
 - `prisma/migrations/20260227211000_add_client_version_policy_history/migration.sql`
 - `prisma/migrations/20260227221000_add_native_auth_pending_results/migration.sql`
 - `prisma/migrations/20260227232000_add_client_platform_to_version_policy_history/migration.sql`
+- `prisma/migrations/20260302051000_add_email_password_auth_and_reset_tokens/migration.sql`
 
 ## React Native (mingle-app/rn)
 
@@ -354,6 +358,7 @@ VALUES (
 
 루트 `pnpm rn:start|ios|android` 스크립트는 `.env.local`을 먼저 로드한 뒤 RN CLI를 실행합니다.
 `pnpm rn:ios`는 실행 전에 `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.0` 검증을 강제합니다.
+`pnpm rn:android`는 실행 전에 `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.0` 검증을 강제합니다.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

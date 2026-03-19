@@ -2,6 +2,41 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def resolveHermesCommandPath = {
+    def rnNodeModulesDir = file("../../node_modules")
+    def osBin = org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_MAC)
+        ? "osx-bin"
+        : (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)
+            ? "win64-bin"
+            : "linux64-bin")
+    def hermesBinaryName = org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)
+        ? "hermesc.exe"
+        : "hermesc"
+
+    def directBinary = new File(rnNodeModulesDir, "hermes-compiler/hermesc/${osBin}/${hermesBinaryName}")
+    if (directBinary.exists()) {
+        return directBinary.absolutePath
+    }
+
+    def pnpmStoreDir = new File(rnNodeModulesDir, ".pnpm")
+    if (pnpmStoreDir.exists()) {
+        def pnpmEntries = pnpmStoreDir.listFiles()
+            ?.findAll { it.name.startsWith("hermes-compiler@") }
+            ?.sort { a, b -> a.name <=> b.name }
+        if (pnpmEntries != null && !pnpmEntries.isEmpty()) {
+            def pnpmBinary = new File(
+                pnpmEntries.last(),
+                "node_modules/hermes-compiler/hermesc/${osBin}/${hermesBinaryName}"
+            )
+            if (pnpmBinary.exists()) {
+                return pnpmBinary.absolutePath
+            }
+        }
+    }
+
+    return ""
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -45,7 +80,7 @@ react {
 
     /* Hermes Commands */
     //   The hermes compiler command to run. By default it is 'hermesc'
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
+    hermesCommand = resolveHermesCommandPath()
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]
@@ -58,6 +93,121 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
+def appVersionCode = 14
+def appVersionName = "1.0.1"
+
+def readEnvOrDefault = { String key, String fallback ->
+    def value = System.getenv(key)
+    if (value == null) {
+        return fallback
+    }
+    def trimmed = value.trim()
+    return trimmed.isEmpty() ? fallback : trimmed
+}
+
+def loadOptionalProperties = { File propertiesFile ->
+    def properties = new Properties()
+    if (!propertiesFile.exists()) {
+        return properties
+    }
+
+    propertiesFile.withInputStream { stream ->
+        properties.load(stream)
+    }
+    return properties
+}
+
+def readSigningValue = { List<Properties> propertySources, String envKey, String propertyKey ->
+    def value = System.getenv(envKey)
+    if (value != null) {
+        def trimmed = value.trim()
+        if (!trimmed.isEmpty()) {
+            return trimmed
+        }
+    }
+
+    for (properties in propertySources) {
+        def propertyValue = properties.getProperty(propertyKey)
+        if (propertyValue != null) {
+            def trimmedPropertyValue = propertyValue.trim()
+            if (!trimmedPropertyValue.isEmpty()) {
+                return trimmedPropertyValue
+            }
+        }
+    }
+    return ""
+}
+
+def resolveSigningStoreFile = { String rawPath ->
+    if (rawPath == null) {
+        return null
+    }
+
+    def trimmed = rawPath.trim()
+    if (trimmed.isEmpty()) {
+        return null
+    }
+
+    def direct = file(trimmed)
+    if (direct.exists() || new File(trimmed).isAbsolute()) {
+        return direct
+    }
+
+    def repoRootCandidate = new File(rootProject.projectDir, "../../../${trimmed}")
+    if (repoRootCandidate.exists()) {
+        return repoRootCandidate
+    }
+
+    return rootProject.file(trimmed)
+}
+
+def quoteBuildConfigString = { String value ->
+    def escaped = value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+    return "\"${escaped}\""
+}
+
+def runtimeSiteUrl = readEnvOrDefault("NEXT_PUBLIC_SITE_URL", "https://mingle-app-xi.vercel.app")
+def runtimeWsUrl = readEnvOrDefault("NEXT_PUBLIC_WS_URL", "wss://mingle.up.railway.app")
+def runtimeApiNamespace = readEnvOrDefault("NEXT_PUBLIC_API_NAMESPACE", "android/v1.0.0")
+def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
+def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
+def allowCleartextTraffic = runtimeSiteUrl.toLowerCase().startsWith("http://")
+def repoCredentialsDir = new File(rootProject.projectDir, "../../../.credentials/android")
+def repoAndroidSigningProperties = loadOptionalProperties(new File(repoCredentialsDir, "keystore.properties"))
+def localAndroidSigningProperties = loadOptionalProperties(rootProject.file("keystore.properties"))
+def uploadStorePath = readSigningValue(
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
+    "ANDROID_UPLOAD_STORE_FILE",
+    "storeFile",
+)
+def uploadStorePassword = readSigningValue(
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
+    "ANDROID_UPLOAD_STORE_PASSWORD",
+    "storePassword",
+)
+def uploadKeyAlias = readSigningValue(
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
+    "ANDROID_UPLOAD_KEY_ALIAS",
+    "keyAlias",
+)
+def uploadKeyPassword = readSigningValue(
+    [repoAndroidSigningProperties, localAndroidSigningProperties],
+    "ANDROID_UPLOAD_KEY_PASSWORD",
+    "keyPassword",
+)
+def defaultRepoUploadStoreFile = new File(repoCredentialsDir, "mingle-upload.keystore")
+def finalUploadStorePath =
+    !uploadStorePath.isEmpty()
+        ? uploadStorePath
+        : (defaultRepoUploadStoreFile.exists() ? defaultRepoUploadStoreFile.absolutePath : "")
+def hasUploadSigning =
+    !finalUploadStorePath.isEmpty() &&
+    !uploadStorePassword.isEmpty() &&
+    !uploadKeyAlias.isEmpty() &&
+    !uploadKeyPassword.isEmpty()
+def uploadStoreFile = hasUploadSigning ? resolveSigningStoreFile(finalUploadStorePath) : null
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -77,13 +227,21 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.mingle"
+    namespace "com.minglelabs.mingle.rn"
     defaultConfig {
-        applicationId "com.mingle"
+        applicationId "com.minglelabs.mingle.rn"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
+        manifestPlaceholders = [
+            usesCleartextTraffic: allowCleartextTraffic.toString(),
+        ]
+        buildConfigField "String", "MINGLE_WEB_APP_BASE_URL", quoteBuildConfigString(runtimeSiteUrl)
+        buildConfigField "String", "MINGLE_DEFAULT_WS_URL", quoteBuildConfigString(runtimeWsUrl)
+        buildConfigField "String", "MINGLE_API_NAMESPACE", quoteBuildConfigString(runtimeApiNamespace)
+        buildConfigField "String", "MINGLE_CLIENT_VERSION", quoteBuildConfigString(runtimeClientVersion)
+        buildConfigField "String", "MINGLE_CLIENT_BUILD", quoteBuildConfigString(runtimeClientBuild)
     }
     signingConfigs {
         debug {
@@ -92,15 +250,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasUploadSigning) {
+            upload {
+                storeFile uploadStoreFile
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Keep local device release installs working when no upload key is configured.
+            signingConfig hasUploadSigning ? signingConfigs.upload : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
