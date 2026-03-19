@@ -880,6 +880,16 @@ wss.on('connection', (clientWs) => {
                         );
                     }
 
+                    // Speaker change wins over silence-based segmentation:
+                    // if another speaker makes progress, finalize prior speakers first.
+                    const currentFrameSpeakers = new Set(speakerFrameUpdates.keys());
+                    if (currentFrameSpeakers.size > 0) {
+                        for (const existingSpeaker of Array.from(speakerStates.keys())) {
+                            if (currentFrameSpeakers.has(existingSpeaker)) continue;
+                            finalizeSpeakerTurn(existingSpeaker);
+                        }
+                    }
+
                     for (const frameUpdate of speakerFrameUpdates.values()) {
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = composeTurnText(
