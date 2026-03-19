@@ -5,10 +5,6 @@ import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
 import {
-    type SegmentationStrategy,
-    type TokenFrameContext,
-    readSegmentationStrategyId,
-    createSegmentationStrategy,
     stripEndpointMarkers,
     SilenceTimerStrategy,
 } from './segmentation-strategy';
@@ -35,7 +31,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
-const SONIOX_SEGMENTATION_STRATEGY_ID = readSegmentationStrategyId();
 const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (() => {
     const configuredPath = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
     if (configuredPath) return resolve(configuredPath);
@@ -71,6 +66,7 @@ interface ClientConfig {
 interface FinalTurnPayload {
     text: string;
     language: string;
+    speaker?: string;
 }
 
 let connectionCounter = 0;
@@ -87,8 +83,7 @@ wss.on('connection', (clientWs) => {
     let selectedLanguages: string[] = [];
     let finalizePendingTurnFromProvider: (() => Promise<FinalTurnPayload | null>) | null = null;
     let sonioxStopRequested = false;
-    /** 활성 연결의 발화 분리 전략 객체 */
-    let sonioxSegStrategy: SegmentationStrategy | null = null;
+    let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
@@ -108,14 +103,8 @@ wss.on('connection', (clientWs) => {
             }
             sttWs = null;
         }
-        sonioxSegStrategy?.dispose();
-        sonioxSegStrategy = null;
-    };
-
-    const resetSonioxSegmentState = () => {
-        if (sonioxSegStrategy instanceof SilenceTimerStrategy) {
-            sonioxSegStrategy.resetState();
-        }
+        disposeSonioxSpeakerStates?.();
+        disposeSonioxSpeakerStates = null;
     };
 
     // ===== GLADIA 연결 =====
@@ -548,47 +537,34 @@ wss.on('connection', (clientWs) => {
 
         try {
             sttWs = new WebSocket(SONIOX_WS_URL);
+            type SonioxToken = {
+                text?: unknown;
+                start_ms?: unknown;
+                end_ms?: unknown;
+                is_final?: unknown;
+                language?: unknown;
+                speaker?: unknown;
+            };
+            type SonioxSpeakerState = {
+                speaker: string;
+                finalizedText: string;
+                latestNonFinalText: string;
+                lastFinalizedEndMs: number;
+                detectedLang: string;
+                strategy: SilenceTimerStrategy;
+            };
+            type SonioxSpeakerFrameUpdate = {
+                speaker: string;
+                newFinalText: string;
+                rebuiltNonFinalText: string;
+                maxSeenFinalEndMs: number;
+                lastDetectedLang: string | null;
+            };
 
-            // 전략 객체 생성
-            const capturedSttWs = sttWs;
-            sonioxSegStrategy = createSegmentationStrategy(
-                SONIOX_SEGMENTATION_STRATEGY_ID,
-                {
-                    silenceMs: SONIOX_MANUAL_FINALIZE_SILENCE_MS,
-                    cooldownMs: SONIOX_MANUAL_FINALIZE_COOLDOWN_MS,
-                    sendFinalizeCommand: (snapshotLen: number) => {
-                        if (!capturedSttWs || capturedSttWs.readyState !== WebSocket.OPEN) return;
-                        if (sonioxStopRequested) return;
-                        try {
-                            capturedSttWs.send(JSON.stringify({ type: 'finalize' }));
-                        } catch (err) {
-                            console.error('Soniox manual finalize send failed:', err);
-                        }
-                    },
-                    onCarryExpiry: () => {
-                        if (
-                            latestNonFinalIsProvisionalCarry
-                            && latestNonFinalText.trim()
-                            && !finalizedText.trim()
-                        ) {
-                            const carryText = composeTurnText('', latestNonFinalText);
-                            if (carryText) emitFinalTurn(carryText, detectedLang);
-                        }
-                    },
-                },
-            );
-            const strategy = sonioxSegStrategy;
-            console.log(`[conn:${connId}] soniox strategy=${strategy.id}`);
-
-            resetSonioxSegmentState();
-
-            // 토큰 누적 상태 (Soniox는 토큰 단위로 반환)
-            let finalizedText = '';
-            let latestNonFinalText = '';
-            let latestNonFinalIsProvisionalCarry = false;
-            let lastFinalizedEndMs = -1;
-            let detectedLang = config.languages[0] || 'en';
+            const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
+            console.log(`[conn:${connId}] soniox strategy=speaker-local`);
+
             const composeTurnText = (finalText: string, nonFinalText: string): string =>
                 `${finalText || ''}${nonFinalText || ''}`.trim();
             const parseTokenTimeMs = (raw: unknown): number | null => {
@@ -604,36 +580,27 @@ wss.on('connection', (clientWs) => {
                 if (tokenStartMs !== null) return tokenStartMs > watermarkMs;
                 return true;
             };
-            const isTokenTimestampedBeyondWatermark = (
-                tokenStartMs: number | null,
-                tokenEndMs: number | null,
-                watermarkMs: number,
-            ): boolean => {
-                if (tokenEndMs !== null) return tokenEndMs > watermarkMs;
-                if (tokenStartMs !== null) return tokenStartMs > watermarkMs;
-                return false;
-            };
 
-            const emitFinalTurn = (text: string, language: string): FinalTurnPayload | null => {
-                // Keep endpoint markers in server-emitted text; client normalizes them away.
+            const emitTranscript = (
+                text: string,
+                language: string,
+                isFinal: boolean,
+                speaker?: string,
+            ): FinalTurnPayload | null => {
                 const cleanedText = text.trim();
                 const cleanedLang = (language || '').trim() || 'unknown';
+                const cleanedSpeaker = (speaker || '').trim() || 'unknown';
                 if (!cleanedText) return null;
-
-                // Clear turn accumulators immediately.
-                finalizedText = '';
-                latestNonFinalText = '';
-                latestNonFinalIsProvisionalCarry = false;
-                resetSonioxSegmentState();
 
                 if (clientWs.readyState === WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
                         type: 'transcript',
                         data: {
-                            is_final: true,
+                            is_final: isFinal,
                             utterance: {
                                 text: cleanedText,
                                 language: cleanedLang,
+                                speaker: cleanedSpeaker,
                             },
                         },
                     }));
@@ -642,16 +609,89 @@ wss.on('connection', (clientWs) => {
                 return {
                     text: cleanedText,
                     language: cleanedLang,
+                    speaker: cleanedSpeaker,
                 };
             };
 
-            finalizePendingTurnFromProvider = async () => {
-                if (latestNonFinalIsProvisionalCarry && !finalizedText.trim()) {
+            const disposeSpeakerState = (state: SonioxSpeakerState) => {
+                state.strategy.resetState();
+                state.strategy.dispose();
+            };
+
+            const removeSpeakerState = (speaker: string) => {
+                const state = speakerStates.get(speaker);
+                if (!state) return;
+                disposeSpeakerState(state);
+                speakerStates.delete(speaker);
+            };
+
+            const finalizeSpeakerTurn = (speaker: string): FinalTurnPayload | null => {
+                const state = speakerStates.get(speaker);
+                if (!state) return null;
+                const merged = composeTurnText(state.finalizedText, state.latestNonFinalText);
+                if (!merged) {
+                    removeSpeakerState(speaker);
                     return null;
                 }
-                const merged = composeTurnText(finalizedText, latestNonFinalText);
-                return emitFinalTurn(merged, detectedLang) ?? null;
+
+                const payload = emitTranscript(
+                    merged,
+                    state.detectedLang,
+                    true,
+                    state.speaker,
+                );
+                removeSpeakerState(speaker);
+                return payload;
             };
+
+            const flushAllSpeakerTurns = (): FinalTurnPayload | null => {
+                let lastPayload: FinalTurnPayload | null = null;
+                for (const speaker of Array.from(speakerStates.keys())) {
+                    const payload = finalizeSpeakerTurn(speaker);
+                    if (payload) {
+                        lastPayload = payload;
+                    }
+                }
+                return lastPayload;
+            };
+
+            const getSpeakerState = (rawSpeaker: string): SonioxSpeakerState => {
+                const speaker = rawSpeaker.trim() || 'unknown';
+                const existing = speakerStates.get(speaker);
+                if (existing) return existing;
+
+                const strategy = new SilenceTimerStrategy({
+                    silenceMs: SONIOX_MANUAL_FINALIZE_SILENCE_MS,
+                    cooldownMs: SONIOX_MANUAL_FINALIZE_COOLDOWN_MS,
+                    sendFinalizeCommand: () => {
+                        if (sonioxStopRequested) return;
+                        finalizeSpeakerTurn(speaker);
+                    },
+                    onCarryExpiry: () => {
+                        if (sonioxStopRequested) return;
+                        finalizeSpeakerTurn(speaker);
+                    },
+                });
+                const state: SonioxSpeakerState = {
+                    speaker,
+                    finalizedText: '',
+                    latestNonFinalText: '',
+                    lastFinalizedEndMs: -1,
+                    detectedLang: config.languages[0] || 'unknown',
+                    strategy,
+                };
+                speakerStates.set(speaker, state);
+                return state;
+            };
+
+            disposeSonioxSpeakerStates = () => {
+                for (const state of speakerStates.values()) {
+                    disposeSpeakerState(state);
+                }
+                speakerStates.clear();
+            };
+
+            finalizePendingTurnFromProvider = async () => flushAllSpeakerTurns();
 
             sttWs.onopen = () => {
                 const sonioxConfig = {
@@ -665,7 +705,6 @@ wss.on('connection', (clientWs) => {
                     enable_endpoint_detection: false,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
-                    ...strategy.sonioxConfigOverrides(),
                 };
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
@@ -721,67 +760,18 @@ wss.on('connection', (clientWs) => {
                     if (msg.finished) {
                         return;
                     }
-
-                    type SonioxToken = {
-                        text?: unknown;
-                        start_ms?: unknown;
-                        end_ms?: unknown;
-                        is_final?: unknown;
-                        language?: unknown;
-                        speaker?: unknown;
-                    };
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
                     if (tokens.length === 0) {
                         return;
                     }
-
-                    const previousFinalizedText = finalizedText;
-                    const previousNonFinalText = latestNonFinalText;
-                    const hadPendingTextBeforeFrame = composeTurnText(previousFinalizedText, previousNonFinalText).length > 0;
-                    let newFinalText = '';
-                    let rebuiltNonFinalText = '';
-                    let maxSeenFinalEndMs = lastFinalizedEndMs;
-                    let hasEndpointToken = false;
-                    let endpointMarkerText = '';
-                    let hasProgressTokenBeyondWatermark = false;
-                    let hasTimestampedProgressBeyondWatermark = false;
-                    let rawFinalText = '';
-                    let rawNonFinalText = '';
-                    let rawEndpointText = '';
-                    let rawFinalTokenCount = 0;
-                    let rawNonFinalTokenCount = 0;
-                    let rawEndpointTokenCount = 0;
                     let joinedTokenTextForLog = '';
-                    let rawFinalStartMs: number | null = null;
-                    let rawFinalEndMs: number | null = null;
-                    let rawNonFinalStartMs: number | null = null;
-                    let rawNonFinalEndMs: number | null = null;
                     const tokenTextByStateLanguagePair = new Map<string, {
                         finalState: string;
                         language: string;
                         speaker: string;
                         text: string;
                     }>();
-                    const mergeTokenTimeRange = (
-                        startMs: number | null,
-                        endMs: number | null,
-                        tokenStartMs: number | null,
-                        tokenEndMs: number | null,
-                    ): { nextStartMs: number | null; nextEndMs: number | null } => {
-                        let nextStartMs = startMs;
-                        let nextEndMs = endMs;
-                        if (tokenStartMs !== null) {
-                            nextStartMs = nextStartMs === null
-                                ? tokenStartMs
-                                : Math.min(nextStartMs, tokenStartMs);
-                        }
-                        if (tokenEndMs !== null) {
-                            nextEndMs = nextEndMs === null
-                                ? tokenEndMs
-                                : Math.max(nextEndMs, tokenEndMs);
-                        }
-                        return { nextStartMs, nextEndMs };
-                    };
+                    const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
                     const appendPairGroupedTokenText = (
                         groupedText: Map<string, {
                             finalState: string;
@@ -807,6 +797,19 @@ wss.on('connection', (clientWs) => {
                             text: tokenText,
                         });
                     };
+                    const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
+                        const existing = speakerFrameUpdates.get(speaker);
+                        if (existing) return existing;
+                        const created: SonioxSpeakerFrameUpdate = {
+                            speaker,
+                            newFinalText: '',
+                            rebuiltNonFinalText: '',
+                            maxSeenFinalEndMs: -1,
+                            lastDetectedLang: null,
+                        };
+                        speakerFrameUpdates.set(speaker, created);
+                        return created;
+                    };
 
                     for (const token of tokens) {
                         const tokenText = typeof token.text === 'string' ? token.text : '';
@@ -816,12 +819,6 @@ wss.on('connection', (clientWs) => {
 
                         const isEndpointMarkerToken = /<\/?(?:end|fin)>/i.test(tokenText);
                         if (isEndpointMarkerToken) {
-                            hasEndpointToken = true;
-                            rawEndpointTokenCount += 1;
-                            rawEndpointText += tokenText;
-                            if (!endpointMarkerText) {
-                                endpointMarkerText = tokenText;
-                            }
                             continue;
                         }
 
@@ -836,9 +833,6 @@ wss.on('connection', (clientWs) => {
                         const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
                             ? token.speaker.trim()
                             : 'unknown';
-                        if (tokenLanguage !== 'unknown') {
-                            detectedLang = tokenLanguage;
-                        }
 
                         joinedTokenTextForLog += tokenText;
                         appendPairGroupedTokenText(
@@ -848,54 +842,29 @@ wss.on('connection', (clientWs) => {
                             tokenSpeaker,
                             tokenText,
                         );
-
-                        if (token.is_final === true) {
-                            rawFinalText += tokenText;
-                            rawFinalTokenCount += 1;
-                            const mergedRange = mergeTokenTimeRange(
-                                rawFinalStartMs,
-                                rawFinalEndMs,
-                                tokenStartMs,
-                                tokenEndMs,
-                            );
-                            rawFinalStartMs = mergedRange.nextStartMs;
-                            rawFinalEndMs = mergedRange.nextEndMs;
-                        } else {
-                            rawNonFinalText += tokenText;
-                            rawNonFinalTokenCount += 1;
-                            const mergedRange = mergeTokenTimeRange(
-                                rawNonFinalStartMs,
-                                rawNonFinalEndMs,
-                                tokenStartMs,
-                                tokenEndMs,
-                            );
-                            rawNonFinalStartMs = mergedRange.nextStartMs;
-                            rawNonFinalEndMs = mergedRange.nextEndMs;
+                        const speakerState = getSpeakerState(tokenSpeaker);
+                        if (tokenLanguage !== 'unknown') {
+                            speakerState.detectedLang = tokenLanguage;
                         }
 
                         const includeByWatermark = isTokenBeyondWatermark(
                             tokenStartMs,
                             tokenEndMs,
-                            lastFinalizedEndMs,
+                            speakerState.lastFinalizedEndMs,
                         );
+                        if (!includeByWatermark) continue;
 
+                        const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
+                        if (tokenLanguage !== 'unknown') {
+                            frameUpdate.lastDetectedLang = tokenLanguage;
+                        }
                         if (token.is_final === true) {
-                            if (!includeByWatermark) continue;
-                            newFinalText += tokenText;
-                            hasProgressTokenBeyondWatermark = true;
-                            if (isTokenTimestampedBeyondWatermark(tokenStartMs, tokenEndMs, lastFinalizedEndMs)) {
-                                hasTimestampedProgressBeyondWatermark = true;
-                            }
-                            if (tokenEndMs !== null && tokenEndMs > maxSeenFinalEndMs) {
-                                maxSeenFinalEndMs = tokenEndMs;
+                            frameUpdate.newFinalText += tokenText;
+                            if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenFinalEndMs) {
+                                frameUpdate.maxSeenFinalEndMs = tokenEndMs;
                             }
                         } else {
-                            if (!includeByWatermark) continue;
-                            rebuiltNonFinalText += tokenText;
-                            hasProgressTokenBeyondWatermark = true;
-                            if (isTokenTimestampedBeyondWatermark(tokenStartMs, tokenEndMs, lastFinalizedEndMs)) {
-                                hasTimestampedProgressBeyondWatermark = true;
-                            }
+                            frameUpdate.rebuiltNonFinalText += tokenText;
                         }
                     }
 
@@ -911,148 +880,42 @@ wss.on('connection', (clientWs) => {
                         );
                     }
 
-                    const hasAnyPendingTextForEndpoint = hadPendingTextBeforeFrame
-                        || newFinalText.trim().length > 0
-                        || rebuiltNonFinalText.trim().length > 0;
-                    if (endpointMarkerText && (hasProgressTokenBeyondWatermark || hasAnyPendingTextForEndpoint)) {
-                        newFinalText += endpointMarkerText;
-                    }
-
-                    // --- Carry promotion ---
-                    // After a snapshot-based endpoint split, carry text (e.g.
-                    // "Right now") is parked in latestNonFinalText as provisional.
-                    // Soniox already considers those tokens finalized and won't
-                    // re-send them in subsequent frames.  When new progress tokens
-                    // arrive for continued speech, we must promote the carry into
-                    // finalizedText as a prefix so it won't be overwritten when
-                    // latestNonFinalText is replaced with the fresh non-final text.
-                    if (latestNonFinalIsProvisionalCarry && previousNonFinalText.trim()) {
-                        const carryRaw = stripEndpointMarkers(previousNonFinalText).trim();
-                        if (carryRaw && hasTimestampedProgressBeyondWatermark) {
-                            // Cancel carry expiry timer since new speech arrived.
-                            if (strategy instanceof SilenceTimerStrategy) {
-                                strategy.clearCarryExpiryTimer();
-                            }
-                            // Check if Soniox re-included the carry in its new tokens
-                            // (sometimes overlapping tokens are re-sent).
-                            const incomingClean = stripEndpointMarkers(
-                                `${stripEndpointMarkers(newFinalText)}${rebuiltNonFinalText}`,
-                            ).trim();
-                            if (incomingClean.startsWith(carryRaw)) {
-                                // Soniox re-included the carry; no promotion needed.
-                                latestNonFinalIsProvisionalCarry = false;
-                            } else {
-                                // Soniox moved past carry; promote it as prefix.
-                                // Strip trailing sentence-ending punctuation since the
-                                // carry is merging into the MIDDLE of the next utterance.
-                                // e.g. "Don't be." → "Don't be" when prefixed.
-                                const carryPrefix = carryRaw.replace(/[.!?]+\s*$/, '').trim();
-                                if (carryPrefix) {
-                                    finalizedText = finalizedText
-                                        ? carryPrefix + ' ' + finalizedText
-                                        : carryPrefix;
-                                }
-                                latestNonFinalIsProvisionalCarry = false;
+                    for (const frameUpdate of speakerFrameUpdates.values()) {
+                        const speakerState = getSpeakerState(frameUpdate.speaker);
+                        const previousMergedSnapshot = composeTurnText(
+                            speakerState.finalizedText,
+                            speakerState.latestNonFinalText,
+                        );
+                        if (frameUpdate.lastDetectedLang) {
+                            speakerState.detectedLang = frameUpdate.lastDetectedLang;
+                        }
+                        if (frameUpdate.newFinalText) {
+                            speakerState.finalizedText += frameUpdate.newFinalText;
+                            if (frameUpdate.maxSeenFinalEndMs > speakerState.lastFinalizedEndMs) {
+                                speakerState.lastFinalizedEndMs = frameUpdate.maxSeenFinalEndMs;
                             }
                         }
-                    }
+                        speakerState.latestNonFinalText = frameUpdate.rebuiltNonFinalText;
 
-                    if (newFinalText) {
-                        finalizedText += newFinalText;
-                        if (maxSeenFinalEndMs > lastFinalizedEndMs) {
-                            lastFinalizedEndMs = maxSeenFinalEndMs;
-                        }
-                    }
+                        const mergedSnapshot = composeTurnText(
+                            speakerState.finalizedText,
+                            speakerState.latestNonFinalText,
+                        );
+                        const previousMergedTextForIdle = stripEndpointMarkers(previousMergedSnapshot);
+                        const mergedTextForIdle = stripEndpointMarkers(mergedSnapshot);
+                        const transcriptChanged = mergedTextForIdle !== previousMergedTextForIdle;
+                        const hasPendingTranscript = mergedSnapshot.length > 0;
 
-                    if (rebuiltNonFinalText) {
-                        if (latestNonFinalIsProvisionalCarry) {
-                            const prevCarry = previousNonFinalText.trim();
-                            const incoming = rebuiltNonFinalText.trim();
-                            const hasProgress = incoming.length > prevCarry.length || !incoming.startsWith(prevCarry);
-                            if (hasProgress) {
-                                latestNonFinalIsProvisionalCarry = false;
-                            }
-                        }
-                        latestNonFinalText = rebuiltNonFinalText;
-                        // 부분 결과: 확정된 텍스트 + 미확정 텍스트
-                        const fullText = composeTurnText(finalizedText, rebuiltNonFinalText);
-                        const partialMsg = {
-                            type: 'transcript',
-                            data: {
-                                is_final: false,
-                                utterance: {
-                                    text: fullText.trim(),
-                                    language: detectedLang,
-                                },
-                            },
-                        };
-                        clientWs.send(JSON.stringify(partialMsg));
-                    } else if (!latestNonFinalIsProvisionalCarry) {
-                        // Non-final snapshot이 빈 경우 기존 tail을 지워 stale carry가 남지 않도록 함.
-                        latestNonFinalText = '';
-                    }
+                        speakerState.strategy.currentMergedTextLen = mergedSnapshot.length;
+                        speakerState.strategy.onTranscriptProgress(hasPendingTranscript, transcriptChanged);
 
-                    const previousMergedSnapshot = composeTurnText(previousFinalizedText, previousNonFinalText);
-                    const mergedSnapshot = composeTurnText(finalizedText, latestNonFinalText);
-                    // SilenceTimerStrategy는 currentMergedTextLen을 스스로 관리
-                    if (strategy instanceof SilenceTimerStrategy) {
-                        strategy.currentMergedTextLen = mergedSnapshot.length;
-                    }
-                    const previousMergedTextForIdle = stripEndpointMarkers(previousMergedSnapshot);
-                    const mergedTextForIdle = stripEndpointMarkers(mergedSnapshot);
-                    const hasPendingTranscript = mergedSnapshot.length > 0
-                        && !(latestNonFinalIsProvisionalCarry && !finalizedText.trim());
-                    const transcriptAdded = mergedTextForIdle.length > previousMergedTextForIdle.length;
-                    strategy.onTranscriptProgress(hasPendingTranscript, transcriptAdded);
-
-                    // 전략에 발화 완료 판단 위임
-                    const snapshotLen = strategy.getSnapshotTextLen();
-                    const tokenFrameCtx: TokenFrameContext = {
-                        finalizedText,
-                        latestNonFinalText,
-                        mergedSnapshot,
-                        hasEndpointToken,
-                        endpointMarkerText,
-                        hasProgressTokenBeyondWatermark,
-                        finalizeSnapshotTextLen: snapshotLen ?? null,
-                        hadPendingTextBeforeFrame,
-                    };
-                    const decision = strategy.onTokenFrame(tokenFrameCtx);
-
-                    if (decision.action === 'finalize') {
-                        if (stripEndpointMarkers(decision.text).trim()) {
-                            emitFinalTurn(decision.text, detectedLang);
-                        } else {
-                            // Ignore marker-only finals to avoid <fin>-only bubble floods.
-                            finalizedText = '';
-                            latestNonFinalText = '';
-                            latestNonFinalIsProvisionalCarry = false;
-                            resetSonioxSegmentState();
-                        }
-
-                        if (decision.carryText) {
-                            latestNonFinalText = decision.carryText;
-                            latestNonFinalIsProvisionalCarry = true;
-                            // carry 만료 타이머 시작 (SilenceTimerStrategy만)
-                            if (strategy instanceof SilenceTimerStrategy) {
-                                strategy.onTranscriptProgress(false, false);
-                                strategy.scheduleCarryExpiry();
-                            }
-
-                            if (clientWs.readyState === WebSocket.OPEN) {
-                                clientWs.send(JSON.stringify({
-                                    type: 'transcript',
-                                    data: {
-                                        is_final: false,
-                                        utterance: {
-                                            text: decision.carryText,
-                                            language: detectedLang,
-                                        },
-                                    },
-                                }));
-                            }
-                        } else {
-                            latestNonFinalIsProvisionalCarry = false;
+                        if (transcriptChanged && hasPendingTranscript) {
+                            emitTranscript(
+                                mergedSnapshot,
+                                speakerState.detectedLang,
+                                false,
+                                speakerState.speaker,
+                            );
                         }
                     }
 
@@ -1078,6 +941,8 @@ wss.on('connection', (clientWs) => {
                         }
                     })();
                 }
+                disposeSonioxSpeakerStates?.();
+                disposeSonioxSpeakerStates = null;
             };
 
         } catch (error) {
@@ -1088,9 +953,14 @@ wss.on('connection', (clientWs) => {
         }
     };
 
-    const sendForcedFinalTurn = (rawText: string, rawLanguage: string): FinalTurnPayload | null => {
+    const sendForcedFinalTurn = (
+        rawText: string,
+        rawLanguage: string,
+        rawSpeaker?: string,
+    ): FinalTurnPayload | null => {
         const text = (rawText || '').trim();
         const language = (rawLanguage || '').trim() || 'unknown';
+        const speaker = (rawSpeaker || '').trim() || 'unknown';
         if (!text) return null;
 
         if (clientWs.readyState === WebSocket.OPEN) {
@@ -1101,12 +971,13 @@ wss.on('connection', (clientWs) => {
                     utterance: {
                         text,
                         language,
+                        speaker,
                     },
                 },
             }));
         }
 
-        return { text, language };
+        return { text, language, speaker };
     };
 
     // ===== 클라이언트 메시지 핸들러 =====
@@ -1124,12 +995,13 @@ wss.on('connection', (clientWs) => {
             const pendingLang = data?.data?.pending_language || selectedLanguages[0] || 'unknown';
             const cleanedPendingText = pendingText.trim();
             sonioxStopRequested = currentModel === 'soniox';
-            sonioxSegStrategy?.dispose();
 
             let finalizedTurn: FinalTurnPayload | null = null;
 
             // User-initiated stop: finalize what the user currently sees.
-            if (cleanedPendingText) {
+            if (currentModel === 'soniox' && finalizePendingTurnFromProvider) {
+                void finalizePendingTurnFromProvider();
+            } else if (cleanedPendingText) {
                 finalizedTurn = sendForcedFinalTurn(pendingText, pendingLang);
             } else if (finalizePendingTurnFromProvider) {
                 // Synchronous path: just emit transcript, no async translation.
@@ -1155,7 +1027,10 @@ wss.on('connection', (clientWs) => {
                     }
                 }, 50);
             }
-            sonioxStopRequested = false;
+            if (currentModel !== 'soniox') {
+                disposeSonioxSpeakerStates?.();
+                disposeSonioxSpeakerStates = null;
+            }
             return;
         }
 
@@ -1206,5 +1081,5 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(
         `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS}`,
     );
-    console.log(`[stt-server] soniox_segmentation_strategy=${SONIOX_SEGMENTATION_STRATEGY_ID}`);
+    console.log('[stt-server] soniox_segmentation_strategy=speaker-local');
 });
