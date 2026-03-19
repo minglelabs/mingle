@@ -560,12 +560,6 @@ wss.on('connection', (clientWs) => {
                 maxSeenFinalEndMs: number;
                 lastDetectedLang: string | null;
             };
-            type SonioxSpeakerFrameInfo = {
-                speaker: string;
-                previousMergedSnapshot: string;
-                nextMergedSnapshot: string;
-                transcriptChanged: boolean;
-            };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
@@ -886,28 +880,6 @@ wss.on('connection', (clientWs) => {
                         );
                     }
 
-                    const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
-                    for (const frameUpdate of speakerFrameUpdates.values()) {
-                        const speakerState = getSpeakerState(frameUpdate.speaker);
-                        const previousMergedSnapshot = composeTurnText(
-                            speakerState.finalizedText,
-                            speakerState.latestNonFinalText,
-                        );
-                        const nextMergedSnapshot = composeTurnText(
-                            `${speakerState.finalizedText}${frameUpdate.newFinalText}`,
-                            frameUpdate.rebuiltNonFinalText,
-                        );
-                        speakerFrameInfos.set(frameUpdate.speaker, {
-                            speaker: frameUpdate.speaker,
-                            previousMergedSnapshot,
-                            nextMergedSnapshot,
-                            transcriptChanged: (
-                                stripEndpointMarkers(nextMergedSnapshot)
-                                !== stripEndpointMarkers(previousMergedSnapshot)
-                            ),
-                        });
-                    }
-
                     // Speaker change wins over silence-based segmentation:
                     // if another speaker makes progress, finalize prior speakers first.
                     const currentFrameSpeakers = new Set(speakerFrameUpdates.keys());
@@ -918,29 +890,7 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
-                    // Soniox may keep repeating a stale partial for the previous speaker
-                    // while a new speaker is actively progressing. In that case, split
-                    // at the speaker boundary immediately instead of keeping both merged
-                    // in-flight until a silence timer fires.
-                    const progressingSpeakers = new Set(
-                        Array.from(speakerFrameInfos.values())
-                            .filter((info) => info.transcriptChanged)
-                            .map((info) => info.speaker),
-                    );
-                    const speakersToSkipInThisFrame = new Set<string>();
-                    if (progressingSpeakers.size > 0 && speakerFrameInfos.size > 1) {
-                        for (const info of speakerFrameInfos.values()) {
-                            if (info.transcriptChanged) continue;
-                            if (!stripEndpointMarkers(info.previousMergedSnapshot).trim()) continue;
-                            finalizeSpeakerTurn(info.speaker);
-                            speakersToSkipInThisFrame.add(info.speaker);
-                        }
-                    }
-
                     for (const frameUpdate of speakerFrameUpdates.values()) {
-                        if (speakersToSkipInThisFrame.has(frameUpdate.speaker)) {
-                            continue;
-                        }
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = composeTurnText(
                             speakerState.finalizedText,
