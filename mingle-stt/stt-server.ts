@@ -547,26 +547,29 @@ wss.on('connection', (clientWs) => {
             };
             type SonioxSpeakerState = {
                 speaker: string;
-                finalizedText: string;
-                latestNonFinalText: string;
-                lastFinalizedEndMs: number;
+                currentSnapshotText: string;
+                currentSnapshotEndMs: number;
+                lastConsumedEndMs: number;
                 detectedLang: string;
                 strategy: SilenceTimerStrategy;
             };
             type SonioxSpeakerFrameUpdate = {
                 speaker: string;
-                newFinalText: string;
-                rebuiltNonFinalText: string;
-                maxSeenFinalEndMs: number;
+                snapshotText: string;
+                maxSeenTokenEndMs: number;
                 lastDetectedLang: string | null;
+            };
+            type SonioxSpeakerFrameInfo = {
+                speaker: string;
+                previousMergedSnapshot: string;
+                nextMergedSnapshot: string;
+                transcriptChanged: boolean;
             };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
             console.log(`[conn:${connId}] soniox strategy=speaker-local`);
 
-            const composeTurnText = (finalText: string, nonFinalText: string): string =>
-                `${finalText || ''}${nonFinalText || ''}`.trim();
             const parseTokenTimeMs = (raw: unknown): number | null => {
                 if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
                 return raw;
@@ -618,19 +621,18 @@ wss.on('connection', (clientWs) => {
                 state.strategy.dispose();
             };
 
-            const removeSpeakerState = (speaker: string) => {
-                const state = speakerStates.get(speaker);
-                if (!state) return;
-                disposeSpeakerState(state);
-                speakerStates.delete(speaker);
+            const resetSpeakerTurn = (state: SonioxSpeakerState) => {
+                state.currentSnapshotText = '';
+                state.currentSnapshotEndMs = -1;
+                state.strategy.resetState();
             };
 
             const finalizeSpeakerTurn = (speaker: string): FinalTurnPayload | null => {
                 const state = speakerStates.get(speaker);
                 if (!state) return null;
-                const merged = composeTurnText(state.finalizedText, state.latestNonFinalText);
+                const merged = state.currentSnapshotText.trim();
                 if (!merged) {
-                    removeSpeakerState(speaker);
+                    resetSpeakerTurn(state);
                     return null;
                 }
 
@@ -640,7 +642,10 @@ wss.on('connection', (clientWs) => {
                     true,
                     state.speaker,
                 );
-                removeSpeakerState(speaker);
+                if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
+                    state.lastConsumedEndMs = state.currentSnapshotEndMs;
+                }
+                resetSpeakerTurn(state);
                 return payload;
             };
 
@@ -674,9 +679,9 @@ wss.on('connection', (clientWs) => {
                 });
                 const state: SonioxSpeakerState = {
                     speaker,
-                    finalizedText: '',
-                    latestNonFinalText: '',
-                    lastFinalizedEndMs: -1,
+                    currentSnapshotText: '',
+                    currentSnapshotEndMs: -1,
+                    lastConsumedEndMs: -1,
                     detectedLang: config.languages[0] || 'unknown',
                     strategy,
                 };
@@ -802,9 +807,8 @@ wss.on('connection', (clientWs) => {
                         if (existing) return existing;
                         const created: SonioxSpeakerFrameUpdate = {
                             speaker,
-                            newFinalText: '',
-                            rebuiltNonFinalText: '',
-                            maxSeenFinalEndMs: -1,
+                            snapshotText: '',
+                            maxSeenTokenEndMs: -1,
                             lastDetectedLang: null,
                         };
                         speakerFrameUpdates.set(speaker, created);
@@ -850,7 +854,7 @@ wss.on('connection', (clientWs) => {
                         const includeByWatermark = isTokenBeyondWatermark(
                             tokenStartMs,
                             tokenEndMs,
-                            speakerState.lastFinalizedEndMs,
+                            speakerState.lastConsumedEndMs,
                         );
                         if (!includeByWatermark) continue;
 
@@ -858,13 +862,9 @@ wss.on('connection', (clientWs) => {
                         if (tokenLanguage !== 'unknown') {
                             frameUpdate.lastDetectedLang = tokenLanguage;
                         }
-                        if (token.is_final === true) {
-                            frameUpdate.newFinalText += tokenText;
-                            if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenFinalEndMs) {
-                                frameUpdate.maxSeenFinalEndMs = tokenEndMs;
-                            }
-                        } else {
-                            frameUpdate.rebuiltNonFinalText += tokenText;
+                        frameUpdate.snapshotText += tokenText;
+                        if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
+                            frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
                     }
 
@@ -880,6 +880,22 @@ wss.on('connection', (clientWs) => {
                         );
                     }
 
+                    const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
+                    for (const frameUpdate of speakerFrameUpdates.values()) {
+                        const speakerState = getSpeakerState(frameUpdate.speaker);
+                        const previousMergedSnapshot = speakerState.currentSnapshotText;
+                        const nextMergedSnapshot = frameUpdate.snapshotText.trim();
+                        speakerFrameInfos.set(frameUpdate.speaker, {
+                            speaker: frameUpdate.speaker,
+                            previousMergedSnapshot,
+                            nextMergedSnapshot,
+                            transcriptChanged: (
+                                stripEndpointMarkers(nextMergedSnapshot)
+                                !== stripEndpointMarkers(previousMergedSnapshot)
+                            ),
+                        });
+                    }
+
                     // Speaker change wins over silence-based segmentation:
                     // if another speaker makes progress, finalize prior speakers first.
                     const currentFrameSpeakers = new Set(speakerFrameUpdates.keys());
@@ -890,27 +906,36 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
+                    const progressingSpeakers = new Set(
+                        Array.from(speakerFrameInfos.values())
+                            .filter((info) => info.transcriptChanged)
+                            .map((info) => info.speaker),
+                    );
+                    const speakersToSkipInThisFrame = new Set<string>();
+                    if (progressingSpeakers.size > 0 && speakerFrameInfos.size > 1) {
+                        for (const info of speakerFrameInfos.values()) {
+                            if (info.transcriptChanged) continue;
+                            if (!stripEndpointMarkers(info.previousMergedSnapshot).trim()) continue;
+                            finalizeSpeakerTurn(info.speaker);
+                            speakersToSkipInThisFrame.add(info.speaker);
+                        }
+                    }
+
                     for (const frameUpdate of speakerFrameUpdates.values()) {
+                        if (speakersToSkipInThisFrame.has(frameUpdate.speaker)) {
+                            continue;
+                        }
                         const speakerState = getSpeakerState(frameUpdate.speaker);
-                        const previousMergedSnapshot = composeTurnText(
-                            speakerState.finalizedText,
-                            speakerState.latestNonFinalText,
-                        );
+                        const previousMergedSnapshot = speakerState.currentSnapshotText;
                         if (frameUpdate.lastDetectedLang) {
                             speakerState.detectedLang = frameUpdate.lastDetectedLang;
                         }
-                        if (frameUpdate.newFinalText) {
-                            speakerState.finalizedText += frameUpdate.newFinalText;
-                            if (frameUpdate.maxSeenFinalEndMs > speakerState.lastFinalizedEndMs) {
-                                speakerState.lastFinalizedEndMs = frameUpdate.maxSeenFinalEndMs;
-                            }
+                        speakerState.currentSnapshotText = frameUpdate.snapshotText.trim();
+                        if (frameUpdate.maxSeenTokenEndMs > speakerState.currentSnapshotEndMs) {
+                            speakerState.currentSnapshotEndMs = frameUpdate.maxSeenTokenEndMs;
                         }
-                        speakerState.latestNonFinalText = frameUpdate.rebuiltNonFinalText;
 
-                        const mergedSnapshot = composeTurnText(
-                            speakerState.finalizedText,
-                            speakerState.latestNonFinalText,
-                        );
+                        const mergedSnapshot = speakerState.currentSnapshotText;
                         const previousMergedTextForIdle = stripEndpointMarkers(previousMergedSnapshot);
                         const mergedTextForIdle = stripEndpointMarkers(mergedSnapshot);
                         const transcriptChanged = mergedTextForIdle !== previousMergedTextForIdle;
