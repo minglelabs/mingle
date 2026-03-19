@@ -750,13 +750,15 @@ wss.on('connection', (clientWs) => {
                     let rawFinalTokenCount = 0;
                     let rawNonFinalTokenCount = 0;
                     let rawEndpointTokenCount = 0;
-                    let joinedTokenTextForLog = '';
                     let rawFinalStartMs: number | null = null;
                     let rawFinalEndMs: number | null = null;
                     let rawNonFinalStartMs: number | null = null;
                     let rawNonFinalEndMs: number | null = null;
-                    const tokenTextByFinalState = new Map<string, string>();
-                    const tokenTextByLanguage = new Map<string, string>();
+                    const tokenTextByStateLanguagePair = new Map<string, {
+                        finalState: string;
+                        language: string;
+                        text: string;
+                    }>();
                     const mergeTokenTimeRange = (
                         startMs: number | null,
                         endMs: number | null,
@@ -777,13 +779,27 @@ wss.on('connection', (clientWs) => {
                         }
                         return { nextStartMs, nextEndMs };
                     };
-                    const appendGroupedTokenText = (
-                        groupedText: Map<string, string>,
-                        key: string,
+                    const appendPairGroupedTokenText = (
+                        groupedText: Map<string, {
+                            finalState: string;
+                            language: string;
+                            text: string;
+                        }>,
+                        finalState: string,
+                        language: string,
                         tokenText: string,
                     ) => {
-                        const previousText = groupedText.get(key) || '';
-                        groupedText.set(key, previousText + tokenText);
+                        const key = `${finalState}\u0000${language}`;
+                        const previousEntry = groupedText.get(key);
+                        if (previousEntry) {
+                            previousEntry.text += tokenText;
+                            return;
+                        }
+                        groupedText.set(key, {
+                            finalState,
+                            language,
+                            text: tokenText,
+                        });
                     };
 
                     for (const token of tokens) {
@@ -815,9 +831,12 @@ wss.on('connection', (clientWs) => {
                             detectedLang = tokenLanguage;
                         }
 
-                        joinedTokenTextForLog += tokenText;
-                        appendGroupedTokenText(tokenTextByFinalState, tokenFinalState, tokenText);
-                        appendGroupedTokenText(tokenTextByLanguage, tokenLanguage, tokenText);
+                        appendPairGroupedTokenText(
+                            tokenTextByStateLanguagePair,
+                            tokenFinalState,
+                            tokenLanguage,
+                            tokenText,
+                        );
 
                         if (token.is_final === true) {
                             rawFinalText += tokenText;
@@ -869,28 +888,11 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
-                    const visibleJoinedTokenTextForLog = joinedTokenTextForLog
-                        .replace(/<\/?(?:end|fin)>/gi, '');
-                    if (visibleJoinedTokenTextForLog) {
+                    for (const pairEntry of tokenTextByStateLanguagePair.values()) {
+                        if (!pairEntry.text) continue;
                         console.log(
-                            `[conn:${connId}] soniox text=${JSON.stringify(visibleJoinedTokenTextForLog)}`,
+                            `[conn:${connId}] soniox text is_final=${pairEntry.finalState} language=${pairEntry.language} text=${JSON.stringify(pairEntry.text)}`,
                         );
-                    }
-                    if (tokenTextByFinalState.size > 1) {
-                        for (const [finalState, groupedText] of tokenTextByFinalState.entries()) {
-                            if (!groupedText) continue;
-                            console.log(
-                                `[conn:${connId}] soniox text_by_is_final=${finalState} text=${JSON.stringify(groupedText)}`,
-                            );
-                        }
-                    }
-                    if (tokenTextByLanguage.size > 1) {
-                        for (const [language, groupedText] of tokenTextByLanguage.entries()) {
-                            if (!groupedText) continue;
-                            console.log(
-                                `[conn:${connId}] soniox text_by_language=${language} text=${JSON.stringify(groupedText)}`,
-                            );
-                        }
                     }
 
                     const hasAnyPendingTextForEndpoint = hadPendingTextBeforeFrame
