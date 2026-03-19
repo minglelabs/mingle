@@ -314,6 +314,11 @@ interface PendingSpeakerTurn {
   updatedAtMs: number
 }
 
+function buildFinalizeDedupSignature(language: string, text: string, speaker?: string): string {
+  const normalizedSpeaker = (speaker || '').trim() || 'unknown'
+  return `${normalizedSpeaker}::${language}::${text}`
+}
+
 interface TranslateApiResult {
   translations: Record<string, string>
   ttsLanguage?: string
@@ -1002,6 +1007,7 @@ export default function useRealtimeSTT({
     rawText: string,
     rawLang: string,
     options?: {
+      speaker?: string
       partialTranslations?: Record<string, string>
       previousStateSourceLanguage?: string
       previousStateSourceText?: string
@@ -1013,7 +1019,7 @@ export default function useRealtimeSTT({
     if (!text) return null
 
     const now = Date.now()
-    const sig = `${lang}::${text}`
+    const sig = buildFinalizeDedupSignature(lang, text, options?.speaker)
     if (
       sig
       && stopFinalizeDedupRef.current.sig === sig
@@ -1070,6 +1076,7 @@ export default function useRealtimeSTT({
     return {
       pendingTurn,
       options: {
+        speaker,
         partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
         previousStateSourceLanguage: pendingTurn?.language || speakerLanguage,
         previousStateSourceText: pendingTurn?.text || '',
@@ -1480,7 +1487,7 @@ export default function useRealtimeSTT({
         if (!text) {
           return
         }
-        const sig = `${lang}::${text}`
+        const sig = buildFinalizeDedupSignature(lang, text, speaker)
         const now = Date.now()
         const hadTurnStart = turnStartedAtRef.current !== null
         const sttDurationMs = hadTurnStart && turnStartedAtRef.current
