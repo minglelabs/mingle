@@ -1249,13 +1249,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
+                type="button"
                 onClick={() => {
                   if (isActive) return
                   setMenuOpen(false)
                   setLangSelectorOpen(o => !o)
                 }}
                 disabled={isActive}
-                className="flex items-center gap-1 disabled:opacity-60"
+                aria-haspopup="menu"
+                aria-expanded={langSelectorOpen}
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-gray-700 transition-all disabled:opacity-60 ${
+                  langSelectorOpen
+                    ? 'border-amber-300 bg-amber-50 shadow-[0_6px_18px_rgba(245,158,11,0.18)]'
+                    : 'border-gray-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.08)]'
+                }`}
               >
                 {selectedLanguages.map((lang) => (
                   <span
@@ -1266,6 +1273,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     {getSttLanguageFlag(lang)}
                   </span>
                 ))}
+                <ChevronDown
+                  size={14}
+                  strokeWidth={2.4}
+                  className={`shrink-0 text-gray-500 transition-transform ${
+                    langSelectorOpen ? 'rotate-180 text-amber-600' : ''
+                  }`}
+                />
               </button>
               <LanguageSelector
                 isOpen={langSelectorOpen}
