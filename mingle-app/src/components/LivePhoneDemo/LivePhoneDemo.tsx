@@ -1199,11 +1199,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 disabled={isActive}
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
-                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-gray-700 transition-colors disabled:opacity-60 ${
-                  langSelectorOpen
-                    ? 'border-gray-300 bg-gray-200'
-                    : 'border-gray-200 bg-gray-100'
-                }`}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 px-2.5 py-1 text-gray-700 transition-colors disabled:opacity-60"
               >
                 {selectedLanguages.map((lang) => (
                   <span
