@@ -57,6 +57,7 @@ describe('use-realtime-stt pure logic', () => {
         utterance: {
           text: ' <fin> ... Hello there ',
           language: 'en-US',
+          speaker: 'speaker-2',
         },
       },
     })
@@ -66,6 +67,7 @@ describe('use-realtime-stt pure logic', () => {
       text: 'Hello there',
       language: 'en-US',
       isFinal: true,
+      speaker: 'speaker-2',
     })
   })
 
