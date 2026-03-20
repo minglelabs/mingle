@@ -82,8 +82,8 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 
   const timestampLines = formatChatBubbleTimestampLines(utterance.createdAtMs, uiLocale)
   const originalBubbleMaxWidth = timestampLines.length > 0
-    ? 'calc(100% - 4.5rem)'
-    : '85%'
+    ? 'min(86%, calc(100% - 4.5rem))'
+    : '86%'
 
   return (
     <motion.div
@@ -93,7 +93,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       className="flex flex-col gap-1"
     >
       {/* Original bubble */}
-      <div data-original-bubble-row className="flex w-full max-w-[96%] items-end gap-2">
+      <div data-original-bubble-row className="flex w-full items-end gap-2">
         <div
           data-original-bubble-body
           style={{ maxWidth: originalBubbleMaxWidth }}
