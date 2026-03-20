@@ -96,7 +96,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       <div data-original-bubble-row className="flex w-full items-end gap-0.5">
         <div
           data-original-bubble-body
-          style={{ maxWidth: originalBubbleMaxWidth }}
+          style={{ maxWidth: originalBubbleMaxWidth, borderTopLeftRadius: '1px' }}
           className="w-fit rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
         >
           <div data-original-bubble-content className="min-w-0">
