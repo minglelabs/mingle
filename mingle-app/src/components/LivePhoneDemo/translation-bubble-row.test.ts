@@ -14,8 +14,8 @@ describe('TranslationBubbleRow', () => {
           metaClassName: 'text-amber-500',
           contentClassName: 'text-sm text-gray-500',
           contentStyle: { lineHeight: 1.25 },
+          children: createElement('span', null, '짧은 번역'),
         },
-        createElement('span', null, '짧은 번역'),
       ),
     )
 
