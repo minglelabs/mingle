@@ -22,7 +22,7 @@ export default function TranslationBubbleRow({
       <div
         data-translation-bubble-body
         className={cn(
-          'inline-flex w-fit max-w-[92%] items-center gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
+          'inline-flex w-fit max-w-[89%] items-center gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
           bubbleClassName,
         )}
       >
