@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
   getWsUrl,
+  isDuplicateTimedSignature,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
   shouldApplyPartialTranslationResponse,
@@ -135,6 +137,45 @@ describe('use-realtime-stt pure logic', () => {
     })
 
     expect(built).toBeNull()
+  })
+
+  it('builds stable translate request signatures for duplicate-request dedupe', () => {
+    expect(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: 'speaker-1',
+      language: 'en',
+      text: 'Hello world',
+    })).toBe('12::speaker-1::en::Hello world')
+
+    expect(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: '',
+      language: 'en',
+      text: '  Hello world  ',
+    })).toBe('12::unknown::en::Hello world')
+  })
+
+  it('detects duplicate timed signatures within the ttl window', () => {
+    expect(isDuplicateTimedSignature({
+      previousSig: 'speaker-1::en::hello',
+      previousExpiresAt: 2_000,
+      nextSig: 'speaker-1::en::hello',
+      nowMs: 1_500,
+    })).toBe(true)
+
+    expect(isDuplicateTimedSignature({
+      previousSig: 'speaker-1::en::hello',
+      previousExpiresAt: 2_000,
+      nextSig: 'speaker-1::en::hello',
+      nowMs: 2_500,
+    })).toBe(false)
+
+    expect(isDuplicateTimedSignature({
+      previousSig: 'speaker-1::en::hello',
+      previousExpiresAt: 2_000,
+      nextSig: 'speaker-2::en::hello',
+      nowMs: 1_500,
+    })).toBe(false)
   })
 
   it('accepts partial translation responses only for the active turn and speaker', () => {

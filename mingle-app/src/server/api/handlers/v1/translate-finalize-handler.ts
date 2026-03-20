@@ -197,6 +197,10 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',
       'No explanations, no markdown, no extra keys.',
+      'Always translate the ENTIRE current text as a standalone translation for each target language.',
+      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
+      'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'),
     userPrompt: userPromptLines.join('\n'),
   }

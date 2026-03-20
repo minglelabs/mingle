@@ -377,6 +377,31 @@ function buildFinalizeDedupSignature(language: string, text: string, speaker?: s
   return `${normalizedSpeaker}::${language}::${text}`
 }
 
+export function buildLiveTranslateRequestSignature(input: {
+  utteranceId: number | string
+  speaker?: string | null
+  language: string
+  text: string
+}): string {
+  const normalizedSpeaker = (input.speaker || '').trim() || 'unknown'
+  const normalizedLanguage = (input.language || 'unknown').trim() || 'unknown'
+  const normalizedText = input.text.trim()
+  return `${String(input.utteranceId)}::${normalizedSpeaker}::${normalizedLanguage}::${normalizedText}`
+}
+
+export function isDuplicateTimedSignature(input: {
+  previousSig: string
+  previousExpiresAt: number
+  nextSig: string
+  nowMs: number
+}): boolean {
+  return Boolean(
+    input.nextSig
+    && input.previousSig === input.nextSig
+    && input.nowMs < input.previousExpiresAt
+  )
+}
+
 export function shouldApplyPartialTranslationResponse(input: {
   requestUtteranceId: number
   currentUtteranceId: number
@@ -647,9 +672,11 @@ export default function useRealtimeSTT({
   const latestPartialTranslateSeqRef = useRef(0)
   const partialTranslationPriorityRef = useRef<Map<string, TranslationPriority>>(new Map()) // lang -> priority for visible partial turn
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
+  const lastPartialTranslateRequestSignatureRef = useRef('')
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const sessionKeyRef = useRef('')
   const turnStartedAtRef = useRef<number | null>(null)
+  const recentServerFinalizeSignatureRef = useRef<{ sig: string, expiresAt: number }>({ sig: '', expiresAt: 0 })
 
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
@@ -850,6 +877,7 @@ export default function useRealtimeSTT({
     hasFiredInitialPartialTranslateRef.current = false
     lastPartialTranslateLenRef.current = 0
     partialTranslationPriorityRef.current.clear()
+    lastPartialTranslateRequestSignatureRef.current = ''
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -1672,15 +1700,15 @@ export default function useRealtimeSTT({
           ? Math.max(0, now - turnStartedAtRef.current)
           : undefined
         turnStartedAtRef.current = null
-        if (
-          sig
-          && stopFinalizeDedupRef.current.sig === sig
-          && now < stopFinalizeDedupRef.current.expiresAt
-        ) {
-          stopFinalizeDedupRef.current = { sig: '', expiresAt: 0 }
+        if (isDuplicateTimedSignature({
+          previousSig: recentServerFinalizeSignatureRef.current.sig,
+          previousExpiresAt: recentServerFinalizeSignatureRef.current.expiresAt,
+          nextSig: sig,
+          nowMs: now,
+        })) {
           return
         }
-        stopFinalizeDedupRef.current = { sig: '', expiresAt: 0 }
+        recentServerFinalizeSignatureRef.current = { sig, expiresAt: now + 2_000 }
 
         utteranceIdRef.current += 1
         const finalizedPayload = buildFinalizedUtterancePayload({
@@ -1773,6 +1801,8 @@ export default function useRealtimeSTT({
       stopFinalizeDedupRef.current = { sig: '', expiresAt: 0 }
       turnStartedAtRef.current = null
       lastPartialTranslationStateRef.current = null
+      lastPartialTranslateRequestSignatureRef.current = ''
+      recentServerFinalizeSignatureRef.current = { sig: '', expiresAt: 0 }
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
       activePartialSpeakerRef.current = null
@@ -2003,6 +2033,23 @@ export default function useRealtimeSTT({
     // that arrive after a new utterance has started (prevents cross-utterance contamination).
     const requestUtteranceId = utteranceIdRef.current
     const requestSpeaker = activePartialSpeakerRef.current
+    const requestSignature = buildLiveTranslateRequestSignature({
+      utteranceId: requestUtteranceId,
+      speaker: requestSpeaker,
+      language: currentLang,
+      text: trimmed,
+    })
+    if (lastPartialTranslateRequestSignatureRef.current === requestSignature) {
+      logSttDebug('partial.translate.skip_duplicate', {
+        requestUtteranceId,
+        requestSpeaker,
+        currentLang,
+        text: trimmed,
+      })
+      return
+    }
+    lastPartialTranslateRequestSignatureRef.current = requestSignature
+
     const requestSeq = latestPartialTranslateSeqRef.current + 1
     latestPartialTranslateSeqRef.current = requestSeq
     const requestPriority: TranslationPriority = {
