@@ -155,6 +155,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
+      isFinal: false,
       currentTurnPreviousState: {
         sourceLanguage: 'en',
         sourceText: 'hello',
@@ -174,6 +175,40 @@ describe('/api/translate/finalize route', () => {
     expect(json.translations).toEqual({ ko: '이전 번역' })
     expect(typeof json.ttsAudioBase64).toBe('string')
     expect(json.ttsAudioMime).toBe('audio/mpeg')
+  })
+
+  it('retries once on transient provider errors before succeeding', async () => {
+    mockGenerateContent
+      .mockRejectedValueOnce(new Error(
+        '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.',
+      ))
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"ko":"안녕하세요"}',
+          usageMetadata: {
+            promptTokenCount: 11,
+            candidatesTokenCount: 22,
+            totalTokenCount: 33,
+          },
+        },
+      })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('returns 400 when text is missing', async () => {
@@ -209,6 +244,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
+      isFinal: false,
       __testFaultMode: 'provider_empty',
       currentTurnPreviousState: {
         sourceLanguage: 'en',
@@ -244,6 +280,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko', 'ja'],
+      isFinal: false,
       __testFaultMode: 'target_miss',
       currentTurnPreviousState: {
         sourceLanguage: 'en',
@@ -264,6 +301,38 @@ describe('/api/translate/finalize route', () => {
       ko: 'fallback-ko',
       ja: 'fallback-ja',
     })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not reuse previous-state fallback for final requests', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+      currentTurnPreviousState: {
+        sourceLanguage: 'en',
+        sourceText: 'hello',
+        translations: {
+          ko: 'partial fallback...',
+        },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(json).toEqual({ error: 'empty_translation_response' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -360,6 +429,10 @@ describe('/api/translate/finalize route', () => {
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',
       'No explanations, no markdown, no extra keys.',
+      'Always translate the ENTIRE current text as a standalone translation for each target language.',
+      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
+      'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'))
   })
 
