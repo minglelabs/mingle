@@ -1072,6 +1072,8 @@ export default function useRealtimeSTT({
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
+  const pendingLanguageChangeRestartRef = useRef(false)
+  const suppressNextNativeStoppedStatusRef = useRef(false)
   const desiredLanguagesRef = useRef([...languages])
   const sessionLanguagesRef = useRef([...languages])
   const previousLanguageSelectionSignatureRef = useRef(buildSttLanguageSelectionSignature(languages))
@@ -2233,6 +2235,7 @@ export default function useRealtimeSTT({
     const useNativeStt = shouldUseNativeSttBridge()
     const sessionLanguages = [...desiredLanguagesRef.current]
     useNativeSttRef.current = useNativeStt
+    pendingLanguageChangeRestartRef.current = false
     logSttDebug('recording.start.request', {
       useNativeStt,
       wsUrl: getWsUrl(),
@@ -2273,7 +2276,6 @@ export default function useRealtimeSTT({
         partialTranslateControllerRef.current.abort()
         partialTranslateControllerRef.current = null
       }
-      nativeStopRequestedRef.current = false
 
       if (useNativeStt) {
         logSttDebug('native.start.begin')
@@ -2374,6 +2376,21 @@ export default function useRealtimeSTT({
     }
   }, [cleanup, enableAec, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
 
+  const restartRecordingAfterLanguageChangeAck = useCallback(() => {
+    if (!pendingLanguageChangeRestartRef.current) return
+    pendingLanguageChangeRestartRef.current = false
+    suppressNextNativeStoppedStatusRef.current = true
+
+    logSttDebug('recording.languages.restart_after_native_ack')
+    void (async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
+      })
+      if (connectionStatusRef.current !== 'idle') return
+      await startRecording()
+    })()
+  }, [startRecording])
+
   useEffect(() => {
     const currentSignature = buildSttLanguageSelectionSignature(languages)
     const previousSignature = previousLanguageSelectionSignatureRef.current
@@ -2398,6 +2415,12 @@ export default function useRealtimeSTT({
         currentSignature,
       })
       void (async () => {
+        if (useNativeSttRef.current) {
+          pendingLanguageChangeRestartRef.current = true
+          await stopRecordingGracefully()
+          return
+        }
+
         await stopRecordingGracefully()
         await new Promise<void>((resolve) => {
           setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
@@ -2422,6 +2445,11 @@ export default function useRealtimeSTT({
         if (detail.status === 'connecting') {
           setConnectionStatus('connecting')
         } else if (detail.status === 'stopped') {
+          if (suppressNextNativeStoppedStatusRef.current) {
+            suppressNextNativeStoppedStatusRef.current = false
+            logSttDebug('native.status.stopped_ignored_after_restart')
+            return
+          }
           setConnectionStatus('idle')
         }
         return
@@ -2449,6 +2477,7 @@ export default function useRealtimeSTT({
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false
           setConnectionStatus('idle')
+          restartRecordingAfterLanguageChangeAck()
           return
         }
         handleSttTransportClose({ native: true, reason: detail.reason })
@@ -2459,7 +2488,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, restartRecordingAfterLanguageChangeAck])
 
   const recoverFromBackgroundIfNeeded = useCallback(async () => {
     if (useNativeSttRef.current) return
