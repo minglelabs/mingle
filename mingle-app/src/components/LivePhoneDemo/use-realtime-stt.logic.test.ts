@@ -7,6 +7,7 @@ import {
   isDuplicateTimedSignature,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
+  shouldApplyLatestPartialTranslationResponse,
   shouldApplyPartialTranslationResponse,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
@@ -268,6 +269,38 @@ describe('use-realtime-stt pure logic', () => {
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
       currentSpeaker: 'speaker-2',
+    })).toBe(false)
+  })
+
+  it('accepts only the latest non-aborted partial translation response', () => {
+    expect(shouldApplyLatestPartialTranslationResponse({
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+      requestSeq: 3,
+      latestRequestSeq: 3,
+      aborted: false,
+    })).toBe(true)
+
+    expect(shouldApplyLatestPartialTranslationResponse({
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+      requestSeq: 2,
+      latestRequestSeq: 3,
+      aborted: false,
+    })).toBe(false)
+
+    expect(shouldApplyLatestPartialTranslationResponse({
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+      requestSeq: 3,
+      latestRequestSeq: 3,
+      aborted: true,
     })).toBe(false)
   })
 
