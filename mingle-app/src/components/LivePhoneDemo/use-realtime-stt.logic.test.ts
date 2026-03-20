@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildSttLanguageSelectionSignature,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
   applyTranslationToUtteranceStoreState,
@@ -133,6 +134,18 @@ describe('use-realtime-stt pure logic', () => {
         ja: 'こんにちは',
       },
     })
+  })
+
+  it('normalizes language selection signatures for debounce comparisons', () => {
+    expect(buildSttLanguageSelectionSignature([' en ', 'ko', '', 'ja ']))
+      .toBe(buildSttLanguageSelectionSignature(['en', 'ko', 'ja']))
+  })
+
+  it('changes language selection signatures when membership or order changes', () => {
+    expect(buildSttLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildSttLanguageSelectionSignature(['en', 'ja']))
+    expect(buildSttLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildSttLanguageSelectionSignature(['ko', 'en']))
   })
 
   it('returns null when final text is only markers/noise', () => {
