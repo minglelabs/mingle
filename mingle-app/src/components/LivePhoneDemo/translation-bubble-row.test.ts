@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import TranslationBubbleRow from './TranslationBubbleRow'
 
 describe('TranslationBubbleRow', () => {
-  it('renders the message body before the right-side meta cluster', () => {
+  it('renders the meta cluster before the message body inside the bubble', () => {
     const html = renderToStaticMarkup(
       createElement(
         TranslationBubbleRow,
@@ -20,8 +20,11 @@ describe('TranslationBubbleRow', () => {
     expect(html).toContain('짧은 번역')
     expect(html).toContain('🇰🇷')
     expect(html).toContain('>ko<')
-    expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
-      html.indexOf('data-translation-bubble-meta'),
+    expect(html.indexOf('data-translation-bubble-meta')).toBeLessThan(
+      html.indexOf('data-translation-bubble-content'),
+    )
+    expect(html.indexOf('data-translation-bubble-content')).toBeLessThan(
+      html.indexOf('짧은 번역'),
     )
   })
 })
