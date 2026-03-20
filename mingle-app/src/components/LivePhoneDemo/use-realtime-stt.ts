@@ -21,9 +21,18 @@ const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
+const LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS = 400
+const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
+
+export function buildSttLanguageSelectionSignature(languages: string[]): string {
+  return languages
+    .map((language) => language.trim())
+    .filter(Boolean)
+    .join('\u001f')
+}
 
 type NativeSttStartCommand = {
   type: 'native_stt_start'
@@ -970,6 +979,8 @@ export default function useRealtimeSTT({
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
+  const connectionStatusRef = useRef<ConnectionStatus>(connectionStatus)
+  connectionStatusRef.current = connectionStatus
 
   // All utterances from localStorage (used as pagination source + merge base for persist)
   const storedUtterancesRef = useRef<Utterance[]>([])
@@ -1061,6 +1072,22 @@ export default function useRealtimeSTT({
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
+  const pendingLanguageChangeRestartRef = useRef(false)
+  const suppressNextNativeStoppedStatusRef = useRef(false)
+  const desiredLanguagesRef = useRef([...languages])
+  const sessionLanguagesRef = useRef([...languages])
+  const previousLanguageSelectionSignatureRef = useRef(buildSttLanguageSelectionSignature(languages))
+  const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const getSessionLanguages = useCallback(() => (
+    sessionLanguagesRef.current.length > 0 ? sessionLanguagesRef.current : desiredLanguagesRef.current
+  ), [])
+
+  const clearLanguageChangeRestartTimer = useCallback(() => {
+    if (!languageChangeRestartTimerRef.current) return
+    clearTimeout(languageChangeRestartTimerRef.current)
+    languageChangeRestartTimerRef.current = null
+  }, [])
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -1077,6 +1104,13 @@ export default function useRealtimeSTT({
   useEffect(() => {
     useNativeSttRef.current = shouldUseNativeSttBridge()
   }, [])
+
+  useEffect(() => {
+    desiredLanguagesRef.current = [...languages]
+    if (connectionStatusRef.current === 'idle' || connectionStatusRef.current === 'error') {
+      sessionLanguagesRef.current = [...languages]
+    }
+  }, [languages])
 
   // Initialize hasOlderUtterances after mount
   useEffect(() => {
@@ -1480,7 +1514,8 @@ export default function useRealtimeSTT({
     result: TranslateApiResult,
   ) => {
     if (!enableTtsRef.current) return
-    const ttsTargetLang = (result.ttsLanguage || languages.filter(l => l !== sourceLanguage)[0] || '').trim()
+    const sessionLanguages = getSessionLanguages()
+    const ttsTargetLang = (result.ttsLanguage || sessionLanguages.filter(l => l !== sourceLanguage)[0] || '').trim()
     if (!ttsTargetLang) return
     const ttsText = (result.translations[ttsTargetLang] || '').trim()
     if (!ttsText) return
@@ -1508,7 +1543,7 @@ export default function useRealtimeSTT({
     void synthesizeTtsViaApi(ttsText, ttsTargetLang).then((fallbackBlob) => {
       queueAudioIfValid(fallbackBlob)
     })
-  }, [languages, synthesizeTtsViaApi])
+  }, [getSessionLanguages, synthesizeTtsViaApi])
 
   const applyTranslationToUtterance = useCallback((
     utteranceId: string,
@@ -1551,6 +1586,7 @@ export default function useRealtimeSTT({
     if (options?.utteranceSerial === undefined) {
       utteranceIdRef.current = reservedUtteranceSerial
     }
+    const sessionLanguages = getSessionLanguages()
     const seedTranslationState = buildSeedTranslationState(
       rawLang,
       options?.partialTranslations ?? partialTranslationsRef.current,
@@ -1559,7 +1595,7 @@ export default function useRealtimeSTT({
     const localPayload = buildFinalizedUtterancePayload({
       rawText,
       rawLanguage: rawLang,
-      languages,
+      languages: sessionLanguages,
       partialTranslations: seedTranslationState.translations,
       currentTurnPreviousTranslations: seedTranslationState.translations,
       utteranceSerial: reservedUtteranceSerial,
@@ -1613,7 +1649,7 @@ export default function useRealtimeSTT({
       lang: localPayload.language,
       currentTurnPreviousState,
     }
-  }, [languages])
+  }, [getSessionLanguages])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -1665,11 +1701,12 @@ export default function useRealtimeSTT({
     const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
+    const sessionLanguages = getSessionLanguages()
 
     // 단일 언어 모드: 선택 언어가 1개인 경우
-    const isSingleLanguageMode = languages.length === 1
+    const isSingleLanguageMode = sessionLanguages.length === 1
     const detectedLangNorm = normalizeLangForCompare(lang)
-    const selectedLangNorm = normalizeLangForCompare(languages[0] || '')
+    const selectedLangNorm = normalizeLangForCompare(sessionLanguages[0] || '')
 
     if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
       // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
@@ -1694,11 +1731,11 @@ export default function useRealtimeSTT({
     // 단일 언어 모드이지만 다른 언어 감지: 선택 언어로 번역 + TTS
     // 다중 언어 모드: 기존 동작 유지
     const ttsTargetLang = isSingleLanguageMode
-      ? (languages[0] || '')
-      : (languages.filter(l => l !== lang)[0] || '')
+      ? (sessionLanguages[0] || '')
+      : (sessionLanguages.filter(l => l !== lang)[0] || '')
     const effectiveTargetLanguages = isSingleLanguageMode
-      ? languages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
-      : languages
+      ? sessionLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
+      : sessionLanguages
 
     // Reserve a TTS queue slot before the API call so playback order matches utterance order
     if (enableTtsRef.current && ttsTargetLang) {
@@ -1748,7 +1785,7 @@ export default function useRealtimeSTT({
         keepalive: true,
       })
     })
-  }, [applyTranslationToUtterance, handleInlineTtsFromTranslate, languages, logClientEvent, translateViaApi])
+  }, [applyTranslationToUtterance, getSessionLanguages, handleInlineTtsFromTranslate, logClientEvent, translateViaApi])
 
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false) => {
     if (isStoppingRef.current) return
@@ -2067,6 +2104,7 @@ export default function useRealtimeSTT({
           : undefined
         turnStartedAtRef.current = null
 
+        const sessionLanguages = getSessionLanguages()
         const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
         const seedTranslationState = buildSeedTranslationState(
           lang,
@@ -2076,7 +2114,7 @@ export default function useRealtimeSTT({
         const finalizedPayload = buildFinalizedUtterancePayload({
           rawText,
           rawLanguage: lang,
-          languages,
+          languages: sessionLanguages,
           partialTranslations: seedTranslationState.translations,
           currentTurnPreviousTranslations: seedTranslationState.translations,
           utteranceSerial: nextUtteranceSerial,
@@ -2184,7 +2222,7 @@ export default function useRealtimeSTT({
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     finalizeTurnWithTranslation,
-    languages,
+    getSessionLanguages,
     logClientEvent,
     normalizedUsageLimitSec,
     startAudioProcessing,
@@ -2195,11 +2233,13 @@ export default function useRealtimeSTT({
   const startRecording = useCallback(async () => {
     if (isStoppingRef.current) return
     const useNativeStt = shouldUseNativeSttBridge()
+    const sessionLanguages = [...desiredLanguagesRef.current]
     useNativeSttRef.current = useNativeStt
+    pendingLanguageChangeRestartRef.current = false
     logSttDebug('recording.start.request', {
       useNativeStt,
       wsUrl: getWsUrl(),
-      languagesCount: languages.length,
+      languagesCount: sessionLanguages.length,
     })
     if (!useNativeStt && (
       socketRef.current
@@ -2216,6 +2256,7 @@ export default function useRealtimeSTT({
 
     try {
       setConnectionStatus('connecting')
+      sessionLanguagesRef.current = sessionLanguages
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
       lastPartialTranslationStateRef.current = null
@@ -2235,7 +2276,6 @@ export default function useRealtimeSTT({
         partialTranslateControllerRef.current.abort()
         partialTranslateControllerRef.current = null
       }
-      nativeStopRequestedRef.current = false
 
       if (useNativeStt) {
         logSttDebug('native.start.begin')
@@ -2243,7 +2283,7 @@ export default function useRealtimeSTT({
           type: 'native_stt_start',
           payload: {
             wsUrl: getWsUrl(),
-            languages,
+            languages: sessionLanguages,
             sttModel: 'soniox',
             langHintsStrict: true,
             aecEnabled: enableAec,
@@ -2289,7 +2329,7 @@ export default function useRealtimeSTT({
       socket.onopen = () => {
         const config = {
           sample_rate: context.sampleRate,
-          languages,
+          languages: sessionLanguages,
           stt_model: 'soniox',
           lang_hints_strict: true,
         }
@@ -2334,7 +2374,62 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       setTimeout(() => setConnectionStatus('idle'), 3000)
     }
-  }, [cleanup, enableAec, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, languages, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
+  }, [cleanup, enableAec, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
+
+  const restartRecordingAfterLanguageChangeAck = useCallback(() => {
+    if (!pendingLanguageChangeRestartRef.current) return
+    pendingLanguageChangeRestartRef.current = false
+    suppressNextNativeStoppedStatusRef.current = true
+
+    logSttDebug('recording.languages.restart_after_native_ack')
+    void (async () => {
+      await new Promise<void>((resolve) => {
+        setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
+      })
+      if (connectionStatusRef.current !== 'idle') return
+      await startRecording()
+    })()
+  }, [startRecording])
+
+  useEffect(() => {
+    const currentSignature = buildSttLanguageSelectionSignature(languages)
+    const previousSignature = previousLanguageSelectionSignatureRef.current
+    previousLanguageSelectionSignatureRef.current = currentSignature
+
+    if (previousSignature === currentSignature) return
+
+    const currentStatus = connectionStatusRef.current
+    if (currentStatus !== 'ready' && currentStatus !== 'connecting') return
+
+    logSttDebug('recording.languages.restart_scheduled', {
+      previousSignature,
+      currentSignature,
+    })
+    clearLanguageChangeRestartTimer()
+    languageChangeRestartTimerRef.current = setTimeout(() => {
+      languageChangeRestartTimerRef.current = null
+      const latestStatus = connectionStatusRef.current
+      if (latestStatus !== 'ready' && latestStatus !== 'connecting') return
+
+      logSttDebug('recording.languages.restart_begin', {
+        currentSignature,
+      })
+      void (async () => {
+        if (useNativeSttRef.current) {
+          pendingLanguageChangeRestartRef.current = true
+          await stopRecordingGracefully()
+          return
+        }
+
+        await stopRecordingGracefully()
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
+        })
+        if (connectionStatusRef.current !== 'idle') return
+        await startRecording()
+      })()
+    }, LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS)
+  }, [clearLanguageChangeRestartTimer, languages, startRecording, stopRecordingGracefully])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2350,6 +2445,11 @@ export default function useRealtimeSTT({
         if (detail.status === 'connecting') {
           setConnectionStatus('connecting')
         } else if (detail.status === 'stopped') {
+          if (suppressNextNativeStoppedStatusRef.current) {
+            suppressNextNativeStoppedStatusRef.current = false
+            logSttDebug('native.status.stopped_ignored_after_restart')
+            return
+          }
           setConnectionStatus('idle')
         }
         return
@@ -2377,6 +2477,7 @@ export default function useRealtimeSTT({
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false
           setConnectionStatus('idle')
+          restartRecordingAfterLanguageChangeAck()
           return
         }
         handleSttTransportClose({ native: true, reason: detail.reason })
@@ -2387,7 +2488,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, restartRecordingAfterLanguageChangeAck])
 
   const recoverFromBackgroundIfNeeded = useCallback(async () => {
     if (useNativeSttRef.current) return
@@ -2424,14 +2525,15 @@ export default function useRealtimeSTT({
   const PARTIAL_TRANSLATE_STEP = 20
   useEffect(() => {
     const trimmed = partialTranscript.trim()
+    const sessionLanguages = getSessionLanguages()
     const len = trimmed.length
-    if (len === 0 || languages.length === 0 || connectionStatus !== 'ready') return
+    if (len === 0 || sessionLanguages.length === 0 || connectionStatus !== 'ready') return
 
     // 단일 언어 모드: 감지 언어가 선택 언어와 동일하면 부분 번역 스킵
     const currentLang = partialLangRef.current || 'unknown'
     if (
-      languages.length === 1
-      && normalizeLangForCompare(currentLang) === normalizeLangForCompare(languages[0] || '')
+      sessionLanguages.length === 1
+      && normalizeLangForCompare(currentLang) === normalizeLangForCompare(sessionLanguages[0] || '')
     ) return
 
     const isInitialPartialRequest = !hasFiredInitialPartialTranslateRef.current
@@ -2479,7 +2581,7 @@ export default function useRealtimeSTT({
     }
     const controller = new AbortController()
     partialTranslateControllerRef.current = controller
-    translateViaApi(trimmed, currentLang, languages, {
+    translateViaApi(trimmed, currentLang, sessionLanguages, {
       signal: controller.signal,
       currentTurnPreviousState: lastPartialTranslationStateRef.current,
     })
@@ -2527,7 +2629,7 @@ export default function useRealtimeSTT({
         partialTranslationsRef.current = nextTranslations
         setPartialTranslations(nextTranslations)
       })
-  }, [partialTranscript, languages, connectionStatus, translateViaApi])
+  }, [connectionStatus, getSessionLanguages, partialTranscript, translateViaApi])
 
   const toggleRecording = useCallback(() => {
     if (connectionStatus === 'error') return
@@ -2540,9 +2642,10 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     return () => {
+      clearLanguageChangeRestartTimer()
       cleanup()
     }
-  }, [cleanup])
+  }, [clearLanguageChangeRestartTimer, cleanup])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
@@ -2593,6 +2696,7 @@ export default function useRealtimeSTT({
   }, [recoverFromBackgroundIfNeeded])
 
   const activePendingTurn = getActivePendingTurn()
+  const liveUtteranceLanguages = getSessionLanguages()
   const liveUtterance = (
     activePendingTurn
     && partialTranscript.trim()
@@ -2601,7 +2705,7 @@ export default function useRealtimeSTT({
     originalText: partialTranscript,
     originalLang: partialLang || activePendingTurn.language || 'unknown',
     targetLanguages: buildTurnTargetLanguagesSnapshot(
-      languages,
+      liveUtteranceLanguages,
       partialLang || activePendingTurn.language || 'unknown',
     ),
     translations: stripSourceLanguageFromTranslations(

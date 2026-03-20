@@ -1194,14 +1194,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 ref={langSelectorButtonRef}
                 type="button"
                 onClick={() => {
-                  if (isActive) return
                   setMenuOpen(false)
                   setLangSelectorOpen(o => !o)
                 }}
-                disabled={isActive}
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors disabled:opacity-60"
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
@@ -1227,7 +1225,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 selectedLanguages={selectedLanguages}
                 onToggleLanguage={handleToggleLanguage}
                 uiLocale={uiLocale}
-                disabled={isActive}
                 triggerRef={langSelectorButtonRef}
               />
             </div>
