@@ -54,7 +54,9 @@ export default function TranslationBubbleRow({
             className={cn('min-w-0', contentClassName)}
           >
             {meta}
-            {children}
+            <span data-translation-bubble-text className="align-middle">
+              {children}
+            </span>
           </p>
         </div>
       ) : (

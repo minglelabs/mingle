@@ -32,5 +32,7 @@ describe('TranslationBubbleRow', () => {
     expect(html).toContain('line-height:1.25')
     expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-translation-bubble-meta')
+    expect(html).toContain('data-translation-bubble-text')
+    expect(html).toContain('class="align-middle"')
   })
 })

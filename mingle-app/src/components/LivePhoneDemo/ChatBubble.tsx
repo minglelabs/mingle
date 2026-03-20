@@ -110,7 +110,9 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                   {utterance.originalLang}
                 </span>
               </span>
-              <span>{utterance.originalText}</span>
+              <span data-original-bubble-text className="align-middle">
+                {utterance.originalText}
+              </span>
             </p>
           </div>
         </div>
