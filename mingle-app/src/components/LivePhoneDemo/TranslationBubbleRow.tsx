@@ -42,7 +42,7 @@ export default function TranslationBubbleRow({
       {inlineMeta ? (
         <div
           data-translation-bubble-body
-          style={{ maxWidth: '86%' }}
+          style={{ maxWidth: '90%' }}
           className={cn(
             'w-fit rounded-2xl rounded-tl-sm px-3.5 py-2',
             bubbleClassName,
@@ -60,7 +60,7 @@ export default function TranslationBubbleRow({
       ) : (
         <div
           data-translation-bubble-body
-          style={{ maxWidth: '86%' }}
+          style={{ maxWidth: '90%' }}
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
             bubbleClassName,
