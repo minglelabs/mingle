@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath } from '@/lib/api-contract'
+import { getSpeakerAvatar } from './speaker-avatar'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -999,6 +1000,12 @@ function logSttDebug(event: string, payload?: Record<string, unknown>) {
     return
   }
   console.log('[MingleSTT]', event)
+}
+
+function buildDebugTextPreview(rawText: string): string {
+  const normalized = rawText.trim().replace(/\s+/g, ' ')
+  if (!normalized) return ''
+  return normalized.slice(0, 120)
 }
 
 const LOAD_BATCH_SIZE = 100
@@ -2098,6 +2105,13 @@ export default function useRealtimeSTT({
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
       const { rawText, text, language: lang, isFinal, speaker } = transcript
+      logSttDebug('transcript.received', {
+        speaker,
+        isFinal,
+        language: lang,
+        rawTextPreview: buildDebugTextPreview(rawText),
+        textPreview: buildDebugTextPreview(text),
+      })
 
       if (isStoppingRef.current && !isFinal) {
         return
@@ -2144,6 +2158,18 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
+        const finalizedAvatar = getSpeakerAvatar(
+          finalizedPayload.utterance.speaker,
+          finalizedPayload.utterance.speakerAvatarSeed,
+        )
+        logSttDebug('transcript.avatar_mapping', {
+          speaker: finalizedPayload.utterance.speaker || 'unknown',
+          speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed || null,
+          isFinal: true,
+          avatarName: finalizedAvatar.name,
+          avatarSrc: finalizedAvatar.src,
+          utteranceId: finalizedPayload.utteranceId,
+        })
         const recentFinalizedMatch = classifyRecentFinalizedUtteranceMatch({
           pendingUtteranceId: pendingTurn?.utteranceId || null,
           finalizedUtteranceId: finalizedPayload.utteranceId,
@@ -2222,18 +2248,28 @@ export default function useRealtimeSTT({
         const now = Date.now()
         const existingPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
         const turnIdentity = existingPendingTurn || reservePendingSpeakerTurnIdentity(utteranceIdRef.current + 1, now)
+        const pendingSpeakerAvatarSeed = existingPendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed()
         if (!existingPendingTurn) {
           utteranceIdRef.current = turnIdentity.utteranceSerial
         }
         pendingTurnsBySpeakerRef.current[speaker] = {
           ...turnIdentity,
           speaker,
-          speakerAvatarSeed: existingPendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed(),
+          speakerAvatarSeed: pendingSpeakerAvatarSeed,
           rawText,
           text,
           language: lang,
           updatedAtMs: now,
         }
+        const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed)
+        logSttDebug('transcript.avatar_mapping', {
+          speaker,
+          speakerAvatarSeed: pendingSpeakerAvatarSeed,
+          isFinal: false,
+          avatarName: pendingAvatar.name,
+          avatarSrc: pendingAvatar.src,
+          utteranceId: turnIdentity.utteranceId,
+        })
         syncVisiblePendingTurn(speaker)
       }
     }
