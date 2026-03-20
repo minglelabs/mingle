@@ -1331,7 +1331,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               className="flex flex-col gap-1"
             >
                 <div className="max-w-[85%] bg-white/80 border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                <p className="text-sm text-gray-400 leading-snug">
+                <p className="text-sm leading-[1.3] text-gray-400">
                   {partialTranscript}
                   <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
                 </p>
@@ -1344,7 +1344,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   bubbleClassName="bg-amber-50/80 border border-amber-100"
                   metaClassName="text-amber-500"
                 >
-                  <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
+                  <p className="text-sm leading-[1.45] text-gray-500">{text}</p>
                 </TranslationBubbleRow>
               ))}
               {/* Bouncing dots for pending partial translations */}
@@ -1378,7 +1378,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <span className="text-xs font-semibold text-gray-500 uppercase">{demoTypingLang}</span>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-gray-600 leading-snug">
+                  <p className="text-sm leading-[1.3] text-gray-600">
                     {demoTypingText}
                     <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
                   </p>
@@ -1396,7 +1396,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     bubbleClassName="bg-amber-50/80 border border-amber-100"
                     metaClassName="text-amber-500"
                   >
-                    <p className="text-sm text-gray-500 leading-relaxed">
+                    <p className="text-sm leading-[1.45] text-gray-500">
                       {text}
                       <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
                     </p>

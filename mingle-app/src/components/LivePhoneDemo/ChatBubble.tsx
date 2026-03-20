@@ -106,7 +106,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
             </span>
           </div>
           <div data-original-bubble-content className="min-w-0">
-            <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
+            <p className="text-sm leading-[1.45] text-gray-900">{utterance.originalText}</p>
           </div>
         </div>
         {timestampLines.length > 0 && (
@@ -142,7 +142,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                 : undefined
           }
         >
-          <p className={`text-sm leading-relaxed ${
+          <p className={`text-sm leading-[1.45] ${
             isFinalized ? 'text-gray-700' : 'text-gray-500'
           }`}>{text}</p>
         </TranslationBubbleRow>
