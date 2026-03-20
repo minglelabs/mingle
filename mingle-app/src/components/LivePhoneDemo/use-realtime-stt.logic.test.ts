@@ -4,6 +4,7 @@ import {
   getWsUrl,
   parseSttTranscriptMessage,
   shouldApplyPartialTranslationResponse,
+  shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
 
 describe('use-realtime-stt pure logic', () => {
@@ -135,19 +136,15 @@ describe('use-realtime-stt pure logic', () => {
     expect(built).toBeNull()
   })
 
-  it('discards stale partial translation responses when a newer request exists', () => {
+  it('accepts partial translation responses only for the active turn and speaker', () => {
     expect(shouldApplyPartialTranslationResponse({
-      requestSeq: 2,
-      latestRequestedSeq: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
       currentSpeaker: 'speaker-1',
-    })).toBe(false)
+    })).toBe(true)
 
     expect(shouldApplyPartialTranslationResponse({
-      requestSeq: 3,
-      latestRequestedSeq: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 10,
       requestSpeaker: 'speaker-1',
@@ -155,21 +152,30 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe(false)
 
     expect(shouldApplyPartialTranslationResponse({
-      requestSeq: 3,
-      latestRequestedSeq: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
       currentSpeaker: 'speaker-2',
     })).toBe(false)
+  })
 
-    expect(shouldApplyPartialTranslationResponse({
-      requestSeq: 3,
-      latestRequestedSeq: 3,
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
-    })).toBe(true)
+  it('prioritizes final over partial and newer partial over older ones', () => {
+    expect(shouldOverrideTranslationByPriority(undefined, { kind: 'initial', seq: 1 })).toBe(true)
+    expect(shouldOverrideTranslationByPriority(
+      { kind: 'initial', seq: 1 },
+      { kind: 'partial', seq: 2 },
+    )).toBe(true)
+    expect(shouldOverrideTranslationByPriority(
+      { kind: 'partial', seq: 3 },
+      { kind: 'partial', seq: 2 },
+    )).toBe(false)
+    expect(shouldOverrideTranslationByPriority(
+      { kind: 'partial', seq: 99 },
+      { kind: 'final', seq: 1 },
+    )).toBe(true)
+    expect(shouldOverrideTranslationByPriority(
+      { kind: 'final', seq: 3 },
+      { kind: 'partial', seq: 999 },
+    )).toBe(false)
   })
 })

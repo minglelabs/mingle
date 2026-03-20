@@ -314,24 +314,49 @@ interface PendingSpeakerTurn {
   updatedAtMs: number
 }
 
+type TranslationPriorityKind = 'initial' | 'partial' | 'final'
+
+interface TranslationPriority {
+  kind: TranslationPriorityKind
+  seq: number
+}
+
+const TRANSLATION_PRIORITY_KIND_ORDER: Record<TranslationPriorityKind, number> = {
+  initial: 0,
+  partial: 1,
+  final: 2,
+}
+
 function buildFinalizeDedupSignature(language: string, text: string, speaker?: string): string {
   const normalizedSpeaker = (speaker || '').trim() || 'unknown'
   return `${normalizedSpeaker}::${language}::${text}`
 }
 
 export function shouldApplyPartialTranslationResponse(input: {
-  requestSeq: number
-  latestRequestedSeq: number
   requestUtteranceId: number
   currentUtteranceId: number
   requestSpeaker: string | null
   currentSpeaker: string | null
 }): boolean {
   return (
-    input.requestSeq === input.latestRequestedSeq
-    && input.requestUtteranceId === input.currentUtteranceId
+    input.requestUtteranceId === input.currentUtteranceId
     && (input.requestSpeaker || null) === (input.currentSpeaker || null)
   )
+}
+
+export function shouldOverrideTranslationByPriority(
+  currentPriority: TranslationPriority | undefined,
+  nextPriority: TranslationPriority,
+): boolean {
+  if (!currentPriority) return true
+
+  const currentKindPriority = TRANSLATION_PRIORITY_KIND_ORDER[currentPriority.kind]
+  const nextKindPriority = TRANSLATION_PRIORITY_KIND_ORDER[nextPriority.kind]
+  if (nextKindPriority !== currentKindPriority) {
+    return nextKindPriority > currentKindPriority
+  }
+
+  return nextPriority.seq > currentPriority.seq
 }
 
 interface TranslateApiResult {
@@ -532,16 +557,16 @@ export default function useRealtimeSTT({
 
   const finalizedTtsSignatureRef = useRef<Map<string, string>>(new Map())
   // Monotonically increasing sequence number for translation requests.
-  // Responses with a seq lower than the latest applied seq are discarded,
-  // preventing old (slow) translations from overwriting newer ones.
+  // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
-  const lastAppliedSeqRef = useRef<Map<string, number>>(new Map()) // utteranceId -> last applied seq
+  const utteranceTranslationPriorityRef = useRef<Map<string, TranslationPriority>>(new Map()) // utteranceId:lang -> priority
   // Track the partial transcript 20-char threshold last used for partial translation.
   // A first partial translation fires immediately when the first transcript arrives,
   // then subsequent calls fire when 20/40/60... thresholds are crossed.
   const hasFiredInitialPartialTranslateRef = useRef(false)
   const lastPartialTranslateLenRef = useRef(0)
   const latestPartialTranslateSeqRef = useRef(0)
+  const partialTranslationPriorityRef = useRef<Map<string, TranslationPriority>>(new Map()) // lang -> priority for visible partial turn
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const sessionKeyRef = useRef('')
@@ -745,6 +770,7 @@ export default function useRealtimeSTT({
     partialLangRef.current = null
     hasFiredInitialPartialTranslateRef.current = false
     lastPartialTranslateLenRef.current = 0
+    partialTranslationPriorityRef.current.clear()
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -991,14 +1017,9 @@ export default function useRealtimeSTT({
   const applyTranslationToUtterance = useCallback((
     utteranceId: string,
     translations: Record<string, string>,
-    seq: number,
+    priority: TranslationPriority,
     markFinalized: boolean,
   ) => {
-    // Discard if a newer translation has already been applied.
-    const lastApplied = lastAppliedSeqRef.current.get(utteranceId) ?? -1
-    if (seq <= lastApplied) return
-    lastAppliedSeqRef.current.set(utteranceId, seq)
-
     setUtterances(prev => {
       const idx = prev.findIndex(u => u.id === utteranceId)
       if (idx < 0) return prev
@@ -1006,10 +1027,15 @@ export default function useRealtimeSTT({
       const newTranslations = { ...target.translations }
       const newFinalized = { ...(target.translationFinalized || {}) }
       for (const [lang, text] of Object.entries(translations)) {
-        if (text.trim()) {
-          newTranslations[lang] = text.trim()
-          if (markFinalized) newFinalized[lang] = true
-        }
+        const cleaned = text.trim()
+        if (!cleaned) continue
+        const bubbleKey = `${utteranceId}:${lang}`
+        const currentPriority = utteranceTranslationPriorityRef.current.get(bubbleKey)
+        if (!shouldOverrideTranslationByPriority(currentPriority, priority)) continue
+
+        utteranceTranslationPriorityRef.current.set(bubbleKey, priority)
+        newTranslations[lang] = cleaned
+        if (markFinalized) newFinalized[lang] = true
       }
       return [
         ...prev.slice(0, idx),
@@ -1069,6 +1095,13 @@ export default function useRealtimeSTT({
       localPayload.currentTurnPreviousState
       && Object.keys(localPayload.currentTurnPreviousState.translations).length > 0
     ) ? localPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || localPayload.currentTurnPreviousState)
+
+    for (const language of Object.keys(localPayload.utterance.translations)) {
+      utteranceTranslationPriorityRef.current.set(
+        `${localPayload.utteranceId}:${language}`,
+        partialTranslationPriorityRef.current.get(language) || { kind: 'initial', seq: 0 },
+      )
+    }
 
     setUtterances(prev => [...prev, localPayload.utterance])
     return {
@@ -1167,7 +1200,7 @@ export default function useRealtimeSTT({
       sttDurationMs: options?.sttDurationMs,
     }).then(result => {
       if (Object.keys(result.translations).length > 0) {
-        applyTranslationToUtterance(utteranceId, result.translations, seq, true)
+        applyTranslationToUtterance(utteranceId, result.translations, { kind: 'final', seq }, true)
         handleInlineTtsFromTranslate(utteranceId, lang, result)
       }
 
@@ -1617,6 +1650,7 @@ export default function useRealtimeSTT({
       partialTranscriptRef.current = ''
       setPartialTranslations({})
       partialTranslationsRef.current = {}
+      partialTranslationPriorityRef.current.clear()
       setPartialLang(null)
       partialLangRef.current = null
       if (partialTranslateControllerRef.current) {
@@ -1822,7 +1856,9 @@ export default function useRealtimeSTT({
       && normalizeLangForCompare(currentLang) === normalizeLangForCompare(languages[0] || '')
     ) return
 
-    if (!hasFiredInitialPartialTranslateRef.current) {
+    const isInitialPartialRequest = !hasFiredInitialPartialTranslateRef.current
+
+    if (isInitialPartialRequest) {
       hasFiredInitialPartialTranslateRef.current = true
       // Prime the threshold tracker based on the first partial length so
       // the next request is triggered at the next 20-char boundary.
@@ -1839,6 +1875,10 @@ export default function useRealtimeSTT({
     const requestSpeaker = activePartialSpeakerRef.current
     const requestSeq = latestPartialTranslateSeqRef.current + 1
     latestPartialTranslateSeqRef.current = requestSeq
+    const requestPriority: TranslationPriority = {
+      kind: isInitialPartialRequest ? 'initial' : 'partial',
+      seq: requestSeq,
+    }
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
     }
@@ -1853,8 +1893,6 @@ export default function useRealtimeSTT({
           partialTranslateControllerRef.current = null
         }
         if (!shouldApplyPartialTranslationResponse({
-          requestSeq,
-          latestRequestedSeq: latestPartialTranslateSeqRef.current,
           requestUtteranceId,
           currentUtteranceId: utteranceIdRef.current,
           requestSpeaker,
@@ -1862,12 +1900,20 @@ export default function useRealtimeSTT({
         })) return
         const filteredExisting = stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang)
         const filteredNew = stripSourceLanguageFromTranslations(result.translations, currentLang)
-        const nextTranslations = { ...filteredExisting, ...filteredNew }
+        const nextTranslations = { ...filteredExisting }
+        const nextPriorities = new Map(partialTranslationPriorityRef.current)
+        for (const [language, translatedText] of Object.entries(filteredNew)) {
+          const currentPriority = nextPriorities.get(language)
+          if (!shouldOverrideTranslationByPriority(currentPriority, requestPriority)) continue
+          nextTranslations[language] = translatedText
+          nextPriorities.set(language, requestPriority)
+        }
         lastPartialTranslationStateRef.current = buildCurrentTurnPreviousStatePayload(
           currentLang,
           trimmed,
           nextTranslations,
         )
+        partialTranslationPriorityRef.current = nextPriorities
         partialTranslationsRef.current = nextTranslations
         setPartialTranslations(nextTranslations)
       })
