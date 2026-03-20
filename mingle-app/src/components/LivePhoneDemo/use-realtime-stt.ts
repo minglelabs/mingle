@@ -414,6 +414,36 @@ function reservePendingSpeakerTurnIdentity(
   }
 }
 
+export function buildLiveUtterance(input: {
+  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'language'> | null
+  partialTranscript: string
+  partialLang?: string | null
+  partialTranslations: Record<string, string>
+  languages: string[]
+}): Utterance | null {
+  const transcript = input.partialTranscript.trim()
+  if (!input.pendingTurn || !transcript) return null
+
+  const sourceLanguage = input.partialLang || input.pendingTurn.language || 'unknown'
+
+  return {
+    id: input.pendingTurn.utteranceId,
+    speaker: input.pendingTurn.speaker,
+    originalText: input.partialTranscript,
+    originalLang: sourceLanguage,
+    targetLanguages: buildTurnTargetLanguagesSnapshot(
+      input.languages,
+      sourceLanguage,
+    ),
+    translations: stripSourceLanguageFromTranslations(
+      input.partialTranslations,
+      sourceLanguage,
+    ),
+    translationFinalized: {},
+    createdAtMs: input.pendingTurn.createdAtMs,
+  }
+}
+
 type TranslationPriorityKind = 'initial' | 'partial' | 'final'
 
 interface TranslationPriority {
@@ -2597,24 +2627,13 @@ export default function useRealtimeSTT({
   }, [recoverFromBackgroundIfNeeded])
 
   const activePendingTurn = getActivePendingTurn()
-  const liveUtterance = (
-    activePendingTurn
-    && partialTranscript.trim()
-  ) ? {
-    id: activePendingTurn.utteranceId,
-    originalText: partialTranscript,
-    originalLang: partialLang || activePendingTurn.language || 'unknown',
-    targetLanguages: buildTurnTargetLanguagesSnapshot(
-      languages,
-      partialLang || activePendingTurn.language || 'unknown',
-    ),
-    translations: stripSourceLanguageFromTranslations(
-      partialTranslations,
-      partialLang || activePendingTurn.language || 'unknown',
-    ),
-    translationFinalized: {},
-    createdAtMs: activePendingTurn.createdAtMs,
-  } satisfies Utterance : null
+  const liveUtterance = buildLiveUtterance({
+    pendingTurn: activePendingTurn,
+    partialTranscript,
+    partialLang,
+    partialTranslations,
+    languages,
+  })
 
   return {
     connectionStatus,

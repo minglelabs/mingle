@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   appendFinalizedUtteranceToStoreState,
+  buildLiveUtterance,
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
@@ -174,6 +175,47 @@ describe('use-realtime-stt pure logic', () => {
         ja: 'こんにちは',
       },
     })
+  })
+
+  it('builds a live utterance with the speaker before finalization', () => {
+    expect(buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        language: 'en',
+      },
+      partialTranscript: 'Still speaking',
+      partialLang: 'en-US',
+      partialTranslations: {
+        en: 'self',
+        ko: '계속 말하는 중',
+      },
+      languages: ['en', 'ko'],
+    })).toEqual({
+      id: 'u-live',
+      speaker: 'speaker-2',
+      originalText: 'Still speaking',
+      originalLang: 'en-US',
+      targetLanguages: ['ko'],
+      translations: {
+        ko: '계속 말하는 중',
+      },
+      translationFinalized: {},
+      createdAtMs: 1700000000999,
+    })
+
+    expect(buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        language: 'en',
+      },
+      partialTranscript: '   ',
+      partialTranslations: {},
+      languages: ['en', 'ko'],
+    })).toBeNull()
   })
 
   it('merges queued translation updates when the finalized utterance is appended later', () => {
