@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Image,
   Linking,
   NativeModules,
   Platform,
@@ -179,6 +180,8 @@ const DEFAULT_WS_URL = resolveConfiguredUrl(
   NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
+const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
   expectedApiNamespace: EXPECTED_API_NAMESPACE,
   configuredApiNamespace: CONFIGURED_API_NAMESPACE,
@@ -795,9 +798,6 @@ function isAuthLikePathname(pathname: string): boolean {
   if (segments.length === 0) return false;
 
   const first = segments[0].toLowerCase();
-  if (segments.length === 1 && WEB_SUPPORTED_LOCALE_SEGMENTS.has(first)) {
-    return true;
-  }
   if (segments[0] === 'auth') {
     return true;
   }
@@ -897,6 +897,8 @@ function AppInner(): React.JSX.Element {
   }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
+  const initialLoadSettledRef = useRef(false);
+  const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
@@ -1580,11 +1582,18 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
+    if (!initialLoadSettledRef.current) {
+      setStartupSplashVisible(true);
+    }
     updateSafeAreaPalette(event?.nativeEvent?.url);
   }, [updateSafeAreaPalette]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = true;
+    if (!initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
+    }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingAuthToWeb();
@@ -1592,6 +1601,10 @@ function AppInner(): React.JSX.Element {
   }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
+    if (!initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
+    }
     const description = event.nativeEvent.description || 'webview_load_failed';
     setLoadError(formatWebViewLoadError(description, webUrl));
   }, [webUrl]);
@@ -1599,6 +1612,13 @@ function AppInner(): React.JSX.Element {
   const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
     updateSafeAreaPalette(navigationState.url);
   }, [updateSafeAreaPalette]);
+
+  useEffect(() => {
+    if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
+      initialLoadSettledRef.current = true;
+      setStartupSplashVisible(false);
+    }
+  }, [versionGate.status]);
 
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
@@ -1701,6 +1721,16 @@ function AppInner(): React.JSX.Element {
           ]}
         />
       ) : null}
+      {startupSplashVisible ? (
+        <View style={styles.startupSplashOverlay}>
+          <Image
+            source={STARTUP_SPLASH_LOGO}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={styles.startupSplashLogo}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1745,6 +1775,17 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  startupSplashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: STARTUP_SPLASH_BACKGROUND,
+    zIndex: 30,
+  },
+  startupSplashLogo: {
+    width: 180,
+    height: 180,
   },
   errorOverlay: {
     position: 'absolute',
