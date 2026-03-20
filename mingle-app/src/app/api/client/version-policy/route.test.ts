@@ -234,7 +234,7 @@ describe('/api/client/version-policy route', () => {
     expect(json.action).toBe('force_update')
     expect(json.minSupportedVersion).toBe('1.0.0')
     expect(json.recommendedBelowVersion).toBe('')
-    expect(json.latestVersion).toBe('1.0.0')
+    expect(json.latestVersion).toBe('')
     expect(json.updateUrl).toBe('')
     expect(json.title).toBe('Update Required')
   })
@@ -249,7 +249,7 @@ describe('/api/client/version-policy route', () => {
     expect(response.status).toBe(200)
     expect(json.action).toBe('force_update')
     expect(json.minSupportedVersion).toBe('1.0.0')
-    expect(json.latestVersion).toBe('1.0.0')
+    expect(json.latestVersion).toBe('')
   })
 
   it('falls back latestVersion to recommendedBelowVersion when latest env is invalid', async () => {

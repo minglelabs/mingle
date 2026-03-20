@@ -1647,9 +1647,9 @@ function AppInner(): React.JSX.Element {
           <View style={styles.versionOverlay}>
             <Text style={styles.versionTitle}>{versionGate.title}</Text>
             <Text style={styles.versionDescription}>{versionGate.message}</Text>
-            {versionGate.clientVersion || versionGate.latestVersion ? (
+            {versionGate.latestVersion ? (
               <Text style={styles.versionMeta}>
-                {versionGate.clientVersion || versionPolicyFallback.unknownVersionLabel} → {versionGate.latestVersion || versionPolicyFallback.unknownVersionLabel}
+                {versionGate.clientVersion || versionPolicyFallback.unknownVersionLabel} → {versionGate.latestVersion}
               </Text>
             ) : null}
             <Pressable

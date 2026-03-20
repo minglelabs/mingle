@@ -17,7 +17,7 @@ type ClientPlatform = 'ios' | 'android'
 type VersionPolicySnapshot = {
   minSupportedVersion: VersionTuple
   recommendBelowVersion: VersionTuple | null
-  latestVersion: VersionTuple
+  latestVersion: VersionTuple | null
   updateUrl: string
 }
 
@@ -250,7 +250,7 @@ function buildFallbackPolicySnapshot(
     snapshot: {
       minSupportedVersion: DEFAULT_MIN_SUPPORTED_VERSION,
       recommendBelowVersion: null,
-      latestVersion: DEFAULT_MIN_SUPPORTED_VERSION,
+      latestVersion: null,
       updateUrl: '',
     },
   }
@@ -406,7 +406,7 @@ export async function handleClientVersionPolicy(
     clientBuild: clientBuildRaw,
     minSupportedVersion: formatVersion(policyRead.snapshot.minSupportedVersion),
     recommendedBelowVersion: policyRead.snapshot.recommendBelowVersion ? formatVersion(policyRead.snapshot.recommendBelowVersion) : '',
-    latestVersion: formatVersion(policyRead.snapshot.latestVersion),
+    latestVersion: policyRead.snapshot.latestVersion ? formatVersion(policyRead.snapshot.latestVersion) : '',
     updateUrl: policyRead.snapshot.updateUrl,
     title,
     message,
