@@ -8,6 +8,7 @@ interface TranslationBubbleRowProps {
   metaClassName: string
   accessory?: ReactNode
   inlineMeta?: boolean
+  maxWidth?: string
   contentClassName?: string
   contentStyle?: CSSProperties
   children: ReactNode
@@ -19,6 +20,7 @@ export default function TranslationBubbleRow({
   metaClassName,
   accessory,
   inlineMeta = true,
+  maxWidth = '93%',
   contentClassName,
   contentStyle,
   children,
@@ -38,11 +40,11 @@ export default function TranslationBubbleRow({
   )
 
   return (
-    <div data-translation-bubble-row className="ml-2.5 flex w-full items-start">
+    <div data-translation-bubble-row className="flex w-full items-start">
       {inlineMeta ? (
         <div
           data-translation-bubble-body
-          style={{ maxWidth: '90%', borderTopLeftRadius: '1px' }}
+          style={{ maxWidth, borderTopLeftRadius: '1px' }}
           className={cn(
             'w-fit rounded-2xl rounded-tl-sm px-3.5 py-2',
             bubbleClassName,
@@ -62,7 +64,7 @@ export default function TranslationBubbleRow({
       ) : (
         <div
           data-translation-bubble-body
-          style={{ maxWidth: '90%', borderTopLeftRadius: '1px' }}
+          style={{ maxWidth, borderTopLeftRadius: '1px' }}
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
             bubbleClassName,

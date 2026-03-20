@@ -8,7 +8,7 @@ describe('ChatBubble', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders original bubble meta inside the bubble and timestamp outside on the right', () => {
+  it('renders original bubble meta inside the bubble and stacks the timestamp under the avatar', () => {
     vi.spyOn(Date, 'now').mockReturnValue(
       new Date('2026-03-11T13:06:10+09:00').getTime(),
     )
@@ -30,16 +30,22 @@ describe('ChatBubble', () => {
     expect(html).toContain('🇺🇸')
     expect(html).toContain('>en<')
     expect(html).toContain('8m ago')
+    expect(html).toContain('data-speaker-avatar-column')
+    expect(html).toContain('width="32"')
+    expect(html).toContain('height="32"')
     expect(html.indexOf('data-original-bubble-content')).toBeLessThan(
       html.indexOf('data-original-bubble-meta'),
     )
     expect(html.indexOf('data-original-bubble-meta')).toBeLessThan(
       html.indexOf('Original message'),
     )
-    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+    expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-timestamp'),
     )
-    expect(html).toContain('max-width:min(86%, calc(100% - 2.5rem))')
+    expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
+      html.indexOf('data-original-bubble-row'),
+    )
+    expect(html).toContain('max-width:93%')
     expect(html).toContain('border-top-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
