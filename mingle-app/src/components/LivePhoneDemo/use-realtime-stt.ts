@@ -22,13 +22,11 @@ const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
-const LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS = 400
-const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
 
-export function buildSttLanguageSelectionSignature(languages: string[]): string {
+export function buildLanguageSelectionSignature(languages: string[]): string {
   return languages
     .map((language) => language.trim())
     .filter(Boolean)
@@ -39,9 +37,7 @@ type NativeSttStartCommand = {
   type: 'native_stt_start'
   payload: {
     wsUrl: string
-    languages: string[]
     sttModel: string
-    langHintsStrict: boolean
     aecEnabled: boolean
   }
 }
@@ -174,6 +170,28 @@ export function buildTurnTargetLanguagesSnapshot(
     targetLanguages.push(language)
   }
   return targetLanguages
+}
+
+export function filterTranslationsToTargetLanguages(
+  translationsRaw: Record<string, string>,
+  targetLanguagesRaw: string[],
+): Record<string, string> {
+  const allowedLanguages = new Set(
+    targetLanguagesRaw
+      .map((language) => normalizeLangForCompare(language))
+      .filter(Boolean),
+  )
+  if (allowedLanguages.size === 0) return {}
+
+  const translations: Record<string, string> = {}
+  for (const [languageRaw, translatedText] of Object.entries(translationsRaw)) {
+    const language = (languageRaw || '').trim()
+    const cleaned = translatedText.trim()
+    if (!language || !cleaned) continue
+    if (!allowedLanguages.has(normalizeLangForCompare(language))) continue
+    translations[language] = cleaned
+  }
+  return translations
 }
 
 export function pruneUnresolvedTranslationTargets(input: {
@@ -441,6 +459,10 @@ export function buildLiveUtterance(input: {
   if (!input.pendingTurn || !transcript) return null
 
   const sourceLanguage = input.partialLang || input.pendingTurn.language || 'unknown'
+  const targetLanguages = buildTurnTargetLanguagesSnapshot(
+    input.languages,
+    sourceLanguage,
+  )
 
   return {
     id: input.pendingTurn.utteranceId,
@@ -449,13 +471,13 @@ export function buildLiveUtterance(input: {
     speakerAvatarIndex: input.pendingTurn.speakerAvatarIndex,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
-    targetLanguages: buildTurnTargetLanguagesSnapshot(
-      input.languages,
-      sourceLanguage,
-    ),
-    translations: stripSourceLanguageFromTranslations(
-      input.partialTranslations,
-      sourceLanguage,
+    targetLanguages,
+    translations: filterTranslationsToTargetLanguages(
+      stripSourceLanguageFromTranslations(
+        input.partialTranslations,
+        sourceLanguage,
+      ),
+      targetLanguages,
     ),
     translationFinalized: {},
     createdAtMs: input.pendingTurn.createdAtMs,
@@ -485,11 +507,13 @@ export function buildLiveTranslateRequestSignature(input: {
   speaker?: string | null
   language: string
   text: string
+  targetLanguages?: string[]
 }): string {
   const normalizedSpeaker = (input.speaker || '').trim() || 'unknown'
   const normalizedLanguage = (input.language || 'unknown').trim() || 'unknown'
   const normalizedText = input.text.trim()
-  return `${String(input.utteranceId)}::${normalizedSpeaker}::${normalizedLanguage}::${normalizedText}`
+  const targetLanguageSignature = buildLanguageSelectionSignature(input.targetLanguages || [])
+  return `${String(input.utteranceId)}::${normalizedSpeaker}::${normalizedLanguage}::${targetLanguageSignature}::${normalizedText}`
 }
 
 export function isDuplicateTimedSignature(input: {
@@ -645,11 +669,16 @@ export function createUtteranceStoreState(
 }
 
 function buildSeedTranslationState(
+  targetLanguagesRaw: string[],
   sourceLanguageRaw: string,
   translationsRaw: Record<string, string>,
   prioritiesRaw: Map<string, TranslationPriority>,
 ): SeedTranslationState {
-  const translations = stripSourceLanguageFromTranslations(translationsRaw, sourceLanguageRaw)
+  const targetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguagesRaw, sourceLanguageRaw)
+  const translations = filterTranslationsToTargetLanguages(
+    stripSourceLanguageFromTranslations(translationsRaw, sourceLanguageRaw),
+    targetLanguages,
+  )
   const priorities = new Map<string, TranslationPriority>()
 
   for (const language of Object.keys(translations)) {
@@ -1118,6 +1147,7 @@ export default function useRealtimeSTT({
   const partialTranslationPriorityRef = useRef<Map<string, TranslationPriority>>(new Map()) // lang -> priority for visible partial turn
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
   const lastPartialTranslateRequestSignatureRef = useRef('')
+  const lastPartialTranslateTargetSignatureRef = useRef(buildLanguageSelectionSignature(languages))
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
@@ -1128,22 +1158,9 @@ export default function useRealtimeSTT({
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
-  const pendingLanguageChangeRestartRef = useRef(false)
-  const suppressNextNativeStoppedStatusRef = useRef(false)
-  const desiredLanguagesRef = useRef([...languages])
-  const sessionLanguagesRef = useRef([...languages])
-  const previousLanguageSelectionSignatureRef = useRef(buildSttLanguageSelectionSignature(languages))
-  const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const targetLanguagesRef = useRef([...languages])
 
-  const getSessionLanguages = useCallback(() => (
-    sessionLanguagesRef.current.length > 0 ? sessionLanguagesRef.current : desiredLanguagesRef.current
-  ), [])
-
-  const clearLanguageChangeRestartTimer = useCallback(() => {
-    if (!languageChangeRestartTimerRef.current) return
-    clearTimeout(languageChangeRestartTimerRef.current)
-    languageChangeRestartTimerRef.current = null
-  }, [])
+  const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -1162,10 +1179,7 @@ export default function useRealtimeSTT({
   }, [])
 
   useEffect(() => {
-    desiredLanguagesRef.current = [...languages]
-    if (connectionStatusRef.current === 'idle' || connectionStatusRef.current === 'error') {
-      sessionLanguagesRef.current = [...languages]
-    }
+    targetLanguagesRef.current = [...languages]
   }, [languages])
 
   // Initialize hasOlderUtterances after mount
@@ -1385,6 +1399,7 @@ export default function useRealtimeSTT({
     lastPartialTranslateLenRef.current = 0
     partialTranslationPriorityRef.current.clear()
     lastPartialTranslateRequestSignatureRef.current = ''
+    lastPartialTranslateTargetSignatureRef.current = buildLanguageSelectionSignature(targetLanguagesRef.current)
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -1596,12 +1611,13 @@ export default function useRealtimeSTT({
 
   const handleInlineTtsFromTranslate = useCallback((
     utteranceId: string,
-    sourceLanguage: string,
     result: TranslateApiResult,
+    options?: {
+      requestedTtsLanguage?: string
+    },
   ) => {
     if (!enableTtsRef.current) return
-    const sessionLanguages = getSessionLanguages()
-    const ttsTargetLang = (result.ttsLanguage || sessionLanguages.filter(l => l !== sourceLanguage)[0] || '').trim()
+    const ttsTargetLang = (result.ttsLanguage || options?.requestedTtsLanguage || '').trim()
     if (!ttsTargetLang) return
     const ttsText = (result.translations[ttsTargetLang] || '').trim()
     if (!ttsText) return
@@ -1629,7 +1645,7 @@ export default function useRealtimeSTT({
     void synthesizeTtsViaApi(ttsText, ttsTargetLang).then((fallbackBlob) => {
       queueAudioIfValid(fallbackBlob)
     })
-  }, [getSessionLanguages, synthesizeTtsViaApi])
+  }, [synthesizeTtsViaApi])
 
   const applyTranslationToUtterance = useCallback((
     utteranceId: string,
@@ -1674,8 +1690,9 @@ export default function useRealtimeSTT({
     if (options?.utteranceSerial === undefined) {
       utteranceIdRef.current = reservedUtteranceSerial
     }
-    const sessionLanguages = getSessionLanguages()
+    const targetLanguages = getCurrentTargetLanguages()
     const seedTranslationState = buildSeedTranslationState(
+      targetLanguages,
       rawLang,
       options?.partialTranslations ?? partialTranslationsRef.current,
       options?.partialTranslationPriorities ?? partialTranslationPriorityRef.current,
@@ -1686,7 +1703,7 @@ export default function useRealtimeSTT({
       speakerAvatarIndex: options?.speakerAvatarIndex,
       rawText,
       rawLanguage: rawLang,
-      languages: sessionLanguages,
+      languages: targetLanguages,
       partialTranslations: seedTranslationState.translations,
       currentTurnPreviousTranslations: seedTranslationState.translations,
       utteranceSerial: reservedUtteranceSerial,
@@ -1740,7 +1757,7 @@ export default function useRealtimeSTT({
       lang: localPayload.language,
       currentTurnPreviousState,
     }
-  }, [getSessionLanguages])
+  }, [getCurrentTargetLanguages])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -1794,12 +1811,12 @@ export default function useRealtimeSTT({
     const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
-    const sessionLanguages = getSessionLanguages()
+    const targetLanguages = [...getCurrentTargetLanguages()]
 
     // 단일 언어 모드: 선택 언어가 1개인 경우
-    const isSingleLanguageMode = sessionLanguages.length === 1
+    const isSingleLanguageMode = targetLanguages.length === 1
     const detectedLangNorm = normalizeLangForCompare(lang)
-    const selectedLangNorm = normalizeLangForCompare(sessionLanguages[0] || '')
+    const selectedLangNorm = normalizeLangForCompare(targetLanguages[0] || '')
 
     if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
       // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
@@ -1824,11 +1841,11 @@ export default function useRealtimeSTT({
     // 단일 언어 모드이지만 다른 언어 감지: 선택 언어로 번역 + TTS
     // 다중 언어 모드: 기존 동작 유지
     const ttsTargetLang = isSingleLanguageMode
-      ? (sessionLanguages[0] || '')
-      : (sessionLanguages.filter(l => l !== lang)[0] || '')
+      ? (targetLanguages[0] || '')
+      : (targetLanguages.filter(l => l !== lang)[0] || '')
     const effectiveTargetLanguages = isSingleLanguageMode
-      ? sessionLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
-      : sessionLanguages
+      ? targetLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
+      : targetLanguages
 
     // Reserve a TTS queue slot before the API call so playback order matches utterance order
     if (enableTtsRef.current && ttsTargetLang) {
@@ -1855,7 +1872,9 @@ export default function useRealtimeSTT({
             sourceLanguage: lang,
           },
         )
-        handleInlineTtsFromTranslate(utteranceId, lang, result)
+        handleInlineTtsFromTranslate(utteranceId, result, {
+          requestedTtsLanguage: ttsTargetLang,
+        })
       }
 
       const translationLatencyMs = Math.max(0, Date.now() - requestStartedAt)
@@ -1878,7 +1897,7 @@ export default function useRealtimeSTT({
         keepalive: true,
       })
     })
-  }, [applyTranslationToUtterance, getSessionLanguages, handleInlineTtsFromTranslate, logClientEvent, translateViaApi])
+  }, [applyTranslationToUtterance, getCurrentTargetLanguages, handleInlineTtsFromTranslate, logClientEvent, translateViaApi])
 
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false) => {
     if (isStoppingRef.current) return
@@ -2208,9 +2227,10 @@ export default function useRealtimeSTT({
           : undefined
         turnStartedAtRef.current = null
 
-        const sessionLanguages = getSessionLanguages()
+        const targetLanguages = getCurrentTargetLanguages()
         const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
         const seedTranslationState = buildSeedTranslationState(
+          targetLanguages,
           lang,
           options.partialTranslations,
           options.partialTranslationPriorities,
@@ -2225,7 +2245,7 @@ export default function useRealtimeSTT({
           ),
           rawText,
           rawLanguage: lang,
-          languages: sessionLanguages,
+          languages: targetLanguages,
           partialTranslations: seedTranslationState.translations,
           currentTurnPreviousTranslations: seedTranslationState.translations,
           utteranceSerial: nextUtteranceSerial,
@@ -2366,7 +2386,7 @@ export default function useRealtimeSTT({
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     finalizeTurnWithTranslation,
-    getSessionLanguages,
+    getCurrentTargetLanguages,
     logClientEvent,
     normalizedUsageLimitSec,
     ensureSpeakerAvatarAssignment,
@@ -2378,13 +2398,12 @@ export default function useRealtimeSTT({
   const startRecording = useCallback(async () => {
     if (isStoppingRef.current) return
     const useNativeStt = shouldUseNativeSttBridge()
-    const sessionLanguages = [...desiredLanguagesRef.current]
+    const targetLanguages = [...getCurrentTargetLanguages()]
     useNativeSttRef.current = useNativeStt
-    pendingLanguageChangeRestartRef.current = false
     logSttDebug('recording.start.request', {
       useNativeStt,
       wsUrl: getWsUrl(),
-      languagesCount: sessionLanguages.length,
+      targetLanguagesCount: targetLanguages.length,
     })
     if (!useNativeStt && (
       socketRef.current
@@ -2401,11 +2420,11 @@ export default function useRealtimeSTT({
 
     try {
       setConnectionStatus('connecting')
-      sessionLanguagesRef.current = sessionLanguages
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
       lastPartialTranslationStateRef.current = null
       lastPartialTranslateRequestSignatureRef.current = ''
+      lastPartialTranslateTargetSignatureRef.current = buildLanguageSelectionSignature(targetLanguages)
       recentFinalizedUtteranceRef.current = null
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
@@ -2428,9 +2447,7 @@ export default function useRealtimeSTT({
           type: 'native_stt_start',
           payload: {
             wsUrl: getWsUrl(),
-            languages: sessionLanguages,
             sttModel: 'soniox',
-            langHintsStrict: true,
             aecEnabled: enableAec,
           },
         })
@@ -2474,9 +2491,7 @@ export default function useRealtimeSTT({
       socket.onopen = () => {
         const config = {
           sample_rate: context.sampleRate,
-          languages: sessionLanguages,
           stt_model: 'soniox',
-          lang_hints_strict: true,
         }
         socket.send(JSON.stringify(config))
       }
@@ -2519,62 +2534,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       setTimeout(() => setConnectionStatus('idle'), 3000)
     }
-  }, [cleanup, enableAec, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
-
-  const restartRecordingAfterLanguageChangeAck = useCallback(() => {
-    if (!pendingLanguageChangeRestartRef.current) return
-    pendingLanguageChangeRestartRef.current = false
-    suppressNextNativeStoppedStatusRef.current = true
-
-    logSttDebug('recording.languages.restart_after_native_ack')
-    void (async () => {
-      await new Promise<void>((resolve) => {
-        setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
-      })
-      if (connectionStatusRef.current !== 'idle') return
-      await startRecording()
-    })()
-  }, [startRecording])
-
-  useEffect(() => {
-    const currentSignature = buildSttLanguageSelectionSignature(languages)
-    const previousSignature = previousLanguageSelectionSignatureRef.current
-    previousLanguageSelectionSignatureRef.current = currentSignature
-
-    if (previousSignature === currentSignature) return
-
-    const currentStatus = connectionStatusRef.current
-    if (currentStatus !== 'ready' && currentStatus !== 'connecting') return
-
-    logSttDebug('recording.languages.restart_scheduled', {
-      previousSignature,
-      currentSignature,
-    })
-    clearLanguageChangeRestartTimer()
-    languageChangeRestartTimerRef.current = setTimeout(() => {
-      languageChangeRestartTimerRef.current = null
-      const latestStatus = connectionStatusRef.current
-      if (latestStatus !== 'ready' && latestStatus !== 'connecting') return
-
-      logSttDebug('recording.languages.restart_begin', {
-        currentSignature,
-      })
-      void (async () => {
-        if (useNativeSttRef.current) {
-          pendingLanguageChangeRestartRef.current = true
-          await stopRecordingGracefully()
-          return
-        }
-
-        await stopRecordingGracefully()
-        await new Promise<void>((resolve) => {
-          setTimeout(() => resolve(), LANGUAGE_CHANGE_RESTART_GAP_MS)
-        })
-        if (connectionStatusRef.current !== 'idle') return
-        await startRecording()
-      })()
-    }, LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS)
-  }, [clearLanguageChangeRestartTimer, languages, startRecording, stopRecordingGracefully])
+  }, [cleanup, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2590,11 +2550,6 @@ export default function useRealtimeSTT({
         if (detail.status === 'connecting') {
           setConnectionStatus('connecting')
         } else if (detail.status === 'stopped') {
-          if (suppressNextNativeStoppedStatusRef.current) {
-            suppressNextNativeStoppedStatusRef.current = false
-            logSttDebug('native.status.stopped_ignored_after_restart')
-            return
-          }
           setConnectionStatus('idle')
         }
         return
@@ -2622,7 +2577,6 @@ export default function useRealtimeSTT({
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false
           setConnectionStatus('idle')
-          restartRecordingAfterLanguageChangeAck()
           return
         }
         handleSttTransportClose({ native: true, reason: detail.reason })
@@ -2633,7 +2587,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, restartRecordingAfterLanguageChangeAck])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError])
 
   const recoverFromBackgroundIfNeeded = useCallback(async () => {
     if (useNativeSttRef.current) return
@@ -2666,27 +2620,56 @@ export default function useRealtimeSTT({
     }
   }, [connectionStatus, startRecording, stopRecordingGracefully])
 
+  useEffect(() => {
+    const currentLang = partialLangRef.current || 'unknown'
+    const targetLanguages = buildTurnTargetLanguagesSnapshot(languages, currentLang)
+    const nextTranslations = filterTranslationsToTargetLanguages(
+      stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang),
+      targetLanguages,
+    )
+    if (partialTranslateControllerRef.current) {
+      partialTranslateControllerRef.current.abort()
+      partialTranslateControllerRef.current = null
+    }
+    const nextPriorities = new Map<string, TranslationPriority>()
+    for (const language of Object.keys(nextTranslations)) {
+      const priority = partialTranslationPriorityRef.current.get(language)
+      if (priority) {
+        nextPriorities.set(language, priority)
+      }
+    }
+
+    partialTranslationPriorityRef.current = nextPriorities
+    partialTranslationsRef.current = nextTranslations
+    setPartialTranslations(nextTranslations)
+    lastPartialTranslationStateRef.current = buildCurrentTurnPreviousStatePayload(
+      currentLang,
+      partialTranscriptRef.current,
+      nextTranslations,
+    )
+  }, [languages])
+
   // ===== Partial translation: fire once immediately, then every 20-char threshold =====
   const PARTIAL_TRANSLATE_STEP = 20
   useEffect(() => {
     const trimmed = partialTranscript.trim()
-    const sessionLanguages = getSessionLanguages()
+    const targetLanguages = getCurrentTargetLanguages()
+    const targetLanguageSignature = buildLanguageSelectionSignature(targetLanguages)
     const len = trimmed.length
-    if (len === 0 || sessionLanguages.length === 0 || connectionStatus !== 'ready') return
+    if (len === 0 || targetLanguages.length === 0 || connectionStatus !== 'ready') return
 
     // 단일 언어 모드: 감지 언어가 선택 언어와 동일하면 부분 번역 스킵
     const currentLang = partialLangRef.current || 'unknown'
     if (
-      sessionLanguages.length === 1
-      && normalizeLangForCompare(currentLang) === normalizeLangForCompare(sessionLanguages[0] || '')
+      targetLanguages.length === 1
+      && normalizeLangForCompare(currentLang) === normalizeLangForCompare(targetLanguages[0] || '')
     ) return
 
     const isInitialPartialRequest = !hasFiredInitialPartialTranslateRef.current
+    const targetLanguagesChanged = lastPartialTranslateTargetSignatureRef.current !== targetLanguageSignature
 
-    if (isInitialPartialRequest) {
+    if (isInitialPartialRequest || targetLanguagesChanged) {
       hasFiredInitialPartialTranslateRef.current = true
-      // Prime the threshold tracker based on the first partial length so
-      // the next request is triggered at the next 20-char boundary.
       lastPartialTranslateLenRef.current = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
     } else {
       const nextThreshold = lastPartialTranslateLenRef.current + PARTIAL_TRANSLATE_STEP
@@ -2703,17 +2686,20 @@ export default function useRealtimeSTT({
       speaker: requestSpeaker,
       language: currentLang,
       text: trimmed,
+      targetLanguages,
     })
     if (lastPartialTranslateRequestSignatureRef.current === requestSignature) {
       logSttDebug('partial.translate.skip_duplicate', {
         requestUtteranceId,
         requestSpeaker,
         currentLang,
+        targetLanguages,
         text: trimmed,
       })
       return
     }
     lastPartialTranslateRequestSignatureRef.current = requestSignature
+    lastPartialTranslateTargetSignatureRef.current = targetLanguageSignature
 
     const requestSeq = latestPartialTranslateSeqRef.current + 1
     latestPartialTranslateSeqRef.current = requestSeq
@@ -2726,7 +2712,7 @@ export default function useRealtimeSTT({
     }
     const controller = new AbortController()
     partialTranslateControllerRef.current = controller
-    translateViaApi(trimmed, currentLang, sessionLanguages, {
+    translateViaApi(trimmed, currentLang, targetLanguages, {
       signal: controller.signal,
       currentTurnPreviousState: lastPartialTranslationStateRef.current,
     })
@@ -2755,8 +2741,14 @@ export default function useRealtimeSTT({
           })
           return
         }
-        const filteredExisting = stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang)
-        const filteredNew = stripSourceLanguageFromTranslations(result.translations, currentLang)
+        const filteredExisting = filterTranslationsToTargetLanguages(
+          stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang),
+          targetLanguages,
+        )
+        const filteredNew = filterTranslationsToTargetLanguages(
+          stripSourceLanguageFromTranslations(result.translations, currentLang),
+          targetLanguages,
+        )
         const nextTranslations = { ...filteredExisting }
         const nextPriorities = new Map(partialTranslationPriorityRef.current)
         for (const [language, translatedText] of Object.entries(filteredNew)) {
@@ -2774,7 +2766,7 @@ export default function useRealtimeSTT({
         partialTranslationsRef.current = nextTranslations
         setPartialTranslations(nextTranslations)
       })
-  }, [connectionStatus, getSessionLanguages, partialTranscript, translateViaApi])
+  }, [connectionStatus, getCurrentTargetLanguages, languages, partialTranscript, translateViaApi])
 
   const toggleRecording = useCallback(() => {
     if (connectionStatus === 'error') return
@@ -2787,10 +2779,9 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     return () => {
-      clearLanguageChangeRestartTimer()
       cleanup()
     }
-  }, [clearLanguageChangeRestartTimer, cleanup])
+  }, [cleanup])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
@@ -2841,7 +2832,7 @@ export default function useRealtimeSTT({
   }, [recoverFromBackgroundIfNeeded])
 
   const activePendingTurn = getActivePendingTurn()
-  const liveUtteranceLanguages = getSessionLanguages()
+  const liveUtteranceLanguages = getCurrentTargetLanguages()
   const liveUtterance = buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  buildSttLanguageSelectionSignature,
+  buildLanguageSelectionSignature,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
   applyTranslationToUtteranceStoreState,
@@ -11,6 +11,7 @@ import {
   findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
+  filterTranslationsToTargetLanguages,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
   shouldApplyLatestPartialTranslationResponse,
@@ -136,16 +137,27 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
-  it('normalizes language selection signatures for debounce comparisons', () => {
-    expect(buildSttLanguageSelectionSignature([' en ', 'ko', '', 'ja ']))
-      .toBe(buildSttLanguageSelectionSignature(['en', 'ko', 'ja']))
+  it('normalizes language selection signatures for target-language comparisons', () => {
+    expect(buildLanguageSelectionSignature([' en ', 'ko', '', 'ja ']))
+      .toBe(buildLanguageSelectionSignature(['en', 'ko', 'ja']))
   })
 
   it('changes language selection signatures when membership or order changes', () => {
-    expect(buildSttLanguageSelectionSignature(['en', 'ko']))
-      .not.toBe(buildSttLanguageSelectionSignature(['en', 'ja']))
-    expect(buildSttLanguageSelectionSignature(['en', 'ko']))
-      .not.toBe(buildSttLanguageSelectionSignature(['ko', 'en']))
+    expect(buildLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildLanguageSelectionSignature(['en', 'ja']))
+    expect(buildLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildLanguageSelectionSignature(['ko', 'en']))
+  })
+
+  it('filters translations down to currently selected target languages', () => {
+    expect(filterTranslationsToTargetLanguages({
+      ko: '안녕하세요',
+      ja: 'こんにちは',
+      en: 'hello',
+    }, ['ja', 'en'])).toEqual({
+      ja: 'こんにちは',
+      en: 'hello',
+    })
   })
 
   it('returns null when final text is only markers/noise', () => {
@@ -420,15 +432,33 @@ describe('use-realtime-stt pure logic', () => {
       utteranceId: 12,
       speaker: 'speaker-1',
       language: 'en',
+      targetLanguages: ['ko', 'ja'],
       text: 'Hello world',
-    })).toBe('12::speaker-1::en::Hello world')
+    })).toBe('12::speaker-1::en::ko\u001fja::Hello world')
 
     expect(buildLiveTranslateRequestSignature({
       utteranceId: 12,
       speaker: '',
       language: 'en',
+      targetLanguages: ['ko'],
       text: '  Hello world  ',
-    })).toBe('12::unknown::en::Hello world')
+    })).toBe('12::unknown::en::ko::Hello world')
+  })
+
+  it('changes translate request signatures when target languages change mid-turn', () => {
+    expect(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: 'speaker-1',
+      language: 'en',
+      targetLanguages: ['ko', 'ja'],
+      text: 'Hello world',
+    })).not.toBe(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: 'speaker-1',
+      language: 'en',
+      targetLanguages: ['ko'],
+      text: 'Hello world',
+    }))
   })
 
   it('detects duplicate timed signatures within the ttl window', () => {
