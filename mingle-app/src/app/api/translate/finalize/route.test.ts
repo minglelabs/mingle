@@ -155,6 +155,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
+      isFinal: false,
       currentTurnPreviousState: {
         sourceLanguage: 'en',
         sourceText: 'hello',
@@ -209,6 +210,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko'],
+      isFinal: false,
       __testFaultMode: 'provider_empty',
       currentTurnPreviousState: {
         sourceLanguage: 'en',
@@ -244,6 +246,7 @@ describe('/api/translate/finalize route', () => {
       text: 'hello',
       sourceLanguage: 'en',
       targetLanguages: ['ko', 'ja'],
+      isFinal: false,
       __testFaultMode: 'target_miss',
       currentTurnPreviousState: {
         sourceLanguage: 'en',
@@ -264,6 +267,38 @@ describe('/api/translate/finalize route', () => {
       ko: 'fallback-ko',
       ja: 'fallback-ja',
     })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not reuse previous-state fallback for final requests', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+      currentTurnPreviousState: {
+        sourceLanguage: 'en',
+        sourceText: 'hello',
+        translations: {
+          ko: 'partial fallback...',
+        },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(json).toEqual({ error: 'empty_translation_response' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

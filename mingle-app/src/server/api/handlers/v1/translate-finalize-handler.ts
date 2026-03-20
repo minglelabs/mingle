@@ -365,7 +365,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     currentTurnPreviousState,
     isFinal,
   }
-  const { systemPrompt, userPrompt } = buildPrompt(ctx)
   // console.info([
   //   '[translate/finalize] input_prompt',
   //   `sourceLanguage=${sourceLanguage}`,
@@ -459,7 +458,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         targetLanguages,
         textPreview: text.slice(0, 120),
       })
-      if (!geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
+      if (!ctx.isFinal && !geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           sourceLanguage,
           targetLanguages,
@@ -501,7 +500,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         returnedLanguages: Object.keys(selectedResult.translations),
         textPreview: text.slice(0, 120),
       })
-      if (Object.keys(fallbackTranslations).length > 0) {
+      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           sourceLanguage,
           targetLanguages,
