@@ -321,14 +321,14 @@ function buildFinalizeDedupSignature(language: string, text: string, speaker?: s
 
 export function shouldApplyPartialTranslationResponse(input: {
   requestSeq: number
-  latestRequestedSeqForBubble: number
+  latestRequestedSeq: number
   requestUtteranceId: number
   currentUtteranceId: number
   requestSpeaker: string | null
   currentSpeaker: string | null
 }): boolean {
   return (
-    input.requestSeq === input.latestRequestedSeqForBubble
+    input.requestSeq === input.latestRequestedSeq
     && input.requestUtteranceId === input.currentUtteranceId
     && (input.requestSpeaker || null) === (input.currentSpeaker || null)
   )
@@ -535,14 +535,13 @@ export default function useRealtimeSTT({
   // Responses with a seq lower than the latest applied seq are discarded,
   // preventing old (slow) translations from overwriting newer ones.
   const translateSeqRef = useRef(0)
-  const lastAppliedSeqRef = useRef<Map<string, number>>(new Map()) // utteranceId:lang -> last applied seq
+  const lastAppliedSeqRef = useRef<Map<string, number>>(new Map()) // utteranceId -> last applied seq
   // Track the partial transcript 20-char threshold last used for partial translation.
   // A first partial translation fires immediately when the first transcript arrives,
   // then subsequent calls fire when 20/40/60... thresholds are crossed.
   const hasFiredInitialPartialTranslateRef = useRef(false)
   const lastPartialTranslateLenRef = useRef(0)
   const latestPartialTranslateSeqRef = useRef(0)
-  const latestPartialTranslateSeqByLanguageRef = useRef<Map<string, number>>(new Map())
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const sessionKeyRef = useRef('')
@@ -747,7 +746,6 @@ export default function useRealtimeSTT({
     hasFiredInitialPartialTranslateRef.current = false
     lastPartialTranslateLenRef.current = 0
     latestPartialTranslateSeqRef.current = 0
-    latestPartialTranslateSeqByLanguageRef.current.clear()
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -997,6 +995,11 @@ export default function useRealtimeSTT({
     seq: number,
     markFinalized: boolean,
   ) => {
+    // Discard if a newer translation has already been applied.
+    const lastApplied = lastAppliedSeqRef.current.get(utteranceId) ?? -1
+    if (seq <= lastApplied) return
+    lastAppliedSeqRef.current.set(utteranceId, seq)
+
     setUtterances(prev => {
       const idx = prev.findIndex(u => u.id === utteranceId)
       if (idx < 0) return prev
@@ -1004,14 +1007,10 @@ export default function useRealtimeSTT({
       const newTranslations = { ...target.translations }
       const newFinalized = { ...(target.translationFinalized || {}) }
       for (const [lang, text] of Object.entries(translations)) {
-        const cleaned = text.trim()
-        if (!cleaned) continue
-        const bubbleKey = `${utteranceId}:${lang}`
-        const lastApplied = lastAppliedSeqRef.current.get(bubbleKey) ?? -1
-        if (seq <= lastApplied) continue
-        lastAppliedSeqRef.current.set(bubbleKey, seq)
-        newTranslations[lang] = cleaned
-        if (markFinalized) newFinalized[lang] = true
+        if (text.trim()) {
+          newTranslations[lang] = text.trim()
+          if (markFinalized) newFinalized[lang] = true
+        }
       }
       return [
         ...prev.slice(0, idx),
@@ -1622,7 +1621,6 @@ export default function useRealtimeSTT({
       setPartialLang(null)
       partialLangRef.current = null
       latestPartialTranslateSeqRef.current = 0
-      latestPartialTranslateSeqByLanguageRef.current.clear()
       if (partialTranslateControllerRef.current) {
         partialTranslateControllerRef.current.abort()
         partialTranslateControllerRef.current = null
@@ -1843,10 +1841,6 @@ export default function useRealtimeSTT({
     const requestSpeaker = activePartialSpeakerRef.current
     const requestSeq = latestPartialTranslateSeqRef.current + 1
     latestPartialTranslateSeqRef.current = requestSeq
-    const requestedTargetLanguages = buildTurnTargetLanguagesSnapshot(languages, currentLang)
-    for (const language of requestedTargetLanguages) {
-      latestPartialTranslateSeqByLanguageRef.current.set(language, requestSeq)
-    }
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
     }
@@ -1860,22 +1854,17 @@ export default function useRealtimeSTT({
         if (partialTranslateControllerRef.current === controller) {
           partialTranslateControllerRef.current = null
         }
+        if (!shouldApplyPartialTranslationResponse({
+          requestSeq,
+          latestRequestedSeq: latestPartialTranslateSeqRef.current,
+          requestUtteranceId,
+          currentUtteranceId: utteranceIdRef.current,
+          requestSpeaker,
+          currentSpeaker: activePartialSpeakerRef.current,
+        })) return
         const filteredExisting = stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang)
         const filteredNew = stripSourceLanguageFromTranslations(result.translations, currentLang)
-        const nextTranslations = { ...filteredExisting }
-        for (const [language, translatedText] of Object.entries(filteredNew)) {
-          if (!shouldApplyPartialTranslationResponse({
-            requestSeq,
-            latestRequestedSeqForBubble: latestPartialTranslateSeqByLanguageRef.current.get(language) ?? -1,
-            requestUtteranceId,
-            currentUtteranceId: utteranceIdRef.current,
-            requestSpeaker,
-            currentSpeaker: activePartialSpeakerRef.current,
-          })) {
-            continue
-          }
-          nextTranslations[language] = translatedText
-        }
+        const nextTranslations = { ...filteredExisting, ...filteredNew }
         lastPartialTranslationStateRef.current = buildCurrentTurnPreviousStatePayload(
           currentLang,
           trimmed,
