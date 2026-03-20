@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
+  findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
   parseSttTranscriptMessage,
@@ -176,6 +177,46 @@ describe('use-realtime-stt pure logic', () => {
       nextSig: 'speaker-2::en::hello',
       nowMs: 1_500,
     })).toBe(false)
+  })
+
+  it('finds the most recent utterance matching source text and language', () => {
+    expect(findRecentMatchingUtteranceIndex({
+      utterances: [
+        {
+          id: 'u-1',
+          originalText: 'Hello',
+          originalLang: 'en',
+          translations: {},
+        },
+        {
+          id: 'u-2',
+          originalText: 'Hello',
+          originalLang: 'ko',
+          translations: {},
+        },
+        {
+          id: 'u-3',
+          originalText: 'Hello',
+          originalLang: 'en-US',
+          translations: {},
+        },
+      ],
+      sourceText: ' Hello ',
+      sourceLanguage: 'en',
+    })).toBe(2)
+
+    expect(findRecentMatchingUtteranceIndex({
+      utterances: [
+        {
+          id: 'u-1',
+          originalText: 'Hello',
+          originalLang: 'en',
+          translations: {},
+        },
+      ],
+      sourceText: 'Goodbye',
+      sourceLanguage: 'en',
+    })).toBe(-1)
   })
 
   it('accepts partial translation responses only for the active turn and speaker', () => {

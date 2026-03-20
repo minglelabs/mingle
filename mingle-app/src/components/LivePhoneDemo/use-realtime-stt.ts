@@ -366,6 +366,11 @@ interface TranslationPriority {
   seq: number
 }
 
+interface TranslationApplyFallbackMatch {
+  sourceText: string
+  sourceLanguage: string
+}
+
 const TRANSLATION_PRIORITY_KIND_ORDER: Record<TranslationPriorityKind, number> = {
   initial: 0,
   partial: 1,
@@ -427,6 +432,25 @@ export function shouldOverrideTranslationByPriority(
   }
 
   return nextPriority.seq > currentPriority.seq
+}
+
+export function findRecentMatchingUtteranceIndex(input: {
+  utterances: Utterance[]
+  sourceText: string
+  sourceLanguage: string
+}): number {
+  const normalizedText = normalizeSttTurnText(input.sourceText)
+  const normalizedLanguage = normalizeLangForCompare(input.sourceLanguage)
+  if (!normalizedText || !normalizedLanguage) return -1
+
+  for (let index = input.utterances.length - 1; index >= 0; index -= 1) {
+    const utterance = input.utterances[index]
+    if (normalizeSttTurnText(utterance.originalText) !== normalizedText) continue
+    if (normalizeLangForCompare(utterance.originalLang) !== normalizedLanguage) continue
+    return index
+  }
+
+  return -1
 }
 
 function mergeTranslationsByPriority(input: {
@@ -1149,10 +1173,31 @@ export default function useRealtimeSTT({
     translations: Record<string, string>,
     priority: TranslationPriority,
     markFinalized: boolean,
+    fallbackMatch?: TranslationApplyFallbackMatch,
   ) => {
     setUtterances(prev => {
-      const idx = prev.findIndex(u => u.id === utteranceId)
+      let idx = prev.findIndex(u => u.id === utteranceId)
+      if (idx < 0 && fallbackMatch) {
+        idx = findRecentMatchingUtteranceIndex({
+          utterances: prev,
+          sourceText: fallbackMatch.sourceText,
+          sourceLanguage: fallbackMatch.sourceLanguage,
+        })
+        if (idx >= 0) {
+          logSttDebug('translation.apply.fallback_match', {
+            requestedUtteranceId: utteranceId,
+            matchedUtteranceId: prev[idx]?.id || null,
+            sourceLanguage: fallbackMatch.sourceLanguage,
+            sourceText: fallbackMatch.sourceText,
+          })
+        }
+      }
       if (idx < 0) {
+        logSttDebug('translation.apply.queued_pending', {
+          utteranceId,
+          languages: Object.keys(translations),
+          markFinalized,
+        })
         const existingPending = pendingUtteranceTranslationUpdatesRef.current.get(utteranceId)
         const mergedPending = mergeTranslationsByPriority({
           utteranceId,
@@ -1167,6 +1212,12 @@ export default function useRealtimeSTT({
         return prev
       }
       const target = prev[idx]
+      logSttDebug('translation.apply.applied', {
+        requestedUtteranceId: utteranceId,
+        targetUtteranceId: target.id,
+        languages: Object.keys(translations),
+        markFinalized,
+      })
       const merged = mergeTranslationsByPriority({
         utteranceId,
         currentTranslations: target.translations,
@@ -1357,7 +1408,16 @@ export default function useRealtimeSTT({
       sttDurationMs: options?.sttDurationMs,
     }).then(result => {
       if (Object.keys(result.translations).length > 0) {
-        applyTranslationToUtterance(utteranceId, result.translations, { kind: 'final', seq }, true)
+        applyTranslationToUtterance(
+          utteranceId,
+          result.translations,
+          { kind: 'final', seq },
+          true,
+          {
+            sourceText: text,
+            sourceLanguage: lang,
+          },
+        )
         handleInlineTtsFromTranslate(utteranceId, lang, result)
       }
 
