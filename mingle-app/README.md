@@ -61,9 +61,9 @@ MINGLE_TEST_TTS_OUTPUT_DIR=/absolute/path/to/tts-output
 
 ## API Namespace (Release Routing)
 
-클라이언트는 런타임 분기 없이 `NEXT_PUBLIC_API_NAMESPACE`로 API 경로를 결정합니다.
+The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without runtime branching.
 
-- 기본값(legacy): 빈 값(`''`) -> `/api/{existing-path}`
+- Default (legacy): empty value (`''`) -> `/api/{existing-path}`
 - iOS versioned: `ios/v1.0.0` -> `/api/ios/v1.0.0/{existing-path}`
 - Android versioned: `android/v1.0.0` -> `/api/android/v1.0.0/{existing-path}`
 
@@ -77,29 +77,29 @@ pnpm build:release:android
 
 URL override (optional):
 
-- 브라우저 URL 쿼리 `apiNamespace`(또는 `apiNs`)는 allow-list 값만 반영됩니다.
-- 허용값: `''`, `ios/v1.0.0`, `android/v1.0.0`
-- 예: `https://your-app/ko?apiNamespace=android/v1.0.0`
-- 허용되지 않은 값은 무시되고 env/default를 사용합니다.
+- The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
+- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`
+- Example: `https://your-app/ko?apiNamespace=android/v1.0.0`
+- Unsupported values are ignored, and the env/default value is used instead.
 
 ### Client Version Policy
 
-- 앱 시작 시 `POST /api/client/version-policy` 또는 플랫폼 namespace 경로를 호출합니다.
-- namespace 예시:
+- On app launch, the client calls `POST /api/client/version-policy` or the platform namespace route.
+- Namespace examples:
   - iOS: `POST /api/ios/v1.0.0/client/version-policy`
   - Android: `POST /api/android/v1.0.0/client/version-policy`
-- 요청: `clientVersion`(`x.y.z`), `clientBuild`
-- 요청 optional: `platform` (`ios` | `android`, 미전달 시 `ios`)
+- Request fields: `clientVersion` (`x.y.z`), `clientBuild`
+- Optional request field: `platform` (`ios` | `android`, defaults to `ios` when omitted)
 - Server env:
   - iOS: `IOS_CLIENT_MIN_SUPPORTED_VERSION`, `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`, `IOS_CLIENT_LATEST_VERSION`, `IOS_APPSTORE_URL`
   - Android: `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`, `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`, `ANDROID_CLIENT_LATEST_VERSION`, `ANDROID_PLAYSTORE_URL`
 - Fallback behavior:
   - If Android env is missing, the API falls back to the iOS env once.
   - If the required min version env is missing or has an invalid semver, the API fails closed with `force_update`.
-- 응답 `action`:
-  - `force_update`: 강제 업데이트 화면
-  - `recommend_update`: 권장 업데이트 알림
-  - `none`: 표시 없음
+- Response `action`:
+  - `force_update`: show a mandatory update screen
+  - `recommend_update`: show a recommended update prompt
+  - `none`: show nothing
 
 Contract test commands:
 
@@ -110,21 +110,21 @@ pnpm test:unit -- src/lib/api-contract.test.ts src/app/api/namespace-routing.con
 
 Fixture scan behavior:
 
-- 폴더 내 파일명은 자유입니다.
-- `.wav`(PCM16/mono) 파일은 바로 처리합니다.
-- `.m4a` 포함 일부 포맷은 ffmpeg(또는 macOS afconvert)로 변환 후 처리합니다.
-- 변환/파싱 실패 파일은 경고만 출력하고 skip 후 다음 파일로 진행합니다.
-- fixture 후보 파일이 없으면 fixture 의존 live 스위트는 자동 skip 됩니다.
-- 파일이 있는데 모두 invalid면 테스트는 실패합니다.
-- 기본 오디오 전송은 실시간 속도(`40ms chunk / 40ms delay`)로 동작합니다.
+- Filenames inside the folders can be anything.
+- `.wav` files (PCM16 / mono) are processed directly.
+- Some formats, including `.m4a`, are transcoded with `ffmpeg` (or macOS `afconvert`) before processing.
+- Files that fail transcoding or parsing are skipped with a warning, and the next file continues.
+- If there are no candidate fixture files, fixture-dependent live suites are skipped automatically.
+- If files exist but all of them are invalid, the test fails.
+- Default audio streaming runs at realtime speed (`40ms chunk / 40ms delay`).
 
 Translation/TTS behavior:
 
-- source가 `en`이면 target은 기본 `ko`
-- source가 `ko`면 target은 기본 `en`
-- 그 외 source는 기본 target `ko,en`
-- 테스트 stdout에 Soniox 원문과 finalize 번역 결과를 출력합니다.
-- finalize 응답에 TTS가 오면 음성 파일을 `test-fixtures/audio/local/tts-output/`에 저장합니다(로컬 전용, git ignore).
+- If `source` is `en`, the default target is `ko`.
+- If `source` is `ko`, the default target is `en`.
+- For any other source, the default targets are `ko,en`.
+- Test stdout prints the original Soniox transcript and the finalize translation results.
+- If the finalize response includes TTS output, the audio file is saved to `test-fixtures/audio/local/tts-output/` (local only, gitignored).
 
 ### Live E2E suites
 
@@ -146,14 +146,14 @@ Device-dependent optional suites (env flag required):
 
 Finalize fault-injection E2E notes:
 
-- live 테스트는 finalize fault mode 요청 시 `x-mingle-live-test: 1` 헤더를 붙입니다.
-- API 서버는 non-production 환경에서만 `provider_empty/target_miss/provider_error` 강제 모드를 허용합니다.
+- Live tests attach the `x-mingle-live-test: 1` header when requesting finalize fault modes.
+- The API server allows forced `provider_empty`, `target_miss`, and `provider_error` modes only in non-production environments.
 
 iOS launch healthcheck notes:
 
-- 스크립트: `scripts/e2e-ios-launch-healthcheck.sh`
-- 필수 env: `MINGLE_TEST_IOS_UDID`
-- 선택 env: `MINGLE_TEST_IOS_BUNDLE_ID`, `MINGLE_TEST_IOS_INSTALL=1`, `MINGLE_TEST_IOS_APP_PATH`
+- Script: `scripts/e2e-ios-launch-healthcheck.sh`
+- Required env: `MINGLE_TEST_IOS_UDID`
+- Optional env: `MINGLE_TEST_IOS_BUNDLE_ID`, `MINGLE_TEST_IOS_INSTALL=1`, `MINGLE_TEST_IOS_APP_PATH`
 
 Fixture requirements:
 
@@ -163,8 +163,8 @@ Fixture requirements:
 
 Audio fixture git policy:
 
-- 팀 공통 재현용 짧은 샘플 1개는 `test-fixtures/audio/fixtures/`에 커밋 권장
-- 개인/민감 음성은 `test-fixtures/audio/local/`에 두고 git ignore 처리
+- Commit one short sample under `test-fixtures/audio/fixtures/` for team-wide reproducibility.
+- Keep personal or sensitive recordings under `test-fixtures/audio/local/` and out of git.
 
 ## Learn More
 
@@ -282,12 +282,12 @@ pnpm rn:start
 pnpm rn:ios
 ```
 
-RN 앱 URL은 하드코딩하지 않고 환경변수로만 읽습니다.
+RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS 필수: `ios/v1.0.0`)
-- iOS에서 `NEXT_PUBLIC_API_NAMESPACE`가 `ios/v1.0.0`과 불일치하면 WebView를 로드하지 않고 오류를 표시합니다.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.0.0`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.0.0`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -322,9 +322,9 @@ ANDROID_CLIENT_LATEST_VERSION=2.2.0
 ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
 ```
 
-루트 `pnpm rn:start|ios|android` 스크립트는 `.env.local`을 먼저 로드한 뒤 RN CLI를 실행합니다.
-`pnpm rn:ios`는 실행 전에 `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.0` 검증을 강제합니다.
-`pnpm rn:android`는 실행 전에 `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.0` 검증을 강제합니다.
+The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.0` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.0` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`
