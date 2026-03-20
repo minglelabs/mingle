@@ -217,6 +217,85 @@ describe('use-realtime-stt pure logic', () => {
     expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
   })
 
+  it('keeps visible partial translations seeded on the finalized utterance', () => {
+    const appended = appendFinalizedUtteranceToStoreState(
+      createUtteranceStoreState([]),
+      {
+        id: 'u-seeded',
+        originalText: 'And eventually we had a falling out. When we did, our—',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {
+          ko: '그리고 결국 우리는 사이가 틀어졌어요. 그때',
+          ja: 'そして最終的に私たちは仲たがいしました。その時',
+        },
+        translationFinalized: {
+          ko: false,
+          ja: false,
+        },
+        createdAtMs: 1700000000004,
+      },
+      {
+        translations: {
+          ko: '그리고 결국 우리는 사이가 틀어졌어요. 그때',
+          ja: 'そして最終的に私たちは仲たがいしました。その時',
+        },
+        priorities: new Map([
+          ['ko', { kind: 'partial', seq: 3 }],
+          ['ja', { kind: 'partial', seq: 3 }],
+        ]),
+      },
+    )
+
+    expect(appended.utterances[0].translations).toEqual({
+      ko: '그리고 결국 우리는 사이가 틀어졌어요. 그때',
+      ja: 'そして最終的に私たちは仲たがいしました。その時',
+    })
+    expect(appended.utterances[0].translationFinalized).toEqual({})
+    expect(appended.translationPriorities.get('u-seeded:ko')).toEqual({ kind: 'partial', seq: 3 })
+    expect(appended.translationPriorities.get('u-seeded:ja')).toEqual({ kind: 'partial', seq: 3 })
+  })
+
+  it('does not let an older queued partial override a seeded newer partial', () => {
+    const queuedOlderPartial = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-seeded',
+      translations: {
+        ko: '그리고',
+      },
+      priority: { kind: 'partial', seq: 1 },
+      markFinalized: false,
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(
+      queuedOlderPartial,
+      {
+        id: 'u-seeded',
+        originalText: 'And eventually we had',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {
+          ko: '그리고 결국 우리는',
+        },
+        translationFinalized: {
+          ko: false,
+        },
+        createdAtMs: 1700000000005,
+      },
+      {
+        translations: {
+          ko: '그리고 결국 우리는',
+        },
+        priorities: new Map([
+          ['ko', { kind: 'partial', seq: 2 }],
+        ]),
+      },
+    )
+
+    expect(appended.utterances[0].translations.ko).toBe('그리고 결국 우리는')
+    expect(appended.translationPriorities.get('u-seeded:ko')).toEqual({ kind: 'partial', seq: 2 })
+  })
+
   it('stores fallback-applied priorities under the matched utterance id', () => {
     const store = createUtteranceStoreState([
       {

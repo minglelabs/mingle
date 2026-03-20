@@ -217,6 +217,11 @@ export interface UtteranceStoreState {
   pendingTranslationUpdates: Map<string, PendingUtteranceTranslationUpdate>
 }
 
+interface SeedTranslationState {
+  translations: Record<string, string>
+  priorities: Map<string, TranslationPriority>
+}
+
 export interface CurrentTurnPreviousStatePayload {
   sourceLanguage: string
   sourceText: string
@@ -528,6 +533,26 @@ export function createUtteranceStoreState(
   }
 }
 
+function buildSeedTranslationState(
+  sourceLanguageRaw: string,
+  translationsRaw: Record<string, string>,
+  prioritiesRaw: Map<string, TranslationPriority>,
+): SeedTranslationState {
+  const translations = stripSourceLanguageFromTranslations(translationsRaw, sourceLanguageRaw)
+  const priorities = new Map<string, TranslationPriority>()
+
+  for (const language of Object.keys(translations)) {
+    const priority = prioritiesRaw.get(language)
+    if (!priority) continue
+    priorities.set(language, priority)
+  }
+
+  return {
+    translations,
+    priorities,
+  }
+}
+
 function mergePendingTranslationUpdateIntoUtterance(
   utterance: Utterance,
   pendingUpdate: PendingUtteranceTranslationUpdate,
@@ -543,6 +568,51 @@ function mergePendingTranslationUpdateIntoUtterance(
     targetLanguages: settledState.targetLanguages,
     translations: settledState.translations,
     translationFinalized: settledState.translationFinalized,
+  }
+}
+
+function applyPendingTranslationUpdateToUtteranceState(input: {
+  utterance: Utterance
+  currentPriorities: Map<string, TranslationPriority>
+  pendingUpdate: PendingUtteranceTranslationUpdate
+}): { utterance: Utterance, priorities: Map<string, TranslationPriority> } {
+  let nextTranslations = { ...input.utterance.translations }
+  let nextTranslationFinalized = { ...(input.utterance.translationFinalized || {}) }
+  let nextPriorities = new Map(input.currentPriorities)
+
+  for (const [language, translatedText] of Object.entries(input.pendingUpdate.translations)) {
+    const priority = input.pendingUpdate.priorities.get(`${input.utterance.id}:${language}`)
+    if (!priority) continue
+
+    const merged = mergeTranslationsByPriority({
+      utteranceId: input.utterance.id,
+      currentTranslations: nextTranslations,
+      currentTranslationFinalized: nextTranslationFinalized,
+      currentPriorities: nextPriorities,
+      nextTranslations: { [language]: translatedText },
+      nextPriority: priority,
+      markFinalized: input.pendingUpdate.translationFinalized[language] === true,
+    })
+
+    nextTranslations = merged.translations
+    nextTranslationFinalized = merged.translationFinalized
+    nextPriorities = merged.priorities
+  }
+
+  const settledState = pruneUnresolvedTranslationTargets({
+    targetLanguages: input.utterance.targetLanguages,
+    translations: nextTranslations,
+    translationFinalized: nextTranslationFinalized,
+  })
+
+  return {
+    utterance: {
+      ...input.utterance,
+      targetLanguages: settledState.targetLanguages,
+      translations: settledState.translations,
+      translationFinalized: settledState.translationFinalized,
+    },
+    priorities: nextPriorities,
   }
 }
 
@@ -566,14 +636,45 @@ function appendOrReplaceUtterance(
 export function appendFinalizedUtteranceToStoreState(
   store: UtteranceStoreState,
   utterance: Utterance,
+  seedTranslationState?: SeedTranslationState,
 ): UtteranceStoreState {
   const existingIndex = store.utterances.findIndex((item) => item.id === utterance.id)
   const baseUtterance = existingIndex >= 0 ? store.utterances[existingIndex] : utterance
   const pendingUpdate = store.pendingTranslationUpdates.get(utterance.id)
+  const nextTranslationPriorities = new Map(store.translationPriorities)
+  const seededTranslations = seedTranslationState?.translations || {}
+  const seededTranslationFinalized: Record<string, boolean> = {
+    ...(baseUtterance.translationFinalized || {}),
+  }
 
-  const nextUtterance = pendingUpdate
-    ? mergePendingTranslationUpdateIntoUtterance(baseUtterance, pendingUpdate)
+  for (const language of Object.keys(seededTranslations)) {
+    const priority = seedTranslationState?.priorities.get(language)
+    if (!priority) continue
+    const bubbleKey = `${utterance.id}:${language}`
+    nextTranslationPriorities.set(bubbleKey, priority)
+    seededTranslationFinalized[language] = false
+  }
+
+  const baseWithSeedTranslations = Object.keys(seededTranslations).length > 0
+    ? mergePendingTranslationUpdateIntoUtterance({
+      ...baseUtterance,
+      translations: seededTranslations,
+      translationFinalized: seededTranslationFinalized,
+    }, {
+      translations: seededTranslations,
+      translationFinalized: seededTranslationFinalized,
+      priorities: new Map(),
+    })
     : baseUtterance
+
+  const resolvedPendingState = pendingUpdate
+    ? applyPendingTranslationUpdateToUtteranceState({
+      utterance: baseWithSeedTranslations,
+      currentPriorities: nextTranslationPriorities,
+      pendingUpdate,
+    })
+    : null
+  const nextUtterance = resolvedPendingState?.utterance || baseWithSeedTranslations
 
   const nextUtterances = appendOrReplaceUtterance(store.utterances, nextUtterance)
   if (!pendingUpdate) {
@@ -581,12 +682,8 @@ export function appendFinalizedUtteranceToStoreState(
     return {
       ...store,
       utterances: nextUtterances,
+      translationPriorities: nextTranslationPriorities,
     }
-  }
-
-  const nextTranslationPriorities = new Map(store.translationPriorities)
-  for (const [bubbleKey, priority] of pendingUpdate.priorities.entries()) {
-    nextTranslationPriorities.set(bubbleKey, priority)
   }
 
   const nextPendingTranslationUpdates = new Map(store.pendingTranslationUpdates)
@@ -594,7 +691,7 @@ export function appendFinalizedUtteranceToStoreState(
 
   return {
     utterances: nextUtterances,
-    translationPriorities: nextTranslationPriorities,
+    translationPriorities: resolvedPendingState?.priorities || nextTranslationPriorities,
     pendingTranslationUpdates: nextPendingTranslationUpdates,
   }
 }
@@ -1381,6 +1478,7 @@ export default function useRealtimeSTT({
     options?: {
       speaker?: string
       partialTranslations?: Record<string, string>
+      partialTranslationPriorities?: Map<string, TranslationPriority>
       previousStateSourceLanguage?: string
       previousStateSourceText?: string
       fallbackCurrentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
@@ -1402,13 +1500,17 @@ export default function useRealtimeSTT({
     stopFinalizeDedupRef.current = { sig, expiresAt: now + 5000 }
 
     utteranceIdRef.current += 1
+    const seedTranslationState = buildSeedTranslationState(
+      rawLang,
+      options?.partialTranslations ?? partialTranslationsRef.current,
+      options?.partialTranslationPriorities ?? partialTranslationPriorityRef.current,
+    )
     const localPayload = buildFinalizedUtterancePayload({
       rawText,
       rawLanguage: rawLang,
       languages,
-      partialTranslations: {},
-      currentTurnPreviousTranslations: options?.partialTranslations ?? partialTranslationsRef.current,
-      seedUtteranceTranslations: false,
+      partialTranslations: seedTranslationState.translations,
+      currentTurnPreviousTranslations: seedTranslationState.translations,
       utteranceSerial: utteranceIdRef.current,
       nowMs: now,
       previousStateSourceLanguage: options?.previousStateSourceLanguage,
@@ -1428,7 +1530,11 @@ export default function useRealtimeSTT({
       && Object.keys(localPayload.currentTurnPreviousState.translations).length > 0
     ) ? localPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || localPayload.currentTurnPreviousState)
 
-    setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(prev, localPayload.utterance))
+    setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
+      prev,
+      localPayload.utterance,
+      seedTranslationState,
+    ))
     recentFinalizedUtteranceRef.current = {
       id: localPayload.utteranceId,
       text: localPayload.text,
@@ -1458,6 +1564,7 @@ export default function useRealtimeSTT({
       options: {
         speaker,
         partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
+        partialTranslationPriorities: isActiveSpeaker ? new Map(partialTranslationPriorityRef.current) : new Map(),
         previousStateSourceLanguage: pendingTurn?.language || speakerLanguage,
         previousStateSourceText: pendingTurn?.text || '',
         fallbackCurrentTurnPreviousState,
@@ -1894,13 +2001,17 @@ export default function useRealtimeSTT({
         recentServerFinalizeSignatureRef.current = { sig, expiresAt: now + 2_000 }
 
         const nextUtteranceSerial = utteranceIdRef.current + 1
+        const seedTranslationState = buildSeedTranslationState(
+          lang,
+          options.partialTranslations,
+          options.partialTranslationPriorities,
+        )
         const finalizedPayload = buildFinalizedUtterancePayload({
           rawText,
           rawLanguage: lang,
           languages,
-          partialTranslations: {},
-          currentTurnPreviousTranslations: options.partialTranslations,
-          seedUtteranceTranslations: false,
+          partialTranslations: seedTranslationState.translations,
+          currentTurnPreviousTranslations: seedTranslationState.translations,
           utteranceSerial: nextUtteranceSerial,
           nowMs: now,
           previousStateSourceLanguage: options.previousStateSourceLanguage || lang,
@@ -1931,7 +2042,11 @@ export default function useRealtimeSTT({
           && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
         ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
         if (!shouldReuseRecentFinalizedUtterance) {
-          setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(prev, finalizedPayload.utterance))
+          setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
+            prev,
+            finalizedPayload.utterance,
+            seedTranslationState,
+          ))
           recentFinalizedUtteranceRef.current = {
             id: finalizedPayload.utteranceId,
             text: finalizedPayload.text,
