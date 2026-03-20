@@ -3,12 +3,13 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
-import { formatChatBubbleTimestampLines } from './chat-bubble.timestamp'
+import {
+  hasRenderableChatBubbleTimestamp,
+} from './chat-bubble.timestamp'
+import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import TranslationBubbleRow from './TranslationBubbleRow'
 
-const RELATIVE_TIMESTAMP_THRESHOLD_MS = 24 * 60 * 60 * 1000
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
-const CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT = 1.05
 
 export interface Utterance {
   id: string
@@ -80,8 +81,8 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
 
-  const timestampLines = formatChatBubbleTimestampLines(utterance.createdAtMs, uiLocale)
-  const originalBubbleMaxWidth = timestampLines.length > 0
+  const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
+  const originalBubbleMaxWidth = hasTimestamp
     ? 'min(86%, calc(100% - 2.5rem))'
     : '86%'
 
@@ -116,19 +117,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
             </p>
           </div>
         </div>
-        {timestampLines.length > 0 && (
-          <div
-            data-original-bubble-timestamp
-            style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT, minWidth: '2.25rem' }}
-            className="mb-0.5 flex shrink-0 flex-col items-end self-end text-right text-[10px] text-black/[0.34] tabular-nums"
-          >
-            {timestampLines.map((line, index) => (
-              <span key={`${utterance.id}-timestamp-${index}`} className="whitespace-nowrap">
-                {line}
-              </span>
-            ))}
-          </div>
-        )}
+        <ChatBubbleTimestamp createdAtMs={utterance.createdAtMs} uiLocale={uiLocale} />
       </div>
 
       {/* Translation bubbles */}
@@ -176,10 +165,6 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 }
 
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
-  // Always re-render utterances that still render compact relative timestamps.
-  const createdAtMs = next.utterance.createdAtMs
-  if (createdAtMs && (Date.now() - createdAtMs) < RELATIVE_TIMESTAMP_THRESHOLD_MS) return false
-
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
@@ -188,6 +173,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     const pu = prev.utterance
     const nu = next.utterance
     if (pu.id !== nu.id) return false
+    if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.targetLanguages !== nu.targetLanguages) {

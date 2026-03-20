@@ -1,3 +1,8 @@
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
 function normalizeLocale(locale: string): string {
   const trimmed = locale.trim();
   return trimmed || "en";
@@ -60,7 +65,7 @@ export function formatChatBubbleTimestampLines(
   createdAtMs: number | undefined,
   locale: string,
 ): string[] {
-  if (!createdAtMs) return [];
+  if (!hasRenderableChatBubbleTimestamp(createdAtMs)) return [];
 
   const normalizedLocale = normalizeLocale(locale);
   const now = Date.now();
@@ -72,12 +77,37 @@ export function formatChatBubbleTimestampLines(
   const sameYear = created.getFullYear() === current.getFullYear();
   const elapsedMs = Math.max(0, now - createdAtMs);
 
-  if (elapsedMs < 24 * 60 * 60 * 1000) {
+  if (elapsedMs < DAY_MS) {
     return [formatRelativeAgoShort(elapsedMs)];
   }
 
   const dateLine = formatDateLine(created, !sameYear);
   return [dateLine, ...formatTimeLines(created, normalizedLocale)];
+}
+
+export function hasRenderableChatBubbleTimestamp(
+  createdAtMs: number | undefined,
+): createdAtMs is number {
+  return typeof createdAtMs === "number" && Number.isFinite(createdAtMs) && createdAtMs > 0;
+}
+
+export function getNextChatBubbleTimestampUpdateDelayMs(
+  createdAtMs: number | undefined,
+  now = Date.now(),
+): number | null {
+  if (!hasRenderableChatBubbleTimestamp(createdAtMs)) return null;
+
+  const elapsedMs = Math.max(0, now - createdAtMs);
+  if (elapsedMs >= DAY_MS) return null;
+
+  const unitMs = elapsedMs < MINUTE_MS
+    ? SECOND_MS
+    : elapsedMs < HOUR_MS
+      ? MINUTE_MS
+      : HOUR_MS;
+  const remainder = elapsedMs % unitMs;
+
+  return remainder === 0 ? unitMs : unitMs - remainder;
 }
 
 export function formatChatBubbleTimestamp(
