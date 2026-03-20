@@ -551,9 +551,7 @@ const VERSION_POLICY_FALLBACK_COPY: Record<VersionPolicyLocale, {
 
 type NativeSttStartPayload = {
   wsUrl?: string;
-  languages?: string[];
   sttModel?: string;
-  langHintsStrict?: boolean;
   aecEnabled?: boolean;
 };
 
@@ -1235,22 +1233,16 @@ function AppInner(): React.JSX.Element {
     const wsUrl = payloadWsUrl
       ? payloadWsUrl
       : DEFAULT_WS_URL;
-    const languages = Array.isArray(payload?.languages)
-      ? payload.languages.filter((language): language is string => typeof language === 'string' && language.trim().length > 0)
-      : ['ko', 'en', 'th'];
     const sttModel = typeof payload?.sttModel === 'string' && payload.sttModel.trim()
       ? payload.sttModel.trim()
       : 'soniox';
-    const langHintsStrict = payload?.langHintsStrict !== false;
     const aecEnabled = payload?.aecEnabled === true;
 
     try {
       nativeStatusRef.current = 'starting';
       await startNativeStt({
         wsUrl,
-        languages,
         sttModel,
-        langHintsStrict,
         aecEnabled,
       });
       nativeStatusRef.current = 'running';

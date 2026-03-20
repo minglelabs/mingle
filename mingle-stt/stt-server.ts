@@ -700,7 +700,7 @@ wss.on('connection', (clientWs) => {
                     currentSnapshotText: '',
                     currentSnapshotEndMs: -1,
                     lastConsumedEndMs: -1,
-                    detectedLang: config.languages[0] || 'unknown',
+                    detectedLang: 'unknown',
                     strategy,
                 };
                 speakerStates.set(speaker, state);
@@ -723,8 +723,6 @@ wss.on('connection', (clientWs) => {
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
-                    language_hints: config.languages,
-                    language_hints_strict: config.lang_hints_strict !== false,
                     enable_endpoint_detection: false,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
@@ -1125,7 +1123,7 @@ wss.on('connection', (clientWs) => {
 
         if (data?.type === 'stop_recording') {
             const pendingText = (data?.data?.pending_text || '').toString();
-            const pendingLang = data?.data?.pending_language || selectedLanguages[0] || 'unknown';
+            const pendingLang = data?.data?.pending_language || 'unknown';
             const cleanedPendingText = pendingText.trim();
             sonioxStopRequested = currentModel === 'soniox';
 
@@ -1167,25 +1165,36 @@ wss.on('connection', (clientWs) => {
             return;
         }
 
-        if (data.sample_rate && data.languages) {
-            currentModel = data.stt_model || 'gladia';
-            selectedLanguages = data.languages;
+        if (data.sample_rate) {
+            const normalizedLanguages = Array.isArray(data.languages)
+                ? data.languages
+                    .filter((language): language is string => typeof language === 'string')
+                    .map((language) => language.trim())
+                    .filter(Boolean)
+                : [];
+            const clientConfig = {
+                ...data,
+                languages: normalizedLanguages,
+            } as ClientConfig;
+
+            currentModel = clientConfig.stt_model || 'gladia';
+            selectedLanguages = normalizedLanguages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
             console.log(`[conn:${connId}] config model=${currentModel} langs=${selectedLanguages.join(',')}`);
             
             if (currentModel === 'deepgram') {
-                startDeepgramConnection(data as ClientConfig);
+                startDeepgramConnection(clientConfig);
             } else if (currentModel === 'deepgram-multi') {
-                startDeepgramMultiConnection(data as ClientConfig);
+                startDeepgramMultiConnection(clientConfig);
             } else if (currentModel === 'fireworks') {
-                startFireworksConnection(data as ClientConfig);
+                startFireworksConnection(clientConfig);
             } else if (currentModel === 'soniox') {
-                startSonioxConnection(data as ClientConfig);
+                startSonioxConnection(clientConfig);
             } else if (currentModel === 'gladia-stt') {
-                startGladiaConnection(data as ClientConfig, false);
+                startGladiaConnection(clientConfig, false);
             } else {
-                startGladiaConnection(data as ClientConfig, true);
+                startGladiaConnection(clientConfig, true);
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
