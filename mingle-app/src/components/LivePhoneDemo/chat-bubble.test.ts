@@ -68,4 +68,30 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
+
+  it('renders draft original bubbles with the same bubble structure and a live cursor', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(
+      new Date('2026-03-20T10:00:10+09:00').getTime(),
+    )
+
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-draft',
+          originalText: 'Draft message',
+          originalLang: 'en',
+          translations: {},
+          createdAtMs: new Date('2026-03-20T10:00:00+09:00').getTime(),
+        },
+        uiLocale: 'en',
+        isDraft: true,
+      }),
+    )
+
+    expect(html).toContain('Draft message')
+    expect(html).toContain('text-sm text-gray-400')
+    expect(html).toContain('bg-amber-400 align-middle animate-pulse')
+    expect(html).toContain('10s ago')
+    expect(html).toContain('data-original-bubble-row')
+  })
 })

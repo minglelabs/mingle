@@ -24,6 +24,7 @@ export interface Utterance {
 interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
+  isDraft?: boolean
   isSpeaking?: boolean
   speakingLanguage?: string | null
 }
@@ -66,7 +67,13 @@ function SpeakingIndicator() {
   )
 }
 
-function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage = null }: ChatBubbleProps) {
+function ChatBubble({
+  utterance,
+  uiLocale,
+  isDraft = false,
+  isSpeaking = false,
+  speakingLanguage = null,
+}: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
@@ -84,6 +91,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
   const originalBubbleMaxWidth = hasTimestamp
     ? 'min(86%, calc(100% - 2.5rem))'
     : '86%'
+  const originalTextClassName = isDraft ? 'text-sm text-gray-400' : 'text-sm text-gray-900'
 
   return (
     <motion.div
@@ -100,7 +108,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
           className="w-fit rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
         >
           <div data-original-bubble-content className="min-w-0">
-            <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-900">
+            <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
               <span
                 data-original-bubble-meta
                 className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
@@ -112,6 +120,9 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
               </span>
               <span data-original-bubble-text className="align-middle">
                 {utterance.originalText}
+                {isDraft && (
+                  <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+                )}
               </span>
             </p>
           </div>
@@ -159,6 +170,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
+  if (prev.isDraft !== next.isDraft) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
 

@@ -289,7 +289,9 @@ export interface BuildFinalizedUtterancePayloadInput {
   currentTurnPreviousTranslations?: Record<string, string>
   seedUtteranceTranslations?: boolean
   utteranceSerial: number
+  utteranceId?: string
   nowMs?: number
+  createdAtMs?: number
   previousStateSourceLanguage?: string
   previousStateSourceText?: string
 }
@@ -310,8 +312,10 @@ export function buildFinalizedUtterancePayload(
   const language = (input.rawLanguage || 'unknown').trim() || 'unknown'
   if (!text) return null
 
-  const createdAtMs = typeof input.nowMs === 'number' && Number.isFinite(input.nowMs)
-    ? Math.floor(input.nowMs)
+  const createdAtMs = typeof input.createdAtMs === 'number' && Number.isFinite(input.createdAtMs)
+    ? Math.floor(input.createdAtMs)
+    : typeof input.nowMs === 'number' && Number.isFinite(input.nowMs)
+      ? Math.floor(input.nowMs)
     : Date.now()
 
   const priorTranslations = stripSourceLanguageFromTranslations(
@@ -331,7 +335,7 @@ export function buildFinalizedUtterancePayload(
     priorTranslations,
   )
 
-  const utteranceId = `u-${createdAtMs}-${input.utteranceSerial}`
+  const utteranceId = input.utteranceId || buildUtteranceId(createdAtMs, input.utteranceSerial)
   const utterance: Utterance = {
     id: utteranceId,
     originalText: text,
@@ -370,11 +374,29 @@ interface LocalFinalizeResult {
 }
 
 interface PendingSpeakerTurn {
+  utteranceId: string
+  utteranceSerial: number
+  createdAtMs: number
   speaker: string
   rawText: string
   text: string
   language: string
   updatedAtMs: number
+}
+
+function buildUtteranceId(createdAtMs: number, utteranceSerial: number): string {
+  return `u-${createdAtMs}-${utteranceSerial}`
+}
+
+function reservePendingSpeakerTurnIdentity(
+  nextUtteranceSerial: number,
+  createdAtMs: number,
+): Pick<PendingSpeakerTurn, 'utteranceId' | 'utteranceSerial' | 'createdAtMs'> {
+  return {
+    utteranceId: buildUtteranceId(createdAtMs, nextUtteranceSerial),
+    utteranceSerial: nextUtteranceSerial,
+    createdAtMs,
+  }
 }
 
 type TranslationPriorityKind = 'initial' | 'partial' | 'final'
@@ -1479,6 +1501,9 @@ export default function useRealtimeSTT({
       speaker?: string
       partialTranslations?: Record<string, string>
       partialTranslationPriorities?: Map<string, TranslationPriority>
+      utteranceId?: string
+      utteranceSerial?: number
+      createdAtMs?: number
       previousStateSourceLanguage?: string
       previousStateSourceText?: string
       fallbackCurrentTurnPreviousState?: CurrentTurnPreviousStatePayload | null
@@ -1499,7 +1524,10 @@ export default function useRealtimeSTT({
     }
     stopFinalizeDedupRef.current = { sig, expiresAt: now + 5000 }
 
-    utteranceIdRef.current += 1
+    const reservedUtteranceSerial = options?.utteranceSerial ?? (utteranceIdRef.current + 1)
+    if (options?.utteranceSerial === undefined) {
+      utteranceIdRef.current = reservedUtteranceSerial
+    }
     const seedTranslationState = buildSeedTranslationState(
       rawLang,
       options?.partialTranslations ?? partialTranslationsRef.current,
@@ -1511,8 +1539,10 @@ export default function useRealtimeSTT({
       languages,
       partialTranslations: seedTranslationState.translations,
       currentTurnPreviousTranslations: seedTranslationState.translations,
-      utteranceSerial: utteranceIdRef.current,
+      utteranceSerial: reservedUtteranceSerial,
+      utteranceId: options?.utteranceId,
       nowMs: now,
+      createdAtMs: options?.createdAtMs,
       previousStateSourceLanguage: options?.previousStateSourceLanguage,
       previousStateSourceText: options?.previousStateSourceText,
     })
@@ -1565,6 +1595,9 @@ export default function useRealtimeSTT({
         speaker,
         partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
         partialTranslationPriorities: isActiveSpeaker ? new Map(partialTranslationPriorityRef.current) : new Map(),
+        utteranceId: pendingTurn?.utteranceId,
+        utteranceSerial: pendingTurn?.utteranceSerial,
+        createdAtMs: pendingTurn?.createdAtMs,
         previousStateSourceLanguage: pendingTurn?.language || speakerLanguage,
         previousStateSourceText: pendingTurn?.text || '',
         fallbackCurrentTurnPreviousState,
@@ -1577,6 +1610,14 @@ export default function useRealtimeSTT({
       .filter((turn) => turn.text.trim())
       .sort((left, right) => left.updatedAtMs - right.updatedAtMs)
   ), [])
+
+  const getActivePendingTurn = useCallback((): PendingSpeakerTurn | null => {
+    const activeSpeaker = activePartialSpeakerRef.current
+    if (activeSpeaker) {
+      return pendingTurnsBySpeakerRef.current[activeSpeaker] || null
+    }
+    return getLatestPendingTurn()
+  }, [getLatestPendingTurn])
 
   const finalizeTurnWithTranslation = useCallback((
     localFinalizeResult: LocalFinalizeResult,
@@ -1978,9 +2019,9 @@ export default function useRealtimeSTT({
         // No bubble, translation, or TTS should be produced.
         const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
         const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, lang)
-        delete pendingTurnsBySpeakerRef.current[speaker]
-        syncVisiblePendingTurn()
         if (!text) {
+          delete pendingTurnsBySpeakerRef.current[speaker]
+          syncVisiblePendingTurn()
           return
         }
         const sig = buildFinalizeDedupSignature(lang, text, speaker)
@@ -2000,7 +2041,7 @@ export default function useRealtimeSTT({
         }
         recentServerFinalizeSignatureRef.current = { sig, expiresAt: now + 2_000 }
 
-        const nextUtteranceSerial = utteranceIdRef.current + 1
+        const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
         const seedTranslationState = buildSeedTranslationState(
           lang,
           options.partialTranslations,
@@ -2013,7 +2054,9 @@ export default function useRealtimeSTT({
           partialTranslations: seedTranslationState.translations,
           currentTurnPreviousTranslations: seedTranslationState.translations,
           utteranceSerial: nextUtteranceSerial,
+          utteranceId: pendingTurn?.utteranceId,
           nowMs: now,
+          createdAtMs: pendingTurn?.createdAtMs ?? now,
           previousStateSourceLanguage: options.previousStateSourceLanguage || lang,
           previousStateSourceText: options.previousStateSourceText || pendingTurn?.text || text,
         })
@@ -2069,6 +2112,8 @@ export default function useRealtimeSTT({
             reason: 'stt_server_final',
           },
         )
+        delete pendingTurnsBySpeakerRef.current[speaker]
+        syncVisiblePendingTurn()
       } else {
         if (!turnStartedAtRef.current && text) {
           turnStartedAtRef.current = Date.now()
@@ -2078,12 +2123,19 @@ export default function useRealtimeSTT({
             sourceText: text,
           })
         }
+        const now = Date.now()
+        const existingPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
+        const turnIdentity = existingPendingTurn || reservePendingSpeakerTurnIdentity(utteranceIdRef.current + 1, now)
+        if (!existingPendingTurn) {
+          utteranceIdRef.current = turnIdentity.utteranceSerial
+        }
         pendingTurnsBySpeakerRef.current[speaker] = {
+          ...turnIdentity,
           speaker,
           rawText,
           text,
           language: lang,
-          updatedAtMs: Date.now(),
+          updatedAtMs: now,
         }
         syncVisiblePendingTurn(speaker)
       }
@@ -2500,9 +2552,30 @@ export default function useRealtimeSTT({
     }
   }, [recoverFromBackgroundIfNeeded])
 
+  const activePendingTurn = getActivePendingTurn()
+  const liveUtterance = (
+    activePendingTurn
+    && partialTranscript.trim()
+  ) ? {
+    id: activePendingTurn.utteranceId,
+    originalText: partialTranscript,
+    originalLang: partialLang || activePendingTurn.language || 'unknown',
+    targetLanguages: buildTurnTargetLanguagesSnapshot(
+      languages,
+      partialLang || activePendingTurn.language || 'unknown',
+    ),
+    translations: stripSourceLanguageFromTranslations(
+      partialTranslations,
+      partialLang || activePendingTurn.language || 'unknown',
+    ),
+    translationFinalized: {},
+    createdAtMs: activePendingTurn.createdAtMs,
+  } satisfies Utterance : null
+
   return {
     connectionStatus,
     utterances,
+    liveUtterance,
     partialTranscript,
     volume,
     toggleRecording,
