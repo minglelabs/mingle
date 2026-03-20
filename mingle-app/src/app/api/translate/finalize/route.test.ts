@@ -177,6 +177,40 @@ describe('/api/translate/finalize route', () => {
     expect(json.ttsAudioMime).toBe('audio/mpeg')
   })
 
+  it('retries once on transient provider errors before succeeding', async () => {
+    mockGenerateContent
+      .mockRejectedValueOnce(new Error(
+        '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.',
+      ))
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{"ko":"안녕하세요"}',
+          usageMetadata: {
+            promptTokenCount: 11,
+            candidatesTokenCount: 22,
+            totalTokenCount: 33,
+          },
+        },
+      })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(mockGenerateContent).toHaveBeenCalledTimes(2)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when text is missing', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

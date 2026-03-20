@@ -26,6 +26,7 @@ const DEFAULT_MODEL = process.env.DEMO_TRANSLATE_MODEL || 'gemini-2.5-flash-lite
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
+const GEMINI_TRANSIENT_RETRY_BACKOFF_MS = 250
 const ENABLE_VERBOSE_TRANSLATE_LOGS = (
   process.env.NODE_ENV !== 'production'
   || process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
@@ -88,6 +89,61 @@ function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | nul
 function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown>) {
   if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
   console.info(`[translate/finalize] ${event}`, payload)
+}
+
+function logParsedTranslations(event: string, payload: {
+  sourceLanguage: string
+  targetLanguages: string[]
+  isFinal: boolean
+  text: string
+  parsedLanguages: string[]
+  translations: Record<string, string>
+  usage?: Record<string, unknown>
+}) {
+  if (ENABLE_VERBOSE_TRANSLATE_LOGS) {
+    console.info(`[translate/finalize] ${event}`, payload)
+    return
+  }
+
+  const translationsPreview = Object.fromEntries(
+    Object.entries(payload.translations).map(([language, translatedText]) => [
+      language,
+      translatedText.slice(0, 80),
+    ]),
+  )
+
+  console.info(`[translate/finalize] ${event}`, {
+    sourceLanguage: payload.sourceLanguage,
+    targetLanguages: payload.targetLanguages,
+    isFinal: payload.isFinal,
+    textPreview: payload.text.slice(0, 120),
+    parsedLanguages: payload.parsedLanguages,
+    translationsPreview,
+    usage: payload.usage,
+  })
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function isRetryableGeminiError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const normalizedMessage = error.message.toLowerCase()
+
+  return (
+    /\[(429|500|502|503|504)\b/.test(error.message)
+    || normalizedMessage.includes('service unavailable')
+    || normalizedMessage.includes('high demand')
+    || normalizedMessage.includes('temporar')
+    || normalizedMessage.includes('try again later')
+    || normalizedMessage.includes('fetch failed')
+    || normalizedMessage.includes('network')
+    || normalizedMessage.includes('timed out')
+    || normalizedMessage.includes('timeout')
+  )
 }
 
 function countMatches(input: string, pattern: RegExp): number {
@@ -265,7 +321,27 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     },
   })
 
-  const result = await model.generateContent(userPrompt)
+  let result: Awaited<ReturnType<typeof model.generateContent>>
+  try {
+    result = await model.generateContent(userPrompt)
+  } catch (error) {
+    if (!isRetryableGeminiError(error)) throw error
+
+    console.warn('[translate/finalize] provider_retry_scheduled', {
+      provider: 'gemini',
+      model: DEFAULT_MODEL,
+      sourceLanguage: ctx.sourceLanguage,
+      targetLanguages: ctx.targetLanguages,
+      isFinal: ctx.isFinal,
+      textPreview: ctx.text.slice(0, 120),
+      retryInMs: GEMINI_TRANSIENT_RETRY_BACKOFF_MS,
+      error: error instanceof Error ? error.message : String(error),
+    })
+
+    await sleep(GEMINI_TRANSIENT_RETRY_BACKOFF_MS)
+    result = await model.generateContent(userPrompt)
+  }
+
   const response = result.response as unknown as GeminiResponseLike
   const rawContent = response.text() || ''
   logTranslateFinalizeInfo('gemini_raw_response', {
@@ -324,7 +400,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     return null
   }
 
-  logTranslateFinalizeInfo('gemini_parsed_translations', {
+  logParsedTranslations('gemini_parsed_translations', {
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     isFinal: ctx.isFinal,
