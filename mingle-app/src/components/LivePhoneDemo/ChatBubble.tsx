@@ -7,6 +7,8 @@ import { formatChatBubbleTimestampLines } from './chat-bubble.timestamp'
 import TranslationBubbleRow from './TranslationBubbleRow'
 
 const RELATIVE_TIMESTAMP_THRESHOLD_MS = 24 * 60 * 60 * 1000
+const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.3
+const CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT = 1.05
 
 export interface Utterance {
   id: string
@@ -107,13 +109,16 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
             </span>
           </div>
           <div data-original-bubble-content className="min-w-0">
-            <p className="text-sm leading-[1.3] text-gray-900">{utterance.originalText}</p>
+            <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-900">
+              {utterance.originalText}
+            </p>
           </div>
         </div>
         {timestampLines.length > 0 && (
           <div
             data-original-bubble-timestamp
-            className="mb-0.5 flex w-16 shrink-0 flex-col items-end self-end text-right text-[10px] leading-[1.05] text-black/[0.34] tabular-nums"
+            style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT }}
+            className="mb-0.5 flex w-16 shrink-0 flex-col items-end self-end text-right text-[10px] text-black/[0.34] tabular-nums"
           >
             {timestampLines.map((line, index) => (
               <span key={`${utterance.id}-timestamp-${index}`} className="whitespace-nowrap">
@@ -143,9 +148,12 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                 : undefined
           }
         >
-          <p className={`text-sm leading-[1.3] ${
-            isFinalized ? 'text-gray-700' : 'text-gray-500'
-          }`}>{text}</p>
+          <p
+            style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+            className={`text-sm ${isFinalized ? 'text-gray-700' : 'text-gray-500'}`}
+          >
+            {text}
+          </p>
         </TranslationBubbleRow>
       ))}
       {/* Bouncing dots for pending translations */}
