@@ -30,6 +30,10 @@ function normalizeSpeakerKey(rawSpeaker?: string | null): string {
   return (rawSpeaker || '').trim().toLowerCase() || 'unknown-speaker'
 }
 
+function normalizeAvatarSeed(rawSeed?: string | null): string {
+  return (rawSeed || '').trim().toLowerCase()
+}
+
 function hashSpeakerKey(speakerKey: string): number {
   let hash = 5381
   for (let i = 0; i < speakerKey.length; i += 1) {
@@ -38,8 +42,10 @@ function hashSpeakerKey(speakerKey: string): number {
   return hash >>> 0
 }
 
-export function getSpeakerAvatar(rawSpeaker?: string | null): SpeakerAvatar {
+export function getSpeakerAvatar(rawSpeaker?: string | null, rawSeed?: string | null): SpeakerAvatar {
   const speakerKey = normalizeSpeakerKey(rawSpeaker)
-  const index = hashSpeakerKey(speakerKey) % SPEAKER_AVATARS.length
+  const avatarSeed = normalizeAvatarSeed(rawSeed)
+  const scopedSpeakerKey = avatarSeed ? `${avatarSeed}::${speakerKey}` : speakerKey
+  const index = hashSpeakerKey(scopedSpeakerKey) % SPEAKER_AVATARS.length
   return SPEAKER_AVATARS[index]
 }

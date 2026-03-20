@@ -283,6 +283,7 @@ export function parseSttTranscriptMessage(
 
 export interface BuildFinalizedUtterancePayloadInput {
   speaker?: string
+  speakerAvatarSeed?: string
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -340,6 +341,7 @@ export function buildFinalizedUtterancePayload(
   const utterance: Utterance = {
     id: utteranceId,
     speaker: (input.speaker || '').trim() || 'unknown',
+    ...(input.speakerAvatarSeed?.trim() ? { speakerAvatarSeed: input.speakerAvatarSeed.trim() } : {}),
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -380,6 +382,7 @@ interface PendingSpeakerTurn {
   utteranceSerial: number
   createdAtMs: number
   speaker: string
+  speakerAvatarSeed: string
   rawText: string
   text: string
   language: string
@@ -415,7 +418,7 @@ function reservePendingSpeakerTurnIdentity(
 }
 
 export function buildLiveUtterance(input: {
-  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'language'> | null
+  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'language'> | null
   partialTranscript: string
   partialLang?: string | null
   partialTranslations: Record<string, string>
@@ -429,6 +432,7 @@ export function buildLiveUtterance(input: {
   return {
     id: input.pendingTurn.utteranceId,
     speaker: input.pendingTurn.speaker,
+    speakerAvatarSeed: input.pendingTurn.speakerAvatarSeed,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages: buildTurnTargetLanguagesSnapshot(
@@ -914,6 +918,13 @@ function createSessionKey(): string {
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
+function createSpeakerAvatarSeed(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `avatar_${crypto.randomUUID().replace(/-/g, '')}`
+  }
+  return `avatar_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
 function getOrCreateSessionKey(): string {
   if (typeof window === 'undefined') return createSessionKey()
   try {
@@ -1088,6 +1099,7 @@ export default function useRealtimeSTT({
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
+  const speakerAvatarSessionSeedRef = useRef('')
   const turnStartedAtRef = useRef<number | null>(null)
 
   const hasActiveSessionRef = useRef(false)
@@ -1206,6 +1218,13 @@ export default function useRealtimeSTT({
     return resolved
   }, [])
 
+  const ensureSpeakerAvatarSessionSeed = useCallback(() => {
+    if (speakerAvatarSessionSeedRef.current) return speakerAvatarSessionSeedRef.current
+    const resolved = createSpeakerAvatarSeed()
+    speakerAvatarSessionSeedRef.current = resolved
+    return resolved
+  }, [])
+
   useEffect(() => {
     ensureSessionKey()
   }, [ensureSessionKey])
@@ -1282,6 +1301,7 @@ export default function useRealtimeSTT({
   const resetToIdle = useCallback(() => {
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
+    speakerAvatarSessionSeedRef.current = ''
     cleanup()
     setConnectionStatus('idle')
   }, [cleanup])
@@ -2108,6 +2128,7 @@ export default function useRealtimeSTT({
         )
         const finalizedPayload = buildFinalizedUtterancePayload({
           speaker,
+          speakerAvatarSeed: pendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed(),
           rawText,
           rawLanguage: lang,
           languages,
@@ -2207,6 +2228,7 @@ export default function useRealtimeSTT({
         pendingTurnsBySpeakerRef.current[speaker] = {
           ...turnIdentity,
           speaker,
+          speakerAvatarSeed: existingPendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed(),
           rawText,
           text,
           language: lang,
@@ -2221,6 +2243,7 @@ export default function useRealtimeSTT({
     languages,
     logClientEvent,
     normalizedUsageLimitSec,
+    ensureSpeakerAvatarSessionSeed,
     startAudioProcessing,
     stopRecordingGracefully,
     syncVisiblePendingTurn,

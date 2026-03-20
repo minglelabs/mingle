@@ -183,6 +183,7 @@ describe('use-realtime-stt pure logic', () => {
         utteranceId: 'u-live',
         createdAtMs: 1700000000999,
         speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
         language: 'en',
       },
       partialTranscript: 'Still speaking',
@@ -195,6 +196,7 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({
       id: 'u-live',
       speaker: 'speaker-2',
+      speakerAvatarSeed: 'avatar_seed_a',
       originalText: 'Still speaking',
       originalLang: 'en-US',
       targetLanguages: ['ko'],
@@ -210,12 +212,28 @@ describe('use-realtime-stt pure logic', () => {
         utteranceId: 'u-live',
         createdAtMs: 1700000000999,
         speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
         language: 'en',
       },
       partialTranscript: '   ',
       partialTranslations: {},
       languages: ['en', 'ko'],
     })).toBeNull()
+  })
+
+  it('keeps speaker avatar seed on finalized utterances when provided', () => {
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
+      speakerAvatarSeed: 'avatar_seed_a',
+      rawText: ' hello everyone ',
+      rawLanguage: 'en-US',
+      languages: ['en', 'ko'],
+      partialTranslations: {},
+      utteranceSerial: 9,
+      nowMs: 1700000000009,
+    })
+
+    expect(built?.utterance.speakerAvatarSeed).toBe('avatar_seed_a')
   })
 
   it('merges queued translation updates when the finalized utterance is appended later', () => {
