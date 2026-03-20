@@ -28,12 +28,13 @@ describe('TranslationBubbleRow', () => {
     expect(html.indexOf('data-translation-bubble-meta')).toBeLessThan(
       html.indexOf('짧은 번역'),
     )
-    expect(html).toContain('max-width:90%')
+    expect(html).toContain('max-width:93%')
     expect(html).toContain('border-top-left-radius:1px')
     expect(html).toContain('line-height:1.25')
     expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-translation-bubble-meta')
     expect(html).toContain('data-translation-bubble-text')
     expect(html).toContain('class="align-middle"')
+    expect(html).not.toContain('ml-2.5')
   })
 })

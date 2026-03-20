@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import {
@@ -8,11 +9,16 @@ import {
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import TranslationBubbleRow from './TranslationBubbleRow'
+import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const CHAT_BUBBLE_MAX_WIDTH = '93%'
 
 export interface Utterance {
   id: string
+  speaker?: string
+  speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
   originalText: string
   originalLang: string
   targetLanguages?: string[]
@@ -75,6 +81,12 @@ function ChatBubble({
   speakingLanguage = null,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
+  const avatar = getSpeakerAvatar(
+    utterance.speaker,
+    utterance.speakerAvatarSeed,
+    utterance.speakerAvatarIndex,
+  )
+  const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance)
@@ -86,84 +98,104 @@ function ChatBubble({
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
-
-  const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
-  const originalBubbleMaxWidth = hasTimestamp
-    ? 'min(86%, calc(100% - 2.5rem))'
-    : '86%'
   const originalTextClassName = isDraft ? 'text-sm text-gray-400' : 'text-sm text-gray-900'
+  const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col gap-1"
+      className="flex items-start gap-1.5"
     >
-      {/* Original bubble */}
-      <div data-original-bubble-row className="flex w-full items-end gap-0.5">
-        <div
-          data-original-bubble-body
-          style={{ maxWidth: originalBubbleMaxWidth, borderTopLeftRadius: '1px' }}
-          className="w-fit rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
-        >
-          <div data-original-bubble-content className="min-w-0">
-            <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
-              <span
-                data-original-bubble-meta
-                className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
-              >
-                <span className="text-base leading-none">{flag}</span>
-                <span className="text-[11px] font-semibold uppercase leading-none">
-                  {utterance.originalLang}
-                </span>
-              </span>
-              <span data-original-bubble-text className="align-middle">
-                {utterance.originalText}
-                {isDraft && (
-                  <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
-                )}
-              </span>
-            </p>
-          </div>
+      <div data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
+        <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+          <Image
+            src={avatar.src}
+            alt={`${speakerLabel} ${avatar.name} avatar`}
+            className="h-8 w-8 rounded-full bg-white object-cover"
+            width={32}
+            height={32}
+            unoptimized
+          />
         </div>
-        <ChatBubbleTimestamp createdAtMs={utterance.createdAtMs} uiLocale={uiLocale} />
+        {hasTimestamp && (
+          <ChatBubbleTimestamp
+            createdAtMs={utterance.createdAtMs}
+            uiLocale={uiLocale}
+            align="center"
+            minWidth="2.5rem"
+            className="text-[10px] text-black/[0.3]"
+          />
+        )}
       </div>
-
-      {/* Translation bubbles */}
-      {translationEntries.map(({ lang, text }) => (
-        <TranslationBubbleRow
-          key={lang}
-          lang={lang}
-          bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
-          metaClassName="text-amber-500"
-          contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-          contentClassName="text-sm text-gray-700"
-          accessory={
-            isSpeaking && speakingLanguage === lang
-              ? <SpeakingIndicator />
-              : undefined
-          }
-        >
-          {text}
-        </TranslationBubbleRow>
-      ))}
-      {/* Bouncing dots for pending translations */}
-      {pendingLangs.map((lang) => (
-        <TranslationBubbleRow
-          key={`pending-${lang}`}
-          lang={lang}
-          bubbleClassName="bg-amber-50/60 border border-amber-100"
-          metaClassName="text-amber-400"
-          inlineMeta={false}
-        >
-          <div className="flex items-center gap-0.5 h-4">
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* Original bubble */}
+        <div data-original-bubble-row className="flex w-full items-start">
+          <div
+            data-original-bubble-body
+            style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH }}
+            className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
+          >
+              <div data-original-bubble-content className="min-w-0">
+                <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
+                  <span
+                    data-original-bubble-meta
+                    className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
+                  >
+                    <span className="text-base leading-none">{flag}</span>
+                    <span className="text-[11px] font-semibold uppercase leading-none">
+                      {utterance.originalLang}
+                    </span>
+                  </span>
+                  <span data-original-bubble-text className="align-middle">
+                    {utterance.originalText}
+                    {isDraft && (
+                      <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+                    )}
+                  </span>
+                </p>
+              </div>
+            </div>
           </div>
-        </TranslationBubbleRow>
-      ))}
+
+        {/* Translation bubbles */}
+        {translationEntries.map(({ lang, text }) => (
+          <TranslationBubbleRow
+            key={lang}
+            lang={lang}
+            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
+            metaClassName="text-amber-500"
+            contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+            contentClassName="text-sm text-gray-700"
+            accessory={
+              isSpeaking && speakingLanguage === lang
+                ? <SpeakingIndicator />
+                : undefined
+            }
+          >
+            {text}
+          </TranslationBubbleRow>
+        ))}
+        {/* Bouncing dots for pending translations */}
+        {pendingLangs.map((lang) => (
+          <TranslationBubbleRow
+            key={`pending-${lang}`}
+            lang={lang}
+            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            bubbleClassName="bg-amber-50/60 border border-amber-100"
+            metaClassName="text-amber-400"
+            inlineMeta={false}
+          >
+            <div className="flex items-center gap-0.5 h-4">
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </TranslationBubbleRow>
+        ))}
+      </div>
     </motion.div>
   )
 }
@@ -178,6 +210,9 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     const pu = prev.utterance
     const nu = next.utterance
     if (pu.id !== nu.id) return false
+    if (pu.speaker !== nu.speaker) return false
+    if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
+    if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
