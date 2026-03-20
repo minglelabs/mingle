@@ -1142,7 +1142,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const draftUtteranceId = (!committedLiveUtteranceExists && liveUtterance)
     ? liveUtterance.id
     : null
-  const displayUtterances = draftUtteranceId
+  const displayUtterances = (draftUtteranceId && liveUtterance)
     ? [...utterances, liveUtterance]
     : utterances
 
