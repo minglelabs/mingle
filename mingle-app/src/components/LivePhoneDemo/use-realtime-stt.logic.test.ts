@@ -79,6 +79,7 @@ describe('use-realtime-stt pure logic', () => {
 
   it('builds finalized utterance payload with source-language filtering', () => {
     const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
       rawText: ' <end> hello everyone ',
       rawLanguage: 'en-US',
       languages: ['en', 'ko', 'ja', 'KO'],
@@ -98,6 +99,7 @@ describe('use-realtime-stt pure logic', () => {
     expect(built?.language).toBe('en-US')
     expect(built?.utterance).toEqual({
       id: 'u-1700000000000-7',
+      speaker: 'speaker-2',
       originalText: 'hello everyone',
       originalLang: 'en-US',
       targetLanguages: ['ko', 'ja'],

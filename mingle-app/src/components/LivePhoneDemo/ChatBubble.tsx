@@ -1,14 +1,17 @@
 'use client'
 
 import { memo } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import { formatChatBubbleTimestamp } from './chat-bubble.timestamp'
+import { getSpeakerAvatar } from './speaker-avatar'
 
 const RECENT_THRESHOLD_MS = 90_000
 
 export interface Utterance {
   id: string
+  speaker?: string
   originalText: string
   originalLang: string
   targetLanguages?: string[]
@@ -64,6 +67,8 @@ function SpeakingIndicator() {
 
 function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage = null }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
+  const avatar = getSpeakerAvatar(utterance.speaker)
+  const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance)
@@ -84,68 +89,80 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col gap-1"
+      className="flex items-start gap-2.5"
     >
-      {/* Original bubble */}
-        <div className="max-w-[85%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2 shadow-sm">
-        <div className="flex items-center justify-between mb-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="text-base">{flag}</span>
-            <span className="text-xs font-semibold text-gray-400 uppercase">
-              {utterance.originalLang}
-            </span>
-          </div>
-          {timestamp && (
-            <span className="text-[11px] text-black/[0.34] tabular-nums whitespace-nowrap">{timestamp}</span>
-          )}
-        </div>
-        <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
+      <div className="mt-0.5 shrink-0 rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={avatar.src}
+          alt={`${speakerLabel} ${avatar.name} avatar`}
+          className="h-10 w-10 rounded-full bg-white object-cover"
+          width={40}
+          height={40}
+          unoptimized
+        />
       </div>
-
-      {/* Translation bubbles */}
-      {translationEntries.map(({ lang, text, isFinalized }) => (
-        <div
-          key={lang}
-          className={`ml-2.5 max-w-[80%] rounded-2xl rounded-tl-sm px-3.5 py-2 transition-colors ${
-            isFinalized
-              ? 'bg-amber-50 border border-amber-100'
-              : 'bg-gray-100/80 border border-gray-200'
-          }`}
-        >
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* Original bubble */}
+        <div className="max-w-[85%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2 shadow-sm">
           <div className="flex items-center justify-between mb-0.5">
             <div className="flex items-center gap-1.5">
-              <span className="text-base">{getSttLanguageFlag(lang)}</span>
-              <span className={`text-xs font-semibold uppercase ${
-                isFinalized ? 'text-amber-500' : 'text-gray-400'
-              }`}>{lang}</span>
-              {!isFinalized && (
-                <span className="inline-block w-1 h-1 rounded-full bg-gray-400 animate-pulse" />
-              )}
+              <span className="text-base">{flag}</span>
+              <span className="text-xs font-semibold text-gray-400 uppercase">
+                {utterance.originalLang}
+              </span>
             </div>
-            {isSpeaking && speakingLanguage === lang && <SpeakingIndicator />}
+            {timestamp && (
+              <span className="text-[11px] text-black/[0.34] tabular-nums whitespace-nowrap">{timestamp}</span>
+            )}
           </div>
-          <p className={`text-sm leading-relaxed ${
-            isFinalized ? 'text-gray-700' : 'text-gray-500'
-          }`}>{text}</p>
+          <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
         </div>
-      ))}
-      {/* Bouncing dots for pending translations */}
-      {pendingLangs.map((lang) => (
-        <div
-          key={`pending-${lang}`}
-          className="ml-2.5 max-w-[80%] bg-amber-50/60 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
-        >
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-base">{getSttLanguageFlag(lang)}</span>
-            <span className="text-xs font-semibold text-amber-400 uppercase">{lang}</span>
+
+        {/* Translation bubbles */}
+        {translationEntries.map(({ lang, text, isFinalized }) => (
+          <div
+            key={lang}
+            className={`ml-2.5 max-w-[80%] rounded-2xl rounded-tl-sm px-3.5 py-2 transition-colors ${
+              isFinalized
+                ? 'bg-amber-50 border border-amber-100'
+                : 'bg-gray-100/80 border border-gray-200'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-base">{getSttLanguageFlag(lang)}</span>
+                <span className={`text-xs font-semibold uppercase ${
+                  isFinalized ? 'text-amber-500' : 'text-gray-400'
+                }`}>{lang}</span>
+                {!isFinalized && (
+                  <span className="inline-block w-1 h-1 rounded-full bg-gray-400 animate-pulse" />
+                )}
+              </div>
+              {isSpeaking && speakingLanguage === lang && <SpeakingIndicator />}
+            </div>
+            <p className={`text-sm leading-relaxed ${
+              isFinalized ? 'text-gray-700' : 'text-gray-500'
+            }`}>{text}</p>
           </div>
-          <div className="flex items-center gap-0.5 h-4">
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+        ))}
+        {/* Bouncing dots for pending translations */}
+        {pendingLangs.map((lang) => (
+          <div
+            key={`pending-${lang}`}
+            className="ml-2.5 max-w-[80%] bg-amber-50/60 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
+          >
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-base">{getSttLanguageFlag(lang)}</span>
+              <span className="text-xs font-semibold text-amber-400 uppercase">{lang}</span>
+            </div>
+            <div className="flex items-center gap-0.5 h-4">
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </motion.div>
   )
 }
@@ -163,6 +180,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     const pu = prev.utterance
     const nu = next.utterance
     if (pu.id !== nu.id) return false
+    if (pu.speaker !== nu.speaker) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
     if (pu.targetLanguages !== nu.targetLanguages) {

@@ -225,6 +225,7 @@ export function parseSttTranscriptMessage(
 }
 
 export interface BuildFinalizedUtterancePayloadInput {
+  speaker?: string
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -271,6 +272,7 @@ export function buildFinalizedUtterancePayload(
   const utteranceId = `u-${createdAtMs}-${input.utteranceSerial}`
   const utterance: Utterance = {
     id: utteranceId,
+    speaker: (input.speaker || '').trim() || 'unknown',
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -1031,6 +1033,7 @@ export default function useRealtimeSTT({
 
     utteranceIdRef.current += 1
     const localPayload = buildFinalizedUtterancePayload({
+      speaker: options?.speaker,
       rawText,
       rawLanguage: rawLang,
       languages,
@@ -1506,6 +1509,7 @@ export default function useRealtimeSTT({
 
         utteranceIdRef.current += 1
         const finalizedPayload = buildFinalizedUtterancePayload({
+          speaker,
           rawText,
           rawLanguage: lang,
           languages,
