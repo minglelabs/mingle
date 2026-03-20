@@ -42,8 +42,7 @@ const SCROLL_UI_HIDE_DELAY_MS = 1000
 const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
-const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.3
-const LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT = 1.45
+const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -1345,8 +1344,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   lang={lang}
                   bubbleClassName="bg-amber-50/80 border border-amber-100"
                   metaClassName="text-amber-500"
+                  contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                  contentClassName="text-sm text-gray-500"
                 >
-                  <span style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">{text}</span>
+                  {text}
                 </TranslationBubbleRow>
               ))}
               {/* Bouncing dots for pending partial translations */}
@@ -1398,11 +1399,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     lang={lang}
                     bubbleClassName="bg-amber-50/80 border border-amber-100"
                     metaClassName="text-amber-500"
+                    contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                    contentClassName="text-sm text-gray-500"
                   >
-                    <span style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">
+                    <>
                       {text}
                       <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
-                    </span>
+                    </>
                   </TranslationBubbleRow>
                 </motion.div>
               ))}

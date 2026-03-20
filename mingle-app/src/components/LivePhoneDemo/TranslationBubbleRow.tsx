@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import { cn } from '@/lib/utils'
 
@@ -8,6 +8,8 @@ interface TranslationBubbleRowProps {
   metaClassName: string
   accessory?: ReactNode
   inlineMeta?: boolean
+  contentClassName?: string
+  contentStyle?: CSSProperties
   children: ReactNode
 }
 
@@ -17,6 +19,8 @@ export default function TranslationBubbleRow({
   metaClassName,
   accessory,
   inlineMeta = true,
+  contentClassName,
+  contentStyle,
   children,
 }: TranslationBubbleRowProps) {
   const meta = (
@@ -44,10 +48,14 @@ export default function TranslationBubbleRow({
             bubbleClassName,
           )}
         >
-          <div data-translation-bubble-content className="min-w-0">
+          <p
+            data-translation-bubble-content
+            style={contentStyle}
+            className={cn('min-w-0', contentClassName)}
+          >
             {meta}
             {children}
-          </div>
+          </p>
         </div>
       ) : (
         <div

@@ -7,7 +7,7 @@ import { formatChatBubbleTimestampLines } from './chat-bubble.timestamp'
 import TranslationBubbleRow from './TranslationBubbleRow'
 
 const RELATIVE_TIMESTAMP_THRESHOLD_MS = 24 * 60 * 60 * 1000
-const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.3
+const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT = 1.05
 
 export interface Utterance {
@@ -140,6 +140,8 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
               : 'bg-gray-100/80 border border-gray-200'
           }`}
           metaClassName={isFinalized ? 'text-amber-500' : 'text-gray-400'}
+          contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+          contentClassName={`text-sm ${isFinalized ? 'text-gray-700' : 'text-gray-500'}`}
           accessory={
             isSpeaking && speakingLanguage === lang
               ? <SpeakingIndicator />
@@ -148,12 +150,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                 : undefined
           }
         >
-          <span
-            style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-            className={`text-sm ${isFinalized ? 'text-gray-700' : 'text-gray-500'}`}
-          >
-            {text}
-          </span>
+          {text}
         </TranslationBubbleRow>
       ))}
       {/* Bouncing dots for pending translations */}
