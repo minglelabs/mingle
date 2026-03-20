@@ -1,76 +1,76 @@
 # mingle-ios
 
-`mingle-ios`는 `mingle-app`과 완전히 분리된 순수 iOS 네이티브(SwiftUI) 앱입니다.
-기존 웹/RN 코드는 수정하지 않고, 백엔드(`mingle-app`의 TS + Prisma + API)만 그대로 사용합니다.
+`mingle-ios` is a fully separate pure native iOS (SwiftUI) app from `mingle-app`.
+It reuses the existing backend only (`mingle-app` TS + Prisma + API) without modifying the web or RN code.
 
-## 포함된 기능
+## Included Features
 
-- AVAudioEngine 기반 실시간 마이크 캡처
-- WebSocket(`mingle-stt`) 연동 (`audio_chunk`, `transcript`, `stop_recording_ack`)
-- STT 워크플로우 파서(Swift)
-- `/api/translate/finalize` 호출로 최종 번역 반영
-- 간단한 통역 로그 UI
+- Realtime microphone capture built on AVAudioEngine
+- WebSocket integration with `mingle-stt` (`audio_chunk`, `transcript`, `stop_recording_ack`)
+- STT workflow parser written in Swift
+- Final translation update via `/api/translate/finalize`
+- Simple interpretation log UI
 
-## 디렉토리
+## Directory Layout
 
-- `project.yml`: XcodeGen 스펙
-- `Config/*.xcconfig`: API/WS 기본 URL 설정
-- `MingleIOS/`: 앱 소스
-- `MingleIOSTests/`: 파서 단위 테스트
-- `scripts/`: CLI 빌드/설치 스크립트
+- `project.yml`: XcodeGen spec
+- `Config/*.xcconfig`: default API / WS URL settings
+- `MingleIOS/`: app source
+- `MingleIOSTests/`: parser unit tests
+- `scripts/`: CLI build and install scripts
 
-## 빠른 시작
+## Quick Start
 
 ```bash
 cd mingle-ios
 ./scripts/build-ios.sh
 ```
 
-## 연결 디바이스 설치/실행
+## Install and Run on a Connected Device
 
 ```bash
 cd mingle-ios
 ./scripts/list-ios-devices.sh
 ./scripts/install-ios-device.sh
-# 또는 특정 디바이스 지정
+# Or target a specific device
 ./scripts/install-ios-device.sh <COREDEVICE_ID>
 ```
 
-필요 시 코드사인 팀 지정:
+Set the code signing team when needed:
 
 ```bash
 DEVELOPMENT_TEAM=YOUR_TEAM_ID ./scripts/install-ios-device.sh <DEVICE_ID>
 ```
 
-번들 ID 충돌(프로비저닝 생성 실패) 시 로컬 번들 ID를 지정할 수 있습니다.
+If you hit a bundle ID conflict (for example, provisioning creation fails), you can override the local bundle ID:
 
 ```bash
 APP_BUNDLE_ID=com.<your_name>.mingleios DEVELOPMENT_TEAM=YOUR_TEAM_ID ./scripts/install-ios-device.sh <DEVICE_ID>
 ```
 
-## iOS 시뮬레이터 설치/실행
+## Install and Run on the iOS Simulator
 
 ```bash
 cd mingle-ios
 ./scripts/install-ios-simulator.sh
-# 또는 특정 시뮬레이터 지정
+# Or target a specific simulator
 SIMULATOR_NAME="iPhone 16 Pro" ./scripts/install-ios-simulator.sh
-# 또는 UDID 직접 지정
+# Or pass the simulator UDID directly
 ./scripts/install-ios-simulator.sh <SIMULATOR_UDID>
 ```
 
-실기기 설치 전 필수 조건:
+Requirements before installing on a physical device:
 
-1. Xcode > Settings > Accounts에 Apple ID 로그인
-2. iPhone 연결 + 잠금해제 + \"이 컴퓨터 신뢰\" 허용
-3. 개발용 프로비저닝 프로필 자동 생성 가능 상태
+1. Sign in with your Apple ID in Xcode > Settings > Accounts.
+2. Connect and unlock the iPhone, then allow "Trust This Computer".
+3. Make sure development provisioning profiles can be created automatically.
 
-## 백엔드 URL 변경
+## Change Backend URLs
 
-앱 내부 `Backend` 섹션에서 다음을 직접 변경할 수 있습니다.
+You can change the following values directly in the in-app `Backend` section:
 
-- API Base URL (예: `http://<맥IP>:3000`)
-- WS URL (예: `ws://<맥IP>:3001`)
-- Languages (`en,ko,ja` 형태)
+- API Base URL (for example, `http://<mac-ip>:3000`)
+- WS URL (for example, `ws://<mac-ip>:3001`)
+- Languages (for example, `en,ko,ja`)
 
-입력값은 앱 내 UserDefaults에 저장됩니다.
+The app stores these inputs in `UserDefaults`.
