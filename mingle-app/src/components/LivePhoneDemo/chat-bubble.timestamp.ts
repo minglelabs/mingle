@@ -1,17 +1,22 @@
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
 function normalizeLocale(locale: string): string {
   const trimmed = locale.trim();
   return trimmed || "en";
 }
 
-function formatRelativeSeconds(secondsAgo: number, locale: string): string {
-  try {
-    return new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(
-      -secondsAgo,
-      "second",
-    );
-  } catch {
-    return `${secondsAgo}s ago`;
-  }
+function formatRelativeAgoShort(elapsedMs: number): string {
+  const secondsAgo = Math.max(0, Math.floor(elapsedMs / 1000));
+  if (secondsAgo < 60) return `${secondsAgo}s ago`;
+
+  const minutesAgo = Math.floor(secondsAgo / 60);
+  if (minutesAgo < 60) return `${minutesAgo}m ago`;
+
+  const hoursAgo = Math.floor(minutesAgo / 60);
+  return `${hoursAgo}h ago`;
 }
 
 function formatDate(date: Date, locale: string, options: Intl.DateTimeFormatOptions): string {
@@ -22,53 +27,92 @@ function formatDate(date: Date, locale: string, options: Intl.DateTimeFormatOpti
   }
 }
 
-export function formatChatBubbleTimestamp(
+function formatDateLine(date: Date, includeYear: boolean): string {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  if (!includeYear) return `${month}/${day}`;
+  return `${date.getFullYear()}/${month}/${day}`;
+}
+
+function formatTimeLines(date: Date, locale: string): string[] {
+  try {
+    const parts = new Intl.DateTimeFormat(locale, {
+      hour: "numeric",
+      minute: "2-digit",
+    }).formatToParts(date);
+
+    let hour = "";
+    let minute = "";
+    let dayPeriod = "";
+
+    for (const part of parts) {
+      if (part.type === "hour") hour = part.value;
+      if (part.type === "minute") minute = part.value;
+      if (part.type === "dayPeriod") dayPeriod = part.value.trim();
+    }
+
+    const timeLine = hour && minute
+      ? `${hour}:${minute}`
+      : formatDate(date, locale, { hour: "numeric", minute: "2-digit" });
+
+    return dayPeriod ? [timeLine, dayPeriod] : [timeLine];
+  } catch {
+    return [formatDate(date, "en", { hour: "numeric", minute: "2-digit" })];
+  }
+}
+
+export function formatChatBubbleTimestampLines(
   createdAtMs: number | undefined,
   locale: string,
-): string {
-  if (!createdAtMs) return "";
+): string[] {
+  if (!hasRenderableChatBubbleTimestamp(createdAtMs)) return [];
 
   const normalizedLocale = normalizeLocale(locale);
   const now = Date.now();
   const created = new Date(createdAtMs);
   const current = new Date(now);
 
-  if (Number.isNaN(created.getTime())) return "";
+  if (Number.isNaN(created.getTime())) return [];
 
   const sameYear = created.getFullYear() === current.getFullYear();
-  const sameMonth = sameYear && created.getMonth() === current.getMonth();
-  const sameDay = sameMonth && created.getDate() === current.getDate();
-  const sameMinute =
-    sameDay
-    && created.getHours() === current.getHours()
-    && created.getMinutes() === current.getMinutes();
+  const elapsedMs = Math.max(0, now - createdAtMs);
 
-  if (sameMinute) {
-    const secondsAgo = Math.max(0, Math.floor((now - createdAtMs) / 1000));
-    return formatRelativeSeconds(secondsAgo, normalizedLocale);
+  if (elapsedMs < DAY_MS) {
+    return [formatRelativeAgoShort(elapsedMs)];
   }
 
-  if (sameDay) {
-    return formatDate(created, normalizedLocale, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
+  const dateLine = formatDateLine(created, !sameYear);
+  return [dateLine, ...formatTimeLines(created, normalizedLocale)];
+}
 
-  if (sameYear) {
-    return formatDate(created, normalizedLocale, {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
+export function hasRenderableChatBubbleTimestamp(
+  createdAtMs: number | undefined,
+): createdAtMs is number {
+  return typeof createdAtMs === "number" && Number.isFinite(createdAtMs) && createdAtMs > 0;
+}
 
-  return formatDate(created, normalizedLocale, {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+export function getNextChatBubbleTimestampUpdateDelayMs(
+  createdAtMs: number | undefined,
+  now = Date.now(),
+): number | null {
+  if (!hasRenderableChatBubbleTimestamp(createdAtMs)) return null;
+
+  const elapsedMs = Math.max(0, now - createdAtMs);
+  if (elapsedMs >= DAY_MS) return null;
+
+  const unitMs = elapsedMs < MINUTE_MS
+    ? SECOND_MS
+    : elapsedMs < HOUR_MS
+      ? MINUTE_MS
+      : HOUR_MS;
+  const remainder = elapsedMs % unitMs;
+
+  return remainder === 0 ? unitMs : unitMs - remainder;
+}
+
+export function formatChatBubbleTimestamp(
+  createdAtMs: number | undefined,
+  locale: string,
+): string {
+  return formatChatBubbleTimestampLines(createdAtMs, locale).join(" ");
 }

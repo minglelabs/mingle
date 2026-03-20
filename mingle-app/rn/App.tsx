@@ -254,26 +254,32 @@ const WEB_SUPPORTED_LOCALE_SEGMENTS = new Set(Array.from(WEB_SUPPORTED_LOCALES).
 
 type SafeAreaPalette = {
   topColor: string;
+  topOverlayColor: string;
   bottomColor: string;
   webViewColor: string;
   statusBarStyle: 'dark-content' | 'light-content';
-  edgeMode: 'fill' | 'transparent';
+  topEdgeMode: 'fill' | 'overlay' | 'transparent';
+  bottomEdgeMode: 'fill' | 'transparent';
 };
 
 const DEFAULT_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topColor: '#ffffff',
+  topOverlayColor: 'rgba(15, 23, 42, 0.22)',
   bottomColor: '#ffffff',
   webViewColor: '#ffffff',
-  statusBarStyle: 'dark-content',
-  edgeMode: 'fill',
+  statusBarStyle: 'light-content',
+  topEdgeMode: 'overlay',
+  bottomEdgeMode: 'fill',
 };
 
 const AUTH_LOGIN_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topColor: '#fbbc32',
+  topOverlayColor: 'transparent',
   bottomColor: '#1c1c1e',
   webViewColor: '#1c1c1e',
   statusBarStyle: 'light-content',
-  edgeMode: 'transparent',
+  topEdgeMode: 'transparent',
+  bottomEdgeMode: 'transparent',
 };
 type VersionPolicyLocale =
   | 'ko'
@@ -899,10 +905,12 @@ function AppInner(): React.JSX.Element {
     setSafeAreaPalette((current) => {
       if (
         current.topColor === nextPalette.topColor
+        && current.topOverlayColor === nextPalette.topOverlayColor
         && current.bottomColor === nextPalette.bottomColor
         && current.webViewColor === nextPalette.webViewColor
         && current.statusBarStyle === nextPalette.statusBarStyle
-        && current.edgeMode === nextPalette.edgeMode
+        && current.topEdgeMode === nextPalette.topEdgeMode
+        && current.bottomEdgeMode === nextPalette.bottomEdgeMode
       ) {
         return current;
       }
@@ -910,7 +918,12 @@ function AppInner(): React.JSX.Element {
     });
   }, [webUrl]);
 
-  const shouldRenderSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.edgeMode === 'fill';
+  const iosTopSafeAreaHeight = Platform.OS === 'ios'
+    ? (safeAreaInsets.top > 0 ? safeAreaInsets.top : iosTopTapOverlayHeight)
+    : 0;
+  const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
+  const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
+  const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1597,13 +1610,13 @@ function AppInner(): React.JSX.Element {
 
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
-      {shouldRenderSafeAreaFill ? (
+      {shouldRenderTopSafeAreaFill ? (
         <View
           pointerEvents="none"
           style={[
             styles.safeAreaTopFill,
             {
-              height: safeAreaInsets.top,
+              height: iosTopSafeAreaHeight,
               backgroundColor: safeAreaPalette.topColor,
             },
           ]}
@@ -1672,7 +1685,19 @@ function AppInner(): React.JSX.Element {
           </View>
         ) : null}
       </View>
-      {shouldRenderSafeAreaFill ? (
+      {shouldRenderTopSafeAreaOverlay ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.safeAreaTopOverlay,
+            {
+              height: iosTopSafeAreaHeight,
+              backgroundColor: safeAreaPalette.topOverlayColor,
+            },
+          ]}
+        />
+      ) : null}
+      {shouldRenderBottomSafeAreaFill ? (
         <View
           pointerEvents="none"
           style={[
@@ -1703,6 +1728,13 @@ const styles = StyleSheet.create({
   },
   safeAreaTopFill: {
     width: '100%',
+  },
+  safeAreaTopOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   safeAreaBottomFill: {
     width: '100%',
