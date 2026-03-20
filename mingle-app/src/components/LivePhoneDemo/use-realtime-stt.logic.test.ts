@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  appendFinalizedUtteranceToStoreState,
+  applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
+  createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
@@ -167,6 +170,88 @@ describe('use-realtime-stt pure logic', () => {
         ko: '안녕하세요',
         ja: 'こんにちは',
       },
+    })
+  })
+
+  it('merges queued translation updates when the finalized utterance is appended later', () => {
+    const queued = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-queued',
+      translations: {
+        ko: '그리고 저는 해고되었습니다.',
+        ja: 'そして私は解雇されました。',
+      },
+      priority: { kind: 'final', seq: 7 },
+      markFinalized: true,
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(queued, {
+      id: 'u-queued',
+      originalText: 'And then I got fired.',
+      originalLang: 'en',
+      targetLanguages: ['ko', 'ja'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000002,
+    })
+
+    expect(appended.pendingTranslationUpdates.size).toBe(0)
+    expect(appended.utterances).toEqual([
+      {
+        id: 'u-queued',
+        originalText: 'And then I got fired.',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {
+          ko: '그리고 저는 해고되었습니다.',
+          ja: 'そして私は解雇されました。',
+        },
+        translationFinalized: {
+          ko: true,
+          ja: true,
+        },
+        createdAtMs: 1700000000002,
+      },
+    ])
+    expect(appended.translationPriorities.get('u-queued:ko')).toEqual({ kind: 'final', seq: 7 })
+    expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
+  })
+
+  it('stores fallback-applied priorities under the matched utterance id', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-real',
+        originalText: 'How can you get fired from a company you started?',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: 1700000000003,
+      },
+    ])
+
+    const updated = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'u-missing',
+      translations: {
+        ko: '자신이 세운 회사에서 어떻게 해고될 수 있나요?',
+        ja: '自分で立ち上げた会社からどうやって解雇されるのか？',
+      },
+      priority: { kind: 'final', seq: 9 },
+      markFinalized: true,
+      fallbackMatch: {
+        sourceText: 'How can you get fired from a company you started?',
+        sourceLanguage: 'en',
+      },
+    })
+
+    expect(updated.pendingTranslationUpdates.size).toBe(0)
+    expect(updated.translationPriorities.get('u-real:ko')).toEqual({ kind: 'final', seq: 9 })
+    expect(updated.translationPriorities.get('u-real:ja')).toEqual({ kind: 'final', seq: 9 })
+    expect(updated.translationPriorities.has('u-missing:ko')).toBe(false)
+    expect(updated.utterances[0].translations).toEqual({
+      ko: '자신이 세운 회사에서 어떻게 해고될 수 있나요?',
+      ja: '自分で立ち上げた会社からどうやって解雇されるのか？',
     })
   })
 
