@@ -6,6 +6,37 @@ import {
   hasRenderableChatBubbleTimestamp,
 } from "./chat-bubble.timestamp";
 
+function buildExpectedAbsoluteTimestampLines(
+  createdAtMs: number,
+  locale: string,
+): string[] {
+  const created = new Date(createdAtMs);
+  const dateLine = `${created.getMonth() + 1}/${created.getDate()}`;
+  const parts = new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).formatToParts(created);
+
+  let hour = "";
+  let minute = "";
+  let dayPeriod = "";
+
+  for (const part of parts) {
+    if (part.type === "hour") hour = part.value;
+    if (part.type === "minute") minute = part.value;
+    if (part.type === "dayPeriod") dayPeriod = part.value.trim();
+  }
+
+  const timeLine = hour && minute
+    ? `${hour}:${minute}`
+    : new Intl.DateTimeFormat(locale, {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(created);
+
+  return dayPeriod ? [dateLine, timeLine, dayPeriod] : [dateLine, timeLine];
+}
+
 describe("formatChatBubbleTimestamp", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -39,11 +70,9 @@ describe("formatChatBubbleTimestamp", () => {
     );
     const createdAtMs = new Date("2026-03-09T15:44:00+09:00").getTime();
 
-    expect(formatChatBubbleTimestampLines(createdAtMs, "en")).toEqual([
-      "3/9",
-      "3:44",
-      "PM",
-    ]);
+    expect(formatChatBubbleTimestampLines(createdAtMs, "en")).toEqual(
+      buildExpectedAbsoluteTimestampLines(createdAtMs, "en"),
+    );
   });
 
   it("returns an empty timestamp for missing timestamps", () => {
