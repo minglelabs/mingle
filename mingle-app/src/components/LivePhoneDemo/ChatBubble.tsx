@@ -18,6 +18,7 @@ export interface Utterance {
   id: string
   speaker?: string
   speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
   originalText: string
   originalLang: string
   targetLanguages?: string[]
@@ -80,7 +81,11 @@ function ChatBubble({
   speakingLanguage = null,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
-  const avatar = getSpeakerAvatar(utterance.speaker, utterance.speakerAvatarSeed)
+  const avatar = getSpeakerAvatar(
+    utterance.speaker,
+    utterance.speakerAvatarSeed,
+    utterance.speakerAvatarIndex,
+  )
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
@@ -212,6 +217,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.id !== nu.id) return false
     if (pu.speaker !== nu.speaker) return false
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
+    if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false

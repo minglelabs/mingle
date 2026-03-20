@@ -184,6 +184,7 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 1700000000999,
         speaker: 'speaker-2',
         speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
         language: 'en',
       },
       partialTranscript: 'Still speaking',
@@ -197,6 +198,7 @@ describe('use-realtime-stt pure logic', () => {
       id: 'u-live',
       speaker: 'speaker-2',
       speakerAvatarSeed: 'avatar_seed_a',
+      speakerAvatarIndex: 7,
       originalText: 'Still speaking',
       originalLang: 'en-US',
       targetLanguages: ['ko'],
@@ -213,6 +215,7 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 1700000000999,
         speaker: 'speaker-2',
         speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
         language: 'en',
       },
       partialTranscript: '   ',
@@ -225,6 +228,7 @@ describe('use-realtime-stt pure logic', () => {
     const built = buildFinalizedUtterancePayload({
       speaker: 'speaker-2',
       speakerAvatarSeed: 'avatar_seed_a',
+      speakerAvatarIndex: 7,
       rawText: ' hello everyone ',
       rawLanguage: 'en-US',
       languages: ['en', 'ko'],
@@ -234,6 +238,7 @@ describe('use-realtime-stt pure logic', () => {
     })
 
     expect(built?.utterance.speakerAvatarSeed).toBe('avatar_seed_a')
+    expect(built?.utterance.speakerAvatarIndex).toBe(7)
   })
 
   it('merges queued translation updates when the finalized utterance is appended later', () => {

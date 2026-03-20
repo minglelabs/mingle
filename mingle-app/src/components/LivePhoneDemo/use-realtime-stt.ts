@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath } from '@/lib/api-contract'
-import { getSpeakerAvatar } from './speaker-avatar'
+import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -285,6 +285,7 @@ export function parseSttTranscriptMessage(
 export interface BuildFinalizedUtterancePayloadInput {
   speaker?: string
   speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -343,6 +344,7 @@ export function buildFinalizedUtterancePayload(
     id: utteranceId,
     speaker: (input.speaker || '').trim() || 'unknown',
     ...(input.speakerAvatarSeed?.trim() ? { speakerAvatarSeed: input.speakerAvatarSeed.trim() } : {}),
+    ...(typeof input.speakerAvatarIndex === 'number' ? { speakerAvatarIndex: input.speakerAvatarIndex } : {}),
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -384,6 +386,7 @@ interface PendingSpeakerTurn {
   createdAtMs: number
   speaker: string
   speakerAvatarSeed: string
+  speakerAvatarIndex: number
   rawText: string
   text: string
   language: string
@@ -419,7 +422,7 @@ function reservePendingSpeakerTurnIdentity(
 }
 
 export function buildLiveUtterance(input: {
-  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'language'> | null
+  pendingTurn: Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language'> | null
   partialTranscript: string
   partialLang?: string | null
   partialTranslations: Record<string, string>
@@ -434,6 +437,7 @@ export function buildLiveUtterance(input: {
     id: input.pendingTurn.utteranceId,
     speaker: input.pendingTurn.speaker,
     speakerAvatarSeed: input.pendingTurn.speakerAvatarSeed,
+    speakerAvatarIndex: input.pendingTurn.speakerAvatarIndex,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages: buildTurnTargetLanguagesSnapshot(
@@ -1107,6 +1111,7 @@ export default function useRealtimeSTT({
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
+  const speakerAvatarAssignmentsRef = useRef<Record<string, number>>({})
   const turnStartedAtRef = useRef<number | null>(null)
 
   const hasActiveSessionRef = useRef(false)
@@ -1232,6 +1237,28 @@ export default function useRealtimeSTT({
     return resolved
   }, [])
 
+  const clearSpeakerAvatarSession = useCallback(() => {
+    speakerAvatarSessionSeedRef.current = ''
+    speakerAvatarAssignmentsRef.current = {}
+  }, [])
+
+  const ensureSpeakerAvatarAssignment = useCallback((rawSpeaker: string): {
+    speakerAvatarSeed: string
+    speakerAvatarIndex: number
+  } => {
+    const speakerAvatarSeed = ensureSpeakerAvatarSessionSeed()
+    const { speakerKey, avatarIndex } = assignSpeakerAvatarIndex(
+      rawSpeaker,
+      speakerAvatarAssignmentsRef.current,
+      speakerAvatarSeed,
+    )
+    speakerAvatarAssignmentsRef.current[speakerKey] = avatarIndex
+    return {
+      speakerAvatarSeed,
+      speakerAvatarIndex: avatarIndex,
+    }
+  }, [ensureSpeakerAvatarSessionSeed])
+
   useEffect(() => {
     ensureSessionKey()
   }, [ensureSessionKey])
@@ -1308,10 +1335,10 @@ export default function useRealtimeSTT({
   const resetToIdle = useCallback(() => {
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
-    speakerAvatarSessionSeedRef.current = ''
+    clearSpeakerAvatarSession()
     cleanup()
     setConnectionStatus('idle')
-  }, [cleanup])
+  }, [cleanup, clearSpeakerAvatarSession])
 
   const resetVisiblePartialState = useCallback(() => {
     setPartialTranslations({})
@@ -1591,6 +1618,8 @@ export default function useRealtimeSTT({
     rawLang: string,
     options?: {
       speaker?: string
+      speakerAvatarSeed?: string
+      speakerAvatarIndex?: number
       partialTranslations?: Record<string, string>
       partialTranslationPriorities?: Map<string, TranslationPriority>
       utteranceId?: string
@@ -1617,6 +1646,8 @@ export default function useRealtimeSTT({
     )
     const localPayload = buildFinalizedUtterancePayload({
       speaker: options?.speaker,
+      speakerAvatarSeed: options?.speakerAvatarSeed,
+      speakerAvatarIndex: options?.speakerAvatarIndex,
       rawText,
       rawLanguage: rawLang,
       languages,
@@ -1689,6 +1720,8 @@ export default function useRealtimeSTT({
       pendingTurn,
       options: {
         speaker,
+        speakerAvatarSeed: pendingTurn?.speakerAvatarSeed,
+        speakerAvatarIndex: pendingTurn?.speakerAvatarIndex,
         partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
         partialTranslationPriorities: isActiveSpeaker ? new Map(partialTranslationPriorityRef.current) : new Map(),
         utteranceId: pendingTurn?.utteranceId,
@@ -1877,6 +1910,7 @@ export default function useRealtimeSTT({
     isStoppingRef.current = false
     const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
+    clearSpeakerAvatarSession()
 
     if (notifyLimitReached) {
       onLimitReachedRef.current?.()
@@ -1908,6 +1942,7 @@ export default function useRealtimeSTT({
     getPendingTurnsForLocalFinalize,
     logClientEvent,
     sendNativeSttCommand,
+    clearSpeakerAvatarSession,
     stopAudioPipeline,
   ])
 
@@ -2000,12 +2035,14 @@ export default function useRealtimeSTT({
     }
 
     cleanup()
+    clearSpeakerAvatarSession()
     setConnectionStatus('error')
     setTimeout(() => setConnectionStatus('idle'), 3000)
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     cleanup,
     clearPartialBuffers,
+    clearSpeakerAvatarSession,
     finalizePendingLocally,
     finalizeTurnWithTranslation,
     getPendingTurnsForLocalFinalize,
@@ -2142,7 +2179,12 @@ export default function useRealtimeSTT({
         )
         const finalizedPayload = buildFinalizedUtterancePayload({
           speaker,
-          speakerAvatarSeed: pendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed(),
+          speakerAvatarSeed: pendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarAssignment(speaker).speakerAvatarSeed,
+          speakerAvatarIndex: (
+            typeof pendingTurn?.speakerAvatarIndex === 'number'
+              ? pendingTurn.speakerAvatarIndex
+              : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
+          ),
           rawText,
           rawLanguage: lang,
           languages,
@@ -2161,10 +2203,12 @@ export default function useRealtimeSTT({
         const finalizedAvatar = getSpeakerAvatar(
           finalizedPayload.utterance.speaker,
           finalizedPayload.utterance.speakerAvatarSeed,
+          finalizedPayload.utterance.speakerAvatarIndex,
         )
         logSttDebug('transcript.avatar_mapping', {
           speaker: finalizedPayload.utterance.speaker || 'unknown',
           speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed || null,
+          speakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex ?? null,
           isFinal: true,
           avatarName: finalizedAvatar.name,
           avatarSrc: finalizedAvatar.src,
@@ -2248,7 +2292,13 @@ export default function useRealtimeSTT({
         const now = Date.now()
         const existingPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
         const turnIdentity = existingPendingTurn || reservePendingSpeakerTurnIdentity(utteranceIdRef.current + 1, now)
-        const pendingSpeakerAvatarSeed = existingPendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarSessionSeed()
+        const pendingSpeakerAvatarAssignment = ensureSpeakerAvatarAssignment(speaker)
+        const pendingSpeakerAvatarSeed = existingPendingTurn?.speakerAvatarSeed || pendingSpeakerAvatarAssignment.speakerAvatarSeed
+        const pendingSpeakerAvatarIndex = (
+          typeof existingPendingTurn?.speakerAvatarIndex === 'number'
+            ? existingPendingTurn.speakerAvatarIndex
+            : pendingSpeakerAvatarAssignment.speakerAvatarIndex
+        )
         if (!existingPendingTurn) {
           utteranceIdRef.current = turnIdentity.utteranceSerial
         }
@@ -2256,15 +2306,17 @@ export default function useRealtimeSTT({
           ...turnIdentity,
           speaker,
           speakerAvatarSeed: pendingSpeakerAvatarSeed,
+          speakerAvatarIndex: pendingSpeakerAvatarIndex,
           rawText,
           text,
           language: lang,
           updatedAtMs: now,
         }
-        const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed)
+        const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed, pendingSpeakerAvatarIndex)
         logSttDebug('transcript.avatar_mapping', {
           speaker,
           speakerAvatarSeed: pendingSpeakerAvatarSeed,
+          speakerAvatarIndex: pendingSpeakerAvatarIndex,
           isFinal: false,
           avatarName: pendingAvatar.name,
           avatarSrc: pendingAvatar.src,
@@ -2279,7 +2331,7 @@ export default function useRealtimeSTT({
     languages,
     logClientEvent,
     normalizedUsageLimitSec,
-    ensureSpeakerAvatarSessionSeed,
+    ensureSpeakerAvatarAssignment,
     startAudioProcessing,
     stopRecordingGracefully,
     syncVisiblePendingTurn,

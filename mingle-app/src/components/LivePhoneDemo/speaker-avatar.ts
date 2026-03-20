@@ -42,7 +42,63 @@ function hashSpeakerKey(speakerKey: string): number {
   return hash >>> 0
 }
 
-export function getSpeakerAvatar(rawSpeaker?: string | null, rawSeed?: string | null): SpeakerAvatar {
+function isValidSpeakerAvatarIndex(index?: number | null): index is number {
+  return typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < SPEAKER_AVATARS.length
+}
+
+function createSeededRandom(seed: string): () => number {
+  let state = hashSpeakerKey(seed) || 0x9e3779b9
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0
+    return state / 0x100000000
+  }
+}
+
+export function buildSpeakerAvatarIndexPool(rawSeed?: string | null): number[] {
+  const avatarSeed = normalizeAvatarSeed(rawSeed) || 'speaker-avatar-default'
+  const nextRandom = createSeededRandom(avatarSeed)
+  const indexes = SPEAKER_AVATARS.map((_, index) => index)
+
+  for (let i = indexes.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(nextRandom() * (i + 1))
+    ;[indexes[i], indexes[j]] = [indexes[j], indexes[i]]
+  }
+
+  return indexes
+}
+
+export function assignSpeakerAvatarIndex(
+  rawSpeaker: string | null | undefined,
+  assignments: Record<string, number>,
+  rawSeed?: string | null,
+): { speakerKey: string, avatarIndex: number } {
+  const speakerKey = normalizeSpeakerKey(rawSpeaker)
+  const existingIndex = assignments[speakerKey]
+  if (isValidSpeakerAvatarIndex(existingIndex)) {
+    return { speakerKey, avatarIndex: existingIndex }
+  }
+
+  const usedIndexes = new Set(
+    Object.values(assignments).filter((index): index is number => isValidSpeakerAvatarIndex(index)),
+  )
+  const nextIndex = buildSpeakerAvatarIndexPool(rawSeed).find((index) => !usedIndexes.has(index))
+  if (isValidSpeakerAvatarIndex(nextIndex)) {
+    return { speakerKey, avatarIndex: nextIndex }
+  }
+
+  const avatarSeed = normalizeAvatarSeed(rawSeed)
+  const overflowKey = avatarSeed ? `${avatarSeed}::${speakerKey}::overflow` : `${speakerKey}::overflow`
+  return { speakerKey, avatarIndex: hashSpeakerKey(overflowKey) % SPEAKER_AVATARS.length }
+}
+
+export function getSpeakerAvatar(
+  rawSpeaker?: string | null,
+  rawSeed?: string | null,
+  avatarIndex?: number | null,
+): SpeakerAvatar {
+  if (isValidSpeakerAvatarIndex(avatarIndex)) {
+    return SPEAKER_AVATARS[avatarIndex]
+  }
   const speakerKey = normalizeSpeakerKey(rawSpeaker)
   const avatarSeed = normalizeAvatarSeed(rawSeed)
   const scopedSpeakerKey = avatarSeed ? `${avatarSeed}::${speakerKey}` : speakerKey
