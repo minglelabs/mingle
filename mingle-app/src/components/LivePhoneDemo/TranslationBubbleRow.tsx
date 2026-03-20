@@ -22,14 +22,14 @@ export default function TranslationBubbleRow({
       <div
         data-translation-bubble-body
         className={cn(
-          'inline-flex w-fit max-w-[85%] items-start gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
+          'inline-flex w-fit max-w-[85%] items-center gap-2 rounded-2xl rounded-tl-sm px-3.5 py-2',
           bubbleClassName,
         )}
       >
         <div
           data-translation-bubble-meta
           className={cn(
-            'flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap pt-0.5',
+            'flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap',
             metaClassName,
           )}
         >
