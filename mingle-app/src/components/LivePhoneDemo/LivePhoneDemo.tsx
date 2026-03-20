@@ -1139,6 +1139,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   // Determine target languages for bouncing dots during partial transcript
   const detectedLang = partialLang || (utterances.length > 0 ? utterances[utterances.length - 1].originalLang : null)
+  const partialOriginalLang = detectedLang || selectedLanguages[0] || ''
+  const partialOriginalLangLabel = partialOriginalLang || '--'
   const pendingPartialLangs = partialTranscript
     ? selectedLanguages.filter(l => l !== detectedLang && !partialTranslations[l])
     : []
@@ -1333,8 +1335,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             >
                 <div className="max-w-[85%] bg-white/80 border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
                 <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-400">
-                  {partialTranscript}
-                  <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
+                  <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
+                    <span className="text-base leading-none">{getSttLanguageFlag(partialOriginalLang)}</span>
+                    <span className="text-[11px] font-semibold uppercase leading-none">{partialOriginalLangLabel}</span>
+                  </span>
+                  <span className="align-middle">
+                    {partialTranscript}
+                    <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full align-middle animate-pulse" />
+                  </span>
                 </p>
               </div>
               {/* Available partial translations */}
