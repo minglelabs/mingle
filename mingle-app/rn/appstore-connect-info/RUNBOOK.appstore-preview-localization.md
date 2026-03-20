@@ -1,69 +1,68 @@
-# App Store Preview 로컬라이징 작업 설명서
+# App Store Preview Localization Runbook
 
-이 문서는 `mingle-app` 기준으로, App Store Preview(로컬 서버) 프로젝트를 복제하고
-언어별 스크린샷 문구를 반영하는 현재 작업 흐름을 정리한 문서입니다.
+This document summarizes the current `mingle-app` workflow for cloning an App Store Preview
+(local server) project and applying locale-specific screenshot copy.
 
-## 1) 범위
+## 1) Scope
 
-- 대상 서버: `http://localhost:4318` (appstore-preview API)
-- 기준 프로젝트: `Mingle 한국어` 또는 `Mingle 영어`
-- 소스 텍스트: `rn/appstore-connect-info/appstore-connect-info.i18n.json`
-- 자동화 스크립트: `scripts/ios-appstore-preview-clone-locale.ts`
+- Target server: `http://localhost:4318` (`appstore-preview` API)
+- Source projects: `Mingle 한국어` or `Mingle 영어`
+- Source text: `rn/appstore-connect-info/appstore-connect-info.i18n.json`
+- Automation script: `scripts/ios-appstore-preview-clone-locale.ts`
 
-## 2) 지금까지 진행한 핵심 작업
+## 2) Key Work Completed So Far
 
-1. App Store Connect 메타데이터를 `appstore-connect-info.i18n.json` 구조로 정리했습니다.
-2. 스크린샷 문구를 언어별 배열(`line1`, `line2`)로 관리하도록 맞췄습니다.
-3. App Store Preview API로 프로젝트/캔버스를 직접 조작 가능한 흐름을 확인했습니다.
-4. 한국어/영어 프로젝트 기준으로 캔버스 복제, 텍스트 교체, 정렬 보정 작업을 반복 수행했습니다.
-5. 일본어 프로젝트(`Mingle 일본어`) 생성 및 텍스트 반영까지 검증했습니다.
+1. Organized App Store Connect metadata into the `appstore-connect-info.i18n.json` structure.
+2. Standardized screenshot copy management as locale-specific arrays (`line1`, `line2`).
+3. Verified a workflow that can manipulate App Store Preview projects and canvases directly through the API.
+4. Repeated the clone, text replacement, and alignment correction flow using the Korean and English source projects.
+5. Verified end-to-end creation and copy replacement for a Japanese project (`Mingle 일본어`).
 
-## 3) 자동화 스크립트 동작 순서
+## 3) Automation Script Flow
 
-`ios-appstore-preview-clone-locale.ts`는 아래 순서로 실행됩니다.
+`ios-appstore-preview-clone-locale.ts` runs in the following order:
 
-1. i18n JSON에서 대상 locale의 스크린샷 문구를 읽습니다.
-2. 소스 프로젝트(기본: `Mingle 한국어`)를 복제해 타겟 프로젝트를 만듭니다.
-3. 각 캔버스의 이름/텍스트를 locale 문구로 교체합니다.
-4. 소스 프로젝트의 미디어(이미지/영상)를 캔버스 인덱스 기준으로 복사합니다.
-5. 텍스트 박스를 문구 폭에 맞춰 줄이고, X축 중앙 정렬합니다.
+1. Read screenshot copy for the target locale from the i18n JSON.
+2. Clone the source project (default: `Mingle 한국어`) and create the target project.
+3. Replace each canvas name and text with the locale-specific copy.
+4. Copy media assets (images/videos) from the source project by canvas index.
+5. Shrink text boxes to match text width and center them on the X axis.
 
-## 4) 실행 방법
+## 4) How to Run
 
-프로젝트 루트(`/Users/nam/mingle/mingle-app`)에서 실행합니다.
+Run the command from the `mingle-app` project root.
 
 ```bash
 pnpm dlx tsx scripts/ios-appstore-preview-clone-locale.ts \
   --locale ja \
-  --target-project-name "Mingle 일본어"
+  --target-project-name "Mingle Japanese"
 ```
 
-옵션:
+Options:
 
-- `--source-project-name` 기본값: `Mingle 한국어`
-- `--api-base` 기본값: `http://localhost:4318`
-- `--i18n-json` 기본값: `rn/appstore-connect-info/appstore-connect-info.i18n.json`
-- `--dry-run` 지정 시 실제 생성 없이 입력 검증만 진행
+- `--source-project-name` default: `Mingle 한국어`
+- `--api-base` default: `http://localhost:4318`
+- `--i18n-json` default: `rn/appstore-connect-info/appstore-connect-info.i18n.json`
+- `--dry-run`: validate inputs only without creating anything
 
-예시(프랑스어):
+Example (French):
 
 ```bash
 pnpm dlx tsx scripts/ios-appstore-preview-clone-locale.ts \
   --locale fr \
-  --target-project-name "Mingle 프랑스어"
+  --target-project-name "Mingle French"
 ```
 
-## 5) 주의사항
+## 5) Notes
 
-1. appstore-preview 웹 UI(5173)를 열어둔 상태에서 수동 편집 중이면 자동 저장이 API 결과를 덮어쓸 수 있습니다.
-2. 동일 이름 프로젝트가 여러 개 생길 수 있으니, 최종본만 남기고 정리해 주세요.
-3. 문구 길이가 긴 언어는 줄바꿈 위험이 있어 결과 캔버스 확인이 필요합니다.
+1. If the appstore-preview web UI (5173) is open and you are editing manually, autosave can overwrite API results.
+2. Multiple projects with the same name can accumulate, so keep only the final version.
+3. Long-copy languages may wrap unexpectedly, so the output canvases should be checked after generation.
 
-## 6) 검수 체크리스트
+## 6) Review Checklist
 
-1. 대상 프로젝트가 생성되었는지 확인
-2. 캔버스 개수/순서가 기대값과 일치하는지 확인
-3. 각 캔버스 `line1`, `line2` 문구 반영 여부 확인
-4. 텍스트가 가운데 정렬되어 있고 줄바꿈이 없는지 확인
-5. 미디어(특히 1번 영상 캔버스)가 정상인지 확인
-
+1. Confirm that the target project was created.
+2. Confirm that the canvas count and order match expectations.
+3. Confirm that `line1` and `line2` were applied to each canvas.
+4. Confirm that the text is centered and does not wrap.
+5. Confirm that the media assets are valid, especially the first video canvas.
