@@ -26,6 +26,10 @@ const DEFAULT_MODEL = process.env.DEMO_TRANSLATE_MODEL || 'gemini-2.5-flash-lite
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
+const ENABLE_VERBOSE_TRANSLATE_LOGS = (
+  process.env.NODE_ENV !== 'production'
+  || process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
+)
 
 
 
@@ -79,6 +83,11 @@ function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | nul
   if (normalized === 'target_miss') return normalized
   if (normalized === 'provider_error') return normalized
   return null
+}
+
+function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown>) {
+  if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
+  console.info(`[translate/finalize] ${event}`, payload)
 }
 
 function formatSingleTurnForPrompt(label: string, turn: RecentTurnContext): string {
@@ -208,10 +217,14 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   const result = await model.generateContent(userPrompt)
   const response = result.response as unknown as GeminiResponseLike
   const rawContent = response.text() || ''
-  // console.info([
-  //   '[translate/finalize] gemini_raw_response',
-  //   rawContent,
-  // ].join('\n'))
+  logTranslateFinalizeInfo('gemini_raw_response', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    textPreview: ctx.text.slice(0, 120),
+    rawResponseLength: rawContent.length,
+    rawResponsePreview: rawContent.slice(0, 2000),
+  })
   const content = rawContent.trim()
   const usageMetadata = response.usageMetadata
   const promptTokens = sanitizeNonNegativeInt(usageMetadata?.promptTokenCount)
@@ -259,6 +272,22 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     })
     return null
   }
+
+  logTranslateFinalizeInfo('gemini_parsed_translations', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    textPreview: ctx.text.slice(0, 120),
+    parsedLanguages: Object.keys(translations),
+    translationsPreview: Object.fromEntries(
+      Object.entries(translations).map(([language, translatedText]) => [language, translatedText.slice(0, 200)])
+    ),
+    usage: {
+      input_tokens: promptTokens,
+      output_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
+  })
 
   return {
     translations,
@@ -365,15 +394,15 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     currentTurnPreviousState,
     isFinal,
   }
-  // console.info([
-  //   '[translate/finalize] input_prompt',
-  //   `sourceLanguage=${sourceLanguage}`,
-  //   `targetLanguages=${targetLanguages.join(',')}`,
-  //   '--- systemPrompt ---',
-  //   systemPrompt,
-  //   '--- userPrompt ---',
-  //   userPrompt,
-  // ].join('\n'))
+  logTranslateFinalizeInfo('request', {
+    sourceLanguage,
+    targetLanguages,
+    isFinal,
+    textPreview: text.slice(0, 120),
+    hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
+    hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
+    currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),
+  })
 
   try {
     const fallbackTranslations = buildFallbackTranslationsFromCurrentTurnPreviousState(
@@ -476,20 +505,35 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       return response
     }
 
-    // console.info([
-    //   '[translate/finalize] response_usage',
-    //   `provider=${selectedResult.provider}`,
-    //   `model=${selectedResult.model}`,
-    //   `input_tokens=${selectedResult.usage?.promptTokens ?? 'unknown'}`,
-    //   `output_tokens=${selectedResult.usage?.completionTokens ?? 'unknown'}`,
-    //   `total_tokens=${selectedResult.usage?.totalTokens ?? 'unknown'}`,
-    // ].join(' '))
+    logTranslateFinalizeInfo('response_usage', {
+      provider: selectedResult.provider,
+      model: selectedResult.model,
+      sourceLanguage,
+      targetLanguages,
+      isFinal,
+      inputTokens: selectedResult.usage?.promptTokens ?? 'unknown',
+      outputTokens: selectedResult.usage?.completionTokens ?? 'unknown',
+      totalTokens: selectedResult.usage?.totalTokens ?? 'unknown',
+    })
 
     const translations: Record<string, string> = {}
     for (const lang of targetLanguages) {
       if (selectedResult.translations[lang]) {
         translations[lang] = selectedResult.translations[lang]
       }
+    }
+
+    const missingTargetLanguages = targetLanguages.filter((lang) => !translations[lang])
+    if (missingTargetLanguages.length > 0) {
+      console.warn('[translate/finalize] missing_target_languages', {
+        provider: selectedResult.provider,
+        sourceLanguage,
+        targetLanguages,
+        missingTargetLanguages,
+        returnedLanguages: Object.keys(selectedResult.translations),
+        isFinal,
+        textPreview: text.slice(0, 120),
+      })
     }
 
     if (Object.keys(translations).length === 0) {
