@@ -120,7 +120,7 @@ function ChatBubble({
             uiLocale={uiLocale}
             align="center"
             minWidth="2.5rem"
-            className="text-[9px] text-black/[0.3]"
+            className="text-[10px] text-black/[0.3]"
           />
         )}
       </div>
