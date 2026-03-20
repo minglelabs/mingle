@@ -409,6 +409,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
+  const clientBundleRev = typeof body.clientBundleRev === 'string' ? body.clientBundleRev.trim() : null
   const sessionKeyHint = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : null
   const isLocalLiveTestRequest = request.headers.get('x-mingle-live-test') === '1'
   const allowTestFaults = process.env.NODE_ENV !== 'production' && isLocalLiveTestRequest
@@ -448,6 +449,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     targetLanguages,
     isFinal,
     text,
+    clientBundleRev,
     hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
     hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
     currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),

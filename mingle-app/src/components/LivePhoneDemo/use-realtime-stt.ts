@@ -21,6 +21,7 @@ const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
+const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
 
@@ -1053,6 +1054,7 @@ export default function useRealtimeSTT({
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
       }
+      body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang) {
         body.tts = { language: normalizedTtsLang, enabled: options?.enableTts === true }
