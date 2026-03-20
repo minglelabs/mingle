@@ -646,6 +646,13 @@ type NativeAuthEvent =
       provider: NativeAuthProvider;
       message: string;
     };
+type RecommendUpdatePrompt = {
+  title: string;
+  message: string;
+  updateUrl: string;
+  updateLabel: string;
+  laterLabel: string;
+};
 function normalizeClientVersion(raw: string): string {
   return raw.trim().replace(/^v/i, '');
 }
@@ -853,6 +860,7 @@ function AppInner(): React.JSX.Element {
       : { status: 'ready' }
   ));
   const recommendPromptShownRef = useRef(false);
+  const pendingRecommendPromptRef = useRef<RecommendUpdatePrompt | null>(null);
   const nativeStatusRef = useRef('idle');
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
@@ -907,6 +915,34 @@ function AppInner(): React.JSX.Element {
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
   }, [updateSafeAreaPalette, webUrl]);
+
+  const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
+    if (prompt.updateUrl) {
+      Alert.alert(
+        prompt.title,
+        prompt.message,
+        [
+          { text: prompt.laterLabel, style: 'cancel' },
+          {
+            text: prompt.updateLabel,
+            onPress: () => {
+              void Linking.openURL(prompt.updateUrl);
+            },
+          },
+        ],
+      );
+      return;
+    }
+    Alert.alert(prompt.title, prompt.message);
+  }, []);
+
+  const flushPendingRecommendPrompt = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingPrompt = pendingRecommendPromptRef.current;
+    if (!pendingPrompt) return;
+    pendingRecommendPromptRef.current = null;
+    presentRecommendPrompt(pendingPrompt);
+  }, [presentRecommendPrompt]);
 
   useEffect(() => {
     if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) {
@@ -985,10 +1021,10 @@ function AppInner(): React.JSX.Element {
         if (policy.action === 'recommend_update' && !recommendPromptShownRef.current) {
           recommendPromptShownRef.current = true;
           const updateUrl = typeof policy.updateUrl === 'string' ? policy.updateUrl : '';
-          const alertTitle = typeof policy.title === 'string' && policy.title.trim()
+          const promptTitle = typeof policy.title === 'string' && policy.title.trim()
             ? policy.title.trim()
             : versionPolicyFallback.recommendTitle;
-          const message = typeof policy.message === 'string' && policy.message.trim()
+          const promptMessage = typeof policy.message === 'string' && policy.message.trim()
             ? policy.message.trim()
             : versionPolicyFallback.recommendMessage;
           const updateLabel = typeof policy.updateButtonLabel === 'string' && policy.updateButtonLabel.trim()
@@ -997,22 +1033,19 @@ function AppInner(): React.JSX.Element {
           const laterLabel = typeof policy.laterButtonLabel === 'string' && policy.laterButtonLabel.trim()
             ? policy.laterButtonLabel.trim()
             : versionPolicyFallback.laterLabel;
-          if (updateUrl) {
-            Alert.alert(
-              alertTitle,
-              message,
-              [
-                { text: laterLabel, style: 'cancel' },
-                {
-                  text: updateLabel,
-                  onPress: () => {
-                    void Linking.openURL(updateUrl);
-                  },
-                },
-              ],
-            );
+
+          const prompt = {
+            title: promptTitle,
+            message: promptMessage,
+            updateUrl,
+            updateLabel,
+            laterLabel,
+          };
+
+          if (isPageReadyRef.current) {
+            presentRecommendPrompt(prompt);
           } else {
-            Alert.alert(alertTitle, message);
+            pendingRecommendPromptRef.current = prompt;
           }
         }
       })
@@ -1028,8 +1061,9 @@ function AppInner(): React.JSX.Element {
       active = false;
       clearTimeout(timeoutId);
       abortController?.abort();
+      pendingRecommendPromptRef.current = null;
     };
-  }, [versionPolicyFallback, versionPolicyLocale]);
+  }, [presentRecommendPrompt, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -1549,7 +1583,8 @@ function AppInner(): React.JSX.Element {
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingAuthToWeb();
-  }, [emitToWeb, flushPendingAuthToWeb, updateSafeAreaPalette]);
+    flushPendingRecommendPrompt();
+  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     const description = event.nativeEvent.description || 'webview_load_failed';
@@ -1584,7 +1619,7 @@ function AppInner(): React.JSX.Element {
         />
       ) : null}
       <View style={[styles.webViewContainer, { backgroundColor: safeAreaPalette.webViewColor }]}>
-        {versionGate.status === 'ready' ? (
+        {versionGate.status !== 'force_update' ? (
           <WebView
             ref={webViewRef}
             source={webUrl
@@ -1608,19 +1643,13 @@ function AppInner(): React.JSX.Element {
         ) : (
           <View style={[styles.webView, { backgroundColor: safeAreaPalette.webViewColor }]} />
         )}
-        {versionGate.status === 'checking' ? (
-          <View style={styles.versionOverlay}>
-            <Text style={styles.versionTitle}>{versionPolicyFallback.checkingTitle}</Text>
-            <Text style={styles.versionDescription}>{versionPolicyFallback.checkingMessage}</Text>
-          </View>
-        ) : null}
         {versionGate.status === 'force_update' ? (
           <View style={styles.versionOverlay}>
             <Text style={styles.versionTitle}>{versionGate.title}</Text>
             <Text style={styles.versionDescription}>{versionGate.message}</Text>
-            {versionGate.clientVersion || versionGate.latestVersion ? (
+            {versionGate.latestVersion ? (
               <Text style={styles.versionMeta}>
-                {versionGate.clientVersion || versionPolicyFallback.unknownVersionLabel} → {versionGate.latestVersion || versionPolicyFallback.unknownVersionLabel}
+                {versionGate.clientVersion || versionPolicyFallback.unknownVersionLabel} → {versionGate.latestVersion}
               </Text>
             ) : null}
             <Pressable
@@ -1636,7 +1665,7 @@ function AppInner(): React.JSX.Element {
             </Pressable>
           </View>
         ) : null}
-        {versionGate.status === 'ready' && loadError ? (
+        {versionGate.status !== 'force_update' && loadError ? (
           <View style={styles.errorOverlay}>
             <Text style={styles.errorTitle}>{versionPolicyFallback.webViewLoadFailedTitle}</Text>
             <Text style={styles.errorDescription}>{loadError}</Text>

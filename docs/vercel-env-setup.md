@@ -7,7 +7,15 @@
 - Preview/Production (legacy web app):
   - `NEXT_PUBLIC_API_NAMESPACE=`
 - iOS client version policy:
-  - 환경변수 대신 `app` 스키마 DB 테이블(`app_client_versions`, `app_client_version_policies`)에서 관리
+  - `IOS_CLIENT_MIN_SUPPORTED_VERSION`
+  - `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`
+  - `IOS_CLIENT_LATEST_VERSION`
+  - `IOS_APPSTORE_URL`
+- Android client version policy:
+  - `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`
+  - `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`
+  - `ANDROID_CLIENT_LATEST_VERSION`
+  - `ANDROID_PLAYSTORE_URL`
 
 ## mingle-landing
 
