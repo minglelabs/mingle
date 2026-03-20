@@ -128,8 +128,8 @@ function ChatBubble({
         <div data-original-bubble-row className="flex w-full items-start">
           <div
             data-original-bubble-body
-            style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH, borderTopLeftRadius: '1px' }}
-            className="w-fit rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
+            style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH, borderBottomLeftRadius: '1px' }}
+            className="w-fit rounded-2xl rounded-bl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
             <div data-original-bubble-content className="min-w-0">
               <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>

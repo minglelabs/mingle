@@ -46,7 +46,7 @@ describe('ChatBubble', () => {
       html.indexOf('data-original-bubble-row'),
     )
     expect(html).toContain('max-width:93%')
-    expect(html).toContain('border-top-left-radius:1px')
+    expect(html).toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
     expect(html).toContain('class="align-middle"')
