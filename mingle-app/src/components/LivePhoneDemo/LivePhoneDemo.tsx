@@ -7,6 +7,7 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -34,13 +35,14 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 // iOS .playAndRecord reduces speaker output; this compensates in software.
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
-const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 600
+const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 400
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
+const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -628,6 +630,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const {
     utterances,
+    liveUtterance,
     partialTranscript,
     volume,
     toggleRecording,
@@ -635,8 +638,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isReady,
     isConnecting,
     isError,
-    partialTranslations,
-    partialLang,
     usageSec,
     isLimitReached,
     usageLimitSec,
@@ -1135,14 +1136,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
 
-  // Determine target languages for bouncing dots during partial transcript
-  const detectedLang = partialLang || (utterances.length > 0 ? utterances[utterances.length - 1].originalLang : null)
-  const pendingPartialLangs = partialTranscript
-    ? selectedLanguages.filter(l => l !== detectedLang && !partialTranslations[l])
-    : []
-  const availablePartialTranslations = partialTranscript
-    ? Object.entries(partialTranslations).filter(([lang]) => selectedLanguages.includes(lang) && lang !== detectedLang)
-    : []
+  const committedLiveUtteranceExists = Boolean(
+    liveUtterance && utterances.some((utterance) => utterance.id === liveUtterance.id),
+  )
+  const draftUtteranceId = (!committedLiveUtteranceExists && liveUtterance)
+    ? liveUtterance.id
+    : null
+  const displayUtterances = (draftUtteranceId && liveUtterance)
+    ? [...utterances, liveUtterance]
+    : utterances
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -1301,7 +1303,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </button>
           )}
           <AnimatePresence mode="popLayout">
-            {utterances.map((u) => (
+            {displayUtterances.map((u) => (
               <div
                 key={u.id}
                 data-utterance-created-at={
@@ -1313,57 +1315,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <ChatBubble
                   utterance={u}
                   uiLocale={uiLocale}
+                  isDraft={draftUtteranceId === u.id}
                   isSpeaking={speakingItem?.utteranceId === u.id}
                   speakingLanguage={speakingItem?.language ?? null}
                 />
               </div>
             ))}
           </AnimatePresence>
-
-          {partialTranscript && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col gap-1"
-            >
-                <div className="max-w-[85%] bg-white/80 border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                <p className="text-sm text-gray-400 leading-snug">
-                  {partialTranscript}
-                  <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
-                </p>
-              </div>
-              {/* Available partial translations */}
-              {availablePartialTranslations.map(([lang, text]) => (
-                <div
-                  key={lang}
-                  className="ml-2.5 max-w-[80%] bg-amber-50/80 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
-                >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                  <span className="text-xs font-semibold text-amber-500 uppercase">{lang}</span>
-                </div>
-                  <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
-                </div>
-              ))}
-              {/* Bouncing dots for pending partial translations */}
-              {pendingPartialLangs.map((lang) => (
-                <div
-                key={`partial-pending-${lang}`}
-                  className="ml-2.5 max-w-[80%] bg-amber-50/60 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
-                >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                    <span className="text-xs font-semibold text-amber-400 uppercase">{lang}</span>
-                  </div>
-                  <div className="flex items-center gap-0.5 h-4">
-                    <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              ))}
-            </motion.div>
-          )}
 
           {/* Demo typing animation */}
           {demoTypingLang && (
@@ -1372,15 +1330,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               className="flex flex-col gap-1"
             >
-              <div className="max-w-[85%] bg-white/80 border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(demoTypingLang)}</span>
-                    <span className="text-xs font-semibold text-gray-500 uppercase">{demoTypingLang}</span>
-                  </div>
-                <p className="text-sm text-gray-600 leading-snug">
-                  {demoTypingText}
-                  <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
-                </p>
+              <div
+                style={{ borderTopLeftRadius: '1px' }}
+                className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-600">
+                    <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
+                      <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
+                      <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
+                    </span>
+                    <span className="align-middle">
+                      {demoTypingText}
+                      <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full align-middle animate-pulse" />
+                    </span>
+                  </p>
+                </div>
               </div>
               {/* Demo translations - typed in parallel */}
               {Object.entries(demoTypingTranslations).map(([lang, text]) => (
@@ -1388,17 +1353,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   key={lang}
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                   className="ml-2.5 max-w-[80%] bg-amber-50/80 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
-                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                     <span className="text-xs font-semibold text-amber-500 uppercase">{lang}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 leading-relaxed">
-                    {text}
-                    <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
-                  </p>
-                 </motion.div>
+                >
+                  <TranslationBubbleRow
+                    lang={lang}
+                    bubbleClassName="bg-amber-50/80 border border-amber-100"
+                    metaClassName="text-amber-500"
+                    contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                    contentClassName="text-sm text-gray-500"
+                  >
+                    <>
+                      {text}
+                      <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
+                    </>
+                  </TranslationBubbleRow>
+                </motion.div>
               ))}
             </motion.div>
           )}
