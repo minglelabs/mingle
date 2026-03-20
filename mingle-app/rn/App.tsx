@@ -267,10 +267,10 @@ type SafeAreaPalette = {
 
 const DEFAULT_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topColor: '#ffffff',
-  topOverlayColor: 'rgba(15, 23, 42, 0.22)',
+  topOverlayColor: 'transparent',
   bottomColor: '#ffffff',
   webViewColor: '#ffffff',
-  statusBarStyle: 'light-content',
+  statusBarStyle: 'dark-content',
   topEdgeMode: 'overlay',
   bottomEdgeMode: 'fill',
 };
