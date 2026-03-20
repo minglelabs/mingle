@@ -384,6 +384,14 @@ interface PendingSpeakerTurn {
   updatedAtMs: number
 }
 
+type RecentFinalizedUtterance = {
+  id: string
+  text: string
+  language: string
+  expiresAt: number
+  source: 'local' | 'server'
+}
+
 function buildUtteranceId(createdAtMs: number, utteranceSerial: number): string {
   return `u-${createdAtMs}-${utteranceSerial}`
 }
@@ -417,11 +425,6 @@ const TRANSLATION_PRIORITY_KIND_ORDER: Record<TranslationPriorityKind, number> =
   final: 2,
 }
 
-function buildFinalizeDedupSignature(language: string, text: string, speaker?: string): string {
-  const normalizedSpeaker = (speaker || '').trim() || 'unknown'
-  return `${normalizedSpeaker}::${language}::${text}`
-}
-
 export function buildLiveTranslateRequestSignature(input: {
   utteranceId: number | string
   speaker?: string | null
@@ -445,6 +448,27 @@ export function isDuplicateTimedSignature(input: {
     && input.previousSig === input.nextSig
     && input.nowMs < input.previousExpiresAt
   )
+}
+
+export function findRecentLocalFinalizeReuseUtteranceId(input: {
+  pendingUtteranceId?: string | null
+  finalizedUtteranceId: string
+  recentFinalizedUtterance: RecentFinalizedUtterance | null
+  nowMs: number
+  text: string
+  language: string
+}): string | null {
+  if (input.pendingUtteranceId) return null
+  const recentFinalizedUtterance = input.recentFinalizedUtterance
+  if (!recentFinalizedUtterance) return null
+  if (recentFinalizedUtterance.source !== 'local') return null
+  if (input.nowMs >= recentFinalizedUtterance.expiresAt) return null
+  if (normalizeSttTurnText(recentFinalizedUtterance.text) !== input.text) return null
+  if (normalizeLangForCompare(recentFinalizedUtterance.language) !== normalizeLangForCompare(input.language)) {
+    return null
+  }
+  if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return null
+  return recentFinalizedUtterance.id
 }
 
 export function shouldApplyPartialTranslationResponse(input: {
@@ -999,7 +1023,7 @@ export default function useRealtimeSTT({
   onTtsAudioRef.current = onTtsAudio
   const enableTtsRef = useRef(enableTts)
   enableTtsRef.current = enableTts
-  const stopFinalizeDedupRef = useRef<{ sig: string, expiresAt: number }>({ sig: '', expiresAt: 0 })
+  const stopFinalizeDedupRef = useRef<{ utteranceId: string, expiresAt: number }>({ utteranceId: '', expiresAt: 0 })
 
   const finalizedTtsSignatureRef = useRef<Map<string, string>>(new Map())
   // Monotonically increasing sequence number for translation requests.
@@ -1015,15 +1039,9 @@ export default function useRealtimeSTT({
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
   const lastPartialTranslateRequestSignatureRef = useRef('')
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
-  const recentFinalizedUtteranceRef = useRef<{
-    id: string
-    text: string
-    language: string
-    expiresAt: number
-  } | null>(null)
+  const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const turnStartedAtRef = useRef<number | null>(null)
-  const recentServerFinalizeSignatureRef = useRef<{ sig: string, expiresAt: number }>({ sig: '', expiresAt: 0 })
 
   const hasActiveSessionRef = useRef(false)
   const useNativeSttRef = useRef(false)
@@ -1514,16 +1532,6 @@ export default function useRealtimeSTT({
     if (!text) return null
 
     const now = Date.now()
-    const sig = buildFinalizeDedupSignature(lang, text, options?.speaker)
-    if (
-      sig
-      && stopFinalizeDedupRef.current.sig === sig
-      && now < stopFinalizeDedupRef.current.expiresAt
-    ) {
-      return null
-    }
-    stopFinalizeDedupRef.current = { sig, expiresAt: now + 5000 }
-
     const reservedUtteranceSerial = options?.utteranceSerial ?? (utteranceIdRef.current + 1)
     if (options?.utteranceSerial === undefined) {
       utteranceIdRef.current = reservedUtteranceSerial
@@ -1547,6 +1555,18 @@ export default function useRealtimeSTT({
       previousStateSourceText: options?.previousStateSourceText,
     })
     if (!localPayload) return null
+    if (isDuplicateTimedSignature({
+      previousSig: stopFinalizeDedupRef.current.utteranceId,
+      previousExpiresAt: stopFinalizeDedupRef.current.expiresAt,
+      nextSig: localPayload.utteranceId,
+      nowMs: now,
+    })) {
+      return null
+    }
+    stopFinalizeDedupRef.current = {
+      utteranceId: localPayload.utteranceId,
+      expiresAt: now + 5_000,
+    }
     const fallbackCurrentTurnPreviousState = (
       options?.fallbackCurrentTurnPreviousState !== undefined
         ? options.fallbackCurrentTurnPreviousState
@@ -1570,6 +1590,7 @@ export default function useRealtimeSTT({
       text: localPayload.text,
       language: localPayload.language,
       expiresAt: now + 5_000,
+      source: 'local',
     }
     return {
       utteranceId: localPayload.utteranceId,
@@ -2024,22 +2045,12 @@ export default function useRealtimeSTT({
           syncVisiblePendingTurn()
           return
         }
-        const sig = buildFinalizeDedupSignature(lang, text, speaker)
         const now = Date.now()
         const hadTurnStart = turnStartedAtRef.current !== null
         const sttDurationMs = hadTurnStart && turnStartedAtRef.current
           ? Math.max(0, now - turnStartedAtRef.current)
           : undefined
         turnStartedAtRef.current = null
-        if (isDuplicateTimedSignature({
-          previousSig: recentServerFinalizeSignatureRef.current.sig,
-          previousExpiresAt: recentServerFinalizeSignatureRef.current.expiresAt,
-          nextSig: sig,
-          nowMs: now,
-        })) {
-          return
-        }
-        recentServerFinalizeSignatureRef.current = { sig, expiresAt: now + 2_000 }
 
         const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
         const seedTranslationState = buildSeedTranslationState(
@@ -2063,16 +2074,17 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
-        const recentFinalizedUtterance = recentFinalizedUtteranceRef.current
-        const shouldReuseRecentFinalizedUtterance = Boolean(
-          recentFinalizedUtterance
-          && now < recentFinalizedUtterance.expiresAt
-          && normalizeSttTurnText(recentFinalizedUtterance.text) === finalizedPayload.text
-          && normalizeLangForCompare(recentFinalizedUtterance.language) === normalizeLangForCompare(finalizedPayload.language)
-        )
-        if (shouldReuseRecentFinalizedUtterance) {
+        const recentLocalReuseUtteranceId = findRecentLocalFinalizeReuseUtteranceId({
+          pendingUtteranceId: pendingTurn?.utteranceId || null,
+          finalizedUtteranceId: finalizedPayload.utteranceId,
+          recentFinalizedUtterance: recentFinalizedUtteranceRef.current,
+          nowMs: now,
+          text: finalizedPayload.text,
+          language: finalizedPayload.language,
+        })
+        if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
-            reusedUtteranceId: recentFinalizedUtterance?.id || null,
+            reusedUtteranceId: recentLocalReuseUtteranceId,
             text: finalizedPayload.text,
             language: finalizedPayload.language,
           })
@@ -2084,25 +2096,24 @@ export default function useRealtimeSTT({
           finalizedPayload.currentTurnPreviousState
           && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
         ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
-        if (!shouldReuseRecentFinalizedUtterance) {
+        if (!recentLocalReuseUtteranceId) {
           setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
             prev,
             finalizedPayload.utterance,
             seedTranslationState,
           ))
-          recentFinalizedUtteranceRef.current = {
-            id: finalizedPayload.utteranceId,
-            text: finalizedPayload.text,
-            language: finalizedPayload.language,
-            expiresAt: now + 5_000,
-          }
+        }
+        recentFinalizedUtteranceRef.current = {
+          id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+          text: finalizedPayload.text,
+          language: finalizedPayload.language,
+          expiresAt: now + 5_000,
+          source: 'server',
         }
 
         finalizeTurnWithTranslation(
           {
-            utteranceId: shouldReuseRecentFinalizedUtterance
-              ? (recentFinalizedUtterance?.id || finalizedPayload.utteranceId)
-              : finalizedPayload.utteranceId,
+            utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
             currentTurnPreviousState,
@@ -2175,12 +2186,11 @@ export default function useRealtimeSTT({
 
     try {
       setConnectionStatus('connecting')
-      stopFinalizeDedupRef.current = { sig: '', expiresAt: 0 }
+      stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
       lastPartialTranslationStateRef.current = null
       lastPartialTranslateRequestSignatureRef.current = ''
       recentFinalizedUtteranceRef.current = null
-      recentServerFinalizeSignatureRef.current = { sig: '', expiresAt: 0 }
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
       activePartialSpeakerRef.current = null

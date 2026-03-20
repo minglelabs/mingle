@@ -5,6 +5,7 @@ import {
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
   createUtteranceStoreState,
+  findRecentLocalFinalizeReuseUtteranceId,
   findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
@@ -371,6 +372,53 @@ describe('use-realtime-stt pure logic', () => {
       nextSig: 'speaker-2::en::hello',
       nowMs: 1_500,
     })).toBe(false)
+  })
+
+  it('reuses only recent local finalize bubbles when server final has no pending utterance identity', () => {
+    expect(findRecentLocalFinalizeReuseUtteranceId({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server',
+      recentFinalizedUtterance: {
+        id: 'u-local',
+        text: '짧게.',
+        language: 'ko',
+        expiresAt: 5_000,
+        source: 'local',
+      },
+      nowMs: 1_000,
+      text: '짧게.',
+      language: 'ko',
+    })).toBe('u-local')
+
+    expect(findRecentLocalFinalizeReuseUtteranceId({
+      pendingUtteranceId: 'u-pending',
+      finalizedUtteranceId: 'u-pending',
+      recentFinalizedUtterance: {
+        id: 'u-local',
+        text: '짧게.',
+        language: 'ko',
+        expiresAt: 5_000,
+        source: 'local',
+      },
+      nowMs: 1_000,
+      text: '짧게.',
+      language: 'ko',
+    })).toBeNull()
+
+    expect(findRecentLocalFinalizeReuseUtteranceId({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server',
+      recentFinalizedUtterance: {
+        id: 'u-server-prev',
+        text: '짧게.',
+        language: 'ko',
+        expiresAt: 5_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+      text: '짧게.',
+      language: 'ko',
+    })).toBeNull()
   })
 
   it('finds the most recent utterance matching source text and language', () => {
