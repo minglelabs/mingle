@@ -76,7 +76,6 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
     .map(lang => ({
       lang,
       text: utterance.translations[lang],
-      isFinalized: utterance.translationFinalized?.[lang] === true,
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
@@ -121,24 +120,18 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       </div>
 
       {/* Translation bubbles */}
-      {translationEntries.map(({ lang, text, isFinalized }) => (
+      {translationEntries.map(({ lang, text }) => (
         <TranslationBubbleRow
           key={lang}
           lang={lang}
-          bubbleClassName={`transition-colors ${
-            isFinalized
-              ? 'bg-amber-50 border border-amber-100'
-              : 'bg-gray-100/80 border border-gray-200'
-          }`}
-          metaClassName={isFinalized ? 'text-amber-500' : 'text-gray-400'}
+          bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
+          metaClassName="text-amber-500"
           contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-          contentClassName={`text-sm ${isFinalized ? 'text-gray-700' : 'text-gray-500'}`}
+          contentClassName="text-sm text-gray-700"
           accessory={
             isSpeaking && speakingLanguage === lang
               ? <SpeakingIndicator />
-              : !isFinalized
-                ? <span className="inline-block w-1 h-1 rounded-full bg-gray-400 animate-pulse" />
-                : undefined
+              : undefined
           }
         >
           {text}

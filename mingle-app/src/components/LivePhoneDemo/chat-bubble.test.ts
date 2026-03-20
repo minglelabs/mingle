@@ -46,7 +46,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('class="align-middle"')
   })
 
-  it('treats translations as finalized only when the flag is explicitly true', () => {
+  it('keeps translation bubbles amber even before the final flag is set', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -64,7 +64,8 @@ describe('ChatBubble', () => {
     )
 
     expect(html).toContain('부분 번역')
-    expect(html).toContain('bg-gray-100/80')
-    expect(html).not.toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).not.toContain('bg-gray-100/80')
+    expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
 })
