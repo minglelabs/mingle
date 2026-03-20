@@ -8,12 +8,16 @@
 | iOS App (versioned) | `/api/ios/v1.0.0/{path}` | `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.0` |
 | Android App (versioned) | `/api/android/v1.0.0/{path}` | `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.0` |
 
-iOS version policy env (optional):
+Server version policy env:
 
 - `IOS_CLIENT_MIN_SUPPORTED_VERSION`
 - `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`
 - `IOS_CLIENT_LATEST_VERSION`
 - `IOS_APPSTORE_URL`
+- `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`
+- `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`
+- `ANDROID_CLIENT_LATEST_VERSION`
+- `ANDROID_PLAYSTORE_URL`
 
 ## 2) Build Commands
 
