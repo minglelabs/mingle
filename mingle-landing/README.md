@@ -74,10 +74,10 @@ export default defineConfig([
 
 ## API Namespace
 
-Landing 프론트는 `NEXT_PUBLIC_API_NAMESPACE`로 API URL을 생성합니다.
+The landing frontend builds API URLs from `NEXT_PUBLIC_API_NAMESPACE`.
 
-- 기본값: `web/landing/v1`
-- 예시 endpoint: `/api/web/landing/v1/subscribe`
+- Default value: `web/landing/v1`
+- Example endpoint: `/api/web/landing/v1/subscribe`
 
 Release build command:
 
@@ -93,6 +93,6 @@ pnpm test -- lib/api-contract.test.ts app/api/namespace-routing.contract.test.ts
 
 URL override (optional):
 
-- 브라우저 URL 쿼리 `apiNamespace`(또는 `apiNs`)는 allow-list 값만 반영됩니다.
-- 허용값: `web/landing/v1`
-- 허용되지 않은 값은 무시되고 env/default를 사용합니다.
+- The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
+- Allowed value: `web/landing/v1`
+- Unsupported values are ignored, and the env/default value is used instead.

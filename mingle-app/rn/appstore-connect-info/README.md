@@ -11,7 +11,7 @@
 - `upload/<locale>/`: files prepared for `scripts/ios-appstore-upload.sh`
 - `appstore-connect-info.i18n.json`: single source of truth
   - `ios.assets`: screenshot upload directory
-  - `ios.submission.screenshots`: "iOS 앱 > 1.0.0 제출 준비 중" screenshot copy
+  - `ios.submission.screenshots`: screenshot copy for "iOS App > Preparing Submission for 1.0.0"
   - `ios.submission.appStoreInfo`: version metadata (promo text, what's new, description, keywords, URLs)
   - `ios.generalInfo.appInfo`: app info metadata (title, subtitle)
 - `RUNBOOK.appstore-preview-localization.md`: appstore-preview API localization workflow
@@ -31,5 +31,5 @@ scripts/ios-appstore-upload.sh --locale en-US
 scripts/ios-appstore-sync-upload-assets.sh
 scripts/devbox ios-appstore-sync-metadata --dry-run
 scripts/devbox ios-appstore-sync-metadata
-pnpm dlx tsx scripts/ios-appstore-preview-clone-locale.ts --locale ja --target-project-name "Mingle 일본어"
+pnpm dlx tsx scripts/ios-appstore-preview-clone-locale.ts --locale ja --target-project-name "Mingle Japanese"
 ```

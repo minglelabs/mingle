@@ -46,7 +46,7 @@ Required fixture format:
 - `MINGLE_TEST_WS_URL` (default: `ws://127.0.0.1:3001`)
 - `MINGLE_TEST_API_BASE_URL` (default: `http://127.0.0.1:3000`)
 - `MINGLE_TEST_EXPECTED_PHRASE` (asserts recognized text contains this phrase)
-- 오디오/서버 회귀 E2E는 `pnpm test:live` 실행 시 동작합니다.
-- iOS 디바이스 전용 테스트만 env로 활성화합니다:
+- Audio/server regression E2E runs through `pnpm test:live`.
+- iOS device-only tests are enabled only through env flags:
   - `MINGLE_TEST_IOS_HEALTHCHECK=1`
   - `MINGLE_TEST_IOS_TTS_EVENT_E2E=1`

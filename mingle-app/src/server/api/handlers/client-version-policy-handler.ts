@@ -9,7 +9,6 @@ import {
   generatedVersionPolicyCopy,
   type VersionPolicyCopy,
 } from '@/i18n/generated-version-policy-copy'
-import { prisma } from '@/lib/prisma'
 
 type VersionTuple = [number, number, number]
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none'
@@ -18,15 +17,14 @@ type ClientPlatform = 'ios' | 'android'
 type VersionPolicySnapshot = {
   minSupportedVersion: VersionTuple
   recommendBelowVersion: VersionTuple | null
-  latestVersion: VersionTuple
+  latestVersion: VersionTuple | null
   updateUrl: string
 }
 
 type VersionPolicySource =
-  | 'db'
+  | 'env'
   | 'fallback_no_policy'
   | 'fallback_invalid'
-  | 'fallback_error'
 
 type VersionPolicyReadResult = {
   snapshot: VersionPolicySnapshot
@@ -42,6 +40,28 @@ const CLIENT_PLATFORM_ALIASES: Record<string, ClientPlatform> = {
   ipad: 'ios',
   android: 'android',
   aos: 'android',
+}
+const VERSION_POLICY_ENV_KEYS: Record<
+  ClientPlatform,
+  {
+    minSupportedVersion: string
+    recommendedBelowVersion: string
+    latestVersion: string
+    updateUrl: string
+  }
+> = {
+  ios: {
+    minSupportedVersion: 'IOS_CLIENT_MIN_SUPPORTED_VERSION',
+    recommendedBelowVersion: 'IOS_CLIENT_RECOMMENDED_BELOW_VERSION',
+    latestVersion: 'IOS_CLIENT_LATEST_VERSION',
+    updateUrl: 'IOS_APPSTORE_URL',
+  },
+  android: {
+    minSupportedVersion: 'ANDROID_CLIENT_MIN_SUPPORTED_VERSION',
+    recommendedBelowVersion: 'ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION',
+    latestVersion: 'ANDROID_CLIENT_LATEST_VERSION',
+    updateUrl: 'ANDROID_PLAYSTORE_URL',
+  },
 }
 
 const VERSION_POLICY_COPY = {
@@ -220,14 +240,8 @@ function resolvePolicy(args: {
   return 'none'
 }
 
-function isUniqueConstraintError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const code = (error as { code?: unknown }).code
-  return typeof code === 'string' && code === 'P2002'
-}
-
 function buildFallbackPolicySnapshot(
-  source: Exclude<VersionPolicySource, 'db'>,
+  source: Exclude<VersionPolicySource, 'env'>,
   policyPlatform: ClientPlatform,
 ): VersionPolicyReadResult {
   return {
@@ -236,31 +250,9 @@ function buildFallbackPolicySnapshot(
     snapshot: {
       minSupportedVersion: DEFAULT_MIN_SUPPORTED_VERSION,
       recommendBelowVersion: null,
-      latestVersion: DEFAULT_MIN_SUPPORTED_VERSION,
+      latestVersion: null,
       updateUrl: '',
     },
-  }
-}
-
-async function insertClientVersionIfMissing(
-  clientVersion: VersionTuple | null,
-  platform: ClientPlatform,
-): Promise<void> {
-  if (!clientVersion) return
-
-  try {
-    await prisma.appClientVersion.create({
-      data: {
-        platform,
-        version: formatVersion(clientVersion),
-        major: clientVersion[0],
-        minor: clientVersion[1],
-        patch: clientVersion[2],
-      },
-    })
-  } catch (error) {
-    if (isUniqueConstraintError(error)) return
-    console.error('[client-version-policy] app client version insert failed', error)
   }
 }
 
@@ -271,97 +263,93 @@ type ActivePolicyRecord = {
   updateUrl: string | null
 }
 
-async function readActiveVersionPolicyForPlatform(
-  platform: ClientPlatform,
-): Promise<ActivePolicyRecord | null> {
-  const rows = await prisma.$queryRaw<ActivePolicyRecord[]>`
-    SELECT
-      "min_supported_version" AS "minSupportedVersion",
-      "recommended_below_version" AS "recommendedBelowVersion",
-      "latest_version" AS "latestVersion",
-      "update_url" AS "updateUrl"
-    FROM "app"."app_client_version_policies"
-    WHERE "platform" = ${platform}
-      AND "effective_from" <= CURRENT_TIMESTAMP
-    ORDER BY "effective_from" DESC, "created_at" DESC
-    LIMIT 1
-  `
+function readEnvValue(name: string): string {
+  return process.env[name]?.trim() || ''
+}
 
-  return rows[0] ?? null
+function readVersionPolicyEnvForPlatform(
+  platform: ClientPlatform,
+): ActivePolicyRecord | null {
+  const envKeys = VERSION_POLICY_ENV_KEYS[platform]
+  const minSupportedVersion = readEnvValue(envKeys.minSupportedVersion)
+  if (!minSupportedVersion) return null
+
+  return {
+    minSupportedVersion,
+    recommendedBelowVersion: readEnvValue(envKeys.recommendedBelowVersion) || null,
+    latestVersion: readEnvValue(envKeys.latestVersion) || null,
+    updateUrl: readEnvValue(envKeys.updateUrl) || null,
+  }
 }
 
 async function readActiveVersionPolicy(
   requestedPlatform: ClientPlatform,
 ): Promise<VersionPolicyReadResult> {
-  try {
-    let policyPlatform: ClientPlatform = requestedPlatform
-    let record = await readActiveVersionPolicyForPlatform(policyPlatform)
+  let policyPlatform: ClientPlatform = requestedPlatform
+  let record = readVersionPolicyEnvForPlatform(policyPlatform)
 
-    if (!record && requestedPlatform !== DEFAULT_CLIENT_PLATFORM) {
-      policyPlatform = DEFAULT_CLIENT_PLATFORM
-      record = await readActiveVersionPolicyForPlatform(policyPlatform)
-      if (record) {
-        console.warn('[client-version-policy] fallback to ios policy row', {
-          requestedPlatform,
-        })
-      }
-    }
-
-    if (!record) {
-      console.error('[client-version-policy] no active policy row found', {
+  if (!record && requestedPlatform !== DEFAULT_CLIENT_PLATFORM) {
+    policyPlatform = DEFAULT_CLIENT_PLATFORM
+    record = readVersionPolicyEnvForPlatform(policyPlatform)
+    if (record) {
+      console.warn('[client-version-policy] fallback to ios policy env', {
         requestedPlatform,
-      })
-      return buildFallbackPolicySnapshot('fallback_no_policy', requestedPlatform)
-    }
-
-    const minSupportedVersion = parseSemver3(record.minSupportedVersion)
-    if (!minSupportedVersion) {
-      console.error('[client-version-policy] active policy has invalid min_supported_version', {
-        policyPlatform,
-        minSupportedVersion: record.minSupportedVersion,
-      })
-      return buildFallbackPolicySnapshot('fallback_invalid', policyPlatform)
-    }
-
-    const recommendBelowVersion = record.recommendedBelowVersion
-      ? parseSemver3(record.recommendedBelowVersion)
-      : null
-
-    if (record.recommendedBelowVersion && !recommendBelowVersion) {
-      console.error('[client-version-policy] active policy has invalid recommended_below_version', {
-        policyPlatform,
-        recommendedBelowVersion: record.recommendedBelowVersion,
+        missingEnvKey: VERSION_POLICY_ENV_KEYS[requestedPlatform].minSupportedVersion,
       })
     }
+  }
 
-    const latestVersionFromPolicy = record.latestVersion
-      ? parseSemver3(record.latestVersion)
-      : null
-
-    if (record.latestVersion && !latestVersionFromPolicy) {
-      console.error('[client-version-policy] active policy has invalid latest_version', {
-        policyPlatform,
-        latestVersion: record.latestVersion,
-      })
-    }
-
-    const latestVersion = latestVersionFromPolicy || recommendBelowVersion || minSupportedVersion
-    return {
-      source: 'db',
-      policyPlatform,
-      snapshot: {
-        minSupportedVersion,
-        recommendBelowVersion,
-        latestVersion,
-        updateUrl: record.updateUrl?.trim() || '',
-      },
-    }
-  } catch (error) {
-    console.error('[client-version-policy] active policy query failed', {
+  if (!record) {
+    console.error('[client-version-policy] no active policy env found', {
       requestedPlatform,
-      error,
     })
-    return buildFallbackPolicySnapshot('fallback_error', requestedPlatform)
+    return buildFallbackPolicySnapshot('fallback_no_policy', requestedPlatform)
+  }
+
+  const minSupportedVersion = parseSemver3(record.minSupportedVersion)
+  if (!minSupportedVersion) {
+    console.error('[client-version-policy] active policy env has invalid min_supported_version', {
+      policyPlatform,
+      minSupportedVersion: record.minSupportedVersion,
+      envKey: VERSION_POLICY_ENV_KEYS[policyPlatform].minSupportedVersion,
+    })
+    return buildFallbackPolicySnapshot('fallback_invalid', policyPlatform)
+  }
+
+  const recommendBelowVersion = record.recommendedBelowVersion
+    ? parseSemver3(record.recommendedBelowVersion)
+    : null
+
+  if (record.recommendedBelowVersion && !recommendBelowVersion) {
+    console.error('[client-version-policy] active policy env has invalid recommended_below_version', {
+      policyPlatform,
+      recommendedBelowVersion: record.recommendedBelowVersion,
+      envKey: VERSION_POLICY_ENV_KEYS[policyPlatform].recommendedBelowVersion,
+    })
+  }
+
+  const latestVersionFromPolicy = record.latestVersion
+    ? parseSemver3(record.latestVersion)
+    : null
+
+  if (record.latestVersion && !latestVersionFromPolicy) {
+    console.error('[client-version-policy] active policy env has invalid latest_version', {
+      policyPlatform,
+      latestVersion: record.latestVersion,
+      envKey: VERSION_POLICY_ENV_KEYS[policyPlatform].latestVersion,
+    })
+  }
+
+  const latestVersion = latestVersionFromPolicy || recommendBelowVersion || minSupportedVersion
+  return {
+    source: 'env',
+    policyPlatform,
+    snapshot: {
+      minSupportedVersion,
+      recommendBelowVersion,
+      latestVersion,
+      updateUrl: record.updateUrl?.trim() || '',
+    },
   }
 }
 
@@ -387,12 +375,9 @@ export async function handleClientVersionPolicy(
   const clientBuildRaw = typeof body.clientBuild === 'string' ? body.clientBuild.trim() : ''
   const clientVersion = parseSemver3(clientVersionRaw)
 
-  const [policyRead] = await Promise.all([
-    readActiveVersionPolicy(clientPlatform),
-    insertClientVersionIfMissing(clientVersion, clientPlatform),
-  ])
+  const policyRead = await readActiveVersionPolicy(clientPlatform)
 
-  const action = policyRead.source === 'db'
+  const action = policyRead.source === 'env'
     ? resolvePolicy({
       clientVersion,
       minSupportedVersion: policyRead.snapshot.minSupportedVersion,
@@ -421,7 +406,7 @@ export async function handleClientVersionPolicy(
     clientBuild: clientBuildRaw,
     minSupportedVersion: formatVersion(policyRead.snapshot.minSupportedVersion),
     recommendedBelowVersion: policyRead.snapshot.recommendBelowVersion ? formatVersion(policyRead.snapshot.recommendBelowVersion) : '',
-    latestVersion: formatVersion(policyRead.snapshot.latestVersion),
+    latestVersion: policyRead.snapshot.latestVersion ? formatVersion(policyRead.snapshot.latestVersion) : '',
     updateUrl: policyRead.snapshot.updateUrl,
     title,
     message,

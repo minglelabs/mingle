@@ -26,6 +26,8 @@ const DEFAULT_MODEL = process.env.DEMO_TRANSLATE_MODEL || 'gemini-2.5-flash-lite
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
+const GEMINI_TRANSIENT_RETRY_BACKOFF_MS = 250
+const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 
 
 
@@ -79,6 +81,105 @@ function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | nul
   if (normalized === 'target_miss') return normalized
   if (normalized === 'provider_error') return normalized
   return null
+}
+
+function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown>) {
+  if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
+  console.info(`[translate/finalize] ${event}`, payload)
+}
+
+function logParsedTranslations(event: string, payload: {
+  sourceLanguage: string
+  targetLanguages: string[]
+  isFinal: boolean
+  text: string
+  parsedLanguages: string[]
+  translations: Record<string, string>
+  usage?: Record<string, unknown>
+}) {
+  if (ENABLE_VERBOSE_TRANSLATE_LOGS) {
+    console.info(`[translate/finalize] ${event}`, payload)
+    return
+  }
+
+  const translationsPreview = Object.fromEntries(
+    Object.entries(payload.translations).map(([language, translatedText]) => [
+      language,
+      translatedText.slice(0, 80),
+    ]),
+  )
+
+  console.info(`[translate/finalize] ${event}`, {
+    sourceLanguage: payload.sourceLanguage,
+    targetLanguages: payload.targetLanguages,
+    isFinal: payload.isFinal,
+    textPreview: payload.text.slice(0, 120),
+    parsedLanguages: payload.parsedLanguages,
+    translationsPreview,
+    usage: payload.usage,
+  })
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+function isRetryableGeminiError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const normalizedMessage = error.message.toLowerCase()
+
+  return (
+    /\[(429|500|502|503|504)\b/.test(error.message)
+    || normalizedMessage.includes('service unavailable')
+    || normalizedMessage.includes('high demand')
+    || normalizedMessage.includes('temporar')
+    || normalizedMessage.includes('try again later')
+    || normalizedMessage.includes('fetch failed')
+    || normalizedMessage.includes('network')
+    || normalizedMessage.includes('timed out')
+    || normalizedMessage.includes('timeout')
+  )
+}
+
+function countMatches(input: string, pattern: RegExp): number {
+  return input.match(pattern)?.length || 0
+}
+
+function isProbablySourceLeakTranslation(
+  sourceTextRaw: string,
+  translatedTextRaw: string,
+  targetLanguageRaw: string,
+): boolean {
+  const sourceText = sourceTextRaw.trim().toLowerCase()
+  const translatedText = translatedTextRaw.trim()
+  const translatedLower = translatedText.toLowerCase()
+  const targetLanguage = normalizeLang(targetLanguageRaw)
+
+  if (!sourceText || !translatedText) return false
+  if (translatedLower === sourceText) return true
+
+  const latinChars = countMatches(translatedText, /[A-Za-z]/g)
+  const hasMeaningfulLatin = latinChars >= 6
+  const sourcePrefix = sourceText.slice(0, Math.min(32, sourceText.length))
+  const containsSourcePrefix = sourcePrefix.length >= 8 && translatedLower.includes(sourcePrefix)
+
+  if (targetLanguage === 'ko') {
+    const hangulChars = countMatches(translatedText, /[\uac00-\ud7a3]/g)
+    if (hangulChars === 0 && hasMeaningfulLatin) return true
+    if (containsSourcePrefix && latinChars > Math.max(8, hangulChars * 2)) return true
+    return false
+  }
+
+  if (targetLanguage === 'ja') {
+    const japaneseChars = countMatches(translatedText, /[\u3040-\u30ff\u4e00-\u9fff]/g)
+    if (japaneseChars === 0 && hasMeaningfulLatin) return true
+    if (containsSourcePrefix && latinChars > Math.max(8, japaneseChars * 2)) return true
+    return false
+  }
+
+  return false
 }
 
 function formatSingleTurnForPrompt(label: string, turn: RecentTurnContext): string {
@@ -149,6 +250,10 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',
       'No explanations, no markdown, no extra keys.',
+      'Always translate the ENTIRE current text as a standalone translation for each target language.',
+      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
+      'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'),
     userPrompt: userPromptLines.join('\n'),
   }
@@ -195,6 +300,14 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
+  logTranslateFinalizeInfo('prompt', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    systemPrompt,
+    userPrompt,
+  })
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages)
   const model = genAI.getGenerativeModel({
     model: DEFAULT_MODEL,
@@ -205,13 +318,37 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     },
   })
 
-  const result = await model.generateContent(userPrompt)
+  let result: Awaited<ReturnType<typeof model.generateContent>>
+  try {
+    result = await model.generateContent(userPrompt)
+  } catch (error) {
+    if (!isRetryableGeminiError(error)) throw error
+
+    console.warn('[translate/finalize] provider_retry_scheduled', {
+      provider: 'gemini',
+      model: DEFAULT_MODEL,
+      sourceLanguage: ctx.sourceLanguage,
+      targetLanguages: ctx.targetLanguages,
+      isFinal: ctx.isFinal,
+      textPreview: ctx.text.slice(0, 120),
+      retryInMs: GEMINI_TRANSIENT_RETRY_BACKOFF_MS,
+      error: error instanceof Error ? error.message : String(error),
+    })
+
+    await sleep(GEMINI_TRANSIENT_RETRY_BACKOFF_MS)
+    result = await model.generateContent(userPrompt)
+  }
+
   const response = result.response as unknown as GeminiResponseLike
   const rawContent = response.text() || ''
-  console.info([
-    '[translate/finalize] gemini_raw_response',
-    rawContent,
-  ].join('\n'))
+  logTranslateFinalizeInfo('gemini_raw_response', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    rawResponseLength: rawContent.length,
+    rawResponse: rawContent,
+  })
   const content = rawContent.trim()
   const usageMetadata = response.usageMetadata
   const promptTokens = sanitizeNonNegativeInt(usageMetadata?.promptTokenCount)
@@ -259,6 +396,20 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     })
     return null
   }
+
+  logParsedTranslations('gemini_parsed_translations', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    parsedLanguages: Object.keys(translations),
+    translations,
+    usage: {
+      input_tokens: promptTokens,
+      output_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
+  })
 
   return {
     translations,
@@ -331,6 +482,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
+  const clientBundleRev = typeof body.clientBundleRev === 'string' ? body.clientBundleRev.trim() : null
   const sessionKeyHint = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : null
   const isLocalLiveTestRequest = request.headers.get('x-mingle-live-test') === '1'
   const allowTestFaults = process.env.NODE_ENV !== 'production' && isLocalLiveTestRequest
@@ -365,16 +517,16 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     currentTurnPreviousState,
     isFinal,
   }
-  const { systemPrompt, userPrompt } = buildPrompt(ctx)
-  console.info([
-    '[translate/finalize] input_prompt',
-    `sourceLanguage=${sourceLanguage}`,
-    `targetLanguages=${targetLanguages.join(',')}`,
-    '--- systemPrompt ---',
-    systemPrompt,
-    '--- userPrompt ---',
-    userPrompt,
-  ].join('\n'))
+  logTranslateFinalizeInfo('request', {
+    sourceLanguage,
+    targetLanguages,
+    isFinal,
+    text,
+    clientBundleRev,
+    hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
+    hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
+    currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),
+  })
 
   try {
     const fallbackTranslations = buildFallbackTranslationsFromCurrentTurnPreviousState(
@@ -459,7 +611,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         targetLanguages,
         textPreview: text.slice(0, 120),
       })
-      if (!geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
+      if (!ctx.isFinal && !geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           sourceLanguage,
           targetLanguages,
@@ -477,20 +629,54 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       return response
     }
 
-    console.info([
-      '[translate/finalize] response_usage',
-      `provider=${selectedResult.provider}`,
-      `model=${selectedResult.model}`,
-      `input_tokens=${selectedResult.usage?.promptTokens ?? 'unknown'}`,
-      `output_tokens=${selectedResult.usage?.completionTokens ?? 'unknown'}`,
-      `total_tokens=${selectedResult.usage?.totalTokens ?? 'unknown'}`,
-    ].join(' '))
+    logTranslateFinalizeInfo('response_usage', {
+      provider: selectedResult.provider,
+      model: selectedResult.model,
+      sourceLanguage,
+      targetLanguages,
+      isFinal,
+      inputTokens: selectedResult.usage?.promptTokens ?? 'unknown',
+      outputTokens: selectedResult.usage?.completionTokens ?? 'unknown',
+      totalTokens: selectedResult.usage?.totalTokens ?? 'unknown',
+    })
 
     const translations: Record<string, string> = {}
     for (const lang of targetLanguages) {
       if (selectedResult.translations[lang]) {
         translations[lang] = selectedResult.translations[lang]
       }
+    }
+
+    const rejectedSourceLeakLanguages: string[] = []
+    for (const [lang, translatedText] of Object.entries(translations)) {
+      if (!isProbablySourceLeakTranslation(text, translatedText, lang)) continue
+      rejectedSourceLeakLanguages.push(lang)
+      delete translations[lang]
+    }
+
+    if (rejectedSourceLeakLanguages.length > 0) {
+      console.warn('[translate/finalize] rejected_source_leak_translations', {
+        provider: selectedResult.provider,
+        sourceLanguage,
+        targetLanguages,
+        rejectedLanguages: rejectedSourceLeakLanguages,
+        isFinal,
+        text,
+        rawTranslations: selectedResult.translations,
+      })
+    }
+
+    const missingTargetLanguages = targetLanguages.filter((lang) => !translations[lang])
+    if (missingTargetLanguages.length > 0) {
+      console.warn('[translate/finalize] missing_target_languages', {
+        provider: selectedResult.provider,
+        sourceLanguage,
+        targetLanguages,
+        missingTargetLanguages,
+        returnedLanguages: Object.keys(selectedResult.translations),
+        isFinal,
+        textPreview: text.slice(0, 120),
+      })
     }
 
     if (Object.keys(translations).length === 0) {
@@ -501,7 +687,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         returnedLanguages: Object.keys(selectedResult.translations),
         textPreview: text.slice(0, 120),
       })
-      if (Object.keys(fallbackTranslations).length > 0) {
+      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           sourceLanguage,
           targetLanguages,

@@ -1,4 +1,4 @@
-export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 600
+export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 400
 
 export interface NavigatorLikeForIosCheck {
   userAgent?: string
