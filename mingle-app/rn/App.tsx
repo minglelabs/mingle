@@ -854,6 +854,23 @@ function resolveTrustedOrigin(rawUrl: string): string {
   }
 }
 
+function shouldBypassWebViewCache(rawUrl: string): boolean {
+  const candidate = rawUrl.trim();
+  if (!candidate) return false;
+  try {
+    const parsed = new URL(candidate);
+    const hostname = parsed.hostname.toLowerCase();
+    return (
+      hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname.includes('devbox')
+      || hostname.includes('ngrok')
+    );
+  } catch {
+    return false;
+  }
+}
+
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
@@ -888,6 +905,14 @@ function AppInner(): React.JSX.Element {
     () => getVersionPolicyFallbackCopy(versionPolicyLocale),
     [versionPolicyLocale],
   );
+  const shouldDisableWebViewCache = useMemo(
+    () => shouldBypassWebViewCache(WEB_APP_BASE_URL),
+    [],
+  );
+  const webViewCacheBustToken = useMemo(
+    () => (shouldDisableWebViewCache ? Date.now().toString(36) : ''),
+    [shouldDisableWebViewCache],
+  );
   const webUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
@@ -895,8 +920,11 @@ function AppInner(): React.JSX.Element {
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
-  }, [nativeAvailable, webLocale]);
+    const cacheBustQuery = webViewCacheBustToken
+      ? `&webViewRev=${encodeURIComponent(webViewCacheBustToken)}`
+      : '';
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${cacheBustQuery}`;
+  }, [nativeAvailable, webLocale, webViewCacheBustToken]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
 
@@ -1642,6 +1670,7 @@ function AppInner(): React.JSX.Element {
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
+            cacheEnabled={!shouldDisableWebViewCache}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
