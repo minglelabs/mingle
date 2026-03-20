@@ -140,6 +140,35 @@ describe('use-realtime-stt pure logic', () => {
     expect(built).toBeNull()
   })
 
+  it('can keep finalized utterance translations pending while still keeping prior turn context', () => {
+    const built = buildFinalizedUtterancePayload({
+      rawText: ' hello everyone ',
+      rawLanguage: 'en-US',
+      languages: ['en', 'ko', 'ja'],
+      partialTranslations: {},
+      currentTurnPreviousTranslations: {
+        ko: ' 안녕하세요 ',
+        ja: ' こんにちは ',
+      },
+      seedUtteranceTranslations: false,
+      utteranceSerial: 8,
+      nowMs: 1700000000001,
+    })
+
+    expect(built).not.toBeNull()
+    expect(built?.utterance.translations).toEqual({})
+    expect(built?.utterance.translationFinalized).toEqual({})
+    expect(built?.utterance.targetLanguages).toEqual(['ko', 'ja'])
+    expect(built?.currentTurnPreviousState).toEqual({
+      sourceLanguage: 'en-US',
+      sourceText: 'hello everyone',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+      },
+    })
+  })
+
   it('builds stable translate request signatures for duplicate-request dedupe', () => {
     expect(buildLiveTranslateRequestSignature({
       utteranceId: 12,

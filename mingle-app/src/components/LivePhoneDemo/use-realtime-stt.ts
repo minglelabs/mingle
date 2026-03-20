@@ -274,6 +274,8 @@ export interface BuildFinalizedUtterancePayloadInput {
   rawLanguage: string
   languages: string[]
   partialTranslations: Record<string, string>
+  currentTurnPreviousTranslations?: Record<string, string>
+  seedUtteranceTranslations?: boolean
   utteranceSerial: number
   nowMs?: number
   previousStateSourceLanguage?: string
@@ -300,7 +302,11 @@ export function buildFinalizedUtterancePayload(
     ? Math.floor(input.nowMs)
     : Date.now()
 
-  const seedTranslations = stripSourceLanguageFromTranslations(input.partialTranslations, language)
+  const priorTranslations = stripSourceLanguageFromTranslations(
+    input.currentTurnPreviousTranslations ?? input.partialTranslations,
+    language,
+  )
+  const seedTranslations = input.seedUtteranceTranslations === false ? {} : priorTranslations
   const targetLanguages = buildTurnTargetLanguagesSnapshot(input.languages, language)
   const translationFinalized: Record<string, boolean> = {}
   for (const key of Object.keys(seedTranslations)) {
@@ -310,7 +316,7 @@ export function buildFinalizedUtterancePayload(
   const currentTurnPreviousState = buildCurrentTurnPreviousStatePayload(
     input.previousStateSourceLanguage ?? input.rawLanguage,
     input.previousStateSourceText ?? input.rawText,
-    seedTranslations,
+    priorTranslations,
   )
 
   const utteranceId = `u-${createdAtMs}-${input.utteranceSerial}`
@@ -1284,7 +1290,9 @@ export default function useRealtimeSTT({
       rawText,
       rawLanguage: rawLang,
       languages,
-      partialTranslations: options?.partialTranslations ?? partialTranslationsRef.current,
+      partialTranslations: {},
+      currentTurnPreviousTranslations: options?.partialTranslations ?? partialTranslationsRef.current,
+      seedUtteranceTranslations: false,
       utteranceSerial: utteranceIdRef.current,
       nowMs: now,
       previousStateSourceLanguage: options?.previousStateSourceLanguage,
@@ -1775,7 +1783,9 @@ export default function useRealtimeSTT({
           rawText,
           rawLanguage: lang,
           languages,
-          partialTranslations: options.partialTranslations,
+          partialTranslations: {},
+          currentTurnPreviousTranslations: options.partialTranslations,
+          seedUtteranceTranslations: false,
           utteranceSerial: utteranceIdRef.current,
           nowMs: now,
           previousStateSourceLanguage: options.previousStateSourceLanguage || lang,

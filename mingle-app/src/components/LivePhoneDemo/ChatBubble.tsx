@@ -76,7 +76,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
     .map(lang => ({
       lang,
       text: utterance.translations[lang],
-      isFinalized: utterance.translationFinalized?.[lang] !== false,
+      isFinalized: utterance.translationFinalized?.[lang] === true,
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])

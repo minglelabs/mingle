@@ -45,4 +45,26 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-original-bubble-text')
     expect(html).toContain('class="align-middle"')
   })
+
+  it('treats translations as finalized only when the flag is explicitly true', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-2',
+          originalText: 'Original message',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {
+            ko: '부분 번역',
+          },
+          translationFinalized: {},
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).toContain('부분 번역')
+    expect(html).toContain('bg-gray-100/80')
+    expect(html).not.toContain('bg-amber-50 border border-amber-100')
+  })
 })
