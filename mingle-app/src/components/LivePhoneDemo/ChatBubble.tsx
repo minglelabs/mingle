@@ -82,7 +82,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 
   const timestampLines = formatChatBubbleTimestampLines(utterance.createdAtMs, uiLocale)
   const originalBubbleMaxWidth = timestampLines.length > 0
-    ? 'min(86%, calc(100% - 3rem))'
+    ? 'min(86%, calc(100% - 2.5rem))'
     : '86%'
 
   return (
@@ -93,7 +93,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       className="flex flex-col gap-1"
     >
       {/* Original bubble */}
-      <div data-original-bubble-row className="flex w-full items-end gap-1">
+      <div data-original-bubble-row className="flex w-full items-end gap-0.5">
         <div
           data-original-bubble-body
           style={{ maxWidth: originalBubbleMaxWidth }}
@@ -119,8 +119,8 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
         {timestampLines.length > 0 && (
           <div
             data-original-bubble-timestamp
-            style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT }}
-            className="mb-0.5 flex w-11 shrink-0 flex-col items-end self-end text-right text-[10px] text-black/[0.34] tabular-nums"
+            style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT, minWidth: '2.25rem' }}
+            className="mb-0.5 flex shrink-0 flex-col items-end self-end text-right text-[10px] text-black/[0.34] tabular-nums"
           >
             {timestampLines.map((line, index) => (
               <span key={`${utterance.id}-timestamp-${index}`} className="whitespace-nowrap">
