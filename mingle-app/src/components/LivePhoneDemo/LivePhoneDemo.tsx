@@ -1372,15 +1372,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               className="flex flex-col gap-1"
             >
-              <div className="max-w-[85%] bg-white/80 border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2.5">
-                <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="inline-flex w-fit max-w-[85%] items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5">
+                <div className="flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap text-gray-500">
                     <span className="text-base">{getSttLanguageFlag(demoTypingLang)}</span>
                     <span className="text-xs font-semibold text-gray-500 uppercase">{demoTypingLang}</span>
-                  </div>
-                <p className="text-sm text-gray-600 leading-snug">
-                  {demoTypingText}
-                  <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
-                </p>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-gray-600 leading-snug">
+                    {demoTypingText}
+                    <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
+                  </p>
+                </div>
               </div>
               {/* Demo translations - typed in parallel */}
               {Object.entries(demoTypingTranslations).map(([lang, text]) => (

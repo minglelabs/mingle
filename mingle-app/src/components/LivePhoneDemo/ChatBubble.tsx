@@ -3,10 +3,10 @@
 import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
-import { formatChatBubbleTimestamp } from './chat-bubble.timestamp'
+import { formatChatBubbleTimestampLines } from './chat-bubble.timestamp'
 import TranslationBubbleRow from './TranslationBubbleRow'
 
-const RECENT_THRESHOLD_MS = 90_000
+const RELATIVE_TIMESTAMP_THRESHOLD_MS = 24 * 60 * 60 * 1000
 
 export interface Utterance {
   id: string
@@ -78,7 +78,10 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
 
-  const timestamp = formatChatBubbleTimestamp(utterance.createdAtMs, uiLocale)
+  const timestampLines = formatChatBubbleTimestampLines(utterance.createdAtMs, uiLocale)
+  const originalBubbleMaxWidthClass = timestampLines.length > 0
+    ? 'max-w-[calc(100%-4.5rem)]'
+    : 'max-w-[85%]'
 
   return (
     <motion.div
@@ -88,19 +91,36 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       className="flex flex-col gap-1"
     >
       {/* Original bubble */}
-        <div className="max-w-[85%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3.5 py-2 shadow-sm">
-        <div className="flex items-center justify-between mb-0.5">
-          <div className="flex items-center gap-1.5">
+      <div data-original-bubble-row className="flex w-full max-w-[96%] items-end gap-2">
+        <div
+          data-original-bubble-body
+          className={`${originalBubbleMaxWidthClass} inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm`}
+        >
+          <div
+            data-original-bubble-meta
+            className="flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap text-gray-400"
+          >
             <span className="text-base">{flag}</span>
             <span className="text-xs font-semibold text-gray-400 uppercase">
               {utterance.originalLang}
             </span>
           </div>
-          {timestamp && (
-            <span className="text-[11px] text-black/[0.34] tabular-nums whitespace-nowrap">{timestamp}</span>
-          )}
+          <div data-original-bubble-content className="min-w-0 flex-1">
+            <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
+          </div>
         </div>
-        <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
+        {timestampLines.length > 0 && (
+          <div
+            data-original-bubble-timestamp
+            className="mb-0.5 flex w-16 shrink-0 flex-col items-end self-end text-right text-[10px] leading-[1.05] text-black/[0.34] tabular-nums"
+          >
+            {timestampLines.map((line, index) => (
+              <span key={`${utterance.id}-timestamp-${index}`} className="whitespace-nowrap">
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Translation bubbles */}
@@ -147,9 +167,9 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 }
 
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
-  // Always re-render recent utterances so relative timestamp stays fresh
+  // Always re-render utterances that still render compact relative timestamps.
   const createdAtMs = next.utterance.createdAtMs
-  if (createdAtMs && (Date.now() - createdAtMs) < RECENT_THRESHOLD_MS) return false
+  if (createdAtMs && (Date.now() - createdAtMs) < RELATIVE_TIMESTAMP_THRESHOLD_MS) return false
 
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
