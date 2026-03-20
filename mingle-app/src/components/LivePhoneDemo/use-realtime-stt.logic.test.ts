@@ -138,7 +138,7 @@ describe('use-realtime-stt pure logic', () => {
   it('discards stale partial translation responses when a newer request exists', () => {
     expect(shouldApplyPartialTranslationResponse({
       requestSeq: 2,
-      latestRequestedSeq: 3,
+      latestRequestedSeqForBubble: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
@@ -147,7 +147,7 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldApplyPartialTranslationResponse({
       requestSeq: 3,
-      latestRequestedSeq: 3,
+      latestRequestedSeqForBubble: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 10,
       requestSpeaker: 'speaker-1',
@@ -156,7 +156,7 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldApplyPartialTranslationResponse({
       requestSeq: 3,
-      latestRequestedSeq: 3,
+      latestRequestedSeqForBubble: 3,
       requestUtteranceId: 9,
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
@@ -165,7 +165,16 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldApplyPartialTranslationResponse({
       requestSeq: 3,
-      latestRequestedSeq: 3,
+      latestRequestedSeqForBubble: 3,
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+    })).toBe(true)
+
+    expect(shouldApplyPartialTranslationResponse({
+      requestSeq: 2,
+      latestRequestedSeqForBubble: 2,
       requestUtteranceId: 9,
       currentUtteranceId: 9,
       requestSpeaker: 'speaker-1',
