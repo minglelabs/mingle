@@ -31,7 +31,6 @@ describe('ChatBubble', () => {
     expect(html).toContain('>en<')
     expect(html).toContain('8m ago')
     expect(html).toContain('data-speaker-avatar-column')
-    expect(html).toContain('data-original-bubble-tail')
     expect(html).toContain('width="32"')
     expect(html).toContain('height="32"')
     expect(html.indexOf('data-original-bubble-content')).toBeLessThan(
@@ -47,6 +46,7 @@ describe('ChatBubble', () => {
       html.indexOf('data-original-bubble-row'),
     )
     expect(html).toContain('max-width:93%')
+    expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
