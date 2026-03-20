@@ -745,7 +745,6 @@ export default function useRealtimeSTT({
     partialLangRef.current = null
     hasFiredInitialPartialTranslateRef.current = false
     lastPartialTranslateLenRef.current = 0
-    latestPartialTranslateSeqRef.current = 0
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -1620,7 +1619,6 @@ export default function useRealtimeSTT({
       partialTranslationsRef.current = {}
       setPartialLang(null)
       partialLangRef.current = null
-      latestPartialTranslateSeqRef.current = 0
       if (partialTranslateControllerRef.current) {
         partialTranslateControllerRef.current.abort()
         partialTranslateControllerRef.current = null
