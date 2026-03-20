@@ -3,6 +3,7 @@ import {
   buildFinalizedUtterancePayload,
   getWsUrl,
   parseSttTranscriptMessage,
+  shouldApplyPartialTranslationResponse,
 } from './use-realtime-stt'
 
 describe('use-realtime-stt pure logic', () => {
@@ -132,5 +133,43 @@ describe('use-realtime-stt pure logic', () => {
     })
 
     expect(built).toBeNull()
+  })
+
+  it('discards stale partial translation responses when a newer request exists', () => {
+    expect(shouldApplyPartialTranslationResponse({
+      requestSeq: 2,
+      latestRequestedSeq: 3,
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+    })).toBe(false)
+
+    expect(shouldApplyPartialTranslationResponse({
+      requestSeq: 3,
+      latestRequestedSeq: 3,
+      requestUtteranceId: 9,
+      currentUtteranceId: 10,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+    })).toBe(false)
+
+    expect(shouldApplyPartialTranslationResponse({
+      requestSeq: 3,
+      latestRequestedSeq: 3,
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-2',
+    })).toBe(false)
+
+    expect(shouldApplyPartialTranslationResponse({
+      requestSeq: 3,
+      latestRequestedSeq: 3,
+      requestUtteranceId: 9,
+      currentUtteranceId: 9,
+      requestSpeaker: 'speaker-1',
+      currentSpeaker: 'speaker-1',
+    })).toBe(true)
   })
 })

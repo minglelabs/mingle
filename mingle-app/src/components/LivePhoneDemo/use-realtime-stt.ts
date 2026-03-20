@@ -319,6 +319,21 @@ function buildFinalizeDedupSignature(language: string, text: string, speaker?: s
   return `${normalizedSpeaker}::${language}::${text}`
 }
 
+export function shouldApplyPartialTranslationResponse(input: {
+  requestSeq: number
+  latestRequestedSeq: number
+  requestUtteranceId: number
+  currentUtteranceId: number
+  requestSpeaker: string | null
+  currentSpeaker: string | null
+}): boolean {
+  return (
+    input.requestSeq === input.latestRequestedSeq
+    && input.requestUtteranceId === input.currentUtteranceId
+    && (input.requestSpeaker || null) === (input.currentSpeaker || null)
+  )
+}
+
 interface TranslateApiResult {
   translations: Record<string, string>
   ttsLanguage?: string
@@ -526,6 +541,7 @@ export default function useRealtimeSTT({
   // then subsequent calls fire when 20/40/60... thresholds are crossed.
   const hasFiredInitialPartialTranslateRef = useRef(false)
   const lastPartialTranslateLenRef = useRef(0)
+  const latestPartialTranslateSeqRef = useRef(0)
   const partialTranslateControllerRef = useRef<AbortController | null>(null)
   const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const sessionKeyRef = useRef('')
@@ -729,6 +745,7 @@ export default function useRealtimeSTT({
     partialLangRef.current = null
     hasFiredInitialPartialTranslateRef.current = false
     lastPartialTranslateLenRef.current = 0
+    latestPartialTranslateSeqRef.current = 0
     if (partialTranslateControllerRef.current) {
       partialTranslateControllerRef.current.abort()
       partialTranslateControllerRef.current = null
@@ -1603,6 +1620,11 @@ export default function useRealtimeSTT({
       partialTranslationsRef.current = {}
       setPartialLang(null)
       partialLangRef.current = null
+      latestPartialTranslateSeqRef.current = 0
+      if (partialTranslateControllerRef.current) {
+        partialTranslateControllerRef.current.abort()
+        partialTranslateControllerRef.current = null
+      }
       nativeStopRequestedRef.current = false
 
       if (useNativeStt) {
@@ -1817,13 +1839,29 @@ export default function useRealtimeSTT({
     // that arrive after a new utterance has started (prevents cross-utterance contamination).
     const requestUtteranceId = utteranceIdRef.current
     const requestSpeaker = activePartialSpeakerRef.current
+    const requestSeq = latestPartialTranslateSeqRef.current + 1
+    latestPartialTranslateSeqRef.current = requestSeq
+    if (partialTranslateControllerRef.current) {
+      partialTranslateControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    partialTranslateControllerRef.current = controller
     translateViaApi(trimmed, currentLang, languages, {
+      signal: controller.signal,
       currentTurnPreviousState: lastPartialTranslationStateRef.current,
     })
       .then(result => {
-        // Discard if a new utterance has started since this request was fired.
-        if (utteranceIdRef.current !== requestUtteranceId) return
-        if (activePartialSpeakerRef.current !== requestSpeaker) return
+        if (partialTranslateControllerRef.current === controller) {
+          partialTranslateControllerRef.current = null
+        }
+        if (!shouldApplyPartialTranslationResponse({
+          requestSeq,
+          latestRequestedSeq: latestPartialTranslateSeqRef.current,
+          requestUtteranceId,
+          currentUtteranceId: utteranceIdRef.current,
+          requestSpeaker,
+          currentSpeaker: activePartialSpeakerRef.current,
+        })) return
         const filteredExisting = stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang)
         const filteredNew = stripSourceLanguageFromTranslations(result.translations, currentLang)
         const nextTranslations = { ...filteredExisting, ...filteredNew }
