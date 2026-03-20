@@ -13,20 +13,21 @@ describe('TranslationBubbleRow', () => {
           bubbleClassName: 'bg-amber-50',
           metaClassName: 'text-amber-500',
         },
-        createElement('p', null, '짧은 번역'),
+        createElement('span', null, '짧은 번역'),
       ),
     )
 
     expect(html).toContain('짧은 번역')
     expect(html).toContain('🇰🇷')
     expect(html).toContain('>ko<')
-    expect(html.indexOf('data-translation-bubble-meta')).toBeLessThan(
-      html.indexOf('data-translation-bubble-content'),
-    )
     expect(html.indexOf('data-translation-bubble-content')).toBeLessThan(
+      html.indexOf('data-translation-bubble-meta'),
+    )
+    expect(html.indexOf('data-translation-bubble-meta')).toBeLessThan(
       html.indexOf('짧은 번역'),
     )
     expect(html).toContain('style="max-width:86%"')
     expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
+    expect(html).toContain('data-translation-bubble-meta')
   })
 })

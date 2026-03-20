@@ -1346,7 +1346,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   bubbleClassName="bg-amber-50/80 border border-amber-100"
                   metaClassName="text-amber-500"
                 >
-                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">{text}</p>
+                  <span style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">{text}</span>
                 </TranslationBubbleRow>
               ))}
               {/* Bouncing dots for pending partial translations */}
@@ -1356,6 +1356,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   lang={lang}
                   bubbleClassName="bg-amber-50/60 border border-amber-100"
                   metaClassName="text-amber-400"
+                  inlineMeta={false}
                 >
                   <div className="flex items-center gap-0.5 h-4">
                     <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1374,14 +1375,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               className="flex flex-col gap-1"
             >
-              <div className="inline-flex w-fit max-w-[85%] items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5">
-                <div className="flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap text-gray-500">
-                    <span className="text-base">{getSttLanguageFlag(demoTypingLang)}</span>
-                    <span className="text-xs font-semibold text-gray-500 uppercase">{demoTypingLang}</span>
-                </div>
+              <div className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5">
                 <div className="min-w-0">
                   <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-600">
-                    {demoTypingText}
+                    <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
+                      <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
+                      <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
+                    </span>
+                    <span>{demoTypingText}</span>
                     <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />
                   </p>
                 </div>
@@ -1398,10 +1399,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     bubbleClassName="bg-amber-50/80 border border-amber-100"
                     metaClassName="text-amber-500"
                   >
-                    <p style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">
+                    <span style={{ lineHeight: LIVE_CHAT_BUBBLE_RELAXED_TEXT_LINE_HEIGHT }} className="text-sm text-gray-500">
                       {text}
                       <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
-                    </p>
+                    </span>
                   </TranslationBubbleRow>
                 </motion.div>
               ))}

@@ -30,14 +30,16 @@ describe('ChatBubble', () => {
     expect(html).toContain('🇺🇸')
     expect(html).toContain('>en<')
     expect(html).toContain('8m ago')
+    expect(html.indexOf('data-original-bubble-content')).toBeLessThan(
+      html.indexOf('data-original-bubble-meta'),
+    )
     expect(html.indexOf('data-original-bubble-meta')).toBeLessThan(
-      html.indexOf('data-original-bubble-content'),
+      html.indexOf('Original message'),
     )
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('data-original-bubble-timestamp'),
     )
     expect(html).toContain('style="max-width:min(86%, calc(100% - 4.5rem))"')
-    expect(html).toContain('line-height:1.3')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
   })
 })

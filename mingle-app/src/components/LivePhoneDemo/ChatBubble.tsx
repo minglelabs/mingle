@@ -56,12 +56,12 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
 
 function SpeakingIndicator() {
   return (
-    <div className="flex items-end gap-0.5" aria-label="tts-speaking">
+    <span className="inline-flex items-end gap-0.5 align-middle" aria-label="tts-speaking">
       <span className="w-0.5 h-2 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
       <span className="w-0.5 h-3 bg-amber-500 rounded-full animate-pulse" style={{ animationDelay: '120ms' }} />
       <span className="w-0.5 h-2.5 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '240ms' }} />
       <span className="w-0.5 h-1.5 bg-amber-300/90 rounded-full animate-pulse" style={{ animationDelay: '360ms' }} />
-    </div>
+    </span>
   )
 }
 
@@ -97,20 +97,20 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
         <div
           data-original-bubble-body
           style={{ maxWidth: originalBubbleMaxWidth }}
-          className="inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
+          className="w-fit rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
         >
-          <div
-            data-original-bubble-meta
-            className="flex min-h-5 shrink-0 items-center gap-1 whitespace-nowrap text-gray-400"
-          >
-            <span className="text-base">{flag}</span>
-            <span className="text-xs font-semibold text-gray-400 uppercase">
-              {utterance.originalLang}
-            </span>
-          </div>
           <div data-original-bubble-content className="min-w-0">
             <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-900">
-              {utterance.originalText}
+              <span
+                data-original-bubble-meta
+                className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
+              >
+                <span className="text-base leading-none">{flag}</span>
+                <span className="text-[11px] font-semibold uppercase leading-none">
+                  {utterance.originalLang}
+                </span>
+              </span>
+              <span>{utterance.originalText}</span>
             </p>
           </div>
         </div>
@@ -148,12 +148,12 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                 : undefined
           }
         >
-          <p
+          <span
             style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
             className={`text-sm ${isFinalized ? 'text-gray-700' : 'text-gray-500'}`}
           >
             {text}
-          </p>
+          </span>
         </TranslationBubbleRow>
       ))}
       {/* Bouncing dots for pending translations */}
@@ -163,6 +163,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
           lang={lang}
           bubbleClassName="bg-amber-50/60 border border-amber-100"
           metaClassName="text-amber-400"
+          inlineMeta={false}
         >
           <div className="flex items-center gap-0.5 h-4">
             <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
