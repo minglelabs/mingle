@@ -134,7 +134,7 @@ jobs:
 
       - name: Enforce RN iOS namespace contract
         env:
-          RN_API_NAMESPACE: ios/v1.0.0
+          RN_API_NAMESPACE: ios/v1.0.2
         run: pnpm run rn:ios:env-check
 
       - name: Run TDD suite (unit)
@@ -213,7 +213,7 @@ jobs:
         if: steps.secret_gate.outputs.run_live == 'true'
         env:
           MINGLE_TEST_API_BASE_URL: http://127.0.0.1:3000
-          MINGLE_TEST_API_NAMESPACE: ios/v1.0.0
+          MINGLE_TEST_API_NAMESPACE: ios/v1.0.2
           MINGLE_TEST_WS_URL: ws://127.0.0.1:3001
           MINGLE_TEST_AUDIO_FIXTURE_DIR: test-fixtures/audio/fixtures
         run: |
