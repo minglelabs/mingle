@@ -37,7 +37,7 @@ export default function TranslationBubbleRow({
           <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
           {accessory}
         </div>
-        <div data-translation-bubble-content className="min-w-0 flex-1">
+        <div data-translation-bubble-content className="min-w-0">
           {children}
         </div>
       </div>

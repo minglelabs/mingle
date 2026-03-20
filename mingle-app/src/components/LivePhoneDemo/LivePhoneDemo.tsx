@@ -1377,7 +1377,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <span className="text-base">{getSttLanguageFlag(demoTypingLang)}</span>
                     <span className="text-xs font-semibold text-gray-500 uppercase">{demoTypingLang}</span>
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0">
                   <p className="text-sm text-gray-600 leading-snug">
                     {demoTypingText}
                     <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full animate-pulse" />

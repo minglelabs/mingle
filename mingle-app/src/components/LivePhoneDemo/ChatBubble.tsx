@@ -105,7 +105,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
               {utterance.originalLang}
             </span>
           </div>
-          <div data-original-bubble-content className="min-w-0 flex-1">
+          <div data-original-bubble-content className="min-w-0">
             <p className="text-sm text-gray-900 leading-relaxed">{utterance.originalText}</p>
           </div>
         </div>

@@ -26,5 +26,6 @@ describe('TranslationBubbleRow', () => {
     expect(html.indexOf('data-translation-bubble-content')).toBeLessThan(
       html.indexOf('짧은 번역'),
     )
+    expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
   })
 })

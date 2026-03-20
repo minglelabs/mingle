@@ -36,5 +36,6 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('data-original-bubble-timestamp'),
     )
+    expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
   })
 })
