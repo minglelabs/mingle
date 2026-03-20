@@ -79,9 +79,9 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
     .filter(lang => !utterance.translations[lang])
 
   const timestampLines = formatChatBubbleTimestampLines(utterance.createdAtMs, uiLocale)
-  const originalBubbleMaxWidthClass = timestampLines.length > 0
-    ? 'max-w-[calc(100%-4.5rem)]'
-    : 'max-w-[85%]'
+  const originalBubbleMaxWidth = timestampLines.length > 0
+    ? 'calc(100% - 4.5rem)'
+    : '85%'
 
   return (
     <motion.div
@@ -94,7 +94,8 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
       <div data-original-bubble-row className="flex w-full max-w-[96%] items-end gap-2">
         <div
           data-original-bubble-body
-          className={`${originalBubbleMaxWidthClass} inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm`}
+          style={{ maxWidth: originalBubbleMaxWidth }}
+          className="inline-flex w-fit items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
         >
           <div
             data-original-bubble-meta
@@ -106,7 +107,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
             </span>
           </div>
           <div data-original-bubble-content className="min-w-0">
-            <p className="text-sm leading-[1.45] text-gray-900">{utterance.originalText}</p>
+            <p className="text-sm leading-[1.3] text-gray-900">{utterance.originalText}</p>
           </div>
         </div>
         {timestampLines.length > 0 && (
@@ -142,7 +143,7 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
                 : undefined
           }
         >
-          <p className={`text-sm leading-[1.45] ${
+          <p className={`text-sm leading-[1.3] ${
             isFinalized ? 'text-gray-700' : 'text-gray-500'
           }`}>{text}</p>
         </TranslationBubbleRow>
