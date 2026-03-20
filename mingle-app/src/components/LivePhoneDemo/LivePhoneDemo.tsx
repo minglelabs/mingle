@@ -7,6 +7,7 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -1018,7 +1019,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ) {
       handleLoadOlder()
     }
-  }, [hasOlderUtterances, handleLoadOlder])
+  }, [hasOlderUtterances, handleLoadOlder, uiLocale])
 
   const handleScroll = useCallback(() => {
     const fromUserScroll = isUserScrollIntentActive()
@@ -1337,33 +1338,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </div>
               {/* Available partial translations */}
               {availablePartialTranslations.map(([lang, text]) => (
-                <div
+                <TranslationBubbleRow
                   key={lang}
-                  className="ml-2.5 max-w-[80%] bg-amber-50/80 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
+                  lang={lang}
+                  bubbleClassName="bg-amber-50/80 border border-amber-100"
+                  metaClassName="text-amber-500"
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                  <span className="text-xs font-semibold text-amber-500 uppercase">{lang}</span>
-                </div>
                   <p className="text-sm text-gray-500 leading-relaxed">{text}</p>
-                </div>
+                </TranslationBubbleRow>
               ))}
               {/* Bouncing dots for pending partial translations */}
               {pendingPartialLangs.map((lang) => (
-                <div
-                key={`partial-pending-${lang}`}
-                  className="ml-2.5 max-w-[80%] bg-amber-50/60 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
+                <TranslationBubbleRow
+                  key={`partial-pending-${lang}`}
+                  lang={lang}
+                  bubbleClassName="bg-amber-50/60 border border-amber-100"
+                  metaClassName="text-amber-400"
                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                    <span className="text-xs font-semibold text-amber-400 uppercase">{lang}</span>
-                  </div>
                   <div className="flex items-center gap-0.5 h-4">
                     <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                </div>
+                </TranslationBubbleRow>
               ))}
             </motion.div>
           )}
@@ -1391,17 +1388,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   key={lang}
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
-                   className="ml-2.5 max-w-[80%] bg-amber-50/80 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
-                 >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-base">{getSttLanguageFlag(lang)}</span>
-                     <span className="text-xs font-semibold text-amber-500 uppercase">{lang}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 leading-relaxed">
-                    {text}
-                    <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
-                  </p>
-                 </motion.div>
+                >
+                  <TranslationBubbleRow
+                    lang={lang}
+                    bubbleClassName="bg-amber-50/80 border border-amber-100"
+                    metaClassName="text-amber-500"
+                  >
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      {text}
+                      <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
+                    </p>
+                  </TranslationBubbleRow>
+                </motion.div>
               ))}
             </motion.div>
           )}

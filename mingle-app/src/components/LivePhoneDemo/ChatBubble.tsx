@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { motion } from 'framer-motion'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import { formatChatBubbleTimestamp } from './chat-bubble.timestamp'
+import TranslationBubbleRow from './TranslationBubbleRow'
 
 const RECENT_THRESHOLD_MS = 90_000
 
@@ -104,47 +105,42 @@ function ChatBubble({ utterance, uiLocale, isSpeaking = false, speakingLanguage 
 
       {/* Translation bubbles */}
       {translationEntries.map(({ lang, text, isFinalized }) => (
-        <div
+        <TranslationBubbleRow
           key={lang}
-          className={`ml-2.5 max-w-[80%] rounded-2xl rounded-tl-sm px-3.5 py-2 transition-colors ${
+          lang={lang}
+          bubbleClassName={`transition-colors ${
             isFinalized
               ? 'bg-amber-50 border border-amber-100'
               : 'bg-gray-100/80 border border-gray-200'
           }`}
+          metaClassName={isFinalized ? 'text-amber-500' : 'text-gray-400'}
+          accessory={
+            isSpeaking && speakingLanguage === lang
+              ? <SpeakingIndicator />
+              : !isFinalized
+                ? <span className="inline-block w-1 h-1 rounded-full bg-gray-400 animate-pulse" />
+                : undefined
+          }
         >
-          <div className="flex items-center justify-between mb-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base">{getSttLanguageFlag(lang)}</span>
-              <span className={`text-xs font-semibold uppercase ${
-                isFinalized ? 'text-amber-500' : 'text-gray-400'
-              }`}>{lang}</span>
-              {!isFinalized && (
-                <span className="inline-block w-1 h-1 rounded-full bg-gray-400 animate-pulse" />
-              )}
-            </div>
-            {isSpeaking && speakingLanguage === lang && <SpeakingIndicator />}
-          </div>
           <p className={`text-sm leading-relaxed ${
             isFinalized ? 'text-gray-700' : 'text-gray-500'
           }`}>{text}</p>
-        </div>
+        </TranslationBubbleRow>
       ))}
       {/* Bouncing dots for pending translations */}
       {pendingLangs.map((lang) => (
-        <div
+        <TranslationBubbleRow
           key={`pending-${lang}`}
-          className="ml-2.5 max-w-[80%] bg-amber-50/60 border border-amber-100 rounded-2xl rounded-tl-sm px-3.5 py-2"
+          lang={lang}
+          bubbleClassName="bg-amber-50/60 border border-amber-100"
+          metaClassName="text-amber-400"
         >
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-base">{getSttLanguageFlag(lang)}</span>
-            <span className="text-xs font-semibold text-amber-400 uppercase">{lang}</span>
-          </div>
           <div className="flex items-center gap-0.5 h-4">
             <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-        </div>
+        </TranslationBubbleRow>
       ))}
     </motion.div>
   )
