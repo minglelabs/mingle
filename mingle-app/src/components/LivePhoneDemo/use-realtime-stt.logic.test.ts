@@ -3,6 +3,7 @@ import {
   buildFinalizedUtterancePayload,
   getWsUrl,
   parseSttTranscriptMessage,
+  pruneUnresolvedTranslationTargets,
   shouldApplyPartialTranslationResponse,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
@@ -177,5 +178,27 @@ describe('use-realtime-stt pure logic', () => {
       { kind: 'final', seq: 3 },
       { kind: 'partial', seq: 999 },
     )).toBe(false)
+  })
+
+  it('prunes unresolved target languages after the final translation attempt settles', () => {
+    expect(pruneUnresolvedTranslationTargets({
+      targetLanguages: ['ko', 'ja'],
+      translations: {
+        ko: '안녕하세요',
+        ja: '   ',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: false,
+      },
+    })).toEqual({
+      targetLanguages: ['ko'],
+      translations: {
+        ko: '안녕하세요',
+      },
+      translationFinalized: {
+        ko: true,
+      },
+    })
   })
 })

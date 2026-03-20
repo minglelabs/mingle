@@ -165,6 +165,45 @@ export function buildTurnTargetLanguagesSnapshot(
   return targetLanguages
 }
 
+export function pruneUnresolvedTranslationTargets(input: {
+  targetLanguages?: string[]
+  translations: Record<string, string>
+  translationFinalized?: Record<string, boolean>
+}): Pick<Utterance, 'targetLanguages' | 'translations' | 'translationFinalized'> {
+  const translations: Record<string, string> = {}
+  for (const [languageRaw, translatedText] of Object.entries(input.translations || {})) {
+    const language = (languageRaw || '').trim()
+    const cleaned = translatedText.trim()
+    if (!language || !cleaned) continue
+    translations[language] = cleaned
+  }
+
+  const targetLanguages: string[] = []
+  const seen = new Set<string>()
+  const pushLanguage = (languageRaw: string) => {
+    const language = (languageRaw || '').trim()
+    if (!language || seen.has(language) || !translations[language]) return
+    seen.add(language)
+    targetLanguages.push(language)
+  }
+
+  for (const language of input.targetLanguages || []) pushLanguage(language)
+  for (const language of Object.keys(translations)) pushLanguage(language)
+
+  const translationFinalized: Record<string, boolean> = {}
+  for (const language of targetLanguages) {
+    if (input.translationFinalized?.[language] === true) {
+      translationFinalized[language] = true
+    }
+  }
+
+  return {
+    targetLanguages,
+    translations,
+    translationFinalized,
+  }
+}
+
 export interface CurrentTurnPreviousStatePayload {
   sourceLanguage: string
   sourceText: string
@@ -1037,9 +1076,23 @@ export default function useRealtimeSTT({
         newTranslations[lang] = cleaned
         if (markFinalized) newFinalized[lang] = true
       }
+
+      const settledState = markFinalized
+        ? pruneUnresolvedTranslationTargets({
+          targetLanguages: target.targetLanguages,
+          translations: newTranslations,
+          translationFinalized: newFinalized,
+        })
+        : null
+
       return [
         ...prev.slice(0, idx),
-        { ...target, translations: newTranslations, translationFinalized: newFinalized },
+        {
+          ...target,
+          targetLanguages: settledState?.targetLanguages || target.targetLanguages,
+          translations: settledState?.translations || newTranslations,
+          translationFinalized: settledState?.translationFinalized || newFinalized,
+        },
         ...prev.slice(idx + 1),
       ]
     })
