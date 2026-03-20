@@ -392,6 +392,11 @@ type RecentFinalizedUtterance = {
   source: 'local' | 'server'
 }
 
+type RecentFinalizedUtteranceMatch =
+  | { kind: 'none' }
+  | { kind: 'reuse_local'; utteranceId: string }
+  | { kind: 'skip_duplicate_server'; utteranceId: string }
+
 function buildUtteranceId(createdAtMs: number, utteranceSerial: number): string {
   return `u-${createdAtMs}-${utteranceSerial}`
 }
@@ -450,25 +455,35 @@ export function isDuplicateTimedSignature(input: {
   )
 }
 
-export function findRecentLocalFinalizeReuseUtteranceId(input: {
+function normalizeFinalizeReuseText(rawText: string): string {
+  return normalizeSttTurnText(rawText)
+    .replace(/[\s.,!?;:，。、…—–-]+$/u, '')
+    .trim()
+}
+
+export function classifyRecentFinalizedUtteranceMatch(input: {
   pendingUtteranceId?: string | null
   finalizedUtteranceId: string
   recentFinalizedUtterance: RecentFinalizedUtterance | null
   nowMs: number
   text: string
   language: string
-}): string | null {
-  if (input.pendingUtteranceId) return null
+}): RecentFinalizedUtteranceMatch {
+  if (input.pendingUtteranceId) return { kind: 'none' }
   const recentFinalizedUtterance = input.recentFinalizedUtterance
-  if (!recentFinalizedUtterance) return null
-  if (recentFinalizedUtterance.source !== 'local') return null
-  if (input.nowMs >= recentFinalizedUtterance.expiresAt) return null
-  if (normalizeSttTurnText(recentFinalizedUtterance.text) !== input.text) return null
-  if (normalizeLangForCompare(recentFinalizedUtterance.language) !== normalizeLangForCompare(input.language)) {
-    return null
+  if (!recentFinalizedUtterance) return { kind: 'none' }
+  if (input.nowMs >= recentFinalizedUtterance.expiresAt) return { kind: 'none' }
+  if (normalizeFinalizeReuseText(recentFinalizedUtterance.text) !== normalizeFinalizeReuseText(input.text)) {
+    return { kind: 'none' }
   }
-  if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return null
-  return recentFinalizedUtterance.id
+  if (normalizeLangForCompare(recentFinalizedUtterance.language) !== normalizeLangForCompare(input.language)) {
+    return { kind: 'none' }
+  }
+  if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return { kind: 'none' }
+  if (recentFinalizedUtterance.source === 'local') {
+    return { kind: 'reuse_local', utteranceId: recentFinalizedUtterance.id }
+  }
+  return { kind: 'skip_duplicate_server', utteranceId: recentFinalizedUtterance.id }
 }
 
 export function shouldApplyPartialTranslationResponse(input: {
@@ -2074,7 +2089,7 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
-        const recentLocalReuseUtteranceId = findRecentLocalFinalizeReuseUtteranceId({
+        const recentFinalizedMatch = classifyRecentFinalizedUtteranceMatch({
           pendingUtteranceId: pendingTurn?.utteranceId || null,
           finalizedUtteranceId: finalizedPayload.utteranceId,
           recentFinalizedUtterance: recentFinalizedUtteranceRef.current,
@@ -2082,6 +2097,21 @@ export default function useRealtimeSTT({
           text: finalizedPayload.text,
           language: finalizedPayload.language,
         })
+        if (recentFinalizedMatch.kind === 'skip_duplicate_server') {
+          logSttDebug('finalize.skip_duplicate_server', {
+            reusedUtteranceId: recentFinalizedMatch.utteranceId,
+            text: finalizedPayload.text,
+            language: finalizedPayload.language,
+          })
+          delete pendingTurnsBySpeakerRef.current[speaker]
+          syncVisiblePendingTurn()
+          return
+        }
+        const recentLocalReuseUtteranceId = (
+          recentFinalizedMatch.kind === 'reuse_local'
+            ? recentFinalizedMatch.utteranceId
+            : null
+        )
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
@@ -2107,7 +2137,7 @@ export default function useRealtimeSTT({
           id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
           text: finalizedPayload.text,
           language: finalizedPayload.language,
-          expiresAt: now + 5_000,
+          expiresAt: now + 2_000,
           source: 'server',
         }
 

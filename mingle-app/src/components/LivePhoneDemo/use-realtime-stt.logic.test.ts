@@ -4,8 +4,8 @@ import {
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
+  classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
-  findRecentLocalFinalizeReuseUtteranceId,
   findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
@@ -374,13 +374,13 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe(false)
   })
 
-  it('reuses only recent local finalize bubbles when server final has no pending utterance identity', () => {
-    expect(findRecentLocalFinalizeReuseUtteranceId({
+  it('classifies recent finalized utterance matches for local handoff and server duplicates', () => {
+    expect(classifyRecentFinalizedUtteranceMatch({
       pendingUtteranceId: null,
       finalizedUtteranceId: 'u-server',
       recentFinalizedUtterance: {
         id: 'u-local',
-        text: '짧게.',
+        text: '짧게',
         language: 'ko',
         expiresAt: 5_000,
         source: 'local',
@@ -388,9 +388,12 @@ describe('use-realtime-stt pure logic', () => {
       nowMs: 1_000,
       text: '짧게.',
       language: 'ko',
-    })).toBe('u-local')
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local',
+    })
 
-    expect(findRecentLocalFinalizeReuseUtteranceId({
+    expect(classifyRecentFinalizedUtteranceMatch({
       pendingUtteranceId: 'u-pending',
       finalizedUtteranceId: 'u-pending',
       recentFinalizedUtterance: {
@@ -403,9 +406,9 @@ describe('use-realtime-stt pure logic', () => {
       nowMs: 1_000,
       text: '짧게.',
       language: 'ko',
-    })).toBeNull()
+    })).toEqual({ kind: 'none' })
 
-    expect(findRecentLocalFinalizeReuseUtteranceId({
+    expect(classifyRecentFinalizedUtteranceMatch({
       pendingUtteranceId: null,
       finalizedUtteranceId: 'u-server',
       recentFinalizedUtterance: {
@@ -418,7 +421,10 @@ describe('use-realtime-stt pure logic', () => {
       nowMs: 1_000,
       text: '짧게.',
       language: 'ko',
-    })).toBeNull()
+    })).toEqual({
+      kind: 'skip_duplicate_server',
+      utteranceId: 'u-server-prev',
+    })
   })
 
   it('finds the most recent utterance matching source text and language', () => {
