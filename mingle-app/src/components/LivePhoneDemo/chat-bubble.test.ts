@@ -101,4 +101,23 @@ describe('ChatBubble', () => {
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
   })
+
+  it('renders a warning icon instead of the unknown language label', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-unknown',
+          originalText: 'Mystery language',
+          originalLang: 'unknown',
+          translations: {},
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).toContain('🌐')
+    expect(html).toContain('❓')
+    expect(html).not.toContain('>unknown<')
+    expect(html).not.toContain('>UNKNOWN<')
+  })
 })

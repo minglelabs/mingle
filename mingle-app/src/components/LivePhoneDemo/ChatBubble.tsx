@@ -39,6 +39,14 @@ function normalizeLanguageCode(rawLanguage: string): string {
   return (rawLanguage || '').trim().replace('_', '-').toLowerCase().split('-')[0] || ''
 }
 
+function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
+  const normalized = normalizeLanguageCode(rawLanguage)
+  if (!normalized || normalized === 'unknown') {
+    return '❓'
+  }
+  return rawLanguage
+}
+
 function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   const sourceLanguage = normalizeLanguageCode(utterance.originalLang)
   const targetLanguages: string[] = []
@@ -81,6 +89,7 @@ function ChatBubble({
   speakingLanguage = null,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
+  const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
   const avatar = getSpeakerAvatar(
     utterance.speaker,
     utterance.speakerAvatarSeed,
@@ -145,7 +154,7 @@ function ChatBubble({
                   >
                     <span className="text-base leading-none">{flag}</span>
                     <span className="text-[11px] font-semibold uppercase leading-none">
-                      {utterance.originalLang}
+                      {originalLanguageBadgeLabel}
                     </span>
                   </span>
                   <span data-original-bubble-text className="align-middle">
