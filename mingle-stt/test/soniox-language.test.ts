@@ -4,6 +4,7 @@ import {
     buildSonioxDebugTokenRuns,
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
+    hasPendingSonioxTurnText,
     mergeDetectedLang,
     shouldUseTokenLanguageForCurrentTurn,
 } from '../soniox-language';
@@ -65,4 +66,11 @@ test('raw Soniox debug token grouping preserves contiguous language runs', () =>
         formatSonioxDebugTokenRun(runs[0]),
         'is_final=false, speaker=1, language=ko, text=안녕하세요 ',
     );
+});
+
+test('endpoint flush includes any speaker that still has pending text', () => {
+    assert.equal(hasPendingSonioxTurnText('personal computer would'), true);
+    assert.equal(hasPendingSonioxTurnText('personal computer would <fin>'), true);
+    assert.equal(hasPendingSonioxTurnText(' <fin> '), false);
+    assert.equal(hasPendingSonioxTurnText('   '), false);
 });

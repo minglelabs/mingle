@@ -13,6 +13,7 @@ export type SonioxDebugTokenRun = {
 };
 
 const ENDPOINT_MARKER_RE = /<\/?(?:end|fin)>/i;
+const ENDPOINT_MARKER_RE_GLOBAL = /<\/?(?:end|fin)>/gi;
 
 export function normalizeDetectedLang(rawLanguage: unknown): string {
     return typeof rawLanguage === 'string' && rawLanguage.trim()
@@ -90,4 +91,8 @@ export function buildSonioxDebugTokenRuns(tokens: SonioxDebugTokenLike[]): Sonio
 
 export function formatSonioxDebugTokenRun(run: SonioxDebugTokenRun): string {
     return `is_final=${run.isFinal}, speaker=${run.speaker}, language=${run.language}, text=${run.text}`;
+}
+
+export function hasPendingSonioxTurnText(text: string): boolean {
+    return text.replace(ENDPOINT_MARKER_RE_GLOBAL, '').trim().length > 0;
 }

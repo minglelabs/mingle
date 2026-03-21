@@ -12,6 +12,7 @@ import {
     buildSonioxDebugTokenRuns,
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
+    hasPendingSonioxTurnText,
     mergeDetectedLang,
     normalizeDetectedLang,
     normalizeSpeaker,
@@ -567,12 +568,6 @@ wss.on('connection', (clientWs) => {
                 hasProgressTokenBeyondWatermark: boolean;
                 hasTimestampedProgressBeyondWatermark: boolean;
             };
-            type SonioxSpeakerFrameInfo = {
-                speaker: string;
-                previousMergedSnapshot: string;
-                nextMergedSnapshot: string;
-                transcriptChanged: boolean;
-            };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
@@ -903,7 +898,7 @@ wss.on('connection', (clientWs) => {
 
                     if (hasEndpointToken) {
                         for (const [speaker, state] of speakerStates.entries()) {
-                            if (state.strategy.getSnapshotTextLen() === null) continue;
+                            if (!hasPendingSonioxTurnText(state.currentSnapshotText)) continue;
                             if (speakerFrameUpdates.has(speaker)) continue;
                             speakerFrameUpdates.set(speaker, {
                                 speaker,
@@ -918,62 +913,7 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
-                    const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
                     for (const frameUpdate of speakerFrameUpdates.values()) {
-                        const speakerState = getSpeakerState(frameUpdate.speaker);
-                        const previousMergedSnapshot = speakerState.currentSnapshotText;
-                        const nextProviderFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
-                        const nextNonFinalText = frameUpdate.nonFinalText
-                            || (speakerState.latestNonFinalIsProvisionalCarry ? speakerState.latestNonFinalText : '');
-                        const nextMergedSnapshot = composeTurnText(nextProviderFinalizedText, nextNonFinalText);
-                        speakerFrameInfos.set(frameUpdate.speaker, {
-                            speaker: frameUpdate.speaker,
-                            previousMergedSnapshot,
-                            nextMergedSnapshot,
-                            transcriptChanged: (
-                                stripEndpointMarkers(nextMergedSnapshot)
-                                !== stripEndpointMarkers(previousMergedSnapshot)
-                            ),
-                        });
-                    }
-
-                    // Speaker change wins over silence-based segmentation:
-                    // if another speaker makes progress, finalize prior speakers first.
-                    const currentFrameSpeakers = new Set(
-                        Array.from(speakerFrameUpdates.values())
-                            .filter((frameUpdate) => frameUpdate.hasProgressTokenBeyondWatermark)
-                            .map((frameUpdate) => frameUpdate.speaker),
-                    );
-                    if (currentFrameSpeakers.size > 0) {
-                        for (const existingSpeaker of Array.from(speakerStates.keys())) {
-                            if (currentFrameSpeakers.has(existingSpeaker)) continue;
-                            const state = speakerStates.get(existingSpeaker);
-                            if (state?.strategy.getSnapshotTextLen() !== null) continue;
-                            finalizeSpeakerTurn(existingSpeaker);
-                        }
-                    }
-
-                    const progressingSpeakers = new Set(
-                        Array.from(speakerFrameInfos.values())
-                            .filter((info) => info.transcriptChanged)
-                            .map((info) => info.speaker),
-                    );
-                    const speakersToSkipInThisFrame = new Set<string>();
-                    if (progressingSpeakers.size > 0 && speakerFrameInfos.size > 1) {
-                        for (const info of speakerFrameInfos.values()) {
-                            if (info.transcriptChanged) continue;
-                            if (!stripEndpointMarkers(info.previousMergedSnapshot).trim()) continue;
-                            const state = speakerStates.get(info.speaker);
-                            if (state?.strategy.getSnapshotTextLen() !== null) continue;
-                            finalizeSpeakerTurn(info.speaker);
-                            speakersToSkipInThisFrame.add(info.speaker);
-                        }
-                    }
-
-                    for (const frameUpdate of speakerFrameUpdates.values()) {
-                        if (speakersToSkipInThisFrame.has(frameUpdate.speaker)) {
-                            continue;
-                        }
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
                         const previousNonFinalText = speakerState.latestNonFinalText;
