@@ -664,7 +664,7 @@ wss.on('connection', (clientWs) => {
                     nonFinalText: '',
                     maxFinalTokenEndMs: -1,
                     maxSeenTokenEndMs: -1,
-                    lastDetectedLang: run.language,
+                    lastDetectedLang: null,
                     hasProgressTokenBeyondWatermark: false,
                     hasTimestampedProgressBeyondWatermark: false,
                 };
@@ -681,6 +681,9 @@ wss.on('connection', (clientWs) => {
                         state.lastConsumedEndMs,
                     );
                     if (!includeByWatermark) continue;
+                    if (run.language !== 'unknown') {
+                        frameUpdate.lastDetectedLang = run.language;
+                    }
 
                     frameUpdate.hasProgressTokenBeyondWatermark = true;
                     if (isTokenTimestampedBeyondWatermark(
