@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { getSttLanguageFlag } from '@/lib/stt-languages'
+import { canonicalizeSttLanguageCode, getSttLanguageFlag } from '@/lib/stt-languages'
 import {
   hasRenderableChatBubbleTimestamp,
 } from './chat-bubble.timestamp'
@@ -81,6 +81,7 @@ function ChatBubble({
   speakingLanguage = null,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
+  const shouldShowLanguageCode = Boolean(canonicalizeSttLanguageCode(utterance.originalLang))
   const avatar = getSpeakerAvatar(
     utterance.speaker,
     utterance.speakerAvatarSeed,
@@ -144,9 +145,11 @@ function ChatBubble({
                     className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
                   >
                     <span className="text-base leading-none">{flag}</span>
-                    <span className="text-[11px] font-semibold uppercase leading-none">
-                      {utterance.originalLang}
-                    </span>
+                    {shouldShowLanguageCode ? (
+                      <span className="text-[11px] font-semibold uppercase leading-none">
+                        {utterance.originalLang}
+                      </span>
+                    ) : null}
                   </span>
                   <span data-original-bubble-text className="align-middle">
                     {utterance.originalText}

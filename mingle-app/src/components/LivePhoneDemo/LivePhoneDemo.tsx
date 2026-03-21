@@ -676,6 +676,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
   })
+  const shouldShowDemoTypingLangCode = demoTypingLang ? Boolean(canonicalizeSttLanguageCode(demoTypingLang)) : false
 
   // Boost TTS volume while STT is active to compensate for iOS
   // .playAndRecord audio session reducing speaker output.
@@ -1358,7 +1359,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-600">
                     <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
                       <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
-                      <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
+                      {shouldShowDemoTypingLangCode ? (
+                        <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
+                      ) : null}
                     </span>
                     <span className="align-middle">
                       {demoTypingText}

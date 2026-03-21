@@ -5,6 +5,7 @@ import {
   STT_LANGUAGE_CODES,
   STT_LANGUAGE_NAME_MAP,
   STT_LANGUAGE_OPTIONS,
+  UNKNOWN_STT_LANGUAGE_ICON,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
@@ -48,6 +49,6 @@ describe('STT language catalog', () => {
     expect(getSttLanguageFlag('af')).toBe('🇿🇦')
     expect(getSttLanguageFlag('zh-TW')).toBe('🇨🇳')
     expect(getSttLanguageFlag('fil-PH')).toBe('🇵🇭')
-    expect(getSttLanguageFlag('unknown')).toBe('🌐')
+    expect(getSttLanguageFlag('unknown')).toBe(UNKNOWN_STT_LANGUAGE_ICON)
   })
 })

@@ -88,6 +88,8 @@ export const STT_LANGUAGE_NAME_MAP: Record<SttLanguageCode, string> = Object.fro
   STT_LANGUAGE_OPTIONS.map(({ code, englishName }) => [code, englishName]),
 ) as Record<SttLanguageCode, string>
 
+export const UNKNOWN_STT_LANGUAGE_ICON = '⚠️'
+
 export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode | '' {
   return canonicalizeTranslationLanguageCode(rawValue)
 }
@@ -114,6 +116,6 @@ export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | un
 
 export function getSttLanguageFlag(rawValue: string): string {
   const canonical = canonicalizeSttLanguageCode(rawValue)
-  if (!canonical) return '🌐'
-  return STT_LANGUAGE_FLAG_MAP[canonical] || '🌐'
+  if (!canonical) return UNKNOWN_STT_LANGUAGE_ICON
+  return STT_LANGUAGE_FLAG_MAP[canonical] || UNKNOWN_STT_LANGUAGE_ICON
 }

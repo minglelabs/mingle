@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode } from 'react'
-import { getSttLanguageFlag } from '@/lib/stt-languages'
+import { canonicalizeSttLanguageCode, getSttLanguageFlag } from '@/lib/stt-languages'
 import { cn } from '@/lib/utils'
 
 interface TranslationBubbleRowProps {
@@ -25,6 +25,7 @@ export default function TranslationBubbleRow({
   contentStyle,
   children,
 }: TranslationBubbleRowProps) {
+  const shouldShowLanguageCode = Boolean(canonicalizeSttLanguageCode(lang))
   const meta = (
     <span
       data-translation-bubble-meta
@@ -34,7 +35,9 @@ export default function TranslationBubbleRow({
       )}
     >
       <span className="text-base leading-none">{getSttLanguageFlag(lang)}</span>
-      <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
+      {shouldShowLanguageCode ? (
+        <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
+      ) : null}
       {accessory}
     </span>
   )
@@ -78,7 +81,9 @@ export default function TranslationBubbleRow({
             )}
           >
             <span className="text-base leading-none">{getSttLanguageFlag(lang)}</span>
-            <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
+            {shouldShowLanguageCode ? (
+              <span className="text-[11px] font-semibold uppercase leading-none">{lang}</span>
+            ) : null}
             {accessory}
           </div>
           <div data-translation-bubble-content className="min-w-0">
