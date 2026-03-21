@@ -556,7 +556,6 @@ type NativeSttStartPayload = {
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
-  sonioxLanguageHints?: string[];
 };
 
 type NativeSttStopPayload = {
@@ -1240,12 +1239,6 @@ function AppInner(): React.JSX.Element {
       ? payload.sttModel.trim()
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
-    const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
-      ? payload.sonioxLanguageHints
-        .filter((language): language is string => typeof language === 'string')
-        .map(language => language.trim())
-        .filter(Boolean)
-      : [];
 
     try {
       nativeStatusRef.current = 'starting';
@@ -1253,7 +1246,6 @@ function AppInner(): React.JSX.Element {
         wsUrl,
         sttModel,
         aecEnabled,
-        sonioxLanguageHints,
       });
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {

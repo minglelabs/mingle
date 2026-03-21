@@ -637,6 +637,7 @@ wss.on('connection', (clientWs) => {
                 state.latestNonFinalIsProvisionalCarry = false;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
+                state.detectedLang = 'unknown';
                 state.strategy.resetState();
             };
 
@@ -955,10 +956,12 @@ wss.on('connection', (clientWs) => {
                         }
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
+                        const previousDetectedLang = speakerState.detectedLang;
                         const previousNonFinalText = speakerState.latestNonFinalText;
                         if (frameUpdate.lastDetectedLang) {
                             speakerState.detectedLang = frameUpdate.lastDetectedLang;
                         }
+                        const languageChanged = speakerState.detectedLang !== previousDetectedLang;
 
                         if (
                             speakerState.latestNonFinalIsProvisionalCarry
@@ -1066,7 +1069,7 @@ wss.on('connection', (clientWs) => {
                             continue;
                         }
 
-                        if (transcriptChanged && hasPendingTranscript) {
+                        if ((transcriptChanged || languageChanged) && hasPendingTranscript) {
                             emitTranscript(
                                 mergedSnapshot,
                                 speakerState.detectedLang,
