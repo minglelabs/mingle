@@ -574,6 +574,12 @@ wss.on('connection', (clientWs) => {
                 hasProgressTokenBeyondWatermark: boolean;
                 hasTimestampedProgressBeyondWatermark: boolean;
             };
+            type SonioxTokenLogEntry = {
+                isFinal: boolean;
+                speaker: string;
+                language: string;
+                text: string;
+            };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
@@ -602,6 +608,46 @@ wss.on('connection', (clientWs) => {
             };
             const composeTurnText = (finalText: string, nonFinalText: string): string =>
                 `${finalText || ''}${nonFinalText || ''}`.trim();
+            const summarizeSonioxTokensForLog = (tokens: SonioxToken[]): SonioxTokenLogEntry[] => {
+                const grouped: SonioxTokenLogEntry[] = [];
+                const indexByTuple = new Map<string, number>();
+
+                for (const token of tokens) {
+                    const tokenText = typeof token.text === 'string' ? token.text : '';
+                    if (!tokenText) continue;
+
+                    const isFinal = token.is_final === true;
+                    const speaker = typeof token.speaker === 'string' && token.speaker.trim()
+                        ? token.speaker.trim()
+                        : 'unknown';
+                    const language = typeof token.language === 'string' && token.language.trim()
+                        ? token.language.trim()
+                        : 'unknown';
+                    const tupleKey = `${isFinal ? '1' : '0'}\u001f${speaker}\u001f${language}`;
+                    const existingIndex = indexByTuple.get(tupleKey);
+                    if (existingIndex !== undefined) {
+                        grouped[existingIndex].text += tokenText;
+                        continue;
+                    }
+
+                    indexByTuple.set(tupleKey, grouped.length);
+                    grouped.push({
+                        isFinal,
+                        speaker,
+                        language,
+                        text: tokenText,
+                    });
+                }
+
+                return grouped;
+            };
+            const logSonioxTokenFrame = (tokens: SonioxToken[]) => {
+                for (const entry of summarizeSonioxTokensForLog(tokens)) {
+                    console.log(
+                        `[stt-server][soniox.tokens] conn=${connId} is_final=${entry.isFinal ? 'true' : 'false'} speaker=${entry.speaker} language=${entry.language} text=${JSON.stringify(entry.text)}`,
+                    );
+                }
+            };
 
             const emitTranscript = (
                 text: string,
@@ -1002,6 +1048,7 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
+                    logSonioxTokenFrame(tokens);
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerRuns: SonioxSpeakerRun[] = [];
