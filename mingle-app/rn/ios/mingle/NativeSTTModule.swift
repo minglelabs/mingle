@@ -743,6 +743,7 @@ class NativeSTTModule: RCTEventEmitter {
         wsUrlString: String,
         sttModel: String,
         aecEnabled: Bool,
+        sonioxLanguageHints: [String],
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -821,10 +822,14 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        sendJson([
+        var configPayload: [String: Any] = [
             "sample_rate": sampleRate,
             "stt_model": sttModel,
-        ])
+        ]
+        if !sonioxLanguageHints.isEmpty {
+            configPayload["soniox_language_hints"] = sonioxLanguageHints
+        }
+        sendJson(configPayload)
 
         emitStatus("running")
         NSLog("[NativeSTTModule] started sampleRate=%d ws=%@", sampleRate, wsUrlString)
@@ -853,6 +858,9 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -862,6 +870,7 @@ class NativeSTTModule: RCTEventEmitter {
                 wsUrlString: wsUrlString,
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
+                sonioxLanguageHints: sonioxLanguageHints,
                 resolve: resolve,
                 reject: reject
             )
@@ -878,6 +887,7 @@ class NativeSTTModule: RCTEventEmitter {
                             wsUrlString: wsUrlString,
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
+                            sonioxLanguageHints: sonioxLanguageHints,
                             resolve: resolve,
                             reject: reject
                         )

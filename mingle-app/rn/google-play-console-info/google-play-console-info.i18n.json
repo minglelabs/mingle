@@ -21,14 +21,14 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.2",
+      "version": "1.0.3",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.2 (15)",
+      "releaseName": "1.0.3 (16)",
       "releaseNotes": {
-        "en-US": "Refined the top safe-area design and improved startup version checks.",
-        "ko-KR": "상단 세이프 영역 디자인을 다듬고 앱 시작 버전 체크를 개선했습니다."
+        "en-US": "Improved locale-based starter languages and refined Soniox hint control.",
+        "ko-KR": "locale 기반 시작 언어를 개선하고 Soniox 힌트 제어를 정리했습니다."
       },
       "screenshots": {
         "ko": [

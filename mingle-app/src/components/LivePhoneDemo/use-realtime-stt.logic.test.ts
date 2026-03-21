@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLanguageSelectionSignature,
+  buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
   applyTranslationToUtteranceStoreState,
@@ -14,6 +15,7 @@ import {
   filterTranslationsToTargetLanguages,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
+  shouldRestartSttForLanguageHintChange,
   shouldApplyLatestPartialTranslationResponse,
   shouldApplyPartialTranslationResponse,
   shouldOverrideTranslationByPriority,
@@ -147,6 +149,33 @@ describe('use-realtime-stt pure logic', () => {
       .not.toBe(buildLanguageSelectionSignature(['en', 'ja']))
     expect(buildLanguageSelectionSignature(['en', 'ko']))
       .not.toBe(buildLanguageSelectionSignature(['ko', 'en']))
+  })
+
+  it('normalizes Soniox language hints without blanks or duplicates', () => {
+    expect(buildSonioxLanguageHints([' en ', '', 'ko', 'EN', 'ja '])).toEqual(['en', 'ko', 'ja'])
+  })
+
+  it('restarts STT on language change only when Soniox hints are enabled and ready', () => {
+    expect(shouldRestartSttForLanguageHintChange({
+      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
+      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
+      connectionStatus: 'ready',
+      sonioxLanguageHintsEnabled: true,
+    })).toBe(true)
+
+    expect(shouldRestartSttForLanguageHintChange({
+      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
+      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
+      connectionStatus: 'ready',
+      sonioxLanguageHintsEnabled: false,
+    })).toBe(false)
+
+    expect(shouldRestartSttForLanguageHintChange({
+      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
+      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
+      connectionStatus: 'ready',
+      sonioxLanguageHintsEnabled: true,
+    })).toBe(false)
   })
 
   it('filters translations down to currently selected target languages', () => {

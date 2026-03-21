@@ -4,6 +4,7 @@ type NativeSttStartOptions = {
   wsUrl: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  sonioxLanguageHints?: string[];
 };
 
 type NativeSttStopOptions = {

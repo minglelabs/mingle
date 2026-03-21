@@ -5,13 +5,13 @@
 1. 플랫폼/버전 분기는 URL로만 합니다.
 2. 컨트롤러는 URL 스코프별로 파일을 분리합니다.
 3. 공통 로직은 handler 모듈을 공유합니다.
-4. 현재 단계는 `legacy + iOS v1.0.2 + Android v1.0.2`를 운영합니다.
+4. 현재 단계는 `legacy + iOS v1.0.3 + Android v1.0.3`를 운영합니다.
 
 ## URL Contract (Current Phase)
 
 - Legacy (무버전): `/api/{existing-path}`
-- iOS versioned: `/api/ios/v1.0.2/{existing-path}`
-- Android versioned: `/api/android/v1.0.2/{existing-path}`
+- iOS versioned: `/api/ios/v1.0.3/{existing-path}`
+- Android versioned: `/api/android/v1.0.3/{existing-path}`
 
 현재 `existing-path`:
 
@@ -24,29 +24,29 @@
 
 - Legacy controllers:
   - `mingle-app/src/server/api/controllers/legacy/*`
-- iOS v1.0.2 controllers:
-  - `mingle-app/src/server/api/controllers/ios/v1.0.2/*`
-- Android v1.0.2 controllers:
-  - `mingle-app/src/server/api/controllers/android/v1.0.2/*`
+- iOS v1.0.3 controllers:
+  - `mingle-app/src/server/api/controllers/ios/v1.0.3/*`
+- Android v1.0.3 controllers:
+  - `mingle-app/src/server/api/controllers/android/v1.0.3/*`
 - Shared handlers:
   - `mingle-app/src/server/api/handlers/v1/*`
 
-iOS/Android v1.0.2 컨트롤러는 legacy 컨트롤러와 동일 코드를 사용합니다.
+iOS/Android v1.0.3 컨트롤러는 legacy 컨트롤러와 동일 코드를 사용합니다.
 
 ## Frontend Routing Strategy
 
 - 기본값: `NEXT_PUBLIC_API_NAMESPACE=''` (legacy 경로 호출)
-- iOS versioned 호출: `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.2`
-- Android versioned 호출: `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.2`
+- iOS versioned 호출: `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.3`
+- Android versioned 호출: `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.3`
 - URL query override: `apiNamespace` 또는 `apiNs`
-  - 허용값: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`
+  - 허용값: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.3`, `android/v1.0.3`
   - 그 외 값은 무시
 
 클라이언트는 `buildClientApiPath`로만 API 경로를 생성합니다.
 
 ## iOS Client Version Policy
 
-- iOS 앱 시작 시 `POST /api/ios/v1.0.2/client/version-policy` 호출
+- iOS 앱 시작 시 `POST /api/ios/v1.0.3/client/version-policy` 호출
 - 요청: `clientVersion`(`x.y.z`), `clientBuild`
 - 응답 `action`:
   - `force_update`
@@ -62,7 +62,7 @@ iOS/Android v1.0.2 컨트롤러는 legacy 컨트롤러와 동일 코드를 사�
 
 ## Android Client Version Policy
 
-- Android 앱 시작 시 `POST /api/android/v1.0.2/client/version-policy` 호출
+- Android 앱 시작 시 `POST /api/android/v1.0.3/client/version-policy` 호출
 - 요청: `clientVersion`(`x.y.z`), `clientBuild`, `platform='android'`
 - 응답 `action`:
   - `force_update`

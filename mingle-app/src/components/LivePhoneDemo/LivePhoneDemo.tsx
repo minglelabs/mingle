@@ -13,6 +13,7 @@ import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
   canonicalizeSttLanguageCode,
+  deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
@@ -64,8 +65,26 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 
-function sanitizeSelectedLanguages(rawValue: unknown): string[] {
-  if (!Array.isArray(rawValue)) return [...DEFAULT_STT_LANGUAGES]
+function resolveDefaultSelectedLanguages(uiLocale?: string): string[] {
+  const normalizedUiLocale = (uiLocale || '').trim()
+  if (normalizedUiLocale) {
+    return deriveDefaultSttLanguagesForLocale(normalizedUiLocale)
+  }
+
+  if (typeof window === 'undefined') return [...DEFAULT_STT_LANGUAGES]
+
+  const browserLocale = (
+    document.documentElement.lang ||
+    window.navigator.languages?.find(Boolean) ||
+    window.navigator.language ||
+    ''
+  ).trim()
+
+  return deriveDefaultSttLanguagesForLocale(browserLocale)
+}
+
+function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[]): string[] {
+  if (!Array.isArray(rawValue)) return [...fallbackLanguages]
 
   const deduped: string[] = []
   for (const item of rawValue) {
@@ -76,7 +95,7 @@ function sanitizeSelectedLanguages(rawValue: unknown): string[] {
     if (deduped.length >= 5) break
   }
 
-  return deduped.length > 0 ? deduped : [...DEFAULT_STT_LANGUAGES]
+  return deduped.length > 0 ? deduped : [...fallbackLanguages]
 }
 
 function startOfLocalDay(date: Date): Date {
@@ -205,11 +224,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showAccountMenu = true,
 }, ref) {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [...DEFAULT_STT_LANGUAGES]
+    const fallbackLanguages = resolveDefaultSelectedLanguages(uiLocale)
+    if (typeof window === 'undefined') return fallbackLanguages
     try {
       const stored = localStorage.getItem(LS_KEY_LANGUAGES)
-      return stored ? sanitizeSelectedLanguages(JSON.parse(stored)) : [...DEFAULT_STT_LANGUAGES]
-    } catch { return [...DEFAULT_STT_LANGUAGES] }
+      return stored ? sanitizeSelectedLanguages(JSON.parse(stored), fallbackLanguages) : fallbackLanguages
+    } catch { return fallbackLanguages }
   })
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
