@@ -10,7 +10,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --ignore-scripts --frozen-lockfile
 
 # 소스 복사
-COPY stt-server.ts segmentation-strategy.ts tsconfig.json ./
+COPY stt-server.ts segmentation-strategy.ts soniox-language.ts tsconfig.json ./
 
 # 빌드
 RUN pnpm build

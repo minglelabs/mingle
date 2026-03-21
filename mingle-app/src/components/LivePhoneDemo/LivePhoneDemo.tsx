@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
 import PhoneFrame from './PhoneFrame'
@@ -9,6 +9,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
+import { mergeDisplayUtterances } from './use-realtime-stt'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -650,7 +651,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const {
     utterances,
-    liveUtterance,
+    liveUtterances,
     partialTranscript,
     volume,
     toggleRecording,
@@ -1141,7 +1142,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     }
     updateScrollDerivedState()
-  }, [demoTypingText, isConnecting, partialTranscript, updateScrollDerivedState, utterances])
+  }, [demoTypingText, isConnecting, liveUtterances, updateScrollDerivedState, utterances])
 
   useEffect(() => {
     updateScrollDerivedState()
@@ -1156,15 +1157,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
 
-  const committedLiveUtteranceExists = Boolean(
-    liveUtterance && utterances.some((utterance) => utterance.id === liveUtterance.id),
+  const committedUtteranceIds = useMemo(
+    () => new Set(utterances.map((utterance) => utterance.id)),
+    [utterances],
   )
-  const draftUtteranceId = (!committedLiveUtteranceExists && liveUtterance)
-    ? liveUtterance.id
-    : null
-  const displayUtterances = (draftUtteranceId && liveUtterance)
-    ? [...utterances, liveUtterance]
-    : utterances
+  const draftUtteranceIds = useMemo(() => new Set(
+    liveUtterances
+      .filter((utterance) => !committedUtteranceIds.has(utterance.id))
+      .map((utterance) => utterance.id),
+  ), [committedUtteranceIds, liveUtterances])
+  const displayUtterances = useMemo(() => mergeDisplayUtterances({
+    utterances,
+    liveUtterances,
+  }), [liveUtterances, utterances])
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -1335,7 +1340,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <ChatBubble
                   utterance={u}
                   uiLocale={uiLocale}
-                  isDraft={draftUtteranceId === u.id}
+                  isDraft={draftUtteranceIds.has(u.id)}
                   isSpeaking={speakingItem?.utteranceId === u.id}
                   speakingLanguage={speakingItem?.language ?? null}
                 />
@@ -1392,7 +1397,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           )}
 
           {/* Empty state */}
-          {utterances.length === 0 && !partialTranscript && !demoTypingText && !demoTypingLang && !isDemoAnimating && !isActive && !isError && !isLimitReached && (
+          {utterances.length === 0 && liveUtterances.length === 0 && !partialTranscript && !demoTypingText && !demoTypingLang && !isDemoAnimating && !isActive && !isError && !isLimitReached && (
             <div className="flex min-h-full flex-col items-center justify-center text-center text-gray-400 gap-2">
                 <Play size={38} className="text-gray-300" />
                 <p className="text-base">{tapPlayToStartLabel}</p>

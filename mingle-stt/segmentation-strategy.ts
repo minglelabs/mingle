@@ -107,7 +107,7 @@ export interface SegmentationStrategy {
 //   SilenceTimer  → 서버가 { type: 'finalize' } 보낸 후 Soniox가 <fin> 응답
 //   SonioxEndpoint → enable_endpoint_detection=true 상태에서 Soniox가 자체 <end> 생성
 
-function evaluateEndpointMarker(ctx: TokenFrameContext): SegmentationDecision {
+export function evaluateEndpointMarkerDecision(ctx: TokenFrameContext): SegmentationDecision {
     if (!ctx.hasEndpointToken) return { action: 'none' };
 
     const mergedHasEndpointMarker = ENDPOINT_MARKER_RE.test(ctx.mergedSnapshot);
@@ -221,7 +221,7 @@ export class SonioxEndpointStrategy implements SegmentationStrategy {
     getSnapshotTextLen(): number | null { return null; }
 
     onTokenFrame(ctx: TokenFrameContext): SegmentationDecision {
-        return evaluateEndpointMarker(ctx);
+        return evaluateEndpointMarkerDecision(ctx);
     }
 
     onTranscriptProgress(_hasPending: boolean, _added: boolean): void {
@@ -290,7 +290,7 @@ export class SilenceTimerStrategy implements SegmentationStrategy {
             ...ctx,
             finalizeSnapshotTextLen: this.snapshotTextLen,
         };
-        const decision = evaluateEndpointMarker(ctxWithSnapshot);
+        const decision = evaluateEndpointMarkerDecision(ctxWithSnapshot);
         if (decision.action === 'finalize') {
             // snapshot 소비 완료
             this.snapshotTextLen = null;

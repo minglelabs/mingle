@@ -4,6 +4,7 @@ import {
   buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
+  buildLiveUtterances,
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
@@ -13,11 +14,14 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  mergeDisplayUtterances,
   parseSttTranscriptMessage,
+  parsePartialTranslateMode,
+  parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
+  shouldApplyPendingTurnPartialTranslationResponse,
   shouldRestartSttForLanguageHintChange,
-  shouldApplyLatestPartialTranslationResponse,
-  shouldApplyPartialTranslationResponse,
+  shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
 
@@ -278,6 +282,67 @@ describe('use-realtime-stt pure logic', () => {
     })).toBeNull()
   })
 
+  it('builds live utterances for all pending speakers in chronological order', () => {
+    expect(buildLiveUtterances({
+      pendingTurns: [
+        {
+          utteranceId: 'u-2',
+          createdAtMs: 1700000000002,
+          speaker: 'speaker-2',
+          speakerAvatarSeed: 'avatar_seed_2',
+          speakerAvatarIndex: 2,
+          language: 'ko',
+          text: 'Second draft updated',
+          partialTranslations: {
+            en: 'Updated second draft',
+          },
+        },
+        {
+          utteranceId: 'u-1',
+          createdAtMs: 1700000000001,
+          speaker: 'speaker-1',
+          speakerAvatarSeed: 'avatar_seed_1',
+          speakerAvatarIndex: 1,
+          language: 'en',
+          text: 'First draft',
+          partialTranslations: {
+            ko: '첫 번째 초안',
+          },
+        },
+      ],
+      languages: ['en', 'ko', 'ja'],
+    })).toEqual([
+      {
+        id: 'u-1',
+        speaker: 'speaker-1',
+        speakerAvatarSeed: 'avatar_seed_1',
+        speakerAvatarIndex: 1,
+        originalText: 'First draft',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {
+          ko: '첫 번째 초안',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000001,
+      },
+      {
+        id: 'u-2',
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_2',
+        speakerAvatarIndex: 2,
+        originalText: 'Second draft updated',
+        originalLang: 'ko',
+        targetLanguages: ['en', 'ja'],
+        translations: {
+          en: 'Updated second draft',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000002,
+      },
+    ])
+  })
+
   it('keeps speaker avatar seed on finalized utterances when provided', () => {
     const built = buildFinalizedUtterancePayload({
       speaker: 'speaker-2',
@@ -337,6 +402,69 @@ describe('use-realtime-stt pure logic', () => {
     ])
     expect(appended.translationPriorities.get('u-queued:ko')).toEqual({ kind: 'final', seq: 7 })
     expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
+  })
+
+  it('inserts a later-arriving finalized utterance back into chronological order', () => {
+    const appended = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([
+      {
+        id: 'u-later',
+        originalText: 'Later speaker',
+        originalLang: 'ko',
+        targetLanguages: ['en'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: 1700000000002,
+      },
+    ]), {
+      id: 'u-earlier',
+      originalText: 'Earlier speaker',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000001,
+    })
+
+    expect(appended.utterances.map((utterance) => utterance.id)).toEqual(['u-earlier', 'u-later'])
+  })
+
+  it('merges committed and live utterances without letting a later draft steal the earlier slot', () => {
+    const merged = mergeDisplayUtterances({
+      utterances: [
+        {
+          id: 'u-1',
+          originalText: 'Earlier committed',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000001,
+        },
+      ],
+      liveUtterances: [
+        {
+          id: 'u-1',
+          originalText: 'Earlier draft',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000001,
+        },
+        {
+          id: 'u-2',
+          originalText: 'Later draft',
+          originalLang: 'ko',
+          targetLanguages: ['en'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000002,
+        },
+      ],
+    })
+
+    expect(merged.map((utterance) => utterance.id)).toEqual(['u-1', 'u-2'])
+    expect(merged[0]?.originalText).toBe('Earlier committed')
   })
 
   it('keeps visible partial translations seeded on the finalized utterance', () => {
@@ -490,6 +618,96 @@ describe('use-realtime-stt pure logic', () => {
     }))
   })
 
+  it('defaults partial translate mode to time and parses env overrides', () => {
+    expect(parsePartialTranslateMode(undefined)).toBe('time')
+    expect(parsePartialTranslateMode('char')).toBe('char')
+    expect(parsePartialTranslateMode('both')).toBe('both')
+    expect(parsePartialTranslateMode('weird')).toBe('time')
+    expect(parsePositiveIntWithFallback(undefined, 2000)).toBe(2000)
+    expect(parsePositiveIntWithFallback('2500', 2000)).toBe(2500)
+    expect(parsePositiveIntWithFallback('0', 2000)).toBe(2000)
+  })
+
+  it('fires partial translation immediately on the first pending text', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: true,
+      targetLanguagesChanged: false,
+      textLength: 8,
+      currentText: '안녕하세요',
+      lastRequestedText: '',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 0,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: true,
+      nextLastTranslateLen: 0,
+    })
+  })
+
+  it('fires time-based partial translation only after the interval when text changed', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 16,
+      currentText: 'hello there world',
+      lastRequestedText: 'hello there',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 1900,
+      intervalMs: 2000,
+    }).shouldRequest).toBe(false)
+
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 16,
+      currentText: 'hello there world',
+      lastRequestedText: 'hello there',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 2000,
+      intervalMs: 2000,
+    }).shouldRequest).toBe(true)
+  })
+
+  it('can still use char threshold mode when enabled', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'char',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 39,
+      currentText: '123456789012345678901234567890123456789',
+      lastRequestedText: '12345678901234567890',
+      lastTranslateLen: 20,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 500,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: false,
+      nextLastTranslateLen: 20,
+    })
+
+    expect(shouldTriggerPartialTranslate({
+      mode: 'char',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 40,
+      currentText: '1234567890123456789012345678901234567890',
+      lastRequestedText: '12345678901234567890',
+      lastTranslateLen: 20,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 500,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: true,
+      nextLastTranslateLen: 40,
+    })
+  })
+
   it('detects duplicate timed signatures within the ttl window', () => {
     expect(isDuplicateTimedSignature({
       previousSig: 'speaker-1::en::hello',
@@ -606,55 +824,34 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe(-1)
   })
 
-  it('accepts partial translation responses only for the active turn and speaker', () => {
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
-    })).toBe(true)
-
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 10,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
-    })).toBe(false)
-
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-2',
-    })).toBe(false)
-  })
-
-  it('accepts only the latest non-aborted partial translation response', () => {
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+  it('accepts partial translation responses for the matching pending utterance only', () => {
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 3,
       latestRequestSeq: 3,
       aborted: false,
     })).toBe(true)
 
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-10',
+      requestSeq: 3,
+      latestRequestSeq: 3,
+      aborted: false,
+    })).toBe(false)
+
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 2,
       latestRequestSeq: 3,
       aborted: false,
     })).toBe(false)
 
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 3,
       latestRequestSeq: 3,
       aborted: true,
