@@ -21,6 +21,7 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
+const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
 const SPEECHMATICS_JWT_TTL_SEC = 60;
 
 const server = createServer();
@@ -32,6 +33,7 @@ type SttModel =
     | 'deepgram-multi'
     | 'fireworks'
     | 'soniox'
+    | 'elevenlabs'
     | 'speechmatics';
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
@@ -140,12 +142,33 @@ const getSpeechmaticsTranscriptLanguage = (
     return fallbackLanguage;
 };
 
+const ELEVENLABS_SUPPORTED_SAMPLE_RATES = [8000, 16000, 22050, 24000, 44100, 48000] as const;
+
+const resolveElevenLabsAudioFormat = (sampleRate: number) => {
+    const rounded = Math.round(sampleRate);
+    const exact = ELEVENLABS_SUPPORTED_SAMPLE_RATES.find((rate) => rate === rounded);
+    if (exact) {
+        return `pcm_${exact}`;
+    }
+
+    const closest = ELEVENLABS_SUPPORTED_SAMPLE_RATES.reduce((best, candidate) => {
+        return Math.abs(candidate - rounded) < Math.abs(best - rounded) ? candidate : best;
+    });
+
+    if (Math.abs(closest - rounded) <= 400) {
+        return `pcm_${closest}`;
+    }
+
+    return null;
+};
+
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
     let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
     let currentModel: SttModel = 'gladia';
+    let currentSampleRate = 16000;
     let selectedLanguages: string[] = [];
     let translateModel: TranslateModel = 'claude-haiku-4-5';
 
@@ -153,6 +176,7 @@ wss.on('connection', (clientWs) => {
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
     const sonioxApiKey = process.env.SONIOX_API_KEY;
+    const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
     const speechmaticsRegion = process.env.SPEECHMATICS_REGION as 'eu' | 'usa' | 'au' | undefined;
     const speechmaticsRtUrl = process.env.SPEECHMATICS_RT_URL;
@@ -622,6 +646,137 @@ wss.on('connection', (clientWs) => {
         }
     };
 
+    // ===== ELEVENLABS 연결 =====
+    const startElevenLabsConnection = async (config: ClientConfig) => {
+        if (!elevenLabsApiKey) {
+            console.error("ELEVENLABS_API_KEY environment variable not set!");
+            clientWs.close(1011, "Server configuration error: ElevenLabs API key not found.");
+            return;
+        }
+
+        try {
+            const audioFormat = resolveElevenLabsAudioFormat(config.sample_rate);
+            let detectedLanguage = config.languages[0] || 'en';
+            let lastCommittedText = '';
+            let readySent = false;
+
+            const wsUrl = new URL(ELEVENLABS_WS_URL);
+            wsUrl.searchParams.set('model_id', 'scribe_v2_realtime');
+            wsUrl.searchParams.set('include_timestamps', 'true');
+            wsUrl.searchParams.set('include_language_detection', 'true');
+            wsUrl.searchParams.set('commit_strategy', 'vad');
+            wsUrl.searchParams.set('vad_silence_threshold_secs', '0.6');
+            if (audioFormat) {
+                wsUrl.searchParams.set('audio_format', audioFormat);
+            }
+
+            sttWs = new WebSocket(wsUrl.toString(), {
+                headers: {
+                    'xi-api-key': elevenLabsApiKey,
+                },
+            });
+
+            sttWs.onopen = () => {
+                if (!audioFormat) {
+                    console.warn(
+                        `[ElevenLabs] unsupported sample rate ${config.sample_rate}; sending chunk sample_rate only`,
+                    );
+                }
+            };
+
+            sttWs.onmessage = (event) => {
+                if (!isClientConnected) return;
+
+                try {
+                    const msg = JSON.parse(event.data.toString()) as Record<string, unknown>;
+                    const messageType = typeof msg.message_type === 'string' ? msg.message_type : '';
+
+                    if (messageType === 'session_started') {
+                        if (!readySent) {
+                            readySent = true;
+                            clientWs.send(JSON.stringify({ status: 'ready' }));
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'partial_transcript') {
+                        const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+                        if (!text) return;
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: false,
+                                utterance: {
+                                    text,
+                                    language: detectedLanguage,
+                                },
+                            },
+                        }));
+                        return;
+                    }
+
+                    if (messageType === 'committed_transcript_with_timestamps' || messageType === 'committed_transcript') {
+                        const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+                        if (!text) return;
+                        if (text === lastCommittedText) return;
+                        lastCommittedText = text;
+
+                        if (typeof msg.language_code === 'string' && msg.language_code.trim()) {
+                            detectedLanguage = msg.language_code.trim();
+                        }
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: true,
+                                utterance: {
+                                    text,
+                                    language: detectedLanguage,
+                                },
+                            },
+                        }));
+
+                        if (selectedLanguages.length > 0) {
+                            translateText(text, detectedLanguage, selectedLanguages, clientWs);
+                        }
+                        return;
+                    }
+
+                    if (messageType.includes('error')) {
+                        const errorMessage = typeof msg.error === 'string'
+                            ? msg.error
+                            : typeof msg.detail === 'string'
+                                ? msg.detail
+                                : messageType;
+                        console.error(`[ElevenLabs] ${messageType}: ${errorMessage}`);
+                        clientWs.close(1011, `ElevenLabs error: ${errorMessage}`);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing ElevenLabs message:', parseError);
+                }
+            };
+
+            sttWs.onerror = (error) => {
+                console.error('ElevenLabs WebSocket error:', error);
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+
+            sttWs.onclose = () => {
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+        } catch (error) {
+            console.error('Error starting ElevenLabs connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to ElevenLabs transcription service.');
+            }
+        }
+    };
+
     // ===== SPEECHMATICS 연결 =====
     const startSpeechmaticsConnection = async (config: ClientConfig) => {
         if (!speechmaticsApiKey) {
@@ -987,6 +1142,7 @@ wss.on('connection', (clientWs) => {
 
         if (data.sample_rate && data.languages) {
             currentModel = data.stt_model || 'gladia';
+            currentSampleRate = data.sample_rate;
             selectedLanguages = data.languages;
             translateModel = data.translate_model || 'claude-haiku-4-5';
             
@@ -996,6 +1152,8 @@ wss.on('connection', (clientWs) => {
                 startDeepgramMultiConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
+            } else if (currentModel === 'elevenlabs') {
+                startElevenLabsConnection(data as ClientConfig);
             } else if (currentModel === 'speechmatics') {
                 startSpeechmaticsConnection(data as ClientConfig);
             } else if (currentModel === 'soniox') {
@@ -1009,6 +1167,14 @@ wss.on('connection', (clientWs) => {
             if (data.type === 'audio_chunk' && data.data?.chunk) {
                 const pcmData = Buffer.from(data.data.chunk, 'base64');
                 speechmaticsClient.sendAudio(pcmData);
+            }
+        } else if (currentModel === 'elevenlabs' && sttWs?.readyState === WebSocket.OPEN) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                sttWs.send(JSON.stringify({
+                    message_type: 'input_audio_chunk',
+                    audio_base_64: data.data.chunk,
+                    sample_rate: currentSampleRate,
+                }));
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송

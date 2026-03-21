@@ -25,6 +25,7 @@ type SttModel =
   | 'deepgram-multi'
   | 'fireworks'
   | 'soniox'
+  | 'elevenlabs'
   | 'speechmatics'
 
 const SUPPORTED_LANGUAGES = [
@@ -361,6 +362,7 @@ export default function Home() {
             <option value="deepgram">Deepgram (AI 번역, 언어 1만 전사)</option>
             <option value="deepgram-multi">Deepgram Multi (AI 번역, 다국어 자동 감지)</option>
             <option value="fireworks">Fireworks (AI 번역)</option>
+            <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
@@ -372,6 +374,11 @@ export default function Home() {
           {sttModel === 'speechmatics' && (
             <p className="mt-1 text-xs text-amber-600">
               기본은 언어 1 고정 전사입니다. 예외적으로 EN+AR, EN+ES, EN+ZH, EN+MS 조합만 공개 bilingual pack을 사용합니다.
+            </p>
+          )}
+          {sttModel === 'elevenlabs' && (
+            <p className="mt-1 text-xs text-amber-600">
+              언어 선택은 번역 대상 위주입니다. STT는 Scribe v2 Realtime의 자동 언어 감지와 VAD 세그먼트를 사용합니다.
             </p>
           )}
           {sttModel === 'soniox' && (
