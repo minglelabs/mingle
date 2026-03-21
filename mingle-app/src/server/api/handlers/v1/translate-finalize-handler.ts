@@ -96,6 +96,20 @@ function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown
   console.info(`[translate/finalize] ${event}`, payload)
 }
 
+function stringifyTranslateFinalizePayload(payload: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(payload)
+  } catch (error) {
+    return JSON.stringify({
+      serializationError: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+function logTranslateFinalizeError(event: string, payload: Record<string, unknown>) {
+  console.error(`[translate/finalize] ${event} ${stringifyTranslateFinalizePayload(payload)}`)
+}
+
 function summarizeUnknownError(error: unknown): Record<string, unknown> {
   if (error instanceof Error) {
     return {
@@ -406,7 +420,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     : []
 
   if (!content) {
-    console.error('[translate/finalize] gemini_empty_text', {
+    logTranslateFinalizeError('gemini_empty_text', {
       ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
@@ -421,7 +435,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   const translations = parseTranslations(content)
   if (Object.keys(translations).length === 0) {
-    console.error('[translate/finalize] gemini_unparseable_json', {
+    logTranslateFinalizeError('gemini_unparseable_json', {
       ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
@@ -635,7 +649,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
     } catch (error) {
       geminiRequestFailed = true
-      console.error('[translate/finalize] provider_error', {
+      logTranslateFinalizeError('provider_error', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: 'gemini',
         error: summarizeUnknownError(error),
@@ -643,9 +657,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     }
 
     if (!selectedResult || Object.keys(selectedResult.translations).length === 0) {
-      console.error('[translate/finalize] provider_empty_response', {
+      logTranslateFinalizeError('provider_empty_response', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: 'gemini',
+        reason: geminiRequestFailed ? 'provider_error' : 'provider_empty_or_unparseable',
         responseStatus: 502,
       })
       if (!ctx.isFinal && !geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
@@ -711,10 +726,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     }
 
     if (Object.keys(translations).length === 0) {
-      console.error('[translate/finalize] target_language_miss', {
+      logTranslateFinalizeError('target_language_miss', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: selectedResult.provider,
         returnedLanguages: Object.keys(selectedResult.translations),
+        rawTranslations: selectedResult.translations,
         responseStatus: 502,
       })
       if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
@@ -739,7 +755,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       model: selectedResult.model,
     })
   } catch (error) {
-    console.error('[translate/finalize] unexpected_handler_error', {
+    logTranslateFinalizeError('unexpected_handler_error', {
       ...buildTranslateFinalizeLogContext(ctx),
       error: summarizeUnknownError(error),
       responseStatus: 500,
