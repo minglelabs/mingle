@@ -564,6 +564,16 @@ wss.on('connection', (clientWs) => {
                 nextMergedSnapshot: string;
                 transcriptChanged: boolean;
             };
+            type SonioxSpeakerRun = {
+                speaker: string;
+                language: string;
+                tokens: SonioxToken[];
+            };
+            type SonioxSpeakerFrameStatus = {
+                hadPendingTextBeforeFrame: boolean;
+                hasProgressTokenBeyondWatermark: boolean;
+                hasTimestampedProgressBeyondWatermark: boolean;
+            };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             sonioxStopRequested = false;
@@ -637,7 +647,203 @@ wss.on('connection', (clientWs) => {
                 state.latestNonFinalIsProvisionalCarry = false;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
+                state.detectedLang = 'unknown';
                 state.strategy.resetState();
+            };
+
+            const hasVisibleSpeakerText = (state: SonioxSpeakerState): boolean =>
+                stripEndpointMarkers(state.currentSnapshotText).trim().length > 0;
+
+            const buildSpeakerFrameUpdateForRun = (
+                state: SonioxSpeakerState,
+                run: SonioxSpeakerRun,
+            ): SonioxSpeakerFrameUpdate => {
+                const frameUpdate: SonioxSpeakerFrameUpdate = {
+                    speaker: run.speaker,
+                    finalDeltaText: '',
+                    nonFinalText: '',
+                    maxFinalTokenEndMs: -1,
+                    maxSeenTokenEndMs: -1,
+                    lastDetectedLang: run.language,
+                    hasProgressTokenBeyondWatermark: false,
+                    hasTimestampedProgressBeyondWatermark: false,
+                };
+
+                for (const token of run.tokens) {
+                    const tokenText = typeof token.text === 'string' ? token.text : '';
+                    if (!tokenText) continue;
+
+                    const tokenStartMs = parseTokenTimeMs(token.start_ms);
+                    const tokenEndMs = parseTokenTimeMs(token.end_ms);
+                    const includeByWatermark = isTokenBeyondWatermark(
+                        tokenStartMs,
+                        tokenEndMs,
+                        state.lastConsumedEndMs,
+                    );
+                    if (!includeByWatermark) continue;
+
+                    frameUpdate.hasProgressTokenBeyondWatermark = true;
+                    if (isTokenTimestampedBeyondWatermark(
+                        tokenStartMs,
+                        tokenEndMs,
+                        state.lastConsumedEndMs,
+                    )) {
+                        frameUpdate.hasTimestampedProgressBeyondWatermark = true;
+                    }
+
+                    if (token.is_final === true) {
+                        if (isTokenBeyondWatermark(
+                            tokenStartMs,
+                            tokenEndMs,
+                            state.providerFinalizedEndMs,
+                        )) {
+                            frameUpdate.finalDeltaText += tokenText;
+                            if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxFinalTokenEndMs) {
+                                frameUpdate.maxFinalTokenEndMs = tokenEndMs;
+                            }
+                        }
+                    } else {
+                        frameUpdate.nonFinalText += tokenText;
+                    }
+
+                    if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
+                        frameUpdate.maxSeenTokenEndMs = tokenEndMs;
+                    }
+                }
+
+                return frameUpdate;
+            };
+
+            const applySpeakerFrameUpdate = (
+                speakerState: SonioxSpeakerState,
+                frameUpdate: SonioxSpeakerFrameUpdate,
+            ): SonioxSpeakerFrameInfo => {
+                const previousMergedSnapshot = speakerState.currentSnapshotText;
+                const previousNonFinalText = speakerState.latestNonFinalText;
+                if (frameUpdate.lastDetectedLang) {
+                    speakerState.detectedLang = frameUpdate.lastDetectedLang;
+                }
+
+                if (
+                    speakerState.latestNonFinalIsProvisionalCarry
+                    && previousNonFinalText.trim()
+                    && frameUpdate.hasTimestampedProgressBeyondWatermark
+                ) {
+                    speakerState.strategy.clearCarryExpiryTimer();
+                    const carryRaw = stripEndpointMarkers(previousNonFinalText).trim();
+                    const incomingClean = stripEndpointMarkers(
+                        `${stripEndpointMarkers(frameUpdate.finalDeltaText)}${frameUpdate.nonFinalText}`,
+                    ).trim();
+                    if (carryRaw) {
+                        if (incomingClean.startsWith(carryRaw)) {
+                            speakerState.latestNonFinalIsProvisionalCarry = false;
+                        } else {
+                            const carryPrefix = carryRaw.replace(/[.!?]+\s*$/, '').trim();
+                            if (carryPrefix) {
+                                speakerState.providerFinalizedText = speakerState.providerFinalizedText
+                                    ? `${carryPrefix} ${speakerState.providerFinalizedText}`
+                                    : carryPrefix;
+                            }
+                            speakerState.latestNonFinalIsProvisionalCarry = false;
+                        }
+                    }
+                }
+
+                if (frameUpdate.finalDeltaText) {
+                    speakerState.providerFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
+                }
+                if (frameUpdate.maxFinalTokenEndMs > speakerState.providerFinalizedEndMs) {
+                    speakerState.providerFinalizedEndMs = frameUpdate.maxFinalTokenEndMs;
+                }
+                if (frameUpdate.nonFinalText) {
+                    if (speakerState.latestNonFinalIsProvisionalCarry) {
+                        const prevCarry = previousNonFinalText.trim();
+                        const incoming = frameUpdate.nonFinalText.trim();
+                        const hasProgress = incoming.length > prevCarry.length || !incoming.startsWith(prevCarry);
+                        if (hasProgress) {
+                            speakerState.latestNonFinalIsProvisionalCarry = false;
+                        }
+                    }
+                    speakerState.latestNonFinalText = frameUpdate.nonFinalText;
+                } else if (!speakerState.latestNonFinalIsProvisionalCarry) {
+                    speakerState.latestNonFinalText = '';
+                }
+
+                speakerState.currentSnapshotText = composeTurnText(
+                    speakerState.providerFinalizedText,
+                    speakerState.latestNonFinalText,
+                );
+                if (frameUpdate.maxSeenTokenEndMs > speakerState.currentSnapshotEndMs) {
+                    speakerState.currentSnapshotEndMs = frameUpdate.maxSeenTokenEndMs;
+                }
+
+                const nextMergedSnapshot = speakerState.currentSnapshotText;
+                const transcriptChanged = (
+                    stripEndpointMarkers(nextMergedSnapshot)
+                    !== stripEndpointMarkers(previousMergedSnapshot)
+                );
+                const hasPendingTranscript = nextMergedSnapshot.length > 0
+                    && !(speakerState.latestNonFinalIsProvisionalCarry && !speakerState.providerFinalizedText.trim());
+
+                speakerState.strategy.currentMergedTextLen = nextMergedSnapshot.length;
+                speakerState.strategy.onTranscriptProgress(hasPendingTranscript, transcriptChanged);
+
+                if (transcriptChanged && hasPendingTranscript) {
+                    emitTranscript(
+                        nextMergedSnapshot,
+                        speakerState.detectedLang,
+                        false,
+                        speakerState.speaker,
+                    );
+                }
+
+                return {
+                    speaker: frameUpdate.speaker,
+                    previousMergedSnapshot,
+                    nextMergedSnapshot,
+                    transcriptChanged,
+                };
+            };
+
+            const applySpeakerDecision = (
+                speakerState: SonioxSpeakerState,
+                decision: ReturnType<SilenceTimerStrategy['onTokenFrame']>,
+            ): boolean => {
+                if (decision.action !== 'finalize') return false;
+
+                const finalizedText = stripEndpointMarkers(decision.text).trim();
+                const consumedEndMs = speakerState.currentSnapshotEndMs;
+                const segmentLanguage = speakerState.detectedLang;
+                if (finalizedText) {
+                    emitTranscript(
+                        decision.text,
+                        segmentLanguage,
+                        true,
+                        speakerState.speaker,
+                    );
+                }
+                if (consumedEndMs > speakerState.lastConsumedEndMs) {
+                    speakerState.lastConsumedEndMs = consumedEndMs;
+                }
+                resetSpeakerTurn(speakerState);
+
+                if (decision.carryText) {
+                    speakerState.detectedLang = segmentLanguage;
+                    speakerState.latestNonFinalText = decision.carryText;
+                    speakerState.latestNonFinalIsProvisionalCarry = true;
+                    speakerState.currentSnapshotText = composeTurnText('', decision.carryText);
+                    speakerState.currentSnapshotEndMs = consumedEndMs;
+                    speakerState.strategy.onTranscriptProgress(false, false);
+                    speakerState.strategy.scheduleCarryExpiry();
+                    emitTranscript(
+                        decision.carryText,
+                        segmentLanguage,
+                        false,
+                        speakerState.speaker,
+                    );
+                }
+
+                return true;
             };
 
             const finalizeSpeakerTurn = (speaker: string): FinalTurnPayload | null => {
@@ -795,29 +1001,10 @@ wss.on('connection', (clientWs) => {
                     }
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
-                    const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
-                    const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
-                        const existing = speakerFrameUpdates.get(speaker);
-                        if (existing) return existing;
-                        const created: SonioxSpeakerFrameUpdate = {
-                            speaker,
-                            finalDeltaText: '',
-                            nonFinalText: '',
-                            maxFinalTokenEndMs: -1,
-                            maxSeenTokenEndMs: -1,
-                            lastDetectedLang: null,
-                            hasProgressTokenBeyondWatermark: false,
-                            hasTimestampedProgressBeyondWatermark: false,
-                        };
-                        speakerFrameUpdates.set(speaker, created);
-                        return created;
-                    };
-
+                    const speakerRuns: SonioxSpeakerRun[] = [];
                     for (const token of tokens) {
                         const tokenText = typeof token.text === 'string' ? token.text : '';
                         if (!tokenText) continue;
-                        const tokenStartMs = parseTokenTimeMs(token.start_ms);
-                        const tokenEndMs = parseTokenTimeMs(token.end_ms);
 
                         const isEndpointMarkerToken = /<\/?(?:end|fin)>/i.test(tokenText);
                         if (isEndpointMarkerToken) {
@@ -835,244 +1022,95 @@ wss.on('connection', (clientWs) => {
                             ? token.speaker.trim()
                             : 'unknown';
 
-                        const speakerState = getSpeakerState(tokenSpeaker);
-                        if (tokenLanguage !== 'unknown') {
-                            speakerState.detectedLang = tokenLanguage;
+                        const lastRun = speakerRuns[speakerRuns.length - 1];
+                        if (
+                            lastRun
+                            && lastRun.speaker === tokenSpeaker
+                            && lastRun.language === tokenLanguage
+                        ) {
+                            lastRun.tokens.push(token);
+                            continue;
                         }
 
-                        const includeByWatermark = isTokenBeyondWatermark(
-                            tokenStartMs,
-                            tokenEndMs,
-                            speakerState.lastConsumedEndMs,
-                        );
-                        if (!includeByWatermark) continue;
+                        speakerRuns.push({
+                            speaker: tokenSpeaker,
+                            language: tokenLanguage,
+                            tokens: [token],
+                        });
+                    }
 
-                        const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
-                        if (tokenLanguage !== 'unknown') {
-                            frameUpdate.lastDetectedLang = tokenLanguage;
+                    const speakerFrameStatuses = new Map<string, SonioxSpeakerFrameStatus>();
+                    const ensureSpeakerFrameStatus = (speaker: string): SonioxSpeakerFrameStatus => {
+                        const existing = speakerFrameStatuses.get(speaker);
+                        if (existing) return existing;
+                        const state = getSpeakerState(speaker);
+                        const created: SonioxSpeakerFrameStatus = {
+                            hadPendingTextBeforeFrame: hasVisibleSpeakerText(state),
+                            hasProgressTokenBeyondWatermark: false,
+                            hasTimestampedProgressBeyondWatermark: false,
+                        };
+                        speakerFrameStatuses.set(speaker, created);
+                        return created;
+                    };
+
+                    for (const run of speakerRuns) {
+                        const priorState = getSpeakerState(run.speaker);
+                        // Language changes split the current speaker into a new utterance segment
+                        // even before Soniox later flushes the enclosing <fin>.
+                        if (
+                            priorState.detectedLang !== 'unknown'
+                            && priorState.detectedLang !== run.language
+                            && hasVisibleSpeakerText(priorState)
+                        ) {
+                            finalizeSpeakerTurn(run.speaker);
                         }
-                        if (includeByWatermark) {
-                            frameUpdate.hasProgressTokenBeyondWatermark = true;
-                            if (isTokenTimestampedBeyondWatermark(
-                                tokenStartMs,
-                                tokenEndMs,
-                                speakerState.lastConsumedEndMs,
-                            )) {
-                                frameUpdate.hasTimestampedProgressBeyondWatermark = true;
-                            }
+
+                        // Speaker changes still close other open segments immediately.
+                        for (const [existingSpeaker, state] of speakerStates.entries()) {
+                            if (existingSpeaker === run.speaker) continue;
+                            if (!hasVisibleSpeakerText(state)) continue;
+                            if (state.strategy.getSnapshotTextLen() !== null) continue;
+                            finalizeSpeakerTurn(existingSpeaker);
                         }
-                        if (token.is_final === true) {
-                            if (isTokenBeyondWatermark(
-                                tokenStartMs,
-                                tokenEndMs,
-                                speakerState.providerFinalizedEndMs,
-                            )) {
-                                frameUpdate.finalDeltaText += tokenText;
-                                if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxFinalTokenEndMs) {
-                                    frameUpdate.maxFinalTokenEndMs = tokenEndMs;
-                                }
-                            }
-                        } else {
-                            frameUpdate.nonFinalText += tokenText;
+
+                        const speakerState = getSpeakerState(run.speaker);
+                        if (speakerState.detectedLang === 'unknown') {
+                            speakerState.detectedLang = run.language;
                         }
-                        if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
-                            frameUpdate.maxSeenTokenEndMs = tokenEndMs;
+
+                        const frameStatus = ensureSpeakerFrameStatus(run.speaker);
+                        const frameUpdate = buildSpeakerFrameUpdateForRun(speakerState, run);
+                        if (frameUpdate.hasProgressTokenBeyondWatermark) {
+                            frameStatus.hasProgressTokenBeyondWatermark = true;
                         }
+                        if (frameUpdate.hasTimestampedProgressBeyondWatermark) {
+                            frameStatus.hasTimestampedProgressBeyondWatermark = true;
+                        }
+
+                        applySpeakerFrameUpdate(speakerState, frameUpdate);
                     }
 
                     if (hasEndpointToken) {
-                        for (const [speaker, state] of speakerStates.entries()) {
-                            if (state.strategy.getSnapshotTextLen() === null) continue;
-                            if (speakerFrameUpdates.has(speaker)) continue;
-                            speakerFrameUpdates.set(speaker, {
-                                speaker,
-                                finalDeltaText: '',
-                                nonFinalText: '',
-                                maxFinalTokenEndMs: -1,
-                                maxSeenTokenEndMs: state.currentSnapshotEndMs,
-                                lastDetectedLang: null,
+                        for (const [speaker, speakerState] of speakerStates.entries()) {
+                            const snapshotLen = speakerState.strategy.getSnapshotTextLen();
+                            if (snapshotLen === null) continue;
+
+                            const frameStatus = speakerFrameStatuses.get(speaker) || {
+                                hadPendingTextBeforeFrame: hasVisibleSpeakerText(speakerState),
                                 hasProgressTokenBeyondWatermark: false,
                                 hasTimestampedProgressBeyondWatermark: false,
+                            };
+                            const decision = speakerState.strategy.onTokenFrame({
+                                finalizedText: speakerState.providerFinalizedText,
+                                latestNonFinalText: speakerState.latestNonFinalText,
+                                mergedSnapshot: speakerState.currentSnapshotText,
+                                hasEndpointToken: true,
+                                endpointMarkerText,
+                                hasProgressTokenBeyondWatermark: frameStatus.hasProgressTokenBeyondWatermark,
+                                finalizeSnapshotTextLen: snapshotLen,
+                                hadPendingTextBeforeFrame: frameStatus.hadPendingTextBeforeFrame,
                             });
-                        }
-                    }
-
-                    const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
-                    for (const frameUpdate of speakerFrameUpdates.values()) {
-                        const speakerState = getSpeakerState(frameUpdate.speaker);
-                        const previousMergedSnapshot = speakerState.currentSnapshotText;
-                        const nextProviderFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
-                        const nextNonFinalText = frameUpdate.nonFinalText
-                            || (speakerState.latestNonFinalIsProvisionalCarry ? speakerState.latestNonFinalText : '');
-                        const nextMergedSnapshot = composeTurnText(nextProviderFinalizedText, nextNonFinalText);
-                        speakerFrameInfos.set(frameUpdate.speaker, {
-                            speaker: frameUpdate.speaker,
-                            previousMergedSnapshot,
-                            nextMergedSnapshot,
-                            transcriptChanged: (
-                                stripEndpointMarkers(nextMergedSnapshot)
-                                !== stripEndpointMarkers(previousMergedSnapshot)
-                            ),
-                        });
-                    }
-
-                    // Speaker change wins over silence-based segmentation:
-                    // if another speaker makes progress, finalize prior speakers first.
-                    const currentFrameSpeakers = new Set(
-                        Array.from(speakerFrameUpdates.values())
-                            .filter((frameUpdate) => frameUpdate.hasProgressTokenBeyondWatermark)
-                            .map((frameUpdate) => frameUpdate.speaker),
-                    );
-                    if (currentFrameSpeakers.size > 0) {
-                        for (const existingSpeaker of Array.from(speakerStates.keys())) {
-                            if (currentFrameSpeakers.has(existingSpeaker)) continue;
-                            const state = speakerStates.get(existingSpeaker);
-                            if (state?.strategy.getSnapshotTextLen() !== null) continue;
-                            finalizeSpeakerTurn(existingSpeaker);
-                        }
-                    }
-
-                    const progressingSpeakers = new Set(
-                        Array.from(speakerFrameInfos.values())
-                            .filter((info) => info.transcriptChanged)
-                            .map((info) => info.speaker),
-                    );
-                    const speakersToSkipInThisFrame = new Set<string>();
-                    if (progressingSpeakers.size > 0 && speakerFrameInfos.size > 1) {
-                        for (const info of speakerFrameInfos.values()) {
-                            if (info.transcriptChanged) continue;
-                            if (!stripEndpointMarkers(info.previousMergedSnapshot).trim()) continue;
-                            const state = speakerStates.get(info.speaker);
-                            if (state?.strategy.getSnapshotTextLen() !== null) continue;
-                            finalizeSpeakerTurn(info.speaker);
-                            speakersToSkipInThisFrame.add(info.speaker);
-                        }
-                    }
-
-                    for (const frameUpdate of speakerFrameUpdates.values()) {
-                        if (speakersToSkipInThisFrame.has(frameUpdate.speaker)) {
-                            continue;
-                        }
-                        const speakerState = getSpeakerState(frameUpdate.speaker);
-                        const previousMergedSnapshot = speakerState.currentSnapshotText;
-                        const previousNonFinalText = speakerState.latestNonFinalText;
-                        if (frameUpdate.lastDetectedLang) {
-                            speakerState.detectedLang = frameUpdate.lastDetectedLang;
-                        }
-
-                        if (
-                            speakerState.latestNonFinalIsProvisionalCarry
-                            && previousNonFinalText.trim()
-                            && frameUpdate.hasTimestampedProgressBeyondWatermark
-                        ) {
-                            speakerState.strategy.clearCarryExpiryTimer();
-                            const carryRaw = stripEndpointMarkers(previousNonFinalText).trim();
-                            const incomingClean = stripEndpointMarkers(
-                                `${stripEndpointMarkers(frameUpdate.finalDeltaText)}${frameUpdate.nonFinalText}`,
-                            ).trim();
-                            if (carryRaw) {
-                                if (incomingClean.startsWith(carryRaw)) {
-                                    speakerState.latestNonFinalIsProvisionalCarry = false;
-                                } else {
-                                    const carryPrefix = carryRaw.replace(/[.!?]+\s*$/, '').trim();
-                                    if (carryPrefix) {
-                                        speakerState.providerFinalizedText = speakerState.providerFinalizedText
-                                            ? `${carryPrefix} ${speakerState.providerFinalizedText}`
-                                            : carryPrefix;
-                                    }
-                                    speakerState.latestNonFinalIsProvisionalCarry = false;
-                                }
-                            }
-                        }
-                        if (frameUpdate.finalDeltaText) {
-                            speakerState.providerFinalizedText = `${speakerState.providerFinalizedText}${frameUpdate.finalDeltaText}`;
-                        }
-                        if (frameUpdate.maxFinalTokenEndMs > speakerState.providerFinalizedEndMs) {
-                            speakerState.providerFinalizedEndMs = frameUpdate.maxFinalTokenEndMs;
-                        }
-                        if (frameUpdate.nonFinalText) {
-                            if (speakerState.latestNonFinalIsProvisionalCarry) {
-                                const prevCarry = previousNonFinalText.trim();
-                                const incoming = frameUpdate.nonFinalText.trim();
-                                const hasProgress = incoming.length > prevCarry.length || !incoming.startsWith(prevCarry);
-                                if (hasProgress) {
-                                    speakerState.latestNonFinalIsProvisionalCarry = false;
-                                }
-                            }
-                            speakerState.latestNonFinalText = frameUpdate.nonFinalText;
-                        } else if (!speakerState.latestNonFinalIsProvisionalCarry) {
-                            speakerState.latestNonFinalText = '';
-                        }
-                        speakerState.currentSnapshotText = composeTurnText(
-                            speakerState.providerFinalizedText,
-                            speakerState.latestNonFinalText,
-                        );
-                        if (frameUpdate.maxSeenTokenEndMs > speakerState.currentSnapshotEndMs) {
-                            speakerState.currentSnapshotEndMs = frameUpdate.maxSeenTokenEndMs;
-                        }
-
-                        const mergedSnapshot = speakerState.currentSnapshotText;
-                        const previousMergedTextForIdle = stripEndpointMarkers(previousMergedSnapshot);
-                        const mergedTextForIdle = stripEndpointMarkers(mergedSnapshot);
-                        const transcriptChanged = mergedTextForIdle !== previousMergedTextForIdle;
-                        const hasPendingTranscript = mergedSnapshot.length > 0
-                            && !(speakerState.latestNonFinalIsProvisionalCarry && !speakerState.providerFinalizedText.trim());
-
-                        speakerState.strategy.currentMergedTextLen = mergedSnapshot.length;
-                        speakerState.strategy.onTranscriptProgress(hasPendingTranscript, transcriptChanged);
-
-                        const snapshotLen = speakerState.strategy.getSnapshotTextLen();
-                        const decision = speakerState.strategy.onTokenFrame({
-                            finalizedText: speakerState.providerFinalizedText,
-                            latestNonFinalText: speakerState.latestNonFinalText,
-                            mergedSnapshot,
-                            hasEndpointToken: hasEndpointToken && snapshotLen !== null,
-                            endpointMarkerText,
-                            hasProgressTokenBeyondWatermark: frameUpdate.hasProgressTokenBeyondWatermark,
-                            finalizeSnapshotTextLen: snapshotLen ?? null,
-                            hadPendingTextBeforeFrame: previousMergedSnapshot.length > 0,
-                        });
-
-                        if (decision.action === 'finalize') {
-                            const finalizedText = stripEndpointMarkers(decision.text).trim();
-                            const consumedEndMs = speakerState.currentSnapshotEndMs;
-                            if (finalizedText) {
-                                emitTranscript(
-                                    decision.text,
-                                    speakerState.detectedLang,
-                                    true,
-                                    speakerState.speaker,
-                                );
-                            }
-                            if (consumedEndMs > speakerState.lastConsumedEndMs) {
-                                speakerState.lastConsumedEndMs = consumedEndMs;
-                            }
-                            resetSpeakerTurn(speakerState);
-
-                            if (decision.carryText) {
-                                speakerState.latestNonFinalText = decision.carryText;
-                                speakerState.latestNonFinalIsProvisionalCarry = true;
-                                speakerState.currentSnapshotText = composeTurnText('', decision.carryText);
-                                speakerState.currentSnapshotEndMs = consumedEndMs;
-                                speakerState.strategy.onTranscriptProgress(false, false);
-                                speakerState.strategy.scheduleCarryExpiry();
-                                emitTranscript(
-                                    decision.carryText,
-                                    speakerState.detectedLang,
-                                    false,
-                                    speakerState.speaker,
-                                );
-                            }
-                            continue;
-                        }
-
-                        if (transcriptChanged && hasPendingTranscript) {
-                            emitTranscript(
-                                mergedSnapshot,
-                                speakerState.detectedLang,
-                                false,
-                                speakerState.speaker,
-                            );
+                            applySpeakerDecision(speakerState, decision);
                         }
                     }
 
