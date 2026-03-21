@@ -8,6 +8,15 @@ import {
     stripEndpointMarkers,
     SilenceTimerStrategy,
 } from './segmentation-strategy';
+import {
+    buildSonioxDebugTokenRuns,
+    formatSonioxDebugTokenRun,
+    getNextTurnDetectedLang,
+    mergeDetectedLang,
+    normalizeDetectedLang,
+    normalizeSpeaker,
+    shouldUseTokenLanguageForCurrentTurn,
+} from './soniox-language';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -33,6 +42,9 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 })();
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
+);
+const SONIOX_DEBUG_TOKEN_LOGS = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.SONIOX_DEBUG_TOKEN_LOGS || '').trim().toLowerCase(),
 );
 
 const server = createServer();
@@ -637,6 +649,7 @@ wss.on('connection', (clientWs) => {
                 state.latestNonFinalIsProvisionalCarry = false;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
+                state.detectedLang = 'unknown';
                 state.strategy.resetState();
             };
 
@@ -793,6 +806,11 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
+                    if (SONIOX_DEBUG_TOKEN_LOGS) {
+                        for (const run of buildSonioxDebugTokenRuns(tokens)) {
+                            console.log(formatSonioxDebugTokenRun(run));
+                        }
+                    }
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
@@ -828,17 +846,10 @@ wss.on('connection', (clientWs) => {
                             continue;
                         }
 
-                        const tokenLanguage = typeof token.language === 'string' && token.language.trim()
-                            ? token.language.trim()
-                            : 'unknown';
-                        const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
-                            ? token.speaker.trim()
-                            : 'unknown';
+                        const tokenLanguage = normalizeDetectedLang(token.language);
+                        const tokenSpeaker = normalizeSpeaker(token.speaker);
 
                         const speakerState = getSpeakerState(tokenSpeaker);
-                        if (tokenLanguage !== 'unknown') {
-                            speakerState.detectedLang = tokenLanguage;
-                        }
 
                         const includeByWatermark = isTokenBeyondWatermark(
                             tokenStartMs,
@@ -861,19 +872,34 @@ wss.on('connection', (clientWs) => {
                                 frameUpdate.hasTimestampedProgressBeyondWatermark = true;
                             }
                         }
+                        let tokenCanUpdateDetectedLang = false;
                         if (token.is_final === true) {
-                            if (isTokenBeyondWatermark(
+                            const includeByProviderFinalizedWatermark = isTokenBeyondWatermark(
                                 tokenStartMs,
                                 tokenEndMs,
                                 speakerState.providerFinalizedEndMs,
-                            )) {
+                            );
+                            if (includeByProviderFinalizedWatermark) {
                                 frameUpdate.finalDeltaText += tokenText;
+                                tokenCanUpdateDetectedLang = shouldUseTokenLanguageForCurrentTurn({
+                                    includeByTurnWatermark: includeByWatermark,
+                                    isFinalToken: true,
+                                    includeByProviderFinalizedWatermark,
+                                });
                                 if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxFinalTokenEndMs) {
                                     frameUpdate.maxFinalTokenEndMs = tokenEndMs;
                                 }
                             }
                         } else {
                             frameUpdate.nonFinalText += tokenText;
+                            tokenCanUpdateDetectedLang = shouldUseTokenLanguageForCurrentTurn({
+                                includeByTurnWatermark: includeByWatermark,
+                                isFinalToken: false,
+                                includeByProviderFinalizedWatermark: false,
+                            });
+                        }
+                        if (tokenCanUpdateDetectedLang) {
+                            frameUpdate.lastDetectedLang = mergeDetectedLang(frameUpdate.lastDetectedLang || 'unknown', tokenLanguage);
                         }
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
@@ -957,7 +983,10 @@ wss.on('connection', (clientWs) => {
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
                         const previousNonFinalText = speakerState.latestNonFinalText;
                         if (frameUpdate.lastDetectedLang) {
-                            speakerState.detectedLang = frameUpdate.lastDetectedLang;
+                            speakerState.detectedLang = mergeDetectedLang(
+                                speakerState.detectedLang,
+                                frameUpdate.lastDetectedLang,
+                            );
                         }
 
                         if (
@@ -1034,12 +1063,13 @@ wss.on('connection', (clientWs) => {
                         });
 
                         if (decision.action === 'finalize') {
+                            const finalizedDetectedLang = speakerState.detectedLang;
                             const finalizedText = stripEndpointMarkers(decision.text).trim();
                             const consumedEndMs = speakerState.currentSnapshotEndMs;
                             if (finalizedText) {
                                 emitTranscript(
                                     decision.text,
-                                    speakerState.detectedLang,
+                                    finalizedDetectedLang,
                                     true,
                                     speakerState.speaker,
                                 );
@@ -1050,6 +1080,10 @@ wss.on('connection', (clientWs) => {
                             resetSpeakerTurn(speakerState);
 
                             if (decision.carryText) {
+                                speakerState.detectedLang = getNextTurnDetectedLang(
+                                    finalizedDetectedLang,
+                                    decision.carryText,
+                                );
                                 speakerState.latestNonFinalText = decision.carryText;
                                 speakerState.latestNonFinalIsProvisionalCarry = true;
                                 speakerState.currentSnapshotText = composeTurnText('', decision.carryText);
@@ -1247,6 +1281,6 @@ wss.on('connection', (clientWs) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
     console.log(
-        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS}`,
+        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
     );
 });

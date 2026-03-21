@@ -157,27 +157,8 @@ function logParsedTranslations(event: string, payload: {
   translations: Record<string, string>
   usage?: Record<string, unknown>
 }) {
-  if (ENABLE_VERBOSE_TRANSLATE_LOGS) {
-    console.info(`[translate/finalize] ${event}`, payload)
-    return
-  }
-
-  const translationsPreview = Object.fromEntries(
-    Object.entries(payload.translations).map(([language, translatedText]) => [
-      language,
-      translatedText.slice(0, 80),
-    ]),
-  )
-
-  console.info(`[translate/finalize] ${event}`, {
-    sourceLanguage: payload.sourceLanguage,
-    targetLanguages: payload.targetLanguages,
-    isFinal: payload.isFinal,
-    textPreview: payload.text.slice(0, 120),
-    parsedLanguages: payload.parsedLanguages,
-    translationsPreview,
-    usage: payload.usage,
-  })
+  if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
+  console.info(`[translate/finalize] ${event}`, payload)
 }
 
 function sleep(ms: number) {
