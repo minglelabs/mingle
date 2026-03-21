@@ -34,13 +34,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
 );
-const SONIOX_DEBUG_SPEAKERS = ['1', 'true', 'yes', 'on'].includes(
-    (process.env.SONIOX_DEBUG_SPEAKERS || '').trim().toLowerCase(),
-);
-
-function buildDebugPreview(rawText: string, maxLen = 40): string {
-    return rawText.replace(/\s+/g, ' ').trim().slice(0, maxLen);
-}
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -611,12 +604,6 @@ wss.on('connection', (clientWs) => {
                 const cleanedSpeaker = (speaker || '').trim() || 'unknown';
                 if (!cleanedText) return null;
 
-                if (SONIOX_DEBUG_SPEAKERS) {
-                    console.log(
-                        `[Soniox][emit] speaker="${cleanedSpeaker}" isFinal=${isFinal} lang=${cleanedLang} text="${buildDebugPreview(cleanedText)}"`,
-                    );
-                }
-
                 if (clientWs.readyState === WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
                         type: 'transcript',
@@ -809,16 +796,6 @@ wss.on('connection', (clientWs) => {
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
-
-                    const debugSpeakerDist = new Map<string, { total: number; final: number; sample: string }>();
-                    const trackDebugSpeakerDist = (speakerLabel: string, isFinal: boolean, text: string) => {
-                        if (!SONIOX_DEBUG_SPEAKERS) return;
-                        const entry = debugSpeakerDist.get(speakerLabel) ?? { total: 0, final: 0, sample: '' };
-                        entry.total++;
-                        if (isFinal) entry.final++;
-                        if (!entry.sample) entry.sample = buildDebugPreview(text, 15);
-                        debugSpeakerDist.set(speakerLabel, entry);
-                    };
                     const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
                         const existing = speakerFrameUpdates.get(speaker);
                         if (existing) return existing;
@@ -854,13 +831,9 @@ wss.on('connection', (clientWs) => {
                         const tokenLanguage = typeof token.language === 'string' && token.language.trim()
                             ? token.language.trim()
                             : 'unknown';
-                        const _rawSpeaker = typeof token.speaker === 'string' ? token.speaker : null;
-                        const tokenSpeaker = _rawSpeaker && _rawSpeaker.trim() ? _rawSpeaker.trim() : 'unknown';
-                        trackDebugSpeakerDist(
-                            _rawSpeaker === null ? '(no field)' : (_rawSpeaker.trim() || '(empty)'),
-                            token.is_final === true,
-                            tokenText,
-                        );
+                        const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
+                            ? token.speaker.trim()
+                            : 'unknown';
 
                         const speakerState = getSpeakerState(tokenSpeaker);
                         if (tokenLanguage !== 'unknown') {
@@ -905,13 +878,6 @@ wss.on('connection', (clientWs) => {
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
-                    }
-
-                    if (SONIOX_DEBUG_SPEAKERS && debugSpeakerDist.size > 0) {
-                        const dist = Array.from(debugSpeakerDist.entries())
-                            .map(([spk, s]) => `"${spk}" total=${s.total} final=${s.final} sample="${s.sample}"`)
-                            .join(' | ');
-                        console.log(`[Soniox][speaker-dist] ${dist}`);
                     }
 
                     if (hasEndpointToken) {

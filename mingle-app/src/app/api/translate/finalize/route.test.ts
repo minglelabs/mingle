@@ -366,17 +366,17 @@ describe('/api/translate/finalize route', () => {
 
       expect(res.status).toBe(502)
       expect(json).toEqual({ error: 'empty_translation_response' })
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
         '[translate/finalize] provider_empty_response',
-        expect.objectContaining({
-          path: '/api/ios/v1.0.2/translate/finalize',
-          method: 'POST',
-          sourceLanguage: 'en',
-          targetLanguages: ['ko'],
-          isFinal: true,
-          responseStatus: 502,
-        }),
-      )
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '"path":"/api/ios/v1.0.2/translate/finalize"',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"method":"POST"'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"sourceLanguage":"en"'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"targetLanguages":["ko"]'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"isFinal":true'))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"responseStatus":502'))
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
