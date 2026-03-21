@@ -12,7 +12,7 @@ Date: 2026-03-21
 ## 2. Must-do before upload
 
 - [ ] Decide release version/build number:
-  - current release target: `MARKETING_VERSION` (`1.0.4`) and `CURRENT_PROJECT_VERSION` (`20`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
+  - current release target: `MARKETING_VERSION` (`1.0.4`) and `CURRENT_PROJECT_VERSION` (`21`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
 - [ ] Create App Store Connect app entry for bundle ID `com.minglelabs.mingle.rn` (if first upload)
 - [ ] Prepare signing for App Store distribution (team: `3RFBMN8TKZ`)
 - [ ] Archive + validate + upload from devbox/Xcode:
