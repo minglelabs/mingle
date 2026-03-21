@@ -26,6 +26,12 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.4(@types/react@19.2.13)(react@19.1.0)
+      '@speechmatics/auth':
+        specifier: ^0.1.0
+        version: 0.1.0
+      '@speechmatics/real-time-client':
+        specifier: ^8.3.0
+        version: 8.3.0
       '@tanstack/react-query':
         specifier: ^5.89.0
         version: 5.90.20(react@19.1.0)
@@ -530,6 +536,12 @@ packages:
 
   '@rushstack/eslint-patch@1.15.0':
     resolution: {integrity: sha512-ojSshQPKwVvSMR8yT2L/QtUkV5SXi/IfDiJ4/8d6UbTPjiHVmxZzUAzGD8Tzks1b9+qQkZa0isUOvYObedITaw==}
+
+  '@speechmatics/auth@0.1.0':
+    resolution: {integrity: sha512-vF1XOFlAtbNSWYsuJm9WDAZfZIOpwibgqu0sH/Qqkbyz2w/EQyoIhlKta8KRVZ74JeKyY08mnGQ17WDj6i6U4Q==}
+
+  '@speechmatics/real-time-client@8.3.0':
+    resolution: {integrity: sha512-tk/VK124Vp4wTWU9RkO/EPD/wOsLoAFvUCIY3iR9FYXqeK4IdYolQ1OF/sbtsLPIo+AZCOt9YMNo1eQJ55MG8Q==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -2246,6 +2258,9 @@ packages:
     resolution: {integrity: sha512-3KS2b+kL7fsuk/eJZ7EQdnEmQoaho/r6KUef7hxvltNA5DR8NAUM+8wJMbJyZ4G9/7i3v5zPBIMN5aybAh2/Jg==}
     engines: {node: '>= 0.4'}
 
+  typescript-event-target@1.1.2:
+    resolution: {integrity: sha512-TvkrTUpv7gCPlcnSoEwUVUBwsdheKm+HF5u2tPAKubkIGMfovdSizCTaZRY/NhR8+Ijy8iZZUapbVQAsNrkFrw==}
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -2674,6 +2689,16 @@ snapshots:
   '@rtsao/scc@1.1.0': {}
 
   '@rushstack/eslint-patch@1.15.0': {}
+
+  '@speechmatics/auth@0.1.0': {}
+
+  '@speechmatics/real-time-client@8.3.0':
+    dependencies:
+      typescript-event-target: 1.1.2
+      ws: 8.19.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -4568,6 +4593,8 @@ snapshots:
       is-typed-array: 1.1.15
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
+
+  typescript-event-target@1.1.2: {}
 
   typescript@5.9.3: {}
 

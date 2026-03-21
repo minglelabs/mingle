@@ -5,6 +5,12 @@ import 'dotenv/config';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createSpeechmaticsJWT } from '@speechmatics/auth';
+import {
+    RealtimeClient,
+    type AddPartialTranscript,
+    type AddTranscript,
+} from '@speechmatics/real-time-client';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
@@ -15,27 +21,131 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
+const SPEECHMATICS_JWT_TTL_SEC = 60;
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
-
-
+type SttModel =
+    | 'gladia'
+    | 'gladia-stt'
+    | 'deepgram'
+    | 'deepgram-multi'
+    | 'fireworks'
+    | 'soniox'
+    | 'speechmatics';
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
 
 interface ClientConfig {
     sample_rate: number;
     languages: string[];
-    stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
+    stt_model: SttModel;
     translate_model?: TranslateModel;
     lang_hints_strict?: boolean;
 }
 
+interface SpeechmaticsSessionConfig {
+    language: string;
+    domain?: string;
+    fallbackLanguage: string;
+    note?: string;
+}
+
+const speechmaticsLanguageMap: Record<string, string> = {
+    en: 'en',
+    ko: 'ko',
+    th: 'th',
+    zh: 'cmn',
+    ja: 'ja',
+    es: 'es',
+    fr: 'fr',
+    de: 'de',
+    ru: 'ru',
+    pt: 'pt',
+    ar: 'ar',
+    hi: 'hi',
+    vi: 'vi',
+    it: 'it',
+    id: 'id',
+    tr: 'tr',
+    pl: 'pl',
+    nl: 'nl',
+    sv: 'sv',
+    ms: 'ms',
+};
+
+const normalizeSpeechmaticsLanguage = (language: string) => (
+    language === 'cmn' ? 'zh' : language
+);
+
+const resolveSpeechmaticsSessionConfig = (languages: string[]): SpeechmaticsSessionConfig => {
+    const unique = [...new Set(languages.filter(Boolean))];
+    const normalized = unique.map((lang) => speechmaticsLanguageMap[lang] || lang);
+    const has = (lang: string) => normalized.includes(lang);
+
+    if (normalized.length === 2 && has('ar') && has('en')) {
+        return {
+            language: 'ar_en',
+            fallbackLanguage: 'ar_en',
+            note: 'Using Speechmatics bilingual Arabic-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('es') && has('en')) {
+        return {
+            language: 'es',
+            domain: 'bilingual-en',
+            fallbackLanguage: 'es_en',
+            note: 'Using Speechmatics bilingual Spanish-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('cmn') && has('en')) {
+        return {
+            language: 'cmn_en',
+            fallbackLanguage: 'zh_en',
+            note: 'Using Speechmatics bilingual Mandarin-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('en') && has('ms')) {
+        return {
+            language: 'en_ms',
+            fallbackLanguage: 'en_ms',
+            note: 'Using Speechmatics bilingual English-Malay pack.',
+        };
+    }
+
+    const primaryLanguage = normalizeSpeechmaticsLanguage(normalized[0] || 'en');
+    return {
+        language: normalized[0] || 'en',
+        fallbackLanguage: primaryLanguage,
+        note: normalized.length > 1
+            ? `Speechmatics public realtime API does not expose this language combination directly. Falling back to primary language "${primaryLanguage}".`
+            : undefined,
+    };
+};
+
+const getSpeechmaticsTranscriptLanguage = (
+    message: AddPartialTranscript | AddTranscript,
+    fallbackLanguage: string,
+) => {
+    for (const result of message.results) {
+        for (const alternative of result.alternatives ?? []) {
+            if (alternative.language) {
+                return normalizeSpeechmaticsLanguage(alternative.language);
+            }
+        }
+    }
+    return fallbackLanguage;
+};
+
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
+    let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
-    let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
+    let currentModel: SttModel = 'gladia';
     let selectedLanguages: string[] = [];
     let translateModel: TranslateModel = 'claude-haiku-4-5';
 
@@ -43,6 +153,9 @@ wss.on('connection', (clientWs) => {
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
     const sonioxApiKey = process.env.SONIOX_API_KEY;
+    const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
+    const speechmaticsRegion = process.env.SPEECHMATICS_REGION as 'eu' | 'usa' | 'au' | undefined;
+    const speechmaticsRtUrl = process.env.SPEECHMATICS_RT_URL;
 
     const cleanup = () => {
         isClientConnected = false;
@@ -59,6 +172,11 @@ wss.on('connection', (clientWs) => {
                 sttWs.close();
             }
             sttWs = null;
+        }
+
+        if (speechmaticsClient) {
+            void speechmaticsClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
+            speechmaticsClient = null;
         }
     };
 
@@ -504,6 +622,105 @@ wss.on('connection', (clientWs) => {
         }
     };
 
+    // ===== SPEECHMATICS 연결 =====
+    const startSpeechmaticsConnection = async (config: ClientConfig) => {
+        if (!speechmaticsApiKey) {
+            console.error("SPEECHMATICS_API_KEY environment variable not set!");
+            clientWs.close(1011, "Server configuration error: Speechmatics API key not found.");
+            return;
+        }
+
+        const sessionConfig = resolveSpeechmaticsSessionConfig(config.languages);
+        if (sessionConfig.note) {
+            console.log(`[Speechmatics] ${sessionConfig.note}`);
+        }
+
+        try {
+            const jwt = await createSpeechmaticsJWT({
+                type: 'rt',
+                apiKey: speechmaticsApiKey,
+                ttl: SPEECHMATICS_JWT_TTL_SEC,
+                ...(speechmaticsRegion ? { region: speechmaticsRegion } : {}),
+            });
+
+            if (!isClientConnected) return;
+
+            const realtimeClient = new RealtimeClient(
+                speechmaticsRtUrl ? { url: speechmaticsRtUrl } : undefined,
+            );
+            speechmaticsClient = realtimeClient;
+
+            realtimeClient.addEventListener('receiveMessage', ({ data }) => {
+                if (!isClientConnected) return;
+
+                if (data.message === 'AddPartialTranscript' || data.message === 'AddTranscript') {
+                    const text = data.metadata?.transcript?.trim();
+                    if (!text) return;
+
+                    const detectedLanguage = getSpeechmaticsTranscriptLanguage(
+                        data,
+                        sessionConfig.fallbackLanguage,
+                    );
+
+                    clientWs.send(JSON.stringify({
+                        type: 'transcript',
+                        data: {
+                            is_final: data.message === 'AddTranscript',
+                            utterance: {
+                                text,
+                                language: detectedLanguage,
+                            },
+                        },
+                    }));
+
+                    if (data.message === 'AddTranscript' && selectedLanguages.length > 0) {
+                        translateText(text, detectedLanguage, selectedLanguages, clientWs);
+                    }
+                    return;
+                }
+
+                if (data.message === 'Warning') {
+                    console.warn(`[Speechmatics] Warning (${data.type}): ${data.reason}`);
+                    return;
+                }
+
+                if (data.message === 'Error') {
+                    console.error(`[Speechmatics] Error (${data.type}): ${data.reason}`);
+                    clientWs.close(1011, `Speechmatics error: ${data.type}`);
+                }
+            });
+
+            await realtimeClient.start(jwt, {
+                audio_format: {
+                    type: 'raw',
+                    encoding: 'pcm_s16le',
+                    sample_rate: config.sample_rate,
+                },
+                transcription_config: {
+                    language: sessionConfig.language,
+                    ...(sessionConfig.domain ? { domain: sessionConfig.domain } : {}),
+                    enable_partials: true,
+                    max_delay: 0.7,
+                    operating_point: 'enhanced',
+                    conversation_config: {
+                        end_of_utterance_silence_trigger: 0.4,
+                    },
+                },
+            });
+
+            if (isClientConnected) {
+                clientWs.send(JSON.stringify({ status: 'ready' }));
+            } else {
+                void realtimeClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
+            }
+        } catch (error) {
+            console.error('Error starting Speechmatics connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to Speechmatics transcription service.');
+            }
+        }
+    };
+
     // ===== SONIOX 연결 (다국어 실시간, 토큰 기반, 발화자 분리) =====
     const startSonioxConnection = async (config: ClientConfig) => {
         if (!sonioxApiKey) {
@@ -779,6 +996,8 @@ wss.on('connection', (clientWs) => {
                 startDeepgramMultiConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
+            } else if (currentModel === 'speechmatics') {
+                startSpeechmaticsConnection(data as ClientConfig);
             } else if (currentModel === 'soniox') {
                 startSonioxConnection(data as ClientConfig);
             } else if (currentModel === 'gladia-stt') {
@@ -786,9 +1005,19 @@ wss.on('connection', (clientWs) => {
             } else {
                 startGladiaConnection(data as ClientConfig, true);
             }
+        } else if (currentModel === 'speechmatics' && speechmaticsClient?.socketState === 'open') {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                speechmaticsClient.sendAudio(pcmData);
+            }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
-            if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {
+            if (
+                currentModel === 'deepgram'
+                || currentModel === 'deepgram-multi'
+                || currentModel === 'fireworks'
+                || currentModel === 'soniox'
+            ) {
                 // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
                     const pcmData = Buffer.from(data.data.chunk, 'base64');
