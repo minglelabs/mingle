@@ -512,6 +512,66 @@ export function buildLiveUtterance(input: {
   }
 }
 
+export function buildLiveUtterances(input: {
+  pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text'>>
+  activeSpeaker?: string | null
+  partialTranscript: string
+  partialLang?: string | null
+  partialTranslations: Record<string, string>
+  languages: string[]
+}): Utterance[] {
+  const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
+    const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
+    const rightCreatedAt = typeof right.createdAtMs === 'number' ? right.createdAtMs : 0
+    if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt
+    return left.utteranceId.localeCompare(right.utteranceId)
+  })
+
+  return sortedPendingTurns.flatMap((pendingTurn) => {
+    const isActiveSpeaker = pendingTurn.speaker === (input.activeSpeaker || null)
+    const utterance = buildLiveUtterance({
+      pendingTurn,
+      partialTranscript: isActiveSpeaker ? input.partialTranscript : pendingTurn.text,
+      partialLang: isActiveSpeaker ? input.partialLang : pendingTurn.language,
+      partialTranslations: isActiveSpeaker ? input.partialTranslations : {},
+      languages: input.languages,
+    })
+    return utterance ? [utterance] : []
+  })
+}
+
+export function mergeDisplayUtterances(input: {
+  utterances: Utterance[]
+  liveUtterances: Utterance[]
+}): Utterance[] {
+  const committedIds = new Set(input.utterances.map((utterance) => utterance.id))
+  const combined = [
+    ...input.utterances.map((utterance, originalIndex) => ({
+      utterance: normalizeStoredUtterance(utterance),
+      originalIndex,
+    })),
+    ...input.liveUtterances
+      .filter((utterance) => !committedIds.has(utterance.id))
+      .map((utterance, index) => ({
+        utterance: normalizeStoredUtterance(utterance),
+        originalIndex: input.utterances.length + index,
+      })),
+  ]
+
+  combined.sort((left, right) => {
+    const leftCreatedAt = inferUtteranceCreatedAtMs(left.utterance)
+    const rightCreatedAt = inferUtteranceCreatedAtMs(right.utterance)
+    if (leftCreatedAt !== null && rightCreatedAt !== null && leftCreatedAt !== rightCreatedAt) {
+      return leftCreatedAt - rightCreatedAt
+    }
+    if (leftCreatedAt !== null && rightCreatedAt === null) return -1
+    if (leftCreatedAt === null && rightCreatedAt !== null) return 1
+    return left.originalIndex - right.originalIndex
+  })
+
+  return combined.map(({ utterance }) => utterance)
+}
+
 type TranslationPriorityKind = 'initial' | 'partial' | 'final'
 
 interface TranslationPriority {
@@ -789,15 +849,32 @@ function appendOrReplaceUtterance(
   nextUtterance: Utterance,
 ): Utterance[] {
   const existingIndex = utterances.findIndex((utterance) => utterance.id === nextUtterance.id)
-  if (existingIndex < 0) return [...utterances, nextUtterance]
+  const normalizedNextUtterance = normalizeStoredUtterance(nextUtterance)
+  const existingUtterance = existingIndex >= 0 ? utterances[existingIndex] : null
+  if (existingUtterance === normalizedNextUtterance) return utterances
 
-  const existingUtterance = utterances[existingIndex]
-  if (existingUtterance === nextUtterance) return utterances
+  const withoutExisting = existingIndex >= 0
+    ? [
+      ...utterances.slice(0, existingIndex),
+      ...utterances.slice(existingIndex + 1),
+    ]
+    : utterances
+  const nextCreatedAt = inferUtteranceCreatedAtMs(normalizedNextUtterance)
+  if (nextCreatedAt === null) return [...withoutExisting, normalizedNextUtterance]
+
+  const insertIndex = withoutExisting.findIndex((utterance) => {
+    const createdAt = inferUtteranceCreatedAtMs(utterance)
+    return createdAt !== null && createdAt > nextCreatedAt
+  })
+
+  if (insertIndex < 0) {
+    return [...withoutExisting, normalizedNextUtterance]
+  }
 
   return [
-    ...utterances.slice(0, existingIndex),
-    nextUtterance,
-    ...utterances.slice(existingIndex + 1),
+    ...withoutExisting.slice(0, insertIndex),
+    normalizedNextUtterance,
+    ...withoutExisting.slice(insertIndex),
   ]
 }
 
@@ -2940,6 +3017,14 @@ export default function useRealtimeSTT({
 
   const activePendingTurn = getActivePendingTurn()
   const liveUtteranceLanguages = getCurrentTargetLanguages()
+  const liveUtterances = buildLiveUtterances({
+    pendingTurns: Object.values(pendingTurnsBySpeakerRef.current),
+    activeSpeaker: activePartialSpeakerRef.current,
+    partialTranscript,
+    partialLang,
+    partialTranslations,
+    languages: liveUtteranceLanguages,
+  })
   const liveUtterance = buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript,
@@ -2951,6 +3036,7 @@ export default function useRealtimeSTT({
   return {
     connectionStatus,
     utterances,
+    liveUtterances,
     liveUtterance,
     partialTranscript,
     volume,

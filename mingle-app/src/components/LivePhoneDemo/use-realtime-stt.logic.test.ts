@@ -4,6 +4,7 @@ import {
   buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
+  buildLiveUtterances,
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
@@ -13,6 +14,7 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  mergeDisplayUtterances,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
   shouldRestartSttForLanguageHintChange,
@@ -278,6 +280,65 @@ describe('use-realtime-stt pure logic', () => {
     })).toBeNull()
   })
 
+  it('builds live utterances for all pending speakers in chronological order', () => {
+    expect(buildLiveUtterances({
+      pendingTurns: [
+        {
+          utteranceId: 'u-2',
+          createdAtMs: 1700000000002,
+          speaker: 'speaker-2',
+          speakerAvatarSeed: 'avatar_seed_2',
+          speakerAvatarIndex: 2,
+          language: 'ko',
+          text: 'Second draft',
+        },
+        {
+          utteranceId: 'u-1',
+          createdAtMs: 1700000000001,
+          speaker: 'speaker-1',
+          speakerAvatarSeed: 'avatar_seed_1',
+          speakerAvatarIndex: 1,
+          language: 'en',
+          text: 'First draft',
+        },
+      ],
+      activeSpeaker: 'speaker-2',
+      partialTranscript: 'Second draft updated',
+      partialLang: 'ko',
+      partialTranslations: {
+        en: 'Updated second draft',
+      },
+      languages: ['en', 'ko', 'ja'],
+    })).toEqual([
+      {
+        id: 'u-1',
+        speaker: 'speaker-1',
+        speakerAvatarSeed: 'avatar_seed_1',
+        speakerAvatarIndex: 1,
+        originalText: 'First draft',
+        originalLang: 'en',
+        targetLanguages: ['ko', 'ja'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: 1700000000001,
+      },
+      {
+        id: 'u-2',
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_2',
+        speakerAvatarIndex: 2,
+        originalText: 'Second draft updated',
+        originalLang: 'ko',
+        targetLanguages: ['en', 'ja'],
+        translations: {
+          en: 'Updated second draft',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000002,
+      },
+    ])
+  })
+
   it('keeps speaker avatar seed on finalized utterances when provided', () => {
     const built = buildFinalizedUtterancePayload({
       speaker: 'speaker-2',
@@ -337,6 +398,69 @@ describe('use-realtime-stt pure logic', () => {
     ])
     expect(appended.translationPriorities.get('u-queued:ko')).toEqual({ kind: 'final', seq: 7 })
     expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
+  })
+
+  it('inserts a later-arriving finalized utterance back into chronological order', () => {
+    const appended = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([
+      {
+        id: 'u-later',
+        originalText: 'Later speaker',
+        originalLang: 'ko',
+        targetLanguages: ['en'],
+        translations: {},
+        translationFinalized: {},
+        createdAtMs: 1700000000002,
+      },
+    ]), {
+      id: 'u-earlier',
+      originalText: 'Earlier speaker',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000001,
+    })
+
+    expect(appended.utterances.map((utterance) => utterance.id)).toEqual(['u-earlier', 'u-later'])
+  })
+
+  it('merges committed and live utterances without letting a later draft steal the earlier slot', () => {
+    const merged = mergeDisplayUtterances({
+      utterances: [
+        {
+          id: 'u-1',
+          originalText: 'Earlier committed',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000001,
+        },
+      ],
+      liveUtterances: [
+        {
+          id: 'u-1',
+          originalText: 'Earlier draft',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000001,
+        },
+        {
+          id: 'u-2',
+          originalText: 'Later draft',
+          originalLang: 'ko',
+          targetLanguages: ['en'],
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000002,
+        },
+      ],
+    })
+
+    expect(merged.map((utterance) => utterance.id)).toEqual(['u-1', 'u-2'])
+    expect(merged[0]?.originalText).toBe('Earlier committed')
   })
 
   it('keeps visible partial translations seeded on the finalized utterance', () => {
