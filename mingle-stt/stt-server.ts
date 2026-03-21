@@ -34,6 +34,9 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
 );
+const SONIOX_DEBUG_RAW_TOKENS = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.SONIOX_DEBUG_RAW_TOKENS || '').trim().toLowerCase(),
+);
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -878,6 +881,7 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
+                    const rawTokenDebugRows: Array<Record<string, unknown>> = [];
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
@@ -927,6 +931,19 @@ wss.on('connection', (clientWs) => {
                             tokenEndMs,
                             speakerState.lastConsumedEndMs,
                         );
+                        if (SONIOX_DEBUG_RAW_TOKENS) {
+                            rawTokenDebugRows.push({
+                                text: buildDebugTextPreview(tokenText),
+                                language: tokenLanguage,
+                                speaker: tokenSpeaker,
+                                isFinal: token.is_final === true,
+                                startMs: tokenStartMs,
+                                endMs: tokenEndMs,
+                                includeByWatermark,
+                                lastConsumedEndMs: speakerState.lastConsumedEndMs,
+                                snapshotBoundaryEndMs: speakerState.snapshotBoundaryEndMs,
+                            });
+                        }
                         if (!includeByWatermark) continue;
 
                         const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
@@ -972,6 +989,9 @@ wss.on('connection', (clientWs) => {
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
+                    }
+                    if (SONIOX_DEBUG_RAW_TOKENS && rawTokenDebugRows.length > 0) {
+                        console.log(`[conn:${connId}][soniox.raw_tokens]`, rawTokenDebugRows);
                     }
 
                     if (hasEndpointToken) {
