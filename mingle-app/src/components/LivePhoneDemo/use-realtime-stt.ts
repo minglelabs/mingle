@@ -25,6 +25,75 @@ const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
 const LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS = 400
 const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
+const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
+const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
+
+export type PartialTranslateMode = 'time' | 'char' | 'both'
+
+export function parsePartialTranslateMode(rawMode: string | undefined): PartialTranslateMode {
+  const normalized = (rawMode || '').trim().toLowerCase()
+  if (normalized === 'char') return 'char'
+  if (normalized === 'both') return 'both'
+  return 'time'
+}
+
+export function parsePositiveIntWithFallback(rawValue: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt((rawValue || '').trim(), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+  return parsed
+}
+
+export function shouldTriggerPartialTranslate(input: {
+  mode: PartialTranslateMode
+  isInitialRequest: boolean
+  targetLanguagesChanged: boolean
+  textLength: number
+  currentText: string
+  lastRequestedText: string
+  lastTranslateLen: number
+  charStep: number
+  elapsedSinceLastRequestMs: number
+  intervalMs: number
+}): { shouldRequest: boolean, nextLastTranslateLen: number } {
+  if (input.textLength <= 0) {
+    return { shouldRequest: false, nextLastTranslateLen: input.lastTranslateLen }
+  }
+
+  const normalizedLastRequestedText = input.lastRequestedText.trim()
+  const normalizedCurrentText = input.currentText.trim()
+  const nextLastTranslateLen = Math.floor(input.textLength / input.charStep) * input.charStep
+
+  if (input.isInitialRequest || input.targetLanguagesChanged) {
+    return { shouldRequest: true, nextLastTranslateLen }
+  }
+
+  const charTriggered = (
+    (input.mode === 'char' || input.mode === 'both')
+    && input.textLength >= (input.lastTranslateLen + input.charStep)
+  )
+  const timeTriggered = (
+    (input.mode === 'time' || input.mode === 'both')
+    && normalizedCurrentText !== normalizedLastRequestedText
+    && input.elapsedSinceLastRequestMs >= input.intervalMs
+  )
+
+  return {
+    shouldRequest: charTriggered || timeTriggered,
+    nextLastTranslateLen: charTriggered || timeTriggered ? nextLastTranslateLen : input.lastTranslateLen,
+  }
+}
+
+const PARTIAL_TRANSLATE_MODE = parsePartialTranslateMode(
+  process.env.NEXT_PUBLIC_LIVE_PARTIAL_TRANSLATE_MODE,
+)
+const PARTIAL_TRANSLATE_INTERVAL_MS = parsePositiveIntWithFallback(
+  process.env.NEXT_PUBLIC_LIVE_PARTIAL_TRANSLATE_INTERVAL_MS,
+  DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS,
+)
+const PARTIAL_TRANSLATE_STEP = parsePositiveIntWithFallback(
+  process.env.NEXT_PUBLIC_LIVE_PARTIAL_TRANSLATE_CHAR_STEP,
+  DEFAULT_PARTIAL_TRANSLATE_STEP,
+)
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
 
@@ -636,6 +705,8 @@ interface PendingTurnTranslationRuntime {
   latestRequestSeq: number
   lastRequestSignature: string
   lastTargetSignature: string
+  lastRequestedText: string
+  lastRequestedAtMs: number
   controller: AbortController | null
 }
 
@@ -1271,6 +1342,7 @@ export default function useRealtimeSTT({
   const [partialTranslations, setPartialTranslations] = useState<Record<string, string>>({})
   const [partialLang, setPartialLang] = useState<string | null>(null)
   const [pendingTurnRenderVersion, setPendingTurnRenderVersion] = useState(0)
+  const [partialTranslateTick, setPartialTranslateTick] = useState(0)
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(() => {
     if (typeof window === 'undefined') return 0
@@ -1346,6 +1418,8 @@ export default function useRealtimeSTT({
       latestRequestSeq: 0,
       lastRequestSignature: '',
       lastTargetSignature: buildLanguageSelectionSignature(targetLanguagesRef.current),
+      lastRequestedText: '',
+      lastRequestedAtMs: 0,
       controller: null,
     }
     pendingTurnTranslationRuntimeRef.current[utteranceId] = runtime
@@ -2929,8 +3003,20 @@ export default function useRealtimeSTT({
     syncVisiblePendingTurn(activePartialSpeakerRef.current)
   }, [bumpPendingTurnRenderVersion, languages, syncVisiblePendingTurn])
 
-  // ===== Partial translation: fire once immediately, then every 20-char threshold =====
-  const PARTIAL_TRANSLATE_STEP = 20
+  useEffect(() => {
+    if (PARTIAL_TRANSLATE_MODE !== 'time' && PARTIAL_TRANSLATE_MODE !== 'both') return
+    if (connectionStatus !== 'ready') return
+
+    const timer = window.setInterval(() => {
+      setPartialTranslateTick((prev) => prev + 1)
+    }, PARTIAL_TRANSLATE_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [connectionStatus])
+
+  // ===== Partial translation: fire immediately once, then re-trigger per configured mode =====
   useEffect(() => {
     const pendingTurns = Object.values(pendingTurnsBySpeakerRef.current)
     const targetLanguages = [...languages]
@@ -2953,15 +3039,21 @@ export default function useRealtimeSTT({
       const runtime = getPendingTurnTranslationRuntime(pendingTurn.utteranceId)
       const isInitialPartialRequest = !runtime.hasFiredInitialRequest
       const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
-
-      if (isInitialPartialRequest || targetLanguagesChanged) {
-        runtime.hasFiredInitialRequest = true
-        runtime.lastTranslateLen = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
-      } else {
-        const nextThreshold = runtime.lastTranslateLen + PARTIAL_TRANSLATE_STEP
-        if (len < nextThreshold) continue
-        runtime.lastTranslateLen = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
-      }
+      const scheduleDecision = shouldTriggerPartialTranslate({
+        mode: PARTIAL_TRANSLATE_MODE,
+        isInitialRequest: isInitialPartialRequest,
+        targetLanguagesChanged,
+        textLength: len,
+        currentText: trimmed,
+        lastRequestedText: runtime.lastRequestedText,
+        lastTranslateLen: runtime.lastTranslateLen,
+        charStep: PARTIAL_TRANSLATE_STEP,
+        elapsedSinceLastRequestMs: Math.max(0, Date.now() - runtime.lastRequestedAtMs),
+        intervalMs: PARTIAL_TRANSLATE_INTERVAL_MS,
+      })
+      if (!scheduleDecision.shouldRequest) continue
+      runtime.hasFiredInitialRequest = true
+      runtime.lastTranslateLen = scheduleDecision.nextLastTranslateLen
 
       const requestSignature = buildLiveTranslateRequestSignature({
         utteranceId: pendingTurn.utteranceId,
@@ -2983,6 +3075,8 @@ export default function useRealtimeSTT({
 
       runtime.lastRequestSignature = requestSignature
       runtime.lastTargetSignature = targetLanguageSignature
+      runtime.lastRequestedText = trimmed
+      runtime.lastRequestedAtMs = Date.now()
       const requestSeq = runtime.latestRequestSeq + 1
       runtime.latestRequestSeq = requestSeq
       const requestPriority: TranslationPriority = {
@@ -3066,6 +3160,7 @@ export default function useRealtimeSTT({
     findPendingTurnByUtteranceId,
     getPendingTurnTranslationRuntime,
     languages,
+    partialTranslateTick,
     pendingTurnRenderVersion,
     translateViaApi,
   ])

@@ -16,9 +16,12 @@ import {
   filterTranslationsToTargetLanguages,
   mergeDisplayUtterances,
   parseSttTranscriptMessage,
+  parsePartialTranslateMode,
+  parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldRestartSttForLanguageHintChange,
+  shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
 
@@ -613,6 +616,96 @@ describe('use-realtime-stt pure logic', () => {
       targetLanguages: ['ko'],
       text: 'Hello world',
     }))
+  })
+
+  it('defaults partial translate mode to time and parses env overrides', () => {
+    expect(parsePartialTranslateMode(undefined)).toBe('time')
+    expect(parsePartialTranslateMode('char')).toBe('char')
+    expect(parsePartialTranslateMode('both')).toBe('both')
+    expect(parsePartialTranslateMode('weird')).toBe('time')
+    expect(parsePositiveIntWithFallback(undefined, 2000)).toBe(2000)
+    expect(parsePositiveIntWithFallback('2500', 2000)).toBe(2500)
+    expect(parsePositiveIntWithFallback('0', 2000)).toBe(2000)
+  })
+
+  it('fires partial translation immediately on the first pending text', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: true,
+      targetLanguagesChanged: false,
+      textLength: 8,
+      currentText: '안녕하세요',
+      lastRequestedText: '',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 0,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: true,
+      nextLastTranslateLen: 0,
+    })
+  })
+
+  it('fires time-based partial translation only after the interval when text changed', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 16,
+      currentText: 'hello there world',
+      lastRequestedText: 'hello there',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 1900,
+      intervalMs: 2000,
+    }).shouldRequest).toBe(false)
+
+    expect(shouldTriggerPartialTranslate({
+      mode: 'time',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 16,
+      currentText: 'hello there world',
+      lastRequestedText: 'hello there',
+      lastTranslateLen: 0,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 2000,
+      intervalMs: 2000,
+    }).shouldRequest).toBe(true)
+  })
+
+  it('can still use char threshold mode when enabled', () => {
+    expect(shouldTriggerPartialTranslate({
+      mode: 'char',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 39,
+      currentText: '123456789012345678901234567890123456789',
+      lastRequestedText: '12345678901234567890',
+      lastTranslateLen: 20,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 500,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: false,
+      nextLastTranslateLen: 20,
+    })
+
+    expect(shouldTriggerPartialTranslate({
+      mode: 'char',
+      isInitialRequest: false,
+      targetLanguagesChanged: false,
+      textLength: 40,
+      currentText: '1234567890123456789012345678901234567890',
+      lastRequestedText: '12345678901234567890',
+      lastTranslateLen: 20,
+      charStep: 20,
+      elapsedSinceLastRequestMs: 500,
+      intervalMs: 2000,
+    })).toEqual({
+      shouldRequest: true,
+      nextLastTranslateLen: 40,
+    })
   })
 
   it('detects duplicate timed signatures within the ttl window', () => {
