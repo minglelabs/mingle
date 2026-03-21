@@ -17,9 +17,8 @@ import {
   mergeDisplayUtterances,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
+  shouldApplyPendingTurnPartialTranslationResponse,
   shouldRestartSttForLanguageHintChange,
-  shouldApplyLatestPartialTranslationResponse,
-  shouldApplyPartialTranslationResponse,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
 
@@ -290,7 +289,10 @@ describe('use-realtime-stt pure logic', () => {
           speakerAvatarSeed: 'avatar_seed_2',
           speakerAvatarIndex: 2,
           language: 'ko',
-          text: 'Second draft',
+          text: 'Second draft updated',
+          partialTranslations: {
+            en: 'Updated second draft',
+          },
         },
         {
           utteranceId: 'u-1',
@@ -300,14 +302,11 @@ describe('use-realtime-stt pure logic', () => {
           speakerAvatarIndex: 1,
           language: 'en',
           text: 'First draft',
+          partialTranslations: {
+            ko: '첫 번째 초안',
+          },
         },
       ],
-      activeSpeaker: 'speaker-2',
-      partialTranscript: 'Second draft updated',
-      partialLang: 'ko',
-      partialTranslations: {
-        en: 'Updated second draft',
-      },
       languages: ['en', 'ko', 'ja'],
     })).toEqual([
       {
@@ -318,7 +317,9 @@ describe('use-realtime-stt pure logic', () => {
         originalText: 'First draft',
         originalLang: 'en',
         targetLanguages: ['ko', 'ja'],
-        translations: {},
+        translations: {
+          ko: '첫 번째 초안',
+        },
         translationFinalized: {},
         createdAtMs: 1700000000001,
       },
@@ -730,55 +731,34 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe(-1)
   })
 
-  it('accepts partial translation responses only for the active turn and speaker', () => {
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
-    })).toBe(true)
-
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 10,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
-    })).toBe(false)
-
-    expect(shouldApplyPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-2',
-    })).toBe(false)
-  })
-
-  it('accepts only the latest non-aborted partial translation response', () => {
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+  it('accepts partial translation responses for the matching pending utterance only', () => {
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 3,
       latestRequestSeq: 3,
       aborted: false,
     })).toBe(true)
 
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-10',
+      requestSeq: 3,
+      latestRequestSeq: 3,
+      aborted: false,
+    })).toBe(false)
+
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 2,
       latestRequestSeq: 3,
       aborted: false,
     })).toBe(false)
 
-    expect(shouldApplyLatestPartialTranslationResponse({
-      requestUtteranceId: 9,
-      currentUtteranceId: 9,
-      requestSpeaker: 'speaker-1',
-      currentSpeaker: 'speaker-1',
+    expect(shouldApplyPendingTurnPartialTranslationResponse({
+      requestUtteranceId: 'u-9',
+      currentPendingUtteranceId: 'u-9',
       requestSeq: 3,
       latestRequestSeq: 3,
       aborted: true,

@@ -445,6 +445,9 @@ interface PendingSpeakerTurn {
   rawText: string
   text: string
   language: string
+  partialTranslations: Record<string, string>
+  partialTranslationPriorities: Map<string, TranslationPriority>
+  currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
   updatedAtMs: number
 }
 
@@ -456,6 +459,7 @@ type PendingSpeakerTurnSnapshot = Pick<
   | 'speakerAvatarSeed'
   | 'speakerAvatarIndex'
   | 'language'
+  | 'partialTranslations'
   | 'text'
   | 'updatedAtMs'
 >
@@ -470,6 +474,7 @@ function buildPendingSpeakerTurnSnapshots(
     speakerAvatarSeed: turn.speakerAvatarSeed,
     speakerAvatarIndex: turn.speakerAvatarIndex,
     language: turn.language,
+    partialTranslations: { ...turn.partialTranslations },
     text: turn.text,
     updatedAtMs: turn.updatedAtMs,
   }))
@@ -488,6 +493,10 @@ function buildPendingSpeakerTurnSignature(
         turn.speakerAvatarSeed,
         String(turn.speakerAvatarIndex),
         turn.language,
+        Object.entries(turn.partialTranslations)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([language, text]) => `${language}:${text}`)
+          .join('\u001d'),
         turn.text,
         String(turn.updatedAtMs),
       ].join('\u001f')
@@ -560,11 +569,7 @@ export function buildLiveUtterance(input: {
 }
 
 export function buildLiveUtterances(input: {
-  pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text'>>
-  activeSpeaker?: string | null
-  partialTranscript: string
-  partialLang?: string | null
-  partialTranslations: Record<string, string>
+  pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>>
   languages: string[]
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
@@ -575,12 +580,11 @@ export function buildLiveUtterances(input: {
   })
 
   return sortedPendingTurns.flatMap((pendingTurn) => {
-    const isActiveSpeaker = pendingTurn.speaker === (input.activeSpeaker || null)
     const utterance = buildLiveUtterance({
       pendingTurn,
-      partialTranscript: isActiveSpeaker ? input.partialTranscript : pendingTurn.text,
-      partialLang: isActiveSpeaker ? input.partialLang : pendingTurn.language,
-      partialTranslations: isActiveSpeaker ? input.partialTranslations : {},
+      partialTranscript: pendingTurn.text,
+      partialLang: pendingTurn.language,
+      partialTranslations: pendingTurn.partialTranslations,
       languages: input.languages,
     })
     return utterance ? [utterance] : []
@@ -624,6 +628,15 @@ type TranslationPriorityKind = 'initial' | 'partial' | 'final'
 interface TranslationPriority {
   kind: TranslationPriorityKind
   seq: number
+}
+
+interface PendingTurnTranslationRuntime {
+  hasFiredInitialRequest: boolean
+  lastTranslateLen: number
+  latestRequestSeq: number
+  lastRequestSignature: string
+  lastTargetSignature: string
+  controller: AbortController | null
 }
 
 interface TranslationApplyFallbackMatch {
@@ -724,6 +737,18 @@ export function shouldApplyLatestPartialTranslationResponse(input: {
     requestSpeaker: input.requestSpeaker,
     currentSpeaker: input.currentSpeaker,
   })
+}
+
+export function shouldApplyPendingTurnPartialTranslationResponse(input: {
+  requestUtteranceId: string
+  currentPendingUtteranceId: string | null
+  requestSeq: number
+  latestRequestSeq: number
+  aborted: boolean
+}): boolean {
+  if (input.aborted) return false
+  if (input.requestSeq !== input.latestRequestSeq) return false
+  return input.requestUtteranceId === (input.currentPendingUtteranceId || null)
 }
 
 export function shouldOverrideTranslationByPriority(
@@ -1245,6 +1270,7 @@ export default function useRealtimeSTT({
   const [partialTranscript, setPartialTranscript] = useState('')
   const [partialTranslations, setPartialTranslations] = useState<Record<string, string>>({})
   const [partialLang, setPartialLang] = useState<string | null>(null)
+  const [pendingTurnRenderVersion, setPendingTurnRenderVersion] = useState(0)
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(() => {
     if (typeof window === 'undefined') return 0
@@ -1276,6 +1302,7 @@ export default function useRealtimeSTT({
   const partialTranscriptRef = useRef('')
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
+  const pendingTurnTranslationRuntimeRef = useRef<Record<string, PendingTurnTranslationRuntime>>({})
   const activePartialSpeakerRef = useRef<string | null>(null)
   const isStoppingRef = useRef(false)
   const onTtsRequestedRef = useRef(onTtsRequested)
@@ -1290,17 +1317,6 @@ export default function useRealtimeSTT({
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
-  // Track the partial transcript 20-char threshold last used for partial translation.
-  // A first partial translation fires immediately when the first transcript arrives,
-  // then subsequent calls fire when 20/40/60... thresholds are crossed.
-  const hasFiredInitialPartialTranslateRef = useRef(false)
-  const lastPartialTranslateLenRef = useRef(0)
-  const latestPartialTranslateSeqRef = useRef(0)
-  const partialTranslationPriorityRef = useRef<Map<string, TranslationPriority>>(new Map()) // lang -> priority for visible partial turn
-  const partialTranslateControllerRef = useRef<AbortController | null>(null)
-  const lastPartialTranslateRequestSignatureRef = useRef('')
-  const lastPartialTranslateTargetSignatureRef = useRef(buildLanguageSelectionSignature(languages))
-  const lastPartialTranslationStateRef = useRef<CurrentTurnPreviousStatePayload | null>(null)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
@@ -1317,6 +1333,47 @@ export default function useRealtimeSTT({
   const sonioxLanguageHintsEnabledRef = useRef(false)
 
   const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
+  const bumpPendingTurnRenderVersion = useCallback(() => {
+    setPendingTurnRenderVersion((prev) => prev + 1)
+  }, [])
+
+  const getPendingTurnTranslationRuntime = useCallback((utteranceId: string): PendingTurnTranslationRuntime => {
+    const existing = pendingTurnTranslationRuntimeRef.current[utteranceId]
+    if (existing) return existing
+    const runtime: PendingTurnTranslationRuntime = {
+      hasFiredInitialRequest: false,
+      lastTranslateLen: 0,
+      latestRequestSeq: 0,
+      lastRequestSignature: '',
+      lastTargetSignature: buildLanguageSelectionSignature(targetLanguagesRef.current),
+      controller: null,
+    }
+    pendingTurnTranslationRuntimeRef.current[utteranceId] = runtime
+    return runtime
+  }, [])
+
+  const clearPendingTurnTranslationRuntime = useCallback((utteranceId: string) => {
+    const runtime = pendingTurnTranslationRuntimeRef.current[utteranceId]
+    if (runtime?.controller) {
+      runtime.controller.abort()
+    }
+    delete pendingTurnTranslationRuntimeRef.current[utteranceId]
+  }, [])
+
+  const clearAllPendingTurnTranslationRuntime = useCallback(() => {
+    for (const runtime of Object.values(pendingTurnTranslationRuntimeRef.current)) {
+      runtime.controller?.abort()
+    }
+    pendingTurnTranslationRuntimeRef.current = {}
+  }, [])
+
+  const removePendingTurn = useCallback((speaker: string) => {
+    const pendingTurn = pendingTurnsBySpeakerRef.current[speaker]
+    if (!pendingTurn) return
+    clearPendingTurnTranslationRuntime(pendingTurn.utteranceId)
+    delete pendingTurnsBySpeakerRef.current[speaker]
+    bumpPendingTurnRenderVersion()
+  }, [bumpPendingTurnRenderVersion, clearPendingTurnTranslationRuntime])
 
   const clearLanguageChangeRestartTimer = useCallback(() => {
     if (!languageChangeRestartTimerRef.current) return
@@ -1558,17 +1615,6 @@ export default function useRealtimeSTT({
     partialTranscriptRef.current = ''
     setPartialLang(null)
     partialLangRef.current = null
-    hasFiredInitialPartialTranslateRef.current = false
-    lastPartialTranslateLenRef.current = 0
-    partialTranslationPriorityRef.current.clear()
-    lastPartialTranslateRequestSignatureRef.current = ''
-    lastPartialTranslateTargetSignatureRef.current = buildLanguageSelectionSignature(targetLanguagesRef.current)
-    if (partialTranslateControllerRef.current) {
-      partialTranslateControllerRef.current.abort()
-      partialTranslateControllerRef.current = null
-    }
-    latestPartialTranslateSeqRef.current += 1
-    lastPartialTranslationStateRef.current = null
   }, [])
 
   const getLatestPendingTurn = useCallback((): PendingSpeakerTurn | null => {
@@ -1576,6 +1622,13 @@ export default function useRealtimeSTT({
       .filter((turn) => turn.text.trim())
       .sort((left, right) => right.updatedAtMs - left.updatedAtMs)
     return pendingTurns[0] || null
+  }, [])
+
+  const findPendingTurnByUtteranceId = useCallback((utteranceId: string): PendingSpeakerTurn | null => {
+    for (const pendingTurn of Object.values(pendingTurnsBySpeakerRef.current)) {
+      if (pendingTurn.utteranceId === utteranceId) return pendingTurn
+    }
+    return null
   }, [])
 
   const syncVisiblePendingTurn = useCallback((preferredSpeaker?: string | null) => {
@@ -1598,14 +1651,19 @@ export default function useRealtimeSTT({
     partialTranscriptRef.current = nextTurn?.text || ''
     setPartialLang(nextTurn?.language || null)
     partialLangRef.current = nextTurn?.language || null
+    const nextTranslations = nextTurn?.partialTranslations || {}
+    setPartialTranslations(nextTranslations)
+    partialTranslationsRef.current = nextTranslations
   }, [getLatestPendingTurn, resetVisiblePartialState])
 
   const clearPartialBuffers = useCallback(() => {
     pendingTurnsBySpeakerRef.current = {}
     activePartialSpeakerRef.current = null
+    clearAllPendingTurnTranslationRuntime()
     resetVisiblePartialState()
     turnStartedAtRef.current = null
-  }, [resetVisiblePartialState])
+    bumpPendingTurnRenderVersion()
+  }, [bumpPendingTurnRenderVersion, clearAllPendingTurnTranslationRuntime, resetVisiblePartialState])
 
   const buildRecentTurnContextPayload = useCallback((excludeUtteranceId?: string): RecentTurnContextPayload[] => {
     const now = Date.now()
@@ -1845,7 +1903,6 @@ export default function useRealtimeSTT({
     },
   ): LocalFinalizeResult | null => {
     const text = normalizeSttTurnText(rawText)
-    const lang = (rawLang || 'unknown').trim() || 'unknown'
     if (!text) return null
 
     const now = Date.now()
@@ -1858,7 +1915,7 @@ export default function useRealtimeSTT({
       targetLanguages,
       rawLang,
       options?.partialTranslations ?? partialTranslationsRef.current,
-      options?.partialTranslationPriorities ?? partialTranslationPriorityRef.current,
+      options?.partialTranslationPriorities ?? new Map(),
     )
     const localPayload = buildFinalizedUtterancePayload({
       speaker: options?.speaker,
@@ -1889,14 +1946,7 @@ export default function useRealtimeSTT({
       utteranceId: localPayload.utteranceId,
       expiresAt: now + 5_000,
     }
-    const fallbackCurrentTurnPreviousState = (
-      options?.fallbackCurrentTurnPreviousState !== undefined
-        ? options.fallbackCurrentTurnPreviousState
-        : (
-          lastPartialTranslationStateRef.current
-          && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(lang)
-        ) ? lastPartialTranslationStateRef.current : null
-    )
+    const fallbackCurrentTurnPreviousState = options?.fallbackCurrentTurnPreviousState ?? null
     const currentTurnPreviousState = (
       localPayload.currentTurnPreviousState
       && Object.keys(localPayload.currentTurnPreviousState.translations).length > 0
@@ -1925,12 +1975,7 @@ export default function useRealtimeSTT({
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
     const speakerLanguage = pendingTurn?.language || fallbackLanguage || 'unknown'
-    const isActiveSpeaker = activePartialSpeakerRef.current === speaker
-    const fallbackCurrentTurnPreviousState = (
-      isActiveSpeaker
-      && lastPartialTranslationStateRef.current
-      && normalizeLangForCompare(lastPartialTranslationStateRef.current.sourceLanguage) === normalizeLangForCompare(speakerLanguage)
-    ) ? lastPartialTranslationStateRef.current : null
+    const fallbackCurrentTurnPreviousState = pendingTurn?.currentTurnPreviousState || null
 
     return {
       pendingTurn,
@@ -1938,8 +1983,8 @@ export default function useRealtimeSTT({
         speaker,
         speakerAvatarSeed: pendingTurn?.speakerAvatarSeed,
         speakerAvatarIndex: pendingTurn?.speakerAvatarIndex,
-        partialTranslations: isActiveSpeaker ? partialTranslationsRef.current : {},
-        partialTranslationPriorities: isActiveSpeaker ? new Map(partialTranslationPriorityRef.current) : new Map(),
+        partialTranslations: pendingTurn?.partialTranslations || {},
+        partialTranslationPriorities: new Map(pendingTurn?.partialTranslationPriorities || []),
         utteranceId: pendingTurn?.utteranceId,
         utteranceSerial: pendingTurn?.utteranceSerial,
         createdAtMs: pendingTurn?.createdAtMs,
@@ -2394,7 +2439,7 @@ export default function useRealtimeSTT({
         const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
         const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, lang)
         if (!text) {
-          delete pendingTurnsBySpeakerRef.current[speaker]
+          removePendingTurn(speaker)
           syncVisiblePendingTurn()
           return
         }
@@ -2464,7 +2509,7 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             language: finalizedPayload.language,
           })
-          delete pendingTurnsBySpeakerRef.current[speaker]
+          removePendingTurn(speaker)
           syncVisiblePendingTurn()
           return
         }
@@ -2514,7 +2559,7 @@ export default function useRealtimeSTT({
             reason: 'stt_server_final',
           },
         )
-        delete pendingTurnsBySpeakerRef.current[speaker]
+        removePendingTurn(speaker)
         syncVisiblePendingTurn()
       } else {
         if (!turnStartedAtRef.current && text) {
@@ -2546,6 +2591,9 @@ export default function useRealtimeSTT({
           rawText,
           text,
           language: lang,
+          partialTranslations: existingPendingTurn?.partialTranslations || {},
+          partialTranslationPriorities: existingPendingTurn?.partialTranslationPriorities || new Map(),
+          currentTurnPreviousState: existingPendingTurn?.currentTurnPreviousState || null,
           updatedAtMs: now,
         }
         const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed, pendingSpeakerAvatarIndex)
@@ -2558,16 +2606,19 @@ export default function useRealtimeSTT({
           avatarSrc: pendingAvatar.src,
           utteranceId: turnIdentity.utteranceId,
         })
+        bumpPendingTurnRenderVersion()
         syncVisiblePendingTurn(speaker)
       }
     }
   }, [
     buildLocalFinalizeOptionsForSpeaker,
+    bumpPendingTurnRenderVersion,
     finalizeTurnWithTranslation,
     getCurrentTargetLanguages,
     logClientEvent,
     normalizedUsageLimitSec,
     ensureSpeakerAvatarAssignment,
+    removePendingTurn,
     startAudioProcessing,
     stopRecordingGracefully,
     syncVisiblePendingTurn,
@@ -2600,24 +2651,18 @@ export default function useRealtimeSTT({
       setConnectionStatus('connecting')
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
-      lastPartialTranslationStateRef.current = null
-      lastPartialTranslateRequestSignatureRef.current = ''
-      lastPartialTranslateTargetSignatureRef.current = buildLanguageSelectionSignature(targetLanguages)
       recentFinalizedUtteranceRef.current = null
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
+      clearAllPendingTurnTranslationRuntime()
       activePartialSpeakerRef.current = null
       setPartialTranscript('')
       partialTranscriptRef.current = ''
       setPartialTranslations({})
       partialTranslationsRef.current = {}
-      partialTranslationPriorityRef.current.clear()
       setPartialLang(null)
       partialLangRef.current = null
-      if (partialTranslateControllerRef.current) {
-        partialTranslateControllerRef.current.abort()
-        partialTranslateControllerRef.current = null
-      }
+      bumpPendingTurnRenderVersion()
 
       if (useNativeStt) {
         const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
@@ -2716,7 +2761,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       setTimeout(() => setConnectionStatus('idle'), 3000)
     }
-  }, [cleanup, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -2851,152 +2896,179 @@ export default function useRealtimeSTT({
   }, [connectionStatus, startRecording, stopRecordingGracefully])
 
   useEffect(() => {
-    const currentLang = partialLangRef.current || 'unknown'
-    const targetLanguages = buildTurnTargetLanguagesSnapshot(languages, currentLang)
-    const nextTranslations = filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang),
-      targetLanguages,
-    )
-    if (partialTranslateControllerRef.current) {
-      partialTranslateControllerRef.current.abort()
-      partialTranslateControllerRef.current = null
-    }
-    const nextPriorities = new Map<string, TranslationPriority>()
-    for (const language of Object.keys(nextTranslations)) {
-      const priority = partialTranslationPriorityRef.current.get(language)
-      if (priority) {
-        nextPriorities.set(language, priority)
+    const pendingTurns = Object.entries(pendingTurnsBySpeakerRef.current)
+    if (pendingTurns.length === 0) return
+
+    for (const [speaker, pendingTurn] of pendingTurns) {
+      const targetLanguages = buildTurnTargetLanguagesSnapshot(languages, pendingTurn.language)
+      const nextTranslations = filterTranslationsToTargetLanguages(
+        stripSourceLanguageFromTranslations(pendingTurn.partialTranslations, pendingTurn.language),
+        targetLanguages,
+      )
+      const nextPriorities = new Map<string, TranslationPriority>()
+      for (const language of Object.keys(nextTranslations)) {
+        const priority = pendingTurn.partialTranslationPriorities.get(language)
+        if (priority) {
+          nextPriorities.set(language, priority)
+        }
+      }
+
+      pendingTurnsBySpeakerRef.current[speaker] = {
+        ...pendingTurn,
+        partialTranslations: nextTranslations,
+        partialTranslationPriorities: nextPriorities,
+        currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
+          pendingTurn.language,
+          pendingTurn.text,
+          nextTranslations,
+        ),
       }
     }
 
-    partialTranslationPriorityRef.current = nextPriorities
-    partialTranslationsRef.current = nextTranslations
-    setPartialTranslations(nextTranslations)
-    lastPartialTranslationStateRef.current = buildCurrentTurnPreviousStatePayload(
-      currentLang,
-      partialTranscriptRef.current,
-      nextTranslations,
-    )
-  }, [languages])
+    bumpPendingTurnRenderVersion()
+    syncVisiblePendingTurn(activePartialSpeakerRef.current)
+  }, [bumpPendingTurnRenderVersion, languages, syncVisiblePendingTurn])
 
   // ===== Partial translation: fire once immediately, then every 20-char threshold =====
   const PARTIAL_TRANSLATE_STEP = 20
   useEffect(() => {
-    const trimmed = partialTranscript.trim()
-    const targetLanguages = getCurrentTargetLanguages()
+    const pendingTurns = Object.values(pendingTurnsBySpeakerRef.current)
+    const targetLanguages = [...languages]
     const targetLanguageSignature = buildLanguageSelectionSignature(targetLanguages)
-    const len = trimmed.length
-    if (len === 0 || targetLanguages.length === 0 || connectionStatus !== 'ready') return
+    if (connectionStatus !== 'ready' || targetLanguages.length === 0 || pendingTurns.length === 0) return
 
-    // 단일 언어 모드: 감지 언어가 선택 언어와 동일하면 부분 번역 스킵
-    const currentLang = partialLangRef.current || 'unknown'
-    if (
-      targetLanguages.length === 1
-      && normalizeLangForCompare(currentLang) === normalizeLangForCompare(targetLanguages[0] || '')
-    ) return
+    for (const pendingTurn of pendingTurns) {
+      const trimmed = pendingTurn.text.trim()
+      const currentLang = pendingTurn.language || 'unknown'
+      const len = trimmed.length
+      if (len === 0) continue
 
-    const isInitialPartialRequest = !hasFiredInitialPartialTranslateRef.current
-    const targetLanguagesChanged = lastPartialTranslateTargetSignatureRef.current !== targetLanguageSignature
+      if (
+        targetLanguages.length === 1
+        && normalizeLangForCompare(currentLang) === normalizeLangForCompare(targetLanguages[0] || '')
+      ) {
+        continue
+      }
 
-    if (isInitialPartialRequest || targetLanguagesChanged) {
-      hasFiredInitialPartialTranslateRef.current = true
-      lastPartialTranslateLenRef.current = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
-    } else {
-      const nextThreshold = lastPartialTranslateLenRef.current + PARTIAL_TRANSLATE_STEP
-      if (len < nextThreshold) return
-      lastPartialTranslateLenRef.current = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
-    }
+      const runtime = getPendingTurnTranslationRuntime(pendingTurn.utteranceId)
+      const isInitialPartialRequest = !runtime.hasFiredInitialRequest
+      const targetLanguagesChanged = runtime.lastTargetSignature !== targetLanguageSignature
 
-    // Capture the utterance counter at request time so we can discard stale responses
-    // that arrive after a new utterance has started (prevents cross-utterance contamination).
-    const requestUtteranceId = utteranceIdRef.current
-    const requestSpeaker = activePartialSpeakerRef.current
-    const requestSignature = buildLiveTranslateRequestSignature({
-      utteranceId: requestUtteranceId,
-      speaker: requestSpeaker,
-      language: currentLang,
-      text: trimmed,
-      targetLanguages,
-    })
-    if (lastPartialTranslateRequestSignatureRef.current === requestSignature) {
-      logSttDebug('partial.translate.skip_duplicate', {
-        requestUtteranceId,
-        requestSpeaker,
-        currentLang,
-        targetLanguages,
+      if (isInitialPartialRequest || targetLanguagesChanged) {
+        runtime.hasFiredInitialRequest = true
+        runtime.lastTranslateLen = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
+      } else {
+        const nextThreshold = runtime.lastTranslateLen + PARTIAL_TRANSLATE_STEP
+        if (len < nextThreshold) continue
+        runtime.lastTranslateLen = Math.floor(len / PARTIAL_TRANSLATE_STEP) * PARTIAL_TRANSLATE_STEP
+      }
+
+      const requestSignature = buildLiveTranslateRequestSignature({
+        utteranceId: pendingTurn.utteranceId,
+        speaker: pendingTurn.speaker,
+        language: currentLang,
         text: trimmed,
+        targetLanguages,
       })
-      return
-    }
-    lastPartialTranslateRequestSignatureRef.current = requestSignature
-    lastPartialTranslateTargetSignatureRef.current = targetLanguageSignature
+      if (runtime.lastRequestSignature === requestSignature) {
+        logSttDebug('partial.translate.skip_duplicate', {
+          requestUtteranceId: pendingTurn.utteranceId,
+          requestSpeaker: pendingTurn.speaker,
+          currentLang,
+          targetLanguages,
+          text: trimmed,
+        })
+        continue
+      }
 
-    const requestSeq = latestPartialTranslateSeqRef.current + 1
-    latestPartialTranslateSeqRef.current = requestSeq
-    const requestPriority: TranslationPriority = {
-      kind: isInitialPartialRequest ? 'initial' : 'partial',
-      seq: requestSeq,
-    }
-    if (partialTranslateControllerRef.current) {
-      partialTranslateControllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    partialTranslateControllerRef.current = controller
-    translateViaApi(trimmed, currentLang, targetLanguages, {
-      signal: controller.signal,
-      currentTurnPreviousState: lastPartialTranslationStateRef.current,
-    })
-      .then(result => {
-        if (partialTranslateControllerRef.current === controller) {
-          partialTranslateControllerRef.current = null
+      runtime.lastRequestSignature = requestSignature
+      runtime.lastTargetSignature = targetLanguageSignature
+      const requestSeq = runtime.latestRequestSeq + 1
+      runtime.latestRequestSeq = requestSeq
+      const requestPriority: TranslationPriority = {
+        kind: isInitialPartialRequest ? 'initial' : 'partial',
+        seq: requestSeq,
+      }
+      runtime.controller?.abort()
+      const controller = new AbortController()
+      runtime.controller = controller
+
+      translateViaApi(trimmed, currentLang, targetLanguages, {
+        signal: controller.signal,
+        currentTurnPreviousState: pendingTurn.currentTurnPreviousState,
+      }).then((result) => {
+        const latestPendingTurn = findPendingTurnByUtteranceId(pendingTurn.utteranceId)
+        const latestRuntime = pendingTurnTranslationRuntimeRef.current[pendingTurn.utteranceId]
+        if (latestRuntime?.controller === controller) {
+          latestRuntime.controller = null
         }
-        if (!shouldApplyLatestPartialTranslationResponse({
-          requestUtteranceId,
-          currentUtteranceId: utteranceIdRef.current,
-          requestSpeaker,
-          currentSpeaker: activePartialSpeakerRef.current,
+        if (!latestPendingTurn) return
+        if (!latestRuntime) return
+        if (!shouldApplyPendingTurnPartialTranslationResponse({
+          requestUtteranceId: pendingTurn.utteranceId,
+          currentPendingUtteranceId: latestPendingTurn.utteranceId,
           requestSeq,
-          latestRequestSeq: latestPartialTranslateSeqRef.current,
+          latestRequestSeq: latestRuntime.latestRequestSeq,
           aborted: controller.signal.aborted,
         })) {
           logSttDebug('partial.translate.skip_stale', {
-            requestUtteranceId,
-            currentUtteranceId: utteranceIdRef.current,
-            requestSpeaker,
-            currentSpeaker: activePartialSpeakerRef.current,
+            requestUtteranceId: pendingTurn.utteranceId,
+            currentPendingUtteranceId: latestPendingTurn.utteranceId,
+            requestSpeaker: pendingTurn.speaker,
+            currentSpeaker: latestPendingTurn.speaker,
             requestSeq,
-            latestRequestSeq: latestPartialTranslateSeqRef.current,
+            latestRequestSeq: latestRuntime.latestRequestSeq,
             aborted: controller.signal.aborted,
             text: trimmed,
           })
           return
         }
+
+        const latestTargetLanguages = buildTurnTargetLanguagesSnapshot(targetLanguages, currentLang)
         const filteredExisting = filterTranslationsToTargetLanguages(
-          stripSourceLanguageFromTranslations(partialTranslationsRef.current, currentLang),
-          targetLanguages,
+          stripSourceLanguageFromTranslations(latestPendingTurn.partialTranslations, currentLang),
+          latestTargetLanguages,
         )
         const filteredNew = filterTranslationsToTargetLanguages(
           stripSourceLanguageFromTranslations(result.translations, currentLang),
-          targetLanguages,
+          latestTargetLanguages,
         )
         const nextTranslations = { ...filteredExisting }
-        const nextPriorities = new Map(partialTranslationPriorityRef.current)
+        const nextPriorities = new Map(latestPendingTurn.partialTranslationPriorities)
         for (const [language, translatedText] of Object.entries(filteredNew)) {
           const currentPriority = nextPriorities.get(language)
           if (!shouldOverrideTranslationByPriority(currentPriority, requestPriority)) continue
           nextTranslations[language] = translatedText
           nextPriorities.set(language, requestPriority)
         }
-        lastPartialTranslationStateRef.current = buildCurrentTurnPreviousStatePayload(
-          currentLang,
-          trimmed,
-          nextTranslations,
-        )
-        partialTranslationPriorityRef.current = nextPriorities
-        partialTranslationsRef.current = nextTranslations
-        setPartialTranslations(nextTranslations)
+
+        const updatedPendingTurn: PendingSpeakerTurn = {
+          ...latestPendingTurn,
+          partialTranslations: nextTranslations,
+          partialTranslationPriorities: nextPriorities,
+          currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
+            currentLang,
+            trimmed,
+            nextTranslations,
+          ),
+        }
+        pendingTurnsBySpeakerRef.current[latestPendingTurn.speaker] = updatedPendingTurn
+        if (activePartialSpeakerRef.current === latestPendingTurn.speaker) {
+          partialTranslationsRef.current = nextTranslations
+          setPartialTranslations(nextTranslations)
+        }
+        bumpPendingTurnRenderVersion()
       })
-  }, [connectionStatus, getCurrentTargetLanguages, languages, partialTranscript, translateViaApi])
+    }
+  }, [
+    bumpPendingTurnRenderVersion,
+    connectionStatus,
+    findPendingTurnByUtteranceId,
+    getPendingTurnTranslationRuntime,
+    languages,
+    pendingTurnRenderVersion,
+    translateViaApi,
+  ])
 
   const toggleRecording = useCallback(() => {
     if (connectionStatus === 'error') return
@@ -3062,8 +3134,7 @@ export default function useRealtimeSTT({
     }
   }, [recoverFromBackgroundIfNeeded])
 
-  const pendingTurnsSignature = buildPendingSpeakerTurnSignature(pendingTurnsBySpeakerRef.current)
-  const activePendingSpeaker = activePartialSpeakerRef.current
+  const pendingTurnsSignature = `${pendingTurnRenderVersion}\u001d${buildPendingSpeakerTurnSignature(pendingTurnsBySpeakerRef.current)}`
   const liveUtteranceLanguages = getCurrentTargetLanguages()
   const pendingTurnSnapshots = useMemo(() => {
     void pendingTurnsSignature
@@ -3072,24 +3143,13 @@ export default function useRealtimeSTT({
   const activePendingTurn = getActivePendingTurn()
   const liveUtterances = useMemo(() => buildLiveUtterances({
     pendingTurns: pendingTurnSnapshots,
-    activeSpeaker: activePendingSpeaker,
-    partialTranscript,
-    partialLang,
-    partialTranslations,
     languages: liveUtteranceLanguages,
-  }), [
-    activePendingSpeaker,
-    partialLang,
-    partialTranscript,
-    partialTranslations,
-    pendingTurnSnapshots,
-    liveUtteranceLanguages,
-  ])
+  }), [pendingTurnSnapshots, liveUtteranceLanguages])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
-    partialTranscript,
-    partialLang,
-    partialTranslations,
+    partialTranscript: activePendingTurn?.text || partialTranscript,
+    partialLang: activePendingTurn?.language || partialLang,
+    partialTranslations: activePendingTurn?.partialTranslations || partialTranslations,
     languages: liveUtteranceLanguages,
   }), [
     activePendingTurn,
