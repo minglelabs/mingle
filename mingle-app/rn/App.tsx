@@ -617,13 +617,22 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type SttDebugLogCommand = {
+  type: 'stt_debug_log';
+  payload?: {
+    event?: string;
+    details?: Record<string, unknown>;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
-  | NativeAuthResetCommand;
+  | NativeAuthResetCommand
+  | SttDebugLogCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -1387,6 +1396,20 @@ function AppInner(): React.JSX.Element {
       return;
     }
     if (!parsed || typeof parsed !== 'object') return;
+
+    if (parsed.type === 'stt_debug_log') {
+      const eventName = typeof parsed.payload?.event === 'string' && parsed.payload.event.trim()
+        ? parsed.payload.event.trim()
+        : 'unknown';
+      let detailsPreview = '{}';
+      try {
+        detailsPreview = JSON.stringify(parsed.payload?.details ?? {}).slice(0, 1000);
+      } catch {
+        detailsPreview = '{"serialization":"failed"}';
+      }
+      console.log(`[WebSTTDebug] ${eventName} ${detailsPreview}`);
+      return;
+    }
 
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'

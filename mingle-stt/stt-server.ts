@@ -590,14 +590,59 @@ wss.on('connection', (clientWs) => {
                 if (tokenStartMs !== null) return tokenStartMs > watermarkMs;
                 return false;
             };
+            const buildDebugTextPreview = (text: string): string => {
+                const normalized = text.trim().replace(/\s+/g, ' ');
+                if (!normalized) return '';
+                return normalized.slice(0, 120);
+            };
             const composeTurnText = (finalText: string, nonFinalText: string): string =>
                 `${finalText || ''}${nonFinalText || ''}`.trim();
+            const buildSpeakerStateDebugSnapshot = (
+                state: SonioxSpeakerState | null | undefined,
+            ): Record<string, unknown> | null => {
+                if (!state) return null;
+                return {
+                    speaker: state.speaker,
+                    detectedLang: state.detectedLang,
+                    providerFinalizedTextPreview: buildDebugTextPreview(state.providerFinalizedText),
+                    latestNonFinalTextPreview: buildDebugTextPreview(state.latestNonFinalText),
+                    latestNonFinalIsProvisionalCarry: state.latestNonFinalIsProvisionalCarry,
+                    currentSnapshotTextPreview: buildDebugTextPreview(state.currentSnapshotText),
+                    providerFinalizedEndMs: state.providerFinalizedEndMs,
+                    currentSnapshotEndMs: state.currentSnapshotEndMs,
+                    lastConsumedEndMs: state.lastConsumedEndMs,
+                };
+            };
+            const logSonioxTranscriptDebug = (input: {
+                source: string;
+                text: string;
+                language: string;
+                isFinal: boolean;
+                speaker: string;
+                state?: SonioxSpeakerState | null;
+                extra?: Record<string, unknown>;
+            }) => {
+                console.log(`[conn:${connId}][soniox.transcript] ${input.source}`, {
+                    speaker: input.speaker,
+                    isFinal: input.isFinal,
+                    language: input.language,
+                    textPreview: buildDebugTextPreview(input.text),
+                    clientSocketOpen: clientWs.readyState === WebSocket.OPEN,
+                    state: buildSpeakerStateDebugSnapshot(input.state),
+                    ...(input.extra || {}),
+                });
+            };
 
             const emitTranscript = (
                 text: string,
                 language: string,
                 isFinal: boolean,
                 speaker?: string,
+                debugMeta?: {
+                    source?: string;
+                    state?: SonioxSpeakerState | null;
+                    extra?: Record<string, unknown>;
+                },
             ): FinalTurnPayload | null => {
                 const cleanedText = text.trim();
                 const cleanedLang = (language || '').trim() || 'unknown';
@@ -617,6 +662,16 @@ wss.on('connection', (clientWs) => {
                         },
                     }));
                 }
+
+                logSonioxTranscriptDebug({
+                    source: debugMeta?.source || (isFinal ? 'final' : 'partial'),
+                    text: cleanedText,
+                    language: cleanedLang,
+                    isFinal,
+                    speaker: cleanedSpeaker,
+                    state: debugMeta?.state,
+                    extra: debugMeta?.extra,
+                });
 
                 return {
                     text: cleanedText,
@@ -655,6 +710,10 @@ wss.on('connection', (clientWs) => {
                     state.detectedLang,
                     true,
                     state.speaker,
+                    {
+                        source: 'finalize_speaker_turn',
+                        state,
+                    },
                 );
                 if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
                     state.lastConsumedEndMs = state.currentSnapshotEndMs;
@@ -695,10 +754,18 @@ wss.on('connection', (clientWs) => {
                         if (sonioxStopRequested) return;
                         const state = speakerStates.get(speaker);
                         if (!state) return;
-                        if (
+                        const shouldFinalizeCarry = (
                             state.latestNonFinalIsProvisionalCarry
                             && state.latestNonFinalText.trim()
                             && !state.providerFinalizedText.trim()
+                        );
+                        console.log(`[conn:${connId}][soniox.carry_expiry]`, {
+                            speaker,
+                            shouldFinalizeCarry,
+                            state: buildSpeakerStateDebugSnapshot(state),
+                        });
+                        if (
+                            shouldFinalizeCarry
                         ) {
                             finalizeSpeakerTurn(speaker);
                         }
@@ -1045,6 +1112,15 @@ wss.on('connection', (clientWs) => {
                                     speakerState.detectedLang,
                                     true,
                                     speakerState.speaker,
+                                    {
+                                        source: 'decision.finalize',
+                                        state: speakerState,
+                                        extra: {
+                                            usedSnapshotBoundary: decision.usedSnapshotBoundary,
+                                            carryTextPreview: buildDebugTextPreview(decision.carryText),
+                                            consumedEndMs,
+                                        },
+                                    },
                                 );
                             }
                             if (consumedEndMs > speakerState.lastConsumedEndMs) {
@@ -1064,6 +1140,13 @@ wss.on('connection', (clientWs) => {
                                     speakerState.detectedLang,
                                     false,
                                     speakerState.speaker,
+                                    {
+                                        source: 'decision.carry_seed',
+                                        state: speakerState,
+                                        extra: {
+                                            consumedEndMs,
+                                        },
+                                    },
                                 );
                             }
                             continue;
@@ -1075,6 +1158,15 @@ wss.on('connection', (clientWs) => {
                                 speakerState.detectedLang,
                                 false,
                                 speakerState.speaker,
+                                {
+                                    source: 'partial_update',
+                                    state: speakerState,
+                                    extra: {
+                                        transcriptChanged,
+                                        languageChanged,
+                                        hasPendingTranscript,
+                                    },
+                                },
                             );
                         }
                     }

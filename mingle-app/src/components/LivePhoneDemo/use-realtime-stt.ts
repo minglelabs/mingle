@@ -86,6 +86,11 @@ function shouldUseNativeSttBridge(): boolean {
   }
 }
 
+function hasNativeDebugBridge(): boolean {
+  if (typeof window === 'undefined') return false
+  return typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
 function floatTo16BitPCM(input: Float32Array): Int16Array {
   const output = new Int16Array(input.length)
   for (let i = 0; i < input.length; i++) {
@@ -418,6 +423,46 @@ interface PendingSpeakerTurn {
   text: string
   language: string
   updatedAtMs: number
+}
+
+function buildPendingTurnDebugSnapshot(
+  turn: Pick<PendingSpeakerTurn, 'utteranceId' | 'speaker' | 'language' | 'text' | 'updatedAtMs'> | null | undefined,
+): Record<string, unknown> | null {
+  if (!turn) return null
+  return {
+    utteranceId: turn.utteranceId,
+    speaker: turn.speaker,
+    language: turn.language,
+    textPreview: buildDebugTextPreview(turn.text),
+    updatedAtMs: turn.updatedAtMs,
+  }
+}
+
+function buildPendingTurnsDebugSnapshot(
+  pendingTurnsBySpeaker: Record<string, PendingSpeakerTurn>,
+): Array<Record<string, unknown>> {
+  return Object.values(pendingTurnsBySpeaker)
+    .sort((left, right) => left.updatedAtMs - right.updatedAtMs)
+    .map((turn) => ({
+      utteranceId: turn.utteranceId,
+      speaker: turn.speaker,
+      language: turn.language,
+      textPreview: buildDebugTextPreview(turn.text),
+      updatedAtMs: turn.updatedAtMs,
+    }))
+}
+
+function buildUtteranceDebugSnapshot(utterance: Utterance | null | undefined): Record<string, unknown> | null {
+  if (!utterance) return null
+  return {
+    id: utterance.id,
+    speaker: utterance.speaker || 'unknown',
+    originalLang: utterance.originalLang || 'unknown',
+    originalTextPreview: buildDebugTextPreview(utterance.originalText || ''),
+    targetLanguages: [...(utterance.targetLanguages || [])],
+    translationLanguages: Object.keys(utterance.translations || {}),
+    createdAtMs: utterance.createdAtMs ?? null,
+  }
 }
 
 type RecentFinalizedUtterance = {
@@ -1025,6 +1070,7 @@ function decodeBase64AudioToBlob(base64: string, mime = 'audio/mpeg'): Blob | nu
 
 function isSttDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false
+  if (hasNativeDebugBridge()) return true
   try {
     const forced = window.localStorage.getItem(LS_KEY_STT_DEBUG)
     if (forced === '1') return true
@@ -1035,13 +1081,35 @@ function isSttDebugEnabled(): boolean {
   return /(?:\?|&)sttDebug=1(?:&|$)/.test(window.location.search || '')
 }
 
+function shouldSuppressSttDebugEvent(event: string): boolean {
+  return event.startsWith('partial.translate')
+}
+
+function postSttDebugToNative(event: string, payload?: Record<string, unknown>) {
+  if (!hasNativeDebugBridge()) return
+  try {
+    window.ReactNativeWebView!.postMessage(JSON.stringify({
+      type: 'stt_debug_log',
+      payload: {
+        event,
+        details: payload || {},
+      },
+    }))
+  } catch {
+    // no-op
+  }
+}
+
 function logSttDebug(event: string, payload?: Record<string, unknown>) {
+  if (shouldSuppressSttDebugEvent(event)) return
   if (!isSttDebugEnabled()) return
   if (payload) {
     console.log('[MingleSTT]', event, payload)
+    postSttDebugToNative(event, payload)
     return
   }
   console.log('[MingleSTT]', event)
+  postSttDebugToNative(event)
 }
 
 function buildDebugTextPreview(rawText: string): string {
@@ -1434,6 +1502,15 @@ export default function useRealtimeSTT({
     partialTranscriptRef.current = nextTurn?.text || ''
     setPartialLang(nextTurn?.language || null)
     partialLangRef.current = nextTurn?.language || null
+    logSttDebug('ui.pending_visible_synced', {
+      preferredSpeaker: preferredSpeaker || null,
+      nextSpeaker,
+      shouldPreserveVisibleState,
+      activePartialSpeaker: activePartialSpeakerRef.current,
+      visiblePartialLang: nextTurn?.language || null,
+      visiblePartialTextPreview: buildDebugTextPreview(nextTurn?.text || ''),
+      pendingTurns: buildPendingTurnsDebugSnapshot(pendingTurnsBySpeakerRef.current),
+    })
   }, [getLatestPendingTurn, resetVisiblePartialState])
 
   const clearPartialBuffers = useCallback(() => {
@@ -2258,6 +2335,14 @@ export default function useRealtimeSTT({
         if (!finalizedPayload) {
           return
         }
+        logSttDebug('transcript.finalize.apply', {
+          speaker,
+          serverLanguage: lang,
+          serverTextPreview: buildDebugTextPreview(text),
+          pendingTurn: buildPendingTurnDebugSnapshot(pendingTurn),
+          finalizedUtterance: buildUtteranceDebugSnapshot(finalizedPayload.utterance),
+          seedTranslationLanguages: Object.keys(seedTranslationState.translations || {}),
+        })
         const finalizedAvatar = getSpeakerAvatar(
           finalizedPayload.utterance.speaker,
           finalizedPayload.utterance.speakerAvatarSeed,
@@ -2370,6 +2455,11 @@ export default function useRealtimeSTT({
           language: lang,
           updatedAtMs: now,
         }
+        logSttDebug('transcript.pending_store_updated', {
+          speaker,
+          activePartialSpeaker: activePartialSpeakerRef.current,
+          pendingTurns: buildPendingTurnsDebugSnapshot(pendingTurnsBySpeakerRef.current),
+        })
         const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed, pendingSpeakerAvatarIndex)
         logSttDebug('transcript.avatar_mapping', {
           speaker,
@@ -2840,6 +2930,41 @@ export default function useRealtimeSTT({
     partialTranslations,
     languages: liveUtteranceLanguages,
   })
+  const liveUtteranceDebugSignature = liveUtterance
+    ? JSON.stringify({
+      id: liveUtterance.id,
+      speaker: liveUtterance.speaker || 'unknown',
+      originalLang: liveUtterance.originalLang || 'unknown',
+      originalText: liveUtterance.originalText || '',
+      translationLanguages: Object.keys(liveUtterance.translations || {}).sort(),
+    })
+    : 'null'
+  const committedTailUtterance = utterances[utterances.length - 1] || null
+  const committedTailDebugSignature = committedTailUtterance
+    ? JSON.stringify({
+      id: committedTailUtterance.id,
+      speaker: committedTailUtterance.speaker || 'unknown',
+      originalLang: committedTailUtterance.originalLang || 'unknown',
+      originalText: committedTailUtterance.originalText || '',
+      translationLanguages: Object.keys(committedTailUtterance.translations || {}).sort(),
+    })
+    : 'null'
+
+  useEffect(() => {
+    logSttDebug('ui.live_utterance_state', {
+      activePendingTurn: buildPendingTurnDebugSnapshot(activePendingTurn),
+      partialLang: partialLang || null,
+      partialTranscriptPreview: buildDebugTextPreview(partialTranscript),
+      liveUtterance: buildUtteranceDebugSnapshot(liveUtterance),
+    })
+  }, [activePendingTurn, liveUtteranceDebugSignature, partialLang, partialTranscript])
+
+  useEffect(() => {
+    logSttDebug('ui.committed_tail_state', {
+      utteranceCount: utterances.length,
+      committedTail: buildUtteranceDebugSnapshot(committedTailUtterance),
+    })
+  }, [committedTailDebugSignature, utterances.length])
 
   return {
     connectionStatus,
