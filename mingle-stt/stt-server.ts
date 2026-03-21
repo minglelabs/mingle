@@ -43,9 +43,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
 );
-const SONIOX_DEBUG_TOKEN_LOGS = ['1', 'true', 'yes', 'on'].includes(
-    (process.env.SONIOX_DEBUG_TOKEN_LOGS || '').trim().toLowerCase(),
-);
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -806,10 +803,8 @@ wss.on('connection', (clientWs) => {
                     if (tokens.length === 0) {
                         return;
                     }
-                    if (SONIOX_DEBUG_TOKEN_LOGS) {
-                        for (const run of buildSonioxDebugTokenRuns(tokens)) {
-                            console.log(formatSonioxDebugTokenRun(run));
-                        }
+                    for (const run of buildSonioxDebugTokenRuns(tokens)) {
+                        console.log(formatSonioxDebugTokenRun(run));
                     }
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
@@ -1281,6 +1276,6 @@ wss.on('connection', (clientWs) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
     console.log(
-        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
+        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS}`,
     );
 });
