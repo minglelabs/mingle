@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+    buildSonioxFinalizeRequestCohort,
     buildSonioxDebugTokenRuns,
+    buildSonioxPendingSignature,
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
@@ -73,4 +75,59 @@ test('endpoint flush includes any speaker that still has pending text', () => {
     assert.equal(hasPendingSonioxTurnText('personal computer would <fin>'), true);
     assert.equal(hasPendingSonioxTurnText(' <fin> '), false);
     assert.equal(hasPendingSonioxTurnText('   '), false);
+});
+
+test('global finalize signature tracks only pending speaker snapshots', () => {
+    assert.equal(buildSonioxPendingSignature([
+        {
+            speaker: '2',
+            currentSnapshotText: 'エミ',
+            currentSnapshotEndMs: 120,
+            detectedLang: 'ja',
+        },
+        {
+            speaker: '1',
+            currentSnapshotText: '  ',
+            currentSnapshotEndMs: 80,
+            detectedLang: 'ja',
+        },
+    ]), '2\u001fエミ');
+});
+
+test('global finalize cohort captures request-time pending speakers only', () => {
+    assert.deepEqual(buildSonioxFinalizeRequestCohort([
+        {
+            speaker: '2',
+            currentSnapshotText: 'エミ',
+            currentSnapshotEndMs: 120,
+            detectedLang: 'ja',
+        },
+        {
+            speaker: '1',
+            currentSnapshotText: '意味ライズ',
+            currentSnapshotEndMs: 220,
+            detectedLang: 'ja',
+        },
+        {
+            speaker: '4',
+            currentSnapshotText: ' <fin> ',
+            currentSnapshotEndMs: 330,
+            detectedLang: 'ko',
+        },
+    ]), [
+        {
+            speaker: '1',
+            snapshotText: '意味ライズ',
+            snapshotTextLen: '意味ライズ'.length,
+            snapshotEndMs: 220,
+            detectedLang: 'ja',
+        },
+        {
+            speaker: '2',
+            snapshotText: 'エミ',
+            snapshotTextLen: 'エミ'.length,
+            snapshotEndMs: 120,
+            detectedLang: 'ja',
+        },
+    ]);
 });

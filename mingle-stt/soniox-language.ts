@@ -12,6 +12,21 @@ export type SonioxDebugTokenRun = {
     text: string;
 };
 
+export type SonioxPendingTurnLike = {
+    speaker: string;
+    currentSnapshotText: string;
+    currentSnapshotEndMs: number;
+    detectedLang: string;
+};
+
+export type SonioxFinalizeRequestSpeaker = {
+    speaker: string;
+    snapshotText: string;
+    snapshotTextLen: number;
+    snapshotEndMs: number;
+    detectedLang: string;
+};
+
 const ENDPOINT_MARKER_RE = /<\/?(?:end|fin)>/i;
 const ENDPOINT_MARKER_RE_GLOBAL = /<\/?(?:end|fin)>/gi;
 
@@ -95,4 +110,34 @@ export function formatSonioxDebugTokenRun(run: SonioxDebugTokenRun): string {
 
 export function hasPendingSonioxTurnText(text: string): boolean {
     return text.replace(ENDPOINT_MARKER_RE_GLOBAL, '').trim().length > 0;
+}
+
+export function buildSonioxPendingSignature(turns: SonioxPendingTurnLike[]): string {
+    return [...turns]
+        .filter((turn) => hasPendingSonioxTurnText(turn.currentSnapshotText))
+        .sort((left, right) => normalizeSpeaker(left.speaker).localeCompare(normalizeSpeaker(right.speaker)))
+        .map((turn) => [
+            normalizeSpeaker(turn.speaker),
+            stripEndpointMarkersForSignature(turn.currentSnapshotText).trim(),
+        ].join('\u001f'))
+        .join('\u001e');
+}
+
+export function buildSonioxFinalizeRequestCohort(
+    turns: SonioxPendingTurnLike[],
+): SonioxFinalizeRequestSpeaker[] {
+    return [...turns]
+        .filter((turn) => hasPendingSonioxTurnText(turn.currentSnapshotText))
+        .sort((left, right) => normalizeSpeaker(left.speaker).localeCompare(normalizeSpeaker(right.speaker)))
+        .map((turn) => ({
+            speaker: normalizeSpeaker(turn.speaker),
+            snapshotText: turn.currentSnapshotText,
+            snapshotTextLen: turn.currentSnapshotText.length,
+            snapshotEndMs: Number.isFinite(turn.currentSnapshotEndMs) ? turn.currentSnapshotEndMs : -1,
+            detectedLang: normalizeDetectedLang(turn.detectedLang),
+        }));
+}
+
+function stripEndpointMarkersForSignature(text: string): string {
+    return text.replace(ENDPOINT_MARKER_RE_GLOBAL, '');
 }
