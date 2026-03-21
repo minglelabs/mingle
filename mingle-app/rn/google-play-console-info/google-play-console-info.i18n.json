@@ -21,11 +21,11 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.3",
+      "version": "1.0.4",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.3 (16)",
+      "releaseName": "1.0.4 (20)",
       "releaseNotes": {
         "en-US": "Improved locale-based starter languages and refined Soniox hint control.",
         "ko-KR": "locale 기반 시작 언어를 개선하고 Soniox 힌트 제어를 정리했습니다."
