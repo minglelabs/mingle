@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
@@ -446,6 +446,53 @@ interface PendingSpeakerTurn {
   text: string
   language: string
   updatedAtMs: number
+}
+
+type PendingSpeakerTurnSnapshot = Pick<
+  PendingSpeakerTurn,
+  | 'utteranceId'
+  | 'createdAtMs'
+  | 'speaker'
+  | 'speakerAvatarSeed'
+  | 'speakerAvatarIndex'
+  | 'language'
+  | 'text'
+  | 'updatedAtMs'
+>
+
+function buildPendingSpeakerTurnSnapshots(
+  pendingTurnsBySpeaker: Record<string, PendingSpeakerTurn>,
+): PendingSpeakerTurnSnapshot[] {
+  return Object.values(pendingTurnsBySpeaker).map((turn) => ({
+    utteranceId: turn.utteranceId,
+    createdAtMs: turn.createdAtMs,
+    speaker: turn.speaker,
+    speakerAvatarSeed: turn.speakerAvatarSeed,
+    speakerAvatarIndex: turn.speakerAvatarIndex,
+    language: turn.language,
+    text: turn.text,
+    updatedAtMs: turn.updatedAtMs,
+  }))
+}
+
+function buildPendingSpeakerTurnSignature(
+  pendingTurnsBySpeaker: Record<string, PendingSpeakerTurn>,
+): string {
+  return buildPendingSpeakerTurnSnapshots(pendingTurnsBySpeaker)
+    .sort((left, right) => left.speaker.localeCompare(right.speaker))
+    .map((turn) => (
+      [
+        turn.utteranceId,
+        String(turn.createdAtMs),
+        turn.speaker,
+        turn.speakerAvatarSeed,
+        String(turn.speakerAvatarIndex),
+        turn.language,
+        turn.text,
+        String(turn.updatedAtMs),
+      ].join('\u001f')
+    ))
+    .join('\u001e')
 }
 
 type RecentFinalizedUtterance = {
@@ -3015,23 +3062,42 @@ export default function useRealtimeSTT({
     }
   }, [recoverFromBackgroundIfNeeded])
 
-  const activePendingTurn = getActivePendingTurn()
+  const pendingTurnsSignature = buildPendingSpeakerTurnSignature(pendingTurnsBySpeakerRef.current)
+  const activePendingSpeaker = activePartialSpeakerRef.current
   const liveUtteranceLanguages = getCurrentTargetLanguages()
-  const liveUtterances = buildLiveUtterances({
-    pendingTurns: Object.values(pendingTurnsBySpeakerRef.current),
-    activeSpeaker: activePartialSpeakerRef.current,
+  const pendingTurnSnapshots = useMemo(() => {
+    void pendingTurnsSignature
+    return buildPendingSpeakerTurnSnapshots(pendingTurnsBySpeakerRef.current)
+  }, [pendingTurnsSignature])
+  const activePendingTurn = getActivePendingTurn()
+  const liveUtterances = useMemo(() => buildLiveUtterances({
+    pendingTurns: pendingTurnSnapshots,
+    activeSpeaker: activePendingSpeaker,
     partialTranscript,
     partialLang,
     partialTranslations,
     languages: liveUtteranceLanguages,
-  })
-  const liveUtterance = buildLiveUtterance({
+  }), [
+    activePendingSpeaker,
+    partialLang,
+    partialTranscript,
+    partialTranslations,
+    pendingTurnSnapshots,
+    liveUtteranceLanguages,
+  ])
+  const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript,
     partialLang,
     partialTranslations,
     languages: liveUtteranceLanguages,
-  })
+  }), [
+    activePendingTurn,
+    partialLang,
+    partialTranscript,
+    partialTranslations,
+    liveUtteranceLanguages,
+  ])
 
   return {
     connectionStatus,

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
 import PhoneFrame from './PhoneFrame'
@@ -1157,16 +1157,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
 
-  const committedUtteranceIds = new Set(utterances.map((utterance) => utterance.id))
-  const draftUtteranceIds = new Set(
+  const committedUtteranceIds = useMemo(
+    () => new Set(utterances.map((utterance) => utterance.id)),
+    [utterances],
+  )
+  const draftUtteranceIds = useMemo(() => new Set(
     liveUtterances
       .filter((utterance) => !committedUtteranceIds.has(utterance.id))
       .map((utterance) => utterance.id),
-  )
-  const displayUtterances = mergeDisplayUtterances({
+  ), [committedUtteranceIds, liveUtterances])
+  const displayUtterances = useMemo(() => mergeDisplayUtterances({
     utterances,
     liveUtterances,
-  })
+  }), [liveUtterances, utterances])
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
