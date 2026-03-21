@@ -46,6 +46,13 @@ type TranslationEngineResult = {
 
 type FinalizeTestFaultMode = 'provider_empty' | 'target_miss' | 'provider_error'
 
+type TranslateRequestMeta = {
+  requestPathname: string
+  requestMethod: string
+  clientBundleRev: string | null
+  sessionKeyHint: string | null
+}
+
 type TranslateContext = {
   text: string
   sourceLanguage: string
@@ -53,6 +60,7 @@ type TranslateContext = {
   immediatePreviousTurn: RecentTurnContext | null
   currentTurnPreviousState: CurrentTurnPreviousState | null
   isFinal: boolean
+  requestMeta: TranslateRequestMeta
 }
 
 type GeminiUsageMetadata = {
@@ -86,6 +94,44 @@ function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | nul
 function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown>) {
   if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
   console.info(`[translate/finalize] ${event}`, payload)
+}
+
+function summarizeUnknownError(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }
+  }
+
+  return { raw: String(error) }
+}
+
+function resolveRequestPathname(request: NextRequest): string {
+  const nextUrlPathname = request.nextUrl?.pathname
+  if (typeof nextUrlPathname === 'string' && nextUrlPathname.trim()) {
+    return nextUrlPathname
+  }
+
+  try {
+    return new URL(request.url).pathname
+  } catch {
+    return ''
+  }
+}
+
+function buildTranslateFinalizeLogContext(ctx: TranslateContext): Record<string, unknown> {
+  return {
+    path: ctx.requestMeta.requestPathname,
+    method: ctx.requestMeta.requestMethod,
+    clientBundleRev: ctx.requestMeta.clientBundleRev,
+    sessionKeyHint: ctx.requestMeta.sessionKeyHint,
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    textPreview: ctx.text.slice(0, 120),
+  }
 }
 
 function logParsedTranslations(event: string, payload: {
@@ -325,12 +371,9 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     if (!isRetryableGeminiError(error)) throw error
 
     console.warn('[translate/finalize] provider_retry_scheduled', {
+      ...buildTranslateFinalizeLogContext(ctx),
       provider: 'gemini',
       model: DEFAULT_MODEL,
-      sourceLanguage: ctx.sourceLanguage,
-      targetLanguages: ctx.targetLanguages,
-      isFinal: ctx.isFinal,
-      textPreview: ctx.text.slice(0, 120),
       retryInMs: GEMINI_TRANSIENT_RETRY_BACKOFF_MS,
       error: error instanceof Error ? error.message : String(error),
     })
@@ -364,9 +407,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   if (!content) {
     console.error('[translate/finalize] gemini_empty_text', {
-      sourceLanguage: ctx.sourceLanguage,
-      targetLanguages: ctx.targetLanguages,
-      textPreview: ctx.text.slice(0, 120),
+      ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
       usage: {
@@ -381,9 +422,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   const translations = parseTranslations(content)
   if (Object.keys(translations).length === 0) {
     console.error('[translate/finalize] gemini_unparseable_json', {
-      sourceLanguage: ctx.sourceLanguage,
-      targetLanguages: ctx.targetLanguages,
-      textPreview: ctx.text.slice(0, 120),
+      ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
       responseTextLength: content.length,
@@ -487,6 +526,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const isLocalLiveTestRequest = request.headers.get('x-mingle-live-test') === '1'
   const allowTestFaults = process.env.NODE_ENV !== 'production' && isLocalLiveTestRequest
   const testFaultMode = allowTestFaults ? parseFinalizeTestFaultMode(body.__testFaultMode) : null
+  const requestMeta: TranslateRequestMeta = {
+    requestPathname: resolveRequestPathname(request),
+    requestMethod: request.method,
+    clientBundleRev,
+    sessionKeyHint,
+  }
 
   if (!GEMINI_API_KEY) {
     const response = NextResponse.json({ error: 'No translation API key configured' }, { status: 500 })
@@ -516,6 +561,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     immediatePreviousTurn,
     currentTurnPreviousState,
     isFinal,
+    requestMeta,
   }
   logTranslateFinalizeInfo('request', {
     sourceLanguage,
@@ -589,32 +635,22 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
     } catch (error) {
       geminiRequestFailed = true
-      const errorPayload = error instanceof Error
-        ? {
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        }
-        : { raw: String(error) }
       console.error('[translate/finalize] provider_error', {
+        ...buildTranslateFinalizeLogContext(ctx),
         provider: 'gemini',
-        sourceLanguage,
-        targetLanguages,
-        error: errorPayload,
+        error: summarizeUnknownError(error),
       })
     }
 
     if (!selectedResult || Object.keys(selectedResult.translations).length === 0) {
       console.error('[translate/finalize] provider_empty_response', {
+        ...buildTranslateFinalizeLogContext(ctx),
         provider: 'gemini',
-        sourceLanguage,
-        targetLanguages,
-        textPreview: text.slice(0, 120),
+        responseStatus: 502,
       })
       if (!ctx.isFinal && !geminiRequestFailed && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
-          sourceLanguage,
-          targetLanguages,
+          ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
           reason: 'provider_empty_response',
         })
@@ -656,12 +692,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
 
     if (rejectedSourceLeakLanguages.length > 0) {
       console.warn('[translate/finalize] rejected_source_leak_translations', {
+        ...buildTranslateFinalizeLogContext(ctx),
         provider: selectedResult.provider,
-        sourceLanguage,
-        targetLanguages,
         rejectedLanguages: rejectedSourceLeakLanguages,
-        isFinal,
-        text,
+        text: ctx.text,
         rawTranslations: selectedResult.translations,
       })
     }
@@ -669,28 +703,23 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     const missingTargetLanguages = targetLanguages.filter((lang) => !translations[lang])
     if (missingTargetLanguages.length > 0) {
       console.warn('[translate/finalize] missing_target_languages', {
+        ...buildTranslateFinalizeLogContext(ctx),
         provider: selectedResult.provider,
-        sourceLanguage,
-        targetLanguages,
         missingTargetLanguages,
         returnedLanguages: Object.keys(selectedResult.translations),
-        isFinal,
-        textPreview: text.slice(0, 120),
       })
     }
 
     if (Object.keys(translations).length === 0) {
       console.error('[translate/finalize] target_language_miss', {
+        ...buildTranslateFinalizeLogContext(ctx),
         provider: selectedResult.provider,
-        sourceLanguage,
-        targetLanguages,
         returnedLanguages: Object.keys(selectedResult.translations),
-        textPreview: text.slice(0, 120),
+        responseStatus: 502,
       })
       if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
-          sourceLanguage,
-          targetLanguages,
+          ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
           reason: 'target_language_miss',
         })
@@ -710,7 +739,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       model: selectedResult.model,
     })
   } catch (error) {
-    console.error('Finalize translation route error:', error)
+    console.error('[translate/finalize] unexpected_handler_error', {
+      ...buildTranslateFinalizeLogContext(ctx),
+      error: summarizeUnknownError(error),
+      responseStatus: 500,
+    })
     const response = NextResponse.json({ error: 'finalize_translation_failed' }, { status: 500 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response

@@ -60,8 +60,12 @@ async function importRouteWithEnv() {
   return mod.POST
 }
 
-function makeJsonRequest(body: unknown, headers?: Record<string, string>): Request {
-  return new Request('http://localhost:3000/api/translate/finalize', {
+function makeJsonRequest(
+  body: unknown,
+  headers?: Record<string, string>,
+  url = 'http://localhost:3000/api/translate/finalize',
+): Request {
+  return new Request(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(headers || {}) },
     body: JSON.stringify(body),
@@ -334,6 +338,49 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(502)
     expect(json).toEqual({ error: 'empty_translation_response' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('logs versioned route context when returning 502', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '',
+        usageMetadata: {},
+      },
+    })
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    const { POST } = await import('@/app/api/ios/v1.0.2/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: 'hello',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.2/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(502)
+      expect(json).toEqual({ error: 'empty_translation_response' })
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[translate/finalize] provider_empty_response',
+        expect.objectContaining({
+          path: '/api/ios/v1.0.2/translate/finalize',
+          method: 'POST',
+          sourceLanguage: 'en',
+          targetLanguages: ['ko'],
+          isFinal: true,
+          responseStatus: 502,
+        }),
+      )
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
   })
 
   it('accepts canonicalized target language aliases in requests and model responses', async () => {
