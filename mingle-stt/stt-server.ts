@@ -1121,16 +1121,9 @@ wss.on('connection', (clientWs) => {
                             finalizeSpeakerTurn(run.speaker);
                         }
 
-                        // Speaker changes still close other open segments immediately,
-                        // but only when this run actually advanced beyond the watermark.
-                        if (boundaryProbe.hasProgressTokenBeyondWatermark) {
-                            for (const [existingSpeaker, state] of speakerStates.entries()) {
-                                if (existingSpeaker === run.speaker) continue;
-                                if (!hasVisibleSpeakerText(state)) continue;
-                                if (state.strategy.getSnapshotTextLen() !== null) continue;
-                                finalizeSpeakerTurn(existingSpeaker);
-                            }
-                        }
+                        // Soniox can interleave multiple speakers' snapshots in the same frame.
+                        // Keep different speakers' segments open concurrently and let each speaker
+                        // close on its own endpoint/silence instead of forcing a finalize here.
 
                         const speakerState = getSpeakerState(run.speaker);
                         const frameStatus = ensureSpeakerFrameStatus(run.speaker);
