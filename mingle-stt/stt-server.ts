@@ -546,6 +546,8 @@ wss.on('connection', (clientWs) => {
                 currentSnapshotEndMs: number;
                 lastConsumedEndMs: number;
                 detectedLang: string;
+                snapshotBoundaryEndMs: number;
+                pendingCarryDetectedLang: string | null;
                 strategy: SilenceTimerStrategy;
             };
             type SonioxSpeakerFrameUpdate = {
@@ -555,6 +557,7 @@ wss.on('connection', (clientWs) => {
                 maxFinalTokenEndMs: number;
                 maxSeenTokenEndMs: number;
                 lastDetectedLang: string | null;
+                lastCarryDetectedLang: string | null;
                 hasProgressTokenBeyondWatermark: boolean;
                 hasTimestampedProgressBeyondWatermark: boolean;
             };
@@ -611,6 +614,8 @@ wss.on('connection', (clientWs) => {
                     providerFinalizedEndMs: state.providerFinalizedEndMs,
                     currentSnapshotEndMs: state.currentSnapshotEndMs,
                     lastConsumedEndMs: state.lastConsumedEndMs,
+                    snapshotBoundaryEndMs: state.snapshotBoundaryEndMs,
+                    pendingCarryDetectedLang: state.pendingCarryDetectedLang,
                 };
             };
             const logSonioxTranscriptDebug = (input: {
@@ -693,6 +698,8 @@ wss.on('connection', (clientWs) => {
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
                 state.detectedLang = 'unknown';
+                state.snapshotBoundaryEndMs = -1;
+                state.pendingCarryDetectedLang = null;
                 state.strategy.resetState();
             };
 
@@ -738,12 +745,17 @@ wss.on('connection', (clientWs) => {
                 const existing = speakerStates.get(speaker);
                 if (existing) return existing;
 
+                let state: SonioxSpeakerState | null = null;
                 const strategy = new SilenceTimerStrategy({
                     silenceMs: SONIOX_MANUAL_FINALIZE_SILENCE_MS,
                     cooldownMs: SONIOX_MANUAL_FINALIZE_COOLDOWN_MS,
                     sendFinalizeCommand: () => {
                         if (sonioxStopRequested) return;
                         if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
+                        if (state) {
+                            state.snapshotBoundaryEndMs = state.currentSnapshotEndMs;
+                            state.pendingCarryDetectedLang = null;
+                        }
                         try {
                             sttWs.send(JSON.stringify({ type: 'finalize' }));
                         } catch (error) {
@@ -771,7 +783,7 @@ wss.on('connection', (clientWs) => {
                         }
                     },
                 });
-                const state: SonioxSpeakerState = {
+                state = {
                     speaker,
                     providerFinalizedText: '',
                     providerFinalizedEndMs: -1,
@@ -781,6 +793,8 @@ wss.on('connection', (clientWs) => {
                     currentSnapshotEndMs: -1,
                     lastConsumedEndMs: -1,
                     detectedLang: 'unknown',
+                    snapshotBoundaryEndMs: -1,
+                    pendingCarryDetectedLang: null,
                     strategy,
                 };
                 speakerStates.set(speaker, state);
@@ -874,6 +888,7 @@ wss.on('connection', (clientWs) => {
                             maxFinalTokenEndMs: -1,
                             maxSeenTokenEndMs: -1,
                             lastDetectedLang: null,
+                            lastCarryDetectedLang: null,
                             hasProgressTokenBeyondWatermark: false,
                             hasTimestampedProgressBeyondWatermark: false,
                         };
@@ -904,10 +919,6 @@ wss.on('connection', (clientWs) => {
                             : 'unknown';
 
                         const speakerState = getSpeakerState(tokenSpeaker);
-                        if (tokenLanguage !== 'unknown') {
-                            speakerState.detectedLang = tokenLanguage;
-                        }
-
                         const includeByWatermark = isTokenBeyondWatermark(
                             tokenStartMs,
                             tokenEndMs,
@@ -917,7 +928,19 @@ wss.on('connection', (clientWs) => {
 
                         const frameUpdate = getSpeakerFrameUpdate(tokenSpeaker);
                         if (tokenLanguage !== 'unknown') {
-                            frameUpdate.lastDetectedLang = tokenLanguage;
+                            const isPostSnapshotToken = (
+                                speakerState.snapshotBoundaryEndMs >= 0
+                                && isTokenTimestampedBeyondWatermark(
+                                    tokenStartMs,
+                                    tokenEndMs,
+                                    speakerState.snapshotBoundaryEndMs,
+                                )
+                            );
+                            if (isPostSnapshotToken) {
+                                frameUpdate.lastCarryDetectedLang = tokenLanguage;
+                            } else {
+                                frameUpdate.lastDetectedLang = tokenLanguage;
+                            }
                         }
                         if (includeByWatermark) {
                             frameUpdate.hasProgressTokenBeyondWatermark = true;
@@ -959,6 +982,7 @@ wss.on('connection', (clientWs) => {
                                 maxFinalTokenEndMs: -1,
                                 maxSeenTokenEndMs: state.currentSnapshotEndMs,
                                 lastDetectedLang: null,
+                                lastCarryDetectedLang: null,
                                 hasProgressTokenBeyondWatermark: false,
                                 hasTimestampedProgressBeyondWatermark: false,
                             });
@@ -1027,6 +1051,9 @@ wss.on('connection', (clientWs) => {
                         const previousNonFinalText = speakerState.latestNonFinalText;
                         if (frameUpdate.lastDetectedLang) {
                             speakerState.detectedLang = frameUpdate.lastDetectedLang;
+                        }
+                        if (frameUpdate.lastCarryDetectedLang) {
+                            speakerState.pendingCarryDetectedLang = frameUpdate.lastCarryDetectedLang;
                         }
                         const languageChanged = speakerState.detectedLang !== previousDetectedLang;
 
@@ -1106,6 +1133,7 @@ wss.on('connection', (clientWs) => {
                         if (decision.action === 'finalize') {
                             const finalizedText = stripEndpointMarkers(decision.text).trim();
                             const consumedEndMs = speakerState.currentSnapshotEndMs;
+                            const carryDetectedLang = speakerState.pendingCarryDetectedLang || 'unknown';
                             if (finalizedText) {
                                 emitTranscript(
                                     decision.text,
@@ -1118,6 +1146,7 @@ wss.on('connection', (clientWs) => {
                                         extra: {
                                             usedSnapshotBoundary: decision.usedSnapshotBoundary,
                                             carryTextPreview: buildDebugTextPreview(decision.carryText),
+                                            carryDetectedLang,
                                             consumedEndMs,
                                         },
                                     },
@@ -1129,6 +1158,7 @@ wss.on('connection', (clientWs) => {
                             resetSpeakerTurn(speakerState);
 
                             if (decision.carryText) {
+                                speakerState.detectedLang = carryDetectedLang;
                                 speakerState.latestNonFinalText = decision.carryText;
                                 speakerState.latestNonFinalIsProvisionalCarry = true;
                                 speakerState.currentSnapshotText = composeTurnText('', decision.carryText);
@@ -1137,13 +1167,14 @@ wss.on('connection', (clientWs) => {
                                 speakerState.strategy.scheduleCarryExpiry();
                                 emitTranscript(
                                     decision.carryText,
-                                    speakerState.detectedLang,
+                                    carryDetectedLang,
                                     false,
                                     speakerState.speaker,
                                     {
                                         source: 'decision.carry_seed',
                                         state: speakerState,
                                         extra: {
+                                            carryDetectedLang,
                                             consumedEndMs,
                                         },
                                     },
