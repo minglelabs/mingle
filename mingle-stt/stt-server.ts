@@ -1105,29 +1105,34 @@ wss.on('connection', (clientWs) => {
 
                     for (const run of speakerRuns) {
                         const priorState = getSpeakerState(run.speaker);
-                        // Language changes split the current speaker into a new utterance segment
-                        // even before Soniox later flushes the enclosing <fin>.
+                        const boundaryProbe = buildSpeakerFrameUpdateForRun(priorState, run);
+                        const incomingProgressedLanguage = boundaryProbe.lastDetectedLang;
+
+                        // Only let watermark-surviving progress create boundaries.
+                        // Repeated stale snapshots from another speaker must not finalize
+                        // the current open turn.
                         if (
-                            priorState.detectedLang !== 'unknown'
-                            && priorState.detectedLang !== run.language
+                            boundaryProbe.hasProgressTokenBeyondWatermark
+                            && incomingProgressedLanguage
+                            && priorState.detectedLang !== 'unknown'
+                            && priorState.detectedLang !== incomingProgressedLanguage
                             && hasVisibleSpeakerText(priorState)
                         ) {
                             finalizeSpeakerTurn(run.speaker);
                         }
 
-                        // Speaker changes still close other open segments immediately.
-                        for (const [existingSpeaker, state] of speakerStates.entries()) {
-                            if (existingSpeaker === run.speaker) continue;
-                            if (!hasVisibleSpeakerText(state)) continue;
-                            if (state.strategy.getSnapshotTextLen() !== null) continue;
-                            finalizeSpeakerTurn(existingSpeaker);
+                        // Speaker changes still close other open segments immediately,
+                        // but only when this run actually advanced beyond the watermark.
+                        if (boundaryProbe.hasProgressTokenBeyondWatermark) {
+                            for (const [existingSpeaker, state] of speakerStates.entries()) {
+                                if (existingSpeaker === run.speaker) continue;
+                                if (!hasVisibleSpeakerText(state)) continue;
+                                if (state.strategy.getSnapshotTextLen() !== null) continue;
+                                finalizeSpeakerTurn(existingSpeaker);
+                            }
                         }
 
                         const speakerState = getSpeakerState(run.speaker);
-                        if (speakerState.detectedLang === 'unknown') {
-                            speakerState.detectedLang = run.language;
-                        }
-
                         const frameStatus = ensureSpeakerFrameStatus(run.speaker);
                         const frameUpdate = buildSpeakerFrameUpdateForRun(speakerState, run);
                         if (frameUpdate.hasProgressTokenBeyondWatermark) {
