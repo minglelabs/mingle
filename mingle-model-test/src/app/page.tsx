@@ -18,6 +18,15 @@ interface Utterance {
   translations: Record<string, string>  // { 'ko': '한국어 번역', 'ja': '일본어 번역' }
 }
 
+type SttModel =
+  | 'gladia'
+  | 'gladia-stt'
+  | 'deepgram'
+  | 'deepgram-multi'
+  | 'fireworks'
+  | 'soniox'
+  | 'speechmatics'
+
 const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English' },
   { code: 'ko', name: 'Korean' },
@@ -65,7 +74,7 @@ export default function Home() {
   const [lang3, setLang3] = useState('ja');
   // selectedLanguages is derived from individual lang selectors
   const selectedLanguages = [lang1, lang2, lang3].filter(Boolean);
-  const [sttModel, setSttModel] = useState<'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox'>('soniox');
+  const [sttModel, setSttModel] = useState<SttModel>('soniox');
   const [translateModel, setTranslateModel] = useState<'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview'>('gemini-2.5-flash-lite');
   const [langHintsStrict, setLangHintsStrict] = useState(true);
   const [sessionUsageSec, setSessionUsageSec] = useState(0)
@@ -343,7 +352,7 @@ export default function Home() {
           <select 
             id="sttModel" 
             value={sttModel} 
-            onChange={(e) => setSttModel(e.target.value as 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox')}
+            onChange={(e) => setSttModel(e.target.value as SttModel)}
             disabled={isActive} 
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
           >
@@ -352,11 +361,17 @@ export default function Home() {
             <option value="deepgram">Deepgram (AI 번역, 언어 1만 전사)</option>
             <option value="deepgram-multi">Deepgram Multi (AI 번역, 다국어 자동 감지)</option>
             <option value="fireworks">Fireworks (AI 번역)</option>
+            <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
           {sttModel === 'deepgram-multi' && (
             <p className="mt-1 text-xs text-amber-600">
               언어 선택 무시됨 - 10개 언어 자동 감지: EN, ES, FR, DE, HI, RU, PT, JA, IT, NL
+            </p>
+          )}
+          {sttModel === 'speechmatics' && (
+            <p className="mt-1 text-xs text-amber-600">
+              기본은 언어 1 고정 전사입니다. 예외적으로 EN+AR, EN+ES, EN+ZH, EN+MS 조합만 공개 bilingual pack을 사용합니다.
             </p>
           )}
           {sttModel === 'soniox' && (
