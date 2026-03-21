@@ -619,6 +619,15 @@ ensure_file_parent() {
   mkdir -p "$(dirname "$file")"
 }
 
+prepare_generated_file() {
+  local file="$1"
+  ensure_file_parent "$file"
+  if [[ -L "$file" ]]; then
+    rm -f "$file"
+  fi
+  : > "$file"
+}
+
 find_main_worktree_root() {
   local line=""
   local worktree_path=""
@@ -4107,8 +4116,7 @@ $(ngrok_plan_capacity_hint)"
   local shared_stt_raw_log_file=""
   local git_common_dir=""
   local repo_root_from_common=""
-  mkdir -p "$(dirname "$stt_raw_log_file")"
-  : > "$stt_raw_log_file"
+  prepare_generated_file "$stt_raw_log_file"
   if git_common_dir="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
     if repo_root_from_common="$(cd "$git_common_dir/.." 2>/dev/null && pwd -P)"; then
       shared_stt_raw_log_file="$repo_root_from_common/.devbox-logs/stt-raw.log"
