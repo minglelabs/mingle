@@ -31,6 +31,9 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
+const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
+);
 const SONIOX_DEBUG_SPEAKERS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_DEBUG_SPEAKERS || '').trim().toLowerCase(),
 );
@@ -47,6 +50,7 @@ interface ClientConfig {
     languages: string[];
     stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
     lang_hints_strict?: boolean;
+    soniox_language_hints?: string[];
 }
 
 interface FinalTurnPayload {
@@ -91,6 +95,14 @@ wss.on('connection', (clientWs) => {
         }
         disposeSonioxSpeakerStates?.();
         disposeSonioxSpeakerStates = null;
+    };
+
+    const sendReadyStatus = () => {
+        if (clientWs.readyState !== WebSocket.OPEN) return;
+        clientWs.send(JSON.stringify({
+            status: 'ready',
+            soniox_language_hints_enabled: SONIOX_USE_LANGUAGE_HINTS,
+        }));
     };
 
     // ===== GLADIA 연결 =====
@@ -165,7 +177,7 @@ wss.on('connection', (clientWs) => {
 
             sttWs.onopen = () => {
                 if (isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                    sendReadyStatus();
                 } else {
                     sttWs?.close();
                 }
@@ -259,7 +271,7 @@ wss.on('connection', (clientWs) => {
 
             sttWs.onopen = () => {
                 if (isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                    sendReadyStatus();
                 } else {
                     sttWs?.close();
                 }
@@ -354,7 +366,7 @@ wss.on('connection', (clientWs) => {
 
             sttWs.onopen = () => {
                 if (isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                    sendReadyStatus();
                 } else {
                     sttWs?.close();
                 }
@@ -460,7 +472,7 @@ wss.on('connection', (clientWs) => {
 
             sttWs.onopen = () => {
                 if (isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                    sendReadyStatus();
                 } else {
                     sttWs?.close();
                 }
@@ -730,6 +742,14 @@ wss.on('connection', (clientWs) => {
             finalizePendingTurnFromProvider = async () => flushAllSpeakerTurns();
 
             sttWs.onopen = () => {
+                const sonioxLanguageHints = (
+                    Array.isArray(config.soniox_language_hints) && config.soniox_language_hints.length > 0
+                        ? config.soniox_language_hints
+                        : config.languages
+                )
+                    .filter((language): language is string => typeof language === 'string')
+                    .map((language) => language.trim())
+                    .filter(Boolean);
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
                     model: 'stt-rt-v4',
@@ -740,10 +760,16 @@ wss.on('connection', (clientWs) => {
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
                 };
+                if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
+                    Object.assign(sonioxConfig, {
+                        language_hints: sonioxLanguageHints,
+                        language_hints_strict: config.lang_hints_strict !== false,
+                    });
+                }
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
                 if (isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                    sendReadyStatus();
                 } else {
                     sttWs?.close();
                 }
@@ -1255,6 +1281,6 @@ wss.on('connection', (clientWs) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
     console.log(
-        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS}`,
+        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS}`,
     );
 });
