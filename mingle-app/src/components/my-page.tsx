@@ -9,7 +9,7 @@ import BottomTabBar from "@/components/bottom-tab-bar";
 import { normalizeAppLocale, resolveAppLocale } from "@/lib/app-locale";
 import {
   Plus, Menu, Globe, LogOut, Trash2,
-  Share2, Edit3, Camera, ChevronLeft, ChevronRight,
+  Share2, Edit3, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
 // ── 로케일 → 국기 ────────────────────────────────────────────────────────
@@ -46,33 +46,16 @@ const DUMMY_POSTS: { id: number; color: string }[] = [];
 
 // ── 프로필 아바타 + 국기 배지 컴포넌트 (하나로 통합) ─────────────────────
 function ProfileAvatarBadge({
-  imageUrl, altText, flag, size = 86,
+  size = 86,
 }: {
-  imageUrl?: string | null; altText: string; flag: string; size?: number;
+  size?: number;
 }) {
-  const badgeSize = Math.round(size * 0.32);
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div className="overflow-hidden rounded-full bg-gray-200" style={{ width: size, height: size }}>
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={altText} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <svg width={size * 0.55} height={size * 0.55} viewBox="0 0 46 46" fill="none">
-              <circle cx="23" cy="17" r="10" fill="#9ca3af" />
-              <path d="M3 43c0-11.046 8.954-20 20-20s20 8.954 20 20" fill="#9ca3af" />
-            </svg>
-          </div>
-        )}
-      </div>
-      <span
-        className="absolute flex items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
-        style={{ width: badgeSize, height: badgeSize, bottom: -2, left: -2, fontSize: badgeSize * 0.62, lineHeight: 1 }}
-      >
-        {flag}
-      </span>
-    </div>
+    <div
+      aria-hidden="true"
+      className="shrink-0 rounded-full border border-gray-200 bg-white"
+      style={{ width: size, height: size }}
+    />
   );
 }
 
@@ -345,11 +328,8 @@ function EditProfilePanel({ open, username, bio, flag, onClose, onSave, dictiona
         onRight={() => { onSave({ username: lu, bio: lb, flag: lf }); onClose(); }}
       />
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col items-center py-5">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-200">
-            <Camera size={28} className="text-gray-400" />
-          </div>
-          <span className="mt-2 text-[13px] font-semibold text-blue-500">{dictionary.myPage.changePhotoAction}</span>
+        <div className="flex items-center justify-center py-5">
+          <ProfileAvatarBadge size={80} />
         </div>
         <div className="space-y-4 px-5 pb-10">
           <div>
@@ -548,12 +528,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         <section className="px-4 pb-3 pt-4">
           {/* 프로필 사진 + 통계 (인스타 레이아웃) */}
           <div className="flex items-center">
-            <ProfileAvatarBadge
-              imageUrl={user?.image}
-              altText={dictionary.myPage.profileImageAlt}
-              flag={flag}
-              size={86}
-            />
+            <ProfileAvatarBadge size={86} />
             <div className="ml-8 flex flex-1 items-stretch justify-around">
               <button type="button" onClick={() => postsRef.current?.scrollIntoView({ behavior: "smooth" })}
                 className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 transition active:opacity-60">
