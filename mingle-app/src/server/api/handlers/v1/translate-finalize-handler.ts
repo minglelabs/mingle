@@ -203,45 +203,6 @@ function isRetryableGeminiError(error: unknown): boolean {
   )
 }
 
-function countMatches(input: string, pattern: RegExp): number {
-  return input.match(pattern)?.length || 0
-}
-
-function isProbablySourceLeakTranslation(
-  sourceTextRaw: string,
-  translatedTextRaw: string,
-  targetLanguageRaw: string,
-): boolean {
-  const sourceText = sourceTextRaw.trim().toLowerCase()
-  const translatedText = translatedTextRaw.trim()
-  const translatedLower = translatedText.toLowerCase()
-  const targetLanguage = normalizeLang(targetLanguageRaw)
-
-  if (!sourceText || !translatedText) return false
-  if (translatedLower === sourceText) return true
-
-  const latinChars = countMatches(translatedText, /[A-Za-z]/g)
-  const hasMeaningfulLatin = latinChars >= 6
-  const sourcePrefix = sourceText.slice(0, Math.min(32, sourceText.length))
-  const containsSourcePrefix = sourcePrefix.length >= 8 && translatedLower.includes(sourcePrefix)
-
-  if (targetLanguage === 'ko') {
-    const hangulChars = countMatches(translatedText, /[\uac00-\ud7a3]/g)
-    if (hangulChars === 0 && hasMeaningfulLatin) return true
-    if (containsSourcePrefix && latinChars > Math.max(8, hangulChars * 2)) return true
-    return false
-  }
-
-  if (targetLanguage === 'ja') {
-    const japaneseChars = countMatches(translatedText, /[\u3040-\u30ff\u4e00-\u9fff]/g)
-    if (japaneseChars === 0 && hasMeaningfulLatin) return true
-    if (containsSourcePrefix && latinChars > Math.max(8, japaneseChars * 2)) return true
-    return false
-  }
-
-  return false
-}
-
 function formatSingleTurnForPrompt(label: string, turn: RecentTurnContext): string {
   const ageSuffix = typeof turn.ageMs === 'number'
     ? ` (~${Math.round(turn.ageMs / 1000)}s ago)`
@@ -696,23 +657,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       if (selectedResult.translations[lang]) {
         translations[lang] = selectedResult.translations[lang]
       }
-    }
-
-    const rejectedSourceLeakLanguages: string[] = []
-    for (const [lang, translatedText] of Object.entries(translations)) {
-      if (!isProbablySourceLeakTranslation(text, translatedText, lang)) continue
-      rejectedSourceLeakLanguages.push(lang)
-      delete translations[lang]
-    }
-
-    if (rejectedSourceLeakLanguages.length > 0) {
-      console.warn('[translate/finalize] rejected_source_leak_translations', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        provider: selectedResult.provider,
-        rejectedLanguages: rejectedSourceLeakLanguages,
-        text: ctx.text,
-        rawTranslations: selectedResult.translations,
-      })
     }
 
     const missingTargetLanguages = targetLanguages.filter((lang) => !translations[lang])

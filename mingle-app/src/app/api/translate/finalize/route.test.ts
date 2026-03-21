@@ -215,6 +215,35 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('returns provider translations as-is even when they match the source text', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"en":"Ek","ko":"Ek","ja":"Ek"}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'Ek',
+      sourceLanguage: 'af',
+      targetLanguages: ['en', 'ko', 'ja'],
+      isFinal: false,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.translations).toEqual({
+      en: 'Ek',
+      ko: 'Ek',
+      ja: 'Ek',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns 400 when text is missing', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
