@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildLanguageSelectionSignature,
   appendFinalizedUtteranceToStoreState,
+  buildLiveUtterance,
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
@@ -9,6 +11,7 @@ import {
   findRecentMatchingUtteranceIndex,
   getWsUrl,
   isDuplicateTimedSignature,
+  filterTranslationsToTargetLanguages,
   parseSttTranscriptMessage,
   pruneUnresolvedTranslationTargets,
   shouldApplyLatestPartialTranslationResponse,
@@ -90,6 +93,7 @@ describe('use-realtime-stt pure logic', () => {
 
   it('builds finalized utterance payload with source-language filtering', () => {
     const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
       rawText: ' <end> hello everyone ',
       rawLanguage: 'en-US',
       languages: ['en', 'ko', 'ja', 'KO'],
@@ -109,6 +113,7 @@ describe('use-realtime-stt pure logic', () => {
     expect(built?.language).toBe('en-US')
     expect(built?.utterance).toEqual({
       id: 'u-1700000000000-7',
+      speaker: 'speaker-2',
       originalText: 'hello everyone',
       originalLang: 'en-US',
       targetLanguages: ['ko', 'ja'],
@@ -129,6 +134,29 @@ describe('use-realtime-stt pure logic', () => {
         ko: '안녕하세요',
         ja: 'こんにちは',
       },
+    })
+  })
+
+  it('normalizes language selection signatures for target-language comparisons', () => {
+    expect(buildLanguageSelectionSignature([' en ', 'ko', '', 'ja ']))
+      .toBe(buildLanguageSelectionSignature(['en', 'ko', 'ja']))
+  })
+
+  it('changes language selection signatures when membership or order changes', () => {
+    expect(buildLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildLanguageSelectionSignature(['en', 'ja']))
+    expect(buildLanguageSelectionSignature(['en', 'ko']))
+      .not.toBe(buildLanguageSelectionSignature(['ko', 'en']))
+  })
+
+  it('filters translations down to currently selected target languages', () => {
+    expect(filterTranslationsToTargetLanguages({
+      ko: '안녕하세요',
+      ja: 'こんにちは',
+      en: 'hello',
+    }, ['ja', 'en'])).toEqual({
+      ja: 'こんにちは',
+      en: 'hello',
     })
   })
 
@@ -172,6 +200,70 @@ describe('use-realtime-stt pure logic', () => {
         ja: 'こんにちは',
       },
     })
+  })
+
+  it('builds a live utterance with the speaker before finalization', () => {
+    expect(buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
+        language: 'en',
+      },
+      partialTranscript: 'Still speaking',
+      partialLang: 'en-US',
+      partialTranslations: {
+        en: 'self',
+        ko: '계속 말하는 중',
+      },
+      languages: ['en', 'ko'],
+    })).toEqual({
+      id: 'u-live',
+      speaker: 'speaker-2',
+      speakerAvatarSeed: 'avatar_seed_a',
+      speakerAvatarIndex: 7,
+      originalText: 'Still speaking',
+      originalLang: 'en-US',
+      targetLanguages: ['ko'],
+      translations: {
+        ko: '계속 말하는 중',
+      },
+      translationFinalized: {},
+      createdAtMs: 1700000000999,
+    })
+
+    expect(buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
+        language: 'en',
+      },
+      partialTranscript: '   ',
+      partialTranslations: {},
+      languages: ['en', 'ko'],
+    })).toBeNull()
+  })
+
+  it('keeps speaker avatar seed on finalized utterances when provided', () => {
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
+      speakerAvatarSeed: 'avatar_seed_a',
+      speakerAvatarIndex: 7,
+      rawText: ' hello everyone ',
+      rawLanguage: 'en-US',
+      languages: ['en', 'ko'],
+      partialTranslations: {},
+      utteranceSerial: 9,
+      nowMs: 1700000000009,
+    })
+
+    expect(built?.utterance.speakerAvatarSeed).toBe('avatar_seed_a')
+    expect(built?.utterance.speakerAvatarIndex).toBe(7)
   })
 
   it('merges queued translation updates when the finalized utterance is appended later', () => {
@@ -340,15 +432,33 @@ describe('use-realtime-stt pure logic', () => {
       utteranceId: 12,
       speaker: 'speaker-1',
       language: 'en',
+      targetLanguages: ['ko', 'ja'],
       text: 'Hello world',
-    })).toBe('12::speaker-1::en::Hello world')
+    })).toBe('12::speaker-1::en::ko\u001fja::Hello world')
 
     expect(buildLiveTranslateRequestSignature({
       utteranceId: 12,
       speaker: '',
       language: 'en',
+      targetLanguages: ['ko'],
       text: '  Hello world  ',
-    })).toBe('12::unknown::en::Hello world')
+    })).toBe('12::unknown::en::ko::Hello world')
+  })
+
+  it('changes translate request signatures when target languages change mid-turn', () => {
+    expect(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: 'speaker-1',
+      language: 'en',
+      targetLanguages: ['ko', 'ja'],
+      text: 'Hello world',
+    })).not.toBe(buildLiveTranslateRequestSignature({
+      utteranceId: 12,
+      speaker: 'speaker-1',
+      language: 'en',
+      targetLanguages: ['ko'],
+      text: 'Hello world',
+    }))
   })
 
   it('detects duplicate timed signatures within the ttl window', () => {

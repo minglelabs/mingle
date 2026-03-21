@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn(() => ({
+const mockGetGenerativeModel = vi.fn((config: unknown) => ({
   generateContent: mockGenerateContent,
 }))
 const ensureTrackingContextMock = vi.fn()
@@ -362,7 +362,7 @@ describe('/api/translate/finalize route', () => {
       zh: '你好',
     })
 
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as {
+    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
       generationConfig?: { responseSchema?: { required?: string[] } }
     }
     expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['tl', 'he', 'zh'])
@@ -424,7 +424,7 @@ describe('/api/translate/finalize route', () => {
     expect(userPrompt).toContain('  Translations:')
     expect(userPrompt).not.toContain('old recent context should be ignored')
 
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as { systemInstruction?: string }
+    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { systemInstruction?: string }
     expect(modelConfig.systemInstruction).toBe([
       'You are an expert live-conversation translator.',
       'Return ONLY strict JSON with keys exactly matching target language codes.',

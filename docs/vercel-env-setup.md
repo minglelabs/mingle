@@ -27,9 +27,9 @@
 RN은 WebView URL에 query로 namespace를 주입합니다.
 
 - iOS build env:
-  - `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.0`
+  - `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.2`
 - Android build env:
-  - `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.0`
+  - `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.2`
 
 ## Optional CLI pattern
 

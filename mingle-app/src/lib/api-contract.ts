@@ -2,7 +2,9 @@ const DEFAULT_API_NAMESPACE = ''
 const ALLOWED_API_NAMESPACES = new Set([
   '',
   'android/v1.0.0',
+  'android/v1.0.2',
   'ios/v1.0.0',
+  'ios/v1.0.2',
 ])
 
 function normalizeApiNamespace(raw: string): string {

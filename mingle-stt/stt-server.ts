@@ -31,6 +31,13 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
+const SONIOX_DEBUG_SPEAKERS = ['1', 'true', 'yes', 'on'].includes(
+    (process.env.SONIOX_DEBUG_SPEAKERS || '').trim().toLowerCase(),
+);
+
+function buildDebugPreview(rawText: string, maxLen = 40): string {
+    return rawText.replace(/\s+/g, ' ').trim().slice(0, maxLen);
+}
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -592,6 +599,12 @@ wss.on('connection', (clientWs) => {
                 const cleanedSpeaker = (speaker || '').trim() || 'unknown';
                 if (!cleanedText) return null;
 
+                if (SONIOX_DEBUG_SPEAKERS) {
+                    console.log(
+                        `[Soniox][emit] speaker="${cleanedSpeaker}" isFinal=${isFinal} lang=${cleanedLang} text="${buildDebugPreview(cleanedText)}"`,
+                    );
+                }
+
                 if (clientWs.readyState === WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
                         type: 'transcript',
@@ -700,7 +713,7 @@ wss.on('connection', (clientWs) => {
                     currentSnapshotText: '',
                     currentSnapshotEndMs: -1,
                     lastConsumedEndMs: -1,
-                    detectedLang: config.languages[0] || 'unknown',
+                    detectedLang: 'unknown',
                     strategy,
                 };
                 speakerStates.set(speaker, state);
@@ -723,8 +736,6 @@ wss.on('connection', (clientWs) => {
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
-                    language_hints: config.languages,
-                    language_hints_strict: config.lang_hints_strict !== false,
                     enable_endpoint_detection: false,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
@@ -772,6 +783,16 @@ wss.on('connection', (clientWs) => {
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
+
+                    const debugSpeakerDist = new Map<string, { total: number; final: number; sample: string }>();
+                    const trackDebugSpeakerDist = (speakerLabel: string, isFinal: boolean, text: string) => {
+                        if (!SONIOX_DEBUG_SPEAKERS) return;
+                        const entry = debugSpeakerDist.get(speakerLabel) ?? { total: 0, final: 0, sample: '' };
+                        entry.total++;
+                        if (isFinal) entry.final++;
+                        if (!entry.sample) entry.sample = buildDebugPreview(text, 15);
+                        debugSpeakerDist.set(speakerLabel, entry);
+                    };
                     const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
                         const existing = speakerFrameUpdates.get(speaker);
                         if (existing) return existing;
@@ -807,9 +828,13 @@ wss.on('connection', (clientWs) => {
                         const tokenLanguage = typeof token.language === 'string' && token.language.trim()
                             ? token.language.trim()
                             : 'unknown';
-                        const tokenSpeaker = typeof token.speaker === 'string' && token.speaker.trim()
-                            ? token.speaker.trim()
-                            : 'unknown';
+                        const _rawSpeaker = typeof token.speaker === 'string' ? token.speaker : null;
+                        const tokenSpeaker = _rawSpeaker && _rawSpeaker.trim() ? _rawSpeaker.trim() : 'unknown';
+                        trackDebugSpeakerDist(
+                            _rawSpeaker === null ? '(no field)' : (_rawSpeaker.trim() || '(empty)'),
+                            token.is_final === true,
+                            tokenText,
+                        );
 
                         const speakerState = getSpeakerState(tokenSpeaker);
                         if (tokenLanguage !== 'unknown') {
@@ -854,6 +879,13 @@ wss.on('connection', (clientWs) => {
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
                         }
+                    }
+
+                    if (SONIOX_DEBUG_SPEAKERS && debugSpeakerDist.size > 0) {
+                        const dist = Array.from(debugSpeakerDist.entries())
+                            .map(([spk, s]) => `"${spk}" total=${s.total} final=${s.final} sample="${s.sample}"`)
+                            .join(' | ');
+                        console.log(`[Soniox][speaker-dist] ${dist}`);
                     }
 
                     if (hasEndpointToken) {
@@ -1125,7 +1157,7 @@ wss.on('connection', (clientWs) => {
 
         if (data?.type === 'stop_recording') {
             const pendingText = (data?.data?.pending_text || '').toString();
-            const pendingLang = data?.data?.pending_language || selectedLanguages[0] || 'unknown';
+            const pendingLang = data?.data?.pending_language || 'unknown';
             const cleanedPendingText = pendingText.trim();
             sonioxStopRequested = currentModel === 'soniox';
 
@@ -1167,25 +1199,36 @@ wss.on('connection', (clientWs) => {
             return;
         }
 
-        if (data.sample_rate && data.languages) {
-            currentModel = data.stt_model || 'gladia';
-            selectedLanguages = data.languages;
+        if (data.sample_rate) {
+            const normalizedLanguages = Array.isArray(data.languages)
+                ? data.languages
+                    .filter((language): language is string => typeof language === 'string')
+                    .map((language) => language.trim())
+                    .filter(Boolean)
+                : [];
+            const clientConfig = {
+                ...data,
+                languages: normalizedLanguages,
+            } as ClientConfig;
+
+            currentModel = clientConfig.stt_model || 'gladia';
+            selectedLanguages = normalizedLanguages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
             console.log(`[conn:${connId}] config model=${currentModel} langs=${selectedLanguages.join(',')}`);
             
             if (currentModel === 'deepgram') {
-                startDeepgramConnection(data as ClientConfig);
+                startDeepgramConnection(clientConfig);
             } else if (currentModel === 'deepgram-multi') {
-                startDeepgramMultiConnection(data as ClientConfig);
+                startDeepgramMultiConnection(clientConfig);
             } else if (currentModel === 'fireworks') {
-                startFireworksConnection(data as ClientConfig);
+                startFireworksConnection(clientConfig);
             } else if (currentModel === 'soniox') {
-                startSonioxConnection(data as ClientConfig);
+                startSonioxConnection(clientConfig);
             } else if (currentModel === 'gladia-stt') {
-                startGladiaConnection(data as ClientConfig, false);
+                startGladiaConnection(clientConfig, false);
             } else {
-                startGladiaConnection(data as ClientConfig, true);
+                startGladiaConnection(clientConfig, true);
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송

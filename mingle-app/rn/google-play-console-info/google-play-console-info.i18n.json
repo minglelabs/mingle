@@ -21,14 +21,14 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.1",
+      "version": "1.0.2",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.1 (14)",
+      "releaseName": "1.0.2 (15)",
       "releaseNotes": {
-        "en-US": "Version 1.0.1 release.",
-        "ko-KR": "1.0.1 버전 출시입니다."
+        "en-US": "Refined the top safe-area design and improved startup version checks.",
+        "ko-KR": "상단 세이프 영역 디자인을 다듬고 앱 시작 버전 체크를 개선했습니다."
       },
       "screenshots": {
         "ko": [

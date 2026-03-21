@@ -32,7 +32,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.Executors
@@ -46,9 +45,7 @@ class NativeSTTModule(
 
   private data class StartOptions(
     val wsUrl: String,
-    val languages: List<String>,
     val sttModel: String,
-    val langHintsStrict: Boolean,
     val aecEnabled: Boolean,
   )
 
@@ -131,24 +128,9 @@ class NativeSTTModule(
       return
     }
 
-    val languages = mutableListOf<String>()
-    if (options.hasKey("languages") && !options.isNull("languages")) {
-      val raw = options.getArray("languages")
-      if (raw != null) {
-        for (index in 0 until raw.size()) {
-          val value = raw.getString(index)?.trim().orEmpty()
-          if (value.isNotEmpty()) {
-            languages.add(value)
-          }
-        }
-      }
-    }
-
     val startOptions = StartOptions(
       wsUrl = wsUrl,
-      languages = languages,
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
-      langHintsStrict = if (options.hasKey("langHintsStrict")) options.getBoolean("langHintsStrict") else true,
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
     )
 
@@ -292,9 +274,7 @@ class NativeSTTModule(
           webSocketReady = true
           val config = JSONObject()
             .put("sample_rate", currentSampleRate)
-            .put("languages", JSONArray(options.languages))
             .put("stt_model", options.sttModel)
-            .put("lang_hints_strict", options.langHintsStrict)
           webSocket.send(config.toString())
           Log.i(TAG, "ws opened sampleRate=$currentSampleRate profile=${profile.label}")
         }

@@ -741,9 +741,7 @@ class NativeSTTModule: RCTEventEmitter {
     private func startSession(
         wsUrl: URL,
         wsUrlString: String,
-        languages: [String],
         sttModel: String,
-        langHintsStrict: Bool,
         aecEnabled: Bool,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
@@ -751,8 +749,8 @@ class NativeSTTModule: RCTEventEmitter {
         isAecEnabled = aecEnabled
         audioChunkCount = 0
         wsMessageCount = 0
-        NSLog("[NativeSTTModule] startSession ws=%@ languages=%@ model=%@ aec=%d",
-              wsUrlString, languages.joined(separator: ","), sttModel, aecEnabled ? 1 : 0)
+        NSLog("[NativeSTTModule] startSession ws=%@ model=%@ aec=%d",
+              wsUrlString, sttModel, aecEnabled ? 1 : 0)
 
         do {
             try configureAudioSession(aecEnabled: aecEnabled)
@@ -825,9 +823,7 @@ class NativeSTTModule: RCTEventEmitter {
 
         sendJson([
             "sample_rate": sampleRate,
-            "languages": languages,
             "stt_model": sttModel,
-            "lang_hints_strict": langHintsStrict,
         ])
 
         emitStatus("running")
@@ -855,9 +851,7 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        let languages = options["languages"] as? [String] ?? []
         let sttModel = options["sttModel"] as? String ?? "soniox"
-        let langHintsStrict = options["langHintsStrict"] as? Bool ?? true
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
 
         let audioSession = AVAudioSession.sharedInstance()
@@ -866,9 +860,7 @@ class NativeSTTModule: RCTEventEmitter {
             startSession(
                 wsUrl: wsUrl,
                 wsUrlString: wsUrlString,
-                languages: languages,
                 sttModel: sttModel,
-                langHintsStrict: langHintsStrict,
                 aecEnabled: aecEnabled,
                 resolve: resolve,
                 reject: reject
@@ -884,9 +876,7 @@ class NativeSTTModule: RCTEventEmitter {
                         self.startSession(
                             wsUrl: wsUrl,
                             wsUrlString: wsUrlString,
-                            languages: languages,
                             sttModel: sttModel,
-                            langHintsStrict: langHintsStrict,
                             aecEnabled: aecEnabled,
                             resolve: resolve,
                             reject: reject

@@ -1,6 +1,6 @@
 # iOS App Store Submission Checklist (main baseline)
 
-Date: 2026-02-21
+Date: 2026-03-21
 
 ## 1. Build Readiness (codebase)
 
@@ -12,10 +12,12 @@ Date: 2026-02-21
 ## 2. Must-do before upload
 
 - [ ] Decide release version/build number:
-  - `MARKETING_VERSION` (`1.0`) and `CURRENT_PROJECT_VERSION` (`1`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
+  - current release target: `MARKETING_VERSION` (`1.0.2`) and `CURRENT_PROJECT_VERSION` (`17`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
 - [ ] Create App Store Connect app entry for bundle ID `com.minglelabs.mingle.rn` (if first upload)
 - [ ] Prepare signing for App Store distribution (team: `3RFBMN8TKZ`)
-- [ ] Archive + validate + upload from Xcode Organizer (or `xcodebuild archive` + export flow)
+- [ ] Archive + validate + upload from devbox/Xcode:
+  - `scripts/devbox ios-rn-ipa-prod`
+  - `xcrun altool --upload-app --file /tmp/<export>/Mingle.ipa --type ios --apiKey <KEY_ID> --apiIssuer <ISSUER_ID>`
 - [ ] Fill App Privacy / Data Collection answers in App Store Connect
 - [ ] Fill Export Compliance (encryption) questionnaire
 - [ ] Upload metadata:
