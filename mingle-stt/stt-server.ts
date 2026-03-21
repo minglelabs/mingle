@@ -575,6 +575,9 @@ wss.on('connection', (clientWs) => {
                 if (typeof raw !== 'number' || !Number.isFinite(raw)) return null;
                 return raw;
             };
+            const normalizeLanguageForComparison = (rawLanguage: string | null | undefined): string => {
+                return (rawLanguage || '').trim().replace(/_/g, '-').toLowerCase().split('-')[0] || '';
+            };
             const isTokenBeyondWatermark = (
                 tokenStartMs: number | null,
                 tokenEndMs: number | null,
@@ -987,6 +990,22 @@ wss.on('connection', (clientWs) => {
                                 hasTimestampedProgressBeyondWatermark: false,
                             });
                         }
+                    }
+
+                    for (const frameUpdate of speakerFrameUpdates.values()) {
+                        const incomingDetectedLang = frameUpdate.lastDetectedLang;
+                        if (!incomingDetectedLang) continue;
+                        const state = speakerStates.get(frameUpdate.speaker);
+                        if (!state) continue;
+                        if (!stripEndpointMarkers(state.currentSnapshotText).trim()) continue;
+
+                        const previousDetectedLang = normalizeLanguageForComparison(state.detectedLang);
+                        const nextDetectedLang = normalizeLanguageForComparison(incomingDetectedLang);
+                        if (!previousDetectedLang || previousDetectedLang === 'unknown') continue;
+                        if (!nextDetectedLang || nextDetectedLang === 'unknown') continue;
+                        if (previousDetectedLang === nextDetectedLang) continue;
+
+                        finalizeSpeakerTurn(frameUpdate.speaker);
                     }
 
                     const speakerFrameInfos = new Map<string, SonioxSpeakerFrameInfo>();
