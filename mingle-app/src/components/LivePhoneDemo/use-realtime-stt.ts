@@ -1980,11 +1980,9 @@ export default function useRealtimeSTT({
     if (!text.trim() || langs.length === 0) return { translations: {} }
     const recentTurns = buildRecentTurnContextPayload(options?.excludeUtteranceId)
     try {
-      const body: Record<string, unknown> = shouldRedetectSourceLanguage
-        ? { text, targetLanguages: langs }
-        : { text, sourceLanguage, targetLanguages: langs }
-      if (shouldRedetectSourceLanguage && sourceLanguage.trim()) {
-        body.probableSpokenSourceLanguage = sourceLanguage
+      const body: Record<string, unknown> = { text, targetLanguages: langs }
+      if (sourceLanguage.trim()) {
+        body.sourceLanguage = sourceLanguage
       }
       if (recentTurns.length > 0) {
         body.recentTurns = recentTurns

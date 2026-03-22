@@ -63,7 +63,6 @@ type TranslateRequestMeta = {
 type TranslateContext = {
   text: string
   sourceLanguage: string
-  probableSpokenSourceLanguage: string | null
   targetLanguages: string[]
   shouldRedetectSourceLanguage: boolean
   immediatePreviousTurn: RecentTurnContext | null
@@ -151,7 +150,6 @@ function buildTranslateFinalizeLogContext(ctx: TranslateContext): Record<string,
     clientBundleRev: ctx.requestMeta.clientBundleRev,
     sessionKeyHint: ctx.requestMeta.sessionKeyHint,
     sourceLanguage: ctx.sourceLanguage,
-    probableSpokenSourceLanguage: ctx.probableSpokenSourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
@@ -256,7 +254,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
     ? [
       'Current turn:',
       `language_hints=${targetLangCodes}`,
-      ...(ctx.probableSpokenSourceLanguage ? [`probable_spoken_source_language=${ctx.probableSpokenSourceLanguage}`] : []),
+      `sourceLanguage=${ctx.sourceLanguage}`,
       'detect_source_language=yes',
       `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
       `text="${ctx.text}"`,
@@ -297,7 +295,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'No explanations, no markdown, no extra keys.',
         'Determine the actual source language from the current text itself.',
         'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
-        'Treat probable_spoken_source_language as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
+        'Treat the provided sourceLanguage field as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
         'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
         'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
@@ -415,7 +413,6 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
   const promptLogPayload = {
     sourceLanguage: ctx.sourceLanguage,
-    probableSpokenSourceLanguage: ctx.probableSpokenSourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
@@ -475,7 +472,6 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     : []
   const responseLogPayload = {
     sourceLanguage: ctx.sourceLanguage,
-    probableSpokenSourceLanguage: ctx.probableSpokenSourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
@@ -662,13 +658,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     isFinal,
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
-  const probableSpokenSourceLanguageRaw = normalizeLang(
-    typeof body.probableSpokenSourceLanguage === 'string' ? body.probableSpokenSourceLanguage : '',
-  )
-  const sourceLanguage = shouldRedetectSourceLanguage ? 'unknown' : (sourceLanguageRaw || 'unknown')
-  const probableSpokenSourceLanguage = shouldRedetectSourceLanguage
-    ? (probableSpokenSourceLanguageRaw || null)
-    : null
+  const sourceLanguage = sourceLanguageRaw || 'unknown'
 
   if (!GEMINI_API_KEY) {
     const response = NextResponse.json({ error: 'No translation API key configured' }, { status: 500 })
@@ -696,7 +686,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const ctx: TranslateContext = {
     text,
     sourceLanguage,
-    probableSpokenSourceLanguage,
     targetLanguages,
     shouldRedetectSourceLanguage,
     immediatePreviousTurn,
@@ -706,7 +695,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   }
   logTranslateFinalizeInfo('request', {
     sourceLanguage,
-    probableSpokenSourceLanguage,
     targetLanguages,
     shouldRedetectSourceLanguage,
     isFinal,
