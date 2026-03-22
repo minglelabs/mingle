@@ -125,6 +125,13 @@ export function parseDetectedSourceLanguage(raw: string): string {
   return normalizeLang(directCandidate)
 }
 
+export function parseSourceLanguagesMixed(raw: string): boolean {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return false
+
+  return parsed.sourceLanguagesMixed === true
+}
+
 export function parseRecentTurns(raw: unknown): RecentTurnContext[] {
   if (!Array.isArray(raw)) return []
   const items = raw.slice(-12)

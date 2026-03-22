@@ -637,6 +637,55 @@ describe('use-realtime-stt pure logic', () => {
     expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
   })
 
+  it('keeps the source-language bubble when the finalized utterance mixes languages', () => {
+    const mixedSourceText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
+    const updated = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([{
+        id: 'u-mixed',
+        originalText: mixedSourceText,
+        originalLang: 'ja',
+        targetLanguages: ['ko', 'en'],
+        translations: {
+          ko: '이전 한국어 번역',
+          en: 'Previous English translation',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000005,
+      }]),
+      utteranceId: 'u-mixed',
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      priority: { kind: 'final', seq: 11 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      sourceLanguagesMixed: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: mixedSourceText,
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-mixed',
+      originalText: mixedSourceText,
+      originalLang: 'ko',
+      sourceLanguagesMixed: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+      createdAtMs: 1700000000005,
+    })
+  })
+
   it('chooses the first rendered translation bubble for finalized TTS', () => {
     expect(resolveRenderedTtsCandidateFromUtterance({
       originalLang: 'ko',
@@ -668,6 +717,27 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({
       language: 'ja',
       text: 'こんにちは',
+    })
+  })
+
+  it('allows the mixed source-language bubble to become the first rendered TTS candidate', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      sourceLanguagesMixed: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: 'イザナと 일본어로 잘 인식되는 소니옥스야',
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+    })).toEqual({
+      language: 'ko',
+      text: 'イザナと 일본어로 잘 인식되는 소니옥스야',
     })
   })
 

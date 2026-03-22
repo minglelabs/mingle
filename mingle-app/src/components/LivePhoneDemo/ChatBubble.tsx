@@ -21,6 +21,7 @@ export interface Utterance {
   speakerAvatarIndex?: number
   originalText: string
   originalLang: string
+  sourceLanguagesMixed?: boolean
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
@@ -56,7 +57,7 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
     const language = (rawLanguage || '').trim()
     if (!language) return
     const normalized = normalizeLanguageCode(language)
-    if (sourceLanguage && normalized === sourceLanguage) return
+    if (!utterance.sourceLanguagesMixed && sourceLanguage && normalized === sourceLanguage) return
     const key = normalized || language.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)

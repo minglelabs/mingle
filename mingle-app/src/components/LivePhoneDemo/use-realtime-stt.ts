@@ -235,6 +235,9 @@ export function normalizeLangForCompare(rawLanguage: string): string {
 export function stripSourceLanguageFromTranslations(
   translationsRaw: Record<string, string>,
   sourceLanguageRaw: string,
+  options?: {
+    keepSourceLanguage?: boolean
+  },
 ): Record<string, string> {
   const sourceLanguage = normalizeLangForCompare(sourceLanguageRaw)
   const translations: Record<string, string> = {}
@@ -243,7 +246,7 @@ export function stripSourceLanguageFromTranslations(
     const normalizedLanguageForCompare = normalizeLangForCompare(normalizedLanguage)
     const cleaned = translatedText.trim()
     if (!normalizedLanguage || !cleaned) continue
-    if (sourceLanguage && normalizedLanguageForCompare === sourceLanguage) continue
+    if (!options?.keepSourceLanguage && sourceLanguage && normalizedLanguageForCompare === sourceLanguage) continue
     translations[normalizedLanguage] = cleaned
   }
   return translations
@@ -252,6 +255,9 @@ export function stripSourceLanguageFromTranslations(
 export function buildTurnTargetLanguagesSnapshot(
   languagesRaw: string[],
   sourceLanguageRaw: string,
+  options?: {
+    includeSourceLanguage?: boolean
+  },
 ): string[] {
   const sourceLanguage = normalizeLangForCompare(sourceLanguageRaw)
   const targetLanguages: string[] = []
@@ -260,7 +266,7 @@ export function buildTurnTargetLanguagesSnapshot(
     const language = (languageRaw || '').trim()
     if (!language) continue
     const normalizedLanguage = normalizeLangForCompare(language)
-    if (sourceLanguage && normalizedLanguage === sourceLanguage) continue
+    if (!options?.includeSourceLanguage && sourceLanguage && normalizedLanguage === sourceLanguage) continue
     const key = normalizedLanguage || language.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
@@ -1093,6 +1099,7 @@ export function applyTranslationToUtteranceStoreState(input: {
   markFinalized: boolean
   fallbackMatch?: TranslationApplyFallbackMatch
   detectedSourceLanguage?: string
+  sourceLanguagesMixed?: boolean
   selectedLanguages?: string[]
   sourceText?: string
 }): UtteranceStoreState {
@@ -1108,7 +1115,9 @@ export function applyTranslationToUtteranceStoreState(input: {
 
   if (idx < 0) {
     const queuedTranslations = normalizedDetectedSourceLanguage
-      ? stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage)
+      ? stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
+        keepSourceLanguage: input.sourceLanguagesMixed === true,
+      })
       : input.translations
     const existingPending = input.store.pendingTranslationUpdates.get(input.utteranceId)
     const mergedPending = mergeTranslationsByPriority({
@@ -1137,7 +1146,9 @@ export function applyTranslationToUtteranceStoreState(input: {
       : [target.originalLang, ...target.targetLanguages]
   )
   const nextTargetLanguages = normalizedDetectedSourceLanguage
-    ? buildTurnTargetLanguagesSnapshot(selectedLanguages, normalizedDetectedSourceLanguage)
+    ? buildTurnTargetLanguagesSnapshot(selectedLanguages, normalizedDetectedSourceLanguage, {
+      includeSourceLanguage: input.sourceLanguagesMixed === true,
+    })
     : target.targetLanguages
   const nextTargetLanguageSet = new Set(nextTargetLanguages)
   const nextOriginalText = normalizedDetectedSourceLanguage && input.sourceText
@@ -1145,7 +1156,9 @@ export function applyTranslationToUtteranceStoreState(input: {
     : target.originalText
   const baseTranslations = normalizedDetectedSourceLanguage
     ? filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(target.translations, normalizedDetectedSourceLanguage),
+      stripSourceLanguageFromTranslations(target.translations, normalizedDetectedSourceLanguage, {
+        keepSourceLanguage: input.sourceLanguagesMixed === true,
+      }),
       nextTargetLanguages,
     )
     : target.translations
@@ -1164,11 +1177,14 @@ export function applyTranslationToUtteranceStoreState(input: {
       }),
     )
     : input.store.translationPriorities
+  const targetWithoutSourceLanguagesMixed: Utterance = { ...target }
+  delete targetWithoutSourceLanguagesMixed.sourceLanguagesMixed
   const baseTarget: Utterance = normalizedDetectedSourceLanguage
     ? {
-      ...target,
+      ...targetWithoutSourceLanguagesMixed,
       originalText: nextOriginalText,
       originalLang: normalizedDetectedSourceLanguage,
+      ...(input.sourceLanguagesMixed === true ? { sourceLanguagesMixed: true } : {}),
       targetLanguages: nextTargetLanguages,
       translations: baseTranslations,
       translationFinalized: baseTranslationFinalized,
@@ -1176,7 +1192,9 @@ export function applyTranslationToUtteranceStoreState(input: {
     : target
   const nextTranslations = normalizedDetectedSourceLanguage
     ? filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage),
+      stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
+        keepSourceLanguage: input.sourceLanguagesMixed === true,
+      }),
       baseTarget.targetLanguages,
     )
     : input.translations
@@ -1230,6 +1248,7 @@ export function applyTranslationToUtteranceStoreState(input: {
 interface TranslateApiResult {
   translations: Record<string, string>
   sourceLanguage?: string
+  sourceLanguagesMixed?: boolean
   ttsLanguage?: string
   ttsAudioBase64?: string
   ttsAudioMime?: string
@@ -1239,7 +1258,7 @@ interface TranslateApiResult {
 
 function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
   Utterance,
-  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized'
+  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized' | 'sourceLanguagesMixed'
 >): string[] {
   const sourceLanguage = normalizeLangForCompare(utterance.originalLang)
   const candidates: string[] = []
@@ -1249,7 +1268,7 @@ function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
     const language = (rawLanguage || '').trim()
     if (!language) return
     const key = normalizeLangForCompare(language) || language.toLowerCase()
-    if (sourceLanguage && key === sourceLanguage) return
+    if (!utterance.sourceLanguagesMixed && sourceLanguage && key === sourceLanguage) return
     if (seen.has(key)) return
     seen.add(key)
     candidates.push(language)
@@ -1264,7 +1283,7 @@ function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
 
 export function resolveRenderedTtsCandidateFromUtterance(utterance: Pick<
   Utterance,
-  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized'
+  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized' | 'sourceLanguagesMixed'
 >): { language: string, text: string } | null {
   for (const language of buildRenderableTargetLanguagesForUtterance(utterance)) {
     const text = (utterance.translations[language] || '').trim()
@@ -1929,6 +1948,7 @@ export default function useRealtimeSTT({
       return {
         translations: (data.translations || {}) as Record<string, string>,
         sourceLanguage: typeof data.sourceLanguage === 'string' ? data.sourceLanguage : undefined,
+        sourceLanguagesMixed: data.sourceLanguagesMixed === true,
         ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,
         ttsAudioBase64,
         ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
@@ -2074,6 +2094,7 @@ export default function useRealtimeSTT({
     fallbackMatch?: TranslationApplyFallbackMatch,
     options?: {
       detectedSourceLanguage?: string
+      sourceLanguagesMixed?: boolean
       selectedLanguages?: string[]
       sourceText?: string
     },
@@ -2086,6 +2107,7 @@ export default function useRealtimeSTT({
       markFinalized,
       fallbackMatch,
       detectedSourceLanguage: options?.detectedSourceLanguage,
+      sourceLanguagesMixed: options?.sourceLanguagesMixed,
       selectedLanguages: options?.selectedLanguages,
       sourceText: options?.sourceText,
     }))
@@ -2288,6 +2310,7 @@ export default function useRealtimeSTT({
           },
           {
             detectedSourceLanguage: result.sourceLanguage,
+            sourceLanguagesMixed: result.sourceLanguagesMixed,
             selectedLanguages: targetLanguages,
             sourceText: text,
           },
