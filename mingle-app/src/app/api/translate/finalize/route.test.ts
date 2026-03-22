@@ -496,25 +496,19 @@ describe('/api/translate/finalize route', () => {
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
       expect(modelConfig.systemInstruction).toContain(
-        'Check whether the provided sourceLanguage matches the current text.',
+        'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text.',
       )
       expect(modelConfig.systemInstruction).toContain(
-        'If the provided sourceLanguage does not seem correct, replace it with the source language that best matches the current text.',
+        'For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',
       )
       expect(modelConfig.systemInstruction).toContain(
-        'For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true and sourceTextHasForeignScript should also be true, because the utterance contains substantive Japanese script inside an otherwise Korean sentence.',
+        'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
       )
       expect(modelConfig.systemInstruction).toContain(
-        'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits.',
       )
       expect(modelConfig.systemInstruction).toContain(
-        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script; otherwise set it to false. Ignore spaces, punctuation, and digits.',
-      )
-      expect(modelConfig.systemInstruction).toContain(
-        'For example, if sourceLanguage is Japanese, "료카이데스" should set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script, even though it represents Japanese speech.',
-      )
-      expect(modelConfig.systemInstruction).toContain(
-        'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
+        'For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script.',
       )
       expect(modelConfig.systemInstruction).not.toContain(
         'Because is_final=yes in this mode, translate the full final text from scratch.',

@@ -264,15 +264,9 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'You are an expert live-conversation translator.',
         'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, sourceTextHasForeignScript, and the requested language codes.',
         'No explanations, no markdown, no extra keys.',
-        'Check whether the provided sourceLanguage matches the current text.',
-        'If the provided sourceLanguage does not seem correct, replace it with the source language that best matches the current text.',
-        'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
-        'For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true and sourceTextHasForeignScript should also be true, because the utterance contains substantive Japanese script inside an otherwise Korean sentence.',
-        'Determine whether the current text itself meaningfully mixes two or more languages within the same utterance.',
-        'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
-        'Determine whether the current text contains substantive characters or script not normally used to write the chosen sourceLanguage.',
-        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script; otherwise set it to false. Ignore spaces, punctuation, and digits.',
-        'For example, if sourceLanguage is Japanese, "료카이데스" should set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script, even though it represents Japanese speech.',
+        'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script.',
+        'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text. For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',
       ].join('\n')
       : [
         'You are an expert live-conversation translator.',
