@@ -499,7 +499,7 @@ describe('/api/translate/finalize route', () => {
         'Treat the provided sourceLanguage field as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
       )
       expect(modelConfig.systemInstruction).toContain(
-        'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
+        'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main sentence body and predicate are Korean even though it begins with a short Japanese fragment. In this kind of case, sourceLanguagesMixed should be true and sourceTextHasForeignScript should also be true, because the utterance contains substantive Japanese script inside an otherwise Korean sentence.',
       )
       expect(modelConfig.systemInstruction).toContain(
         'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',

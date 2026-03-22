@@ -298,7 +298,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'Treat the provided sourceLanguage field as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
         'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
         'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
-        'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
+        'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main sentence body and predicate are Korean even though it begins with a short Japanese fragment. In this kind of case, sourceLanguagesMixed should be true and sourceTextHasForeignScript should also be true, because the utterance contains substantive Japanese script inside an otherwise Korean sentence.',
         'Determine whether the current text itself meaningfully mixes two or more languages within the same utterance.',
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
         'Determine whether the current text contains substantive characters or script not normally used to write the chosen sourceLanguage.',
