@@ -1159,9 +1159,13 @@ wss.on('connection', (clientWs) => {
         if (data.sample_rate && data.languages) {
             currentModel = data.stt_model || 'gladia';
             currentSampleRate = data.sample_rate;
-            selectedLanguages = data.languages;
             translateModel = data.translate_model || 'claude-haiku-4-5';
             translationEnabled = data.translation_enabled !== false;
+            selectedLanguages = translationEnabled ? data.languages : [];
+
+            console.log(
+                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
+            );
             
             if (currentModel === 'deepgram') {
                 startDeepgramConnection(data as ClientConfig);
