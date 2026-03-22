@@ -433,14 +433,6 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   const response = result.response as unknown as GeminiResponseLike
   const rawContent = response.text() || ''
-  logTranslateFinalizeInfo('gemini_raw_response', {
-    sourceLanguage: ctx.sourceLanguage,
-    targetLanguages: ctx.targetLanguages,
-    isFinal: ctx.isFinal,
-    text: ctx.text,
-    rawResponseLength: rawContent.length,
-    rawResponse: rawContent,
-  })
   const content = rawContent.trim()
   const usageMetadata = response.usageMetadata
   const promptTokens = sanitizeNonNegativeInt(usageMetadata?.promptTokenCount)
@@ -453,6 +445,29 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
       safetyRatings: candidate.safetyRatings ?? null,
     }))
     : []
+  const responseLogPayload = {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    provider: 'gemini',
+    model: DEFAULT_MODEL,
+    rawResponseLength: rawContent.length,
+    rawResponse: rawContent,
+    usage: {
+      input_tokens: promptTokens,
+      output_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
+    promptFeedback: response.promptFeedback ?? null,
+    candidates: candidateMeta,
+  }
+
+  logTranslateFinalizeInfo('gemini_response', responseLogPayload)
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+    console.info('[translate/finalize] gemini_response', responseLogPayload)
+  }
 
   if (!content) {
     logTranslateFinalizeError('gemini_empty_text', {

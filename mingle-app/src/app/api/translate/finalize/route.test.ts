@@ -449,7 +449,11 @@ describe('/api/translate/finalize route', () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"sourceLanguage":"ko","ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
-        usageMetadata: {},
+        usageMetadata: {
+          promptTokenCount: 12,
+          candidatesTokenCount: 18,
+          totalTokenCount: 30,
+        },
       },
     })
 
@@ -498,6 +502,20 @@ describe('/api/translate/finalize route', () => {
         expect.objectContaining({
           shouldRedetectSourceLanguage: true,
           targetLanguages: ['en', 'ja', 'ko'],
+        }),
+      )
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[translate/finalize] gemini_response',
+        expect.objectContaining({
+          shouldRedetectSourceLanguage: true,
+          provider: 'gemini',
+          model: 'gemini-2.5-flash-lite',
+          rawResponse: '{"sourceLanguage":"ko","ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+          usage: {
+            input_tokens: 12,
+            output_tokens: 18,
+            total_tokens: 30,
+          },
         }),
       )
       expect(fetchMock).not.toHaveBeenCalled()
