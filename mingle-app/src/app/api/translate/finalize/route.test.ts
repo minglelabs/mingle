@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn((config: unknown) => ({
+const mockGetGenerativeModel = vi.fn(() => ({
   generateContent: mockGenerateContent,
 }))
 const ensureTrackingContextMock = vi.fn()
@@ -443,6 +443,67 @@ describe('/api/translate/finalize route', () => {
     }
     expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['tl', 'he', 'zh'])
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('redetects final source language on v1.0.4 routes and returns all selected languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: '안녕하세요',
+        targetLanguages: ['en', 'ja', 'ko'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('ko')
+      expect(json.translations).toEqual({
+        en: 'Hello',
+        ja: 'こんにちは',
+        ko: '안녕하세요',
+      })
+
+      const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+      expect(userPrompt).toContain('language_hints=en, ja, ko')
+      expect(userPrompt).not.toContain('source=')
+
+      const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
+        systemInstruction?: string
+        generationConfig?: { responseSchema?: { required?: string[] } }
+      }
+      expect(modelConfig.systemInstruction).toContain(
+        'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
+      )
+      expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
+        'sourceLanguage',
+        'en',
+        'ja',
+        'ko',
+      ])
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[translate/finalize] prompt',
+        expect.objectContaining({
+          shouldRedetectSourceLanguage: true,
+          targetLanguages: ['en', 'ja', 'ko'],
+        }),
+      )
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleInfoSpy.mockRestore()
+    }
   })
 
   it('builds compact prompt with previous state first and no recent-turns section', async () => {

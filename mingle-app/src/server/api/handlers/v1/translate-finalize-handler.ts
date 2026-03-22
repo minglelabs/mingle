@@ -11,8 +11,10 @@ import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-vo
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
   normalizeLang,
+  normalizeSelectedLanguages,
   normalizeTargetLanguages,
   parseCurrentTurnPreviousState,
+  parseDetectedSourceLanguage,
   parseImmediatePreviousTurn,
   parseTranslations,
   type CurrentTurnPreviousState,
@@ -39,6 +41,7 @@ type TranslationUsage = {
 
 type TranslationEngineResult = {
   translations: Record<string, string>
+  sourceLanguage?: string
   provider: 'gemini'
   model: string
   usage?: TranslationUsage
@@ -57,6 +60,7 @@ type TranslateContext = {
   text: string
   sourceLanguage: string
   targetLanguages: string[]
+  shouldRedetectSourceLanguage: boolean
   immediatePreviousTurn: RecentTurnContext | null
   currentTurnPreviousState: CurrentTurnPreviousState | null
   isFinal: boolean
@@ -143,6 +147,7 @@ function buildTranslateFinalizeLogContext(ctx: TranslateContext): Record<string,
     sessionKeyHint: ctx.requestMeta.sessionKeyHint,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
+    shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
     textPreview: ctx.text.slice(0, 120),
   }
@@ -184,17 +189,24 @@ function isRetryableGeminiError(error: unknown): boolean {
   )
 }
 
-function formatSingleTurnForPrompt(label: string, turn: RecentTurnContext): string {
+function formatSingleTurnForPromptWithOptions(
+  label: string,
+  turn: RecentTurnContext,
+  options: { includeSourceLanguage: boolean },
+): string {
   const ageSuffix = typeof turn.ageMs === 'number'
     ? ` (~${Math.round(turn.ageMs / 1000)}s ago)`
     : ''
   const translationLines = Object.entries(turn.translations)
     .map(([language, translatedText]) => `    - ${language}: "${translatedText}"`)
     .join('\n')
+  const sourceLine = options.includeSourceLanguage
+    ? `  Original [${turn.sourceLanguage}]: "${turn.sourceText}"`
+    : `  Original: "${turn.sourceText}"`
 
   return [
     `${label}${ageSuffix}:`,
-    `  Original [${turn.sourceLanguage}]: "${turn.sourceText}"`,
+    sourceLine,
     '  Translations:',
     translationLines || '    - (none)',
   ].join('\n')
@@ -207,14 +219,20 @@ function selectPromptImmediatePreviousTurn(turn: RecentTurnContext | null): Rece
   return turn
 }
 
-function formatCurrentTurnPreviousStateForPrompt(state: CurrentTurnPreviousState | null): string {
+function formatCurrentTurnPreviousStateForPromptWithOptions(
+  state: CurrentTurnPreviousState | null,
+  options: { includeSourceLanguage: boolean },
+): string {
   if (!state) return 'None'
   const translationLines = Object.entries(state.translations)
     .map(([language, translatedText]) => `    - ${language}: "${translatedText}"`)
     .join('\n')
+  const sourceLine = options.includeSourceLanguage
+    ? `  Source [${state.sourceLanguage}]: "${state.sourceText}"`
+    : `  Source text: "${state.sourceText}"`
 
   return [
-    `  Source [${state.sourceLanguage}]: "${state.sourceText}"`,
+    sourceLine,
     '  Prior translations from same turn:',
     translationLines || '    - (none)',
   ].join('\n')
@@ -222,23 +240,40 @@ function formatCurrentTurnPreviousStateForPrompt(state: CurrentTurnPreviousState
 
 function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt: string } {
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
-  const currentTurnPreviousState = formatCurrentTurnPreviousStateForPrompt(ctx.currentTurnPreviousState)
+  const includeSourceLanguage = !ctx.shouldRedetectSourceLanguage
+  const currentTurnPreviousState = formatCurrentTurnPreviousStateForPromptWithOptions(
+    ctx.currentTurnPreviousState,
+    { includeSourceLanguage },
+  )
   const targetLangCodes = ctx.targetLanguages.join(', ')
-  const userPromptLines = [
-    'Current turn:',
-    `source=${ctx.sourceLanguage}`,
-    `targets=${targetLangCodes}`,
-    `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
-    `text="${ctx.text}"`,
-    '',
-    'Previous state of current turn:',
-    currentTurnPreviousState,
-  ]
+  const userPromptLines = ctx.shouldRedetectSourceLanguage
+    ? [
+      'Current turn:',
+      `language_hints=${targetLangCodes}`,
+      'detect_source_language=yes',
+      `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
+      `text="${ctx.text}"`,
+      '',
+      'Previous state of current turn:',
+      currentTurnPreviousState,
+    ]
+    : [
+      'Current turn:',
+      `source=${ctx.sourceLanguage}`,
+      `targets=${targetLangCodes}`,
+      `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
+      `text="${ctx.text}"`,
+      '',
+      'Previous state of current turn:',
+      currentTurnPreviousState,
+    ]
 
   if (immediatePreviousTurn) {
     userPromptLines.push(
       '',
-      formatSingleTurnForPrompt('Immediate previous turn', immediatePreviousTurn),
+      formatSingleTurnForPromptWithOptions('Immediate previous turn', immediatePreviousTurn, {
+        includeSourceLanguage,
+      }),
     )
   }
 
@@ -248,15 +283,29 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
   )
 
   return {
-    systemPrompt: [
-      'You are an expert live-conversation translator.',
-      'Return ONLY strict JSON with keys exactly matching target language codes.',
-      'No explanations, no markdown, no extra keys.',
-      'Always translate the ENTIRE current text as a standalone translation for each target language.',
-      'Never return only a suffix, delta, patch, completion fragment, or continuation.',
-      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
-      'If is_final=yes, translate the full final text from scratch, not an incremental update.',
-    ].join('\n'),
+    systemPrompt: ctx.shouldRedetectSourceLanguage
+      ? [
+        'You are an expert live-conversation translator.',
+        'Return ONLY strict JSON with keys exactly matching sourceLanguage and the requested language codes.',
+        'No explanations, no markdown, no extra keys.',
+        'Determine the actual source language from the current text itself.',
+        'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
+        'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
+        'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
+        'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
+        'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
+        'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
+        'Because is_final=yes in this mode, translate the full final text from scratch.',
+      ].join('\n')
+      : [
+        'You are an expert live-conversation translator.',
+        'Return ONLY strict JSON with keys exactly matching target language codes.',
+        'No explanations, no markdown, no extra keys.',
+        'Always translate the ENTIRE current text as a standalone translation for each target language.',
+        'Never return only a suffix, delta, patch, completion fragment, or continuation.',
+        'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
+        'If is_final=yes, translate the full final text from scratch, not an incremental update.',
+      ].join('\n'),
     userPrompt: userPromptLines.join('\n'),
   }
 }
@@ -281,8 +330,20 @@ function normalizeUsage(raw: {
   return usage
 }
 
-function buildGeminiResponseSchema(targetLanguages: string[]): ResponseSchema {
+function buildGeminiResponseSchema(targetLanguages: string[], options?: {
+  shouldRedetectSourceLanguage: boolean
+}): ResponseSchema {
   const properties: Record<string, ResponseSchema> = {}
+  const required = [...targetLanguages]
+
+  if (options?.shouldRedetectSourceLanguage) {
+    properties.sourceLanguage = {
+      type: SchemaType.STRING,
+      description: 'Detected source language code for the current text.',
+    }
+    required.unshift('sourceLanguage')
+  }
+
   for (const language of targetLanguages) {
     properties[language] = {
       type: SchemaType.STRING,
@@ -293,8 +354,33 @@ function buildGeminiResponseSchema(targetLanguages: string[]): ResponseSchema {
   return {
     type: SchemaType.OBJECT,
     properties,
-    required: [...targetLanguages],
+    required,
   }
+}
+
+function shouldRedetectSourceLanguageFromRequest(args: {
+  pathname: string
+  isFinal: boolean
+}): boolean {
+  if (!args.isFinal) return false
+  return /^\/api\/(?:ios|android)\/v1\.0\.4\/translate\/finalize\/?$/.test(args.pathname)
+}
+
+function inferDetectedSourceLanguageFromEcho(
+  text: string,
+  targetLanguages: string[],
+  translations: Record<string, string>,
+): string {
+  const normalizedText = text.trim()
+  if (!normalizedText) return ''
+
+  for (const language of targetLanguages) {
+    if ((translations[language] || '').trim() === normalizedText) {
+      return language
+    }
+  }
+
+  return ''
 }
 
 async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEngineResult | null> {
@@ -302,15 +388,22 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
-  logTranslateFinalizeInfo('prompt', {
+  const promptLogPayload = {
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
+    shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
     text: ctx.text,
     systemPrompt,
     userPrompt,
+  }
+  logTranslateFinalizeInfo('prompt', promptLogPayload)
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+    console.info('[translate/finalize] prompt', promptLogPayload)
+  }
+  const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
+    shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
   })
-  const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages)
   const model = genAI.getGenerativeModel({
     model: DEFAULT_MODEL,
     systemInstruction: systemPrompt,
@@ -376,6 +469,13 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   }
 
   const translations = parseTranslations(content)
+  const detectedSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? parseDetectedSourceLanguage(content) || inferDetectedSourceLanguageFromEcho(
+      ctx.text,
+      ctx.targetLanguages,
+      translations,
+    )
+    : ''
   if (Object.keys(translations).length === 0) {
     logTranslateFinalizeError('gemini_unparseable_json', {
       ...buildTranslateFinalizeLogContext(ctx),
@@ -388,6 +488,15 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
         output_tokens: completionTokens,
         total_tokens: totalTokens,
       },
+    })
+    return null
+  }
+  if (ctx.shouldRedetectSourceLanguage && !detectedSourceLanguage) {
+    logTranslateFinalizeError('gemini_missing_source_language', {
+      ...buildTranslateFinalizeLogContext(ctx),
+      responseTextLength: content.length,
+      responseTextPreview: content.slice(0, 2000),
+      parsedLanguages: Object.keys(translations),
     })
     return null
   }
@@ -408,6 +517,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
 
   return {
     translations,
+    ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     provider: 'gemini',
     model: DEFAULT_MODEL,
     usage: normalizeUsage({
@@ -468,8 +578,6 @@ async function synthesizeTtsInline(args: {
 export async function handleTranslateFinalizeV1(request: NextRequest) {
   const body = await request.json().catch((): Record<string, unknown> => ({}))
   const text = typeof body.text === 'string' ? body.text.trim() : ''
-  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
-  const sourceLanguage = sourceLanguageRaw || 'unknown'
   const targetLanguagesRaw: unknown[] = Array.isArray(body.targetLanguages) ? body.targetLanguages : []
   const ttsPayload = (typeof body.tts === 'object' && body.tts !== null) ? body.tts as Record<string, unknown> : null
   const ttsLanguage = normalizeLang(typeof ttsPayload?.language === 'string' ? ttsPayload.language : '')
@@ -488,6 +596,12 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     clientBundleRev,
     sessionKeyHint,
   }
+  const shouldRedetectSourceLanguage = shouldRedetectSourceLanguageFromRequest({
+    pathname: requestMeta.requestPathname,
+    isFinal,
+  })
+  const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
+  const sourceLanguage = shouldRedetectSourceLanguage ? 'unknown' : (sourceLanguageRaw || 'unknown')
 
   if (!GEMINI_API_KEY) {
     const response = NextResponse.json({ error: 'No translation API key configured' }, { status: 500 })
@@ -495,7 +609,9 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     return response
   }
 
-  const targetLanguages = normalizeTargetLanguages(targetLanguagesRaw, sourceLanguage)
+  const targetLanguages = shouldRedetectSourceLanguage
+    ? normalizeSelectedLanguages(targetLanguagesRaw)
+    : normalizeTargetLanguages(targetLanguagesRaw, sourceLanguage)
 
   if (!text) {
     const response = NextResponse.json({ error: 'text is required' }, { status: 400 })
@@ -514,6 +630,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     text,
     sourceLanguage,
     targetLanguages,
+    shouldRedetectSourceLanguage,
     immediatePreviousTurn,
     currentTurnPreviousState,
     isFinal,
@@ -522,6 +639,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   logTranslateFinalizeInfo('request', {
     sourceLanguage,
     targetLanguages,
+    shouldRedetectSourceLanguage,
     isFinal,
     text,
     clientBundleRev,
@@ -537,12 +655,20 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     )
     const buildResponseWithOptionalTts = async (
       translations: Record<string, string>,
-      meta: { provider: string, model: string, usedFallbackFromPreviousState?: boolean },
+      meta: {
+        provider: string
+        model: string
+        sourceLanguage?: string
+        usedFallbackFromPreviousState?: boolean
+      },
     ): Promise<NextResponse> => {
       const responsePayload: Record<string, unknown> = {
         translations,
         provider: meta.provider,
         model: meta.model,
+      }
+      if (meta.sourceLanguage) {
+        responsePayload.sourceLanguage = meta.sourceLanguage
       }
       if (meta.usedFallbackFromPreviousState) {
         responsePayload.usedFallbackFromPreviousState = true
@@ -626,6 +752,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       provider: selectedResult.provider,
       model: selectedResult.model,
       sourceLanguage,
+      detectedSourceLanguage: selectedResult.sourceLanguage || null,
       targetLanguages,
       isFinal,
       inputTokens: selectedResult.usage?.promptTokens ?? 'unknown',
@@ -678,6 +805,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     return await buildResponseWithOptionalTts(translations, {
       provider: selectedResult.provider,
       model: selectedResult.model,
+      sourceLanguage: selectedResult.sourceLanguage,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

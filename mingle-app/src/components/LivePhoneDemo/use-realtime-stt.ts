@@ -1091,7 +1091,11 @@ export function applyTranslationToUtteranceStoreState(input: {
   priority: TranslationPriority
   markFinalized: boolean
   fallbackMatch?: TranslationApplyFallbackMatch
+  detectedSourceLanguage?: string
+  selectedLanguages?: string[]
+  sourceText?: string
 }): UtteranceStoreState {
+  const normalizedDetectedSourceLanguage = normalizeLangForCompare(input.detectedSourceLanguage || '')
   let idx = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
   if (idx < 0 && input.fallbackMatch) {
     idx = findRecentMatchingUtteranceIndex({
@@ -1102,13 +1106,16 @@ export function applyTranslationToUtteranceStoreState(input: {
   }
 
   if (idx < 0) {
+    const queuedTranslations = normalizedDetectedSourceLanguage
+      ? stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage)
+      : input.translations
     const existingPending = input.store.pendingTranslationUpdates.get(input.utteranceId)
     const mergedPending = mergeTranslationsByPriority({
       utteranceId: input.utteranceId,
       currentTranslations: existingPending?.translations || {},
       currentTranslationFinalized: existingPending?.translationFinalized,
       currentPriorities: existingPending?.priorities || new Map(),
-      nextTranslations: input.translations,
+      nextTranslations: queuedTranslations,
       nextPriority: input.priority,
       markFinalized: input.markFinalized,
     })
@@ -1123,27 +1130,76 @@ export function applyTranslationToUtteranceStoreState(input: {
   }
 
   const target = input.store.utterances[idx]
+  const selectedLanguages = (
+    input.selectedLanguages && input.selectedLanguages.length > 0
+      ? input.selectedLanguages
+      : [target.originalLang, ...target.targetLanguages]
+  )
+  const nextTargetLanguages = normalizedDetectedSourceLanguage
+    ? buildTurnTargetLanguagesSnapshot(selectedLanguages, normalizedDetectedSourceLanguage)
+    : target.targetLanguages
+  const nextTargetLanguageSet = new Set(nextTargetLanguages)
+  const nextOriginalText = normalizedDetectedSourceLanguage && input.sourceText
+    ? (normalizeSttTurnText(input.sourceText) || target.originalText)
+    : target.originalText
+  const baseTranslations = normalizedDetectedSourceLanguage
+    ? filterTranslationsToTargetLanguages(
+      stripSourceLanguageFromTranslations(target.translations, normalizedDetectedSourceLanguage),
+      nextTargetLanguages,
+    )
+    : target.translations
+  const baseTranslationFinalized = normalizedDetectedSourceLanguage
+    ? Object.fromEntries(
+      Object.entries(target.translationFinalized || {})
+        .filter(([language, isFinalized]) => nextTargetLanguageSet.has(language) && isFinalized === true),
+    )
+    : target.translationFinalized
+  const basePriorities = normalizedDetectedSourceLanguage
+    ? new Map(
+      Array.from(input.store.translationPriorities.entries()).filter(([bubbleKey]) => {
+        if (!bubbleKey.startsWith(`${target.id}:`)) return true
+        const language = bubbleKey.slice(target.id.length + 1)
+        return nextTargetLanguageSet.has(language)
+      }),
+    )
+    : input.store.translationPriorities
+  const baseTarget: Utterance = normalizedDetectedSourceLanguage
+    ? {
+      ...target,
+      originalText: nextOriginalText,
+      originalLang: normalizedDetectedSourceLanguage,
+      targetLanguages: nextTargetLanguages,
+      translations: baseTranslations,
+      translationFinalized: baseTranslationFinalized,
+    }
+    : target
+  const nextTranslations = normalizedDetectedSourceLanguage
+    ? filterTranslationsToTargetLanguages(
+      stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage),
+      baseTarget.targetLanguages,
+    )
+    : input.translations
   const merged = mergeTranslationsByPriority({
-    utteranceId: target.id,
-    currentTranslations: target.translations,
-    currentTranslationFinalized: target.translationFinalized,
-    currentPriorities: input.store.translationPriorities,
-    nextTranslations: input.translations,
+    utteranceId: baseTarget.id,
+    currentTranslations: baseTarget.translations,
+    currentTranslationFinalized: baseTarget.translationFinalized,
+    currentPriorities: basePriorities,
+    nextTranslations,
     nextPriority: input.priority,
     markFinalized: input.markFinalized,
   })
 
   const settledState = input.markFinalized
     ? pruneUnresolvedTranslationTargets({
-      targetLanguages: target.targetLanguages,
+      targetLanguages: baseTarget.targetLanguages,
       translations: merged.translations,
       translationFinalized: merged.translationFinalized,
     })
     : null
 
   const nextTarget: Utterance = {
-    ...target,
-    targetLanguages: settledState?.targetLanguages || target.targetLanguages,
+    ...baseTarget,
+    targetLanguages: settledState?.targetLanguages || baseTarget.targetLanguages,
     translations: settledState?.translations || merged.translations,
     translationFinalized: settledState?.translationFinalized || merged.translationFinalized,
   }
@@ -1172,6 +1228,7 @@ export function applyTranslationToUtteranceStoreState(input: {
 
 interface TranslateApiResult {
   translations: Record<string, string>
+  sourceLanguage?: string
   ttsLanguage?: string
   ttsAudioBase64?: string
   ttsAudioMime?: string
@@ -1791,11 +1848,20 @@ export default function useRealtimeSTT({
       totalDurationMs?: number
     },
   ): Promise<TranslateApiResult> => {
-    const langs = targetLanguages.filter(l => l !== sourceLanguage)
+    const apiPath = buildClientApiPath('/translate/finalize')
+    const shouldRedetectSourceLanguage = (
+      options?.isFinal === true
+      && /^\/api\/(?:ios|android)\/v1\.0\.4\/translate\/finalize\/?$/.test(apiPath)
+    )
+    const langs = shouldRedetectSourceLanguage
+      ? targetLanguages
+      : targetLanguages.filter(l => l !== sourceLanguage)
     if (!text.trim() || langs.length === 0) return { translations: {} }
     const recentTurns = buildRecentTurnContextPayload(options?.excludeUtteranceId)
     try {
-      const body: Record<string, unknown> = { text, sourceLanguage, targetLanguages: langs }
+      const body: Record<string, unknown> = shouldRedetectSourceLanguage
+        ? { text, targetLanguages: langs }
+        : { text, sourceLanguage, targetLanguages: langs }
       if (recentTurns.length > 0) {
         body.recentTurns = recentTurns
         body.immediatePreviousTurn = recentTurns[recentTurns.length - 1]
@@ -1833,6 +1899,7 @@ export default function useRealtimeSTT({
       const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       return {
         translations: (data.translations || {}) as Record<string, string>,
+        sourceLanguage: typeof data.sourceLanguage === 'string' ? data.sourceLanguage : undefined,
         ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,
         ttsAudioBase64,
         ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
@@ -1948,6 +2015,11 @@ export default function useRealtimeSTT({
     priority: TranslationPriority,
     markFinalized: boolean,
     fallbackMatch?: TranslationApplyFallbackMatch,
+    options?: {
+      detectedSourceLanguage?: string
+      selectedLanguages?: string[]
+      sourceText?: string
+    },
   ) => {
     setUtteranceStore((prev) => applyTranslationToUtteranceStoreState({
       store: prev,
@@ -1956,6 +2028,9 @@ export default function useRealtimeSTT({
       priority,
       markFinalized,
       fallbackMatch,
+      detectedSourceLanguage: options?.detectedSourceLanguage,
+      selectedLanguages: options?.selectedLanguages,
+      sourceText: options?.sourceText,
     }))
   }, [])
 
@@ -2153,6 +2228,11 @@ export default function useRealtimeSTT({
             sourceText: text,
             sourceLanguage: lang,
           },
+          {
+            detectedSourceLanguage: result.sourceLanguage,
+            selectedLanguages: targetLanguages,
+            sourceText: text,
+          },
         )
         handleInlineTtsFromTranslate(utteranceId, result, {
           requestedTtsLanguage: ttsTargetLang,
@@ -2164,7 +2244,7 @@ export default function useRealtimeSTT({
       void logClientEvent({
         eventType: 'stt_turn_finalized',
         clientMessageId: utteranceId,
-        sourceLanguage: lang,
+        sourceLanguage: result.sourceLanguage || lang,
         sourceText: text,
         translations: result.translations,
         sttDurationMs: options?.sttDurationMs,

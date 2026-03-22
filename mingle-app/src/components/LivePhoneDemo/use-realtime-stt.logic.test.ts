@@ -584,6 +584,58 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('reconciles finalized utterance source language from the final translation response', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-real',
+        originalText: '안녕하세요',
+        originalLang: 'ja',
+        targetLanguages: ['en', 'ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+        translationFinalized: {
+          ko: false,
+        },
+        createdAtMs: 1700000000004,
+      },
+    ])
+
+    const updated = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'u-real',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+        en: 'Hello',
+      },
+      priority: { kind: 'final', seq: 10 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      sourceText: '안녕하세요',
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-real',
+      originalText: '안녕하세요',
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+      },
+      translationFinalized: {
+        en: true,
+        ja: true,
+      },
+      createdAtMs: 1700000000004,
+    })
+    expect(updated.translationPriorities.get('u-real:en')).toEqual({ kind: 'final', seq: 10 })
+    expect(updated.translationPriorities.get('u-real:ja')).toEqual({ kind: 'final', seq: 10 })
+    expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
+  })
+
   it('builds stable translate request signatures for duplicate-request dedupe', () => {
     expect(buildLiveTranslateRequestSignature({
       utteranceId: 12,
