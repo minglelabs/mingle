@@ -347,6 +347,11 @@ interface PendingUtteranceTranslationUpdate {
   translations: Record<string, string>
   translationFinalized: Record<string, boolean>
   priorities: Map<string, TranslationPriority>
+  detectedSourceLanguage?: string
+  sourceLanguagesMixed?: boolean
+  sourceTextHasForeignScript?: boolean
+  selectedLanguages?: string[]
+  sourceText?: string
 }
 
 export interface UtteranceStoreState {
@@ -956,21 +961,105 @@ function mergePendingTranslationUpdateIntoUtterance(
   }
 }
 
+function reconcileUtteranceTranslationBase(input: {
+  utterance: Utterance
+  currentPriorities: Map<string, TranslationPriority>
+  detectedSourceLanguage?: string
+  sourceLanguagesMixed?: boolean
+  sourceTextHasForeignScript?: boolean
+  selectedLanguages?: string[]
+  sourceText?: string
+}): { utterance: Utterance, priorities: Map<string, TranslationPriority> } {
+  const normalizedDetectedSourceLanguage = normalizeLangForCompare(input.detectedSourceLanguage || '')
+  const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
+    sourceLanguagesMixed: input.sourceLanguagesMixed,
+    sourceTextHasForeignScript: input.sourceTextHasForeignScript,
+  })
+  if (!normalizedDetectedSourceLanguage) {
+    return {
+      utterance: input.utterance,
+      priorities: input.currentPriorities,
+    }
+  }
+
+  const selectedLanguages = (
+    input.selectedLanguages && input.selectedLanguages.length > 0
+      ? input.selectedLanguages
+      : [input.utterance.originalLang, ...input.utterance.targetLanguages]
+  )
+  const nextTargetLanguages = buildTurnTargetLanguagesSnapshot(
+    selectedLanguages,
+    normalizedDetectedSourceLanguage,
+    {
+      includeSourceLanguage: keepSourceLanguageBubble,
+    },
+  )
+  const nextTargetLanguageSet = new Set(nextTargetLanguages)
+  const nextOriginalText = input.sourceText
+    ? (normalizeSttTurnText(input.sourceText) || input.utterance.originalText)
+    : input.utterance.originalText
+  const baseTranslations = filterTranslationsToTargetLanguages(
+    stripSourceLanguageFromTranslations(input.utterance.translations, normalizedDetectedSourceLanguage, {
+      keepSourceLanguage: keepSourceLanguageBubble,
+    }),
+    nextTargetLanguages,
+  )
+  const baseTranslationFinalized = Object.fromEntries(
+    Object.entries(input.utterance.translationFinalized || {})
+      .filter(([language, isFinalized]) => nextTargetLanguageSet.has(language) && isFinalized === true),
+  )
+  const nextPriorities = new Map(
+    Array.from(input.currentPriorities.entries()).filter(([bubbleKey]) => {
+      if (!bubbleKey.startsWith(`${input.utterance.id}:`)) return true
+      const language = bubbleKey.slice(input.utterance.id.length + 1)
+      return nextTargetLanguageSet.has(language)
+    }),
+  )
+  const nextUtterance: Utterance = { ...input.utterance }
+  delete nextUtterance.sourceLanguagesMixed
+  delete nextUtterance.sourceTextHasForeignScript
+  nextUtterance.originalText = nextOriginalText
+  nextUtterance.originalLang = normalizedDetectedSourceLanguage
+  if (input.sourceLanguagesMixed === true) {
+    nextUtterance.sourceLanguagesMixed = true
+  }
+  if (input.sourceTextHasForeignScript === true) {
+    nextUtterance.sourceTextHasForeignScript = true
+  }
+  nextUtterance.targetLanguages = nextTargetLanguages
+  nextUtterance.translations = baseTranslations
+  nextUtterance.translationFinalized = baseTranslationFinalized
+
+  return {
+    utterance: nextUtterance,
+    priorities: nextPriorities,
+  }
+}
+
 function applyPendingTranslationUpdateToUtteranceState(input: {
   utterance: Utterance
   currentPriorities: Map<string, TranslationPriority>
   pendingUpdate: PendingUtteranceTranslationUpdate
 }): { utterance: Utterance, priorities: Map<string, TranslationPriority> } {
-  let nextTranslations = { ...input.utterance.translations }
-  let nextTranslationFinalized = { ...(input.utterance.translationFinalized || {}) }
-  let nextPriorities = new Map(input.currentPriorities)
+  const reconciled = reconcileUtteranceTranslationBase({
+    utterance: input.utterance,
+    currentPriorities: input.currentPriorities,
+    detectedSourceLanguage: input.pendingUpdate.detectedSourceLanguage,
+    sourceLanguagesMixed: input.pendingUpdate.sourceLanguagesMixed,
+    sourceTextHasForeignScript: input.pendingUpdate.sourceTextHasForeignScript,
+    selectedLanguages: input.pendingUpdate.selectedLanguages,
+    sourceText: input.pendingUpdate.sourceText,
+  })
+  let nextTranslations = { ...reconciled.utterance.translations }
+  let nextTranslationFinalized = { ...(reconciled.utterance.translationFinalized || {}) }
+  let nextPriorities = new Map(reconciled.priorities)
 
   for (const [language, translatedText] of Object.entries(input.pendingUpdate.translations)) {
-    const priority = input.pendingUpdate.priorities.get(`${input.utterance.id}:${language}`)
+    const priority = input.pendingUpdate.priorities.get(`${reconciled.utterance.id}:${language}`)
     if (!priority) continue
 
     const merged = mergeTranslationsByPriority({
-      utteranceId: input.utterance.id,
+      utteranceId: reconciled.utterance.id,
       currentTranslations: nextTranslations,
       currentTranslationFinalized: nextTranslationFinalized,
       currentPriorities: nextPriorities,
@@ -985,14 +1074,14 @@ function applyPendingTranslationUpdateToUtteranceState(input: {
   }
 
   const settledState = pruneUnresolvedTranslationTargets({
-    targetLanguages: input.utterance.targetLanguages,
+    targetLanguages: reconciled.utterance.targetLanguages,
     translations: nextTranslations,
     translationFinalized: nextTranslationFinalized,
   })
 
   return {
     utterance: {
-      ...input.utterance,
+      ...reconciled.utterance,
       targetLanguages: settledState.targetLanguages,
       translations: settledState.translations,
       translationFinalized: settledState.translationFinalized,
@@ -1143,7 +1232,14 @@ export function applyTranslationToUtteranceStoreState(input: {
     })
 
     const nextPendingTranslationUpdates = new Map(input.store.pendingTranslationUpdates)
-    nextPendingTranslationUpdates.set(input.utteranceId, mergedPending)
+    nextPendingTranslationUpdates.set(input.utteranceId, {
+      ...mergedPending,
+      detectedSourceLanguage: input.detectedSourceLanguage ?? existingPending?.detectedSourceLanguage,
+      sourceLanguagesMixed: input.sourceLanguagesMixed ?? existingPending?.sourceLanguagesMixed,
+      sourceTextHasForeignScript: input.sourceTextHasForeignScript ?? existingPending?.sourceTextHasForeignScript,
+      selectedLanguages: input.selectedLanguages ?? existingPending?.selectedLanguages,
+      sourceText: input.sourceText ?? existingPending?.sourceText,
+    })
 
     return {
       ...input.store,
@@ -1152,58 +1248,16 @@ export function applyTranslationToUtteranceStoreState(input: {
   }
 
   const target = input.store.utterances[idx]
-  const selectedLanguages = (
-    input.selectedLanguages && input.selectedLanguages.length > 0
-      ? input.selectedLanguages
-      : [target.originalLang, ...target.targetLanguages]
-  )
-  const nextTargetLanguages = normalizedDetectedSourceLanguage
-    ? buildTurnTargetLanguagesSnapshot(selectedLanguages, normalizedDetectedSourceLanguage, {
-      includeSourceLanguage: keepSourceLanguageBubble,
-    })
-    : target.targetLanguages
-  const nextTargetLanguageSet = new Set(nextTargetLanguages)
-  const nextOriginalText = normalizedDetectedSourceLanguage && input.sourceText
-    ? (normalizeSttTurnText(input.sourceText) || target.originalText)
-    : target.originalText
-  const baseTranslations = normalizedDetectedSourceLanguage
-    ? filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(target.translations, normalizedDetectedSourceLanguage, {
-        keepSourceLanguage: keepSourceLanguageBubble,
-      }),
-      nextTargetLanguages,
-    )
-    : target.translations
-  const baseTranslationFinalized = normalizedDetectedSourceLanguage
-    ? Object.fromEntries(
-      Object.entries(target.translationFinalized || {})
-        .filter(([language, isFinalized]) => nextTargetLanguageSet.has(language) && isFinalized === true),
-    )
-    : target.translationFinalized
-  const basePriorities = normalizedDetectedSourceLanguage
-    ? new Map(
-      Array.from(input.store.translationPriorities.entries()).filter(([bubbleKey]) => {
-        if (!bubbleKey.startsWith(`${target.id}:`)) return true
-        const language = bubbleKey.slice(target.id.length + 1)
-        return nextTargetLanguageSet.has(language)
-      }),
-    )
-    : input.store.translationPriorities
-  const targetWithoutSourceLanguagesMixed: Utterance = { ...target }
-  delete targetWithoutSourceLanguagesMixed.sourceLanguagesMixed
-  delete targetWithoutSourceLanguagesMixed.sourceTextHasForeignScript
-  const baseTarget: Utterance = normalizedDetectedSourceLanguage
-    ? {
-      ...targetWithoutSourceLanguagesMixed,
-      originalText: nextOriginalText,
-      originalLang: normalizedDetectedSourceLanguage,
-      ...(input.sourceLanguagesMixed === true ? { sourceLanguagesMixed: true } : {}),
-      ...(input.sourceTextHasForeignScript === true ? { sourceTextHasForeignScript: true } : {}),
-      targetLanguages: nextTargetLanguages,
-      translations: baseTranslations,
-      translationFinalized: baseTranslationFinalized,
-    }
-    : target
+  const reconciled = reconcileUtteranceTranslationBase({
+    utterance: target,
+    currentPriorities: input.store.translationPriorities,
+    detectedSourceLanguage: input.detectedSourceLanguage,
+    sourceLanguagesMixed: input.sourceLanguagesMixed,
+    sourceTextHasForeignScript: input.sourceTextHasForeignScript,
+    selectedLanguages: input.selectedLanguages,
+    sourceText: input.sourceText,
+  })
+  const baseTarget = reconciled.utterance
   const nextTranslations = normalizedDetectedSourceLanguage
     ? filterTranslationsToTargetLanguages(
       stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
@@ -1216,7 +1270,7 @@ export function applyTranslationToUtteranceStoreState(input: {
     utteranceId: baseTarget.id,
     currentTranslations: baseTarget.translations,
     currentTranslationFinalized: baseTarget.translationFinalized,
-    currentPriorities: basePriorities,
+    currentPriorities: reconciled.priorities,
     nextTranslations,
     nextPriority: input.priority,
     markFinalized: input.markFinalized,

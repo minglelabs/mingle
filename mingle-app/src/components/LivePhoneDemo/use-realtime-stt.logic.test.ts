@@ -405,6 +405,106 @@ describe('use-realtime-stt pure logic', () => {
     expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
   })
 
+  it('preserves source-language correction metadata when a finalized translation is queued before append', () => {
+    const queued = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-race-corrected',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+        en: 'Hello',
+      },
+      priority: { kind: 'final', seq: 8 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      sourceText: '안녕하세요',
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(queued, {
+      id: 'u-race-corrected',
+      originalText: '안녕하세요',
+      originalLang: 'ja',
+      targetLanguages: ['en', 'ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000003,
+    })
+
+    expect(appended.pendingTranslationUpdates.size).toBe(0)
+    expect(appended.utterances).toEqual([
+      {
+        id: 'u-race-corrected',
+        originalText: '안녕하세요',
+        originalLang: 'ko',
+        targetLanguages: ['en', 'ja'],
+        translations: {
+          en: 'Hello',
+          ja: 'こんにちは',
+        },
+        translationFinalized: {
+          en: true,
+          ja: true,
+        },
+        createdAtMs: 1700000000003,
+      },
+    ])
+    expect(appended.translationPriorities.get('u-race-corrected:en')).toEqual({ kind: 'final', seq: 8 })
+    expect(appended.translationPriorities.get('u-race-corrected:ja')).toEqual({ kind: 'final', seq: 8 })
+    expect(appended.translationPriorities.has('u-race-corrected:ko')).toBe(false)
+  })
+
+  it('preserves source bubble flags when a mixed finalized translation is queued before append', () => {
+    const mixedSourceText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
+    const queued = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-race-mixed',
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      priority: { kind: 'final', seq: 9 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      sourceLanguagesMixed: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: mixedSourceText,
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(queued, {
+      id: 'u-race-mixed',
+      originalText: mixedSourceText,
+      originalLang: 'ja',
+      targetLanguages: ['ko', 'en'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000004,
+    })
+
+    expect(appended.pendingTranslationUpdates.size).toBe(0)
+    expect(appended.utterances).toEqual([
+      {
+        id: 'u-race-mixed',
+        originalText: mixedSourceText,
+        originalLang: 'ko',
+        sourceLanguagesMixed: true,
+        targetLanguages: ['ko', 'ja', 'en'],
+        translations: {
+          ko: mixedSourceText,
+          ja: 'イザナと日本語として認識されるソニオックスだよ',
+          en: 'Soniox keeps recognizing Izanato as Japanese.',
+        },
+        translationFinalized: {
+          ko: true,
+          ja: true,
+          en: true,
+        },
+        createdAtMs: 1700000000004,
+      },
+    ])
+  })
+
   it('inserts a later-arriving finalized utterance back into chronological order', () => {
     const appended = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([
       {
