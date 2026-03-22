@@ -985,7 +985,7 @@ function reconcileUtteranceTranslationBase(input: {
   const selectedLanguages = (
     input.selectedLanguages && input.selectedLanguages.length > 0
       ? input.selectedLanguages
-      : [input.utterance.originalLang, ...input.utterance.targetLanguages]
+      : [input.utterance.originalLang, ...(input.utterance.targetLanguages || [])]
   )
   const nextTargetLanguages = buildTurnTargetLanguagesSnapshot(
     selectedLanguages,
@@ -1263,7 +1263,7 @@ export function applyTranslationToUtteranceStoreState(input: {
       stripSourceLanguageFromTranslations(input.translations, normalizedDetectedSourceLanguage, {
         keepSourceLanguage: keepSourceLanguageBubble,
       }),
-      baseTarget.targetLanguages,
+      baseTarget.targetLanguages || [],
     )
     : input.translations
   const merged = mergeTranslationsByPriority({

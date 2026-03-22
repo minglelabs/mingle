@@ -737,6 +737,48 @@ describe('use-realtime-stt pure logic', () => {
     expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
   })
 
+  it('reconciles source language safely when a stored utterance has no targetLanguages array', () => {
+    const updated = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([
+        {
+          id: 'u-legacy',
+          originalText: '안녕하세요',
+          originalLang: 'ja',
+          translations: {},
+          translationFinalized: {},
+          createdAtMs: 1700000000004,
+        },
+      ]),
+      utteranceId: 'u-legacy',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+        en: 'Hello',
+      },
+      priority: { kind: 'final', seq: 11 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      sourceText: '안녕하세요',
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-legacy',
+      originalText: '안녕하세요',
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+      },
+      translationFinalized: {
+        en: true,
+        ja: true,
+      },
+      createdAtMs: 1700000000004,
+    })
+  })
+
   it('keeps the source-language bubble when the finalized utterance mixes languages', () => {
     const mixedSourceText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
     const updated = applyTranslationToUtteranceStoreState({
