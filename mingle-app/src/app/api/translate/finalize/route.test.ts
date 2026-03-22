@@ -489,7 +489,16 @@ describe('/api/translate/finalize route', () => {
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
       expect(modelConfig.systemInstruction).toContain(
+        'Determine sourceLanguage from the entire utterance, not just the prefix or first token.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'Do not let a short leading fragment, named entity, or quoted word dominate the source-language decision.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'The value of the field named by sourceLanguage must exactly equal the original current text verbatim.',
       )
       expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
         'sourceLanguage',
@@ -521,6 +530,46 @@ describe('/api/translate/finalize route', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleInfoSpy.mockRestore()
+    }
+  })
+
+  it('rejects redetected source language responses that do not echo the original text in the declared source field', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
+        usageMetadata: {},
+      },
+    })
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: '先に14年経ったことを',
+        targetLanguages: ['ko', 'ja', 'en'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(502)
+      expect(json).toEqual({ error: 'empty_translation_response' })
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] gemini_invalid_source_language_contract',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '"declaredSourceLanguage":"ko"',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] gemini_missing_source_language',
+      ))
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleErrorSpy.mockRestore()
     }
   })
 

@@ -291,7 +291,11 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'Determine the actual source language from the current text itself.',
         'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
         'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
+        'Determine sourceLanguage from the entire utterance, not just the prefix or first token.',
+        'When the utterance is mixed, choose the language that best explains most of the full sentence.',
+        'Do not let a short leading fragment, named entity, or quoted word dominate the source-language decision.',
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
+        'The value of the field named by sourceLanguage must exactly equal the original current text verbatim.',
         'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
         'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
         'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
@@ -381,6 +385,16 @@ function inferDetectedSourceLanguageFromEcho(
   }
 
   return ''
+}
+
+function validateDeclaredSourceLanguage(args: {
+  text: string
+  declaredSourceLanguage: string
+  translations: Record<string, string>
+}): boolean {
+  const declaredSourceLanguage = normalizeLang(args.declaredSourceLanguage)
+  if (!declaredSourceLanguage) return false
+  return (args.translations[declaredSourceLanguage] || '').trim() === args.text.trim()
 }
 
 async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEngineResult | null> {
@@ -484,11 +498,28 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   }
 
   const translations = parseTranslations(content)
-  const detectedSourceLanguage = ctx.shouldRedetectSourceLanguage
-    ? parseDetectedSourceLanguage(content) || inferDetectedSourceLanguageFromEcho(
+  const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? parseDetectedSourceLanguage(content)
+    : ''
+  const declaredSourceLanguageIsValid = ctx.shouldRedetectSourceLanguage
+    ? validateDeclaredSourceLanguage({
+      text: ctx.text,
+      declaredSourceLanguage,
+      translations,
+    })
+    : false
+  const echoDetectedSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? inferDetectedSourceLanguageFromEcho(
       ctx.text,
       ctx.targetLanguages,
       translations,
+    )
+    : ''
+  const detectedSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? (
+      declaredSourceLanguageIsValid
+        ? declaredSourceLanguage
+        : echoDetectedSourceLanguage
     )
     : ''
   if (Object.keys(translations).length === 0) {
@@ -506,12 +537,23 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     })
     return null
   }
+  if (ctx.shouldRedetectSourceLanguage && declaredSourceLanguage && !declaredSourceLanguageIsValid) {
+    logTranslateFinalizeError('gemini_invalid_source_language_contract', {
+      ...buildTranslateFinalizeLogContext(ctx),
+      declaredSourceLanguage,
+      declaredSourceValue: translations[declaredSourceLanguage] || '',
+      echoDetectedSourceLanguage: echoDetectedSourceLanguage || null,
+      responseTextLength: content.length,
+      responseTextPreview: content.slice(0, 2000),
+    })
+  }
   if (ctx.shouldRedetectSourceLanguage && !detectedSourceLanguage) {
     logTranslateFinalizeError('gemini_missing_source_language', {
       ...buildTranslateFinalizeLogContext(ctx),
       responseTextLength: content.length,
       responseTextPreview: content.slice(0, 2000),
       parsedLanguages: Object.keys(translations),
+      declaredSourceLanguage: declaredSourceLanguage || null,
     })
     return null
   }
