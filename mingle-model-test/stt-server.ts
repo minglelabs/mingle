@@ -43,6 +43,7 @@ interface ClientConfig {
     languages: string[];
     stt_model: SttModel;
     translate_model?: TranslateModel;
+    translation_enabled?: boolean;
     lang_hints_strict?: boolean;
 }
 
@@ -171,6 +172,7 @@ wss.on('connection', (clientWs) => {
     let currentSampleRate = 16000;
     let selectedLanguages: string[] = [];
     let translateModel: TranslateModel = 'claude-haiku-4-5';
+    let translationEnabled = true;
 
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
@@ -288,7 +290,7 @@ wss.on('connection', (clientWs) => {
                     clientWs.send(raw);
 
                     // Gladia-STT (번역 미사용) 모드에서 GPT 번역 적용
-                    if (!enableTranslation && selectedLanguages.length > 0) {
+                    if (!enableTranslation && translationEnabled && selectedLanguages.length > 0) {
                         try {
                             const msg = JSON.parse(raw);
                             if (msg.type === 'transcript' && msg.data?.is_final && msg.data?.utterance?.text) {
@@ -656,7 +658,7 @@ wss.on('connection', (clientWs) => {
 
         try {
             const audioFormat = resolveElevenLabsAudioFormat(config.sample_rate);
-            let detectedLanguage = config.languages[0] || 'en';
+            let detectedLanguage = 'unknown';
             let lastCommittedText = '';
             let readySent = false;
 
@@ -688,8 +690,13 @@ wss.on('connection', (clientWs) => {
                 if (!isClientConnected) return;
 
                 try {
-                    const msg = JSON.parse(event.data.toString()) as Record<string, unknown>;
+                    const raw = event.data.toString();
+                    console.log(`[ElevenLabs] inbound ${raw}`);
+                    const msg = JSON.parse(raw) as Record<string, unknown>;
                     const messageType = typeof msg.message_type === 'string' ? msg.message_type : '';
+                    const messageLanguageCode = typeof msg.language_code === 'string'
+                        ? msg.language_code.trim()
+                        : '';
 
                     if (messageType === 'session_started') {
                         if (!readySent) {
@@ -722,8 +729,8 @@ wss.on('connection', (clientWs) => {
                         if (text === lastCommittedText) return;
                         lastCommittedText = text;
 
-                        if (typeof msg.language_code === 'string' && msg.language_code.trim()) {
-                            detectedLanguage = msg.language_code.trim();
+                        if (messageType === 'committed_transcript_with_timestamps' && messageLanguageCode) {
+                            detectedLanguage = messageLanguageCode;
                         }
 
                         clientWs.send(JSON.stringify({
@@ -737,7 +744,7 @@ wss.on('connection', (clientWs) => {
                             },
                         }));
 
-                        if (selectedLanguages.length > 0) {
+                        if (translationEnabled && selectedLanguages.length > 0) {
                             translateText(text, detectedLanguage, selectedLanguages, clientWs);
                         }
                         return;
@@ -1070,6 +1077,7 @@ wss.on('connection', (clientWs) => {
     };
 
     const translateText = async (text: string, sourceLang: string, targetLangs: string[], ws: WebSocket, isPartial = false) => {
+        if (!translationEnabled) return;
         const langs = targetLangs.filter(l => l !== sourceLang);
         if (langs.length === 0 || !text.trim()) return;
 
@@ -1145,6 +1153,7 @@ wss.on('connection', (clientWs) => {
             currentSampleRate = data.sample_rate;
             selectedLanguages = data.languages;
             translateModel = data.translate_model || 'claude-haiku-4-5';
+            translationEnabled = data.translation_enabled !== false;
             
             if (currentModel === 'deepgram') {
                 startDeepgramConnection(data as ClientConfig);
@@ -1161,7 +1170,7 @@ wss.on('connection', (clientWs) => {
             } else if (currentModel === 'gladia-stt') {
                 startGladiaConnection(data as ClientConfig, false);
             } else {
-                startGladiaConnection(data as ClientConfig, true);
+                startGladiaConnection(data as ClientConfig, translationEnabled);
             }
         } else if (currentModel === 'speechmatics' && speechmaticsClient?.socketState === 'open') {
             if (data.type === 'audio_chunk' && data.data?.chunk) {

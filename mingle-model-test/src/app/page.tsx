@@ -76,6 +76,7 @@ export default function Home() {
   // selectedLanguages is derived from individual lang selectors
   const selectedLanguages = [lang1, lang2, lang3].filter(Boolean);
   const [sttModel, setSttModel] = useState<SttModel>('soniox');
+  const [translationEnabled, setTranslationEnabled] = useState(true);
   const [translateModel, setTranslateModel] = useState<'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview'>('gemini-2.5-flash-lite');
   const [langHintsStrict, setLangHintsStrict] = useState(true);
   const [sessionUsageSec, setSessionUsageSec] = useState(0)
@@ -199,6 +200,7 @@ export default function Home() {
           sample_rate: context.sampleRate,
           languages: languages,
           stt_model: sttModel,
+          translation_enabled: translationEnabled,
           translate_model: translateModel,
           lang_hints_strict: langHintsStrict
         }
@@ -394,8 +396,25 @@ export default function Home() {
             </label>
           )}
         </div>
+        <div className="mb-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={translationEnabled}
+              onChange={(e) => setTranslationEnabled(e.target.checked)}
+              disabled={isActive}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            번역 사용
+          </label>
+          {!translationEnabled && (
+            <p className="mt-1 text-xs text-amber-600">
+              번역 API 호출을 모두 끄고 STT만 테스트합니다.
+            </p>
+          )}
+        </div>
         {/* 번역 모델 선택 (Gladia 자체 번역 제외) */}
-        {sttModel !== 'gladia' && (
+        {translationEnabled && sttModel !== 'gladia' && (
           <div className="mb-4">
             <label htmlFor="translateModel" className="block text-sm font-medium text-gray-700">번역 모델</label>
             <select
