@@ -1237,13 +1237,11 @@ interface TranslateApiResult {
   model?: string
 }
 
-export function resolveFinalizedTtsLanguage(input: {
-  sourceLanguage?: string
-  selectedLanguages?: string[]
-  translations?: Record<string, string>
-}): string {
-  const sourceLanguage = normalizeLangForCompare(input.sourceLanguage || '')
-  const translations = input.translations || {}
+function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
+  Utterance,
+  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized'
+>): string[] {
+  const sourceLanguage = normalizeLangForCompare(utterance.originalLang)
   const candidates: string[] = []
   const seen = new Set<string>()
 
@@ -1251,29 +1249,30 @@ export function resolveFinalizedTtsLanguage(input: {
     const language = (rawLanguage || '').trim()
     if (!language) return
     const key = normalizeLangForCompare(language) || language.toLowerCase()
+    if (sourceLanguage && key === sourceLanguage) return
     if (seen.has(key)) return
     seen.add(key)
     candidates.push(language)
   }
 
-  for (const language of input.selectedLanguages || []) pushCandidate(language)
-  for (const language of Object.keys(translations)) pushCandidate(language)
+  for (const language of utterance.targetLanguages || []) pushCandidate(language)
+  for (const language of Object.keys(utterance.translations || {})) pushCandidate(language)
+  for (const language of Object.keys(utterance.translationFinalized || {})) pushCandidate(language)
 
-  for (const language of candidates) {
-    if (sourceLanguage && normalizeLangForCompare(language) === sourceLanguage) continue
+  return candidates
+}
 
-    const directText = (translations[language] || '').trim()
-    if (directText) return language
-
-    const normalizedLanguage = normalizeLangForCompare(language)
-    if (!normalizedLanguage) continue
-    for (const [candidateLanguage, candidateText] of Object.entries(translations)) {
-      if (normalizeLangForCompare(candidateLanguage) !== normalizedLanguage) continue
-      if (candidateText.trim()) return candidateLanguage
-    }
+export function resolveRenderedTtsCandidateFromUtterance(utterance: Pick<
+  Utterance,
+  'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized'
+>): { language: string, text: string } | null {
+  for (const language of buildRenderableTargetLanguagesForUtterance(utterance)) {
+    const text = (utterance.translations[language] || '').trim()
+    if (!text) continue
+    return { language, text }
   }
 
-  return ''
+  return null
 }
 
 interface RecentTurnContextPayload {
@@ -1486,6 +1485,7 @@ export default function useRealtimeSTT({
   const stopFinalizeDedupRef = useRef<{ utteranceId: string, expiresAt: number }>({ utteranceId: '', expiresAt: 0 })
 
   const finalizedTtsSignatureRef = useRef<Map<string, string>>(new Map())
+  const pendingFinalizedTtsResultsRef = useRef<Map<string, TranslateApiResult>>(new Map())
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
@@ -2018,20 +2018,17 @@ export default function useRealtimeSTT({
     utteranceId: string,
     result: TranslateApiResult,
     options?: {
-      selectedLanguages?: string[]
+      renderedLanguage?: string
+      renderedText?: string
     },
   ) => {
     if (!enableTtsRef.current) return
-    const ttsTargetLang = resolveFinalizedTtsLanguage({
-      sourceLanguage: result.sourceLanguage,
-      selectedLanguages: options?.selectedLanguages,
-      translations: result.translations,
-    })
+    const ttsTargetLang = (options?.renderedLanguage || '').trim()
     if (!ttsTargetLang) {
       onTtsCanceledRef.current?.(utteranceId)
       return
     }
-    const ttsText = (result.translations[ttsTargetLang] || '').trim()
+    const ttsText = (options?.renderedText || '').trim()
     if (!ttsText) {
       onTtsCanceledRef.current?.(utteranceId)
       return
@@ -2064,6 +2061,33 @@ export default function useRealtimeSTT({
       onTtsCanceledRef.current?.(utteranceId)
     })
   }, [synthesizeTtsViaApi])
+
+  useEffect(() => {
+    if (pendingFinalizedTtsResultsRef.current.size === 0) return
+
+    const consumedUtteranceIds: string[] = []
+    for (const [utteranceId, result] of pendingFinalizedTtsResultsRef.current.entries()) {
+      const utterance = utterances.find((item) => item.id === utteranceId)
+      if (!utterance) continue
+
+      const renderedTtsCandidate = resolveRenderedTtsCandidateFromUtterance(utterance)
+      if (!renderedTtsCandidate) {
+        onTtsCanceledRef.current?.(utteranceId)
+        consumedUtteranceIds.push(utteranceId)
+        continue
+      }
+
+      handleInlineTtsFromTranslate(utteranceId, result, {
+        renderedLanguage: renderedTtsCandidate.language,
+        renderedText: renderedTtsCandidate.text,
+      })
+      consumedUtteranceIds.push(utteranceId)
+    }
+
+    for (const utteranceId of consumedUtteranceIds) {
+      pendingFinalizedTtsResultsRef.current.delete(utteranceId)
+    }
+  }, [handleInlineTtsFromTranslate, utterances])
 
   const applyTranslationToUtterance = useCallback((
     utteranceId: string,
@@ -2274,7 +2298,8 @@ export default function useRealtimeSTT({
       excludeUtteranceId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
     }).then(result => {
-      if (Object.keys(result.translations).length > 0) {
+      const hasTranslations = Object.keys(result.translations).length > 0
+      if (hasTranslations) {
         applyTranslationToUtterance(
           utteranceId,
           result.translations,
@@ -2290,9 +2315,11 @@ export default function useRealtimeSTT({
             sourceText: text,
           },
         )
-        handleInlineTtsFromTranslate(utteranceId, result, {
-          selectedLanguages: targetLanguages,
-        })
+        if (enableTtsRef.current && ttsTargetLang) {
+          pendingFinalizedTtsResultsRef.current.set(utteranceId, result)
+        }
+      } else if (enableTtsRef.current && ttsTargetLang) {
+        onTtsCanceledRef.current?.(utteranceId)
       }
 
       const translationLatencyMs = Math.max(0, Date.now() - requestStartedAt)
@@ -2315,7 +2342,7 @@ export default function useRealtimeSTT({
         keepalive: true,
       })
     })
-  }, [applyTranslationToUtterance, getCurrentTargetLanguages, handleInlineTtsFromTranslate, logClientEvent, translateViaApi])
+  }, [applyTranslationToUtterance, getCurrentTargetLanguages, logClientEvent, translateViaApi])
 
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return

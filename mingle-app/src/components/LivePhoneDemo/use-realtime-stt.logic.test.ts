@@ -15,7 +15,7 @@ import {
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
   mergeDisplayUtterances,
-  resolveFinalizedTtsLanguage,
+  resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
@@ -637,36 +637,58 @@ describe('use-realtime-stt pure logic', () => {
     expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
   })
 
-  it('chooses the first finalized translation unless it matches the corrected source language', () => {
-    expect(resolveFinalizedTtsLanguage({
-      sourceLanguage: 'ko',
-      selectedLanguages: ['en', 'ja', 'ko'],
+  it('chooses the first rendered translation bubble for finalized TTS', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
       translations: {
         en: 'Hello',
         ja: 'こんにちは',
-        ko: '안녕하세요',
       },
-    })).toBe('en')
+      translationFinalized: {
+        en: true,
+        ja: true,
+      },
+    })).toEqual({
+      language: 'en',
+      text: 'Hello',
+    })
 
-    expect(resolveFinalizedTtsLanguage({
-      sourceLanguage: 'en',
-      selectedLanguages: ['en', 'ja', 'ko'],
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'en',
+      targetLanguages: ['ja', 'ko'],
       translations: {
-        en: 'Hello',
         ja: 'こんにちは',
         ko: '안녕하세요',
       },
-    })).toBe('ja')
+      translationFinalized: {
+        ja: true,
+        ko: true,
+      },
+    })).toEqual({
+      language: 'ja',
+      text: 'こんにちは',
+    })
   })
 
-  it('returns no finalized TTS language when the only translation matches the corrected source', () => {
-    expect(resolveFinalizedTtsLanguage({
-      sourceLanguage: 'ko',
-      selectedLanguages: ['ko'],
+  it('returns no rendered TTS candidate when no translation bubble is visible', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+    })).toBeNull()
+
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: ['en'],
       translations: {
         ko: '안녕하세요',
       },
-    })).toBe('')
+      translationFinalized: {
+        en: true,
+      },
+    })).toBeNull()
   })
 
   it('builds stable translate request signatures for duplicate-request dedupe', () => {
