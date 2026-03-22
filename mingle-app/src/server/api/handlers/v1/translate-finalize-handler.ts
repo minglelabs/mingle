@@ -170,6 +170,29 @@ function logParsedTranslations(event: string, payload: {
   console.info(`[translate/finalize] ${event}`, payload)
 }
 
+function formatPromptConsoleLog(payload: {
+  sourceLanguage: string
+  targetLanguages: string[]
+  shouldRedetectSourceLanguage: boolean
+  isFinal: boolean
+  text: string
+  systemPrompt: string
+  userPrompt: string
+}): string {
+  return [
+    '[translate/finalize] prompt',
+    `sourceLanguage: ${payload.sourceLanguage}`,
+    `targetLanguages: ${JSON.stringify(payload.targetLanguages)}`,
+    `shouldRedetectSourceLanguage: ${payload.shouldRedetectSourceLanguage}`,
+    `isFinal: ${payload.isFinal}`,
+    `text: ${JSON.stringify(payload.text)}`,
+    'systemPrompt:',
+    payload.systemPrompt,
+    'userPrompt:',
+    payload.userPrompt,
+  ].join('\n')
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -379,7 +402,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   }
   logTranslateFinalizeInfo('prompt', promptLogPayload)
   if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
-    console.info('[translate/finalize] prompt', promptLogPayload)
+    console.info(formatPromptConsoleLog(promptLogPayload))
   }
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
