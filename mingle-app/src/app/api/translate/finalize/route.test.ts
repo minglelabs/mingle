@@ -496,7 +496,10 @@ describe('/api/translate/finalize route', () => {
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
       expect(modelConfig.systemInstruction).toContain(
-        'Treat the provided sourceLanguage field as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
+        'Check whether the provided sourceLanguage matches the current text.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'If the provided sourceLanguage does not seem correct, replace it with the source language that best matches the current text.',
       )
       expect(modelConfig.systemInstruction).toContain(
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main sentence body and predicate are Korean even though it begins with a short Japanese fragment. In this kind of case, sourceLanguagesMixed should be true and sourceTextHasForeignScript should also be true, because the utterance contains substantive Japanese script inside an otherwise Korean sentence.',
