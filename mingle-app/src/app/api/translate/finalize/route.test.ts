@@ -533,15 +533,23 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
-  it('rejects redetected source language responses that do not echo the original text in the declared source field', async () => {
-    mockGenerateContent.mockResolvedValue({
-      response: {
-        text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
-        usageMetadata: {},
-      },
-    })
+  it('retries once when redetected source language does not echo the original text in the declared source field', async () => {
+    mockGenerateContent
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
+          usageMetadata: {},
+        },
+      })
+      .mockResolvedValueOnce({
+        response: {
+          text: () => '{\n  "sourceLanguage": "ja",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "先に14年経ったことを",\n  "en": "First, that 14 years have passed"\n}',
+          usageMetadata: {},
+        },
+      })
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
@@ -556,20 +564,29 @@ describe('/api/translate/finalize route', () => {
       }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
       const json = await res.json()
 
-      expect(res.status).toBe(502)
-      expect(json).toEqual({ error: 'empty_translation_response' })
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('ja')
+      expect(json.translations).toEqual({
+        ko: '먼저 14년이 지났다는 것을',
+        ja: '先に14年経ったことを',
+        en: 'First, that 14 years have passed',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(2)
       expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
         '[translate/finalize] gemini_invalid_source_language_contract',
       ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"declaredSourceLanguage":"ko"',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] gemini_missing_source_language',
-      ))
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[translate/finalize] source_language_retry_scheduled',
+        expect.objectContaining({
+          reason: 'invalid_source_language_contract',
+          attempt: 1,
+          retryAttempt: 2,
+        }),
+      )
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
+      consoleWarnSpy.mockRestore()
     }
   })
 
