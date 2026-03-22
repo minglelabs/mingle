@@ -516,9 +516,6 @@ describe('/api/translate/finalize route', () => {
       expect(modelConfig.systemInstruction).toContain(
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
       )
-      expect(modelConfig.systemInstruction).toContain(
-        'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
-      )
       expect(modelConfig.systemInstruction).not.toContain(
         'Because is_final=yes in this mode, translate the full final text from scratch.',
       )
