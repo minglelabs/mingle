@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
   normalizeLang,
+  normalizeSelectedLanguages,
   normalizeTargetLanguages,
   parseCurrentTurnPreviousState,
+  parseDetectedSourceLanguage,
   parseImmediatePreviousTurn,
   parseRecentTurns,
   parseTranslations,
@@ -25,6 +27,12 @@ describe('translate/finalize utils', () => {
       'en',
     )
     expect(normalized).toEqual(['ko', 'ja', 'tl', 'he', 'zh'])
+  })
+
+  it('normalizes selected languages without excluding any hint language', () => {
+    expect(normalizeSelectedLanguages(
+      ['ko', 'KO', 'en-US', 'ja', 'fil-PH', 'iw-IL', 'zh-TW', 123, '', 'en'] as unknown[],
+    )).toEqual(['ko', 'en', 'ja', 'tl', 'he', 'zh'])
   })
 
   it('parses translation JSON and strips marker tokens', () => {
@@ -55,6 +63,15 @@ describe('translate/finalize utils', () => {
       he: 'שלום',
       zh: '你好',
     })
+  })
+
+  it('parses detected source language from strict json payload', () => {
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"ko","ko":"안녕하세요","ja":"こんにちは"}'))
+      .toBe('ko')
+    expect(parseDetectedSourceLanguage('result: {"sourceLang":"en-US","en":"hello"} done'))
+      .toBe('en')
+    expect(parseDetectedSourceLanguage('{"sourceLanguage":"unknown-code"}'))
+      .toBe('')
   })
 
   it('keeps only latest 12 recent turns and removes source-language translations', () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn((config: unknown) => ({
+const mockGetGenerativeModel = vi.fn(() => ({
   generateContent: mockGenerateContent,
 }))
 const ensureTrackingContextMock = vi.fn()
@@ -36,6 +36,7 @@ vi.mock('@google/generative-ai', () => {
   return {
     GoogleGenerativeAI,
     SchemaType: {
+      BOOLEAN: 'BOOLEAN',
       STRING: 'STRING',
       OBJECT: 'OBJECT',
     },
@@ -445,6 +446,147 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('redetects final source language on v1.0.4 routes and returns all selected languages', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+        usageMetadata: {
+          promptTokenCount: 12,
+          candidatesTokenCount: 18,
+          totalTokenCount: 30,
+        },
+      },
+    })
+
+    const fetchMock = vi.fn()
+    const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: '안녕하세요',
+        sourceLanguage: 'ja',
+        targetLanguages: ['en', 'ja', 'ko'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('ko')
+      expect(json.sourceLanguagesMixed).toBe(false)
+      expect(json.sourceTextHasForeignScript).toBe(false)
+      expect(json.translations).toEqual({
+        en: 'Hello',
+        ja: 'こんにちは',
+        ko: '안녕하세요',
+      })
+
+      const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
+      expect(userPrompt).toContain('language_hints=en, ja, ko')
+      expect(userPrompt).toContain('sourceLanguage=ja')
+      expect(userPrompt).not.toContain('detect_source_language=')
+      expect(userPrompt).not.toContain('is_final=')
+      expect(userPrompt).not.toContain('If is_final=no')
+
+      const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
+        systemInstruction?: string
+        generationConfig?: { responseSchema?: { required?: string[] } }
+      }
+      expect(modelConfig.systemInstruction).toContain(
+        'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'Set sourceLanguagesMixed=true only when the current text itself meaningfully mixes two or more languages within the same utterance; otherwise set it to false. For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceLanguagesMixed should be true.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script for the chosen sourceLanguage; otherwise set it to false. Ignore spaces, punctuation, and digits.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'For example, in "そんな답답해서 죽겠다고 내가 진짜로.", sourceTextHasForeignScript should be true, and if sourceLanguage is Japanese, "료카이데스" should also set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script.',
+      )
+      expect(modelConfig.systemInstruction).not.toContain(
+        'Because is_final=yes in this mode, translate the full final text from scratch.',
+      )
+      expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
+        'sourceLanguage',
+        'sourceLanguagesMixed',
+        'sourceTextHasForeignScript',
+        'en',
+        'ja',
+        'ko',
+      ])
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[translate/finalize] prompt',
+        expect.objectContaining({
+          sourceLanguage: 'ja',
+          shouldRedetectSourceLanguage: true,
+          targetLanguages: ['en', 'ja', 'ko'],
+          systemPrompt: expect.not.stringContaining('\n'),
+          userPrompt: expect.not.stringContaining('\n'),
+        }),
+      )
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[translate/finalize] gemini_response',
+        expect.objectContaining({
+          shouldRedetectSourceLanguage: true,
+          provider: 'gemini',
+          model: 'gemini-2.5-flash-lite',
+          rawResponse: '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+          usage: {
+            input_tokens: 12,
+            output_tokens: 18,
+            total_tokens: 30,
+          },
+        }),
+      )
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleInfoSpy.mockRestore()
+    }
+  })
+
+  it('accepts declared redetected source language without retry when source text is lightly rewritten', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: '先に14年経ったことを',
+        targetLanguages: ['ko', 'ja', 'en'],
+        isFinal: true,
+      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.sourceLanguage).toBe('ko')
+      expect(json.translations).toEqual({
+        ko: '먼저 14년이 지났다는 것을',
+        ja: 'まず14年が経ったことを',
+        en: 'First, that 14 years have passed',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('builds compact prompt with previous state first and no recent-turns section', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
@@ -489,12 +631,12 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
 
     const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
-    const previousStateIndex = userPrompt.indexOf('Previous state of current turn:')
     const immediateIndex = userPrompt.indexOf('Immediate previous turn (~3s ago):')
 
-    expect(previousStateIndex).toBeGreaterThanOrEqual(0)
     expect(immediateIndex).toBeGreaterThanOrEqual(0)
-    expect(previousStateIndex).toBeLessThan(immediateIndex)
+    expect(userPrompt).not.toContain('Previous state of current turn:')
+    expect(userPrompt).not.toContain('hello-before')
+    expect(userPrompt).not.toContain('이전 번역')
     expect(userPrompt).not.toContain('Recent turns (last 10s):')
     expect(userPrompt).not.toContain('Context reliability:')
     expect(userPrompt).toContain('  Translations:')
@@ -507,7 +649,6 @@ describe('/api/translate/finalize route', () => {
       'No explanations, no markdown, no extra keys.',
       'Always translate the ENTIRE current text as a standalone translation for each target language.',
       'Never return only a suffix, delta, patch, completion fragment, or continuation.',
-      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
       'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'))
   })

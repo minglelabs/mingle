@@ -21,6 +21,8 @@ export interface Utterance {
   speakerAvatarIndex?: number
   originalText: string
   originalLang: string
+  sourceLanguagesMixed?: boolean
+  sourceTextHasForeignScript?: boolean
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
@@ -49,6 +51,10 @@ function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
 
 function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   const sourceLanguage = normalizeLanguageCode(utterance.originalLang)
+  const keepSourceLanguageBubble = (
+    utterance.sourceLanguagesMixed === true
+    || utterance.sourceTextHasForeignScript === true
+  )
   const targetLanguages: string[] = []
   const seen = new Set<string>()
 
@@ -56,7 +62,7 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
     const language = (rawLanguage || '').trim()
     if (!language) return
     const normalized = normalizeLanguageCode(language)
-    if (sourceLanguage && normalized === sourceLanguage) return
+    if (!keepSourceLanguageBubble && sourceLanguage && normalized === sourceLanguage) return
     const key = normalized || language.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
@@ -225,6 +231,8 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
+    if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
+    if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

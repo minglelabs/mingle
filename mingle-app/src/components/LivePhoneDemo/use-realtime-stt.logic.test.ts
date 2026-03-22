@@ -15,6 +15,7 @@ import {
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
   mergeDisplayUtterances,
+  resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
@@ -404,6 +405,106 @@ describe('use-realtime-stt pure logic', () => {
     expect(appended.translationPriorities.get('u-queued:ja')).toEqual({ kind: 'final', seq: 7 })
   })
 
+  it('preserves source-language correction metadata when a finalized translation is queued before append', () => {
+    const queued = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-race-corrected',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+        en: 'Hello',
+      },
+      priority: { kind: 'final', seq: 8 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      sourceText: '안녕하세요',
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(queued, {
+      id: 'u-race-corrected',
+      originalText: '안녕하세요',
+      originalLang: 'ja',
+      targetLanguages: ['en', 'ko'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000003,
+    })
+
+    expect(appended.pendingTranslationUpdates.size).toBe(0)
+    expect(appended.utterances).toEqual([
+      {
+        id: 'u-race-corrected',
+        originalText: '안녕하세요',
+        originalLang: 'ko',
+        targetLanguages: ['en', 'ja'],
+        translations: {
+          en: 'Hello',
+          ja: 'こんにちは',
+        },
+        translationFinalized: {
+          en: true,
+          ja: true,
+        },
+        createdAtMs: 1700000000003,
+      },
+    ])
+    expect(appended.translationPriorities.get('u-race-corrected:en')).toEqual({ kind: 'final', seq: 8 })
+    expect(appended.translationPriorities.get('u-race-corrected:ja')).toEqual({ kind: 'final', seq: 8 })
+    expect(appended.translationPriorities.has('u-race-corrected:ko')).toBe(false)
+  })
+
+  it('preserves source bubble flags when a mixed finalized translation is queued before append', () => {
+    const mixedSourceText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
+    const queued = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-race-mixed',
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      priority: { kind: 'final', seq: 9 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      sourceLanguagesMixed: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: mixedSourceText,
+    })
+
+    const appended = appendFinalizedUtteranceToStoreState(queued, {
+      id: 'u-race-mixed',
+      originalText: mixedSourceText,
+      originalLang: 'ja',
+      targetLanguages: ['ko', 'en'],
+      translations: {},
+      translationFinalized: {},
+      createdAtMs: 1700000000004,
+    })
+
+    expect(appended.pendingTranslationUpdates.size).toBe(0)
+    expect(appended.utterances).toEqual([
+      {
+        id: 'u-race-mixed',
+        originalText: mixedSourceText,
+        originalLang: 'ko',
+        sourceLanguagesMixed: true,
+        targetLanguages: ['ko', 'ja', 'en'],
+        translations: {
+          ko: mixedSourceText,
+          ja: 'イザナと日本語として認識されるソニオックスだよ',
+          en: 'Soniox keeps recognizing Izanato as Japanese.',
+        },
+        translationFinalized: {
+          ko: true,
+          ja: true,
+          en: true,
+        },
+        createdAtMs: 1700000000004,
+      },
+    ])
+  })
+
   it('inserts a later-arriving finalized utterance back into chronological order', () => {
     const appended = appendFinalizedUtteranceToStoreState(createUtteranceStoreState([
       {
@@ -582,6 +683,252 @@ describe('use-realtime-stt pure logic', () => {
       ko: '자신이 세운 회사에서 어떻게 해고될 수 있나요?',
       ja: '自分で立ち上げた会社からどうやって解雇されるのか？',
     })
+  })
+
+  it('reconciles finalized utterance source language from the final translation response', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-real',
+        originalText: '안녕하세요',
+        originalLang: 'ja',
+        targetLanguages: ['en', 'ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+        translationFinalized: {
+          ko: false,
+        },
+        createdAtMs: 1700000000004,
+      },
+    ])
+
+    const updated = applyTranslationToUtteranceStoreState({
+      store,
+      utteranceId: 'u-real',
+      translations: {
+        ko: '안녕하세요',
+        ja: 'こんにちは',
+        en: 'Hello',
+      },
+      priority: { kind: 'final', seq: 10 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      sourceText: '안녕하세요',
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-real',
+      originalText: '안녕하세요',
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+      },
+      translationFinalized: {
+        en: true,
+        ja: true,
+      },
+      createdAtMs: 1700000000004,
+    })
+    expect(updated.translationPriorities.get('u-real:en')).toEqual({ kind: 'final', seq: 10 })
+    expect(updated.translationPriorities.get('u-real:ja')).toEqual({ kind: 'final', seq: 10 })
+    expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
+  })
+
+  it('keeps the source-language bubble when the finalized utterance mixes languages', () => {
+    const mixedSourceText = 'イザナと 일본어로 잘 인식되는 소니옥스야'
+    const updated = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([{
+        id: 'u-mixed',
+        originalText: mixedSourceText,
+        originalLang: 'ja',
+        targetLanguages: ['ko', 'en'],
+        translations: {
+          ko: '이전 한국어 번역',
+          en: 'Previous English translation',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000005,
+      }]),
+      utteranceId: 'u-mixed',
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      priority: { kind: 'final', seq: 11 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ko',
+      sourceLanguagesMixed: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: mixedSourceText,
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-mixed',
+      originalText: mixedSourceText,
+      originalLang: 'ko',
+      sourceLanguagesMixed: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: mixedSourceText,
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+      createdAtMs: 1700000000005,
+    })
+  })
+
+  it('keeps the source-language bubble when the finalized utterance uses foreign script for the source language', () => {
+    const transliteratedJapanese = '료카이데스'
+    const updated = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([{
+        id: 'u-foreign-script',
+        originalText: transliteratedJapanese,
+        originalLang: 'ko',
+        targetLanguages: ['ja', 'en'],
+        translations: {
+          ja: '了解です',
+          en: 'Understood.',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000006,
+      }]),
+      utteranceId: 'u-foreign-script',
+      translations: {
+        ja: transliteratedJapanese,
+        ko: '알겠습니다.',
+        en: 'Understood.',
+      },
+      priority: { kind: 'final', seq: 12 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ja',
+      sourceTextHasForeignScript: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: transliteratedJapanese,
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-foreign-script',
+      originalText: transliteratedJapanese,
+      originalLang: 'ja',
+      sourceTextHasForeignScript: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: '알겠습니다.',
+        ja: transliteratedJapanese,
+        en: 'Understood.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+      createdAtMs: 1700000000006,
+    })
+  })
+
+  it('chooses the first rendered translation bubble for finalized TTS', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: ['en', 'ja'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+      },
+      translationFinalized: {
+        en: true,
+        ja: true,
+      },
+    })).toEqual({
+      language: 'en',
+      text: 'Hello',
+    })
+
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'en',
+      targetLanguages: ['ja', 'ko'],
+      translations: {
+        ja: 'こんにちは',
+        ko: '안녕하세요',
+      },
+      translationFinalized: {
+        ja: true,
+        ko: true,
+      },
+    })).toEqual({
+      language: 'ja',
+      text: 'こんにちは',
+    })
+  })
+
+  it('allows the mixed source-language bubble to become the first rendered TTS candidate', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      sourceLanguagesMixed: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: 'イザナと 일본어로 잘 인식되는 소니옥스야',
+        ja: 'イザナと日本語として認識されるソニオックスだよ',
+        en: 'Soniox keeps recognizing Izanato as Japanese.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+    })).toEqual({
+      language: 'ko',
+      text: 'イザナと 일본어로 잘 인식되는 소니옥스야',
+    })
+  })
+
+  it('allows the foreign-script source-language bubble to become the first rendered TTS candidate', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ja',
+      sourceTextHasForeignScript: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: '알겠습니다.',
+        ja: '료카이데스',
+        en: 'Understood.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+    })).toEqual({
+      language: 'ko',
+      text: '알겠습니다.',
+    })
+  })
+
+  it('returns no rendered TTS candidate when no translation bubble is visible', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: [],
+      translations: {},
+      translationFinalized: {},
+    })).toBeNull()
+
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ko',
+      targetLanguages: ['en'],
+      translations: {
+        ko: '안녕하세요',
+      },
+      translationFinalized: {
+        en: true,
+      },
+    })).toBeNull()
   })
 
   it('builds stable translate request signatures for duplicate-request dedupe', () => {

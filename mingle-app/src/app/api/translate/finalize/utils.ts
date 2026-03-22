@@ -14,6 +14,8 @@ export type CurrentTurnPreviousState = {
   translations: Record<string, string>
 }
 
+type ParsedTranslationJson = Record<string, unknown>
+
 function sanitizeNonNegativeInt(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const floored = Math.floor(value)
@@ -54,35 +56,45 @@ export function normalizeLang(input: string): string {
   return canonicalizeTranslationLanguageCode(input)
 }
 
-export function normalizeTargetLanguages(raw: unknown[], sourceLanguage: string): string[] {
-  const targets = new Set<string>()
+export function normalizeSelectedLanguages(raw: unknown[]): string[] {
+  const languages = new Set<string>()
   for (const item of raw) {
     if (typeof item !== 'string') continue
     const normalized = normalizeLang(item)
-    if (!normalized || normalized === sourceLanguage) continue
-    targets.add(normalized)
+    if (!normalized) continue
+    languages.add(normalized)
   }
-  return Array.from(targets)
+  return Array.from(languages)
 }
 
-export function parseTranslations(raw: string): Record<string, string> {
+export function normalizeTargetLanguages(raw: unknown[], sourceLanguage: string): string[] {
+  return normalizeSelectedLanguages(raw).filter((language) => language !== sourceLanguage)
+}
+
+function parseTranslationJson(raw: string): ParsedTranslationJson | null {
   const base = raw.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '')
-  let parsed: Record<string, unknown> | null = null
+  let parsed: ParsedTranslationJson | null = null
 
   try {
-    parsed = JSON.parse(base) as Record<string, unknown>
+    parsed = JSON.parse(base) as ParsedTranslationJson
   } catch {
     const start = base.indexOf('{')
     const end = base.lastIndexOf('}')
     if (start >= 0 && end > start) {
       const sliced = base.slice(start, end + 1)
       try {
-        parsed = JSON.parse(sliced) as Record<string, unknown>
+        parsed = JSON.parse(sliced) as ParsedTranslationJson
       } catch {
         parsed = null
       }
     }
   }
+
+  return parsed
+}
+
+export function parseTranslations(raw: string): Record<string, string> {
+  const parsed = parseTranslationJson(raw)
 
   if (!parsed) return {}
   const output: Record<string, string> = {}
@@ -96,6 +108,35 @@ export function parseTranslations(raw: string): Record<string, string> {
     output[normalizedKey] = cleaned
   }
   return output
+}
+
+export function parseDetectedSourceLanguage(raw: string): string {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return ''
+
+  const directCandidate = (
+    typeof parsed.sourceLanguage === 'string'
+      ? parsed.sourceLanguage
+      : typeof parsed.sourceLang === 'string'
+        ? parsed.sourceLang
+        : ''
+  )
+
+  return normalizeLang(directCandidate)
+}
+
+export function parseSourceLanguagesMixed(raw: string): boolean {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return false
+
+  return parsed.sourceLanguagesMixed === true
+}
+
+export function parseSourceTextHasForeignScript(raw: string): boolean {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return false
+
+  return parsed.sourceTextHasForeignScript === true
 }
 
 export function parseRecentTurns(raw: unknown): RecentTurnContext[] {
