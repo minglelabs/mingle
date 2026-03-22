@@ -449,7 +449,7 @@ describe('/api/translate/finalize route', () => {
   it('redetects final source language on v1.0.4 routes and returns all selected languages', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+        text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
         usageMetadata: {
           promptTokenCount: 12,
           candidatesTokenCount: 18,
@@ -476,6 +476,7 @@ describe('/api/translate/finalize route', () => {
       expect(res.status).toBe(200)
       expect(json.sourceLanguage).toBe('ko')
       expect(json.sourceLanguagesMixed).toBe(false)
+      expect(json.sourceTextHasForeignScript).toBe(false)
       expect(json.translations).toEqual({
         en: 'Hello',
         ja: 'こんにちは',
@@ -497,6 +498,9 @@ describe('/api/translate/finalize route', () => {
         'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
       )
       expect(modelConfig.systemInstruction).toContain(
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script; otherwise set it to false. Ignore spaces, punctuation, and digits.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
       )
       expect(modelConfig.systemInstruction).toContain(
@@ -505,6 +509,7 @@ describe('/api/translate/finalize route', () => {
       expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
         'sourceLanguage',
         'sourceLanguagesMixed',
+        'sourceTextHasForeignScript',
         'en',
         'ja',
         'ko',
@@ -522,7 +527,7 @@ describe('/api/translate/finalize route', () => {
           shouldRedetectSourceLanguage: true,
           provider: 'gemini',
           model: 'gemini-2.5-flash-lite',
-          rawResponse: '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
+          rawResponse: '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
           usage: {
             input_tokens: 12,
             output_tokens: 18,

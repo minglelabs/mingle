@@ -132,6 +132,13 @@ export function parseSourceLanguagesMixed(raw: string): boolean {
   return parsed.sourceLanguagesMixed === true
 }
 
+export function parseSourceTextHasForeignScript(raw: string): boolean {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return false
+
+  return parsed.sourceTextHasForeignScript === true
+}
+
 export function parseRecentTurns(raw: unknown): RecentTurnContext[] {
   if (!Array.isArray(raw)) return []
   const items = raw.slice(-12)

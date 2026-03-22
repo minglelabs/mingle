@@ -17,6 +17,7 @@ import {
   parseDetectedSourceLanguage,
   parseImmediatePreviousTurn,
   parseSourceLanguagesMixed,
+  parseSourceTextHasForeignScript,
   parseTranslations,
   type CurrentTurnPreviousState,
   type RecentTurnContext,
@@ -44,6 +45,7 @@ type TranslationEngineResult = {
   translations: Record<string, string>
   sourceLanguage?: string
   sourceLanguagesMixed?: boolean
+  sourceTextHasForeignScript?: boolean
   provider: 'gemini'
   model: string
   usage?: TranslationUsage
@@ -288,7 +290,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
     systemPrompt: ctx.shouldRedetectSourceLanguage
       ? [
         'You are an expert live-conversation translator.',
-        'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, and the requested language codes.',
+        'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, sourceTextHasForeignScript, and the requested language codes.',
         'No explanations, no markdown, no extra keys.',
         'Determine the actual source language from the current text itself.',
         'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
@@ -297,6 +299,8 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
         'Determine whether the current text itself meaningfully mixes two or more languages within the same utterance.',
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
+        'Determine whether the current text contains substantive characters or script not normally used to write the chosen sourceLanguage.',
+        'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script; otherwise set it to false. Ignore spaces, punctuation, and digits.',
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
         'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
         'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
@@ -351,8 +355,13 @@ function buildGeminiResponseSchema(targetLanguages: string[], options?: {
       type: SchemaType.BOOLEAN,
       description: 'Whether the current text itself meaningfully mixes two or more languages.',
     }
+    properties.sourceTextHasForeignScript = {
+      type: SchemaType.BOOLEAN,
+      description: 'Whether the current text contains substantive characters or script not normally used to write the chosen source language.',
+    }
     required.unshift('sourceLanguage')
     required.splice(1, 0, 'sourceLanguagesMixed')
+    required.splice(2, 0, 'sourceTextHasForeignScript')
   }
 
   for (const language of targetLanguages) {
@@ -503,6 +512,9 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   const sourceLanguagesMixed = ctx.shouldRedetectSourceLanguage
     ? parseSourceLanguagesMixed(content)
     : false
+  const sourceTextHasForeignScript = ctx.shouldRedetectSourceLanguage
+    ? parseSourceTextHasForeignScript(content)
+    : false
   const echoDetectedSourceLanguage = ctx.shouldRedetectSourceLanguage
     ? inferDetectedSourceLanguageFromEcho(
       ctx.text,
@@ -559,6 +571,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     translations,
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
+    ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     provider: 'gemini',
     model: DEFAULT_MODEL,
     usage: normalizeUsage({
@@ -701,6 +714,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         model: string
         sourceLanguage?: string
         sourceLanguagesMixed?: boolean
+        sourceTextHasForeignScript?: boolean
         usedFallbackFromPreviousState?: boolean
       },
     ): Promise<NextResponse> => {
@@ -714,6 +728,9 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
       if (typeof meta.sourceLanguagesMixed === 'boolean') {
         responsePayload.sourceLanguagesMixed = meta.sourceLanguagesMixed
+      }
+      if (typeof meta.sourceTextHasForeignScript === 'boolean') {
+        responsePayload.sourceTextHasForeignScript = meta.sourceTextHasForeignScript
       }
       if (meta.usedFallbackFromPreviousState) {
         responsePayload.usedFallbackFromPreviousState = true
@@ -799,6 +816,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       sourceLanguage,
       detectedSourceLanguage: selectedResult.sourceLanguage || null,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed ?? null,
+      sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript ?? null,
       targetLanguages,
       isFinal,
       inputTokens: selectedResult.usage?.promptTokens ?? 'unknown',
@@ -853,6 +871,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       model: selectedResult.model,
       sourceLanguage: selectedResult.sourceLanguage,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
+      sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
     })
   } catch (error) {
     logTranslateFinalizeError('unexpected_handler_error', {

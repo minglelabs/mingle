@@ -686,6 +686,55 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('keeps the source-language bubble when the finalized utterance uses foreign script for the source language', () => {
+    const transliteratedJapanese = '료카이데스'
+    const updated = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([{
+        id: 'u-foreign-script',
+        originalText: transliteratedJapanese,
+        originalLang: 'ko',
+        targetLanguages: ['ja', 'en'],
+        translations: {
+          ja: '了解です',
+          en: 'Understood.',
+        },
+        translationFinalized: {},
+        createdAtMs: 1700000000006,
+      }]),
+      utteranceId: 'u-foreign-script',
+      translations: {
+        ja: transliteratedJapanese,
+        ko: '알겠습니다.',
+        en: 'Understood.',
+      },
+      priority: { kind: 'final', seq: 12 },
+      markFinalized: true,
+      detectedSourceLanguage: 'ja',
+      sourceTextHasForeignScript: true,
+      selectedLanguages: ['ko', 'ja', 'en'],
+      sourceText: transliteratedJapanese,
+    })
+
+    expect(updated.utterances[0]).toEqual({
+      id: 'u-foreign-script',
+      originalText: transliteratedJapanese,
+      originalLang: 'ja',
+      sourceTextHasForeignScript: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: '알겠습니다.',
+        ja: transliteratedJapanese,
+        en: 'Understood.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+      createdAtMs: 1700000000006,
+    })
+  })
+
   it('chooses the first rendered translation bubble for finalized TTS', () => {
     expect(resolveRenderedTtsCandidateFromUtterance({
       originalLang: 'ko',
@@ -738,6 +787,27 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({
       language: 'ko',
       text: 'イザナと 일본어로 잘 인식되는 소니옥스야',
+    })
+  })
+
+  it('allows the foreign-script source-language bubble to become the first rendered TTS candidate', () => {
+    expect(resolveRenderedTtsCandidateFromUtterance({
+      originalLang: 'ja',
+      sourceTextHasForeignScript: true,
+      targetLanguages: ['ko', 'ja', 'en'],
+      translations: {
+        ko: '알겠습니다.',
+        ja: '료카이데스',
+        en: 'Understood.',
+      },
+      translationFinalized: {
+        ko: true,
+        ja: true,
+        en: true,
+      },
+    })).toEqual({
+      language: 'ko',
+      text: '알겠습니다.',
     })
   })
 
