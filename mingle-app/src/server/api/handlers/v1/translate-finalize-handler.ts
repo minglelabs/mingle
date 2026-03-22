@@ -273,8 +273,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'Determine whether the current text contains substantive characters or script not normally used to write the chosen sourceLanguage.',
         'Set sourceTextHasForeignScript=true only when the current text contains substantive non-source-language characters or script; otherwise set it to false. Ignore spaces, punctuation, and digits.',
         'For example, if sourceLanguage is Japanese, "료카이데스" should set sourceTextHasForeignScript=true because it is written in Hangul rather than Japanese script, even though it represents Japanese speech.',
-        'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
-        'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
       ].join('\n')
       : [
         'You are an expert live-conversation translator.',
