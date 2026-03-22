@@ -223,32 +223,9 @@ function selectPromptImmediatePreviousTurn(turn: RecentTurnContext | null): Rece
   return turn
 }
 
-function formatCurrentTurnPreviousStateForPromptWithOptions(
-  state: CurrentTurnPreviousState | null,
-  options: { includeSourceLanguage: boolean },
-): string {
-  if (!state) return 'None'
-  const translationLines = Object.entries(state.translations)
-    .map(([language, translatedText]) => `    - ${language}: "${translatedText}"`)
-    .join('\n')
-  const sourceLine = options.includeSourceLanguage
-    ? `  Source [${state.sourceLanguage}]: "${state.sourceText}"`
-    : `  Source text: "${state.sourceText}"`
-
-  return [
-    sourceLine,
-    '  Prior translations from same turn:',
-    translationLines || '    - (none)',
-  ].join('\n')
-}
-
 function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt: string } {
   const immediatePreviousTurn = selectPromptImmediatePreviousTurn(ctx.immediatePreviousTurn)
   const includeSourceLanguage = !ctx.shouldRedetectSourceLanguage
-  const currentTurnPreviousState = formatCurrentTurnPreviousStateForPromptWithOptions(
-    ctx.currentTurnPreviousState,
-    { includeSourceLanguage },
-  )
   const targetLangCodes = ctx.targetLanguages.join(', ')
   const userPromptLines = ctx.shouldRedetectSourceLanguage
     ? [
@@ -256,9 +233,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       `language_hints=${targetLangCodes}`,
       `sourceLanguage=${ctx.sourceLanguage}`,
       `text="${ctx.text}"`,
-      '',
-      'Previous state of current turn:',
-      currentTurnPreviousState,
     ]
     : [
       'Current turn:',
@@ -266,9 +240,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       `targets=${targetLangCodes}`,
       `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
       `text="${ctx.text}"`,
-      '',
-      'Previous state of current turn:',
-      currentTurnPreviousState,
     ]
 
   if (immediatePreviousTurn) {
@@ -307,7 +278,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
         'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
         'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
-        'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
       ].join('\n')
       : [
         'You are an expert live-conversation translator.',
@@ -315,7 +285,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'No explanations, no markdown, no extra keys.',
         'Always translate the ENTIRE current text as a standalone translation for each target language.',
         'Never return only a suffix, delta, patch, completion fragment, or continuation.',
-        'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
         'If is_final=yes, translate the full final text from scratch, not an incremental update.',
       ].join('\n'),
     userPrompt: userPromptLines.join('\n'),

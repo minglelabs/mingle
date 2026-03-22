@@ -635,12 +635,12 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
 
     const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
-    const previousStateIndex = userPrompt.indexOf('Previous state of current turn:')
     const immediateIndex = userPrompt.indexOf('Immediate previous turn (~3s ago):')
 
-    expect(previousStateIndex).toBeGreaterThanOrEqual(0)
     expect(immediateIndex).toBeGreaterThanOrEqual(0)
-    expect(previousStateIndex).toBeLessThan(immediateIndex)
+    expect(userPrompt).not.toContain('Previous state of current turn:')
+    expect(userPrompt).not.toContain('hello-before')
+    expect(userPrompt).not.toContain('이전 번역')
     expect(userPrompt).not.toContain('Recent turns (last 10s):')
     expect(userPrompt).not.toContain('Context reliability:')
     expect(userPrompt).toContain('  Translations:')
@@ -653,7 +653,6 @@ describe('/api/translate/finalize route', () => {
       'No explanations, no markdown, no extra keys.',
       'Always translate the ENTIRE current text as a standalone translation for each target language.',
       'Never return only a suffix, delta, patch, completion fragment, or continuation.',
-      'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
       'If is_final=yes, translate the full final text from scratch, not an incremental update.',
     ].join('\n'))
   })
