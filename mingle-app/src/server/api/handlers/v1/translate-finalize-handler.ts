@@ -265,7 +265,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'Return ONLY strict JSON with keys exactly matching sourceLanguage, sourceLanguagesMixed, sourceTextHasForeignScript, and the requested language codes.',
         'No explanations, no markdown, no extra keys.',
         'Determine the actual source language from the current text itself.',
-        'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
         'Treat the provided sourceLanguage field as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
         'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
         'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
