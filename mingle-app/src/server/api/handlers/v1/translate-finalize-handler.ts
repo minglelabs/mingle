@@ -255,8 +255,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
       'Current turn:',
       `language_hints=${targetLangCodes}`,
       `sourceLanguage=${ctx.sourceLanguage}`,
-      'detect_source_language=yes',
-      `is_final=${ctx.isFinal ? 'yes' : 'no'}`,
       `text="${ctx.text}"`,
       '',
       'Previous state of current turn:',
@@ -282,10 +280,12 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
     )
   }
 
-  userPromptLines.push(
-    '',
-    'If is_final=no, avoid over-completing unfinished thoughts.',
-  )
+  if (!ctx.shouldRedetectSourceLanguage) {
+    userPromptLines.push(
+      '',
+      'If is_final=no, avoid over-completing unfinished thoughts.',
+    )
+  }
 
   return {
     systemPrompt: ctx.shouldRedetectSourceLanguage
@@ -308,7 +308,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
         'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
         'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
-        'Because is_final=yes in this mode, translate the full final text from scratch.',
       ].join('\n')
       : [
         'You are an expert live-conversation translator.',

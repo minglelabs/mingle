@@ -487,6 +487,9 @@ describe('/api/translate/finalize route', () => {
       const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
       expect(userPrompt).toContain('language_hints=en, ja, ko')
       expect(userPrompt).toContain('sourceLanguage=ja')
+      expect(userPrompt).not.toContain('detect_source_language=')
+      expect(userPrompt).not.toContain('is_final=')
+      expect(userPrompt).not.toContain('If is_final=no')
 
       const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
         systemInstruction?: string
@@ -512,6 +515,9 @@ describe('/api/translate/finalize route', () => {
       )
       expect(modelConfig.systemInstruction).toContain(
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
+      )
+      expect(modelConfig.systemInstruction).not.toContain(
+        'Because is_final=yes in this mode, translate the full final text from scratch.',
       )
       expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
         'sourceLanguage',
