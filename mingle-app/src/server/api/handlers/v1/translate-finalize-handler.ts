@@ -295,7 +295,6 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'When the utterance is mixed, choose the language that best explains most of the full sentence.',
         'Do not let a short leading fragment, named entity, or quoted word dominate the source-language decision.',
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
-        'The value of the field named by sourceLanguage must exactly equal the original current text verbatim.',
         'For every other requested language key, return the ENTIRE current text translated as a standalone translation.',
         'Never omit any requested language key, and never return only a suffix, delta, patch, completion fragment, or continuation.',
         'Previous state of current turn is reference context only; do not assume any part is already rendered on screen.',
@@ -387,16 +386,6 @@ function inferDetectedSourceLanguageFromEcho(
   return ''
 }
 
-function validateDeclaredSourceLanguage(args: {
-  text: string
-  declaredSourceLanguage: string
-  translations: Record<string, string>
-}): boolean {
-  const declaredSourceLanguage = normalizeLang(args.declaredSourceLanguage)
-  if (!declaredSourceLanguage) return false
-  return (args.translations[declaredSourceLanguage] || '').trim() === args.text.trim()
-}
-
 async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEngineResult | null> {
   if (!GEMINI_API_KEY) return null
 
@@ -446,176 +435,126 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     }
   }
 
-  const maxContractValidationAttempts = ctx.shouldRedetectSourceLanguage ? 2 : 1
-  for (let attempt = 1; attempt <= maxContractValidationAttempts; attempt += 1) {
-    const result = await generateContentWithRetry()
-    const response = result.response as unknown as GeminiResponseLike
-    const rawContent = response.text() || ''
-    const content = rawContent.trim()
-    const usageMetadata = response.usageMetadata
-    const promptTokens = sanitizeNonNegativeInt(usageMetadata?.promptTokenCount)
-    const completionTokens = sanitizeNonNegativeInt(usageMetadata?.candidatesTokenCount)
-    const totalTokens = sanitizeNonNegativeInt(usageMetadata?.totalTokenCount)
-    const candidateMeta = Array.isArray(response.candidates)
-      ? response.candidates.map((candidate, index) => ({
-        index,
-        finishReason: candidate.finishReason ?? null,
-        safetyRatings: candidate.safetyRatings ?? null,
-      }))
-      : []
-    const responseLogPayload = {
-      sourceLanguage: ctx.sourceLanguage,
-      targetLanguages: ctx.targetLanguages,
-      shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
-      isFinal: ctx.isFinal,
-      text: ctx.text,
-      provider: 'gemini',
-      model: DEFAULT_MODEL,
-      attempt,
-      rawResponseLength: rawContent.length,
-      rawResponse: rawContent,
-      usage: {
-        input_tokens: promptTokens,
-        output_tokens: completionTokens,
-        total_tokens: totalTokens,
-      },
+  const result = await generateContentWithRetry()
+  const response = result.response as unknown as GeminiResponseLike
+  const rawContent = response.text() || ''
+  const content = rawContent.trim()
+  const usageMetadata = response.usageMetadata
+  const promptTokens = sanitizeNonNegativeInt(usageMetadata?.promptTokenCount)
+  const completionTokens = sanitizeNonNegativeInt(usageMetadata?.candidatesTokenCount)
+  const totalTokens = sanitizeNonNegativeInt(usageMetadata?.totalTokenCount)
+  const candidateMeta = Array.isArray(response.candidates)
+    ? response.candidates.map((candidate, index) => ({
+      index,
+      finishReason: candidate.finishReason ?? null,
+      safetyRatings: candidate.safetyRatings ?? null,
+    }))
+    : []
+  const responseLogPayload = {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    provider: 'gemini',
+    model: DEFAULT_MODEL,
+    rawResponseLength: rawContent.length,
+    rawResponse: rawContent,
+    usage: {
+      input_tokens: promptTokens,
+      output_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
+    promptFeedback: response.promptFeedback ?? null,
+    candidates: candidateMeta,
+  }
+
+  logTranslateFinalizeInfo('gemini_response', responseLogPayload)
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+    console.info('[translate/finalize] gemini_response', responseLogPayload)
+  }
+
+  if (!content) {
+    logTranslateFinalizeError('gemini_empty_text', {
+      ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
-    }
-
-    logTranslateFinalizeInfo('gemini_response', responseLogPayload)
-    if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
-      console.info('[translate/finalize] gemini_response', responseLogPayload)
-    }
-
-    if (!content) {
-      logTranslateFinalizeError('gemini_empty_text', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        attempt,
-        promptFeedback: response.promptFeedback ?? null,
-        candidates: candidateMeta,
-        usage: {
-          input_tokens: promptTokens,
-          output_tokens: completionTokens,
-          total_tokens: totalTokens,
-        },
-      })
-      return null
-    }
-
-    const translations = parseTranslations(content)
-    const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage
-      ? parseDetectedSourceLanguage(content)
-      : ''
-    const declaredSourceLanguageIsValid = ctx.shouldRedetectSourceLanguage
-      ? validateDeclaredSourceLanguage({
-        text: ctx.text,
-        declaredSourceLanguage,
-        translations,
-      })
-      : false
-    const echoDetectedSourceLanguage = ctx.shouldRedetectSourceLanguage
-      ? inferDetectedSourceLanguageFromEcho(
-        ctx.text,
-        ctx.targetLanguages,
-        translations,
-      )
-      : ''
-    const shouldRetryInvalidContract = (
-      ctx.shouldRedetectSourceLanguage
-      && declaredSourceLanguage
-      && !declaredSourceLanguageIsValid
-      && attempt < maxContractValidationAttempts
-    )
-
-    if (Object.keys(translations).length === 0) {
-      logTranslateFinalizeError('gemini_unparseable_json', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        attempt,
-        promptFeedback: response.promptFeedback ?? null,
-        candidates: candidateMeta,
-        responseTextLength: content.length,
-        responseTextPreview: content.slice(0, 2000),
-        usage: {
-          input_tokens: promptTokens,
-          output_tokens: completionTokens,
-          total_tokens: totalTokens,
-        },
-      })
-      return null
-    }
-
-    if (ctx.shouldRedetectSourceLanguage && declaredSourceLanguage && !declaredSourceLanguageIsValid) {
-      logTranslateFinalizeError('gemini_invalid_source_language_contract', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        attempt,
-        declaredSourceLanguage,
-        declaredSourceValue: translations[declaredSourceLanguage] || '',
-        echoDetectedSourceLanguage: echoDetectedSourceLanguage || null,
-        responseTextLength: content.length,
-        responseTextPreview: content.slice(0, 2000),
-      })
-      if (shouldRetryInvalidContract) {
-        console.warn('[translate/finalize] source_language_retry_scheduled', {
-          ...buildTranslateFinalizeLogContext(ctx),
-          provider: 'gemini',
-          model: DEFAULT_MODEL,
-          attempt,
-          retryAttempt: attempt + 1,
-          reason: 'invalid_source_language_contract',
-        })
-        continue
-      }
-    }
-
-    const detectedSourceLanguage = ctx.shouldRedetectSourceLanguage
-      ? (
-        declaredSourceLanguageIsValid
-          ? declaredSourceLanguage
-          : echoDetectedSourceLanguage
-      )
-      : ''
-
-    if (ctx.shouldRedetectSourceLanguage && !detectedSourceLanguage) {
-      logTranslateFinalizeError('gemini_missing_source_language', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        attempt,
-        responseTextLength: content.length,
-        responseTextPreview: content.slice(0, 2000),
-        parsedLanguages: Object.keys(translations),
-        declaredSourceLanguage: declaredSourceLanguage || null,
-      })
-      return null
-    }
-
-    logParsedTranslations('gemini_parsed_translations', {
-      sourceLanguage: ctx.sourceLanguage,
-      targetLanguages: ctx.targetLanguages,
-      isFinal: ctx.isFinal,
-      text: ctx.text,
-      parsedLanguages: Object.keys(translations),
-      translations,
       usage: {
         input_tokens: promptTokens,
         output_tokens: completionTokens,
         total_tokens: totalTokens,
       },
     })
-
-    return {
-      translations,
-      ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
-      provider: 'gemini',
-      model: DEFAULT_MODEL,
-      usage: normalizeUsage({
-        prompt: promptTokens,
-        completion: completionTokens,
-        total: totalTokens,
-      }),
-    }
+    return null
   }
 
-  return null
+  const translations = parseTranslations(content)
+  const declaredSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? parseDetectedSourceLanguage(content)
+    : ''
+  const echoDetectedSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? inferDetectedSourceLanguageFromEcho(
+      ctx.text,
+      ctx.targetLanguages,
+      translations,
+    )
+    : ''
+  const detectedSourceLanguage = ctx.shouldRedetectSourceLanguage
+    ? (declaredSourceLanguage || echoDetectedSourceLanguage)
+    : ''
+
+  if (Object.keys(translations).length === 0) {
+    logTranslateFinalizeError('gemini_unparseable_json', {
+      ...buildTranslateFinalizeLogContext(ctx),
+      promptFeedback: response.promptFeedback ?? null,
+      candidates: candidateMeta,
+      responseTextLength: content.length,
+      responseTextPreview: content.slice(0, 2000),
+      usage: {
+        input_tokens: promptTokens,
+        output_tokens: completionTokens,
+        total_tokens: totalTokens,
+      },
+    })
+    return null
+  }
+
+  if (ctx.shouldRedetectSourceLanguage && !detectedSourceLanguage) {
+    logTranslateFinalizeError('gemini_missing_source_language', {
+      ...buildTranslateFinalizeLogContext(ctx),
+      responseTextLength: content.length,
+      responseTextPreview: content.slice(0, 2000),
+      parsedLanguages: Object.keys(translations),
+      declaredSourceLanguage: declaredSourceLanguage || null,
+    })
+    return null
+  }
+
+  logParsedTranslations('gemini_parsed_translations', {
+    sourceLanguage: ctx.sourceLanguage,
+    targetLanguages: ctx.targetLanguages,
+    isFinal: ctx.isFinal,
+    text: ctx.text,
+    parsedLanguages: Object.keys(translations),
+    translations,
+    usage: {
+      input_tokens: promptTokens,
+      output_tokens: completionTokens,
+      total_tokens: totalTokens,
+    },
+  })
+
+  return {
+    translations,
+    ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
+    provider: 'gemini',
+    model: DEFAULT_MODEL,
+    usage: normalizeUsage({
+      prompt: promptTokens,
+      completion: completionTokens,
+      total: totalTokens,
+    }),
+  }
 }
 
 

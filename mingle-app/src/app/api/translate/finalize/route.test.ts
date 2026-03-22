@@ -497,9 +497,6 @@ describe('/api/translate/finalize route', () => {
       expect(modelConfig.systemInstruction).toContain(
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',
       )
-      expect(modelConfig.systemInstruction).toContain(
-        'The value of the field named by sourceLanguage must exactly equal the original current text verbatim.',
-      )
       expect(modelConfig.generationConfig?.responseSchema?.required).toEqual([
         'sourceLanguage',
         'en',
@@ -533,23 +530,14 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
-  it('retries once when redetected source language does not echo the original text in the declared source field', async () => {
-    mockGenerateContent
-      .mockResolvedValueOnce({
-        response: {
-          text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
-          usageMetadata: {},
-        },
-      })
-      .mockResolvedValueOnce({
-        response: {
-          text: () => '{\n  "sourceLanguage": "ja",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "先に14年経ったことを",\n  "en": "First, that 14 years have passed"\n}',
-          usageMetadata: {},
-        },
-      })
+  it('accepts declared redetected source language without retry when source text is lightly rewritten', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{\n  "sourceLanguage": "ko",\n  "ko": "먼저 14년이 지났다는 것을",\n  "ja": "まず14年が経ったことを",\n  "en": "First, that 14 years have passed"\n}',
+        usageMetadata: {},
+      },
+    })
 
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
@@ -565,28 +553,16 @@ describe('/api/translate/finalize route', () => {
       const json = await res.json()
 
       expect(res.status).toBe(200)
-      expect(json.sourceLanguage).toBe('ja')
+      expect(json.sourceLanguage).toBe('ko')
       expect(json.translations).toEqual({
         ko: '먼저 14년이 지났다는 것을',
-        ja: '先に14年経ったことを',
+        ja: 'まず14年が経ったことを',
         en: 'First, that 14 years have passed',
       })
-      expect(mockGenerateContent).toHaveBeenCalledTimes(2)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] gemini_invalid_source_language_contract',
-      ))
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[translate/finalize] source_language_retry_scheduled',
-        expect.objectContaining({
-          reason: 'invalid_source_language_contract',
-          attempt: 1,
-          retryAttempt: 2,
-        }),
-      )
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
-      consoleErrorSpy.mockRestore()
-      consoleWarnSpy.mockRestore()
+      vi.unstubAllGlobals()
     }
   })
 
