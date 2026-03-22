@@ -723,13 +723,21 @@ wss.on('connection', (clientWs) => {
                         return;
                     }
 
-                    if (messageType === 'committed_transcript_with_timestamps' || messageType === 'committed_transcript') {
+                    if (messageType === 'committed_transcript') {
+                        // When timestamps are enabled, ElevenLabs also sends
+                        // committed_transcript_with_timestamps with language_code.
+                        // Ignore the plain committed event so we do not lock in
+                        // an "unknown" language before the richer event arrives.
+                        return;
+                    }
+
+                    if (messageType === 'committed_transcript_with_timestamps') {
                         const text = typeof msg.text === 'string' ? msg.text.trim() : '';
                         if (!text) return;
                         if (text === lastCommittedText) return;
                         lastCommittedText = text;
 
-                        if (messageType === 'committed_transcript_with_timestamps' && messageLanguageCode) {
+                        if (messageLanguageCode) {
                             detectedLanguage = messageLanguageCode;
                         }
 
