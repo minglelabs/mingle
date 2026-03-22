@@ -1353,20 +1353,6 @@ function buildClientContextPayload(usageSec: number): Record<string, unknown> {
   }
 }
 
-function decodeBase64AudioToBlob(base64: string, mime = 'audio/mpeg'): Blob | null {
-  try {
-    const binary = atob(base64)
-    const len = binary.length
-    const bytes = new Uint8Array(len)
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binary.charCodeAt(i)
-    }
-    return new Blob([bytes], { type: mime })
-  } catch {
-    return null
-  }
-}
-
 function isSttDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false
   try {
@@ -1485,7 +1471,7 @@ export default function useRealtimeSTT({
   const stopFinalizeDedupRef = useRef<{ utteranceId: string, expiresAt: number }>({ utteranceId: '', expiresAt: 0 })
 
   const finalizedTtsSignatureRef = useRef<Map<string, string>>(new Map())
-  const pendingFinalizedTtsResultsRef = useRef<Map<string, TranslateApiResult>>(new Map())
+  const pendingFinalizedTtsUtteranceIdsRef = useRef<Set<string>>(new Set())
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
@@ -1926,7 +1912,7 @@ export default function useRealtimeSTT({
       }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
-      if (normalizedTtsLang) {
+      if (normalizedTtsLang && options?.isFinal !== true) {
         body.tts = { language: normalizedTtsLang, enabled: options?.enableTts === true }
       }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
@@ -2014,9 +2000,8 @@ export default function useRealtimeSTT({
     }
   }, [ensureSessionKey, usageSec])
 
-  const handleInlineTtsFromTranslate = useCallback((
+  const requestTtsForRenderedTranslation = useCallback((
     utteranceId: string,
-    result: TranslateApiResult,
     options?: {
       renderedLanguage?: string
       renderedText?: string
@@ -2048,14 +2033,6 @@ export default function useRealtimeSTT({
       return true
     }
 
-    const inlineTtsLanguage = normalizeLangForCompare(result.ttsLanguage || '')
-    const resolvedTtsLanguage = normalizeLangForCompare(ttsTargetLang)
-    if (result.ttsAudioBase64 && inlineTtsLanguage && inlineTtsLanguage === resolvedTtsLanguage) {
-      const audioBlob = decodeBase64AudioToBlob(result.ttsAudioBase64, result.ttsAudioMime || 'audio/mpeg')
-      if (queueAudioIfValid(audioBlob)) return
-    }
-
-    // Inline TTS가 없거나 유효하지 않음 → 별도 TTS API 호출로 폴백
     void synthesizeTtsViaApi(ttsText, ttsTargetLang).then((fallbackBlob) => {
       if (queueAudioIfValid(fallbackBlob)) return
       onTtsCanceledRef.current?.(utteranceId)
@@ -2063,10 +2040,10 @@ export default function useRealtimeSTT({
   }, [synthesizeTtsViaApi])
 
   useEffect(() => {
-    if (pendingFinalizedTtsResultsRef.current.size === 0) return
+    if (pendingFinalizedTtsUtteranceIdsRef.current.size === 0) return
 
     const consumedUtteranceIds: string[] = []
-    for (const [utteranceId, result] of pendingFinalizedTtsResultsRef.current.entries()) {
+    for (const utteranceId of pendingFinalizedTtsUtteranceIdsRef.current.values()) {
       const utterance = utterances.find((item) => item.id === utteranceId)
       if (!utterance) continue
 
@@ -2077,7 +2054,7 @@ export default function useRealtimeSTT({
         continue
       }
 
-      handleInlineTtsFromTranslate(utteranceId, result, {
+      requestTtsForRenderedTranslation(utteranceId, {
         renderedLanguage: renderedTtsCandidate.language,
         renderedText: renderedTtsCandidate.text,
       })
@@ -2085,9 +2062,9 @@ export default function useRealtimeSTT({
     }
 
     for (const utteranceId of consumedUtteranceIds) {
-      pendingFinalizedTtsResultsRef.current.delete(utteranceId)
+      pendingFinalizedTtsUtteranceIdsRef.current.delete(utteranceId)
     }
-  }, [handleInlineTtsFromTranslate, utterances])
+  }, [requestTtsForRenderedTranslation, utterances])
 
   const applyTranslationToUtterance = useCallback((
     utteranceId: string,
@@ -2316,7 +2293,7 @@ export default function useRealtimeSTT({
           },
         )
         if (enableTtsRef.current && ttsTargetLang) {
-          pendingFinalizedTtsResultsRef.current.set(utteranceId, result)
+          pendingFinalizedTtsUtteranceIdsRef.current.add(utteranceId)
         }
       } else if (enableTtsRef.current && ttsTargetLang) {
         onTtsCanceledRef.current?.(utteranceId)
