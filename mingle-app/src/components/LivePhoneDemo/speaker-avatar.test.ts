@@ -8,9 +8,9 @@ import {
 
 describe('speaker-avatar', () => {
   it('scopes speaker avatars by session seed', () => {
-    expect(getSpeakerAvatar('speaker-1').src).toBe('/avatars/animals/wild-boar.svg')
-    expect(getSpeakerAvatar('speaker-1', 'avatar_seed_a').src).toBe('/avatars/animals/fox.svg')
-    expect(getSpeakerAvatar('speaker-1', 'avatar_seed_b').src).toBe('/avatars/animals/cute-animals.svg')
+    expect(getSpeakerAvatar('speaker-1').src).toBe('/avatars/animals/the-cow.svg')
+    expect(getSpeakerAvatar('speaker-1', 'avatar_seed_a').src).toBe('/avatars/animals/rabbit.svg')
+    expect(getSpeakerAvatar('speaker-1', 'avatar_seed_b').src).toBe('/avatars/animals/crab.svg')
   })
 
   it('builds a deterministic shuffled pool per session seed', () => {
