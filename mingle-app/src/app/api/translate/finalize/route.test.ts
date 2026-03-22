@@ -491,10 +491,7 @@ describe('/api/translate/finalize route', () => {
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
       expect(modelConfig.systemInstruction).toContain(
-        'Determine sourceLanguage from the entire utterance, not just the prefix or first token.',
-      )
-      expect(modelConfig.systemInstruction).toContain(
-        'Do not let a short leading fragment, named entity, or quoted word dominate the source-language decision.',
+        'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
       )
       expect(modelConfig.systemInstruction).toContain(
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
