@@ -521,11 +521,16 @@ describe('/api/translate/finalize route', () => {
         'ja',
         'ko',
       ])
-      expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('[translate/finalize] prompt'))
-      expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('sourceLanguage: ja'))
-      expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('targetLanguages: ["en","ja","ko"]'))
-      expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('systemPrompt:'))
-      expect(consoleInfoSpy).toHaveBeenCalledWith(expect.stringContaining('userPrompt:'))
+      expect(consoleInfoSpy).toHaveBeenCalledWith(
+        '[translate/finalize] prompt',
+        expect.objectContaining({
+          sourceLanguage: 'ja',
+          shouldRedetectSourceLanguage: true,
+          targetLanguages: ['en', 'ja', 'ko'],
+          systemPrompt: expect.not.stringContaining('\n'),
+          userPrompt: expect.not.stringContaining('\n'),
+        }),
+      )
       expect(consoleInfoSpy).toHaveBeenCalledWith(
         '[translate/finalize] gemini_response',
         expect.objectContaining({

@@ -178,19 +178,14 @@ function formatPromptConsoleLog(payload: {
   text: string
   systemPrompt: string
   userPrompt: string
-}): string {
-  return [
-    '[translate/finalize] prompt',
-    `sourceLanguage: ${payload.sourceLanguage}`,
-    `targetLanguages: ${JSON.stringify(payload.targetLanguages)}`,
-    `shouldRedetectSourceLanguage: ${payload.shouldRedetectSourceLanguage}`,
-    `isFinal: ${payload.isFinal}`,
-    `text: ${JSON.stringify(payload.text)}`,
-    'systemPrompt:',
-    payload.systemPrompt,
-    'userPrompt:',
-    payload.userPrompt,
-  ].join('\n')
+}): Record<string, unknown> {
+  const collapsePromptText = (text: string) => text.replace(/\s*\n\s*/g, ' ').trim()
+
+  return {
+    ...payload,
+    systemPrompt: collapsePromptText(payload.systemPrompt),
+    userPrompt: collapsePromptText(payload.userPrompt),
+  }
 }
 
 function sleep(ms: number) {
@@ -402,7 +397,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
   }
   logTranslateFinalizeInfo('prompt', promptLogPayload)
   if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
-    console.info(formatPromptConsoleLog(promptLogPayload))
+    console.info('[translate/finalize] prompt', formatPromptConsoleLog(promptLogPayload))
   }
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
