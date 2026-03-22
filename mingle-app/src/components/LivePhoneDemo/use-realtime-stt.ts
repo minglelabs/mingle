@@ -1983,6 +1983,9 @@ export default function useRealtimeSTT({
       const body: Record<string, unknown> = shouldRedetectSourceLanguage
         ? { text, targetLanguages: langs }
         : { text, sourceLanguage, targetLanguages: langs }
+      if (shouldRedetectSourceLanguage && sourceLanguage.trim()) {
+        body.probableSpokenSourceLanguage = sourceLanguage
+      }
       if (recentTurns.length > 0) {
         body.recentTurns = recentTurns
         body.immediatePreviousTurn = recentTurns[recentTurns.length - 1]

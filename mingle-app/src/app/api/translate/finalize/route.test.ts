@@ -469,6 +469,7 @@ describe('/api/translate/finalize route', () => {
       const res = await POST(makeJsonRequest({
         text: '안녕하세요',
         targetLanguages: ['en', 'ja', 'ko'],
+        probableSpokenSourceLanguage: 'ja',
         isFinal: true,
       }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
       const json = await res.json()
@@ -485,12 +486,16 @@ describe('/api/translate/finalize route', () => {
 
       const userPrompt = String(mockGenerateContent.mock.calls[0]?.[0] ?? '')
       expect(userPrompt).toContain('language_hints=en, ja, ko')
+      expect(userPrompt).toContain('probable_spoken_source_language=ja')
       expect(userPrompt).not.toContain('source=')
 
       const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
         systemInstruction?: string
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
+      expect(modelConfig.systemInstruction).toContain(
+        'Treat probable_spoken_source_language as a weak audio-based hint from STT. Use it only as a tiebreaker when the text is mixed, transliterated, or otherwise ambiguous; if the text itself clearly indicates another language, ignore the hint.',
+      )
       expect(modelConfig.systemInstruction).toContain(
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
       )
@@ -520,6 +525,7 @@ describe('/api/translate/finalize route', () => {
       expect(consoleInfoSpy).toHaveBeenCalledWith(
         '[translate/finalize] prompt',
         expect.objectContaining({
+          probableSpokenSourceLanguage: 'ja',
           shouldRedetectSourceLanguage: true,
           targetLanguages: ['en', 'ja', 'ko'],
         }),
