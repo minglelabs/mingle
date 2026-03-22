@@ -649,6 +649,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     processTtsQueue()
   }, [enableAutoTTS, isSoundEnabled, processTtsQueue])
 
+  const handleTtsCanceled = useCallback((utteranceId: string) => {
+    const queue = ttsQueueRef.current
+    const nextQueue = queue.filter((item) => item.utteranceId !== utteranceId)
+    if (nextQueue.length === queue.length) return
+    ttsQueueRef.current = nextQueue
+    clearTtsWaitTimer()
+    processTtsQueue()
+  }, [clearTtsWaitTimer, processTtsQueue])
+
   const {
     utterances,
     liveUtterances,
@@ -674,6 +683,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onLimitReached,
     onTtsRequested: handleTtsRequested,
     onTtsAudio: handleTtsAudio,
+    onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
   })

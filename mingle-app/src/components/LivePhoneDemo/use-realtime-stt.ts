@@ -492,6 +492,7 @@ interface UseRealtimeSTTOptions {
   onLimitReached?: () => void
   onTtsRequested?: (utteranceId: string, language: string) => void
   onTtsAudio?: (utteranceId: string, audioBlob: Blob, language: string, ttsText?: string) => void
+  onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
   usageLimitSec?: number | null
@@ -1236,6 +1237,45 @@ interface TranslateApiResult {
   model?: string
 }
 
+export function resolveFinalizedTtsLanguage(input: {
+  sourceLanguage?: string
+  selectedLanguages?: string[]
+  translations?: Record<string, string>
+}): string {
+  const sourceLanguage = normalizeLangForCompare(input.sourceLanguage || '')
+  const translations = input.translations || {}
+  const candidates: string[] = []
+  const seen = new Set<string>()
+
+  const pushCandidate = (rawLanguage: string | undefined) => {
+    const language = (rawLanguage || '').trim()
+    if (!language) return
+    const key = normalizeLangForCompare(language) || language.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    candidates.push(language)
+  }
+
+  for (const language of input.selectedLanguages || []) pushCandidate(language)
+  for (const language of Object.keys(translations)) pushCandidate(language)
+
+  for (const language of candidates) {
+    if (sourceLanguage && normalizeLangForCompare(language) === sourceLanguage) continue
+
+    const directText = (translations[language] || '').trim()
+    if (directText) return language
+
+    const normalizedLanguage = normalizeLangForCompare(language)
+    if (!normalizedLanguage) continue
+    for (const [candidateLanguage, candidateText] of Object.entries(translations)) {
+      if (normalizeLangForCompare(candidateLanguage) !== normalizedLanguage) continue
+      if (candidateText.trim()) return candidateLanguage
+    }
+  }
+
+  return ''
+}
+
 interface RecentTurnContextPayload {
   sourceLanguage: string
   sourceText: string
@@ -1362,6 +1402,7 @@ export default function useRealtimeSTT({
   onLimitReached,
   onTtsRequested,
   onTtsAudio,
+  onTtsCanceled,
   enableTts,
   enableAec = false,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
@@ -1438,6 +1479,8 @@ export default function useRealtimeSTT({
   onTtsRequestedRef.current = onTtsRequested
   const onTtsAudioRef = useRef(onTtsAudio)
   onTtsAudioRef.current = onTtsAudio
+  const onTtsCanceledRef = useRef(onTtsCanceled)
+  onTtsCanceledRef.current = onTtsCanceled
   const enableTtsRef = useRef(enableTts)
   enableTtsRef.current = enableTts
   const stopFinalizeDedupRef = useRef<{ utteranceId: string, expiresAt: number }>({ utteranceId: '', expiresAt: 0 })
@@ -1975,14 +2018,24 @@ export default function useRealtimeSTT({
     utteranceId: string,
     result: TranslateApiResult,
     options?: {
-      requestedTtsLanguage?: string
+      selectedLanguages?: string[]
     },
   ) => {
     if (!enableTtsRef.current) return
-    const ttsTargetLang = (result.ttsLanguage || options?.requestedTtsLanguage || '').trim()
-    if (!ttsTargetLang) return
+    const ttsTargetLang = resolveFinalizedTtsLanguage({
+      sourceLanguage: result.sourceLanguage,
+      selectedLanguages: options?.selectedLanguages,
+      translations: result.translations,
+    })
+    if (!ttsTargetLang) {
+      onTtsCanceledRef.current?.(utteranceId)
+      return
+    }
     const ttsText = (result.translations[ttsTargetLang] || '').trim()
-    if (!ttsText) return
+    if (!ttsText) {
+      onTtsCanceledRef.current?.(utteranceId)
+      return
+    }
 
     const signature = `${ttsTargetLang}::${ttsText}`
     if (finalizedTtsSignatureRef.current.get(utteranceId) === signature) return
@@ -1998,14 +2051,17 @@ export default function useRealtimeSTT({
       return true
     }
 
-    if (result.ttsAudioBase64) {
+    const inlineTtsLanguage = normalizeLangForCompare(result.ttsLanguage || '')
+    const resolvedTtsLanguage = normalizeLangForCompare(ttsTargetLang)
+    if (result.ttsAudioBase64 && inlineTtsLanguage && inlineTtsLanguage === resolvedTtsLanguage) {
       const audioBlob = decodeBase64AudioToBlob(result.ttsAudioBase64, result.ttsAudioMime || 'audio/mpeg')
       if (queueAudioIfValid(audioBlob)) return
     }
 
     // Inline TTS가 없거나 유효하지 않음 → 별도 TTS API 호출로 폴백
     void synthesizeTtsViaApi(ttsText, ttsTargetLang).then((fallbackBlob) => {
-      queueAudioIfValid(fallbackBlob)
+      if (queueAudioIfValid(fallbackBlob)) return
+      onTtsCanceledRef.current?.(utteranceId)
     })
   }, [synthesizeTtsViaApi])
 
@@ -2235,7 +2291,7 @@ export default function useRealtimeSTT({
           },
         )
         handleInlineTtsFromTranslate(utteranceId, result, {
-          requestedTtsLanguage: ttsTargetLang,
+          selectedLanguages: targetLanguages,
         })
       }
 

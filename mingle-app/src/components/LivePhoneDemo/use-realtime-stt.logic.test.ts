@@ -15,6 +15,7 @@ import {
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
   mergeDisplayUtterances,
+  resolveFinalizedTtsLanguage,
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
@@ -634,6 +635,38 @@ describe('use-realtime-stt pure logic', () => {
     expect(updated.translationPriorities.get('u-real:en')).toEqual({ kind: 'final', seq: 10 })
     expect(updated.translationPriorities.get('u-real:ja')).toEqual({ kind: 'final', seq: 10 })
     expect(updated.translationPriorities.has('u-real:ko')).toBe(false)
+  })
+
+  it('chooses the first finalized translation unless it matches the corrected source language', () => {
+    expect(resolveFinalizedTtsLanguage({
+      sourceLanguage: 'ko',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+        ko: '안녕하세요',
+      },
+    })).toBe('en')
+
+    expect(resolveFinalizedTtsLanguage({
+      sourceLanguage: 'en',
+      selectedLanguages: ['en', 'ja', 'ko'],
+      translations: {
+        en: 'Hello',
+        ja: 'こんにちは',
+        ko: '안녕하세요',
+      },
+    })).toBe('ja')
+  })
+
+  it('returns no finalized TTS language when the only translation matches the corrected source', () => {
+    expect(resolveFinalizedTtsLanguage({
+      sourceLanguage: 'ko',
+      selectedLanguages: ['ko'],
+      translations: {
+        ko: '안녕하세요',
+      },
+    })).toBe('')
   })
 
   it('builds stable translate request signatures for duplicate-request dedupe', () => {
