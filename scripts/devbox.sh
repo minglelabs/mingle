@@ -3398,12 +3398,23 @@ client = Spaceship::ConnectAPI.client.tunes_request_client
 app = Spaceship::ConnectAPI::App.find(app_identifier)
 raise "app not found: #{app_identifier}" unless app
 
-def choose_ios_version(client, app)
+def choose_ios_version(client, app, expected_version = nil)
+  versions = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=50").body['data'] || []
+  if expected_version
+    exact = versions.find do |version|
+      attrs = version['attributes'] || {}
+      attrs['versionString'].to_s == expected_version
+    end
+    if exact
+      exact_version_id = exact.respond_to?(:id) ? exact.id : exact['id']
+      return Spaceship::ConnectAPI::AppStoreVersion.get(app_store_version_id: exact_version_id)
+    end
+  end
+
   editable = app.get_edit_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
   return editable if editable
 
-  versions = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appStoreVersions?filter[platform]=IOS&limit=50").body['data'] || []
-  preferred = %w[READY_FOR_SALE PENDING_DEVELOPER_RELEASE PRE_ORDER_READY_FOR_SALE PREPARE_FOR_SUBMISSION]
+  preferred = %w[READY_FOR_REVIEW READY_FOR_SALE PENDING_DEVELOPER_RELEASE PRE_ORDER_READY_FOR_SALE PREPARE_FOR_SUBMISSION]
   versions.sort_by! do |version|
     attrs = version['attributes'] || {}
     state = attrs['appStoreState'].to_s
@@ -3421,7 +3432,7 @@ def choose_ios_version(client, app)
   Spaceship::ConnectAPI::AppStoreVersion.get(app_store_version_id: selected_version_id)
 end
 
-version = choose_ios_version(client, app)
+version = choose_ios_version(client, app, expected_version)
 
 if expected_version && version.version_string != expected_version
   raise "editable version mismatch: expected #{expected_version}, actual #{version.version_string}"
