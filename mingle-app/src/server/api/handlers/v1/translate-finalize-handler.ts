@@ -294,6 +294,7 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
         'Treat language_hints as hints only; if the text is clearly another supported language, sourceLanguage may be outside the hints.',
         'Even if the text is mixed, choose exactly one best sourceLanguage code for the overall utterance.',
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
+        'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
         'Determine whether the current text itself meaningfully mixes two or more languages within the same utterance.',
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
         'For the key matching sourceLanguage, return the original current text verbatim, not a translation.',

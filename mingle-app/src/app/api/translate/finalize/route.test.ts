@@ -494,6 +494,9 @@ describe('/api/translate/finalize route', () => {
         'For example, "そんな답답해서 죽겠다고 내가 진짜로." should be classified as Korean, because the main predication is Korean even though it starts with a short Japanese fragment.',
       )
       expect(modelConfig.systemInstruction).toContain(
+        'If the text is written in the script of one language but clearly phonetically represents another language, choose the intended spoken language rather than the writing system. For example, "료카이데스" should be classified as Japanese, not Korean.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
         'Set sourceLanguagesMixed=true only when two or more languages are actually mixed in the current text itself; otherwise set it to false.',
       )
       expect(modelConfig.systemInstruction).toContain(
