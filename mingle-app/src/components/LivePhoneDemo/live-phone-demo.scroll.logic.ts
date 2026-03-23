@@ -81,6 +81,80 @@ export function deriveAutoScrollThrottleDelayMs(
   return Math.max(0, minIntervalMs - elapsedMs)
 }
 
+export interface AutoScrollSchedulerUpdateInput {
+  shouldAutoScroll: () => boolean
+  runAutoScroll: () => boolean
+}
+
+export interface AutoScrollSchedulerOptions {
+  minIntervalMs?: number
+  getNowMs?: () => number
+  setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
+  clearTimer?: (timer: ReturnType<typeof setTimeout>) => void
+}
+
+export interface AutoScrollScheduler {
+  update: (input: AutoScrollSchedulerUpdateInput) => void
+  cancel: () => void
+  markPerformed: (nowMs?: number) => void
+}
+
+export function createAutoScrollScheduler(
+  options: AutoScrollSchedulerOptions = {},
+): AutoScrollScheduler {
+  const minIntervalMs = options.minIntervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
+  const getNowMs = options.getNowMs ?? (() => Date.now())
+  const setTimer = options.setTimer ?? ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
+  const clearTimer = options.clearTimer ?? ((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer))
+
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null
+  let lastAutoScrollAtMs = 0
+  let currentInput: AutoScrollSchedulerUpdateInput | null = null
+
+  const cancel = () => {
+    if (!pendingTimer) return
+    clearTimer(pendingTimer)
+    pendingTimer = null
+  }
+
+  const execute = () => {
+    if (!currentInput?.shouldAutoScroll()) return
+    const didAutoScroll = currentInput.runAutoScroll()
+    if (didAutoScroll) {
+      lastAutoScrollAtMs = getNowMs()
+    }
+  }
+
+  return {
+    update(input) {
+      currentInput = input
+      cancel()
+
+      if (!input.shouldAutoScroll()) return
+
+      const delayMs = deriveAutoScrollThrottleDelayMs({
+        nowMs: getNowMs(),
+        lastAutoScrollAtMs,
+        minIntervalMs,
+      })
+
+      if (delayMs === 0) {
+        execute()
+        return
+      }
+
+      pendingTimer = setTimer(() => {
+        pendingTimer = null
+        execute()
+      }, delayMs)
+    },
+    cancel,
+    markPerformed(nowMs) {
+      lastAutoScrollAtMs = nowMs ?? getNowMs()
+    },
+  }
+}
+
 export interface DeriveScrollUiVisibilityInput {
   fromUserScroll: boolean
   shouldAutoScroll: boolean

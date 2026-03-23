@@ -19,8 +19,7 @@ import {
 } from '@/lib/stt-languages'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
-  AUTO_SCROLL_MIN_INTERVAL_MS,
-  deriveAutoScrollThrottleDelayMs,
+  createAutoScrollScheduler,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
@@ -964,8 +963,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isPaginatingRef = useRef(false)
   const prevScrollHeightRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
-  const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastAutoScrollAtRef = useRef(0)
+  const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
@@ -1003,10 +1001,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const clearPendingAutoScrollTimer = useCallback(() => {
-    if (autoScrollTimerRef.current) {
-      clearTimeout(autoScrollTimerRef.current)
-      autoScrollTimerRef.current = null
-    }
+    autoScrollSchedulerRef.current.cancel()
   }, [])
 
   const updateScrollDerivedState = useCallback((options?: { fromUserScroll?: boolean }) => {
@@ -1098,6 +1093,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     suppressAutoScrollRef.current = false
     shouldAutoScroll.current = true
     chatRef.current.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
+    autoScrollSchedulerRef.current.markPerformed()
     updateScrollDerivedState({ fromUserScroll: true })
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
@@ -1134,6 +1130,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     node.scrollTop = node.scrollHeight
     shouldAutoScroll.current = true
     suppressAutoScrollRef.current = false
+    autoScrollSchedulerRef.current.markPerformed()
     hasInitialBottomAnchorRef.current = true
 
     const rafId = window.requestAnimationFrame(() => {
@@ -1155,8 +1152,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     updateScrollDerivedState()
   }, [updateScrollDerivedState, utterances])
 
-  const runScheduledAutoScroll = useCallback(() => {
-    autoScrollTimerRef.current = null
+  const executeAutoScrollIfEligible = useCallback(() => {
     updateScrollDerivedState()
 
     if (
@@ -1166,45 +1162,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       || isPaginatingRef.current
       || isLoadingOlderRef.current
     ) {
-      return
+      return false
     }
 
     const targetTop = chatRef.current.scrollHeight
-    if (Math.abs(targetTop - chatRef.current.scrollTop) <= 1) return
+    if (Math.abs(targetTop - chatRef.current.scrollTop) <= 1) return false
 
     chatRef.current.scrollTo({ top: targetTop, behavior: 'smooth' })
-    lastAutoScrollAtRef.current = Date.now()
     updateScrollDerivedState()
+    return true
   }, [updateScrollDerivedState])
 
   useEffect(() => {
     updateScrollDerivedState()
-    clearPendingAutoScrollTimer()
-
-    if (
-      !chatRef.current
-      || !shouldAutoScroll.current
-      || suppressAutoScrollRef.current
-      || isPaginatingRef.current
-      || isLoadingOlderRef.current
-    ) {
-      return
-    }
-
-    const delayMs = deriveAutoScrollThrottleDelayMs({
-      nowMs: Date.now(),
-      lastAutoScrollAtMs: lastAutoScrollAtRef.current,
-      minIntervalMs: AUTO_SCROLL_MIN_INTERVAL_MS,
+    autoScrollSchedulerRef.current.update({
+      shouldAutoScroll: () => (
+        !!chatRef.current
+        && shouldAutoScroll.current
+        && !suppressAutoScrollRef.current
+        && !isPaginatingRef.current
+        && !isLoadingOlderRef.current
+      ),
+      runAutoScroll: executeAutoScrollIfEligible,
     })
-
-    if (delayMs === 0) {
-      runScheduledAutoScroll()
-      return
-    }
-
-    autoScrollTimerRef.current = setTimeout(() => {
-      runScheduledAutoScroll()
-    }, delayMs)
 
     return () => {
       clearPendingAutoScrollTimer()
@@ -1212,9 +1192,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     clearPendingAutoScrollTimer,
     demoTypingText,
+    executeAutoScrollIfEligible,
     isConnecting,
     liveUtterances,
-    runScheduledAutoScroll,
     updateScrollDerivedState,
     utterances,
   ])
