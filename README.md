@@ -75,7 +75,7 @@ scripts/devbox status
 - If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in your shell (`.zshrc`) or in
   `mingle-app/.env.local` / `mingle-stt/.env.local`, devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
-- The default devbox behavior is stateless: it does not touch `.env.local` and uses ngrok/xcconfig-based configuration.
+- Devbox keeps worktree-local runtime settings in `.devbox.env` while leaving `.env.local` user-managed.
 - `scripts/devbox up`, `init`, `mobile`, and `bootstrap` do not auto-sync `.env.local`.
 - If a saved Vault path exists, `scripts/devbox up` injects unmanaged keys (such as API keys)
   into the server process environment at runtime without writing them to files.

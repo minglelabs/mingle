@@ -146,8 +146,9 @@ scripts/devbox bootstrap --vault-push
 
 - `scripts/devbox init`
   - `.devbox.env` 생성
-  - git worktree 목록 기준으로 이미 할당된 포트를 회피해 기본 포트 자동 선택
+  - git worktree 목록 기준으로 다른 워크트리의 `.devbox.env`를 읽어 이미 할당된 포트를 회피해 기본 포트 자동 선택
     (`web/stt/metro` + `ngrok inspector`)
+  - 현재 워크트리 경로 해시를 기준으로 기본 포트 슬롯을 안정적으로 선택하고, 충돌 시 다음 슬롯으로 이동
   - `ngrok.mobile.local.yml` 생성
   - RN 워크스페이스 의존성(`mingle-app/rn`) 자동 설치/점검
   - iOS Pods 상태(`Podfile.lock` vs `Pods/Manifest.lock`) 자동 점검 후
