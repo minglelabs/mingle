@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLanguageSelectionSignature,
   buildSonioxLanguageHints,
+  buildClientEventEnvelopeV2,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
   buildLiveUtterances,
@@ -89,6 +90,23 @@ describe('use-realtime-stt pure logic', () => {
       language: 'en-US',
       isFinal: true,
       speaker: 'speaker-2',
+    })
+  })
+
+  it('builds v2 client event envelope with session-bound monotonic seq', () => {
+    const envelope = buildClientEventEnvelopeV2({
+      sessionId: 'sess_abc',
+      seq: 12,
+      nowMs: 1_710_000_100_000,
+      randomUuid: () => '123e4567-e89b-12d3-a456-426614174000',
+    })
+
+    expect(envelope).toEqual({
+      eventId: 'evt_123e4567e89b12d3a456426614174000',
+      seq: 12,
+      sessionId: 'sess_abc',
+      schemaVersion: '2',
+      clientCreatedAt: '2024-03-09T16:01:40.000Z',
     })
   })
 

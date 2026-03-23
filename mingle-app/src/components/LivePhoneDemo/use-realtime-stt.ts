@@ -1390,6 +1390,41 @@ interface ClientEventLogPayload {
   keepalive?: boolean
 }
 
+const CLIENT_EVENT_SCHEMA_VERSION = '2'
+
+function createClientEventId(randomUuid?: () => string): string {
+  const uuid = randomUuid?.()
+    || (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : null)
+    || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+  return `evt_${uuid.replace(/-/g, '')}`
+}
+
+export interface ClientEventEnvelopeV2 {
+  eventId: string
+  seq: number
+  sessionId: string
+  schemaVersion: string
+  clientCreatedAt: string
+}
+
+export function buildClientEventEnvelopeV2(input: {
+  sessionId: string
+  seq: number
+  nowMs?: number
+  randomUuid?: () => string
+}): ClientEventEnvelopeV2 {
+  const clientCreatedAtIso = new Date(input.nowMs ?? Date.now()).toISOString()
+  return {
+    eventId: createClientEventId(input.randomUuid),
+    seq: input.seq,
+    sessionId: input.sessionId,
+    schemaVersion: CLIENT_EVENT_SCHEMA_VERSION,
+    clientCreatedAt: clientCreatedAtIso,
+  }
+}
+
 function createSessionKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `sess_${crypto.randomUUID().replace(/-/g, '')}`
@@ -1567,6 +1602,7 @@ export default function useRealtimeSTT({
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
+  const clientEventSeqRef = useRef(0)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
@@ -2037,9 +2073,21 @@ export default function useRealtimeSTT({
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
+      const sessionId = ensureSessionKey()
+      const nextSeq = clientEventSeqRef.current + 1
+      clientEventSeqRef.current = nextSeq
+      const envelope = buildClientEventEnvelopeV2({
+        sessionId,
+        seq: nextSeq,
+      })
       const body: Record<string, unknown> = {
         eventType: payload.eventType,
-        sessionKey: ensureSessionKey(),
+        sessionKey: sessionId,
+        eventId: envelope.eventId,
+        seq: envelope.seq,
+        sessionId: envelope.sessionId,
+        schemaVersion: envelope.schemaVersion,
+        clientCreatedAt: envelope.clientCreatedAt,
         clientContext: buildClientContextPayload(usageSec),
       }
 

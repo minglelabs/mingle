@@ -14,6 +14,11 @@ import {
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
+import {
+  buildTimelineMetadata,
+  parseLiveEventEnvelopeV2,
+} from '@/server/api/handlers/v1/live-event-contract'
+import { LIVE_SYNC_SHADOW_WRITE_ENABLED } from '@/server/api/handlers/v1/live-sync-flags'
 
 export const runtime = 'nodejs'
 
@@ -50,6 +55,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const model = sanitizeText(body.model, 128)
   const translations = sanitizeTranslations(body.translations)
   const clientMetadata = sanitizeJsonObject(body.metadata)
+  const envelopeV2 = parseLiveEventEnvelopeV2(body)
   const clientContext = parseClientContext(body.clientContext)
   const usageSecFromBody = sanitizeNonNegativeInt(body.usageSec)
 
@@ -169,6 +175,22 @@ export async function handleLogClientEventV1(request: NextRequest) {
     if (model) eventMetadata.model = model
     if (sttDurationMs !== null) eventMetadata.sttDurationMs = sttDurationMs
     if (totalDurationMs !== null) eventMetadata.totalDurationMs = totalDurationMs
+    if (envelopeV2.eventId) eventMetadata.eventId = envelopeV2.eventId
+    if (envelopeV2.seq !== null) eventMetadata.seq = envelopeV2.seq
+    if (envelopeV2.sessionId) eventMetadata.sessionId = envelopeV2.sessionId
+    if (envelopeV2.schemaVersion) eventMetadata.schemaVersion = envelopeV2.schemaVersion
+    if (envelopeV2.clientCreatedAtIso) eventMetadata.clientCreatedAt = envelopeV2.clientCreatedAtIso
+    if (LIVE_SYNC_SHADOW_WRITE_ENABLED) {
+      const timelineMetadata = buildTimelineMetadata({
+        envelope: envelopeV2,
+        fallbackSessionId: tracking.sessionKey,
+        eventType,
+        clientMessageId,
+      })
+      if (timelineMetadata) {
+        eventMetadata.timeline = timelineMetadata
+      }
+    }
     if (clientMetadata) eventMetadata.clientMetadata = clientMetadata
 
     await createTrackedEventLog({
