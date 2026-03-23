@@ -496,7 +496,13 @@ describe('/api/translate/finalize route', () => {
         generationConfig?: { responseSchema?: { required?: string[] } }
       }
       expect(modelConfig.systemInstruction).toContain(
+        'Treat language_hints as reference-only hints, not a constraint. If the current text clearly indicates a different source language, choose that language even when it is not included in language_hints.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
         'Only if the provided sourceLanguage clearly seems wrong for the current text, replace it with the source language that best matches the current text.',
+      )
+      expect(modelConfig.systemInstruction).toContain(
+        'choose that language even when it is not included in language_hints.',
       )
       expect(modelConfig.systemInstruction).toContain(
         'For example, if "료카이데스" is given sourceLanguage=ko, it should be corrected to Japanese because it is Korean script that phonetically represents Japanese speech.',

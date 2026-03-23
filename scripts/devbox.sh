@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 DEVBOX_LOG_DIR="$ROOT_DIR/.devbox-logs"
+DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
@@ -18,10 +19,12 @@ MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
 IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.4"
 ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.4"
-DEVBOX_FIXED_WEB_PORT=3518
-DEVBOX_FIXED_STT_PORT=5518
-DEVBOX_FIXED_METRO_PORT=8518
-DEVBOX_FIXED_NGROK_API_PORT=10518
+DEVBOX_BASE_WEB_PORT=3518
+DEVBOX_BASE_STT_PORT=5518
+DEVBOX_BASE_METRO_PORT=8518
+DEVBOX_BASE_NGROK_API_PORT=10518
+DEVBOX_PORT_SLOT_SPACING=20
+DEVBOX_PORT_SLOT_LIMIT=1000
 
 if [[ -d "$LOCAL_TOOLS_BIN" ]]; then
   PATH="$LOCAL_TOOLS_BIN:$PATH"
@@ -134,7 +137,7 @@ Usage:
   scripts/devbox status
 
 Commands:
-  init         Generate fixed ports/config runtime files.
+  init         Generate worktree-aware ports/config runtime files.
   bootstrap    Read-only for .env.local; install deps and optionally push local env keys to Vault.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
@@ -403,6 +406,22 @@ read_devbox_shell_setting_value() {
   return 1
 }
 
+read_devbox_env_value_from_file() {
+  local file="$1"
+  local key="$2"
+  local value=""
+
+  [[ -f "$file" ]] || return 1
+  value="$(read_env_or_export_value_from_file "$key" "$file" || true)"
+  value="$(trim_whitespace "$value")"
+  [[ -n "$value" ]] || return 1
+  printf '%s' "$value"
+}
+
+read_devbox_env_value() {
+  read_devbox_env_value_from_file "$DEVBOX_ENV_FILE" "$1"
+}
+
 read_vault_cli_env_value_from_local_env_files() {
   local key="$1"
   local value=""
@@ -520,6 +539,15 @@ read_app_setting_value() {
     return 0
   fi
 
+  if [[ "$key" == DEVBOX_* ]]; then
+    value="$(read_devbox_env_value "$key" || true)"
+    value="$(trim_whitespace "$value")"
+    if [[ -n "$value" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  fi
+
   if [[ -n "${DEVBOX_VAULT_APP_PATH:-}" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     value="$(read_env_value_from_vault "$DEVBOX_VAULT_APP_PATH" "$key" || true)"
     if [[ -n "$value" ]]; then
@@ -578,40 +606,86 @@ derive_worktree_name() {
 
 collect_reserved_ports() {
   RESERVED_ALL_PORTS=""
-  # .devbox.env is no longer used; port collision checks rely on active listeners.
+  local line="" worktree_path="" worktree_canon="" env_file="" port="" key=""
+
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *)
+        worktree_path="${line#worktree }"
+        worktree_canon="$(cd "$worktree_path" 2>/dev/null && pwd -P || true)"
+        [[ -n "$worktree_canon" ]] || continue
+        [[ "$worktree_canon" != "$ROOT_CANON" ]] || continue
+
+        env_file="$worktree_canon/.devbox.env"
+        [[ -f "$env_file" ]] || continue
+
+        for key in \
+          DEVBOX_WEB_PORT \
+          DEVBOX_STT_PORT \
+          DEVBOX_METRO_PORT \
+          DEVBOX_NGROK_API_PORT
+        do
+          port="$(read_devbox_env_value_from_file "$env_file" "$key" || true)"
+          if is_numeric "$port" && ! port_list_contains "$RESERVED_ALL_PORTS" "$port"; then
+            RESERVED_ALL_PORTS="$(append_port "$RESERVED_ALL_PORTS" "$port")"
+          fi
+        done
+        ;;
+    esac
+  done < <(git -C "$ROOT_DIR" worktree list --porcelain 2>/dev/null || true)
+}
+
+calc_slot_port() {
+  local base="$1"
+  local slot="$2"
+  printf '%s' "$((base + (slot * DEVBOX_PORT_SLOT_SPACING)))"
+}
+
+default_port_set_available() {
+  local web_port="$1"
+  local stt_port="$2"
+  local metro_port="$3"
+  local ngrok_api_port="$4"
+  local port=""
+
+  for port in "$web_port" "$stt_port" "$metro_port" "$ngrok_api_port"; do
+    (( port >= 1 && port <= 65535 )) || return 1
+    port_list_contains "$RESERVED_ALL_PORTS" "$port" && return 1
+    port_in_use "$port" && return 1
+  done
+
+  return 0
 }
 
 calc_default_ports() {
   collect_reserved_ports
-  DEFAULT_WEB_PORT="$DEVBOX_FIXED_WEB_PORT"
-  DEFAULT_STT_PORT="$DEVBOX_FIXED_STT_PORT"
-  DEFAULT_METRO_PORT="$DEVBOX_FIXED_METRO_PORT"
-  DEFAULT_NGROK_API_PORT="$DEVBOX_FIXED_NGROK_API_PORT"
-}
 
-enforce_fixed_ports() {
-  local requested_web="${DEVBOX_WEB_PORT:-}"
-  local requested_stt="${DEVBOX_STT_PORT:-}"
-  local requested_metro="${DEVBOX_METRO_PORT:-}"
-  local requested_ngrok_api="${DEVBOX_NGROK_API_PORT:-}"
+  local preferred_slot=0
+  local slot=0
+  local attempt=0
 
-  if [[ -n "$requested_web" && "$requested_web" != "$DEFAULT_WEB_PORT" ]]; then
-    warn "DEVBOX_WEB_PORT override($requested_web) ignored; using fixed port $DEFAULT_WEB_PORT"
-  fi
-  if [[ -n "$requested_stt" && "$requested_stt" != "$DEFAULT_STT_PORT" ]]; then
-    warn "DEVBOX_STT_PORT override($requested_stt) ignored; using fixed port $DEFAULT_STT_PORT"
-  fi
-  if [[ -n "$requested_metro" && "$requested_metro" != "$DEFAULT_METRO_PORT" ]]; then
-    warn "DEVBOX_METRO_PORT override($requested_metro) ignored; using fixed port $DEFAULT_METRO_PORT"
-  fi
-  if [[ -n "$requested_ngrok_api" && "$requested_ngrok_api" != "$DEFAULT_NGROK_API_PORT" ]]; then
-    warn "DEVBOX_NGROK_API_PORT override($requested_ngrok_api) ignored; using fixed port $DEFAULT_NGROK_API_PORT"
-  fi
+  preferred_slot="$(printf '%s' "$ROOT_CANON" | cksum | awk -v mod="$DEVBOX_PORT_SLOT_LIMIT" '{print $1 % mod}')"
 
-  DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
-  DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
-  DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
-  DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
+  while [[ "$attempt" -lt "$DEVBOX_PORT_SLOT_LIMIT" ]]; do
+    slot="$(((preferred_slot + attempt) % DEVBOX_PORT_SLOT_LIMIT))"
+    DEFAULT_WEB_PORT="$(calc_slot_port "$DEVBOX_BASE_WEB_PORT" "$slot")"
+    DEFAULT_STT_PORT="$(calc_slot_port "$DEVBOX_BASE_STT_PORT" "$slot")"
+    DEFAULT_METRO_PORT="$(calc_slot_port "$DEVBOX_BASE_METRO_PORT" "$slot")"
+    DEFAULT_NGROK_API_PORT="$(calc_slot_port "$DEVBOX_BASE_NGROK_API_PORT" "$slot")"
+
+    if default_port_set_available \
+      "$DEFAULT_WEB_PORT" \
+      "$DEFAULT_STT_PORT" \
+      "$DEFAULT_METRO_PORT" \
+      "$DEFAULT_NGROK_API_PORT"
+    then
+      return 0
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  die "unable to allocate devbox ports for this worktree after ${DEVBOX_PORT_SLOT_LIMIT} attempts"
 }
 
 ensure_file_parent() {
@@ -1111,6 +1185,7 @@ require_devbox_env() {
   if [[ -z "$DEVBOX_WORKTREE_NAME" ]]; then
     DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
   fi
+  DEVBOX_ROOT_DIR="$ROOT_CANON"
 
   if [[ -z "${DEVBOX_VAULT_APP_PATH:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_APP_PATH || true)")"
@@ -1131,8 +1206,26 @@ require_devbox_env() {
   fi
 
   calc_default_ports
-
-  enforce_fixed_ports
+  if [[ -z "${DEVBOX_WEB_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_WEB_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_WEB_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_STT_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_STT_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_STT_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_METRO_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_METRO_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_METRO_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_NGROK_API_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_NGROK_API_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_NGROK_API_PORT="$value"
+  fi
+  [[ -n "${DEVBOX_WEB_PORT:-}" ]] || DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
+  [[ -n "${DEVBOX_STT_PORT:-}" ]] || DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
+  [[ -n "${DEVBOX_METRO_PORT:-}" ]] || DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
+  [[ -n "${DEVBOX_NGROK_API_PORT:-}" ]] || DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
 
   if [[ -z "${DEVBOX_PROFILE:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PROFILE || true)")"
@@ -1216,6 +1309,58 @@ require_devbox_env() {
   if [[ "$DEVBOX_PROFILE" == "local" ]]; then
     validate_host "$DEVBOX_LOCAL_HOST"
   fi
+}
+
+write_devbox_env_file() {
+  local key=""
+  local value=""
+
+  prepare_generated_file "$DEVBOX_ENV_FILE"
+  cat > "$DEVBOX_ENV_FILE" <<EOF
+# Auto-generated by scripts/devbox.
+# Worktree-local runtime configuration.
+EOF
+
+  for key in \
+    DEVBOX_WORKTREE_NAME \
+    DEVBOX_ROOT_DIR \
+    DEVBOX_PROFILE \
+    DEVBOX_WEB_PORT \
+    DEVBOX_STT_PORT \
+    DEVBOX_METRO_PORT \
+    DEVBOX_NGROK_API_PORT \
+    DEVBOX_LOCAL_HOST \
+    DEVBOX_SITE_URL \
+    DEVBOX_RN_WS_URL \
+    DEVBOX_PUBLIC_WS_URL \
+    DEVBOX_TEST_API_BASE_URL \
+    DEVBOX_TEST_WS_URL \
+    NEXT_PUBLIC_SITE_URL \
+    NEXTAUTH_URL \
+    NEXT_PUBLIC_WS_PORT \
+    NEXT_PUBLIC_WS_URL \
+    MINGLE_TEST_API_BASE_URL \
+    MINGLE_TEST_WS_URL \
+    RN_IOS_API_NAMESPACE \
+    RN_ANDROID_API_NAMESPACE \
+    DEVBOX_TUNNEL_PROVIDER \
+    DEVBOX_VAULT_APP_PATH \
+    DEVBOX_VAULT_STT_PATH \
+    DEVBOX_OPENCLAW_ROOT \
+    DEVBOX_IOS_TEAM_ID
+  do
+    case "$key" in
+      NEXT_PUBLIC_SITE_URL|NEXTAUTH_URL) value="${DEVBOX_SITE_URL:-}" ;;
+      NEXT_PUBLIC_WS_PORT) value="${DEVBOX_STT_PORT:-}" ;;
+      NEXT_PUBLIC_WS_URL) value="${DEVBOX_RN_WS_URL:-}" ;;
+      MINGLE_TEST_API_BASE_URL) value="${DEVBOX_TEST_API_BASE_URL:-}" ;;
+      MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
+      RN_IOS_API_NAMESPACE) value="${IOS_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      RN_ANDROID_API_NAMESPACE) value="${ANDROID_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      *) value="${!key:-}" ;;
+    esac
+    printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
+  done
 }
 
 write_app_env_block() {
@@ -2609,6 +2754,11 @@ resolve_device_app_env_override() {
 }
 
 save_and_refresh() {
+  if [[ -z "${DEVBOX_WORKTREE_NAME:-}" ]]; then
+    DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
+  fi
+  DEVBOX_ROOT_DIR="$ROOT_CANON"
+  write_devbox_env_file
   refresh_runtime_files
 }
 
@@ -2784,6 +2934,7 @@ cmd_init() {
   local web_port="" stt_port="" metro_port="" ngrok_api_port="" host="127.0.0.1"
   local vault_app_override="" vault_stt_override=""
   local openclaw_root_override=""
+  local current_web_port="" current_stt_port="" current_metro_port="" current_ngrok_api_port=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2808,25 +2959,16 @@ cmd_init() {
   fi
 
   DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
+  current_web_port="$(read_devbox_env_value DEVBOX_WEB_PORT || true)"
+  current_stt_port="$(read_devbox_env_value DEVBOX_STT_PORT || true)"
+  current_metro_port="$(read_devbox_env_value DEVBOX_METRO_PORT || true)"
+  current_ngrok_api_port="$(read_devbox_env_value DEVBOX_NGROK_API_PORT || true)"
   calc_default_ports
 
-  if [[ -n "$web_port" && "$web_port" != "$DEFAULT_WEB_PORT" ]]; then
-    die "web port is fixed to $DEFAULT_WEB_PORT; remove --web-port override"
-  fi
-  if [[ -n "$stt_port" && "$stt_port" != "$DEFAULT_STT_PORT" ]]; then
-    die "stt port is fixed to $DEFAULT_STT_PORT; remove --stt-port override"
-  fi
-  if [[ -n "$metro_port" && "$metro_port" != "$DEFAULT_METRO_PORT" ]]; then
-    die "metro port is fixed to $DEFAULT_METRO_PORT; remove --metro-port override"
-  fi
-  if [[ -n "$ngrok_api_port" && "$ngrok_api_port" != "$DEFAULT_NGROK_API_PORT" ]]; then
-    die "ngrok api port is fixed to $DEFAULT_NGROK_API_PORT; remove --ngrok-api-port override"
-  fi
-
-  web_port="$DEFAULT_WEB_PORT"
-  stt_port="$DEFAULT_STT_PORT"
-  metro_port="$DEFAULT_METRO_PORT"
-  ngrok_api_port="$DEFAULT_NGROK_API_PORT"
+  [[ -n "$web_port" ]] || web_port="${current_web_port:-$DEFAULT_WEB_PORT}"
+  [[ -n "$stt_port" ]] || stt_port="${current_stt_port:-$DEFAULT_STT_PORT}"
+  [[ -n "$metro_port" ]] || metro_port="${current_metro_port:-$DEFAULT_METRO_PORT}"
+  [[ -n "$ngrok_api_port" ]] || ngrok_api_port="${current_ngrok_api_port:-$DEFAULT_NGROK_API_PORT}"
 
   validate_port "web port" "$web_port"
   validate_port "stt port" "$stt_port"
@@ -4456,6 +4598,7 @@ OpenClaw    : root=${DEVBOX_OPENCLAW_ROOT:-$(resolve_openclaw_root)}
 iOS Team ID : ${DEVBOX_IOS_TEAM_ID:-"(auto: mingle.xcodeproj DEVELOPMENT_TEAM)"}
 
 Files:
+- $DEVBOX_ENV_FILE
 - $APP_ENV_FILE
 - $STT_ENV_FILE
 - $NGROK_LOCAL_CONFIG
