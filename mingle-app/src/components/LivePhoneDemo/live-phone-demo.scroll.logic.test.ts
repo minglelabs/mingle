@@ -1,12 +1,96 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  AUTO_SCROLL_MIN_INTERVAL_MS,
+  createAutoScrollScheduler,
+  deriveAutoScrollThrottleDelayMs,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
 } from './live-phone-demo.scroll.logic'
 
 describe('live-phone-demo scroll/platform logic', () => {
+  describe('createAutoScrollScheduler', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-03-23T00:00:00.000Z'))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('rechecks the latest condition before a throttled scroll runs', () => {
+      let shouldAutoScroll = true
+      let runCount = 0
+
+      const scheduler = createAutoScrollScheduler()
+      scheduler.markPerformed()
+      scheduler.update({
+        shouldAutoScroll: () => shouldAutoScroll,
+        runAutoScroll: () => {
+          runCount += 1
+          return true
+        },
+      })
+
+      shouldAutoScroll = false
+      vi.advanceTimersByTime(AUTO_SCROLL_MIN_INTERVAL_MS)
+
+      expect(runCount).toBe(0)
+    })
+
+    it('cancels a pending throttled scroll when auto-follow turns off', () => {
+      let shouldAutoScroll = true
+      let runCount = 0
+
+      const scheduler = createAutoScrollScheduler()
+      scheduler.markPerformed()
+      scheduler.update({
+        shouldAutoScroll: () => shouldAutoScroll,
+        runAutoScroll: () => {
+          runCount += 1
+          return true
+        },
+      })
+
+      shouldAutoScroll = false
+      scheduler.cancel()
+      vi.advanceTimersByTime(AUTO_SCROLL_MIN_INTERVAL_MS)
+
+      expect(runCount).toBe(0)
+    })
+
+    it('reschedules using the remaining throttle window instead of stacking timers', () => {
+      let runCount = 0
+
+      const scheduler = createAutoScrollScheduler()
+      scheduler.markPerformed()
+      scheduler.update({
+        shouldAutoScroll: () => true,
+        runAutoScroll: () => {
+          runCount += 1
+          return true
+        },
+      })
+
+      vi.advanceTimersByTime(400)
+      scheduler.update({
+        shouldAutoScroll: () => true,
+        runAutoScroll: () => {
+          runCount += 1
+          return true
+        },
+      })
+
+      vi.advanceTimersByTime(599)
+      expect(runCount).toBe(0)
+
+      vi.advanceTimersByTime(1)
+      expect(runCount).toBe(1)
+    })
+  })
+
   describe('isLikelyIOSNavigator', () => {
     it('returns true for iPhone user agent', () => {
       expect(isLikelyIOSNavigator({
@@ -150,6 +234,29 @@ describe('live-phone-demo scroll/platform logic', () => {
 
       expect(ui.visible).toBe(true)
       expect(ui.scheduleHideTimer).toBe(true)
+    })
+  })
+
+  describe('deriveAutoScrollThrottleDelayMs', () => {
+    it('returns zero when auto-scroll has not run yet', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 10_000,
+        lastAutoScrollAtMs: 0,
+      })).toBe(0)
+    })
+
+    it('returns the remaining throttle window', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 10_250,
+        lastAutoScrollAtMs: 10_000,
+      })).toBe(AUTO_SCROLL_MIN_INTERVAL_MS - 250)
+    })
+
+    it('returns zero after the minimum interval elapses', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 11_250,
+        lastAutoScrollAtMs: 10_000,
+      })).toBe(0)
     })
   })
 })
