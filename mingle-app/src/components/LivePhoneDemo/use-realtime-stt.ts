@@ -18,6 +18,7 @@ const DEFAULT_USAGE_LIMIT_SEC = 60
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
 const LS_KEY_SESSION = 'mingle_demo_session_key'
+const LS_KEY_CLIENT_EVENT_SEQ_PREFIX = 'mingle_demo_client_event_seq'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
@@ -1452,6 +1453,32 @@ function getOrCreateSessionKey(): string {
   }
 }
 
+function getClientEventSeqStorageKey(sessionId: string): string {
+  return `${LS_KEY_CLIENT_EVENT_SEQ_PREFIX}:${sessionId}`
+}
+
+function readPersistedClientEventSeq(sessionId: string): number {
+  if (typeof window === 'undefined' || !sessionId) return 0
+  try {
+    const raw = window.localStorage.getItem(getClientEventSeqStorageKey(sessionId))
+    const parsed = Number.parseInt(raw || '', 10)
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed
+  } catch {
+    // noop
+  }
+  return 0
+}
+
+function persistClientEventSeq(sessionId: string, seq: number): void {
+  if (typeof window === 'undefined' || !sessionId) return
+  const normalized = Number.isFinite(seq) && seq > 0 ? Math.floor(seq) : 0
+  try {
+    window.localStorage.setItem(getClientEventSeqStorageKey(sessionId), String(normalized))
+  } catch {
+    // noop
+  }
+}
+
 function buildClientContextPayload(usageSec: number): Record<string, unknown> {
   if (typeof window === 'undefined') {
     return { usageSec }
@@ -1603,6 +1630,7 @@ export default function useRealtimeSTT({
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
   const clientEventSeqRef = useRef(0)
+  const clientEventSeqSessionRef = useRef('')
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
@@ -2074,8 +2102,13 @@ export default function useRealtimeSTT({
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
       const sessionId = ensureSessionKey()
+      if (clientEventSeqSessionRef.current !== sessionId) {
+        clientEventSeqRef.current = readPersistedClientEventSeq(sessionId)
+        clientEventSeqSessionRef.current = sessionId
+      }
       const nextSeq = clientEventSeqRef.current + 1
       clientEventSeqRef.current = nextSeq
+      persistClientEventSeq(sessionId, nextSeq)
       const envelope = buildClientEventEnvelopeV2({
         sessionId,
         seq: nextSeq,

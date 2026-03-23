@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ensureTrackingContext, sanitizeNonNegativeInt } from '@/lib/app-analytics'
 import { sanitizeText, sanitizeTranslations } from '@/app/api/log/client-event/sanitize'
 import { extractTimelineFromEventMetadata } from '@/server/api/handlers/v1/live-event-contract'
 import { LIVE_SYNC_DELTA_READ_ENABLED } from '@/server/api/handlers/v1/live-sync-flags'
+import { sliceDeltaEventsForCursor } from '@/server/api/handlers/v1/log-client-event-delta-slice'
 
 export const runtime = 'nodejs'
 
@@ -11,6 +13,7 @@ const DEFAULT_DELTA_LIMIT = 50
 const MAX_DELTA_LIMIT = 200
 const LOOKUP_WINDOW_FLOOR = 240
 const LOOKUP_WINDOW_MULTIPLIER = 12
+const MAX_DELTA_SCAN_ROWS = 5000
 
 function parseDeltaLimit(rawValue: string | null): number {
   const parsed = sanitizeNonNegativeInt(rawValue)
@@ -26,6 +29,43 @@ function parseAfterSeq(rawValue: string | null): number | null {
 function extractMetadataRecord(metadata: unknown): Record<string, unknown> {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {}
   return metadata as Record<string, unknown>
+}
+
+type DeltaLogRow = {
+  id: string
+  eventType: string
+  messageId: string | null
+  metadata: unknown
+  createdAt: Date
+}
+
+async function queryDeltaRowsByTimelineSeq(args: {
+  sessionKey: string
+  afterSeq: number
+  scanLimit: number
+}): Promise<DeltaLogRow[]> {
+  const safeLimit = Math.max(1, args.scanLimit)
+
+  return prisma.$queryRaw<DeltaLogRow[]>(Prisma.sql`
+    SELECT
+      id,
+      event_type AS "eventType",
+      message_id AS "messageId",
+      metadata,
+      created_at AS "createdAt"
+    FROM app_event_logs
+    WHERE session_key = ${args.sessionKey}
+      AND metadata IS NOT NULL
+      AND jsonb_typeof(metadata) = 'object'
+      AND jsonb_typeof(metadata -> 'timeline') = 'object'
+      AND (metadata -> 'timeline' ->> 'seq') ~ '^[0-9]+$'
+      AND ((metadata -> 'timeline' ->> 'seq')::bigint > ${args.afterSeq})
+    ORDER BY
+      ((metadata -> 'timeline' ->> 'seq')::bigint) ASC,
+      created_at ASC,
+      id ASC
+    LIMIT ${safeLimit}
+  `)
 }
 
 export async function handleGetLogClientEventDeltaV1(request: NextRequest) {
@@ -49,23 +89,16 @@ export async function handleGetLogClientEventDeltaV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, cookieCarrier, { sessionKeyHint })
   const sessionKey = sessionKeyHint || tracking.sessionKey
   const limit = parseDeltaLimit(query.get('limit'))
-  const lookupWindow = Math.min(1000, Math.max(limit * LOOKUP_WINDOW_MULTIPLIER, LOOKUP_WINDOW_FLOOR))
+  const scanLimit = Math.min(MAX_DELTA_SCAN_ROWS, Math.max(limit * LOOKUP_WINDOW_MULTIPLIER, LOOKUP_WINDOW_FLOOR))
 
   try {
-    const rows = await prisma.appEventLog.findMany({
-      where: { sessionKey },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: lookupWindow,
-      select: {
-        id: true,
-        eventType: true,
-        messageId: true,
-        metadata: true,
-        createdAt: true,
-      },
+    const rows = await queryDeltaRowsByTimelineSeq({
+      sessionKey,
+      afterSeq,
+      scanLimit,
     })
 
-    const events = rows
+    const parsedEvents = rows
       .map((row) => {
         const timeline = extractTimelineFromEventMetadata(row.metadata)
         if (!timeline || timeline.seq <= afterSeq) return null
@@ -94,14 +127,13 @@ export async function handleGetLogClientEventDeltaV1(request: NextRequest) {
         }
       })
       .filter((event): event is NonNullable<typeof event> => Boolean(event))
-      .sort((left, right) => (
-        left.seq - right.seq
-        || left.serverCreatedAt.localeCompare(right.serverCreatedAt)
-        || left.logId.localeCompare(right.logId)
-      ))
 
-    const hasMore = events.length > limit || rows.length === lookupWindow
-    const slicedEvents = events.slice(0, limit)
+    const { events: slicedEvents, hasMore } = sliceDeltaEventsForCursor({
+      events: parsedEvents,
+      limit,
+      didHitFetchLimit: rows.length === scanLimit,
+    })
+
     const nextSeq = slicedEvents.length > 0
       ? slicedEvents[slicedEvents.length - 1].seq
       : afterSeq
