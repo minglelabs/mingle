@@ -25,10 +25,10 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.4 (20)",
+      "releaseName": "1.0.4 (21)",
       "releaseNotes": {
-        "en-US": "Improved locale-based starter languages and refined Soniox hint control.",
-        "ko-KR": "locale 기반 시작 언어를 개선하고 Soniox 힌트 제어를 정리했습니다."
+        "en-US": "Rebuilt Android 1.0.4 with a new Play upload bundle.\nImproved locale-based starter language defaults.\nRefined Soniox hint control for more stable recognition.",
+        "ko-KR": "안드로이드 1.0.4를 신규 Play 업로드 번들로 재빌드했습니다.\nlocale 기반 시작 언어 기본값을 개선했습니다.\nSoniox 힌트 제어를 정리해 인식 안정성을 높였습니다."
       },
       "screenshots": {
         "ko": [
