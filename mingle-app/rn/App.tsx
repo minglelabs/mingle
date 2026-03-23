@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Alert,
   Image,
   Linking,
@@ -9,6 +10,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  type AppStateStatus,
   View,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -854,9 +856,33 @@ function resolveTrustedOrigin(rawUrl: string): string {
   }
 }
 
+function pickWebViewDiagnosticFields(
+  value?: Record<string, unknown> | null,
+): Record<string, string | number | boolean | null> {
+  if (!value) return {};
+
+  const result: Record<string, string | number | boolean | null> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (
+      entry === null
+      || typeof entry === 'string'
+      || typeof entry === 'number'
+      || typeof entry === 'boolean'
+    ) {
+      result[key] = entry;
+    }
+  }
+  return result;
+}
+
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundEnteredAtRef = useRef<number | null>(null);
+  const lastBackgroundDurationMsRef = useRef<number | null>(null);
+  const webViewLifecycleSeqRef = useRef(0);
+  const webViewLoadStartedAtRef = useRef<number | null>(null);
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -926,6 +952,49 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
+
+  const logWebViewLifecycle = useCallback((phase: string, details?: Record<string, unknown>) => {
+    const seq = webViewLifecycleSeqRef.current + 1;
+    webViewLifecycleSeqRef.current = seq;
+    console.log(`[RNWebView] ${JSON.stringify({
+      seq,
+      phase,
+      appState: appStateRef.current,
+      nativeSttStatus: nativeStatusRef.current,
+      pageReady: isPageReadyRef.current,
+      webUrl: webUrl || null,
+      ...details,
+    })}`);
+  }, [webUrl]);
+
+  useEffect(() => {
+    logWebViewLifecycle('app_state_init', { state: appStateRef.current });
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      const now = Date.now();
+
+      if ((nextState === 'background' || nextState === 'inactive') && previousState === 'active') {
+        backgroundEnteredAtRef.current = now;
+      } else if (nextState === 'active' && previousState !== 'active') {
+        lastBackgroundDurationMsRef.current = backgroundEnteredAtRef.current
+          ? now - backgroundEnteredAtRef.current
+          : null;
+        backgroundEnteredAtRef.current = null;
+      }
+
+      appStateRef.current = nextState;
+      logWebViewLifecycle('app_state_change', {
+        previousState,
+        nextState,
+        lastBackgroundDurationMs: lastBackgroundDurationMsRef.current,
+      });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [logWebViewLifecycle]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1593,15 +1662,30 @@ function AppInner(): React.JSX.Element {
   }, [emitTtsToWeb, resolveCurrentTtsIdentity]);
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
+    webViewLoadStartedAtRef.current = Date.now();
     isPageReadyRef.current = false;
+    logWebViewLifecycle('load_start', {
+      requestedUrl: event?.nativeEvent?.url || null,
+      lastBackgroundDurationMs: lastBackgroundDurationMsRef.current,
+    });
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
-  }, [updateSafeAreaPalette]);
+  }, [logWebViewLifecycle, updateSafeAreaPalette]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
+    const loadDurationMs = webViewLoadStartedAtRef.current
+      ? Date.now() - webViewLoadStartedAtRef.current
+      : null;
+    webViewLoadStartedAtRef.current = null;
     isPageReadyRef.current = true;
+    logWebViewLifecycle('load_end', {
+      requestedUrl: event?.nativeEvent?.url || null,
+      loadDurationMs,
+      lastBackgroundDurationMs: lastBackgroundDurationMsRef.current,
+    });
+    lastBackgroundDurationMsRef.current = null;
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
@@ -1610,20 +1694,43 @@ function AppInner(): React.JSX.Element {
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, logWebViewLifecycle, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
+    const loadDurationMs = webViewLoadStartedAtRef.current
+      ? Date.now() - webViewLoadStartedAtRef.current
+      : null;
+    webViewLoadStartedAtRef.current = null;
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
     const description = event.nativeEvent.description || 'webview_load_failed';
+    logWebViewLifecycle('load_error', {
+      description,
+      loadDurationMs,
+      lastBackgroundDurationMs: lastBackgroundDurationMsRef.current,
+    });
+    lastBackgroundDurationMsRef.current = null;
     setLoadError(formatWebViewLoadError(description, webUrl));
-  }, [webUrl]);
+  }, [logWebViewLifecycle, webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
+    if (navigationState.url !== webUrl) {
+      logWebViewLifecycle('navigation_change', {
+        navigationUrl: navigationState.url,
+      });
+    }
     updateSafeAreaPalette(navigationState.url);
-  }, [updateSafeAreaPalette]);
+  }, [logWebViewLifecycle, updateSafeAreaPalette, webUrl]);
+
+  const handleRenderProcessGone = useCallback((event?: { nativeEvent?: Record<string, unknown> }) => {
+    logWebViewLifecycle('render_process_gone', pickWebViewDiagnosticFields(event?.nativeEvent));
+  }, [logWebViewLifecycle]);
+
+  const handleContentProcessDidTerminate = useCallback((event?: { nativeEvent?: Record<string, unknown> }) => {
+    logWebViewLifecycle('content_process_did_terminate', pickWebViewDiagnosticFields(event?.nativeEvent));
+  }, [logWebViewLifecycle]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -1675,6 +1782,8 @@ function AppInner(): React.JSX.Element {
             onLoadEnd={handleLoadEnd}
             onError={handleLoadError}
             onNavigationStateChange={handleNavigationStateChange}
+            onRenderProcessGone={handleRenderProcessGone}
+            onContentProcessDidTerminate={handleContentProcessDidTerminate}
             style={[styles.webView, { backgroundColor: safeAreaPalette.webViewColor }]}
           />
         ) : (
