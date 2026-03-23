@@ -1,4 +1,5 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 400
+export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 
 export interface NavigatorLikeForIosCheck {
   userAgent?: string
@@ -56,6 +57,101 @@ export function deriveScrollAutoFollowState(
     isNearBottom,
     suppressAutoScroll: nextSuppressAutoScroll,
     shouldAutoScroll,
+  }
+}
+
+export interface DeriveAutoScrollThrottleDelayMsInput {
+  nowMs: number
+  lastAutoScrollAtMs: number
+  minIntervalMs?: number
+}
+
+export function deriveAutoScrollThrottleDelayMs(
+  input: DeriveAutoScrollThrottleDelayMsInput,
+): number {
+  const minIntervalMs = input.minIntervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
+  const safeNowMs = Number.isFinite(input.nowMs) ? input.nowMs : 0
+  const safeLastAutoScrollAtMs = Number.isFinite(input.lastAutoScrollAtMs)
+    ? input.lastAutoScrollAtMs
+    : 0
+
+  if (safeLastAutoScrollAtMs <= 0) return 0
+
+  const elapsedMs = Math.max(0, safeNowMs - safeLastAutoScrollAtMs)
+  return Math.max(0, minIntervalMs - elapsedMs)
+}
+
+export interface AutoScrollSchedulerUpdateInput {
+  shouldAutoScroll: () => boolean
+  runAutoScroll: () => boolean
+}
+
+export interface AutoScrollSchedulerOptions {
+  minIntervalMs?: number
+  getNowMs?: () => number
+  setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
+  clearTimer?: (timer: ReturnType<typeof setTimeout>) => void
+}
+
+export interface AutoScrollScheduler {
+  update: (input: AutoScrollSchedulerUpdateInput) => void
+  cancel: () => void
+  markPerformed: (nowMs?: number) => void
+}
+
+export function createAutoScrollScheduler(
+  options: AutoScrollSchedulerOptions = {},
+): AutoScrollScheduler {
+  const minIntervalMs = options.minIntervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
+  const getNowMs = options.getNowMs ?? (() => Date.now())
+  const setTimer = options.setTimer ?? ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
+  const clearTimer = options.clearTimer ?? ((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer))
+
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null
+  let lastAutoScrollAtMs = 0
+  let currentInput: AutoScrollSchedulerUpdateInput | null = null
+
+  const cancel = () => {
+    if (!pendingTimer) return
+    clearTimer(pendingTimer)
+    pendingTimer = null
+  }
+
+  const execute = () => {
+    if (!currentInput?.shouldAutoScroll()) return
+    const didAutoScroll = currentInput.runAutoScroll()
+    if (didAutoScroll) {
+      lastAutoScrollAtMs = getNowMs()
+    }
+  }
+
+  return {
+    update(input) {
+      currentInput = input
+      cancel()
+
+      if (!input.shouldAutoScroll()) return
+
+      const delayMs = deriveAutoScrollThrottleDelayMs({
+        nowMs: getNowMs(),
+        lastAutoScrollAtMs,
+        minIntervalMs,
+      })
+
+      if (delayMs === 0) {
+        execute()
+        return
+      }
+
+      pendingTimer = setTimer(() => {
+        pendingTimer = null
+        execute()
+      }, delayMs)
+    },
+    cancel,
+    markPerformed(nowMs) {
+      lastAutoScrollAtMs = nowMs ?? getNowMs()
+    },
   }
 }
 
