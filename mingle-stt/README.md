@@ -11,6 +11,7 @@ Standalone STT relay server for Mingle.
 ## Environment Variables
 
 - `PORT` (default: `3001`)
+- `STT_DEFAULT_MODEL` (optional, default: `soniox`)
 - `SONIOX_API_KEY`
 - `GLADIA_API_KEY` (optional, for gladia modes)
 - `DEEPGRAM_API_KEY` (optional, for deepgram modes)
@@ -21,6 +22,15 @@ Standalone STT relay server for Mingle.
 
 `mingle-stt` loads `.env.local` first, then `.env` in this directory.
 If these variables are missing, it safely falls back to the defaults above.
+
+Supported values for `STT_DEFAULT_MODEL`:
+
+- `soniox`
+- `gladia`
+- `gladia-stt`
+- `deepgram`
+- `deepgram-multi`
+- `fireworks`
 
 ## Railway
 

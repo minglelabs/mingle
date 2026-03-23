@@ -127,7 +127,6 @@ final class AppViewModel: ObservableObject {
                 let config = STTConfigPayload(
                     sample_rate: audioCaptureService.sampleRate,
                     languages: languages,
-                    stt_model: "soniox",
                     lang_hints_strict: true
                 )
                 sttSocketClient.connect(url: socketURL, config: config)

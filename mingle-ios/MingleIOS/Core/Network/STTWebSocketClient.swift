@@ -3,7 +3,7 @@ import Foundation
 struct STTConfigPayload: Encodable {
     let sample_rate: Double
     let languages: [String]
-    let stt_model: String
+    let stt_model: String? = nil
     let lang_hints_strict: Bool
 }
 

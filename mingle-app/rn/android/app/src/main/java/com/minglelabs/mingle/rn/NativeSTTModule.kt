@@ -33,6 +33,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.Executors
@@ -46,7 +47,8 @@ class NativeSTTModule(
 
   private data class StartOptions(
     val wsUrl: String,
-    val sttModel: String,
+    val sttModel: String?,
+    val languages: List<String>,
     val aecEnabled: Boolean,
     val sonioxLanguageHints: List<String>,
   )
@@ -132,7 +134,8 @@ class NativeSTTModule(
 
     val startOptions = StartOptions(
       wsUrl = wsUrl,
-      sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
+      sttModel = options.getString("sttModel")?.trim()?.takeIf { it.isNotEmpty() },
+      languages = normalizeStringArray(options.getArray("languages")),
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
       sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
     )
@@ -288,7 +291,10 @@ class NativeSTTModule(
           webSocketReady = true
           val config = JSONObject()
             .put("sample_rate", currentSampleRate)
-            .put("stt_model", options.sttModel)
+            .put("languages", JSONArray(options.languages))
+          if (options.sttModel != null) {
+            config.put("stt_model", options.sttModel)
+          }
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
           }

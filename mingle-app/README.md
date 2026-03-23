@@ -40,6 +40,9 @@ Default local endpoints:
 - STT WS: `ws://127.0.0.1:3001`
 - API: `http://127.0.0.1:3000`
 
+The web client no longer hardcodes a specific STT provider.
+`mingle-stt` selects the default provider through `STT_DEFAULT_MODEL`.
+
 Default audio fixture path:
 
 - `test-fixtures/audio/fixtures/`
@@ -51,6 +54,7 @@ You can override paths/endpoints with env vars:
 MINGLE_TEST_AUDIO_FIXTURE=/absolute/path/to/file.wav
 MINGLE_TEST_AUDIO_FIXTURE_DIR=/absolute/path/to/fixtures-dir
 MINGLE_TEST_WS_URL=ws://127.0.0.1:3001
+MINGLE_TEST_STT_MODEL=soniox
 MINGLE_TEST_API_BASE_URL=http://127.0.0.1:3000
 MINGLE_TEST_API_NAMESPACE=
 MINGLE_TEST_EXPECTED_PHRASE="hello mingle"

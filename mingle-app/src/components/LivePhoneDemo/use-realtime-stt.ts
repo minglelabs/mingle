@@ -122,8 +122,10 @@ export function shouldRestartSttForLanguageHintChange(input: {
   previousSelectionSignature: string
   nextSelectionSignature: string
   connectionStatus: ConnectionStatus
+  activeSttModel: string | null
   sonioxLanguageHintsEnabled: boolean
 }): boolean {
+  if (input.activeSttModel !== 'soniox') return false
   if (!input.sonioxLanguageHintsEnabled) return false
   if (input.previousSelectionSignature === input.nextSelectionSignature) return false
   return input.connectionStatus === 'ready'
@@ -133,7 +135,8 @@ type NativeSttStartCommand = {
   type: 'native_stt_start'
   payload: {
     wsUrl: string
-    sttModel: string
+    sttModel?: string
+    languages: string[]
     aecEnabled: boolean
     sonioxLanguageHints: string[]
   }
@@ -1580,6 +1583,7 @@ export default function useRealtimeSTT({
   const previousLanguageSelectionSignatureRef = useRef(buildLanguageSelectionSignature(languages))
   const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLanguageChangeRestartRef = useRef(false)
+  const activeSttModelRef = useRef<string | null>(null)
   const sonioxLanguageHintsEnabledRef = useRef(false)
 
   const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
@@ -1855,6 +1859,8 @@ export default function useRealtimeSTT({
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
     pendingLanguageChangeRestartRef.current = false
+    activeSttModelRef.current = null
+    sonioxLanguageHintsEnabledRef.current = false
     clearSpeakerAvatarSession()
     cleanup()
     setConnectionStatus('idle')
@@ -2694,8 +2700,13 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
+      const activeSttModel = typeof message.stt_model === 'string' && message.stt_model.trim()
+        ? message.stt_model.trim()
+        : null
+      activeSttModelRef.current = activeSttModel
       sonioxLanguageHintsEnabledRef.current = message.soniox_language_hints_enabled === true
       logSttDebug('transport.ready', {
+        activeSttModel,
         sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
       })
       setConnectionStatus('ready')
@@ -2968,6 +2979,8 @@ export default function useRealtimeSTT({
       turnStartedAtRef.current = null
       recentFinalizedUtteranceRef.current = null
       hasActiveSessionRef.current = false
+      activeSttModelRef.current = null
+      sonioxLanguageHintsEnabledRef.current = false
       pendingTurnsBySpeakerRef.current = {}
       clearAllPendingTurnTranslationRuntime()
       activePartialSpeakerRef.current = null
@@ -2986,7 +2999,7 @@ export default function useRealtimeSTT({
           type: 'native_stt_start',
           payload: {
             wsUrl: getWsUrl(),
-            sttModel: 'soniox',
+            languages: targetLanguages,
             aecEnabled: enableAec,
             sonioxLanguageHints,
           },
@@ -3032,7 +3045,7 @@ export default function useRealtimeSTT({
         const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         const config = {
           sample_rate: context.sampleRate,
-          stt_model: 'soniox',
+          languages: targetLanguages,
           soniox_language_hints: sonioxLanguageHints,
         }
         socket.send(JSON.stringify(config))
@@ -3140,6 +3153,7 @@ export default function useRealtimeSTT({
       previousSelectionSignature: previousSignature,
       nextSelectionSignature: currentSignature,
       connectionStatus: connectionStatusRef.current,
+      activeSttModel: activeSttModelRef.current,
       sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
     })) {
       return
@@ -3148,15 +3162,18 @@ export default function useRealtimeSTT({
     logSttDebug('recording.languages.restart_scheduled', {
       previousSignature,
       currentSignature,
+      activeSttModel: activeSttModelRef.current,
       sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
     })
     clearLanguageChangeRestartTimer()
     languageChangeRestartTimerRef.current = setTimeout(() => {
       languageChangeRestartTimerRef.current = null
+      if (activeSttModelRef.current !== 'soniox') return
       if (!sonioxLanguageHintsEnabledRef.current) return
       if (connectionStatusRef.current !== 'ready') return
       pendingLanguageChangeRestartRef.current = true
       logSttDebug('recording.languages.restart_begin', {
+        activeSttModel: activeSttModelRef.current,
         currentSignature: buildLanguageSelectionSignature(targetLanguagesRef.current),
       })
       void stopRecordingGracefully(false, 'language_hint_change')

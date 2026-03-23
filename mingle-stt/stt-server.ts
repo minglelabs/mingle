@@ -20,6 +20,7 @@ import {
     normalizeSpeaker,
     shouldUseTokenLanguageForCurrentTurn,
 } from './soniox-language';
+import { resolveSttModel, type SttModel } from './stt-model';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -53,6 +54,7 @@ const SONIOX_DEBUG_TOKEN_LOGS = (() => {
     }
     return process.env.NODE_ENV !== 'production';
 })();
+const DEFAULT_STT_MODEL = resolveSttModel(process.env.STT_DEFAULT_MODEL, 'soniox');
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -60,7 +62,7 @@ const wss = new WebSocketServer({ server });
 interface ClientConfig {
     sample_rate: number;
     languages: string[];
-    stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
+    stt_model?: SttModel;
     lang_hints_strict?: boolean;
     soniox_language_hints?: string[];
 }
@@ -81,7 +83,7 @@ wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
-    let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
+    let currentModel: SttModel = DEFAULT_STT_MODEL;
     let selectedLanguages: string[] = [];
     let finalizePendingTurnFromProvider: (() => Promise<FinalTurnPayload | null>) | null = null;
     let sonioxStopRequested = false;
@@ -113,7 +115,8 @@ wss.on('connection', (clientWs) => {
         if (clientWs.readyState !== WebSocket.OPEN) return;
         clientWs.send(JSON.stringify({
             status: 'ready',
-            soniox_language_hints_enabled: SONIOX_USE_LANGUAGE_HINTS,
+            stt_model: currentModel,
+            soniox_language_hints_enabled: currentModel === 'soniox' && SONIOX_USE_LANGUAGE_HINTS,
         }));
     };
 
@@ -1328,7 +1331,7 @@ wss.on('connection', (clientWs) => {
                 languages: normalizedLanguages,
             } as ClientConfig;
 
-            currentModel = clientConfig.stt_model || 'gladia';
+            currentModel = resolveSttModel(clientConfig.stt_model, DEFAULT_STT_MODEL);
             selectedLanguages = normalizedLanguages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
@@ -1371,6 +1374,7 @@ wss.on('connection', (clientWs) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
+    console.log(`[stt-server] default_stt_model=${DEFAULT_STT_MODEL}`);
     console.log(
         `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
     );

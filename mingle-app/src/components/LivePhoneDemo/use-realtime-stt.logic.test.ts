@@ -165,6 +165,7 @@ describe('use-realtime-stt pure logic', () => {
       previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
       nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
       connectionStatus: 'ready',
+      activeSttModel: 'soniox',
       sonioxLanguageHintsEnabled: true,
     })).toBe(true)
 
@@ -172,6 +173,15 @@ describe('use-realtime-stt pure logic', () => {
       previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
       nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
       connectionStatus: 'ready',
+      activeSttModel: 'gladia',
+      sonioxLanguageHintsEnabled: true,
+    })).toBe(false)
+
+    expect(shouldRestartSttForLanguageHintChange({
+      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
+      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
+      connectionStatus: 'ready',
+      activeSttModel: 'soniox',
       sonioxLanguageHintsEnabled: false,
     })).toBe(false)
 
@@ -179,6 +189,7 @@ describe('use-realtime-stt pure logic', () => {
       previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
       nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
       connectionStatus: 'ready',
+      activeSttModel: 'soniox',
       sonioxLanguageHintsEnabled: true,
     })).toBe(false)
   })

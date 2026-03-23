@@ -741,7 +741,8 @@ class NativeSTTModule: RCTEventEmitter {
     private func startSession(
         wsUrl: URL,
         wsUrlString: String,
-        sttModel: String,
+        sttModel: String?,
+        languages: [String],
         aecEnabled: Bool,
         sonioxLanguageHints: [String],
         resolve: @escaping RCTPromiseResolveBlock,
@@ -824,8 +825,11 @@ class NativeSTTModule: RCTEventEmitter {
 
         var configPayload: [String: Any] = [
             "sample_rate": sampleRate,
-            "stt_model": sttModel,
+            "languages": languages,
         ]
+        if let sttModel, !sttModel.isEmpty {
+            configPayload["stt_model"] = sttModel
+        }
         if !sonioxLanguageHints.isEmpty {
             configPayload["soniox_language_hints"] = sonioxLanguageHints
         }
@@ -856,7 +860,12 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        let sttModel = options["sttModel"] as? String ?? "soniox"
+        let trimmedSttModel = (options["sttModel"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let sttModel = trimmedSttModel?.isEmpty == false ? trimmedSttModel : nil
+        let languages = (options["languages"] as? [String] ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
         let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -869,6 +878,7 @@ class NativeSTTModule: RCTEventEmitter {
                 wsUrl: wsUrl,
                 wsUrlString: wsUrlString,
                 sttModel: sttModel,
+                languages: languages,
                 aecEnabled: aecEnabled,
                 sonioxLanguageHints: sonioxLanguageHints,
                 resolve: resolve,
@@ -886,6 +896,7 @@ class NativeSTTModule: RCTEventEmitter {
                             wsUrl: wsUrl,
                             wsUrlString: wsUrlString,
                             sttModel: sttModel,
+                            languages: languages,
                             aecEnabled: aecEnabled,
                             sonioxLanguageHints: sonioxLanguageHints,
                             resolve: resolve,

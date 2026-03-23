@@ -3,6 +3,7 @@ import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 type NativeSttStartOptions = {
   wsUrl: string;
   sttModel?: string;
+  languages?: string[];
   aecEnabled?: boolean;
   sonioxLanguageHints?: string[];
 };

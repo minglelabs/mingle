@@ -39,6 +39,10 @@ Regular builds that do not use devbox keep the default Xcode project values (pro
 
 Android runtime URLs and the namespace are injected through Gradle `BuildConfig` and `NativeRuntimeConfigModule`.
 
+The native STT bridge forwards the selected languages and lets `mingle-stt`
+choose the default provider through `STT_DEFAULT_MODEL`, unless a specific
+`sttModel` override is supplied for debugging.
+
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
