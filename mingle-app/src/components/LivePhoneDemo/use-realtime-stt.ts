@@ -96,6 +96,7 @@ const PARTIAL_TRANSLATE_STEP = parsePositiveIntWithFallback(
 )
 
 type ConnectionStatus = 'idle' | 'connecting' | 'ready' | 'error'
+type NativeSttStatusEvent = Extract<NativeSttBridgeEvent, { type: 'status' }>
 
 export function buildLanguageSelectionSignature(languages: string[]): string {
   return languages
@@ -165,6 +166,7 @@ declare global {
     ReactNativeWebView?: {
       postMessage: (message: string) => void
     }
+    __MINGLE_LAST_NATIVE_STT_STATUS?: NativeSttStatusEvent
   }
 }
 
@@ -3083,17 +3085,37 @@ export default function useRealtimeSTT({
     if (!shouldUseNativeSttBridge()) return
     useNativeSttRef.current = true
 
+    const applyNativeStatus = (status: string) => {
+      logSttDebug('native.status', { status })
+
+      if (status === 'connecting' || status === 'starting' || status === 'recovering') {
+        setConnectionStatus('connecting')
+        return
+      }
+
+      if (status === 'running' || status === 'silenced' || status === 'interrupted') {
+        hasActiveSessionRef.current = true
+        setVolume(0)
+        setConnectionStatus('ready')
+        return
+      }
+
+      if (status === 'failed' || status === 'error') {
+        setConnectionStatus('error')
+        return
+      }
+
+      if (status === 'stopped' || status === 'closed') {
+        setConnectionStatus('idle')
+      }
+    }
+
     const handleNativeEvent = (event: Event) => {
       const detail = (event as CustomEvent<NativeSttBridgeEvent>).detail
       if (!detail || typeof detail !== 'object') return
 
       if (detail.type === 'status') {
-        logSttDebug('native.status', { status: detail.status })
-        if (detail.status === 'connecting') {
-          setConnectionStatus('connecting')
-        } else if (detail.status === 'stopped') {
-          setConnectionStatus('idle')
-        }
+        applyNativeStatus(detail.status)
         return
       }
 
@@ -3126,6 +3148,10 @@ export default function useRealtimeSTT({
     }
 
     window.addEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
+    const bootstrapStatus = window.__MINGLE_LAST_NATIVE_STT_STATUS
+    if (bootstrapStatus?.type === 'status' && typeof bootstrapStatus.status === 'string') {
+      applyNativeStatus(bootstrapStatus.status)
+    }
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }

@@ -209,6 +209,7 @@ const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
+const LAST_NATIVE_STT_STATUS_GLOBAL = '__MINGLE_LAST_NATIVE_STT_STATUS';
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
@@ -1095,7 +1096,10 @@ function AppInner(): React.JSX.Element {
         : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const bootstrapScript = payload.type === 'status'
+      ? `window.${LAST_NATIVE_STT_STATUS_GLOBAL} = ${serialized}; `
+      : '';
+    const script = `${bootstrapScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
