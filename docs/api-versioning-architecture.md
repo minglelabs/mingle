@@ -56,7 +56,7 @@ iOS/Android v1.0.3 컨트롤러는 legacy 컨트롤러와 동일 코드를 사�
   - `IOS_CLIENT_MIN_SUPPORTED_VERSION`
   - `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`
   - `IOS_CLIENT_LATEST_VERSION`
-  - `IOS_APPSTORE_URL`
+  - `IOS_APPSTORE_URL` (recommended: `https://apps.apple.com/app/id6759795134`)
 - 안전 폴백:
   - `IOS_CLIENT_MIN_SUPPORTED_VERSION` 미설정 또는 invalid semver 시 `force_update`로 fail-closed
 
@@ -72,7 +72,7 @@ iOS/Android v1.0.3 컨트롤러는 legacy 컨트롤러와 동일 코드를 사�
   - `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`
   - `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`
   - `ANDROID_CLIENT_LATEST_VERSION`
-  - `ANDROID_PLAYSTORE_URL`
+  - `ANDROID_PLAYSTORE_URL` (recommended: `https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn`)
 - 안전 폴백:
   - Android env가 비어 있으면 iOS env로 fallback
   - fallback 이후에도 min version env가 없거나 invalid semver면 `force_update`
