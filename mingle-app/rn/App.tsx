@@ -215,6 +215,7 @@ const LAST_NATIVE_STT_STATUS_GLOBAL = '__MINGLE_LAST_NATIVE_STT_STATUS';
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const RESUME_DIAG_PROBE_TIMEOUT_MS = 2500;
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const WEB_SUPPORTED_LOCALES = new Set([
   'ko',
@@ -621,13 +622,28 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeDiagProbeAckCommand = {
+  type: 'native_diag_probe_ack';
+  payload?: {
+    probeId?: number;
+    href?: string;
+    readyState?: string;
+    visibilityState?: string;
+    hasReactNativeWebView?: boolean;
+    pageHidden?: boolean;
+    ts?: number;
+    error?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
-  | NativeAuthResetCommand;
+  | NativeAuthResetCommand
+  | NativeDiagProbeAckCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -883,6 +899,9 @@ function AppInner(): React.JSX.Element {
   const lastBackgroundDurationMsRef = useRef<number | null>(null);
   const webViewLifecycleSeqRef = useRef(0);
   const webViewLoadStartedAtRef = useRef<number | null>(null);
+  const resumeDiagProbeSeqRef = useRef(0);
+  const resumeDiagPendingProbeRef = useRef<{ id: number; startedAt: number } | null>(null);
+  const resumeDiagProbeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -967,6 +986,89 @@ function AppInner(): React.JSX.Element {
     })}`);
   }, [webUrl]);
 
+  const clearResumeDiagProbeTimeout = useCallback(() => {
+    if (resumeDiagProbeTimeoutRef.current) {
+      clearTimeout(resumeDiagProbeTimeoutRef.current);
+      resumeDiagProbeTimeoutRef.current = null;
+    }
+  }, []);
+
+  const issueResumeDiagProbe = useCallback((trigger: string) => {
+    if (!webViewRef.current) {
+      logWebViewLifecycle('resume_probe_skip', {
+        trigger,
+        reason: 'missing_webview_ref',
+      });
+      return;
+    }
+
+    clearResumeDiagProbeTimeout();
+    const probeId = resumeDiagProbeSeqRef.current + 1;
+    resumeDiagProbeSeqRef.current = probeId;
+    resumeDiagPendingProbeRef.current = {
+      id: probeId,
+      startedAt: Date.now(),
+    };
+    const backgroundDurationMs = lastBackgroundDurationMsRef.current;
+
+    const script = `
+      (function () {
+        try {
+          var payload = {
+            type: 'native_diag_probe_ack',
+            payload: {
+              probeId: ${probeId},
+              href: String((window.location && window.location.href) || ''),
+              readyState: String((document && document.readyState) || ''),
+              visibilityState: String((document && document.visibilityState) || ''),
+              pageHidden: !!(document && document.hidden),
+              hasReactNativeWebView: !!(window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function'),
+              ts: Date.now()
+            }
+          };
+          if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+            window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+          }
+        } catch (error) {
+          try {
+            if (window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'native_diag_probe_ack',
+                payload: {
+                  probeId: ${probeId},
+                  error: String(error),
+                  ts: Date.now()
+                }
+              }));
+            }
+          } catch (_) {}
+        }
+      })();
+      true;
+    `;
+    webViewRef.current.injectJavaScript(script);
+    logWebViewLifecycle('resume_probe_injected', {
+      trigger,
+      probeId,
+      backgroundDurationMs,
+      appStateAtInjection: appStateRef.current,
+    });
+
+    resumeDiagProbeTimeoutRef.current = setTimeout(() => {
+      const pending = resumeDiagPendingProbeRef.current;
+      if (!pending || pending.id !== probeId) return;
+      resumeDiagPendingProbeRef.current = null;
+      logWebViewLifecycle('resume_probe_timeout', {
+        probeId,
+        trigger,
+        backgroundDurationMs,
+        elapsedMs: Date.now() - pending.startedAt,
+        appStateAtTimeout: appStateRef.current,
+      });
+      clearResumeDiagProbeTimeout();
+    }, RESUME_DIAG_PROBE_TIMEOUT_MS);
+  }, [clearResumeDiagProbeTimeout, logWebViewLifecycle]);
+
   useEffect(() => {
     logWebViewLifecycle('app_state_init', { state: appStateRef.current });
 
@@ -989,12 +1091,17 @@ function AppInner(): React.JSX.Element {
         nextState,
         lastBackgroundDurationMs: lastBackgroundDurationMsRef.current,
       });
+
+      if (nextState === 'active' && previousState !== 'active') {
+        issueResumeDiagProbe('app_state_active');
+      }
     });
 
     return () => {
+      clearResumeDiagProbeTimeout();
       subscription.remove();
     };
-  }, [logWebViewLifecycle]);
+  }, [clearResumeDiagProbeTimeout, issueResumeDiagProbe, logWebViewLifecycle]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1469,6 +1576,40 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    if (parsed.type === 'native_diag_probe_ack') {
+      const payload = parsed.payload ?? {};
+      const probeId = typeof payload.probeId === 'number' ? payload.probeId : null;
+      const pending = resumeDiagPendingProbeRef.current;
+
+      if (!pending || probeId === null || probeId !== pending.id) {
+        logWebViewLifecycle('resume_probe_ack_unmatched', {
+          probeId,
+          pendingProbeId: pending?.id ?? null,
+          href: payload.href ?? null,
+          readyState: payload.readyState ?? null,
+          visibilityState: payload.visibilityState ?? null,
+          pageHidden: payload.pageHidden ?? null,
+          hasReactNativeWebView: payload.hasReactNativeWebView ?? null,
+          error: payload.error ?? null,
+        });
+        return;
+      }
+
+      resumeDiagPendingProbeRef.current = null;
+      clearResumeDiagProbeTimeout();
+      logWebViewLifecycle('resume_probe_ack', {
+        probeId,
+        elapsedMs: Date.now() - pending.startedAt,
+        href: payload.href ?? null,
+        readyState: payload.readyState ?? null,
+        visibilityState: payload.visibilityState ?? null,
+        pageHidden: payload.pageHidden ?? null,
+        hasReactNativeWebView: payload.hasReactNativeWebView ?? null,
+        error: payload.error ?? null,
+      });
+      return;
+    }
+
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
         ? parsed.payload.provider
@@ -1577,8 +1718,14 @@ function AppInner(): React.JSX.Element {
         console.log(`[Web→NativeAuth] ${parsed.type}`, JSON.stringify(parsed.payload ?? {}).slice(0, 120));
       }
       void handleNativeAuthStart(parsed.payload);
+      return;
     }
-  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop]);
+
+    if (__DEV__) {
+      const messageType = 'type' in parsed ? parsed.type : 'unknown';
+      console.log(`[Web→Native] unhandled command type=${String(messageType)}`);
+    }
+  }, [clearAuthDispatchRetryTimer, clearResumeDiagProbeTimeout, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop, logWebViewLifecycle]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
