@@ -3,13 +3,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${PROJECT_DIR}/.." && pwd)"
+DEVBOX_ENV_FILE="${ROOT_DIR}/.devbox.env"
+
+if [[ -f "${DEVBOX_ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${DEVBOX_ENV_FILE}"
+  set +a
+fi
 
 SCHEME="${SCHEME:-MingleIOS}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-${PROJECT_DIR}/.derived-data}"
 DEVICE_ID="${1:-${DEVICE_ID:-}}"
-NEXT_PUBLIC_SITE_URL="${NEXT_PUBLIC_SITE_URL:-${MINGLE_API_BASE_URL:-}}"
-NEXT_PUBLIC_WS_URL="${NEXT_PUBLIC_WS_URL:-${MINGLE_WS_URL:-}}"
+NEXT_PUBLIC_SITE_URL="${NEXT_PUBLIC_SITE_URL:-${DEVBOX_SITE_URL:-${MINGLE_API_BASE_URL:-}}}"
+NEXT_PUBLIC_WS_URL="${NEXT_PUBLIC_WS_URL:-${DEVBOX_RN_WS_URL:-${MINGLE_WS_URL:-}}}"
 APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.nam.mingleios}"
 
 maybe_generate_xcodeproj() {

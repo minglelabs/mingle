@@ -1335,13 +1335,30 @@ EOF
     DEVBOX_PUBLIC_WS_URL \
     DEVBOX_TEST_API_BASE_URL \
     DEVBOX_TEST_WS_URL \
+    NEXT_PUBLIC_SITE_URL \
+    NEXTAUTH_URL \
+    NEXT_PUBLIC_WS_PORT \
+    NEXT_PUBLIC_WS_URL \
+    MINGLE_TEST_API_BASE_URL \
+    MINGLE_TEST_WS_URL \
+    RN_IOS_API_NAMESPACE \
+    RN_ANDROID_API_NAMESPACE \
     DEVBOX_TUNNEL_PROVIDER \
     DEVBOX_VAULT_APP_PATH \
     DEVBOX_VAULT_STT_PATH \
     DEVBOX_OPENCLAW_ROOT \
     DEVBOX_IOS_TEAM_ID
   do
-    value="${!key:-}"
+    case "$key" in
+      NEXT_PUBLIC_SITE_URL|NEXTAUTH_URL) value="${DEVBOX_SITE_URL:-}" ;;
+      NEXT_PUBLIC_WS_PORT) value="${DEVBOX_STT_PORT:-}" ;;
+      NEXT_PUBLIC_WS_URL) value="${DEVBOX_RN_WS_URL:-}" ;;
+      MINGLE_TEST_API_BASE_URL) value="${DEVBOX_TEST_API_BASE_URL:-}" ;;
+      MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
+      RN_IOS_API_NAMESPACE) value="${IOS_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      RN_ANDROID_API_NAMESPACE) value="${ANDROID_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      *) value="${!key:-}" ;;
+    esac
     printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
   done
 }

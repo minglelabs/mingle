@@ -76,6 +76,8 @@ scripts/devbox status
   `mingle-app/.env.local` / `mingle-stt/.env.local`, devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
 - Devbox keeps worktree-local runtime settings in `.devbox.env` while leaving `.env.local` user-managed.
+- Frontend and app build entrypoints also read `.devbox.env`, so `pnpm dev`, `pnpm build`, `pnpm start`,
+  React Native Android builds, and `mingle-ios` scripts all resolve the current worktree URLs and namespaces.
 - `scripts/devbox up`, `init`, `mobile`, and `bootstrap` do not auto-sync `.env.local`.
 - If a saved Vault path exists, `scripts/devbox up` injects unmanaged keys (such as API keys)
   into the server process environment at runtime without writing them to files.
