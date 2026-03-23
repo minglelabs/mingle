@@ -30,7 +30,7 @@ function seedDefaultIosPolicyEnv() {
   process.env.IOS_CLIENT_MIN_SUPPORTED_VERSION = '1.0.0'
   process.env.IOS_CLIENT_RECOMMENDED_BELOW_VERSION = '1.2.0'
   process.env.IOS_CLIENT_LATEST_VERSION = '1.3.0'
-  process.env.IOS_APPSTORE_URL = 'https://apps.apple.com/app/id1234567890'
+  process.env.IOS_APPSTORE_URL = 'https://apps.apple.com/app/id6759795134'
 }
 
 function makeRequest(version: string, locale?: string, platform?: string): Request {
@@ -92,7 +92,7 @@ describe('/api/client/version-policy route', () => {
     expect(json.locale).toBe('ko')
     expect(json.minSupportedVersion).toBe('1.0.0')
     expect(json.latestVersion).toBe('1.3.0')
-    expect(json.updateUrl).toBe('https://apps.apple.com/app/id1234567890')
+    expect(json.updateUrl).toBe('https://apps.apple.com/app/id6759795134')
     expect(json.title).toBe('업데이트 필요')
     expect(json.message).toContain('최신 버전으로 업데이트')
     expect(json.updateButtonLabel).toBe('업데이트')
