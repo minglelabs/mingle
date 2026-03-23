@@ -19,6 +19,8 @@ import {
 } from '@/lib/stt-languages'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  AUTO_SCROLL_MIN_INTERVAL_MS,
+  deriveAutoScrollThrottleDelayMs,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
@@ -962,6 +964,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isPaginatingRef = useRef(false)
   const prevScrollHeightRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
+  const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastAutoScrollAtRef = useRef(0)
   const scrollUiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
@@ -995,6 +999,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (scrollUiHideTimerRef.current) {
       clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
+    }
+  }, [])
+
+  const clearPendingAutoScrollTimer = useCallback(() => {
+    if (autoScrollTimerRef.current) {
+      clearTimeout(autoScrollTimerRef.current)
+      autoScrollTimerRef.current = null
     }
   }, [])
 
@@ -1056,6 +1067,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const fromUserScroll = isUserScrollIntentActive()
     updateScrollDerivedState({ fromUserScroll })
 
+    if (fromUserScroll && (!shouldAutoScroll.current || suppressAutoScrollRef.current)) {
+      clearPendingAutoScrollTimer()
+    }
+
     const scrollUi = deriveScrollUiVisibility({
       fromUserScroll,
       shouldAutoScroll: shouldAutoScroll.current,
@@ -1074,25 +1089,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setScrollUiVisible(false)
       }, SCROLL_UI_HIDE_DELAY_MS)
     }
-  }, [clearScrollUiHideTimer, isUserScrollIntentActive, updateScrollDerivedState])
+  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer, isUserScrollIntentActive, updateScrollDerivedState])
 
   const handleScrollToBottom = useCallback(() => {
     if (!chatRef.current) return
     markUserScrollIntent()
+    clearPendingAutoScrollTimer()
     suppressAutoScrollRef.current = false
     shouldAutoScroll.current = true
     chatRef.current.scrollTo({ top: chatRef.current.scrollHeight, behavior: 'smooth' })
     updateScrollDerivedState({ fromUserScroll: true })
-  }, [markUserScrollIntent, updateScrollDerivedState])
+  }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
   const handleTopSafeAreaTap = useCallback(() => {
     if (!chatRef.current) return
     markUserScrollIntent()
+    clearPendingAutoScrollTimer()
     suppressAutoScrollRef.current = true
     shouldAutoScroll.current = false
     chatRef.current.scrollTo({ top: 0, behavior: 'smooth' })
     updateScrollDerivedState({ fromUserScroll: true })
-  }, [markUserScrollIntent, updateScrollDerivedState])
+  }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -1138,21 +1155,69 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     updateScrollDerivedState()
   }, [updateScrollDerivedState, utterances])
 
-  useEffect(() => {
-    if (
-      chatRef.current
-      && shouldAutoScroll.current
-      && !suppressAutoScrollRef.current
-      && !isPaginatingRef.current
-      && !isLoadingOlderRef.current
-    ) {
-      const targetTop = chatRef.current.scrollHeight
-      if (Math.abs(targetTop - chatRef.current.scrollTop) > 1) {
-        chatRef.current.scrollTo({ top: targetTop, behavior: 'smooth' })
-      }
-    }
+  const runScheduledAutoScroll = useCallback(() => {
+    autoScrollTimerRef.current = null
     updateScrollDerivedState()
-  }, [demoTypingText, isConnecting, liveUtterances, updateScrollDerivedState, utterances])
+
+    if (
+      !chatRef.current
+      || !shouldAutoScroll.current
+      || suppressAutoScrollRef.current
+      || isPaginatingRef.current
+      || isLoadingOlderRef.current
+    ) {
+      return
+    }
+
+    const targetTop = chatRef.current.scrollHeight
+    if (Math.abs(targetTop - chatRef.current.scrollTop) <= 1) return
+
+    chatRef.current.scrollTo({ top: targetTop, behavior: 'smooth' })
+    lastAutoScrollAtRef.current = Date.now()
+    updateScrollDerivedState()
+  }, [updateScrollDerivedState])
+
+  useEffect(() => {
+    updateScrollDerivedState()
+    clearPendingAutoScrollTimer()
+
+    if (
+      !chatRef.current
+      || !shouldAutoScroll.current
+      || suppressAutoScrollRef.current
+      || isPaginatingRef.current
+      || isLoadingOlderRef.current
+    ) {
+      return
+    }
+
+    const delayMs = deriveAutoScrollThrottleDelayMs({
+      nowMs: Date.now(),
+      lastAutoScrollAtMs: lastAutoScrollAtRef.current,
+      minIntervalMs: AUTO_SCROLL_MIN_INTERVAL_MS,
+    })
+
+    if (delayMs === 0) {
+      runScheduledAutoScroll()
+      return
+    }
+
+    autoScrollTimerRef.current = setTimeout(() => {
+      runScheduledAutoScroll()
+    }, delayMs)
+
+    return () => {
+      clearPendingAutoScrollTimer()
+    }
+  }, [
+    clearPendingAutoScrollTimer,
+    demoTypingText,
+    isConnecting,
+    liveUtterances,
+    runScheduledAutoScroll,
+    updateScrollDerivedState,
+    utterances,
+  ])
 
   useEffect(() => {
     updateScrollDerivedState()
@@ -1160,9 +1225,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     return () => {
+      clearPendingAutoScrollTimer()
       clearScrollUiHideTimer()
     }
-  }, [clearScrollUiHideTimer])
+  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer])
 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1

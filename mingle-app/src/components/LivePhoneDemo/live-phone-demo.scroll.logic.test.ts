@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  AUTO_SCROLL_MIN_INTERVAL_MS,
+  deriveAutoScrollThrottleDelayMs,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
@@ -150,6 +152,29 @@ describe('live-phone-demo scroll/platform logic', () => {
 
       expect(ui.visible).toBe(true)
       expect(ui.scheduleHideTimer).toBe(true)
+    })
+  })
+
+  describe('deriveAutoScrollThrottleDelayMs', () => {
+    it('returns zero when auto-scroll has not run yet', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 10_000,
+        lastAutoScrollAtMs: 0,
+      })).toBe(0)
+    })
+
+    it('returns the remaining throttle window', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 10_250,
+        lastAutoScrollAtMs: 10_000,
+      })).toBe(AUTO_SCROLL_MIN_INTERVAL_MS - 250)
+    })
+
+    it('returns zero after the minimum interval elapses', () => {
+      expect(deriveAutoScrollThrottleDelayMs({
+        nowMs: 11_250,
+        lastAutoScrollAtMs: 10_000,
+      })).toBe(0)
     })
   })
 })

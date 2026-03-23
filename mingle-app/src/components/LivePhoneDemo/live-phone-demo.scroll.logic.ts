@@ -1,4 +1,5 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 400
+export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 
 export interface NavigatorLikeForIosCheck {
   userAgent?: string
@@ -57,6 +58,27 @@ export function deriveScrollAutoFollowState(
     suppressAutoScroll: nextSuppressAutoScroll,
     shouldAutoScroll,
   }
+}
+
+export interface DeriveAutoScrollThrottleDelayMsInput {
+  nowMs: number
+  lastAutoScrollAtMs: number
+  minIntervalMs?: number
+}
+
+export function deriveAutoScrollThrottleDelayMs(
+  input: DeriveAutoScrollThrottleDelayMsInput,
+): number {
+  const minIntervalMs = input.minIntervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
+  const safeNowMs = Number.isFinite(input.nowMs) ? input.nowMs : 0
+  const safeLastAutoScrollAtMs = Number.isFinite(input.lastAutoScrollAtMs)
+    ? input.lastAutoScrollAtMs
+    : 0
+
+  if (safeLastAutoScrollAtMs <= 0) return 0
+
+  const elapsedMs = Math.max(0, safeNowMs - safeLastAutoScrollAtMs)
+  return Math.max(0, minIntervalMs - elapsedMs)
 }
 
 export interface DeriveScrollUiVisibilityInput {
