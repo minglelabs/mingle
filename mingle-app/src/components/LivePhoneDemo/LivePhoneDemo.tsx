@@ -1488,7 +1488,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </label>
                       <label className="block">
-                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+                        <div
+                          className={`mb-1 flex items-center justify-between text-xs font-semibold transition-colors ${
+                            isSttSessionRunning ? 'text-gray-400' : 'text-gray-700'
+                          }`}
+                        >
                           <span>{silenceFinalizeLabel}</span>
                           <span>{sonioxManualFinalizeSilenceMs}ms</span>
                         </div>
@@ -1535,7 +1539,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
-                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-60' : ''}`}
+                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
                           aria-label={`${silenceFinalizeLabel} milliseconds`}
                         />
                       </label>
