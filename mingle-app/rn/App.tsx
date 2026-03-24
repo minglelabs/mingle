@@ -1,18 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  Animated,
-  BackHandler,
   Image,
   Linking,
   NativeModules,
-  PanResponder,
   Platform,
   Pressable,
   StatusBar,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -861,8 +857,6 @@ function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
   const safeAreaInsets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const drawerWidth = Math.min(Math.max(screenWidth * 0.5, 280), 420);
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
   const [versionGate, setVersionGate] = useState<VersionGateState>(() => (
@@ -906,11 +900,6 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
-  const [isDrawerVisible, setIsDrawerVisible] = useState(false);
-  const [isDrawerMounted, setIsDrawerMounted] = useState(false);
-  const drawerTranslateX = useRef(new Animated.Value(drawerWidth)).current;
-  const drawerOpenRef = useRef(false);
-  const dragStartOffsetRef = useRef(drawerWidth);
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
@@ -1096,107 +1085,6 @@ function AppInner(): React.JSX.Element {
     if (!updateUrl) return;
     void Linking.openURL(updateUrl);
   }, [versionGate]);
-
-  const closeDrawer = useCallback(() => {
-    drawerOpenRef.current = false;
-    Animated.timing(drawerTranslateX, {
-      toValue: drawerWidth,
-      duration: 240,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished || drawerOpenRef.current) return;
-      setIsDrawerVisible(false);
-      setIsDrawerMounted(false);
-    });
-  }, [drawerTranslateX, drawerWidth]);
-
-  const openDrawer = useCallback(() => {
-    drawerOpenRef.current = true;
-    setIsDrawerVisible(true);
-    setIsDrawerMounted(true);
-    drawerTranslateX.stopAnimation();
-    drawerTranslateX.setValue(drawerWidth);
-    Animated.timing(drawerTranslateX, {
-      toValue: 0,
-      duration: 280,
-      useNativeDriver: true,
-    }).start();
-  }, [drawerTranslateX, drawerWidth]);
-
-  const toggleDrawer = useCallback(() => {
-    if (drawerOpenRef.current) {
-      closeDrawer();
-      return;
-    }
-    openDrawer();
-  }, [closeDrawer, openDrawer]);
-
-  useEffect(() => {
-    if (!isDrawerVisible) return;
-
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      closeDrawer();
-      return true;
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [closeDrawer, isDrawerVisible]);
-
-  useEffect(() => {
-    drawerTranslateX.setValue(drawerOpenRef.current ? 0 : drawerWidth);
-  }, [drawerTranslateX, drawerWidth]);
-
-  const drawerPanResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gestureState) => (
-      drawerOpenRef.current
-      && Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
-      && gestureState.dx > 8
-    ),
-    onPanResponderGrant: () => {
-      drawerTranslateX.stopAnimation((value) => {
-        dragStartOffsetRef.current = value;
-      });
-    },
-    onPanResponderMove: (_, gestureState) => {
-      const nextValue = Math.max(
-        0,
-        Math.min(drawerWidth, dragStartOffsetRef.current + gestureState.dx),
-      );
-      drawerTranslateX.setValue(nextValue);
-    },
-    onPanResponderRelease: (_, gestureState) => {
-      const closingByDistance = gestureState.dx > drawerWidth * 0.28;
-      const closingByVelocity = gestureState.vx > 0.7;
-      if (closingByDistance || closingByVelocity) {
-        closeDrawer();
-        return;
-      }
-      Animated.spring(drawerTranslateX, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 22,
-        stiffness: 220,
-        mass: 0.9,
-      }).start();
-    },
-    onPanResponderTerminate: () => {
-      Animated.spring(drawerTranslateX, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 22,
-        stiffness: 220,
-        mass: 0.9,
-      }).start();
-    },
-  }), [closeDrawer, drawerTranslateX, drawerWidth]);
-
-  const drawerBackdropOpacity = drawerTranslateX.interpolate({
-    inputRange: [0, drawerWidth],
-    outputRange: [0.32, 0],
-    extrapolate: 'clamp',
-  });
 
   const emitToWeb = useCallback((payload: NativeSttEvent) => {
     if (!isPageReadyRef.current) return;
@@ -1841,68 +1729,6 @@ function AppInner(): React.JSX.Element {
           ]}
         />
       ) : null}
-      <View
-        pointerEvents="box-none"
-        style={[
-          styles.menuButtonContainer,
-          {
-            top: safeAreaInsets.top + 10,
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Open menu"
-          onPress={toggleDrawer}
-          style={({ pressed }) => [
-            styles.menuButton,
-            pressed ? styles.menuButtonPressed : null,
-          ]}
-        >
-          <View style={styles.menuBar} />
-          <View style={styles.menuBar} />
-          <View style={styles.menuBarShort} />
-        </Pressable>
-      </View>
-      {isDrawerMounted ? (
-        <View pointerEvents="box-none" style={styles.drawerRoot}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close menu" onPress={closeDrawer} style={styles.drawerBackdropHitSlop}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.drawerBackdrop,
-                { opacity: drawerBackdropOpacity },
-              ]}
-            />
-          </Pressable>
-          <Animated.View
-            {...drawerPanResponder.panHandlers}
-            style={[
-              styles.drawerPanel,
-              {
-                width: drawerWidth,
-                paddingTop: safeAreaInsets.top + 18,
-                paddingBottom: Math.max(safeAreaInsets.bottom + 24, 24),
-                transform: [{ translateX: drawerTranslateX }],
-              },
-            ]}
-          >
-            <Text style={styles.drawerEyebrow}>Menu</Text>
-            <Text style={styles.drawerTitle}>Mingle</Text>
-            <Text style={styles.drawerDescription}>
-              Drawer UI is ready. Menu content will be connected next.
-            </Text>
-            {/*
-            <Pressable style={styles.drawerActionButton}>
-              <Text style={styles.drawerActionLabel}>Sign out</Text>
-            </Pressable>
-            <Pressable style={styles.drawerDangerButton}>
-              <Text style={styles.drawerDangerLabel}>Delete account</Text>
-            </Pressable>
-            */}
-          </Animated.View>
-        </View>
-      ) : null}
       {startupSplashVisible ? (
         <View style={styles.startupSplashOverlay}>
           <Image
@@ -1957,111 +1783,6 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
     backgroundColor: '#ffffff',
-  },
-  menuButtonContainer: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 40,
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(15, 23, 42, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 5,
-  },
-  menuButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.92,
-  },
-  menuBar: {
-    width: 18,
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: '#111827',
-  },
-  menuBarShort: {
-    width: 12,
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: '#111827',
-  },
-  drawerRoot: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 50,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  drawerBackdropHitSlop: {
-    flex: 1,
-  },
-  drawerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#020617',
-  },
-  drawerPanel: {
-    height: '100%',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 22,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: 'rgba(15, 23, 42, 0.08)',
-    shadowColor: '#020617',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: -8, height: 0 },
-    elevation: 12,
-  },
-  drawerEyebrow: {
-    color: '#64748b',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  drawerTitle: {
-    marginTop: 12,
-    color: '#0f172a',
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  drawerDescription: {
-    marginTop: 12,
-    color: '#475569',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  drawerActionButton: {
-    marginTop: 28,
-    borderRadius: 16,
-    backgroundColor: '#111827',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  drawerActionLabel: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  drawerDangerButton: {
-    marginTop: 12,
-    borderRadius: 16,
-    backgroundColor: '#fff1f2',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  drawerDangerLabel: {
-    color: '#be123c',
-    fontSize: 15,
-    fontWeight: '700',
   },
   startupSplashOverlay: {
     ...StyleSheet.absoluteFillObject,
