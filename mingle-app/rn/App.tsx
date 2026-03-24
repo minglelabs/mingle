@@ -9,6 +9,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -186,6 +187,7 @@ const DEFAULT_WS_URL = resolveConfiguredUrl(
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
 const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
   expectedApiNamespace: EXPECTED_API_NAMESPACE,
@@ -217,6 +219,7 @@ const NATIVE_STT_EVENT = 'mingle:native-stt';
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
@@ -879,45 +882,69 @@ function resolveNativeBannerHeightPx(rawValue: string | number | undefined): num
   );
 }
 
+function resolveNativeCanvasScale(windowWidthPx: number): number {
+  if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) return 1;
+  return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
+}
+
+function resolveNativeTranscriptInsetPx(bannerHeightPx: number, canvasScale: number): number {
+  const safeScale = canvasScale > 0 ? canvasScale : 1;
+  return Math.max(0, Math.round(bannerHeightPx / safeScale));
+}
+
 function NativeAdBanner(props: {
   position: NativeBannerPosition;
   unitId: string;
   heightPx: number;
+  frameWidthPx: number;
   topOffsetPx: number;
   bottomOffsetPx: number;
 }): React.JSX.Element | null {
-  const { position, unitId, heightPx, topOffsetPx, bottomOffsetPx } = props;
+  const {
+    position,
+    unitId,
+    heightPx,
+    frameWidthPx,
+    topOffsetPx,
+    bottomOffsetPx,
+  } = props;
   if (position === 'off' || !unitId) return null;
 
   // Keep app boot-safe when native ad sdk is not linked yet.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type BannerAdProps = {
+    unitId: string;
+    size: string;
+    requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
+  };
+  type NativeAdModule = {
+    BannerAd?: React.ComponentType<BannerAdProps>;
+    BannerAdSize?: { ADAPTIVE_BANNER: string };
+  };
   const adModule = (() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('react-native-google-mobile-ads') as any;
+      return require('react-native-google-mobile-ads') as NativeAdModule;
     } catch {
       return null;
     }
   })();
   if (!adModule?.BannerAd || !adModule?.BannerAdSize) return null;
 
-  const BannerAd = adModule.BannerAd as React.ComponentType<{
-    unitId: string;
-    size: string;
-    requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
-  }>;
-  const BannerAdSize = adModule.BannerAdSize as { ADAPTIVE_BANNER: string };
+  const BannerAd = adModule.BannerAd;
+  const BannerAdSize = adModule.BannerAdSize;
   const containerStyle = position === 'top'
     ? [styles.nativeBannerContainer, { top: topOffsetPx, height: heightPx }]
     : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: heightPx }];
 
   return (
     <View pointerEvents="box-none" style={containerStyle}>
-      <BannerAd
-        unitId={unitId}
-        size={BannerAdSize.ADAPTIVE_BANNER}
-        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-      />
+      <View style={[styles.nativeBannerSlot, { width: frameWidthPx, height: heightPx }]}>
+        <BannerAd
+          unitId={unitId}
+          size={BannerAdSize.ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        />
+      </View>
     </View>
   );
 }
@@ -925,6 +952,7 @@ function NativeAdBanner(props: {
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  const { width: windowWidthPx } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -956,6 +984,16 @@ function AppInner(): React.JSX.Element {
     () => getVersionPolicyFallbackCopy(versionPolicyLocale),
     [versionPolicyLocale],
   );
+  const nativeCanvasScale = useMemo(
+    () => resolveNativeCanvasScale(windowWidthPx),
+    [windowWidthPx],
+  );
+  const nativeBannerFrameWidthPx = useMemo(() => {
+    if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) {
+      return WEB_CANVAS_BASE_WIDTH_PX;
+    }
+    return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
+  }, [windowWidthPx]);
   const webUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const bannerPosition = resolveNativeBannerPosition(
@@ -966,8 +1004,9 @@ function AppInner(): React.JSX.Element {
       readRuntimeEnvValue(['RN_AD_BANNER_HEIGHT_PX', 'NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX'])
       || NATIVE_RUNTIME_CONFIG.adBannerHeightPx,
     );
-    const transcriptTopInsetPx = bannerPosition === 'top' ? bannerHeightPx : 0;
-    const transcriptBottomInsetPx = bannerPosition === 'bottom' ? bannerHeightPx : 0;
+    const transcriptInsetPx = resolveNativeTranscriptInsetPx(bannerHeightPx, nativeCanvasScale);
+    const transcriptTopInsetPx = bannerPosition === 'top' ? transcriptInsetPx : 0;
+    const transcriptBottomInsetPx = bannerPosition === 'bottom' ? transcriptInsetPx : 0;
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
@@ -975,7 +1014,7 @@ function AppInner(): React.JSX.Element {
     const nativeSttQuery = nativeAvailable ? '1' : '0';
     const nativeBannerQuery = `&nativeBannerPosition=${encodeURIComponent(bannerPosition)}&nativeTopInsetPx=${transcriptTopInsetPx}&nativeBottomInsetPx=${transcriptBottomInsetPx}`;
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
-  }, [nativeAvailable, webLocale]);
+  }, [nativeAvailable, nativeCanvasScale, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
@@ -1029,12 +1068,12 @@ function AppInner(): React.JSX.Element {
     return readRuntimeEnvValue(platformEnvKeys) || runtimeFallback.trim();
   }, []);
   const nativeBannerTopOffsetPx = useMemo(
-    () => safeAreaInsets.top + NATIVE_AD_BANNER_OFFSET_TOP_PX,
-    [safeAreaInsets.top],
+    () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.top],
   );
   const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + NATIVE_AD_BANNER_OFFSET_BOTTOM_PX,
-    [safeAreaInsets.bottom],
+    () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.bottom],
   );
 
   useEffect(() => {
@@ -1855,6 +1894,7 @@ function AppInner(): React.JSX.Element {
           position={nativeBannerPosition}
           unitId={nativeBannerUnitId}
           heightPx={nativeBannerHeightPx}
+          frameWidthPx={nativeBannerFrameWidthPx}
           topOffsetPx={nativeBannerTopOffsetPx}
           bottomOffsetPx={nativeBannerBottomOffsetPx}
         />
@@ -1984,6 +2024,11 @@ const styles = StyleSheet.create({
     zIndex: 25,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nativeBannerSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
 });
 
