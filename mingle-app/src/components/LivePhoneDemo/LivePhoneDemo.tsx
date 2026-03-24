@@ -1458,13 +1458,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 {menuOpen && (
                   <div
                     ref={menuPanelRef}
-                    className={`absolute right-0 top-full z-50 mt-1 w-[24rem] max-w-[calc(100vw-1rem)] border border-gray-200 p-0 ${navSurfaceClassName}`}
+                    className={`absolute right-0 top-full z-50 mt-1 w-[min(34rem,calc(100vw-1rem))] border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
                     <div className="space-y-2.5 border-b border-gray-200 px-3 py-2.5">
                       <label className="block">
-                        <div className="mb-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[0.8125rem] font-semibold text-gray-700">
-                          <span className="whitespace-nowrap">{textSizeLabel}</span>
-                          <span className="whitespace-nowrap">Level {textSizeLevel}</span>
+                        <div className="mb-0.5 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                          <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
+                          <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
                         </div>
                         <input
                           type="range"
@@ -1497,12 +1497,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </label>
                       <label className="block">
                         <div
-                          className={`mb-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-[0.8125rem] font-semibold transition-colors ${
+                          className={`mb-0.5 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold transition-colors ${
                             isSttSessionRunning ? 'text-gray-400' : 'text-gray-700'
                           }`}
                         >
-                          <span className="whitespace-nowrap">{silenceFinalizeLabel}</span>
-                          <span className="whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                          <span className="shrink-0 whitespace-nowrap">{silenceFinalizeLabel}</span>
+                          <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
                         </div>
                         <input
                           type="range"
