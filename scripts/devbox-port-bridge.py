@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
+"""Lightweight TCP reverse proxy.
+
+Each connection is handled by two blocking threads (one per direction),
+which avoids the non-blocking sendall pitfall that caused unexpected EOF
+on large transfers.
+"""
 import argparse
-import selectors
 import signal
 import socket
 import sys
@@ -10,9 +15,31 @@ import threading
 stop_event = threading.Event()
 
 
+def _forward(src: socket.socket, dst: socket.socket) -> None:
+    """Copy bytes from src to dst until EOF, then half-close dst."""
+    try:
+        while True:
+            try:
+                data = src.recv(65536)
+            except OSError:
+                break
+            if not data:
+                break
+            try:
+                dst.sendall(data)
+            except OSError:
+                break
+    finally:
+        # Signal the other side that we are done writing.
+        try:
+            dst.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass
+
+
 def pipe_bidirectional(client: socket.socket, target_host: str, target_port: int) -> None:
     upstream = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    upstream.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    upstream.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     try:
         upstream.connect((target_host, target_port))
     except OSError:
@@ -20,38 +47,18 @@ def pipe_bidirectional(client: socket.socket, target_host: str, target_port: int
         upstream.close()
         return
 
-    client.setblocking(False)
-    upstream.setblocking(False)
-    selector = selectors.DefaultSelector()
-    selector.register(client, selectors.EVENT_READ, upstream)
-    selector.register(upstream, selectors.EVENT_READ, client)
+    client.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-    try:
-        while not stop_event.is_set():
-            events = selector.select(timeout=0.5)
-            if not events:
-                continue
-            for key, _ in events:
-                src = key.fileobj
-                dst = key.data
-                try:
-                    data = src.recv(65536)
-                except OSError:
-                    data = b""
-                if not data:
-                    return
-                try:
-                    dst.sendall(data)
-                except OSError:
-                    return
-    finally:
-        selector.close()
+    t_up = threading.Thread(target=_forward, args=(client, upstream), daemon=True)
+    t_dn = threading.Thread(target=_forward, args=(upstream, client), daemon=True)
+    t_up.start()
+    t_dn.start()
+    t_up.join()
+    t_dn.join()
+
+    for sock in (client, upstream):
         try:
-            client.close()
-        except OSError:
-            pass
-        try:
-            upstream.close()
+            sock.close()
         except OSError:
             pass
 

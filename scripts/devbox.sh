@@ -1821,6 +1821,9 @@ write_cloudflared_named_config() {
 
   mkdir -p "$(dirname "$config_file")"
   cat >"$config_file" <<EOF
+originRequest:
+  noTLSVerify: true
+  http2Origin: false
 ingress:
   - hostname: $web_host
     service: http://127.0.0.1:$DEVBOX_WEB_PORT
