@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn(() => ({
+const mockGetGenerativeModel = vi.fn((config?: unknown) => ({
   generateContent: mockGenerateContent,
 }))
 const ensureTrackingContextMock = vi.fn()
@@ -28,7 +28,7 @@ vi.mock('@/lib/app-analytics', () => {
 
 vi.mock('@google/generative-ai', () => {
   class GoogleGenerativeAI {
-    getGenerativeModel(config: unknown) {
+    getGenerativeModel(config?: unknown) {
       return mockGetGenerativeModel(config)
     }
   }
