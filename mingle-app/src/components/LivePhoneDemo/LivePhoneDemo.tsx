@@ -172,7 +172,8 @@ interface LivePhoneDemoProps {
   onLogout: () => void
   onDeleteAccount: () => void
   isAuthActionPending?: boolean
-  showAccountMenu?: boolean
+  showMenuButton?: boolean
+  showAccountActions?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -223,7 +224,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLogout,
   onDeleteAccount,
   isAuthActionPending = false,
-  showAccountMenu = true,
+  showMenuButton = true,
+  showAccountActions = true,
 }, ref) {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
     const fallbackLanguages = resolveDefaultSelectedLanguages(uiLocale)
@@ -302,7 +304,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [menuOpen])
 
   useEffect(() => {
-    if (showAccountMenu) return
+    if (showMenuButton) return
 
     const closeMenuState = window.setTimeout(() => {
       setMenuOpen(false)
@@ -312,7 +314,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(closeMenuState)
     }
-  }, [showAccountMenu])
+  }, [showMenuButton])
 
   const closeDeleteAccountDialog = useCallback(() => {
     if (isAuthActionPending) return
@@ -1309,7 +1311,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 triggerRef={langSelectorButtonRef}
               />
             </div>
-            {showAccountMenu ? (
+            {showMenuButton ? (
               <div className="relative">
                 <button
                   ref={menuButtonRef}
@@ -1330,30 +1332,34 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     ref={menuPanelRef}
                     className={`absolute right-0 top-full z-50 mt-1 w-44 border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        onLogout()
-                      }}
-                      disabled={isAuthActionPending}
-                      className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <LogOut size={15} strokeWidth={2} />
-                      <span>{logoutLabel}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        setDeleteAccountDialogOpen(true)
-                      }}
-                      disabled={isAuthActionPending}
-                      className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Trash2 size={15} strokeWidth={2} />
-                      <span>{deleteAccountLabel}</span>
-                    </button>
+                    {showAccountActions ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            onLogout()
+                          }}
+                          disabled={isAuthActionPending}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <LogOut size={15} strokeWidth={2} />
+                          <span>{logoutLabel}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setDeleteAccountDialogOpen(true)
+                          }}
+                          disabled={isAuthActionPending}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 size={15} strokeWidth={2} />
+                          <span>{deleteAccountLabel}</span>
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -1543,7 +1549,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </div>
 
         <AnimatePresence>
-          {showAccountMenu && deleteAccountDialogOpen && (
+          {showAccountActions && deleteAccountDialogOpen && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

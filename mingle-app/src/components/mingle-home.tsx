@@ -1586,7 +1586,8 @@ export default function MingleHome(props: MingleHomeProps) {
         onLogout={handleSignOut}
         onDeleteAccount={handleDeleteAccount}
         isAuthActionPending={isDeletingAccount}
-        showAccountMenu={status === "authenticated"}
+        showMenuButton
+        showAccountActions={status === "authenticated"}
       />
     </main>
   );
