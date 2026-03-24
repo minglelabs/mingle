@@ -809,7 +809,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
     // iOS-like visual style with larger touch area for drag stability on all platforms.
-    'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-2',
+    'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
     'accent-[#0A84FF]',
     '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#D1D1D6]',
     '[&::-webkit-slider-thumb]:-mt-[7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#C7C7CC] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
@@ -1460,9 +1460,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     ref={menuPanelRef}
                     className={`absolute right-0 top-full z-50 mt-1 w-72 border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
-                    <div className="space-y-3 border-b border-gray-200 px-3 py-3">
+                    <div className="space-y-2.5 border-b border-gray-200 px-3 py-2.5">
                       <label className="block">
-                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+                        <div className="mb-0.5 flex items-center justify-between text-[0.8125rem] font-semibold text-gray-700">
                           <span>{textSizeLabel}</span>
                           <span>Level {textSizeLevel}</span>
                         </div>
@@ -1497,7 +1497,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </label>
                       <label className="block">
                         <div
-                          className={`mb-1 flex items-center justify-between text-xs font-semibold transition-colors ${
+                          className={`mb-0.5 flex items-center justify-between text-[0.8125rem] font-semibold transition-colors ${
                             isSttSessionRunning ? 'text-gray-400' : 'text-gray-700'
                           }`}
                         >
