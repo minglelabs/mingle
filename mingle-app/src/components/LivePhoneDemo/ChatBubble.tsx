@@ -224,6 +224,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.isDraft !== next.isDraft) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
+  if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
