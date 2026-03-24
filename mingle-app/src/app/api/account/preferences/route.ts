@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
 const MIN_SILENCE_MS = 500;
-const MAX_SILENCE_MS = 2000;
+const MAX_SILENCE_MS = 3000;
 
 type PreferencesBody = {
   textSizeLevel?: unknown;

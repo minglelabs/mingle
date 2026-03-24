@@ -182,7 +182,7 @@ const DEFAULT_WS_URL = resolveConfiguredUrl(
 ) || 'wss://mingle.up.railway.app';
 const DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 1000;
 const MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 500;
-const MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 2000;
+const MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 3000;
 
 function normalizeSonioxManualFinalizeSilenceMs(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);

@@ -220,7 +220,7 @@ class NativeSTTModule: RCTEventEmitter {
     private let wsQueue = DispatchQueue(label: "NativeSTTModule.wsQueue")
     private let defaultSonioxManualFinalizeSilenceMs = 1000
     private let minSonioxManualFinalizeSilenceMs = 500
-    private let maxSonioxManualFinalizeSilenceMs = 2000
+    private let maxSonioxManualFinalizeSilenceMs = 3000
 
     private var webSocketSession: URLSession?
     private var socketTask: URLSessionWebSocketTask?
