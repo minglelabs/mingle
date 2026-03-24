@@ -16,6 +16,10 @@ The RN app requires the following environment variables.
 - `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.4`, Android: `android/v1.0.4`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
+- `RN_AD_BANNER_POSITION` (optional: `off` | `top` | `bottom`, default: `off`)
+- `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
+- `RN_ADMOB_BANNER_UNIT_ID_IOS` (required when iOS banner is enabled)
+- `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (required when Android banner is enabled)
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
@@ -38,6 +42,21 @@ to override those values with the current worktree / ngrok URLs.
 Regular builds that do not use devbox keep the default Xcode project values (production URLs).
 
 Android runtime URLs and the namespace are injected through Gradle `BuildConfig` and `NativeRuntimeConfigModule`.
+
+## Native Ad Banner Placement
+
+RN can render a native ad banner overlay with a build-time/env option.
+
+- `RN_AD_BANNER_POSITION=top`: render banner below the native top area.
+- `RN_AD_BANNER_POSITION=bottom`: render banner above the native bottom area.
+- `RN_AD_BANNER_POSITION=off`: disable banner.
+
+When banner is enabled, RN forwards these query params to web:
+
+- `nativeTopInsetPx`
+- `nativeBottomInsetPx`
+
+`LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
 
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 

@@ -46,6 +46,7 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const NATIVE_INSET_QUERY_MAX_PX = 240
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -54,6 +55,19 @@ function isNativeApp(): boolean {
 function isLikelyIOSPlatform(): boolean {
   if (typeof window === 'undefined') return false
   return isLikelyIOSNavigator(window.navigator)
+}
+
+function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
+  try {
+    const params = new URLSearchParams(search)
+    const raw = (params.get(queryKey) || '').trim()
+    if (!raw) return 0
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return 0
+    return Math.max(0, Math.min(NATIVE_INSET_QUERY_MAX_PX, Math.round(parsed)))
+  } catch {
+    return 0
+  }
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -1243,6 +1257,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
+  const nativeTopInsetPx = useMemo(() => {
+    if (typeof window === 'undefined') return 0
+    return parseNativeInsetPxFromSearch(window.location.search || '', 'nativeTopInsetPx')
+  }, [])
+  const nativeBottomInsetPx = useMemo(() => {
+    if (typeof window === 'undefined') return 0
+    return parseNativeInsetPxFromSearch(window.location.search || '', 'nativeBottomInsetPx')
+  }, [])
+  const chatPaddingTop = nativeTopInsetPx > 0 ? `calc(0.625rem + ${nativeTopInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = nativeBottomInsetPx > 0 ? `calc(0.625rem + ${nativeBottomInsetPx}px)` : '0.625rem'
 
   return (
     <PhoneFrame>
@@ -1371,6 +1395,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onPointerDown={markUserScrollIntent}
             className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
             style={{
+              paddingTop: chatPaddingTop,
+              paddingBottom: chatPaddingBottom,
               paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
               paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
             }}
