@@ -1,18 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-
-const LivePhoneDemo = dynamic(
-  () => import("@/components/LivePhoneDemo/LivePhoneDemo"),
-  {
-    ssr: false,
-  },
-);
+import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
