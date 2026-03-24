@@ -58,8 +58,8 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
   2: 'text-sm',
   3: 'text-[15px]',
-  4: 'text-[16px]',
-  5: 'text-[20px]',
+  4: 'text-base',
+  5: 'text-[18px]',
 }
 
 function isNativeApp(): boolean {
@@ -802,12 +802,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
-    'h-11 w-full cursor-pointer touch-none appearance-none bg-transparent py-1',
-    'accent-amber-500',
-    '[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-amber-100',
-    '[&::-webkit-slider-thumb]:-mt-[11px] [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-amber-600 [&::-webkit-slider-thumb]:bg-amber-500 [&::-webkit-slider-thumb]:shadow-sm',
-    '[&::-moz-range-track]:h-2 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-amber-100',
-    '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-amber-600 [&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:shadow-sm',
+    // iOS-like visual style with larger touch area for drag stability on all platforms.
+    'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-2',
+    'accent-[#0A84FF]',
+    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#D1D1D6]',
+    '[&::-webkit-slider-thumb]:-mt-[7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#C7C7CC] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
+    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-[#D1D1D6]',
+    '[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#C7C7CC] [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
   ].join(' ')
 
   // Boost TTS volume while STT is active to compensate for iOS
@@ -1534,7 +1535,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
-                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-50' : ''}`}
+                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-60' : ''}`}
                           aria-label={`${silenceFinalizeLabel} milliseconds`}
                         />
                       </label>
