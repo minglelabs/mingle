@@ -41,7 +41,7 @@ export default function HeroSection({ version, openModal }: HeroSectionProps) {
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <div className="inline-flex">
-              <StoreDownloadButtons size="md" />
+              <StoreDownloadButtons size="md" label={t('hero.cta')} />
             </div>
             <button
               onClick={() => {

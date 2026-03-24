@@ -87,6 +87,8 @@ export interface NavBarProps {
 }
 
 export default function NavBar({ version }: NavBarProps) {
+  const { t } = useTranslation()
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 py-5 bg-white/80 backdrop-blur-xl border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-6 flex justify-between items-center">
@@ -95,7 +97,7 @@ export default function NavBar({ version }: NavBarProps) {
         </div>
         <div className="flex items-center gap-4">
           <LanguageSelector version={version} />
-          <StoreDownloadButtons size="sm" />
+          <StoreDownloadButtons size="sm" label={t('nav.cta')} />
         </div>
       </div>
     </nav>

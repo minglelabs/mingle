@@ -1,58 +1,58 @@
 'use client'
 
+import type { MouseEvent } from 'react'
+
 const ANDROID_STORE_URL = 'https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn'
 const IOS_STORE_URL = 'https://apps.apple.com/us/app/mingle-global-hangout/id6759795134'
 
 type StoreDownloadButtonsProps = {
   className?: string
   buttonClassName?: string
-  orientation?: 'row' | 'column'
+  label: string
   size?: 'sm' | 'md'
+}
+
+function resolveStoreUrl() {
+  if (typeof navigator === 'undefined') {
+    return ANDROID_STORE_URL
+  }
+
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || ''
+  const userAgent = navigator.userAgent || ''
+  const isApplePlatform =
+    /iPhone|iPad|iPod|Macintosh|MacIntel|MacPPC|Mac68K/i.test(platform) ||
+    /iPhone|iPad|iPod/i.test(userAgent)
+
+  return isApplePlatform ? IOS_STORE_URL : ANDROID_STORE_URL
 }
 
 export default function StoreDownloadButtons({
   className = '',
   buttonClassName = '',
-  orientation = 'row',
+  label,
   size = 'md',
 }: StoreDownloadButtonsProps) {
-  const baseButtonClassName =
-    'inline-flex items-center justify-center rounded-xl font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg'
   const sizeClassName = size === 'sm' ? 'px-4 py-2.5 text-sm gap-2' : 'px-6 py-3.5 text-base gap-3'
-  const containerClassName =
-    orientation === 'row'
-      ? 'flex flex-col sm:flex-row items-stretch sm:items-center gap-3'
-      : 'flex flex-col gap-3'
+
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault()
+    window.location.href = resolveStoreUrl()
+  }
 
   return (
-    <div className={`${containerClassName} ${className}`.trim()}>
+    <div className={`flex ${className}`.trim()}>
       <a
         href={ANDROID_STORE_URL}
+        onClick={handleClick}
         className={[
-          baseButtonClassName,
+          'inline-flex items-center justify-center rounded-xl font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg',
           sizeClassName,
           'bg-gradient-to-r from-accent-primary to-accent-secondary text-white',
           buttonClassName,
         ].join(' ')}
-        target="_blank"
-        rel="noopener noreferrer"
       >
-        Google Play
-      </a>
-      <a
-        href={IOS_STORE_URL}
-        className={[
-          baseButtonClassName,
-          sizeClassName,
-          'bg-white border-2 border-accent-primary text-accent-primary',
-          buttonClassName,
-        ].join(' ')}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        App Store
+        {label}
       </a>
     </div>
   )
 }
-

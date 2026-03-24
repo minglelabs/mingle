@@ -29,7 +29,7 @@ export default function CTASection({}: CTASectionProps) {
           <p className="text-lg text-text-secondary mb-12">
             {t('cta.subtitle')}
           </p>
-          <StoreDownloadButtons className="justify-center" size="md" />
+          <StoreDownloadButtons className="justify-center" size="md" label={t('cta.button')} />
         </motion.div>
       </div>
     </section>

@@ -77,7 +77,7 @@ export default function SocialHeroSection({ version, openModal }: SocialHeroSect
 
           {/* 버튼 영역 */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <StoreDownloadButtons size="md" />
+            <StoreDownloadButtons size="md" label={tKey('ctaMain')} />
 
             {/* gaming 버전에서만 테스트 버튼 표시 */}
             {isGaming && (
