@@ -23,10 +23,10 @@ Date: 2026-03-21
 - [ ] Upload metadata:
   - app description, keywords, support/privacy URLs
   - suggested legal URLs (prod):
-    - `https://app.minglelabs.xyz/legal/privacy-policy.html`
-    - `https://app.minglelabs.xyz/legal/terms-of-use.html`
+    - `https://translator.minglelabs.xyz/legal/privacy-policy.html`
+    - `https://translator.minglelabs.xyz/legal/terms-of-use.html`
   - locale-specific legal docs (15 locales):
-    - `https://app.minglelabs.xyz/legal/` (language index)
+    - `https://translator.minglelabs.xyz/legal/` (language index)
   - age rating, categories
   - screenshots (required device sets)
     - auto-generate command:
