@@ -1365,10 +1365,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               style={{ height: "max(env(safe-area-inset-top), 20px)" }}
             />
           )}
-          <span className="text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+          <span className="relative z-20 text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
             Mingle
           </span>
-          <div className="relative flex items-center gap-1">
+          <div className="relative z-20 flex items-center gap-1">
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
