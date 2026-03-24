@@ -10,7 +10,7 @@ export const enDictionary: AppDictionary = {
     muteTts: "Mute TTS",
     unmuteTts: "Unmute TTS",
     textSizeLabel: "Text Size",
-    silenceFinalizeLabel: "Silence Finalize",
+    silenceFinalizeLabel: "Speech Split Threshold",
   },
   tabs: {
     chats: "Chats",

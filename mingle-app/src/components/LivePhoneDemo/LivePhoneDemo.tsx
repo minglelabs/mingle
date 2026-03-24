@@ -780,12 +780,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
-    'w-full cursor-pointer touch-none appearance-none bg-transparent py-2',
+    'h-11 w-full cursor-pointer touch-none appearance-none bg-transparent py-1',
     'accent-amber-500',
-    '[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-amber-100',
-    '[&::-webkit-slider-thumb]:-mt-2 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-amber-600 [&::-webkit-slider-thumb]:bg-amber-500',
-    '[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-amber-100',
-    '[&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-amber-600 [&::-moz-range-thumb]:bg-amber-500',
+    '[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-amber-100',
+    '[&::-webkit-slider-thumb]:-mt-[11px] [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-amber-600 [&::-webkit-slider-thumb]:bg-amber-500 [&::-webkit-slider-thumb]:shadow-sm',
+    '[&::-moz-range-track]:h-2 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-amber-100',
+    '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-amber-600 [&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:shadow-sm',
   ].join(' ')
 
   // Boost TTS volume while STT is active to compensate for iOS
@@ -1442,8 +1442,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           step={1}
                           value={textSizeLevel}
                           onPointerDown={(event) => {
+                            event.currentTarget.setPointerCapture(event.pointerId)
                             const next = deriveRangeValueFromPointer(event, 1, 4, 1)
                             setTextSizeLevel(next)
+                          }}
+                          onPointerMove={(event) => {
+                            if (event.buttons !== 1) return
+                            const next = deriveRangeValueFromPointer(event, 1, 4, 1)
+                            setTextSizeLevel(next)
+                          }}
+                          onPointerUp={(event) => {
+                            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                              event.currentTarget.releasePointerCapture(event.pointerId)
+                            }
                           }}
                           onChange={(event) => {
                             const next = Math.max(1, Math.min(4, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
@@ -1465,6 +1476,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           step={100}
                           value={sonioxManualFinalizeSilenceMs}
                           onPointerDown={(event) => {
+                            event.currentTarget.setPointerCapture(event.pointerId)
                             const next = deriveRangeValueFromPointer(
                               event,
                               MIN_SONIOX_SILENCE_MS,
@@ -1472,6 +1484,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               100,
                             )
                             setSonioxManualFinalizeSilenceMs(next)
+                          }}
+                          onPointerMove={(event) => {
+                            if (event.buttons !== 1) return
+                            const next = deriveRangeValueFromPointer(
+                              event,
+                              MIN_SONIOX_SILENCE_MS,
+                              MAX_SONIOX_SILENCE_MS,
+                              100,
+                            )
+                            setSonioxManualFinalizeSilenceMs(next)
+                          }}
+                          onPointerUp={(event) => {
+                            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                              event.currentTarget.releasePointerCapture(event.pointerId)
+                            }
                           }}
                           onChange={(event) => {
                             const next = Math.max(

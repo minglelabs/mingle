@@ -10,7 +10,7 @@ export const deDictionary: AppDictionary = {
     muteTts: "TTS stummschalten",
     unmuteTts: "TTS einschalten",
     textSizeLabel: "Textgröße",
-    silenceFinalizeLabel: "Stille-Abschluss",
+    silenceFinalizeLabel: "Schwellenwert für Sprachtrennung",
   },
   tabs: {
     chats: "Chats",

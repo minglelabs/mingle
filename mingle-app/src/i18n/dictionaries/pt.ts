@@ -10,7 +10,7 @@ export const ptDictionary: AppDictionary = {
     muteTts: "Silenciar TTS",
     unmuteTts: "Ativar TTS",
     textSizeLabel: "Tamanho do texto",
-    silenceFinalizeLabel: "Finalização por silêncio",
+    silenceFinalizeLabel: "Limiar de separação da fala",
   },
   tabs: {
     chats: "Conversas",

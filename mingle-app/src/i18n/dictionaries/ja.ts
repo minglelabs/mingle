@@ -10,7 +10,7 @@ export const jaDictionary: AppDictionary = {
     muteTts: "音声再生をミュート",
     unmuteTts: "音声再生をミュート解除",
     textSizeLabel: "文字サイズ",
-    silenceFinalizeLabel: "無音で終了",
+    silenceFinalizeLabel: "発話分離の基準時間",
   },
   tabs: {
     chats: "チャット",

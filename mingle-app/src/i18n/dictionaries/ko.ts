@@ -10,7 +10,7 @@ export const koDictionary: AppDictionary = {
     muteTts: "음성 끄기",
     unmuteTts: "음성 켜기",
     textSizeLabel: "텍스트 크기",
-    silenceFinalizeLabel: "무음 종료",
+    silenceFinalizeLabel: "발화 분리 기준 시간",
   },
   tabs: {
     chats: "채팅",
