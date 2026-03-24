@@ -1458,7 +1458,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 {menuOpen && (
                   <div
                     ref={menuPanelRef}
-                    className={`absolute right-0 top-full z-50 mt-1 w-[min(34rem,calc(100vw-1rem))] border border-gray-200 p-0 ${navSurfaceClassName}`}
+                    style={{ width: '34rem', maxWidth: 'calc(100vw - 1rem)', flexShrink: 0 }}
+                    className={`absolute right-0 top-full z-50 mt-1 border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
                     <div className="space-y-2.5 border-b border-gray-200 px-3 py-2.5">
                       <label className="block">
