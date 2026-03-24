@@ -1458,11 +1458,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </label>
                       <label className="block">
                         <div
-                          className={`mb-0.5 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold transition-colors ${
+                          className={`mb-0.5 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
                             isSttSessionRunning ? 'text-gray-400' : 'text-gray-700'
                           }`}
                         >
-                          <span className="shrink-0 whitespace-nowrap">{silenceFinalizeLabel}</span>
+                          <span className="min-w-0 flex-1 whitespace-normal break-words leading-tight text-[0.72rem]">
+                            {silenceFinalizeLabel}
+                          </span>
                           <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
                         </div>
                         <input
