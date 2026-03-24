@@ -18,6 +18,13 @@ import {
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
+  DEFAULT_SONIOX_SILENCE_MS,
+  DEFAULT_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_SILENCE_MS,
+  readPersistedIntegerPreference,
+} from './live-phone-demo.preferences'
+import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
   deriveScrollAutoFollowState,
@@ -49,10 +56,6 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
-const DEFAULT_TEXT_SIZE_LEVEL = 2
-const DEFAULT_SONIOX_SILENCE_MS = 1000
-const MIN_SONIOX_SILENCE_MS = 500
-const MAX_SONIOX_SILENCE_MS = 3000
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -312,20 +315,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     try {
-      const storedTextSize = Number(localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL))
-      if (Number.isFinite(storedTextSize)) {
-        next.textSizeLevel = Math.max(1, Math.min(5, Math.floor(storedTextSize)))
-      }
+      next.textSizeLevel = readPersistedIntegerPreference(
+        localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL),
+        DEFAULT_TEXT_SIZE_LEVEL,
+        1,
+        5,
+      )
     } catch { /* ignore */ }
 
     try {
-      const storedSilenceMs = Number(localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS))
-      if (Number.isFinite(storedSilenceMs)) {
-        next.sonioxManualFinalizeSilenceMs = Math.max(
-          MIN_SONIOX_SILENCE_MS,
-          Math.min(MAX_SONIOX_SILENCE_MS, Math.floor(storedSilenceMs)),
-        )
-      }
+      next.sonioxManualFinalizeSilenceMs = readPersistedIntegerPreference(
+        localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS),
+        DEFAULT_SONIOX_SILENCE_MS,
+        MIN_SONIOX_SILENCE_MS,
+        MAX_SONIOX_SILENCE_MS,
+      )
     } catch { /* ignore */ }
 
     const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
