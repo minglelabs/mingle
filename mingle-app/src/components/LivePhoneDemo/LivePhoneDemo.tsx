@@ -58,8 +58,8 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
   2: 'text-sm',
   3: 'text-[15px]',
-  4: 'text-base',
-  5: 'text-[18px]',
+  4: 'text-[16px]',
+  5: 'text-[20px]',
 }
 
 function isNativeApp(): boolean {
