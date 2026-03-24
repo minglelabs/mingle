@@ -15,7 +15,7 @@ Standalone STT relay server for Mingle.
 - `GLADIA_API_KEY` (optional, for gladia modes)
 - `DEEPGRAM_API_KEY` (optional, for deepgram modes)
 - `FIREWORKS_API_KEY` (optional, for fireworks mode)
-- `SONIOX_MANUAL_FINALIZE_SILENCE_MS` (optional, default: `250`, range: `100..1000`)
+- `SONIOX_MANUAL_FINALIZE_SILENCE_MS` (optional, default: `1000`, range: `100..3000`)
   - If no new Soniox realtime text arrives during this interval, the server requests a manual finalize.
 - `SONIOX_MANUAL_FINALIZE_COOLDOWN_MS` (optional, default: `1200`, range: `300..5000`)
 
