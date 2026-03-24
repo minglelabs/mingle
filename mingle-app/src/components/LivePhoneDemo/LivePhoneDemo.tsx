@@ -58,6 +58,7 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   2: 'text-sm',
   3: 'text-[15px]',
   4: 'text-base',
+  5: 'text-[18px]',
 }
 
 function isNativeApp(): boolean {
@@ -312,7 +313,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       const storedTextSize = Number(localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL))
       if (Number.isFinite(storedTextSize)) {
-        next.textSizeLevel = Math.max(1, Math.min(4, Math.floor(storedTextSize)))
+        next.textSizeLevel = Math.max(1, Math.min(5, Math.floor(storedTextSize)))
       }
     } catch { /* ignore */ }
 
@@ -1438,17 +1439,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <input
                           type="range"
                           min={1}
-                          max={4}
+                          max={5}
                           step={1}
                           value={textSizeLevel}
                           onPointerDown={(event) => {
                             event.currentTarget.setPointerCapture(event.pointerId)
-                            const next = deriveRangeValueFromPointer(event, 1, 4, 1)
+                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
                             setTextSizeLevel(next)
                           }}
                           onPointerMove={(event) => {
                             if (event.buttons !== 1) return
-                            const next = deriveRangeValueFromPointer(event, 1, 4, 1)
+                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
                             setTextSizeLevel(next)
                           }}
                           onPointerUp={(event) => {
@@ -1457,7 +1458,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             }
                           }}
                           onChange={(event) => {
-                            const next = Math.max(1, Math.min(4, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
+                            const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
                             setTextSizeLevel(next)
                           }}
                           className={sliderClassName}

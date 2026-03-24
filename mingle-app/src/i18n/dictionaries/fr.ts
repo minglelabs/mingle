@@ -10,7 +10,7 @@ export const frDictionary: AppDictionary = {
     muteTts: "Couper le TTS",
     unmuteTts: "Activer le TTS",
     textSizeLabel: "Taille du texte",
-    silenceFinalizeLabel: "Seuil de séparation de la parole",
+    silenceFinalizeLabel: "Durée de silence pour séparation vocale",
   },
   tabs: {
     chats: "Discussions",

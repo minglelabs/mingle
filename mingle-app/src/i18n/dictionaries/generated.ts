@@ -13,7 +13,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "静音 TTS",
       "unmuteTts": "取消静音 TTS",
       "textSizeLabel": "文字大小",
-      "silenceFinalizeLabel": "语音分段阈值时间",
+      "silenceFinalizeLabel": "语音分段静音时长",
     },
     "tabs": {
       "chats": "聊天记录",
@@ -162,7 +162,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "靜音 TTS",
       "unmuteTts": "取消靜音 TTS",
       "textSizeLabel": "文字大小",
-      "silenceFinalizeLabel": "語音分段閾值時間",
+      "silenceFinalizeLabel": "語音分段靜音時長",
     },
     "tabs": {
       "chats": "聊天記錄",
@@ -311,7 +311,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "Отключить TTS",
       "unmuteTts": "Включить звук TTS",
       "textSizeLabel": "Размер текста",
-      "silenceFinalizeLabel": "Порог разделения реплик",
+      "silenceFinalizeLabel": "Длительность тишины для разделения реплик",
     },
     "tabs": {
       "chats": "Чаты",
@@ -460,7 +460,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "كتم تحويل النص إلى كلام",
       "unmuteTts": "إلغاء كتم تحويل النص إلى كلام",
       "textSizeLabel": "حجم النص",
-      "silenceFinalizeLabel": "عتبة فصل المقاطع الكلامية",
+      "silenceFinalizeLabel": "مدة الصمت لفصل المقاطع الكلامية",
     },
     "tabs": {
       "chats": "الدردشات",
@@ -3402,7 +3402,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "टीटीएस म्यूट करें",
       "unmuteTts": "टीटीएस को अनम्यूट करें",
       "textSizeLabel": "पाठ आकार",
-      "silenceFinalizeLabel": "वाक्य विभाजन सीमा समय",
+      "silenceFinalizeLabel": "वाक्य विभाजन हेतु मौन अवधि",
     },
     "tabs": {
       "chats": "चैट",
@@ -4139,7 +4139,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "ปิดเสียง TTS",
       "unmuteTts": "เปิดเสียง TTS",
       "textSizeLabel": "ขนาดข้อความ",
-      "silenceFinalizeLabel": "เวลาเกณฑ์แยกช่วงคำพูด",
+      "silenceFinalizeLabel": "ระยะเวลาเงียบสำหรับแยกช่วงคำพูด",
     },
     "tabs": {
       "chats": "แชท",
@@ -7522,7 +7522,7 @@ export const generatedLocaleDictionaries = {
       "muteTts": "Tắt tiếng TTS",
       "unmuteTts": "Bật tiếng TTS",
       "textSizeLabel": "Kích thước chữ",
-      "silenceFinalizeLabel": "Ngưỡng tách đoạn lời nói",
+      "silenceFinalizeLabel": "Thời lượng im lặng để tách đoạn lời nói",
     },
     "tabs": {
       "chats": "Trò chuyện",
