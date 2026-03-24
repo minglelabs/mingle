@@ -20,9 +20,12 @@ import {
 import {
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  LS_KEY_LANGUAGES,
+  LS_KEY_SONIOX_SILENCE_MS,
+  LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
-  readPersistedIntegerPreference,
+  readPersistedLivePhoneDemoPreferences,
 } from './live-phone-demo.preferences'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -39,9 +42,6 @@ import {
 } from './live-phone-demo.native-ui.logic'
 
 const VOLUME_THRESHOLD = 0.05
-const LS_KEY_LANGUAGES = 'mingle_demo_languages'
-const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
-const LS_KEY_SONIOX_SILENCE_MS = 'mingle_demo_soniox_silence_ms'
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
@@ -102,21 +102,6 @@ function resolveDefaultSelectedLanguages(uiLocale?: string): string[] {
   ).trim()
 
   return deriveDefaultSttLanguagesForLocale(browserLocale)
-}
-
-function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[]): string[] {
-  if (!Array.isArray(rawValue)) return [...fallbackLanguages]
-
-  const deduped: string[] = []
-  for (const item of rawValue) {
-    if (typeof item !== 'string') continue
-    const normalized = canonicalizeSttLanguageCode(item)
-    if (!normalized || deduped.includes(normalized)) continue
-    deduped.push(normalized)
-    if (deduped.length >= 5) break
-  }
-
-  return deduped.length > 0 ? deduped : [...fallbackLanguages]
 }
 
 function startOfLocalDay(date: Date): Date {
@@ -297,57 +282,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
 
 
-  useEffect(() => {
-    const next = {
-      selectedLanguages: fallbackLanguages as string[],
-      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
-      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
-      isIosTopTapEnabled: false,
-    }
+  // Hydrate persisted preferences before paint without tripping the
+  // react-hooks/set-state-in-effect rule.
+  useLayoutEffect(() => {
+    let cancelled = false
+    const schedule = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (callback: () => void) => { void Promise.resolve().then(callback) }
 
-    try {
-      const storedLanguages = localStorage.getItem(LS_KEY_LANGUAGES)
-      if (storedLanguages) {
-        next.selectedLanguages = sanitizeSelectedLanguages(JSON.parse(storedLanguages), fallbackLanguages)
-      }
-    } catch {
-      next.selectedLanguages = fallbackLanguages
-    }
+    schedule(() => {
+      if (cancelled) return
 
-    try {
-      next.textSizeLevel = readPersistedIntegerPreference(
-        localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL),
-        DEFAULT_TEXT_SIZE_LEVEL,
-        1,
-        5,
-      )
-    } catch { /* ignore */ }
-
-    try {
-      next.sonioxManualFinalizeSilenceMs = readPersistedIntegerPreference(
-        localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS),
-        DEFAULT_SONIOX_SILENCE_MS,
-        MIN_SONIOX_SILENCE_MS,
-        MAX_SONIOX_SILENCE_MS,
-      )
-    } catch { /* ignore */ }
-
-    const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
-    next.isIosTopTapEnabled = shouldEnableIosTopTapFallback({
-      isLikelyIosPlatform: isLikelyIOSPlatform(),
-      isNativeApp: isNativeApp(),
-      isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
-    })
-
-    const timerId = window.setTimeout(() => {
+      const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(next.sonioxManualFinalizeSilenceMs)
-      setIsIosTopTapEnabled(next.isIosTopTapEnabled)
-    }, 0)
+
+      const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
+      setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
+        isLikelyIosPlatform: isLikelyIOSPlatform(),
+        isNativeApp: isNativeApp(),
+        isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
+      }))
+    })
 
     return () => {
-      window.clearTimeout(timerId)
+      cancelled = true
     }
   }, [fallbackLanguages])
 

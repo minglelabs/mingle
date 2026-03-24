@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  LS_KEY_LANGUAGES,
+  LS_KEY_SONIOX_SILENCE_MS,
+  LS_KEY_TEXT_SIZE_LEVEL,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   readPersistedIntegerPreference,
+  readPersistedLivePhoneDemoPreferences,
 } from './live-phone-demo.preferences'
 
 describe('readPersistedIntegerPreference', () => {
@@ -29,5 +33,57 @@ describe('readPersistedIntegerPreference', () => {
     expect(readPersistedIntegerPreference('99', DEFAULT_TEXT_SIZE_LEVEL, 1, 5)).toBe(5)
     expect(readPersistedIntegerPreference('1', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(MIN_SONIOX_SILENCE_MS)
     expect(readPersistedIntegerPreference('99999', DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)).toBe(MAX_SONIOX_SILENCE_MS)
+  })
+})
+
+describe('readPersistedLivePhoneDemoPreferences', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns fallback values when localStorage is unavailable', () => {
+    expect(readPersistedLivePhoneDemoPreferences(['en', 'ko', 'ja'])).toEqual({
+      selectedLanguages: ['en', 'ko', 'ja'],
+      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+    })
+  })
+
+  it('reads and sanitizes stored preferences', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => {
+        if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US', 'en', 'bad'])
+        if (key === LS_KEY_TEXT_SIZE_LEVEL) return '5'
+        if (key === LS_KEY_SONIOX_SILENCE_MS) return '2500'
+        return null
+      }),
+    } as unknown as Storage)
+
+    expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
+      selectedLanguages: ['ja', 'en'],
+      textSizeLevel: 5,
+      sonioxManualFinalizeSilenceMs: 2500,
+    })
+  })
+
+  it('falls back to defaults when stored preferences are malformed', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => {
+        if (key === LS_KEY_LANGUAGES) return '{not-json}'
+        if (key === LS_KEY_TEXT_SIZE_LEVEL) return '0'
+        if (key === LS_KEY_SONIOX_SILENCE_MS) return '-100'
+        return null
+      }),
+    } as unknown as Storage)
+
+    expect(readPersistedLivePhoneDemoPreferences(['en', 'ko'])).toEqual({
+      selectedLanguages: ['en', 'ko'],
+      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+    })
   })
 })
