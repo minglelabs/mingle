@@ -367,6 +367,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [sonioxManualFinalizeSilenceMs])
 
   useEffect(() => {
+    if (!showAccountActions) return
+
     const timeoutId = window.setTimeout(() => {
       void fetch(ACCOUNT_PREFERENCES_API_PATH, {
         method: 'PATCH',
@@ -383,7 +385,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [textSizeLevel, sonioxManualFinalizeSilenceMs])
+  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
 
   useEffect(() => {
     if (!menuOpen) return
