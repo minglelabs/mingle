@@ -239,36 +239,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showMenuButton = true,
   showAccountActions = true,
 }, ref) {
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
-    const fallbackLanguages = resolveDefaultSelectedLanguages(uiLocale)
-    if (typeof window === 'undefined') return fallbackLanguages
-    try {
-      const stored = localStorage.getItem(LS_KEY_LANGUAGES)
-      return stored ? sanitizeSelectedLanguages(JSON.parse(stored), fallbackLanguages) : fallbackLanguages
-    } catch { return fallbackLanguages }
-  })
+  const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [textSizeLevel, setTextSizeLevel] = useState<number>(() => {
-    if (typeof window === 'undefined') return DEFAULT_TEXT_SIZE_LEVEL
-    try {
-      const stored = Number(localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL))
-      if (!Number.isFinite(stored)) return DEFAULT_TEXT_SIZE_LEVEL
-      return Math.max(1, Math.min(4, Math.floor(stored)))
-    } catch {
-      return DEFAULT_TEXT_SIZE_LEVEL
-    }
-  })
-  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(() => {
-    if (typeof window === 'undefined') return DEFAULT_SONIOX_SILENCE_MS
-    try {
-      const stored = Number(localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS))
-      if (!Number.isFinite(stored)) return DEFAULT_SONIOX_SILENCE_MS
-      return Math.max(100, Math.min(3000, Math.floor(stored)))
-    } catch {
-      return DEFAULT_SONIOX_SILENCE_MS
-    }
-  })
+  const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
+  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -292,16 +268,58 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const [isNativeUiBridgeEnabled] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return isNativeUiBridgeEnabledFromSearch(window.location.search || '')
-  })
-  const [isIosTopTapEnabled] = useState(() => shouldEnableIosTopTapFallback({
-    isLikelyIosPlatform: isLikelyIOSPlatform(),
-    isNativeApp: isNativeApp(),
-    isNativeUiBridgeEnabled,
-  }))
+  const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
 
+
+  useEffect(() => {
+    const next = {
+      selectedLanguages: fallbackLanguages as string[],
+      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+      isIosTopTapEnabled: false,
+    }
+
+    try {
+      const storedLanguages = localStorage.getItem(LS_KEY_LANGUAGES)
+      if (storedLanguages) {
+        next.selectedLanguages = sanitizeSelectedLanguages(JSON.parse(storedLanguages), fallbackLanguages)
+      }
+    } catch {
+      next.selectedLanguages = fallbackLanguages
+    }
+
+    try {
+      const storedTextSize = Number(localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL))
+      if (Number.isFinite(storedTextSize)) {
+        next.textSizeLevel = Math.max(1, Math.min(4, Math.floor(storedTextSize)))
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const storedSilenceMs = Number(localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS))
+      if (Number.isFinite(storedSilenceMs)) {
+        next.sonioxManualFinalizeSilenceMs = Math.max(100, Math.min(3000, Math.floor(storedSilenceMs)))
+      }
+    } catch { /* ignore */ }
+
+    const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
+    next.isIosTopTapEnabled = shouldEnableIosTopTapFallback({
+      isLikelyIosPlatform: isLikelyIOSPlatform(),
+      isNativeApp: isNativeApp(),
+      isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
+    })
+
+    const timerId = window.setTimeout(() => {
+      setSelectedLanguages(next.selectedLanguages)
+      setTextSizeLevel(next.textSizeLevel)
+      setSonioxManualFinalizeSilenceMs(next.sonioxManualFinalizeSilenceMs)
+      setIsIosTopTapEnabled(next.isIosTopTapEnabled)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [fallbackLanguages])
 
   // Persist selected languages
   useEffect(() => {
