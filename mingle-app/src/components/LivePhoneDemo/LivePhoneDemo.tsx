@@ -43,6 +43,7 @@ import {
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
+const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -275,6 +276,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsNeedsUnlockRef = useRef(false)
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
+  const accountPreferencesSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
@@ -330,26 +332,43 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch { /* ignore */ }
   }, [sonioxManualFinalizeSilenceMs])
 
+  const clearAccountPreferencesSyncTimer = useCallback(() => {
+    if (accountPreferencesSyncTimerRef.current === null) return
+    window.clearTimeout(accountPreferencesSyncTimerRef.current)
+    accountPreferencesSyncTimerRef.current = null
+  }, [])
+
+  const syncAccountPreferences = useCallback(() => {
+    if (!showAccountActions) return
+
+    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        textSizeLevel,
+        sonioxManualFinalizeSilenceMs,
+      }),
+    }).catch(() => {
+      // Local settings stay authoritative; server sync is best-effort.
+    })
+  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
+
+  const flushAccountPreferencesSync = useCallback(() => {
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferences()
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferences])
+
   useEffect(() => {
     if (!showAccountActions) return
 
-    const timeoutId = window.setTimeout(() => {
-      void fetch(ACCOUNT_PREFERENCES_API_PATH, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          textSizeLevel,
-          sonioxManualFinalizeSilenceMs,
-        }),
-      }).catch(() => {
-        // Local settings stay authoritative; server sync is best-effort.
-      })
-    }, 250)
+    clearAccountPreferencesSyncTimer()
+    accountPreferencesSyncTimerRef.current = window.setTimeout(() => {
+      accountPreferencesSyncTimerRef.current = null
+      syncAccountPreferences()
+    }, ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS)
 
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
+    return clearAccountPreferencesSyncTimer
+  }, [clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -1447,6 +1466,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                               event.currentTarget.releasePointerCapture(event.pointerId)
                             }
+                            flushAccountPreferencesSync()
                           }}
                           onChange={(event) => {
                             const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
@@ -1501,6 +1521,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                               event.currentTarget.releasePointerCapture(event.pointerId)
                             }
+                            flushAccountPreferencesSync()
                           }}
                           onChange={(event) => {
                             if (isSttSessionRunning) return
