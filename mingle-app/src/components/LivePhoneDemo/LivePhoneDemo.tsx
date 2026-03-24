@@ -35,6 +35,7 @@ const VOLUME_THRESHOLD = 0.05
 const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 const LS_KEY_SONIOX_SILENCE_MS = 'mingle_demo_soniox_silence_ms'
+const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -364,6 +365,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       localStorage.setItem(LS_KEY_SONIOX_SILENCE_MS, String(sonioxManualFinalizeSilenceMs))
     } catch { /* ignore */ }
   }, [sonioxManualFinalizeSilenceMs])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          textSizeLevel,
+          sonioxManualFinalizeSilenceMs,
+        }),
+      }).catch(() => {
+        // Local settings stay authoritative; server sync is best-effort.
+      })
+    }, 250)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [textSizeLevel, sonioxManualFinalizeSilenceMs])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -778,6 +798,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
   })
+  const isSttSessionRunning = isConnecting || isReady || isActive
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
@@ -1476,6 +1497,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           max={MAX_SONIOX_SILENCE_MS}
                           step={100}
                           value={sonioxManualFinalizeSilenceMs}
+                          disabled={isSttSessionRunning}
                           onPointerDown={(event) => {
                             event.currentTarget.setPointerCapture(event.pointerId)
                             const next = deriveRangeValueFromPointer(
@@ -1508,7 +1530,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
-                          className={sliderClassName}
+                          className={`${sliderClassName} ${isSttSessionRunning ? 'cursor-not-allowed opacity-50' : ''}`}
                           aria-label={`${silenceFinalizeLabel} milliseconds`}
                         />
                       </label>
