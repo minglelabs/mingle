@@ -1575,6 +1575,8 @@ export default function MingleHome(props: MingleHomeProps) {
         connectionFailedLabel={props.dictionary.demo.connectionFailed}
         muteTtsLabel={props.dictionary.demo.muteTts}
         unmuteTtsLabel={props.dictionary.demo.unmuteTts}
+        textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
+        silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
         menuLabel={props.dictionary.profile.menuLabel}
         logoutLabel={props.dictionary.profile.logout}
         deleteAccountLabel={props.dictionary.profile.deleteAccount}

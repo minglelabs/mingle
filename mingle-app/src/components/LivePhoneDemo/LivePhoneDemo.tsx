@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
 import PhoneFrame from './PhoneFrame'
@@ -162,6 +162,21 @@ function findTopVisibleUtteranceDateLabel(container: HTMLDivElement, locale: str
   return ''
 }
 
+function deriveRangeValueFromPointer(
+  event: ReactPointerEvent<HTMLInputElement>,
+  min: number,
+  max: number,
+  step: number,
+): number {
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (rect.width <= 0) return min
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  const raw = min + ((max - min) * ratio)
+  const stepped = min + (Math.round((raw - min) / step) * step)
+  const bounded = Math.max(min, Math.min(max, stepped))
+  return Number.isFinite(bounded) ? bounded : min
+}
+
 export interface LivePhoneDemoRef {
   startRecording: () => void
 }
@@ -177,6 +192,8 @@ interface LivePhoneDemoProps {
   connectionFailedLabel: string
   muteTtsLabel: string
   unmuteTtsLabel: string
+  textSizeLabel: string
+  silenceFinalizeLabel: string
   menuLabel: string
   logoutLabel: string
   deleteAccountLabel: string
@@ -229,6 +246,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   muteTtsLabel,
   unmuteTtsLabel,
+  textSizeLabel,
+  silenceFinalizeLabel,
   menuLabel,
   logoutLabel,
   deleteAccountLabel,
@@ -760,6 +779,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
+  const sliderClassName = [
+    'w-full cursor-pointer touch-none appearance-none bg-transparent py-2',
+    'accent-amber-500',
+    '[&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-amber-100',
+    '[&::-webkit-slider-thumb]:-mt-2 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-amber-600 [&::-webkit-slider-thumb]:bg-amber-500',
+    '[&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-amber-100',
+    '[&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-amber-600 [&::-moz-range-thumb]:bg-amber-500',
+  ].join(' ')
 
   // Boost TTS volume while STT is active to compensate for iOS
   // .playAndRecord audio session reducing speaker output.
@@ -1405,7 +1432,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <div className="space-y-3 border-b border-gray-200 px-3 py-3">
                       <label className="block">
                         <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
-                          <span>Text Size</span>
+                          <span>{textSizeLabel}</span>
                           <span>Level {textSizeLevel}</span>
                         </div>
                         <input
@@ -1414,17 +1441,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           max={4}
                           step={1}
                           value={textSizeLevel}
+                          onPointerDown={(event) => {
+                            const next = deriveRangeValueFromPointer(event, 1, 4, 1)
+                            setTextSizeLevel(next)
+                          }}
                           onChange={(event) => {
                             const next = Math.max(1, Math.min(4, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
                             setTextSizeLevel(next)
                           }}
-                          className="w-full accent-amber-500"
-                          aria-label="Text size level"
+                          className={sliderClassName}
+                          aria-label={`${textSizeLabel} level`}
                         />
                       </label>
                       <label className="block">
                         <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
-                          <span>Silence Finalize</span>
+                          <span>{silenceFinalizeLabel}</span>
                           <span>{sonioxManualFinalizeSilenceMs}ms</span>
                         </div>
                         <input
@@ -1433,6 +1464,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           max={MAX_SONIOX_SILENCE_MS}
                           step={100}
                           value={sonioxManualFinalizeSilenceMs}
+                          onPointerDown={(event) => {
+                            const next = deriveRangeValueFromPointer(
+                              event,
+                              MIN_SONIOX_SILENCE_MS,
+                              MAX_SONIOX_SILENCE_MS,
+                              100,
+                            )
+                            setSonioxManualFinalizeSilenceMs(next)
+                          }}
                           onChange={(event) => {
                             const next = Math.max(
                               MIN_SONIOX_SILENCE_MS,
@@ -1440,8 +1480,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
-                          className="w-full accent-amber-500"
-                          aria-label="Soniox manual finalize silence milliseconds"
+                          className={sliderClassName}
+                          aria-label={`${silenceFinalizeLabel} milliseconds`}
                         />
                       </label>
                     </div>

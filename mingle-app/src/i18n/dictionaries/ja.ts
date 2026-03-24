@@ -9,6 +9,8 @@ export const jaDictionary: AppDictionary = {
     connectionFailed: "接続に失敗しました。再試行中...",
     muteTts: "音声再生をミュート",
     unmuteTts: "音声再生をミュート解除",
+    textSizeLabel: "文字サイズ",
+    silenceFinalizeLabel: "無音で終了",
   },
   tabs: {
     chats: "チャット",

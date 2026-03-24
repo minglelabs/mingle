@@ -12,6 +12,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "连接失败。正在重试...",
       "muteTts": "静音 TTS",
       "unmuteTts": "取消静音 TTS",
+      "textSizeLabel": "文字大小",
+      "silenceFinalizeLabel": "静音结束",
     },
     "tabs": {
       "chats": "聊天记录",
@@ -159,6 +161,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "連線失敗。正在重試...",
       "muteTts": "靜音 TTS",
       "unmuteTts": "取消靜音 TTS",
+      "textSizeLabel": "文字大小",
+      "silenceFinalizeLabel": "靜音結束",
     },
     "tabs": {
       "chats": "聊天記錄",
@@ -306,6 +310,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "Соединение не удалось. Повторная попытка...",
       "muteTts": "Отключить TTS",
       "unmuteTts": "Включить звук TTS",
+      "textSizeLabel": "Размер текста",
+      "silenceFinalizeLabel": "Завершение по тишине",
     },
     "tabs": {
       "chats": "Чаты",
@@ -453,6 +459,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "فشل الاتصال. جارٍ إعادة المحاولة...",
       "muteTts": "كتم تحويل النص إلى كلام",
       "unmuteTts": "إلغاء كتم تحويل النص إلى كلام",
+      "textSizeLabel": "حجم النص",
+      "silenceFinalizeLabel": "إنهاء الصمت",
     },
     "tabs": {
       "chats": "الدردشات",
@@ -3393,6 +3401,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "कनेक्शन विफल. पुनः प्रयास कर रहा हूँ...",
       "muteTts": "टीटीएस म्यूट करें",
       "unmuteTts": "टीटीएस को अनम्यूट करें",
+      "textSizeLabel": "पाठ आकार",
+      "silenceFinalizeLabel": "साइलेंस फ़ाइनलाइज़",
     },
     "tabs": {
       "chats": "चैट",
@@ -4128,6 +4138,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "การเชื่อมต่อล้มเหลว กำลังลองอีกครั้ง...",
       "muteTts": "ปิดเสียง TTS",
       "unmuteTts": "เปิดเสียง TTS",
+      "textSizeLabel": "ขนาดข้อความ",
+      "silenceFinalizeLabel": "จบเมื่อเงียบ",
     },
     "tabs": {
       "chats": "แชท",
@@ -7509,6 +7521,8 @@ export const generatedLocaleDictionaries = {
       "connectionFailed": "Kết nối không thành công. Đang thử lại...",
       "muteTts": "Tắt tiếng TTS",
       "unmuteTts": "Bật tiếng TTS",
+      "textSizeLabel": "Kích thước chữ",
+      "silenceFinalizeLabel": "Kết thúc khi im lặng",
     },
     "tabs": {
       "chats": "Trò chuyện",
