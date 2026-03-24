@@ -136,6 +136,7 @@ type NativeSttStartCommand = {
     sttModel: string
     aecEnabled: boolean
     sonioxLanguageHints: string[]
+    sonioxManualFinalizeSilenceMs: number
   }
 }
 
@@ -513,6 +514,7 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  sonioxManualFinalizeSilenceMs?: number
   usageLimitSec?: number | null
 }
 
@@ -1482,6 +1484,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  sonioxManualFinalizeSilenceMs = 1000,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
@@ -2989,6 +2992,7 @@ export default function useRealtimeSTT({
             sttModel: 'soniox',
             aecEnabled: enableAec,
             sonioxLanguageHints,
+            sonioxManualFinalizeSilenceMs,
           },
         })
         if (!posted) {
@@ -3034,6 +3038,7 @@ export default function useRealtimeSTT({
           sample_rate: context.sampleRate,
           stt_model: 'soniox',
           soniox_language_hints: sonioxLanguageHints,
+          soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
         }
         socket.send(JSON.stringify(config))
       }
@@ -3076,7 +3081,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       setTimeout(() => setConnectionStatus('idle'), 3000)
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

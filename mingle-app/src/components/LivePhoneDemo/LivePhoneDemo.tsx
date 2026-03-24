@@ -33,6 +33,8 @@ import {
 
 const VOLUME_THRESHOLD = 0.05
 const LS_KEY_LANGUAGES = 'mingle_demo_languages'
+const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
+const LS_KEY_SONIOX_SILENCE_MS = 'mingle_demo_soniox_silence_ms'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -46,6 +48,16 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const DEFAULT_TEXT_SIZE_LEVEL = 2
+const DEFAULT_SONIOX_SILENCE_MS = 1000
+
+const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
+  1: 'text-[13px]',
+  2: 'text-sm',
+  3: 'text-[15px]',
+  4: 'text-base',
+}
+
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -237,6 +249,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [textSizeLevel, setTextSizeLevel] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_TEXT_SIZE_LEVEL
+    try {
+      const stored = Number(localStorage.getItem(LS_KEY_TEXT_SIZE_LEVEL))
+      if (!Number.isFinite(stored)) return DEFAULT_TEXT_SIZE_LEVEL
+      return Math.max(1, Math.min(4, Math.floor(stored)))
+    } catch {
+      return DEFAULT_TEXT_SIZE_LEVEL
+    }
+  })
+  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SONIOX_SILENCE_MS
+    try {
+      const stored = Number(localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS))
+      if (!Number.isFinite(stored)) return DEFAULT_SONIOX_SILENCE_MS
+      return Math.max(100, Math.min(3000, Math.floor(stored)))
+    } catch {
+      return DEFAULT_SONIOX_SILENCE_MS
+    }
+  })
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -277,6 +309,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
   }, [selectedLanguages])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY_TEXT_SIZE_LEVEL, String(textSizeLevel))
+    } catch { /* ignore */ }
+  }, [textSizeLevel])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY_SONIOX_SILENCE_MS, String(sonioxManualFinalizeSilenceMs))
+    } catch { /* ignore */ }
+  }, [sonioxManualFinalizeSilenceMs])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -689,7 +733,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
+    sonioxManualFinalizeSilenceMs,
   })
+
+  const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
 
   // Boost TTS volume while STT is active to compensate for iOS
   // .playAndRecord audio session reducing speaker output.
@@ -1330,8 +1377,48 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 {menuOpen && (
                   <div
                     ref={menuPanelRef}
-                    className={`absolute right-0 top-full z-50 mt-1 w-44 border border-gray-200 p-0 ${navSurfaceClassName}`}
+                    className={`absolute right-0 top-full z-50 mt-1 w-72 border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
+                    <div className="space-y-3 border-b border-gray-200 px-3 py-3">
+                      <label className="block">
+                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+                          <span>Text Size</span>
+                          <span>Level {textSizeLevel}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={4}
+                          step={1}
+                          value={textSizeLevel}
+                          onChange={(event) => {
+                            const next = Math.max(1, Math.min(4, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
+                            setTextSizeLevel(next)
+                          }}
+                          className="w-full accent-amber-500"
+                          aria-label="Text size level"
+                        />
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 flex items-center justify-between text-xs font-semibold text-gray-700">
+                          <span>Silence Finalize</span>
+                          <span>{sonioxManualFinalizeSilenceMs}ms</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={100}
+                          max={3000}
+                          step={100}
+                          value={sonioxManualFinalizeSilenceMs}
+                          onChange={(event) => {
+                            const next = Math.max(100, Math.min(3000, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS))
+                            setSonioxManualFinalizeSilenceMs(next)
+                          }}
+                          className="w-full accent-amber-500"
+                          aria-label="Soniox manual finalize silence milliseconds"
+                        />
+                      </label>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -1401,6 +1488,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isDraft={draftUtteranceIds.has(u.id)}
                   isSpeaking={speakingItem?.utteranceId === u.id}
                   speakingLanguage={speakingItem?.language ?? null}
+                  bubbleTextClassName={chatBubbleTextClassName}
                 />
               </div>
             ))}
@@ -1418,7 +1506,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5"
               >
                 <div className="min-w-0">
-                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-600">
+                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
                     <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
                       <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
                       <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
@@ -1442,7 +1530,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     bubbleClassName="bg-amber-50/80 border border-amber-100"
                     metaClassName="text-amber-500"
                     contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                    contentClassName="text-sm text-gray-500"
+                    contentClassName={`${chatBubbleTextClassName} text-gray-500`}
                   >
                     <>
                       {text}
