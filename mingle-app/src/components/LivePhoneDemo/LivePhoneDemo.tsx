@@ -50,6 +50,8 @@ const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const DEFAULT_TEXT_SIZE_LEVEL = 2
 const DEFAULT_SONIOX_SILENCE_MS = 1000
+const MIN_SONIOX_SILENCE_MS = 500
+const MAX_SONIOX_SILENCE_MS = 2000
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -298,7 +300,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       const storedSilenceMs = Number(localStorage.getItem(LS_KEY_SONIOX_SILENCE_MS))
       if (Number.isFinite(storedSilenceMs)) {
-        next.sonioxManualFinalizeSilenceMs = Math.max(100, Math.min(3000, Math.floor(storedSilenceMs)))
+        next.sonioxManualFinalizeSilenceMs = Math.max(
+          MIN_SONIOX_SILENCE_MS,
+          Math.min(MAX_SONIOX_SILENCE_MS, Math.floor(storedSilenceMs)),
+        )
       }
     } catch { /* ignore */ }
 
@@ -1424,12 +1429,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                         <input
                           type="range"
-                          min={100}
-                          max={3000}
+                          min={MIN_SONIOX_SILENCE_MS}
+                          max={MAX_SONIOX_SILENCE_MS}
                           step={100}
                           value={sonioxManualFinalizeSilenceMs}
                           onChange={(event) => {
-                            const next = Math.max(100, Math.min(3000, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS))
+                            const next = Math.max(
+                              MIN_SONIOX_SILENCE_MS,
+                              Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                            )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
                           className="w-full accent-amber-500"
