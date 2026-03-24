@@ -1197,10 +1197,6 @@ function AppInner(): React.JSX.Element {
     };
   }, [clearAuthDispatchRetryTimer]);
 
-  const handleIosTopTapOverlayPress = useCallback(() => {
-    emitUiToWeb({ type: 'scroll_to_top', source: 'ios_status_bar_overlay' });
-  }, [emitUiToWeb]);
-
   const resolveCurrentTtsIdentity = useCallback((event?: { utteranceId?: string; playbackId?: string }) => {
     const active = currentTtsPlaybackRef.current;
     const eventPlaybackId = typeof event?.playbackId === 'string' ? event.playbackId : '';
@@ -1643,14 +1639,8 @@ function AppInner(): React.JSX.Element {
         />
       ) : null}
       <StatusBar barStyle={safeAreaPalette.statusBarStyle} />
-      {Platform.OS === 'ios' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Scroll to top"
-          onPress={handleIosTopTapOverlayPress}
-          style={[styles.iosTopTapOverlay, { height: iosTopTapOverlayHeight }]}
-        />
-      ) : null}
+      {/* iOS top-tap fallback is handled in web UI to avoid native overlay
+          intercepting touches on WebView content. */}
       <View style={[styles.webViewContainer, { backgroundColor: safeAreaPalette.webViewColor }]}>
         {versionGate.status !== 'force_update' ? (
           <WebView
