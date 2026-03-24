@@ -1499,6 +1499,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           value={sonioxManualFinalizeSilenceMs}
                           disabled={isSttSessionRunning}
                           onPointerDown={(event) => {
+                            if (isSttSessionRunning) return
                             event.currentTarget.setPointerCapture(event.pointerId)
                             const next = deriveRangeValueFromPointer(
                               event,
@@ -1509,6 +1510,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
                           onPointerMove={(event) => {
+                            if (isSttSessionRunning) return
                             if (event.buttons !== 1) return
                             const next = deriveRangeValueFromPointer(
                               event,
@@ -1519,18 +1521,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
                           onPointerUp={(event) => {
+                            if (isSttSessionRunning) return
                             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                               event.currentTarget.releasePointerCapture(event.pointerId)
                             }
                           }}
                           onChange={(event) => {
+                            if (isSttSessionRunning) return
                             const next = Math.max(
                               MIN_SONIOX_SILENCE_MS,
                               Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
                             )
                             setSonioxManualFinalizeSilenceMs(next)
                           }}
-                          className={`${sliderClassName} ${isSttSessionRunning ? 'cursor-not-allowed opacity-50' : ''}`}
+                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-50' : ''}`}
                           aria-label={`${silenceFinalizeLabel} milliseconds`}
                         />
                       </label>
