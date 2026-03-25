@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.5 (22)",
+      "releaseName": "1.0.5 (23)",
       "releaseNotes": {
         "en-US": "Live phone demo polish.\nSafer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
         "ko-KR": "라이브 폰 데모를 다듬었습니다.\n더 안전한 silence 슬라이더 처리, 업그레이드 안내 문구 개선, 토스트 위치 조정, 환경설정 동기화 안정화를 반영했습니다."
