@@ -17,8 +17,8 @@ MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT="$MINGLE_IOS_DIR/scripts/install-ios-simulat
 MINGLE_IOS_TEST_SCRIPT="$MINGLE_IOS_DIR/scripts/test-ios.sh"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.4"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.4"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.5"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.5"
 DEVBOX_BASE_WEB_PORT=3518
 DEVBOX_BASE_STT_PORT=5518
 DEVBOX_BASE_METRO_PORT=8518
@@ -1694,6 +1694,26 @@ cloudflared_named_log_file_path() {
   printf '%s/.devbox-cache/cloudflared/%s.named.log' "$ROOT_DIR" "$worktree"
 }
 
+cloudflared_named_config_file_path() {
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named.yml' "$ROOT_DIR" "$worktree"
+}
+
+cloudflared_named_bridge_pid_file_path() {
+  local kind="$1"
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named-bridge-%s.pid' "$ROOT_DIR" "$worktree" "$kind"
+}
+
+cloudflared_named_bridge_log_file_path() {
+  local kind="$1"
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named-bridge-%s.log' "$ROOT_DIR" "$worktree" "$kind"
+}
+
 resolve_cloudflare_named_tunnel_settings() {
   local token web_host stt_host
   token="$(trim_whitespace "${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}")"
@@ -1792,6 +1812,108 @@ stop_cloudflared_named_tunnel_from_pidfile() {
   fi
 
   rm -f "$pid_file"
+}
+
+write_cloudflared_named_config() {
+  local config_file="$1"
+  local web_host="$2"
+  local stt_host="$3"
+
+  mkdir -p "$(dirname "$config_file")"
+  cat >"$config_file" <<EOF
+originRequest:
+  noTLSVerify: true
+  http2Origin: false
+ingress:
+  - hostname: $web_host
+    service: http://127.0.0.1:$DEVBOX_WEB_PORT
+  - hostname: $stt_host
+    service: http://127.0.0.1:$DEVBOX_STT_PORT
+  - service: http_status:404
+EOF
+}
+
+extract_cloudflared_named_service_port() {
+  local log_file="$1"
+  local hostname="$2"
+  [[ -f "$log_file" ]] || return 0
+
+  python3 - "$log_file" "$hostname" <<'PY'
+import re
+import sys
+
+log_file, hostname = sys.argv[1], sys.argv[2]
+pattern = re.compile(rf'"hostname":"{re.escape(hostname)}".*?"service":"http://localhost:(\d+)"')
+escaped_pattern = re.compile(
+    rf'\\"hostname\\":\\"{re.escape(hostname)}\\".*?\\"service\\":\\"http://localhost:(\d+)\\"'
+)
+port = ""
+with open(log_file, "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        match = pattern.search(line)
+        if not match:
+            match = escaped_pattern.search(line)
+        if match:
+            port = match.group(1)
+if port:
+    print(port)
+PY
+}
+
+stop_cloudflared_named_bridge() {
+  local kind="$1"
+  local pid_file
+  local pid
+
+  pid_file="$(cloudflared_named_bridge_pid_file_path "$kind")"
+  [[ -f "$pid_file" ]] || return 0
+
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+    log "stopping cloudflared named bridge($kind) (pid: $pid)"
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  rm -f "$pid_file"
+}
+
+ensure_cloudflared_named_bridge() {
+  local kind="$1"
+  local remote_port="$2"
+  local target_port="$3"
+  local tracked_pids_ref="${4:-}"
+  local pid_file log_file bridge_pid
+
+  [[ -n "$remote_port" ]] || return 0
+  if [[ "$remote_port" == "$target_port" ]]; then
+    stop_cloudflared_named_bridge "$kind"
+    return 0
+  fi
+
+  pid_file="$(cloudflared_named_bridge_pid_file_path "$kind")"
+  log_file="$(cloudflared_named_bridge_log_file_path "$kind")"
+  mkdir -p "$(dirname "$pid_file")"
+
+  stop_cloudflared_named_bridge "$kind"
+  rm -f "$log_file"
+  stop_listeners_by_port "cloudflared named bridge($kind)" "$remote_port"
+
+  log "starting cloudflared named bridge($kind): localhost:$remote_port -> 127.0.0.1:$target_port"
+  python3 "$ROOT_DIR/scripts/devbox-port-bridge.py" \
+    --listen-host 127.0.0.1 \
+    --listen-port "$remote_port" \
+    --target-host 127.0.0.1 \
+    --target-port "$target_port" >"$log_file" 2>&1 &
+  bridge_pid="$!"
+  printf '%s\n' "$bridge_pid" > "$pid_file"
+
+  if [[ -n "$tracked_pids_ref" ]]; then
+    eval "$tracked_pids_ref+=(\"$bridge_pid\")"
+  fi
 }
 
 detect_ios_coredevice_id() {
@@ -4053,6 +4175,7 @@ cmd_up() {
   local cloudflared_stt_pid=""
   local cloudflared_named_log=""
   local cloudflared_named_pid_file=""
+  local cloudflared_named_config_file=""
   local cloudflared_named_token=""
   local cloudflared_named_web_host=""
   local cloudflared_named_stt_host=""
@@ -4116,13 +4239,18 @@ $(ngrok_plan_capacity_hint)"
 
             cloudflared_named_pid_file="$(cloudflared_named_pid_file_path)"
             cloudflared_named_log="$(cloudflared_named_log_file_path)"
+            cloudflared_named_config_file="$(cloudflared_named_config_file_path)"
             mkdir -p "$(dirname "$cloudflared_named_pid_file")"
 
             stop_cloudflared_named_tunnel_from_pidfile
             rm -f "$cloudflared_named_log"
+            write_cloudflared_named_config \
+              "$cloudflared_named_config_file" \
+              "$cloudflared_named_web_host" \
+              "$cloudflared_named_stt_host"
 
             log "starting cloudflared named tunnel connector"
-            cloudflared tunnel --no-autoupdate run --token "$cloudflared_named_token" >"$cloudflared_named_log" 2>&1 &
+            cloudflared --config "$cloudflared_named_config_file" tunnel --no-autoupdate run --token "$cloudflared_named_token" >"$cloudflared_named_log" 2>&1 &
             local cloudflared_named_pid="$!"
             printf '%s\n' "$cloudflared_named_pid" > "$cloudflared_named_pid_file"
             pids+=("$cloudflared_named_pid")
@@ -4132,6 +4260,13 @@ $(ngrok_plan_capacity_hint)"
               rm -f "$cloudflared_named_pid_file"
               die "cloudflared named tunnel startup failed (log: $cloudflared_named_log)"
             fi
+
+            local cloudflared_named_remote_web_port=""
+            local cloudflared_named_remote_stt_port=""
+            cloudflared_named_remote_web_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_web_host" || true)"
+            cloudflared_named_remote_stt_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_stt_host" || true)"
+            ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT" pids
+            ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT" pids
 
             cloudflared_web_url="https://$cloudflared_named_web_host"
             cloudflared_stt_url="https://$cloudflared_named_stt_host"
@@ -4404,6 +4539,9 @@ cmd_down() {
   stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_STT_PORT"
   stop_cloudflared_named_tunnel_from_pidfile
+  stop_cloudflared_named_bridge "web"
+  stop_cloudflared_named_bridge "stt"
+  rm -f "$(cloudflared_named_config_file_path)"
 
   local next_lock_file="$ROOT_DIR/mingle-app/.next/dev/lock"
   if [[ -f "$next_lock_file" ]]; then

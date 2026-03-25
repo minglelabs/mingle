@@ -8,42 +8,42 @@ import {
 
 describe('RN api namespace validation contract', () => {
   it('normalizes leading and trailing slashes', () => {
-    expect(normalizeApiNamespace(' /ios/v1.0.4/ ')).toBe('ios/v1.0.4')
+    expect(normalizeApiNamespace(' /ios/v1.0.5/ ')).toBe('ios/v1.0.5')
   })
 
   it('returns expected namespace by runtime os', () => {
-    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.4')
-    expect(resolveExpectedApiNamespace('android')).toBe('android/v1.0.4')
+    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.5')
+    expect(resolveExpectedApiNamespace('android')).toBe('android/v1.0.5')
     expect(resolveExpectedApiNamespace('web')).toBe('')
   })
 
   it('accepts only matching iOS namespace', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'ios',
-      configuredApiNamespace: 'ios/v1.0.4',
+      configuredApiNamespace: 'ios/v1.0.5',
     })
 
-    expect(result.expectedApiNamespace).toBe('ios/v1.0.4')
-    expect(result.validatedApiNamespace).toBe('ios/v1.0.4')
+    expect(result.expectedApiNamespace).toBe('ios/v1.0.5')
+    expect(result.validatedApiNamespace).toBe('ios/v1.0.5')
   })
 
   it('accepts only matching Android namespace', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'android',
-      configuredApiNamespace: 'android/v1.0.4',
+      configuredApiNamespace: 'android/v1.0.5',
     })
 
-    expect(result.expectedApiNamespace).toBe('android/v1.0.4')
-    expect(result.validatedApiNamespace).toBe('android/v1.0.4')
+    expect(result.expectedApiNamespace).toBe('android/v1.0.5')
+    expect(result.validatedApiNamespace).toBe('android/v1.0.5')
   })
 
   it('rejects mismatched namespace for Android runtime', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'android',
-      configuredApiNamespace: 'ios/v1.0.4',
+      configuredApiNamespace: 'ios/v1.0.5',
     })
 
-    expect(result.expectedApiNamespace).toBe('android/v1.0.4')
+    expect(result.expectedApiNamespace).toBe('android/v1.0.5')
     expect(result.validatedApiNamespace).toBe('')
   })
 

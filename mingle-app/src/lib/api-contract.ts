@@ -5,10 +5,12 @@ const ALLOWED_API_NAMESPACES = new Set([
   'android/v1.0.2',
   'android/v1.0.3',
   'android/v1.0.4',
+  'android/v1.0.5',
   'ios/v1.0.0',
   'ios/v1.0.2',
   'ios/v1.0.3',
   'ios/v1.0.4',
+  'ios/v1.0.5',
 ])
 
 function normalizeApiNamespace(raw: string): string {

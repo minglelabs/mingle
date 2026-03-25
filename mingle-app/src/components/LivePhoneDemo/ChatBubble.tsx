@@ -35,6 +35,7 @@ interface ChatBubbleProps {
   isDraft?: boolean
   isSpeaking?: boolean
   speakingLanguage?: string | null
+  bubbleTextClassName?: string
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -93,6 +94,7 @@ function ChatBubble({
   isDraft = false,
   isSpeaking = false,
   speakingLanguage = null,
+  bubbleTextClassName = 'text-sm',
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
@@ -113,7 +115,9 @@ function ChatBubble({
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
-  const originalTextClassName = isDraft ? 'text-sm text-gray-400' : 'text-sm text-gray-900'
+  const originalTextClassName = isDraft
+    ? `${bubbleTextClassName} text-gray-400`
+    : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
 
   return (
@@ -183,7 +187,7 @@ function ChatBubble({
             bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-            contentClassName="text-sm text-gray-700"
+            contentClassName={`${bubbleTextClassName} text-gray-700`}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />
@@ -220,6 +224,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.isDraft !== next.isDraft) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
+  if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance

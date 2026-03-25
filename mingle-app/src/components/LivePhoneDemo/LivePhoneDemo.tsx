@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
@@ -10,6 +11,7 @@ import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { mergeDisplayUtterances } from './use-realtime-stt'
+import { clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -17,6 +19,17 @@ import {
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
+import {
+  DEFAULT_SONIOX_SILENCE_MS,
+  DEFAULT_TEXT_SIZE_LEVEL,
+  LS_KEY_LANGUAGES,
+  LS_KEY_SONIOX_SILENCE_MS,
+  LS_KEY_TEXT_SIZE_LEVEL,
+  MAX_SONIOX_SILENCE_MS,
+  MIN_SONIOX_SILENCE_MS,
+  readPersistedLivePhoneDemoPreferences,
+} from './live-phone-demo.preferences'
+import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
@@ -32,7 +45,8 @@ import {
 } from './live-phone-demo.native-ui.logic'
 
 const VOLUME_THRESHOLD = 0.05
-const LS_KEY_LANGUAGES = 'mingle_demo_languages'
+const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
+const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -46,6 +60,16 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
+
+const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
+  1: 'text-[13px]',
+  2: 'text-sm',
+  3: 'text-[15px]',
+  4: 'text-base',
+  5: 'text-[18px]',
+}
+
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -83,21 +107,6 @@ function resolveDefaultSelectedLanguages(uiLocale?: string): string[] {
   ).trim()
 
   return deriveDefaultSttLanguagesForLocale(browserLocale)
-}
-
-function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[]): string[] {
-  if (!Array.isArray(rawValue)) return [...fallbackLanguages]
-
-  const deduped: string[] = []
-  for (const item of rawValue) {
-    if (typeof item !== 'string') continue
-    const normalized = canonicalizeSttLanguageCode(item)
-    if (!normalized || deduped.includes(normalized)) continue
-    deduped.push(normalized)
-    if (deduped.length >= 5) break
-  }
-
-  return deduped.length > 0 ? deduped : [...fallbackLanguages]
 }
 
 function startOfLocalDay(date: Date): Date {
@@ -148,6 +157,21 @@ function findTopVisibleUtteranceDateLabel(container: HTMLDivElement, locale: str
   return ''
 }
 
+function deriveRangeValueFromPointer(
+  event: ReactPointerEvent<HTMLInputElement>,
+  min: number,
+  max: number,
+  step: number,
+): number {
+  const rect = event.currentTarget.getBoundingClientRect()
+  if (rect.width <= 0) return min
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  const raw = min + ((max - min) * ratio)
+  const stepped = min + (Math.round((raw - min) / step) * step)
+  const bounded = Math.max(min, Math.min(max, stepped))
+  return Number.isFinite(bounded) ? bounded : min
+}
+
 export interface LivePhoneDemoRef {
   startRecording: () => void
 }
@@ -163,6 +187,10 @@ interface LivePhoneDemoProps {
   connectionFailedLabel: string
   muteTtsLabel: string
   unmuteTtsLabel: string
+  textSizeLabel: string
+  silenceFinalizeLabel: string
+  silenceFinalizeLockedMessage: string
+  silenceFinalizeLockedButtonLabel: string
   menuLabel: string
   logoutLabel: string
   deleteAccountLabel: string
@@ -172,7 +200,8 @@ interface LivePhoneDemoProps {
   onLogout: () => void
   onDeleteAccount: () => void
   isAuthActionPending?: boolean
-  showAccountMenu?: boolean
+  showMenuButton?: boolean
+  showAccountActions?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -214,6 +243,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   connectionFailedLabel,
   muteTtsLabel,
   unmuteTtsLabel,
+  textSizeLabel,
+  silenceFinalizeLabel,
+  silenceFinalizeLockedMessage,
+  silenceFinalizeLockedButtonLabel,
   menuLabel,
   logoutLabel,
   deleteAccountLabel,
@@ -223,19 +256,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLogout,
   onDeleteAccount,
   isAuthActionPending = false,
-  showAccountMenu = true,
+  showMenuButton = true,
+  showAccountActions = true,
 }, ref) {
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
-    const fallbackLanguages = resolveDefaultSelectedLanguages(uiLocale)
-    if (typeof window === 'undefined') return fallbackLanguages
-    try {
-      const stored = localStorage.getItem(LS_KEY_LANGUAGES)
-      return stored ? sanitizeSelectedLanguages(JSON.parse(stored), fallbackLanguages) : fallbackLanguages
-    } catch { return fallbackLanguages }
-  })
+  const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
+  const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
@@ -243,7 +275,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
   const isTtsProcessingRef = useRef(false)
-  const ttsWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ttsWaitTimerRef = useRef<number | null>(null)
   const nativeTtsPlaybackSeqRef = useRef(0)
   const activeNativeTtsPlaybackIdRef = useRef<string | null>(null)
   const activeNativeTtsUtteranceIdRef = useRef<string | null>(null)
@@ -254,20 +286,48 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsNeedsUnlockRef = useRef(false)
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
+  const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const [isNativeUiBridgeEnabled] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return isNativeUiBridgeEnabledFromSearch(window.location.search || '')
-  })
-  const [isIosTopTapEnabled] = useState(() => shouldEnableIosTopTapFallback({
-    isLikelyIosPlatform: isLikelyIOSPlatform(),
-    isNativeApp: isNativeApp(),
-    isNativeUiBridgeEnabled,
-  }))
+  const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
+  const silenceFinalizeLockedDescriptionId = useId()
 
+  // Hydrate persisted preferences before paint without tripping the
+  // react-hooks/set-state-in-effect rule.
+  useLayoutEffect(() => {
+    let cancelled = false
+    const schedule = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (callback: () => void) => { void Promise.resolve().then(callback) }
+
+    schedule(() => {
+      if (cancelled) return
+
+      const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
+      const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
+      setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
+      setSelectedLanguages(next.selectedLanguages)
+      setTextSizeLevel(next.textSizeLevel)
+      setSonioxManualFinalizeSilenceMs(
+        nextIsSilenceFinalizeSliderLocked
+          ? DEFAULT_SONIOX_SILENCE_MS
+          : next.sonioxManualFinalizeSilenceMs,
+      )
+
+      const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
+      setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
+        isLikelyIosPlatform: isLikelyIOSPlatform(),
+        isNativeApp: isNativeApp(),
+        isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
+      }))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fallbackLanguages])
 
   // Persist selected languages
   useEffect(() => {
@@ -275,6 +335,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
   }, [selectedLanguages])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY_TEXT_SIZE_LEVEL, String(textSizeLevel))
+    } catch { /* ignore */ }
+  }, [textSizeLevel])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY_SONIOX_SILENCE_MS, String(sonioxManualFinalizeSilenceMs))
+    } catch { /* ignore */ }
+  }, [sonioxManualFinalizeSilenceMs])
+
+  const clearAccountPreferencesSyncTimer = useCallback(() => {
+    if (accountPreferencesSyncTimerRef.current === null) return
+    window.clearTimeout(accountPreferencesSyncTimerRef.current)
+    accountPreferencesSyncTimerRef.current = null
+  }, [])
+
+  const syncAccountPreferences = useCallback(() => {
+    if (!showAccountActions) return
+
+    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        textSizeLevel,
+        sonioxManualFinalizeSilenceMs,
+      }),
+    }).catch(() => {
+      // Local settings stay authoritative; server sync is best-effort.
+    })
+  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
+
+  const flushAccountPreferencesSync = useCallback(() => {
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferences()
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferences])
+
+  useEffect(() => {
+    if (!showAccountActions) return
+
+    clearAccountPreferencesSyncTimer()
+    accountPreferencesSyncTimerRef.current = window.setTimeout(() => {
+      accountPreferencesSyncTimerRef.current = null
+      syncAccountPreferences()
+    }, ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS)
+
+    return clearAccountPreferencesSyncTimer
+  }, [clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -302,7 +412,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [menuOpen])
 
   useEffect(() => {
-    if (showAccountMenu) return
+    if (showMenuButton) return
 
     const closeMenuState = window.setTimeout(() => {
       setMenuOpen(false)
@@ -312,7 +422,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(closeMenuState)
     }
-  }, [showAccountMenu])
+  }, [showMenuButton])
 
   const closeDeleteAccountDialog = useCallback(() => {
     if (isAuthActionPending) return
@@ -386,7 +496,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const clearTtsWaitTimer = useCallback(() => {
     if (ttsWaitTimerRef.current) {
-      clearTimeout(ttsWaitTimerRef.current)
+      window.clearTimeout(ttsWaitTimerRef.current)
       ttsWaitTimerRef.current = null
     }
   }, [])
@@ -454,7 +564,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Front item is waiting for audio — set a timeout to skip if it never arrives
     if (!front.audioBlob) {
       if (!ttsWaitTimerRef.current) {
-        ttsWaitTimerRef.current = setTimeout(() => {
+        ttsWaitTimerRef.current = window.setTimeout(() => {
           ttsWaitTimerRef.current = null
           const q = ttsQueueRef.current
           if (q.length > 0 && !q[0].audioBlob) {
@@ -687,7 +797,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTtsCanceled: handleTtsCanceled,
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
+    sonioxManualFinalizeSilenceMs,
   })
+  const isSttSessionRunning = isConnecting || isReady || isActive
+  const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+
+  const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
+  const sliderClassName = [
+    // iOS-like visual style with larger touch area for drag stability on all platforms.
+    'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
+    'accent-[#0A84FF]',
+    '[&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:appearance-none [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[#D1D1D6]',
+    '[&::-webkit-slider-thumb]:-mt-[7px] [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#C7C7CC] [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
+    '[&::-moz-range-track]:h-1.5 [&::-moz-range-track]:appearance-none [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-[#D1D1D6]',
+    '[&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#C7C7CC] [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-[0_1px_3px_rgba(0,0,0,0.35)]',
+  ].join(' ')
 
   // Boost TTS volume while STT is active to compensate for iOS
   // .playAndRecord audio session reducing speaker output.
@@ -964,7 +1088,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const prevScrollHeightRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
-  const scrollUiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrollUiHideTimerRef = useRef<number | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState({
@@ -995,7 +1119,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const clearScrollUiHideTimer = useCallback(() => {
     if (scrollUiHideTimerRef.current) {
-      clearTimeout(scrollUiHideTimerRef.current)
+      window.clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
     }
   }, [])
@@ -1080,7 +1204,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setScrollUiVisible(true)
     clearScrollUiHideTimer()
     if (scrollUi.scheduleHideTimer) {
-      scrollUiHideTimerRef.current = setTimeout(() => {
+      scrollUiHideTimerRef.current = window.setTimeout(() => {
         setScrollUiVisible(false)
       }, SCROLL_UI_HIDE_DELAY_MS)
     }
@@ -1243,6 +1367,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
+  // Hidden by default to avoid exposing account actions in demo/review builds.
+  const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
+  const handleSilenceFinalizeLockedInteraction = useCallback(() => {
+    const now = Date.now()
+    if (now - silenceSliderUpgradeToastLastShownAtRef.current < SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS) return
+    silenceSliderUpgradeToastLastShownAtRef.current = now
+    toast(silenceFinalizeLockedMessage)
+  }, [silenceFinalizeLockedMessage])
 
   return (
     <PhoneFrame>
@@ -1266,10 +1398,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               style={{ height: "max(env(safe-area-inset-top), 20px)" }}
             />
           )}
-          <span className="text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+          <span className="relative z-20 text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
             Mingle
           </span>
-          <div className="relative flex items-center gap-1">
+          <div className="relative z-20 flex items-center gap-1">
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -1309,7 +1441,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 triggerRef={langSelectorButtonRef}
               />
             </div>
-            {showAccountMenu ? (
+            {showMenuButton ? (
               <div className="relative">
                 <button
                   ref={menuButtonRef}
@@ -1328,32 +1460,150 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 {menuOpen && (
                   <div
                     ref={menuPanelRef}
-                    className={`absolute right-0 top-full z-50 mt-1 w-44 border border-gray-200 p-0 ${navSurfaceClassName}`}
+                    style={{ width: '20rem', maxWidth: 'calc(100vw - 1rem)', flexShrink: 0 }}
+                    className={`absolute right-0 top-full z-50 mt-1 border border-gray-200 p-0 ${navSurfaceClassName}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        onLogout()
-                      }}
-                      disabled={isAuthActionPending}
-                      className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <LogOut size={15} strokeWidth={2} />
-                      <span>{logoutLabel}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        setDeleteAccountDialogOpen(true)
-                      }}
-                      disabled={isAuthActionPending}
-                      className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Trash2 size={15} strokeWidth={2} />
-                      <span>{deleteAccountLabel}</span>
-                    </button>
+                    <div className="space-y-2.5 border-b border-gray-200 px-3 py-2.5">
+                      <label className="block">
+                        <div className="mb-0.5 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                          <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
+                          <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={5}
+                          step={1}
+                          value={textSizeLevel}
+                          onPointerDown={(event) => {
+                            event.currentTarget.setPointerCapture(event.pointerId)
+                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
+                            setTextSizeLevel(next)
+                          }}
+                          onPointerMove={(event) => {
+                            if (event.buttons !== 1) return
+                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
+                            setTextSizeLevel(next)
+                          }}
+                          onPointerUp={(event) => {
+                            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                              event.currentTarget.releasePointerCapture(event.pointerId)
+                            }
+                            flushAccountPreferencesSync()
+                          }}
+                          onChange={(event) => {
+                            const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
+                            setTextSizeLevel(next)
+                          }}
+                          className={sliderClassName}
+                          aria-label={`${textSizeLabel} level`}
+                        />
+                      </label>
+                      <label className="block">
+                        <div
+                          className={`mb-0.5 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
+                            isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                          }`}
+                        >
+                          <span className="min-w-0 flex-1 whitespace-normal break-words leading-tight text-[0.72rem]">
+                            {silenceFinalizeLabel}
+                          </span>
+                          <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="range"
+                            min={MIN_SONIOX_SILENCE_MS}
+                            max={MAX_SONIOX_SILENCE_MS}
+                            step={100}
+                            value={sonioxManualFinalizeSilenceMs}
+                            disabled={isSilenceFinalizeSliderDisabled}
+                            onPointerDown={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              event.currentTarget.setPointerCapture(event.pointerId)
+                              const next = deriveRangeValueFromPointer(
+                                event,
+                                MIN_SONIOX_SILENCE_MS,
+                                MAX_SONIOX_SILENCE_MS,
+                                100,
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            onPointerMove={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              if (event.buttons !== 1) return
+                              const next = deriveRangeValueFromPointer(
+                                event,
+                                MIN_SONIOX_SILENCE_MS,
+                                MAX_SONIOX_SILENCE_MS,
+                                100,
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            onPointerUp={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                event.currentTarget.releasePointerCapture(event.pointerId)
+                              }
+                              flushAccountPreferencesSync()
+                            }}
+                            onChange={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              const next = Math.max(
+                                MIN_SONIOX_SILENCE_MS,
+                                Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            className={`${sliderClassName} ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                            aria-label={`${silenceFinalizeLabel} milliseconds`}
+                          />
+                          {isSilenceFinalizeSliderLocked && (
+                            <>
+                              <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                {silenceFinalizeLockedMessage}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label={silenceFinalizeLockedButtonLabel}
+                                aria-describedby={silenceFinalizeLockedDescriptionId}
+                                onFocus={handleSilenceFinalizeLockedInteraction}
+                                onClick={handleSilenceFinalizeLockedInteraction}
+                                className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                              />
+                            </>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                    {showAccountMenuItems && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            onLogout()
+                          }}
+                          disabled={isAuthActionPending || !showAccountActions}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <LogOut size={15} strokeWidth={2} />
+                          <span>{logoutLabel}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setDeleteAccountDialogOpen(true)
+                          }}
+                          disabled={isAuthActionPending || !showAccountActions}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 size={15} strokeWidth={2} />
+                          <span>{deleteAccountLabel}</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -1399,6 +1649,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isDraft={draftUtteranceIds.has(u.id)}
                   isSpeaking={speakingItem?.utteranceId === u.id}
                   speakingLanguage={speakingItem?.language ?? null}
+                  bubbleTextClassName={chatBubbleTextClassName}
                 />
               </div>
             ))}
@@ -1416,7 +1667,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5"
               >
                 <div className="min-w-0">
-                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className="text-sm text-gray-600">
+                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
                     <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
                       <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
                       <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
@@ -1440,7 +1691,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     bubbleClassName="bg-amber-50/80 border border-amber-100"
                     metaClassName="text-amber-500"
                     contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                    contentClassName="text-sm text-gray-500"
+                    contentClassName={`${chatBubbleTextClassName} text-gray-500`}
                   >
                     <>
                       {text}
@@ -1543,7 +1794,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </div>
 
         <AnimatePresence>
-          {showAccountMenu && deleteAccountDialogOpen && (
+          {showAccountMenuItems && deleteAccountDialogOpen && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

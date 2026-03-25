@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Toaster } from "sonner";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import { TtsSettingsProvider } from "@/context/tts-settings";
@@ -71,6 +72,7 @@ export default function RootLayout({
         <TtsSettingsProvider>
           <AuthSessionProvider>
             <MobileCanvasShell>{children}</MobileCanvasShell>
+            <Toaster position="bottom-center" richColors closeButton />
           </AuthSessionProvider>
         </TtsSettingsProvider>
       </body>
