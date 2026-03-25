@@ -6,6 +6,7 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
+import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -194,6 +195,10 @@ function GoogleMark() {
 
 export default function MingleHome(props: MingleHomeProps) {
   const { status } = useSession();
+  const silenceSliderUpgradeCopy = useMemo(
+    () => getSilenceSliderUpgradeCopy(props.locale),
+    [props.locale],
+  );
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
@@ -1577,6 +1582,8 @@ export default function MingleHome(props: MingleHomeProps) {
         unmuteTtsLabel={props.dictionary.demo.unmuteTts}
         textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
         silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+        silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
+        silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
         menuLabel={props.dictionary.profile.menuLabel}
         logoutLabel={props.dictionary.profile.logout}
         deleteAccountLabel={props.dictionary.profile.deleteAccount}

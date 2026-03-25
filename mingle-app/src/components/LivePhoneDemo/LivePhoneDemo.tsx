@@ -189,6 +189,8 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  silenceFinalizeLockedMessage: string
+  silenceFinalizeLockedButtonLabel: string
   menuLabel: string
   logoutLabel: string
   deleteAccountLabel: string
@@ -243,6 +245,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   unmuteTtsLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  silenceFinalizeLockedMessage,
+  silenceFinalizeLockedButtonLabel,
   menuLabel,
   logoutLabel,
   deleteAccountLabel,
@@ -288,20 +292,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
-  const silenceFinalizeLockedMessage = useMemo(() => {
-    if (uiLocale.trim().toLowerCase().startsWith('ko')) {
-      return '업데이트 예정입니다. 최신 버전에서 조절할 수 있습니다.'
-    }
-
-    return 'Update coming soon. This control will be available in the next update.'
-  }, [uiLocale])
-  const silenceFinalizeLockedButtonLabel = useMemo(() => {
-    if (uiLocale.trim().toLowerCase().startsWith('ko')) {
-      return '업데이트 안내 보기'
-    }
-
-    return 'Show update notice'
-  }, [uiLocale])
   const silenceFinalizeLockedDescriptionId = useId()
 
   // Hydrate persisted preferences before paint without tripping the
