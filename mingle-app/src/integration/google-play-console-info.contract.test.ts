@@ -74,6 +74,7 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
       title?: Record<string, unknown>;
       shortDescription?: Record<string, unknown>;
       fullDescription?: Record<string, unknown>;
+      video?: Record<string, unknown>;
     };
     manualOnly?: {
       privacyPolicyUrl?: unknown;
@@ -161,6 +162,13 @@ describe("google-play-console-info contract", () => {
         isNonEmptyString(storeListing?.fullDescription?.[copyLocale]),
         `missing fullDescription for Play locale ${uploadLocale} (${copyLocale})`,
       ).toBe(true);
+
+      if (copyLocale === "en") {
+        expect(
+          isNonEmptyString(storeListing?.video?.[copyLocale]),
+          "missing Play listing video for the default locale",
+        ).toBe(true);
+      }
 
       const imageFiles = fs
         .readdirSync(path.join(screenshotRoot, uploadLocale), { withFileTypes: true })

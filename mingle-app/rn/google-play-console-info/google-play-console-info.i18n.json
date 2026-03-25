@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.5 (24)",
+      "releaseName": "1.0.5 (25)",
       "releaseNotes": {
         "en-US": "Version 1.0.5 polishes the live phone demo, with safer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
         "ar": "يحسّن الإصدار 1.0.5 تجربة الهاتف المباشر، مع معالجة أكثر أمانًا لمنزلق silence، ونص ترقية أوضح، وموضع أفضل للتنبيهات، ومزامنة أكثر استقرارًا للتفضيلات.",
@@ -622,6 +622,9 @@
         "ja": "• Mingleは3言語以上でも全方向の通訳・翻訳を提供します。複数言語が同時に混ざる会話でもリアルタイムで翻訳されるため、話者が変わるたびに言語を手動で選択・切り替えする必要はありません。\n• 途切れない翻訳とリアルタイム字幕を提供します。一文ごとに止まって翻訳するのではなく、会話や会議の流れ全体に沿って連続翻訳されるため、文脈まで自然に把握できます。\n• 他アプリの音声もリアルタイム字幕と翻訳で確認できます。スピーカーフォンで通話、ラジオ、Discordなどの音声アプリをバックグラウンドで動かし、Mingleをフォアグラウンドで開いておくと、その音声がMingle入力として取り込まれ、字幕と翻訳がすぐ表示されます。\n• 翻訳結果を音声でリアルタイム同時通訳できます。音声出力をオンにすると、通訳者がそばにいるように内容を聞けるため、画面を見なくても理解でき、ランニング中でも使えます。\n• バックグラウンド実行のままアプリを自由に切り替えできます。画面をロックしたりMingleをバックグラウンドにしても停止せず、会話ログと翻訳をリアルタイムで記録し続けます。",
         "vi": "• Mingle hỗ trợ phiên dịch và dịch thuật đa chiều với hơn 3 ngôn ngữ. Ngay cả khi nhiều ngôn ngữ được dùng xen kẽ trong cùng một cuộc trò chuyện, mọi nội dung vẫn được dịch theo thời gian thực, nên bạn không cần tự chọn hay chuyển ngôn ngữ mỗi khi đổi người nói.\n• Cung cấp bản dịch liên tục và transcript thời gian thực. Thay vì dừng lại sau từng câu, Mingle dịch liên tục theo toàn bộ mạch hội thoại hoặc cuộc họp để bạn nắm được ngữ cảnh tự nhiên.\n• Ngay cả âm thanh từ ứng dụng khác cũng có thể hiển thị phụ đề và bản dịch theo thời gian thực. Khi bật loa ngoài cho cuộc gọi, radio hoặc ứng dụng thoại như Discord chạy nền và giữ Mingle ở tiền cảnh, âm thanh đó sẽ đi vào Mingle để hiển thị transcript và bản dịch ngay lập tức.\n• Có thể phát bản dịch bằng giọng nói theo thời gian thực. Khi bật đầu ra giọng nói, nội dung dịch sẽ được đọc như có thông dịch viên bên cạnh, giúp bạn hiểu chỉ bằng nghe mà không cần nhìn màn hình, kể cả khi đang chạy bộ.\n• Chạy nền và chuyển ứng dụng tự do. Dù khóa màn hình hay đưa Mingle xuống nền, ứng dụng vẫn tiếp tục hoạt động và ghi lại hội thoại cùng bản dịch theo thời gian thực.",
         "th": "• Mingle รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด Mingle ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ Mingle และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• ทำงานต่อได้ในเบื้องหลังและสลับแอปได้อิสระ แม้ล็อกหน้าจอหรือย้าย Mingle ไปเบื้องหลัง ระบบก็ไม่หยุด และยังบันทึกบทสนทนากับคำแปลแบบเรียลไทม์ต่อเนื่อง"
+      },
+      "video": {
+        "en": "https://www.youtube.com/watch?v=kN27U0zzeZ4"
       }
     },
     "manualOnly": {

@@ -12,7 +12,7 @@
   - `googlePlay.release`: default release track, release status, notes, and screenshot copy
   - `googlePlay.appDetails`: package name, default language, and Play contact details
   - `googlePlay.assets`: relative paths for Play listing graphics
-  - `googlePlay.storeListing`: localized title, short description, and full description
+  - `googlePlay.storeListing`: localized title, short description, full description, and optional YouTube video URL for the Play listing
   - `googlePlay.manualOnly`: console-only items that must still be filled manually, including the foreground service disclosure copy for microphone capture
 
 ## Default behavior
@@ -46,3 +46,5 @@ scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-a
   - target audience
   - ads declaration
   - account deletion
+  - foreground service disclosure form
+- For this app, API commits must be created with `changesNotSentForReview=true`, then the final review submission is completed from the Play Console UI.
