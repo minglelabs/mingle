@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -60,6 +60,7 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -260,8 +261,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
-  const silenceSliderUpgradeToastShownRef = useRef(false)
+  const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
@@ -286,7 +288,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
-  const isSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
   const silenceFinalizeLockedMessage = useMemo(() => {
     if (uiLocale.trim().toLowerCase().startsWith('ko')) {
       return '업데이트 예정입니다. 최신 버전에서 조절할 수 있습니다.'
@@ -294,6 +295,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     return 'Update coming soon. This control will be available in the next update.'
   }, [uiLocale])
+  const silenceFinalizeLockedButtonLabel = useMemo(() => {
+    if (uiLocale.trim().toLowerCase().startsWith('ko')) {
+      return '업데이트 안내 보기'
+    }
+
+    return 'Show update notice'
+  }, [uiLocale])
+  const silenceFinalizeLockedDescriptionId = useId()
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -307,10 +316,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
+      const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
+      setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(
-        isSilenceFinalizeSliderLocked
+        nextIsSilenceFinalizeSliderLocked
           ? DEFAULT_SONIOX_SILENCE_MS
           : next.sonioxManualFinalizeSilenceMs,
       )
@@ -326,7 +337,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [fallbackLanguages, isSilenceFinalizeSliderLocked])
+  }, [fallbackLanguages])
 
   // Persist selected languages
   useEffect(() => {
@@ -1369,8 +1380,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
-    if (silenceSliderUpgradeToastShownRef.current) return
-    silenceSliderUpgradeToastShownRef.current = true
+    const now = Date.now()
+    if (now - silenceSliderUpgradeToastLastShownAtRef.current < SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS) return
+    silenceSliderUpgradeToastLastShownAtRef.current = now
     toast(silenceFinalizeLockedMessage)
   }, [silenceFinalizeLockedMessage])
 
@@ -1557,13 +1569,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             aria-label={`${silenceFinalizeLabel} milliseconds`}
                           />
                           {isSilenceFinalizeSliderLocked && (
-                            <button
-                              type="button"
-                              tabIndex={-1}
-                              aria-label={silenceFinalizeLockedMessage}
-                              onClick={handleSilenceFinalizeLockedInteraction}
-                              className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent"
-                            />
+                            <>
+                              <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                {silenceFinalizeLockedMessage}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label={silenceFinalizeLockedButtonLabel}
+                                aria-describedby={silenceFinalizeLockedDescriptionId}
+                                onFocus={handleSilenceFinalizeLockedInteraction}
+                                onClick={handleSilenceFinalizeLockedInteraction}
+                                className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                              />
+                            </>
                           )}
                         </div>
                       </label>
