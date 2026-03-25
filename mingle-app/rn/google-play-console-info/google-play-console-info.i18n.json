@@ -21,14 +21,14 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.4",
+      "version": "1.0.5",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.4 (21)",
+      "releaseName": "1.0.5 (22)",
       "releaseNotes": {
-        "en-US": "Rebuilt Android 1.0.4 with a new Play upload bundle.\nImproved locale-based starter language defaults.\nRefined Soniox hint control for more stable recognition.",
-        "ko-KR": "안드로이드 1.0.4를 신규 Play 업로드 번들로 재빌드했습니다.\nlocale 기반 시작 언어 기본값을 개선했습니다.\nSoniox 힌트 제어를 정리해 인식 안정성을 높였습니다."
+        "en-US": "Live phone demo polish.\nSafer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
+        "ko-KR": "라이브 폰 데모를 다듬었습니다.\n더 안전한 silence 슬라이더 처리, 업그레이드 안내 문구 개선, 토스트 위치 조정, 환경설정 동기화 안정화를 반영했습니다."
       },
       "screenshots": {
         "ko": [
