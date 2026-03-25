@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
@@ -10,6 +11,7 @@ import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { mergeDisplayUtterances } from './use-realtime-stt'
+import { clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -27,6 +29,7 @@ import {
   MIN_SONIOX_SILENCE_MS,
   readPersistedLivePhoneDemoPreferences,
 } from './live-phone-demo.preferences'
+import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
@@ -258,6 +261,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const silenceSliderUpgradeToastShownRef = useRef(false)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
@@ -265,7 +269,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const currentAudioUrlRef = useRef<string | null>(null)
   const ttsQueueRef = useRef<TtsQueueItem[]>([])
   const isTtsProcessingRef = useRef(false)
-  const ttsWaitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ttsWaitTimerRef = useRef<number | null>(null)
   const nativeTtsPlaybackSeqRef = useRef(0)
   const activeNativeTtsPlaybackIdRef = useRef<string | null>(null)
   const activeNativeTtsUtteranceIdRef = useRef<string | null>(null)
@@ -276,13 +280,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsNeedsUnlockRef = useRef(false)
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
-  const accountPreferencesSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
+  const isSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
+  const silenceFinalizeLockedMessage = useMemo(() => {
+    if (uiLocale.trim().toLowerCase().startsWith('ko')) {
+      return '업데이트 예정입니다. 최신 버전에서 조절할 수 있습니다.'
+    }
 
+    return 'Update coming soon. This control will be available in the next update.'
+  }, [uiLocale])
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -298,7 +309,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
-      setSonioxManualFinalizeSilenceMs(next.sonioxManualFinalizeSilenceMs)
+      setSonioxManualFinalizeSilenceMs(
+        isSilenceFinalizeSliderLocked
+          ? DEFAULT_SONIOX_SILENCE_MS
+          : next.sonioxManualFinalizeSilenceMs,
+      )
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -311,7 +326,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [fallbackLanguages])
+  }, [fallbackLanguages, isSilenceFinalizeSliderLocked])
 
   // Persist selected languages
   useEffect(() => {
@@ -480,7 +495,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const clearTtsWaitTimer = useCallback(() => {
     if (ttsWaitTimerRef.current) {
-      clearTimeout(ttsWaitTimerRef.current)
+      window.clearTimeout(ttsWaitTimerRef.current)
       ttsWaitTimerRef.current = null
     }
   }, [])
@@ -548,7 +563,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     // Front item is waiting for audio — set a timeout to skip if it never arrives
     if (!front.audioBlob) {
       if (!ttsWaitTimerRef.current) {
-        ttsWaitTimerRef.current = setTimeout(() => {
+        ttsWaitTimerRef.current = window.setTimeout(() => {
           ttsWaitTimerRef.current = null
           const q = ttsQueueRef.current
           if (q.length > 0 && !q[0].audioBlob) {
@@ -784,6 +799,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxManualFinalizeSilenceMs,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
+  const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
@@ -1071,7 +1087,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const prevScrollHeightRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
-  const scrollUiHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrollUiHideTimerRef = useRef<number | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState({
@@ -1102,7 +1118,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const clearScrollUiHideTimer = useCallback(() => {
     if (scrollUiHideTimerRef.current) {
-      clearTimeout(scrollUiHideTimerRef.current)
+      window.clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
     }
   }, [])
@@ -1187,7 +1203,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setScrollUiVisible(true)
     clearScrollUiHideTimer()
     if (scrollUi.scheduleHideTimer) {
-      scrollUiHideTimerRef.current = setTimeout(() => {
+      scrollUiHideTimerRef.current = window.setTimeout(() => {
         setScrollUiVisible(false)
       }, SCROLL_UI_HIDE_DELAY_MS)
     }
@@ -1352,6 +1368,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const navSurfaceClassName = 'bg-white'
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
+  const handleSilenceFinalizeLockedInteraction = useCallback(() => {
+    if (silenceSliderUpgradeToastShownRef.current) return
+    silenceSliderUpgradeToastShownRef.current = true
+    toast(silenceFinalizeLockedMessage)
+  }, [silenceFinalizeLockedMessage])
 
   return (
     <PhoneFrame>
@@ -1479,7 +1500,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <label className="block">
                         <div
                           className={`mb-0.5 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
-                            isSttSessionRunning ? 'text-gray-400' : 'text-gray-700'
+                            isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                           }`}
                         >
                           <span className="min-w-0 flex-1 whitespace-normal break-words leading-tight text-[0.72rem]">
@@ -1487,53 +1508,64 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </span>
                           <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
                         </div>
-                        <input
-                          type="range"
-                          min={MIN_SONIOX_SILENCE_MS}
-                          max={MAX_SONIOX_SILENCE_MS}
-                          step={100}
-                          value={sonioxManualFinalizeSilenceMs}
-                          disabled={isSttSessionRunning}
-                          onPointerDown={(event) => {
-                            if (isSttSessionRunning) return
-                            event.currentTarget.setPointerCapture(event.pointerId)
-                            const next = deriveRangeValueFromPointer(
-                              event,
-                              MIN_SONIOX_SILENCE_MS,
-                              MAX_SONIOX_SILENCE_MS,
-                              100,
-                            )
-                            setSonioxManualFinalizeSilenceMs(next)
-                          }}
-                          onPointerMove={(event) => {
-                            if (isSttSessionRunning) return
-                            if (event.buttons !== 1) return
-                            const next = deriveRangeValueFromPointer(
-                              event,
-                              MIN_SONIOX_SILENCE_MS,
-                              MAX_SONIOX_SILENCE_MS,
-                              100,
-                            )
-                            setSonioxManualFinalizeSilenceMs(next)
-                          }}
-                          onPointerUp={(event) => {
-                            if (isSttSessionRunning) return
-                            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                              event.currentTarget.releasePointerCapture(event.pointerId)
-                            }
-                            flushAccountPreferencesSync()
-                          }}
-                          onChange={(event) => {
-                            if (isSttSessionRunning) return
-                            const next = Math.max(
-                              MIN_SONIOX_SILENCE_MS,
-                              Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
-                            )
-                            setSonioxManualFinalizeSilenceMs(next)
-                          }}
-                          className={`${sliderClassName} ${isSttSessionRunning ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                          aria-label={`${silenceFinalizeLabel} milliseconds`}
-                        />
+                        <div className="relative">
+                          <input
+                            type="range"
+                            min={MIN_SONIOX_SILENCE_MS}
+                            max={MAX_SONIOX_SILENCE_MS}
+                            step={100}
+                            value={sonioxManualFinalizeSilenceMs}
+                            disabled={isSilenceFinalizeSliderDisabled}
+                            onPointerDown={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              event.currentTarget.setPointerCapture(event.pointerId)
+                              const next = deriveRangeValueFromPointer(
+                                event,
+                                MIN_SONIOX_SILENCE_MS,
+                                MAX_SONIOX_SILENCE_MS,
+                                100,
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            onPointerMove={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              if (event.buttons !== 1) return
+                              const next = deriveRangeValueFromPointer(
+                                event,
+                                MIN_SONIOX_SILENCE_MS,
+                                MAX_SONIOX_SILENCE_MS,
+                                100,
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            onPointerUp={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                event.currentTarget.releasePointerCapture(event.pointerId)
+                              }
+                              flushAccountPreferencesSync()
+                            }}
+                            onChange={(event) => {
+                              if (isSilenceFinalizeSliderDisabled) return
+                              const next = Math.max(
+                                MIN_SONIOX_SILENCE_MS,
+                                Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                              )
+                              setSonioxManualFinalizeSilenceMs(next)
+                            }}
+                            className={`${sliderClassName} ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                            aria-label={`${silenceFinalizeLabel} milliseconds`}
+                          />
+                          {isSilenceFinalizeSliderLocked && (
+                            <button
+                              type="button"
+                              tabIndex={-1}
+                              aria-label={silenceFinalizeLockedMessage}
+                              onClick={handleSilenceFinalizeLockedInteraction}
+                              className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent"
+                            />
+                          )}
+                        </div>
                       </label>
                     </div>
                     {showAccountMenuItems && (
