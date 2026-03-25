@@ -25,10 +25,25 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.0.5 (23)",
+      "releaseName": "1.0.5 (24)",
       "releaseNotes": {
-        "en-US": "Live phone demo polish.\nSafer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
-        "ko-KR": "라이브 폰 데모를 다듬었습니다.\n더 안전한 silence 슬라이더 처리, 업그레이드 안내 문구 개선, 토스트 위치 조정, 환경설정 동기화 안정화를 반영했습니다."
+        "en-US": "Version 1.0.5 polishes the live phone demo, with safer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
+        "ar": "يحسّن الإصدار 1.0.5 تجربة الهاتف المباشر، مع معالجة أكثر أمانًا لمنزلق silence، ونص ترقية أوضح، وموضع أفضل للتنبيهات، ومزامنة أكثر استقرارًا للتفضيلات.",
+        "de-DE": "Version 1.0.5 verfeinert die Live-Phone-Demo mit sichererer Silence-Slider-Behandlung, klarerem Upgrade-Text, besserer Toast-Position und stabilerer Synchronisierung der Einstellungen.",
+        "es-ES": "La versión 1.0.5 pule la demo de teléfono en vivo con un manejo más seguro del slider de silencio, texto de actualización más claro, mejor ubicación de los avisos y sincronización de preferencias más estable.",
+        "fr-CA": "La version 1.0.5 peaufine la démo de téléphone en direct avec une gestion plus sûre du slider de silence, un texte de mise à niveau plus clair, un meilleur placement des toasts et une synchronisation des préférences plus stable.",
+        "fr-FR": "La version 1.0.5 peaufine la démo de téléphone en direct avec une gestion plus sûre du slider de silence, un texte de mise à niveau plus clair, un meilleur placement des toasts et une synchronisation des préférences plus stable.",
+        "hi-IN": "संस्करण 1.0.5 में लाइव फोन डेमो को बेहतर बनाया गया है, जिसमें silence स्लाइडर को अधिक सुरक्षित तरीके से संभाला गया है, अपग्रेड कॉपी को साफ़ किया गया है, toast की स्थिति सुधारी गई है, और preference syncing को अधिक स्थिर बनाया गया है।",
+        "it-IT": "La versione 1.0.5 rifinisce la demo telefono in tempo reale con una gestione più sicura del cursore silence, un testo di upgrade più chiaro, un posizionamento migliore dei toast e una sincronizzazione delle preferenze più stabile.",
+        "ja-JP": "バージョン1.0.5ではライブ電話デモを調整し、silenceスライダーの処理をより安全にし、アップグレード案内を改善、トーストの位置と設定同期も安定化しました。",
+        "ko-KR": "버전 1.0.5에서는 라이브 폰 데모를 다듬고, silence 슬라이더를 더 안전하게 처리했으며, 업그레이드 안내 문구를 개선하고, 토스트 위치와 환경설정 동기화도 안정화했습니다.",
+        "pt-BR": "A versão 1.0.5 aprimora a demo de telefone ao vivo, com tratamento mais seguro do slider de silence, texto de upgrade mais claro, melhor posicionamento dos toasts e sincronização de preferências mais estável.",
+        "pt-PT": "A versão 1.0.5 aprimora a demo de telefone ao vivo, com tratamento mais seguro do slider de silence, texto de upgrade mais claro, melhor posicionamento dos toasts e sincronização de preferências mais estável.",
+        "ru-RU": "Версия 1.0.5 улучшает демо живого телефона: более безопасная работа со слайдером silence, более понятный текст обновления, лучшее размещение toast и более стабильная синхронизация настроек.",
+        "th": "เวอร์ชัน 1.0.5 ปรับปรุงเดโมโทรศัพท์สดให้ดีขึ้น จัดการ silence slider อย่างปลอดภัยขึ้น ปรับข้อความอัปเกรดให้ชัดเจนขึ้น วาง toast ได้เหมาะสมขึ้น และซิงก์การตั้งค่าได้เสถียรขึ้น",
+        "vi": "Phiên bản 1.0.5 tinh chỉnh demo điện thoại trực tiếp, xử lý slider silence an toàn hơn, nội dung nâng cấp rõ ràng hơn, vị trí toast tốt hơn và đồng bộ tùy chọn ổn định hơn.",
+        "zh-CN": "1.0.5 版本优化了实时手机演示，更安全地处理 silence 滑杆，改进了升级文案，调整了 toast 位置，并让偏好同步更稳定。",
+        "zh-TW": "1.0.5 版本優化了即時手機示範，更安全地處理 silence 滑桿，改進了升級文案，調整了 toast 位置，並讓偏好同步更穩定。"
       },
       "screenshots": {
         "ko": [
