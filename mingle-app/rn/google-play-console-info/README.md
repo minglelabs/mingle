@@ -13,7 +13,7 @@
   - `googlePlay.appDetails`: package name, default language, and Play contact details
   - `googlePlay.assets`: relative paths for Play listing graphics
   - `googlePlay.storeListing`: localized title, short description, and full description
-  - `googlePlay.manualOnly`: console-only items that must still be filled manually
+  - `googlePlay.manualOnly`: console-only items that must still be filled manually, including the foreground service disclosure copy for microphone capture
 
 ## Default behavior
 

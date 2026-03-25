@@ -179,5 +179,6 @@ describe("google-play-console-info contract", () => {
     const manualOnly = payload.googlePlay?.manualOnly;
     expect(isNonEmptyString(manualOnly?.privacyPolicyUrl)).toBe(true);
     expect(isNonEmptyString(manualOnly?.termsOfUseUrl)).toBe(true);
+    expect(isNonEmptyString(manualOnly?.foregroundServiceDisclosure)).toBe(true);
   });
 });
