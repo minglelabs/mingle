@@ -72,7 +72,7 @@ export default function RootLayout({
         <TtsSettingsProvider>
           <AuthSessionProvider>
             <MobileCanvasShell>{children}</MobileCanvasShell>
-            <Toaster position="top-center" richColors closeButton />
+            <Toaster position="bottom-center" richColors closeButton />
           </AuthSessionProvider>
         </TtsSettingsProvider>
       </body>
