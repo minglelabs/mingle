@@ -1885,6 +1885,7 @@ ensure_cloudflared_named_bridge() {
   local kind="$1"
   local remote_port="$2"
   local target_port="$3"
+  local tracked_pids_ref="${4:-}"
   local pid_file log_file bridge_pid
 
   [[ -n "$remote_port" ]] || return 0
@@ -1909,6 +1910,10 @@ ensure_cloudflared_named_bridge() {
     --target-port "$target_port" >"$log_file" 2>&1 &
   bridge_pid="$!"
   printf '%s\n' "$bridge_pid" > "$pid_file"
+
+  if [[ -n "$tracked_pids_ref" ]]; then
+    eval "$tracked_pids_ref+=(\"$bridge_pid\")"
+  fi
 }
 
 detect_ios_coredevice_id() {
@@ -4260,8 +4265,8 @@ $(ngrok_plan_capacity_hint)"
             local cloudflared_named_remote_stt_port=""
             cloudflared_named_remote_web_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_web_host" || true)"
             cloudflared_named_remote_stt_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_stt_host" || true)"
-            ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT"
-            ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT"
+            ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT" pids
+            ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT" pids
 
             cloudflared_web_url="https://$cloudflared_named_web_host"
             cloudflared_stt_url="https://$cloudflared_named_stt_host"
