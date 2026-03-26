@@ -36,9 +36,9 @@ describe('api-contract namespace guard', () => {
   })
 
   it('accepts only allowed env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.5'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.6'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.5')
+    expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
   })
 
   it('accepts Android env namespace values', async () => {
@@ -56,9 +56,9 @@ describe('api-contract namespace guard', () => {
 
   it('allows query override only when value is allow-listed', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
-    stubWindowSearch('?apiNamespace=ios%2Fv1.0.5')
+    stubWindowSearch('?apiNamespace=ios%2Fv1.0.6')
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.5')
+    expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
   })
 
   it('allows Android query override when value is allow-listed', async () => {
@@ -69,9 +69,9 @@ describe('api-contract namespace guard', () => {
   })
 
   it('ignores invalid query override values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.5'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.6'
     stubWindowSearch('?apiNs=unknown%2Fnamespace')
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.5')
+    expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
   })
 })
