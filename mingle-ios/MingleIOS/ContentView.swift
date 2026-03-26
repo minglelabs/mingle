@@ -145,14 +145,7 @@ struct ContentView: View {
             }
 
             if viewModel.utterances.isEmpty && viewModel.partialTranscript.isEmpty && !viewModel.isRecording && !isConnecting && !isError {
-                VStack(spacing: 10) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 40, weight: .regular))
-                        .foregroundStyle(Color.gray.opacity(0.4))
-                    Text(tapPlayToStartLabel)
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
-                }
+                emptyStatePrompt
             }
 
             if isConnecting {
@@ -394,6 +387,33 @@ struct ContentView: View {
         .padding(.bottom, 18)
         .padding(.horizontal, 14)
         .background(Color.white)
+    }
+
+    private var emptyStatePrompt: some View {
+        VStack(spacing: 12) {
+            Text(tapPlayToStartLabel)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(Color.gray.opacity(0.34))
+                    .frame(width: 3)
+                    .frame(maxHeight: .infinity)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Color.gray.opacity(0.5))
+                    .offset(y: -2)
+            }
+            .frame(maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 56)
+        .padding(.bottom, 6)
+        .padding(.horizontal, 28)
+        .allowsHitTesting(false)
     }
 
     private var leftUsageArea: some View {

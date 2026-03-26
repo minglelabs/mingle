@@ -1705,11 +1705,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
           {/* Empty state */}
           {utterances.length === 0 && liveUtterances.length === 0 && !partialTranscript && !demoTypingText && !demoTypingLang && !isDemoAnimating && !isActive && !isError && !isLimitReached && (
-            <div className="flex min-h-full flex-col items-center justify-center text-center text-gray-400 gap-2">
-                <Play size={38} className="text-gray-300" />
-                <p className="text-base">{tapPlayToStartLabel}</p>
+            <div className="pointer-events-none flex min-h-full flex-col items-center px-7 pt-14 text-center">
+              <p className="text-base font-medium text-gray-400">{tapPlayToStartLabel}</p>
+              <div className="mt-3 flex min-h-0 flex-1 flex-col items-center self-stretch">
+                <div className="w-[3px] flex-1 rounded-full bg-gray-300/85" />
+                <ChevronDown size={20} strokeWidth={2.4} className="-mt-0.5 text-gray-300/95" />
               </div>
-            )}
+            </div>
+          )}
 
           {/* Limit reached state */}
           {isLimitReached && !isActive && (
