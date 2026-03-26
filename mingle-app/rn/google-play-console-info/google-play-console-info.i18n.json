@@ -21,29 +21,29 @@
   },
   "googlePlay": {
     "release": {
-      "version": "1.0.5",
+      "version": "1.0.6",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
-      "changesNotSentForReview": false,
-      "releaseName": "1.0.5 (25)",
+      "changesNotSentForReview": true,
+      "releaseName": "1.0.6 (26)",
       "releaseNotes": {
-        "en-US": "Version 1.0.5 polishes the live phone demo, with safer silence slider handling, clearer upgrade copy, better toast placement, and more stable preference syncing.",
-        "ar": "يحسّن الإصدار 1.0.5 تجربة الهاتف المباشر، مع معالجة أكثر أمانًا لمنزلق silence، ونص ترقية أوضح، وموضع أفضل للتنبيهات، ومزامنة أكثر استقرارًا للتفضيلات.",
-        "de-DE": "Version 1.0.5 verfeinert die Live-Phone-Demo mit sichererer Silence-Slider-Behandlung, klarerem Upgrade-Text, besserer Toast-Position und stabilerer Synchronisierung der Einstellungen.",
-        "es-ES": "La versión 1.0.5 pule la demo de teléfono en vivo con un manejo más seguro del slider de silencio, texto de actualización más claro, mejor ubicación de los avisos y sincronización de preferencias más estable.",
-        "fr-CA": "La version 1.0.5 peaufine la démo de téléphone en direct avec une gestion plus sûre du slider de silence, un texte de mise à niveau plus clair, un meilleur placement des toasts et une synchronisation des préférences plus stable.",
-        "fr-FR": "La version 1.0.5 peaufine la démo de téléphone en direct avec une gestion plus sûre du slider de silence, un texte de mise à niveau plus clair, un meilleur placement des toasts et une synchronisation des préférences plus stable.",
-        "hi-IN": "संस्करण 1.0.5 में लाइव फोन डेमो को बेहतर बनाया गया है, जिसमें silence स्लाइडर को अधिक सुरक्षित तरीके से संभाला गया है, अपग्रेड कॉपी को साफ़ किया गया है, toast की स्थिति सुधारी गई है, और preference syncing को अधिक स्थिर बनाया गया है।",
-        "it-IT": "La versione 1.0.5 rifinisce la demo telefono in tempo reale con una gestione più sicura del cursore silence, un testo di upgrade più chiaro, un posizionamento migliore dei toast e una sincronizzazione delle preferenze più stabile.",
-        "ja-JP": "バージョン1.0.5ではライブ電話デモを調整し、silenceスライダーの処理をより安全にし、アップグレード案内を改善、トーストの位置と設定同期も安定化しました。",
-        "ko-KR": "버전 1.0.5에서는 라이브 폰 데모를 다듬고, silence 슬라이더를 더 안전하게 처리했으며, 업그레이드 안내 문구를 개선하고, 토스트 위치와 환경설정 동기화도 안정화했습니다.",
-        "pt-BR": "A versão 1.0.5 aprimora a demo de telefone ao vivo, com tratamento mais seguro do slider de silence, texto de upgrade mais claro, melhor posicionamento dos toasts e sincronização de preferências mais estável.",
-        "pt-PT": "A versão 1.0.5 aprimora a demo de telefone ao vivo, com tratamento mais seguro do slider de silence, texto de upgrade mais claro, melhor posicionamento dos toasts e sincronização de preferências mais estável.",
-        "ru-RU": "Версия 1.0.5 улучшает демо живого телефона: более безопасная работа со слайдером silence, более понятный текст обновления, лучшее размещение toast и более стабильная синхронизация настроек.",
-        "th": "เวอร์ชัน 1.0.5 ปรับปรุงเดโมโทรศัพท์สดให้ดีขึ้น จัดการ silence slider อย่างปลอดภัยขึ้น ปรับข้อความอัปเกรดให้ชัดเจนขึ้น วาง toast ได้เหมาะสมขึ้น และซิงก์การตั้งค่าได้เสถียรขึ้น",
-        "vi": "Phiên bản 1.0.5 tinh chỉnh demo điện thoại trực tiếp, xử lý slider silence an toàn hơn, nội dung nâng cấp rõ ràng hơn, vị trí toast tốt hơn và đồng bộ tùy chọn ổn định hơn.",
-        "zh-CN": "1.0.5 版本优化了实时手机演示，更安全地处理 silence 滑杆，改进了升级文案，调整了 toast 位置，并让偏好同步更稳定。",
-        "zh-TW": "1.0.5 版本優化了即時手機示範，更安全地處理 silence 滑桿，改進了升級文案，調整了 toast 位置，並讓偏好同步更穩定。"
+        "en-US": "Version 1.0.6 updates support information, refreshes localized App Store text, and improves release messaging for a clearer Mingle listing.",
+        "ar": "يحدّث الإصدار 1.0.6 معلومات الدعم، ويُجدّد نص App Store المترجم، ويُحسّن رسالة الإصدار لتجربة أوضح في صفحة Mingle.",
+        "de-DE": "Version 1.0.6 aktualisiert die Support-Informationen, überarbeitet die lokalisierten App-Store-Texte und verbessert die Release-Mitteilung für einen klareren Mingle-Eintrag.",
+        "es-ES": "La versión 1.0.6 actualiza la información de soporte, renueva el texto localizado de App Store y mejora el mensaje de la versión para una ficha de Mingle más clara.",
+        "fr-CA": "La version 1.0.6 met à jour les informations de support, rafraîchit le texte App Store localisé et améliore le message de version pour une fiche Mingle plus claire.",
+        "fr-FR": "La version 1.0.6 met à jour les informations de support, rafraîchit le texte App Store localisé et améliore le message de version pour une fiche Mingle plus claire.",
+        "hi-IN": "संस्करण 1.0.6 सपोर्ट जानकारी को अपडेट करता है, स्थानीयकृत App Store टेक्स्ट को ताज़ा करता है, और Mingle लिस्टिंग को अधिक स्पष्ट बनाने के लिए रिलीज़ संदेश को बेहतर करता है।",
+        "it-IT": "La versione 1.0.6 aggiorna le informazioni di supporto, rinnova il testo localizzato dell’App Store e migliora il messaggio di rilascio per una scheda Mingle più chiara.",
+        "ja-JP": "バージョン1.0.6ではサポート情報を更新し、ローカライズ済みのApp Store文言を整理し、リリース案内をより分かりやすく改善しました。",
+        "ko-KR": "버전 1.0.6에서는 지원 정보를 업데이트하고, 현지화된 App Store 문구를 정리했으며, 릴리즈 안내 문구를 더 명확하게 다듬었습니다.",
+        "pt-BR": "A versão 1.0.6 atualiza as informações de suporte, renova o texto localizado da App Store e melhora a mensagem de lançamento para uma listagem do Mingle mais clara.",
+        "pt-PT": "A versão 1.0.6 atualiza as informações de suporte, renova o texto localizado da App Store e melhora a mensagem de lançamento para uma listagem do Mingle mais clara.",
+        "ru-RU": "Версия 1.0.6 обновляет информацию поддержки, освежает локализованный текст App Store и улучшает сообщение о релизе для более понятной страницы Mingle.",
+        "th": "เวอร์ชัน 1.0.6 อัปเดตข้อมูลการช่วยเหลือ ปรับข้อความ App Store ที่แปลแล้วให้ใหม่ขึ้น และทำให้ข้อความอธิบายเวอร์ชันชัดเจนขึ้นสำหรับหน้ารายการของ Mingle",
+        "vi": "Phiên bản 1.0.6 cập nhật thông tin hỗ trợ, làm mới nội dung App Store đã bản địa hóa và cải thiện thông điệp phát hành để trang Mingle rõ ràng hơn.",
+        "zh-CN": "1.0.6 版本更新了支持信息，刷新了本地化 App Store 文案，并优化了版本说明，让 Mingle 的商店页面更清晰。",
+        "zh-TW": "1.0.6 版本更新了支援資訊，刷新了在地化 App Store 文案，並優化了版本說明，讓 Mingle 的商店頁面更清楚。"
       },
       "screenshots": {
         "ko": [
@@ -624,12 +624,12 @@
         "th": "• Mingle รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด Mingle ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ Mingle และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• ทำงานต่อได้ในเบื้องหลังและสลับแอปได้อิสระ แม้ล็อกหน้าจอหรือย้าย Mingle ไปเบื้องหลัง ระบบก็ไม่หยุด และยังบันทึกบทสนทนากับคำแปลแบบเรียลไทม์ต่อเนื่อง"
       },
       "video": {
-        "en": "https://www.youtube.com/watch?v=kN27U0zzeZ4"
+        "en": "https://www.youtube.com/watch?v=EA--1emAoYE"
       }
     },
     "manualOnly": {
-      "privacyPolicyUrl": "https://app.minglelabs.xyz/legal/privacy-policy.html",
-      "termsOfUseUrl": "https://app.minglelabs.xyz/legal/terms-of-use.html",
+      "privacyPolicyUrl": "https://translator.minglelabs.xyz/legal/privacy-policy.html",
+      "termsOfUseUrl": "https://translator.minglelabs.xyz/legal/terms-of-use.html",
       "category": null,
       "appType": "APPLICATION",
       "dataSafety": null,
