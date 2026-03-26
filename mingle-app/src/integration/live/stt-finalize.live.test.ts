@@ -660,10 +660,16 @@ async function runFinalizeApiCheck(finalTurn: FinalTurn, fixtureName: string): P
       API_TIMEOUT_MS,
     )
 
-    if (status === 500 && json.error === 'No translation API key configured') {
+    if (
+      status === 500
+      && (
+        json.error === 'No translation API key configured'
+        || json.error === 'translation_provider_misconfigured'
+      )
+    ) {
       throw new Error([
-        '[live-test] GEMINI_API_KEY is missing in the running API server environment.',
-        '- set GEMINI_API_KEY in the API server env and run pnpm test again.',
+        '[live-test] Translation provider is not configured in the running API server environment.',
+        '- set GEMINI_API_KEY for Gemini, or set DEMO_TRANSLATE_PROVIDER=qwen with DEMO_TRANSLATE_BASE_URL and DEMO_TRANSLATE_API_KEY.',
       ].join('\n'))
     }
 
@@ -681,7 +687,7 @@ async function runFinalizeApiCheck(finalTurn: FinalTurn, fixtureName: string): P
       expect(nonEmptyTranslations.length).toBeGreaterThan(0)
 
       console.info([
-        '[live-test][gemini]',
+        '[live-test][translate]',
         `fixture=${fixtureName}`,
         `sourceLanguage=${finalTurn.language}`,
         `targets=${plan.targetLanguages.join(',')}`,
@@ -720,7 +726,7 @@ async function runFinalizeApiCheck(finalTurn: FinalTurn, fixtureName: string): P
 
     const error = typeof json.error === 'string' ? json.error : ''
     console.warn([
-      '[live-test][gemini]',
+      '[live-test][translate]',
       `fixture=${fixtureName}`,
       `status=${status}`,
       `error=${error || 'unknown'}`,

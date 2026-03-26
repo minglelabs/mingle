@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn((config?: unknown) => ({
+const mockGetGenerativeModel = vi.fn(() => ({
   generateContent: mockGenerateContent,
 }))
 const ensureTrackingContextMock = vi.fn()
@@ -50,9 +50,64 @@ function buildBase64Audio(prefix: 'mpeg' | 'wav' = 'mpeg'): string {
   return bytes.toString('base64')
 }
 
+function clearTranslationEnv() {
+  delete process.env.DEMO_TRANSLATE_PROVIDER
+  delete process.env.DEMO_TRANSLATE_MODEL
+  delete process.env.DEMO_TRANSLATE_BASE_URL
+  delete process.env.DEMO_TRANSLATE_API_KEY
+  delete process.env.DEMO_TRANSLATE_EXTRA_BODY
+  delete process.env.OPENROUTER_API_KEY
+  delete process.env.TOGETHER_API_KEY
+  delete process.env.DASHSCOPE_API_KEY
+  delete process.env.OPENAI_API_KEY
+  delete process.env.OPENAI_BASE_URL
+  delete process.env.GEMINI_API_KEY
+}
+
+function setGeminiTranslateEnv() {
+  clearTranslationEnv()
+  process.env.DEMO_TRANSLATE_PROVIDER = 'gemini'
+  process.env.GEMINI_API_KEY = 'test-gemini-key'
+}
+
+function setQwenTranslateEnv(args?: {
+  baseUrl?: string
+  apiKey?: string
+  model?: string
+  extraBody?: Record<string, unknown>
+}) {
+  clearTranslationEnv()
+  process.env.DEMO_TRANSLATE_PROVIDER = 'qwen'
+  if (args?.baseUrl) process.env.DEMO_TRANSLATE_BASE_URL = args.baseUrl
+  if (args?.apiKey) process.env.DEMO_TRANSLATE_API_KEY = args.apiKey
+  if (args?.model) process.env.DEMO_TRANSLATE_MODEL = args.model
+  if (args?.extraBody) process.env.DEMO_TRANSLATE_EXTRA_BODY = JSON.stringify(args.extraBody)
+}
+
 async function importRouteWithEnv() {
   vi.resetModules()
-  process.env.GEMINI_API_KEY = 'test-gemini-key'
+  setGeminiTranslateEnv()
+  process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+  process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+  process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+  const mod = await import('@/app/api/translate/finalize/route')
+  return mod.POST
+}
+
+async function importRouteWithQwenEnv(args?: {
+  baseUrl?: string
+  apiKey?: string
+  model?: string
+  extraBody?: Record<string, unknown>
+}) {
+  vi.resetModules()
+  setQwenTranslateEnv({
+    baseUrl: args?.baseUrl ?? 'https://openrouter.ai/api/v1',
+    apiKey: args?.apiKey ?? 'test-qwen-key',
+    model: args?.model,
+    extraBody: args?.extraBody,
+  })
   process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
   process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
   process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
@@ -82,6 +137,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   afterEach(() => {
+    clearTranslationEnv()
     vi.unstubAllGlobals()
   })
 
@@ -245,6 +301,124 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports qwen via an OpenAI-compatible endpoint and strips think blocks', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '<think>\ninternal reasoning\n</think>\n```json\n{"ko":"안녕하세요"}\n```',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 14,
+            completion_tokens: 9,
+            total_tokens: 23,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'qwen/qwen3.5-9b',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.translations).toEqual({ ko: '안녕하세요' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://openrouter.ai/api/v1/chat/completions',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      model?: string
+      messages?: Array<{ role?: string, content?: string }>
+      extra_body?: Record<string, unknown>
+    }
+    const headers = requestInit.headers as Record<string, string>
+
+    expect(headers.Authorization).toBe('Bearer test-qwen-key')
+    expect(headers['X-Title']).toBe('mingle-app')
+    expect(body.model).toBe('qwen/qwen3.5-9b')
+    expect(body.extra_body).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+    })
+    expect(body.messages?.[0]?.role).toBe('system')
+    expect(body.messages?.[1]?.role).toBe('user')
+  })
+
+  it('uses DashScope defaults for qwen when only DASHSCOPE_API_KEY is set', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setQwenTranslateEnv()
+    delete process.env.DEMO_TRANSLATE_BASE_URL
+    delete process.env.DEMO_TRANSLATE_API_KEY
+    delete process.env.DEMO_TRANSLATE_MODEL
+    process.env.DASHSCOPE_API_KEY = 'test-dashscope-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.model).toBe('Qwen3.5-9B')
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      model?: string
+      extra_body?: Record<string, unknown>
+    }
+    const headers = requestInit.headers as Record<string, string>
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions')
+    expect(headers.Authorization).toBe('Bearer test-dashscope-key')
+    expect(body.model).toBe('Qwen3.5-9B')
+    expect(body.extra_body).toEqual({ enable_thinking: false })
+  })
+
   it('returns 400 when text is missing', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -382,7 +556,7 @@ describe('/api/translate/finalize route', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
-    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    setGeminiTranslateEnv()
     const { POST } = await import('@/app/api/ios/v1.0.2/translate/finalize/route')
 
     try {
@@ -483,7 +657,7 @@ describe('/api/translate/finalize route', () => {
     const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
-    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    setGeminiTranslateEnv()
     const { POST } = await loadRoute()
 
     try {
@@ -589,7 +763,7 @@ describe('/api/translate/finalize route', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
-    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    setGeminiTranslateEnv()
     const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
 
     try {
