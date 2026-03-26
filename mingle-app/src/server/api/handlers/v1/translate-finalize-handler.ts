@@ -22,6 +22,7 @@ import {
   type CurrentTurnPreviousState,
   type RecentTurnContext,
 } from '@/app/api/translate/finalize/utils'
+import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 
 export const runtime = 'nodejs'
 
@@ -362,7 +363,7 @@ function shouldRedetectSourceLanguageFromRequest(args: {
   isFinal: boolean
 }): boolean {
   if (!args.isFinal) return false
-  return /^\/api\/(?:ios|android)\/v1\.0\.4\/translate\/finalize\/?$/.test(args.pathname)
+  return shouldRedetectFinalizeSourceLanguage(args.pathname)
 }
 
 function inferDetectedSourceLanguageFromEcho(
