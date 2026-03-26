@@ -32,6 +32,13 @@ import {
   type NativeAuthProvider,
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
+import {
+  createCheckingNativeAppUpdateSnapshot,
+  createUnknownNativeAppUpdateSnapshot,
+  normalizeClientVersion,
+  resolveNativeAppUpdateSnapshot,
+  type NativeAppUpdateSnapshot,
+} from './src/appUpdateStatus';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -221,6 +228,7 @@ const NATIVE_STT_EVENT = 'mingle:native-stt';
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const WEB_SUPPORTED_LOCALES = new Set([
   'ko',
@@ -628,13 +636,21 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeOpenUpdateStoreCommand = {
+  type: 'native_open_update_store';
+  payload?: {
+    updateUrl?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
-  | NativeAuthResetCommand;
+  | NativeAuthResetCommand
+  | NativeOpenUpdateStoreCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -671,9 +687,6 @@ type RecommendUpdatePrompt = {
   updateLabel: string;
   laterLabel: string;
 };
-function normalizeClientVersion(raw: string): string {
-  return raw.trim().replace(/^v/i, '');
-}
 
 function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
   const normalizedNamespace = apiNamespace.trim().replace(/^\/+/, '').replace(/\/+$/, '');
@@ -687,6 +700,27 @@ function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android
   if (runtimeOs === 'android') return 'android';
   return 'ios';
 }
+
+type RuntimeClientInfo = {
+  clientVersion: string;
+  clientBuild: string;
+};
+
+function resolveRuntimeClientInfo(): RuntimeClientInfo {
+  const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
+  const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
+
+  return {
+    clientVersion: normalizeClientVersion(
+      envClientVersion
+      || NATIVE_RUNTIME_CONFIG.clientVersion
+      || '',
+    ),
+    clientBuild: envClientBuild || NATIVE_RUNTIME_CONFIG.clientBuild || '',
+  };
+}
+
+const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -866,6 +900,9 @@ function resolveTrustedOrigin(rawUrl: string): string {
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
+    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
+  );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -968,6 +1005,21 @@ function AppInner(): React.JSX.Element {
     presentRecommendPrompt(pendingPrompt);
   }, [presentRecommendPrompt]);
 
+  const emitAppUpdateToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const serialized = JSON.stringify(nativeAppUpdateRef.current);
+    if (__DEV__) {
+      console.log(`[NativeAppUpdate→Web] ${serialized.slice(0, 160)}`);
+    }
+    const script = `window.__MINGLE_NATIVE_APP_UPDATE_STATUS = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_APP_UPDATE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current?.injectJavaScript(script);
+  }, []);
+
+  const setNativeAppUpdateSnapshot = useCallback((snapshot: NativeAppUpdateSnapshot) => {
+    nativeAppUpdateRef.current = snapshot;
+    emitAppUpdateToWeb();
+  }, [emitAppUpdateToWeb]);
+
   useEffect(() => {
     if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) {
       return;
@@ -976,15 +1028,9 @@ function AppInner(): React.JSX.Element {
     let active = true;
     let settled = false;
     const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const nativeRuntimeConfig = readNativeRuntimeConfig();
-    const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
-    const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
-    const clientVersion = normalizeClientVersion(
-      envClientVersion
-      || nativeRuntimeConfig?.clientVersion
-      || '',
-    );
-    const clientBuild = envClientBuild || nativeRuntimeConfig?.clientBuild || '';
+    const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
+    const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
+    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
 
     const fallbackToReady = (reason: string, details?: string) => {
       if (!active || settled) return;
@@ -992,6 +1038,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[VersionPolicy] bypass (${reason})${details ? `: ${details}` : ''}`);
       }
+      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion));
       setVersionGate({ status: 'ready' });
     };
 
@@ -1019,6 +1066,7 @@ function AppInner(): React.JSX.Element {
       })
       .then((policy) => {
         if (!active || settled) return;
+        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {
           settled = true;
@@ -1087,7 +1135,7 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [presentRecommendPrompt, versionPolicyFallback, versionPolicyLocale]);
+  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -1408,6 +1456,16 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    if (parsed.type === 'native_open_update_store') {
+      const requestedUrl = typeof parsed.payload?.updateUrl === 'string'
+        ? parsed.payload.updateUrl.trim()
+        : '';
+      const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
+      if (!updateUrl) return;
+      void Linking.openURL(updateUrl);
+      return;
+    }
+
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
         ? parsed.payload.provider
@@ -1616,9 +1674,10 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
