@@ -210,7 +210,56 @@ require_cmd() {
 }
 
 resolve_bundle_cmd() {
-  local candidate
+  bundle_cmd_ruby_version() {
+    local bundle_cmd_path="$1"
+    local ruby_path=""
+
+    [[ -x "$bundle_cmd_path" ]] || return 1
+    ruby_path="$(head -n 1 "$bundle_cmd_path" 2>/dev/null | sed -n 's/^#!//p')"
+    [[ -n "$ruby_path" ]] || return 1
+    [[ -x "$ruby_path" ]] || return 1
+    "$ruby_path" -e 'print RUBY_VERSION' 2>/dev/null || return 1
+  }
+
+  local candidate=""
+  local gemfile_lock="$ROOT_DIR/mingle-app/rn/Gemfile.lock"
+  local ruby_version=""
+  local ruby_version_base=""
+  local current_bundle=""
+  local current_bundle_ruby_version=""
+  local env_bundle_cmd="${DEVBOX_BUNDLE_CMD:-}"
+
+  if [[ -f "$gemfile_lock" ]]; then
+    ruby_version="$(awk '
+      $1 == "RUBY" && $2 == "VERSION" { getline; gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); print $2; exit }
+    ' "$gemfile_lock" 2>/dev/null || true)"
+    ruby_version_base="${ruby_version%%p*}"
+  fi
+
+  if [[ -n "$env_bundle_cmd" && -x "$env_bundle_cmd" ]]; then
+    printf "%s" "$env_bundle_cmd"
+    return 0
+  fi
+
+  current_bundle="$(command -v bundle 2>/dev/null || true)"
+  if [[ -n "$current_bundle" && ! "$current_bundle" =~ ^/opt/homebrew/lib/ruby/gems/.*/bin/bundle$ ]]; then
+    current_bundle_ruby_version="$(bundle_cmd_ruby_version "$current_bundle" || true)"
+    if [[ -n "$ruby_version_base" && "$current_bundle_ruby_version" == "$ruby_version_base" ]]; then
+      printf "%s" "$current_bundle"
+      return 0
+    fi
+  fi
+
+  for candidate in \
+    "/opt/homebrew/Cellar/ruby/${ruby_version_base}/bin/bundle" \
+    "/usr/local/Cellar/ruby/${ruby_version_base}/bin/bundle"
+  do
+    [[ -n "$ruby_version_base" ]] || continue
+    [[ -x "$candidate" ]] || continue
+    printf "%s" "$candidate"
+    return 0
+  done
+
   for candidate in \
     "/opt/homebrew/opt/ruby/bin/bundle" \
     "/usr/local/opt/ruby/bin/bundle"
@@ -221,9 +270,8 @@ resolve_bundle_cmd() {
   done
 
   # Avoid homebrew gem-bin shim path which can hang on some environments.
-  candidate="$(command -v bundle 2>/dev/null || true)"
-  if [[ -n "$candidate" && ! "$candidate" =~ ^/opt/homebrew/lib/ruby/gems/.*/bin/bundle$ ]]; then
-    printf "%s" "$candidate"
+  if [[ -n "$current_bundle" && ! "$current_bundle" =~ ^/opt/homebrew/lib/ruby/gems/.*/bin/bundle$ ]]; then
+    printf "%s" "$current_bundle"
     return 0
   fi
 
@@ -938,6 +986,16 @@ ensure_ios_pods_if_needed() {
       cd "$ROOT_DIR/mingle-app/rn/ios"
       local bundle_home="$ROOT_DIR/.devbox-cache/bundle/rn"
       mkdir -p "$bundle_home"
+      if ! BUNDLE_USER_HOME="$bundle_home" \
+        BUNDLE_PATH="$bundle_home" \
+        BUNDLE_DISABLE_SHARED_GEMS=true \
+          "$bundle_cmd" check >/dev/null 2>&1; then
+        log "installing RN ruby gems for CocoaPods via: $bundle_cmd"
+        BUNDLE_USER_HOME="$bundle_home" \
+        BUNDLE_PATH="$bundle_home" \
+        BUNDLE_DISABLE_SHARED_GEMS=true \
+          "$bundle_cmd" install
+      fi
       BUNDLE_USER_HOME="$bundle_home" \
       BUNDLE_PATH="$bundle_home" \
       BUNDLE_DISABLE_SHARED_GEMS=true \
