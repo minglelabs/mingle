@@ -1367,6 +1367,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
+  const showEmptyState = utterances.length === 0
+    && liveUtterances.length === 0
+    && !partialTranscript
+    && !demoTypingText
+    && !demoTypingLang
+    && !isDemoAnimating
+    && !isActive
+    && !isError
+    && !isLimitReached
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
@@ -1378,7 +1387,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         {/* Header */}
         <div
           className={`relative z-40 shrink-0 flex items-center justify-between ${navSurfaceClassName}`}
@@ -1611,293 +1620,319 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </div>
         </div>
 
-        {/* Chat Area */}
-        <div className="relative min-h-0 flex-1 bg-gray-50/50">
-          <div
-            ref={chatRef}
-            onScroll={handleScroll}
-            onWheel={markUserScrollIntent}
-            onTouchMove={markUserScrollIntent}
-            onPointerDown={markUserScrollIntent}
-            className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
-            style={{
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
-            }}
-          >
-          {hasOlderUtterances && (
-            <button
-              onClick={handleLoadOlder}
-              className="w-full py-2 text-xs text-gray-400 hover:text-gray-500 active:text-gray-600 transition-colors"
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {/* Chat Area */}
+          <div className="relative min-h-0 flex-1 bg-gray-50/50">
+            <div
+              ref={chatRef}
+              onScroll={handleScroll}
+              onWheel={markUserScrollIntent}
+              onTouchMove={markUserScrollIntent}
+              onPointerDown={markUserScrollIntent}
+              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
+              style={{
+                paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
+                paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
+              }}
             >
-              ···
-            </button>
-          )}
-          <AnimatePresence mode="popLayout">
-            {displayUtterances.map((u) => (
-              <div
-                key={u.id}
-                data-utterance-created-at={
-                  (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
-                    ? String(Math.floor(u.createdAtMs))
-                    : ''
-                }
-              >
-                <ChatBubble
-                  utterance={u}
-                  uiLocale={uiLocale}
-                  isDraft={draftUtteranceIds.has(u.id)}
-                  isSpeaking={speakingItem?.utteranceId === u.id}
-                  speakingLanguage={speakingItem?.language ?? null}
-                  bubbleTextClassName={chatBubbleTextClassName}
-                />
-              </div>
-            ))}
-          </AnimatePresence>
-
-          {/* Demo typing animation */}
-          {demoTypingLang && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col gap-1"
-            >
-              <div
-                style={{ borderTopLeftRadius: '1px' }}
-                className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
-                    <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
-                      <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
-                      <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
-                    </span>
-                    <span className="align-middle">
-                      {demoTypingText}
-                      <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full align-middle animate-pulse" />
-                    </span>
-                  </p>
-                </div>
-              </div>
-              {/* Demo translations - typed in parallel */}
-              {Object.entries(demoTypingTranslations).map(([lang, text]) => (
-                <motion.div
-                  key={lang}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
+              {hasOlderUtterances && (
+                <button
+                  onClick={handleLoadOlder}
+                  className="w-full py-2 text-xs text-gray-400 hover:text-gray-500 active:text-gray-600 transition-colors"
                 >
-                  <TranslationBubbleRow
-                    lang={lang}
-                    bubbleClassName="bg-amber-50/80 border border-amber-100"
-                    metaClassName="text-amber-500"
-                    contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                    contentClassName={`${chatBubbleTextClassName} text-gray-500`}
+                  ···
+                </button>
+              )}
+              <AnimatePresence mode="popLayout">
+                {displayUtterances.map((u) => (
+                  <div
+                    key={u.id}
+                    data-utterance-created-at={
+                      (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
+                        ? String(Math.floor(u.createdAtMs))
+                        : ''
+                    }
                   >
-                    <>
-                      {text}
-                      <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
-                    </>
-                  </TranslationBubbleRow>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
+                    <ChatBubble
+                      utterance={u}
+                      uiLocale={uiLocale}
+                      isDraft={draftUtteranceIds.has(u.id)}
+                      isSpeaking={speakingItem?.utteranceId === u.id}
+                      speakingLanguage={speakingItem?.language ?? null}
+                      bubbleTextClassName={chatBubbleTextClassName}
+                    />
+                  </div>
+                ))}
+              </AnimatePresence>
 
-          {/* Empty state */}
-          {utterances.length === 0 && liveUtterances.length === 0 && !partialTranscript && !demoTypingText && !demoTypingLang && !isDemoAnimating && !isActive && !isError && !isLimitReached && (
-            <div className="flex min-h-full flex-col items-center justify-center text-center text-gray-400 gap-2">
-                <Play size={38} className="text-gray-300" />
-                <p className="text-base">{tapPlayToStartLabel}</p>
-              </div>
+            {/* Demo typing animation */}
+            {demoTypingLang && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col gap-1"
+              >
+                <div
+                  style={{ borderTopLeftRadius: '1px' }}
+                  className="w-fit max-w-[85%] rounded-2xl rounded-tl-sm border border-gray-200 bg-white/80 px-3.5 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
+                      <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
+                        <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
+                        <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
+                      </span>
+                      <span className="align-middle">
+                        {demoTypingText}
+                        <span className="inline-block w-1 h-3 ml-0.5 bg-amber-400 rounded-full align-middle animate-pulse" />
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                {/* Demo translations - typed in parallel */}
+                {Object.entries(demoTypingTranslations).map(([lang, text]) => (
+                  <motion.div
+                    key={lang}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <TranslationBubbleRow
+                      lang={lang}
+                      bubbleClassName="bg-amber-50/80 border border-amber-100"
+                      metaClassName="text-amber-500"
+                      contentStyle={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                      contentClassName={`${chatBubbleTextClassName} text-gray-500`}
+                    >
+                      <>
+                        {text}
+                        <span className="inline-block w-0.5 h-3 ml-0.5 bg-amber-300 rounded-full animate-pulse" />
+                      </>
+                    </TranslationBubbleRow>
+                  </motion.div>
+                ))}
+              </motion.div>
             )}
 
-          {/* Limit reached state */}
-          {isLimitReached && !isActive && (
-            <div className="flex flex-col items-center justify-center text-center text-gray-400 gap-2 pt-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3.5 text-center">
-                <p className="text-sm font-semibold text-amber-600 mb-1">{usageLimitReachedLabel}</p>
-              <p className="text-xs text-amber-500/80">{usageLimitRetryHintLabel}</p>
-          </div>
-      </div>
-    )}
+            {/* Limit reached state */}
+              {isLimitReached && !isActive && (
+                <div className="flex flex-col items-center justify-center gap-2 pt-4 text-center text-gray-400">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-center">
+                    <p className="mb-1 text-sm font-semibold text-amber-600">{usageLimitReachedLabel}</p>
+                    <p className="text-xs text-amber-500/80">{usageLimitRetryHintLabel}</p>
+                  </div>
+                </div>
+              )}
 
-          {/* Connecting state */}
-          {isConnecting && (
-            <div className="flex items-center justify-center gap-2 py-4">
-                <Loader2 size={20} className="text-amber-400 animate-spin" />
-                <p className="text-sm text-gray-400">{connectingLabel}</p>
+            {/* Connecting state */}
+              {isConnecting && (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <Loader2 size={20} className="animate-spin text-amber-400" />
+                  <p className="text-sm text-gray-400">{connectingLabel}</p>
+                </div>
+              )}
+
+            {/* Error state */}
+              {isError && (
+                <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
+                  <p className="text-sm">{connectionFailedLabel}</p>
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Error state */}
-          {isError && (
-              <div className="flex min-h-full flex-col items-center justify-center text-center text-red-400 gap-2">
-                <p className="text-sm">{connectionFailedLabel}</p>
-             </div>
-          )}
+            <AnimatePresence>
+              {scrollUiVisible && scrollMetrics.scrollable && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-y-0 right-1 z-20"
+                >
+                  {scrollDateLabel && (
+                    <div
+                      className="absolute right-2.5 -translate-y-1/2 whitespace-nowrap rounded-full border border-black/10 bg-white/48 px-3 py-1 text-[11px] font-medium tracking-tight text-black/[0.46] shadow-sm backdrop-blur-[1px]"
+                      style={{ top: scrollDateTop }}
+                    >
+                      {scrollDateLabel}
+                    </div>
+                  )}
+                  <div
+                    className="absolute right-0 w-[3px] rounded-full bg-black/28"
+                    style={{
+                      top: scrollMetrics.thumbTop,
+                      height: scrollMetrics.thumbHeight,
+                    }}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {showScrollToBottom && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-x-0 z-20 flex justify-center"
+                  style={{ bottom: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleScrollToBottom}
+                    className="pointer-events-auto inline-flex items-center justify-center rounded-full border border-black/10 bg-white text-black shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+                    style={{
+                      width: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
+                      minWidth: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
+                      height: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
+                    }}
+                    aria-label="Scroll to latest"
+                  >
+                    <ChevronDown size={28} strokeWidth={1.85} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {showEmptyState && (
+              <div className="pointer-events-none absolute inset-0 z-10">
+                <p
+                  className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
+                  style={{ top: '48%' }}
+                >
+                  {tapPlayToStartLabel}
+                </p>
+                <div
+                  className="absolute left-1/2 w-7 -translate-x-1/2"
+                  style={{
+                    top: 'calc(48% + 24px)',
+                    bottom: '16px',
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 100"
+                    preserveAspectRatio="none"
+                    className="h-full w-full text-gray-300/95"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12 4V96M12 96L4 90M12 96L20 90"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+            )}
           </div>
 
           <AnimatePresence>
-            {scrollUiVisible && scrollMetrics.scrollable && (
+            {showAccountMenuItems && deleteAccountDialogOpen && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="pointer-events-none absolute inset-y-0 right-1 z-20"
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
+                onClick={closeDeleteAccountDialog}
               >
-                {scrollDateLabel && (
-                  <div
-                    className="absolute right-2.5 -translate-y-1/2 whitespace-nowrap rounded-full border border-black/10 bg-white/48 px-3 py-1 text-[11px] font-medium tracking-tight text-black/[0.46] shadow-sm backdrop-blur-[1px]"
-                    style={{ top: scrollDateTop }}
-                  >
-                    {scrollDateLabel}
-                  </div>
-                )}
-                <div
-                  className="absolute right-0 w-[3px] rounded-full bg-black/28"
-                  style={{
-                    top: scrollMetrics.thumbTop,
-                    height: scrollMetrics.thumbHeight,
-                  }}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {showScrollToBottom && (
-              <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="pointer-events-none absolute inset-x-0 z-20 flex justify-center"
-                style={{ bottom: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX }}
-              >
-                <button
-                  type="button"
-                  onClick={handleScrollToBottom}
-                  className="pointer-events-auto inline-flex items-center justify-center rounded-full border border-black/10 bg-white text-black shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
-                  style={{
-                    width: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
-                    minWidth: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
-                    height: SCROLL_TO_BOTTOM_BUTTON_SIZE_PX,
-                  }}
-                  aria-label="Scroll to latest"
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={deleteAccountLabel}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
                 >
-                  <ChevronDown size={28} strokeWidth={1.85} />
-                </button>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {deleteAccountLabel}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                    {deleteAccountConfirmMessage}
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      ref={deleteAccountCancelButtonRef}
+                      type="button"
+                      onClick={closeDeleteAccountDialog}
+                      disabled={isAuthActionPending}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deleteAccountCancelLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccountConfirm}
+                      disabled={isAuthActionPending}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
+                    >
+                      {deleteAccountConfirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
 
-        <AnimatePresence>
-          {showAccountMenuItems && deleteAccountDialogOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
-              onClick={closeDeleteAccountDialog}
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.98 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                role="dialog"
-                aria-modal="true"
-                aria-label={deleteAccountLabel}
-                onClick={(event) => event.stopPropagation()}
-                className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
-              >
-                <p className="text-sm font-semibold text-gray-900">
-                  {deleteAccountLabel}
-                </p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                  {deleteAccountConfirmMessage}
-                </p>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    ref={deleteAccountCancelButtonRef}
-                    type="button"
-                    onClick={closeDeleteAccountDialog}
-                    disabled={isAuthActionPending}
-                    className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {deleteAccountCancelLabel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteAccountConfirm}
-                    disabled={isAuthActionPending}
-                    className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
-                  >
-                    {deleteAccountConfirmLabel}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Bottom Bar with Mic Button */}
-        <div
-          className="shrink-0 grid grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
-          style={{
-            paddingTop: "10px",
-            paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
-            paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
-            paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
-          }}
-        >
-          <div className="justify-self-start pl-2">
-            {/* Usage progress bar */}
-            {usageSec > 0 && (
-              <div className="flex items-center gap-1.5">
-                {isUsageLimited ? (
-                  <>
-                    <div className="w-28 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm tabular-nums ${isLimitReached ? 'text-red-400 font-semibold' : 'text-gray-400'}`}>
-                      {remainingSec}s
+          {/* Bottom Bar with Mic Button */}
+          <div
+            className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
+            style={{
+              paddingTop: "10px",
+              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
+              paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
+              paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
+            }}
+          >
+            <div className="justify-self-start pl-2">
+              {/* Usage progress bar */}
+              {usageSec > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {isUsageLimited ? (
+                    <>
+                      <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                          style={{ width: `${usagePercent}%` }}
+                        />
+                      </div>
+                      <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                        {remainingSec}s
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-sm tabular-nums text-gray-400">
+                      {usageSec}s
                     </span>
-                  </>
-                ) : (
-                  <span className="text-sm tabular-nums text-gray-400">
-                    {usageSec}s
-                  </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center">
+              <button
+                onPointerDown={handleMicPointerDown}
+                onClick={handleMicClick}
+                disabled={isConnecting || isError}
+                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+              >
+                {showRipple && (
+                  <span
+                    className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                    style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
+                  />
                 )}
-              </div>
-            )}
-          </div>
-           <div className="flex justify-center">
-            <button
-              onPointerDown={handleMicPointerDown}
-              onClick={handleMicClick}
-              disabled={isConnecting || isError}
-              className="relative flex items-center justify-center w-[4rem] h-[4rem] rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-            >
-              {showRipple && (
+
+                {isReady && (
+                  <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                )}
+
                 <span
-                  className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                  style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
-                />
-              )}
-
-              {isReady && (
-                <span className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-20" />
-              )}
-
-              <span
-                  className={`relative flex items-center justify-center w-full h-full rounded-full shadow-lg ${
+                  className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
                     isLimitReached
                       ? 'bg-gray-300'
                       : isReady
@@ -1908,45 +1943,46 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 >
                   {isConnecting ? (
-                   <Loader2 size={30} className="text-white animate-spin" />
+                    <Loader2 size={30} className="animate-spin text-white" />
                   ) : (
-                   <Play size={30} className="text-white" />
+                    <Play size={30} className="text-white" />
                   )}
                 </span>
-             </button>
-          </div>
-          <div className="justify-self-end">
-            {usageSec > 0 && (
-              <div className="flex items-center gap-1">
-                {enableAutoTTS && (
-                  <button
-                    onClick={() => {
-                      const next = !isSoundEnabled
-                      setIsSoundEnabled(next)
-                      if (!next) {
-                        setSpeakingItem(null)
-                      }
-                    }}
-                     className="p-2 rounded-full transition-colors hover:bg-gray-100 active:scale-90"
+              </button>
+            </div>
+            <div className="justify-self-end">
+              {usageSec > 0 && (
+                <div className="flex items-center gap-1">
+                  {enableAutoTTS && (
+                    <button
+                      onClick={() => {
+                        const next = !isSoundEnabled
+                        setIsSoundEnabled(next)
+                        if (!next) {
+                          setSpeakingItem(null)
+                        }
+                      }}
+                      className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
                       aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
                     >
-                    {isSoundEnabled ? (
-                       <Volume2 size={18} className="text-amber-500" />
-                    ) : (
-                       <VolumeX size={18} className="text-gray-400" />
-                    )}
+                      {isSoundEnabled ? (
+                        <Volume2 size={18} className="text-amber-500" />
+                      ) : (
+                        <VolumeX size={18} className="text-gray-400" />
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setAecEnabled(!aecEnabled)}
+                    className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
+                    aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
+                    title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
+                  >
+                    <EchoInputRouteIcon echoAllowed={!aecEnabled} />
                   </button>
-                )}
-                <button
-                  onClick={() => setAecEnabled(!aecEnabled)}
-                  className="p-2 rounded-full transition-colors hover:bg-gray-100 active:scale-90"
-                  aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                  title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                >
-                  <EchoInputRouteIcon echoAllowed={!aecEnabled} />
-                </button>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
