@@ -416,14 +416,14 @@ struct ContentView: View {
                     path.addLine(to: CGPoint(x: midX, y: arrowBottom))
 
                     path.move(to: CGPoint(x: midX, y: arrowBottom))
-                    path.addLine(to: CGPoint(x: midX - 9, y: arrowBottom - 9))
+                    path.addLine(to: CGPoint(x: midX - 7, y: arrowBottom - 7))
 
                     path.move(to: CGPoint(x: midX, y: arrowBottom))
-                    path.addLine(to: CGPoint(x: midX + 9, y: arrowBottom - 9))
+                    path.addLine(to: CGPoint(x: midX + 7, y: arrowBottom - 7))
                 }
                 .stroke(
                     Color.gray.opacity(0.34),
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
                 )
             }
         }

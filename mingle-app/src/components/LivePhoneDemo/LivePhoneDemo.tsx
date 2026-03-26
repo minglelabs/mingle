@@ -1802,7 +1802,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   {tapPlayToStartLabel}
                 </p>
                 <div
-                  className="absolute left-1/2 w-8 -translate-x-1/2"
+                  className="absolute left-1/2 w-7 -translate-x-1/2"
                   style={{
                     top: 'calc(48% + 24px)',
                     bottom: '16px',
@@ -1815,10 +1815,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     aria-hidden="true"
                   >
                     <path
-                      d="M12 4V96M12 96L4 88M12 96L20 88"
+                      d="M12 4V96M12 96L6 89M12 96L18 89"
                       fill="none"
                       stroke="currentColor"
-                      strokeWidth="3"
+                      strokeWidth="2.4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
