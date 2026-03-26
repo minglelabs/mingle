@@ -10,11 +10,6 @@ APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
 RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
-MINGLE_IOS_DIR="$ROOT_DIR/mingle-ios"
-MINGLE_IOS_BUILD_SCRIPT="$MINGLE_IOS_DIR/scripts/build-ios.sh"
-MINGLE_IOS_INSTALL_SCRIPT="$MINGLE_IOS_DIR/scripts/install-ios-device.sh"
-MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT="$MINGLE_IOS_DIR/scripts/install-ios-simulator.sh"
-MINGLE_IOS_TEST_SCRIPT="$MINGLE_IOS_DIR/scripts/test-ios.sh"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
 IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.6"
@@ -125,15 +120,13 @@ Usage:
   scripts/devbox profile --profile local|device [--host HOST]
   scripts/devbox ngrok-config
   scripts/devbox gateway [--openclaw-root PATH] [--mode dev|run] [--]
-  scripts/devbox ios-native-build [--ios-configuration Debug|Release] [--ios-coredevice-id ID]
-  scripts/devbox ios-native-uninstall [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-coredevice-id ID] [--bundle-id ID]
   scripts/devbox ios-appstore-sync-metadata [--json PATH] [--api-key-json PATH] [--app-id BUNDLE_ID] [--dry-run] [--no-fallback]
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
-  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-runtime rn|native|both] [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-udid UDID] [--ios-coredevice-id ID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-runtime rn|native|both] [--ios-native-target device|simulator] [--ios-simulator-name NAME] [--ios-simulator-udid UDID] [--ios-udid UDID] [--ios-coredevice-id ID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
-  scripts/devbox test [--target app|ios-native|all] [--ios-configuration Debug|Release] [--with-live] [vitest args...]
+  scripts/devbox test [--target app] [--with-live] [vitest args...]
   scripts/devbox status
 
 Commands:
@@ -142,15 +135,13 @@ Commands:
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
   gateway      Run OpenClaw gateway from configured openclaw root.
-  ios-native-build Build mingle-ios only (no install).
-  ios-native-uninstall Uninstall mingle-ios app from simulator/device.
   ios-appstore-sync-metadata Sync App Store Connect metadata from appstore-connect-info.i18n.json.
   ios-rn-ipa   Archive/export RN iOS app to .xcarchive/.ipa for App Store/TestFlight.
   ios-rn-ipa-prod Same as ios-rn-ipa, defaulting to --device-app-env prod.
-  mobile       Build/install RN/native iOS and Android apps (device/simulator).
+  mobile       Build/install RN iOS and Android apps.
   up           Start STT + Next app together (device profile includes tunnel startup).
   down         Stop devbox runtime processes (web/stt/metro/tunnels) for this repo.
-  test         Run mingle-app unit tests by default (live with --with-live) and/or mingle-ios native test build.
+  test         Run mingle-app unit tests by default (live with --with-live).
   status       Print current endpoints for PC/iOS/Android web and app targets.
 
 Global Options:
@@ -160,7 +151,7 @@ Global Options:
 
 Default Shortcut:
   scripts/devbox up
-    == scripts/devbox --log-file auto up --profile device --tunnel-provider cloudflare --with-ios-install --ios-runtime rn
+    == scripts/devbox --log-file auto up --profile device --tunnel-provider cloudflare --with-ios-install
 
 Environment:
   DEVBOX_NGROK_WEB_DOMAIN  Optional fixed ngrok domain for devbox_web tunnel.
@@ -1626,20 +1617,8 @@ normalize_ios_runtime() {
   lowered="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
   case "$lowered" in
     rn) printf 'rn' ;;
-    native) printf 'native' ;;
-    both) printf 'both' ;;
-    *) die "invalid --ios-runtime: $raw (expected rn|native|both)" ;;
-  esac
-}
-
-normalize_ios_native_target() {
-  local raw="${1:-device}"
-  local lowered
-  lowered="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
-  case "$lowered" in
-    device) printf 'device' ;;
-    simulator|sim) printf 'simulator' ;;
-    *) die "invalid --ios-native-target: $raw (expected device|simulator)" ;;
+    native|both) die "mingle-ios has been removed; use React Native iOS only." ;;
+    *) die "invalid --ios-runtime: $raw (expected rn)" ;;
   esac
 }
 
@@ -2182,101 +2161,6 @@ run_ios_mobile_install() {
   fi
 }
 
-run_native_ios_mobile_install() {
-  local requested_coredevice_id="${1:-}"
-  local configuration="$2"
-  local with_clean_install="${3:-0}"
-  local bundle_id="${4:-com.nam.mingleios}"
-
-  [[ -x "$MINGLE_IOS_INSTALL_SCRIPT" ]] || die "native iOS install script not found: $MINGLE_IOS_INSTALL_SCRIPT"
-  require_cmd xcodebuild
-  require_cmd xcrun
-  require_cmd xcodegen
-
-  local coredevice_id="$requested_coredevice_id"
-  if [[ -z "$coredevice_id" ]]; then
-    coredevice_id="$(detect_ios_coredevice_id || true)"
-  fi
-
-  if [[ "$with_clean_install" -eq 1 && -n "$bundle_id" && -n "$coredevice_id" ]]; then
-    log "uninstalling existing native iOS app before reinstall: $bundle_id"
-    xcrun devicectl device uninstall app --device "$coredevice_id" "$bundle_id" || \
-      log "native iOS uninstall skipped (app may not be installed)"
-  fi
-
-  log "building native iOS app ($configuration) for device: ${requested_coredevice_id:-auto}"
-  (
-    cd "$MINGLE_IOS_DIR"
-    APP_BUNDLE_ID="$bundle_id" \
-    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
-    NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
-    AUTO_SELECT_DEVICE=1 \
-    CONFIGURATION="$configuration" \
-      "$MINGLE_IOS_INSTALL_SCRIPT" "${coredevice_id:-}"
-  )
-}
-
-run_native_ios_simulator_install() {
-  local simulator_name="${1:-iPhone 16}"
-  local simulator_udid="${2:-}"
-  local configuration="$3"
-  local with_clean_install="${4:-0}"
-  local bundle_id="${5:-com.nam.mingleios}"
-
-  [[ -x "$MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT" ]] || die "native iOS simulator script not found: $MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT"
-  require_cmd xcodebuild
-  require_cmd xcrun
-  require_cmd xcodegen
-
-  if [[ "$with_clean_install" -eq 1 && -n "$bundle_id" ]]; then
-    local target_simulator_udid
-    target_simulator_udid="$(resolve_ios_simulator_udid_for_uninstall "$simulator_name" "$simulator_udid")"
-    log "uninstalling existing native iOS app before reinstall: $bundle_id"
-    xcrun simctl uninstall "$target_simulator_udid" "$bundle_id" || \
-      log "native iOS simulator uninstall skipped (app may not be installed)"
-    simulator_udid="$target_simulator_udid"
-  fi
-
-  log "building native iOS app ($configuration) for simulator: ${simulator_udid:-$simulator_name}"
-  (
-    cd "$MINGLE_IOS_DIR"
-    APP_BUNDLE_ID="$bundle_id" \
-    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
-    NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
-    CONFIGURATION="$configuration" \
-    SIMULATOR_NAME="$simulator_name" \
-      "$MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT" "${simulator_udid:-}"
-  )
-}
-
-run_native_ios_build() {
-  local requested_coredevice_id="${1:-}"
-  local configuration="$2"
-  local api_base_url="${3:-}"
-  local ws_url="${4:-}"
-  local bundle_id="${5:-com.nam.mingleios}"
-
-  [[ -x "$MINGLE_IOS_BUILD_SCRIPT" ]] || die "native iOS build script not found: $MINGLE_IOS_BUILD_SCRIPT"
-  require_cmd xcodebuild
-  require_cmd xcodegen
-
-  log "building native iOS app only ($configuration): ${requested_coredevice_id:-generic}"
-  (
-    cd "$MINGLE_IOS_DIR"
-    if [[ -n "$api_base_url" || -n "$ws_url" ]]; then
-      APP_BUNDLE_ID="$bundle_id" \
-      NEXT_PUBLIC_SITE_URL="${api_base_url:-}" \
-      NEXT_PUBLIC_WS_URL="${ws_url:-}" \
-      CONFIGURATION="$configuration" \
-        "$MINGLE_IOS_BUILD_SCRIPT" "${requested_coredevice_id:-}"
-    else
-      APP_BUNDLE_ID="$bundle_id" \
-      CONFIGURATION="$configuration" \
-        "$MINGLE_IOS_BUILD_SCRIPT" "${requested_coredevice_id:-}"
-    fi
-  )
-}
-
 run_android_mobile_install() {
   local requested_serial="${1:-}"
   local variant="$2"
@@ -2320,20 +2204,14 @@ run_android_mobile_install() {
 
 run_mobile_install_targets() {
   local do_rn_ios="$1"
-  local do_native_ios="$2"
-  local do_android="$3"
-  local ios_udid="$4"
-  local ios_coredevice_id="$5"
-  local android_serial="$6"
-  local ios_configuration="$7"
-  local android_variant="$8"
-  local ios_native_target="$9"
-  local ios_simulator_name="${10}"
-  local ios_simulator_udid="${11}"
-  local with_ios_clean_install="${12:-0}"
-  local app_site_override="${13:-}"
-  local app_ws_override="${14:-}"
-  local native_ios_bundle_id="${MINGLE_IOS_BUNDLE_ID:-com.nam.mingleios}"
+  local do_android="$2"
+  local ios_udid="$3"
+  local android_serial="$4"
+  local ios_configuration="$5"
+  local android_variant="$6"
+  local with_ios_clean_install="${7:-0}"
+  local app_site_override="${8:-}"
+  local app_ws_override="${9:-}"
 
   (
     if [[ -n "$app_site_override" ]]; then
@@ -2345,22 +2223,6 @@ run_mobile_install_targets() {
 
     if [[ "$do_rn_ios" -eq 1 ]]; then
       run_ios_mobile_install "$ios_udid" "$ios_configuration" "$with_ios_clean_install"
-    fi
-    if [[ "$do_native_ios" -eq 1 ]]; then
-      if [[ "$ios_native_target" == "simulator" ]]; then
-        run_native_ios_simulator_install \
-          "$ios_simulator_name" \
-          "$ios_simulator_udid" \
-          "$ios_configuration" \
-          "$with_ios_clean_install" \
-          "$native_ios_bundle_id"
-      else
-        run_native_ios_mobile_install \
-          "$ios_coredevice_id" \
-          "$ios_configuration" \
-          "$with_ios_clean_install" \
-          "$native_ios_bundle_id"
-      fi
     fi
     if [[ "$do_android" -eq 1 ]]; then
       run_android_mobile_install "$android_serial" "$android_variant"
@@ -3955,11 +3817,7 @@ cmd_mobile() {
   local device_app_env=""
   local platform="all"
   local ios_runtime="rn"
-  local ios_native_target="device"
-  local ios_simulator_name="iPhone 16"
-  local ios_simulator_udid=""
   local ios_udid=""
-  local ios_coredevice_id=""
   local android_serial=""
   local ios_configuration="Release"
   local android_variant="release"
@@ -3975,11 +3833,7 @@ cmd_mobile() {
       --host) host_override="${2:-}"; shift 2 ;;
       --platform) platform="${2:-}"; shift 2 ;;
       --ios-runtime) ios_runtime="${2:-}"; shift 2 ;;
-      --ios-native-target) ios_native_target="${2:-}"; shift 2 ;;
-      --ios-simulator-name) ios_simulator_name="${2:-}"; shift 2 ;;
-      --ios-simulator-udid) ios_simulator_udid="${2:-}"; shift 2 ;;
       --ios-udid) ios_udid="${2:-}"; shift 2 ;;
-      --ios-coredevice-id) ios_coredevice_id="${2:-}"; shift 2 ;;
       --android-serial) android_serial="${2:-}"; shift 2 ;;
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --android-variant) android_variant="${2:-}"; shift 2 ;;
@@ -4012,8 +3866,9 @@ cmd_mobile() {
     mobile_ws_override="$ws_override"
   fi
 
-  ios_runtime="$(normalize_ios_runtime "$ios_runtime")"
-  ios_native_target="$(normalize_ios_native_target "$ios_native_target")"
+  if [[ -n "${ios_runtime:-}" ]]; then
+    normalize_ios_runtime "${ios_runtime:-rn}" >/dev/null
+  fi
   local tunnel_provider=""
   tunnel_provider="$(resolve_tunnel_provider "$tunnel_provider_override")"
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
@@ -4079,46 +3934,24 @@ cmd_mobile() {
   android_variant="$(normalize_android_variant "$android_variant")"
 
   local do_rn_ios=0
-  local do_native_ios=0
   local do_android=0
 
   case "$platform" in
-    ios)
-      case "$ios_runtime" in
-        rn) do_rn_ios=1 ;;
-        native) do_native_ios=1 ;;
-        both) do_rn_ios=1; do_native_ios=1 ;;
-      esac
-      ;;
+    ios) do_rn_ios=1 ;;
     android)
       do_android=1
       ;;
     all)
-      case "$ios_runtime" in
-        rn) do_rn_ios=1 ;;
-        native) do_native_ios=1 ;;
-        both) do_rn_ios=1; do_native_ios=1 ;;
-      esac
+      do_rn_ios=1
       do_android=1
       ;;
     *)
       die "invalid --platform: $platform (expected ios|android|all)"
-      ;;
+    ;;
   esac
 
   if [[ -n "$ios_udid" ]]; then
     do_rn_ios=1
-  fi
-  if [[ -n "$ios_coredevice_id" ]]; then
-    do_native_ios=1
-    ios_native_target="device"
-  fi
-  if [[ -n "$ios_simulator_udid" ]]; then
-    do_native_ios=1
-    ios_native_target="simulator"
-  fi
-  if [[ "$ios_native_target" == "simulator" ]]; then
-    do_native_ios=1
   fi
   if [[ -n "$android_serial" ]]; then
     do_android=1
@@ -4133,16 +3966,11 @@ cmd_mobile() {
 
   run_mobile_install_targets \
     "$do_rn_ios" \
-    "$do_native_ios" \
     "$do_android" \
     "$ios_udid" \
-    "$ios_coredevice_id" \
     "$android_serial" \
     "$ios_configuration" \
     "$android_variant" \
-    "$ios_native_target" \
-    "$ios_simulator_name" \
-    "$ios_simulator_udid" \
     "$with_ios_clean_install" \
     "$mobile_site_override" \
     "$mobile_ws_override"
@@ -4162,13 +3990,9 @@ cmd_up() {
   local with_ios_install=0
   local with_android_install=0
   local ios_runtime="rn"
-  local ios_native_target="device"
-  local ios_simulator_name="iPhone 16"
-  local ios_simulator_udid=""
   local with_ios_clean_install=0
   local device_app_env=""
   local ios_udid=""
-  local ios_coredevice_id=""
   local android_serial=""
   local ios_configuration="Release"
   local android_variant="release"
@@ -4185,12 +4009,8 @@ cmd_up() {
       --with-android-install) with_android_install=1; shift ;;
       --with-mobile-install) with_ios_install=1; with_android_install=1; shift ;;
       --ios-runtime) ios_runtime="${2:-}"; shift 2 ;;
-      --ios-native-target) ios_native_target="${2:-}"; with_ios_install=1; shift 2 ;;
-      --ios-simulator-name) ios_simulator_name="${2:-}"; with_ios_install=1; shift 2 ;;
-      --ios-simulator-udid) ios_simulator_udid="${2:-}"; with_ios_install=1; shift 2 ;;
       --with-ios-clean-install) with_ios_clean_install=1; shift ;;
       --ios-udid) ios_udid="${2:-}"; with_ios_install=1; shift 2 ;;
-      --ios-coredevice-id) ios_coredevice_id="${2:-}"; with_ios_install=1; shift 2 ;;
       --android-serial) android_serial="${2:-}"; with_android_install=1; shift 2 ;;
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --android-variant) android_variant="${2:-}"; shift 2 ;;
@@ -4203,7 +4023,6 @@ cmd_up() {
   done
 
   ios_runtime="$(normalize_ios_runtime "$ios_runtime")"
-  ios_native_target="$(normalize_ios_native_target "$ios_native_target")"
   ios_configuration="$(normalize_ios_configuration "$ios_configuration")"
   android_variant="$(normalize_android_variant "$android_variant")"
   local tunnel_provider=""
@@ -4395,15 +4214,10 @@ $(ngrok_plan_capacity_hint)"
 
   if [[ "$with_ios_install" -eq 1 || "$with_android_install" -eq 1 ]]; then
     local do_rn_ios=0
-    local do_native_ios=0
     local do_android=0
 
     if [[ "$with_ios_install" -eq 1 ]]; then
-      case "$ios_runtime" in
-        rn) do_rn_ios=1 ;;
-        native) do_native_ios=1 ;;
-        both) do_rn_ios=1; do_native_ios=1 ;;
-      esac
+      do_rn_ios=1
     fi
 
     if [[ "$with_android_install" -eq 1 ]]; then
@@ -4412,17 +4226,6 @@ $(ngrok_plan_capacity_hint)"
 
     if [[ -n "$ios_udid" ]]; then
       do_rn_ios=1
-    fi
-    if [[ -n "$ios_coredevice_id" ]]; then
-      do_native_ios=1
-      ios_native_target="device"
-    fi
-    if [[ -n "$ios_simulator_udid" ]]; then
-      do_native_ios=1
-      ios_native_target="simulator"
-    fi
-    if [[ "$ios_native_target" == "simulator" ]]; then
-      do_native_ios=1
     fi
     if [[ -n "$android_serial" ]]; then
       do_android=1
@@ -4437,16 +4240,11 @@ $(ngrok_plan_capacity_hint)"
 
     run_mobile_install_targets \
       "$do_rn_ios" \
-      "$do_native_ios" \
       "$do_android" \
       "$ios_udid" \
-      "$ios_coredevice_id" \
       "$android_serial" \
       "$ios_configuration" \
       "$android_variant" \
-      "$ios_native_target" \
-      "$ios_simulator_name" \
-      "$ios_simulator_udid" \
       "$with_ios_clean_install" \
       "$mobile_site_override" \
       "$mobile_ws_override"
@@ -4611,103 +4409,37 @@ cmd_down() {
 }
 
 cmd_ios_native_build() {
-  local ios_configuration="Debug"
-  local ios_coredevice_id=""
-  local ios_bundle_id="${MINGLE_IOS_BUNDLE_ID:-com.nam.mingleios}"
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
-      --ios-coredevice-id) ios_coredevice_id="${2:-}"; shift 2 ;;
-      *) die "unknown option for ios-native-build: $1" ;;
-    esac
-  done
-
-  ios_configuration="$(normalize_ios_configuration "$ios_configuration")"
-
-  local api_base_url=""
-  local ws_url=""
-  require_devbox_env
-  api_base_url="$DEVBOX_SITE_URL"
-  ws_url="$DEVBOX_RN_WS_URL"
-
-  run_native_ios_build "$ios_coredevice_id" "$ios_configuration" "$api_base_url" "$ws_url" "$ios_bundle_id"
+  die "mingle-ios has been removed. Use 'scripts/devbox up --with-ios-install' or 'scripts/devbox ios-rn-ipa'."
 }
 
 cmd_ios_native_uninstall() {
-  local ios_native_target="simulator"
-  local ios_simulator_name="iPhone 16"
-  local ios_simulator_udid=""
-  local ios_coredevice_id=""
-  local bundle_id="${MINGLE_IOS_BUNDLE_ID:-com.nam.mingleios}"
-
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --ios-native-target) ios_native_target="${2:-}"; shift 2 ;;
-      --ios-simulator-name) ios_simulator_name="${2:-}"; shift 2 ;;
-      --ios-simulator-udid) ios_simulator_udid="${2:-}"; shift 2 ;;
-      --ios-coredevice-id) ios_coredevice_id="${2:-}"; shift 2 ;;
-      --bundle-id) bundle_id="${2:-}"; shift 2 ;;
-      *) die "unknown option for ios-native-uninstall: $1" ;;
-    esac
-  done
-
-  ios_native_target="$(normalize_ios_native_target "$ios_native_target")"
-  [[ -n "$bundle_id" ]] || die "--bundle-id must not be empty"
-  require_cmd xcrun
-
-  if [[ "$ios_native_target" == "simulator" ]]; then
-    local simulator_udid
-    simulator_udid="$(resolve_ios_simulator_udid_for_uninstall "$ios_simulator_name" "$ios_simulator_udid")"
-    log "uninstalling native iOS app bundle '$bundle_id' from simulator: $simulator_udid"
-    if xcrun simctl uninstall "$simulator_udid" "$bundle_id"; then
-      log "native iOS app uninstalled from simulator: $simulator_udid"
-    else
-      log "native iOS app uninstall skipped (bundle may be absent): $bundle_id on $simulator_udid"
-    fi
-    return 0
-  fi
-
-  local coredevice_id="$ios_coredevice_id"
-  if [[ -z "$coredevice_id" ]]; then
-    coredevice_id="$(detect_ios_coredevice_id || true)"
-  fi
-  [[ -n "$coredevice_id" ]] || die "iOS device not detected; specify --ios-coredevice-id"
-
-  log "uninstalling native iOS app bundle '$bundle_id' from device: $coredevice_id"
-  if xcrun devicectl device uninstall app --device "$coredevice_id" "$bundle_id"; then
-    log "native iOS app uninstalled from device: $coredevice_id"
-  else
-    log "native iOS app uninstall skipped (bundle may be absent): $bundle_id on $coredevice_id"
-  fi
+  die "mingle-ios has been removed. Uninstall the React Native app bundle instead if cleanup is needed."
 }
 
 cmd_test() {
   require_devbox_env
   local target="app"
-  local ios_configuration="Debug"
   local with_live=0
   local -a app_test_args=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --target) target="${2:-}"; shift 2 ;;
-      --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --with-live) with_live=1; shift ;;
       --) shift; app_test_args+=("$@"); break ;;
       *) app_test_args+=("$1"); shift ;;
     esac
   done
 
-  ios_configuration="$(normalize_ios_configuration "$ios_configuration")"
-
   local run_app=0
-  local run_ios_native=0
   case "$target" in
     app) run_app=1 ;;
-    ios-native) run_ios_native=1 ;;
-    all) run_app=1; run_ios_native=1 ;;
-    *) die "invalid --target: $target (expected app|ios-native|all)" ;;
+    ios-native) die "mingle-ios has been removed. Use 'scripts/devbox test --target app'." ;;
+    all)
+      warn "--target all now runs app tests only because mingle-ios has been removed."
+      run_app=1
+      ;;
+    *) die "invalid --target: $target (expected app)" ;;
   esac
 
   if [[ "$run_app" -eq 1 ]]; then
@@ -4730,20 +4462,6 @@ cmd_test() {
         MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
           pnpm "$app_test_script"
       fi
-    )
-  fi
-
-  if [[ "$run_ios_native" -eq 1 ]]; then
-    [[ -x "$MINGLE_IOS_TEST_SCRIPT" ]] || die "native iOS test script not found: $MINGLE_IOS_TEST_SCRIPT"
-    require_cmd xcodebuild
-    require_cmd xcodegen
-    log "running mingle-ios native test build ($ios_configuration)"
-    (
-      cd "$MINGLE_IOS_DIR"
-      NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
-      NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
-      CONFIGURATION="$ios_configuration" \
-        "$MINGLE_IOS_TEST_SCRIPT"
     )
   fi
 }
@@ -4785,7 +4503,6 @@ PC Web      : $DEVBOX_SITE_URL
 iOS Web     : $DEVBOX_SITE_URL
 Android Web : $DEVBOX_SITE_URL
 iOS App     : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$IOS_RN_REQUIRED_API_NAMESPACE
-iOS Native  : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL
 Android App : NEXT_PUBLIC_SITE_URL=$DEVBOX_SITE_URL | NEXT_PUBLIC_WS_URL=$DEVBOX_RN_WS_URL | NEXT_PUBLIC_API_NAMESPACE=$ANDROID_RN_REQUIRED_API_NAMESPACE
 Live Test   : MINGLE_TEST_API_BASE_URL=$DEVBOX_TEST_API_BASE_URL | MINGLE_TEST_WS_URL=$DEVBOX_TEST_WS_URL
 Vault App   : ${DEVBOX_VAULT_APP_PATH:-"(unset)"}
@@ -4810,18 +4527,11 @@ Run:
 - scripts/devbox up --profile device --device-app-env dev --with-ios-install
 - scripts/devbox up --profile device --device-app-env prod --with-ios-install
 - scripts/devbox up --profile device --with-mobile-install
-- scripts/devbox up --profile device --with-ios-install --ios-runtime native
-- scripts/devbox up --profile local --with-ios-install --ios-runtime native --ios-native-target simulator
 - scripts/devbox up --profile local --with-metro
-- scripts/devbox ios-native-build --ios-configuration Debug
 - scripts/devbox ios-rn-ipa --device-app-env prod
 - scripts/devbox ios-rn-ipa-prod
-- scripts/devbox ios-native-uninstall --ios-native-target simulator --ios-simulator-udid <UDID>
-- scripts/devbox mobile --platform ios --ios-runtime rn
-- scripts/devbox mobile --platform ios --ios-runtime native
-- scripts/devbox mobile --platform ios --ios-runtime native --ios-native-target simulator --ios-simulator-name "iPhone 16"
+- scripts/devbox mobile --platform ios
 - scripts/devbox mobile --platform android
-- scripts/devbox test --target ios-native
 - scripts/devbox test --with-live
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
@@ -4910,7 +4620,6 @@ main() {
     --profile device
     --tunnel-provider cloudflare
     --with-ios-install
-    --ios-runtime rn
   )
   if [[ "$cmd" == "up" && "$#" -eq 0 ]]; then
     auto_up_defaults=1
@@ -4918,7 +4627,7 @@ main() {
       DEVBOX_LOG_FILE="$(default_log_file_path)"
       enable_log_capture "$DEVBOX_LOG_FILE"
     fi
-    log "no options for 'up'; applying defaults: --profile device --tunnel-provider cloudflare --with-ios-install --ios-runtime rn"
+    log "no options for 'up'; applying defaults: --profile device --tunnel-provider cloudflare --with-ios-install"
   fi
 
   case "$cmd" in
