@@ -773,18 +773,76 @@ seed_env_from_main_worktree() {
     "$STT_ENV_FILE"
 }
 
-ensure_workspace_dependencies() {
-  local app_next_bin="$ROOT_DIR/mingle-app/node_modules/.bin/next"
-  local stt_tsnode_bin="$ROOT_DIR/mingle-stt/node_modules/.bin/ts-node"
+workspace_dependency_manifest_checksum() {
+  local workspace_dir="${1:-}"
+  local package_json="$workspace_dir/package.json"
+  local lockfile="$workspace_dir/pnpm-lock.yaml"
+  [[ -f "$package_json" && -f "$lockfile" ]] || return 1
 
-  if [[ ! -x "$app_next_bin" ]]; then
+  cat "$package_json" "$lockfile" | cksum | awk '{print $1 ":" $2}'
+}
+
+workspace_dependency_install_marker_path() {
+  local workspace_dir="${1:-}"
+  printf '%s/node_modules/.devbox-install-state' "$workspace_dir"
+}
+
+workspace_dependencies_need_install() {
+  local workspace_dir="${1:-}"
+  local primary_path="${2:-}"
+  shift 2 || true
+  local expected_state=""
+  local marker_path=""
+  local actual_state=""
+  local extra_path=""
+
+  [[ -n "$primary_path" ]] || return 0
+  [[ -e "$primary_path" ]] || return 0
+  for extra_path in "$@"; do
+    [[ -e "$extra_path" ]] || return 0
+  done
+
+  expected_state="$(workspace_dependency_manifest_checksum "$workspace_dir" || true)"
+  [[ -n "$expected_state" ]] || return 0
+
+  marker_path="$(workspace_dependency_install_marker_path "$workspace_dir")"
+  [[ -f "$marker_path" ]] || return 0
+
+  actual_state="$(tr -d '\r\n' < "$marker_path" 2>/dev/null || true)"
+  [[ "$actual_state" != "$expected_state" ]] && return 0
+
+  return 1
+}
+
+write_workspace_dependency_install_marker() {
+  local workspace_dir="${1:-}"
+  local expected_state=""
+  local marker_path=""
+
+  expected_state="$(workspace_dependency_manifest_checksum "$workspace_dir" || true)"
+  [[ -n "$expected_state" ]] || return 0
+  [[ -d "$workspace_dir/node_modules" ]] || return 0
+
+  marker_path="$(workspace_dependency_install_marker_path "$workspace_dir")"
+  printf '%s\n' "$expected_state" > "$marker_path"
+}
+
+ensure_workspace_dependencies() {
+  local app_dir="$ROOT_DIR/mingle-app"
+  local stt_dir="$ROOT_DIR/mingle-stt"
+  local app_next_bin="$app_dir/node_modules/.bin/next"
+  local stt_tsnode_bin="$stt_dir/node_modules/.bin/ts-node"
+
+  if workspace_dependencies_need_install "$app_dir" "$app_next_bin"; then
     log "installing dependencies: mingle-app"
-    pnpm --dir "$ROOT_DIR/mingle-app" install
+    pnpm --dir "$app_dir" install --frozen-lockfile
   fi
-  if [[ ! -x "$stt_tsnode_bin" ]]; then
+  if workspace_dependencies_need_install "$stt_dir" "$stt_tsnode_bin"; then
     log "installing dependencies: mingle-stt"
-    pnpm --dir "$ROOT_DIR/mingle-stt" install
+    pnpm --dir "$stt_dir" install --frozen-lockfile
   fi
+  write_workspace_dependency_install_marker "$app_dir"
+  write_workspace_dependency_install_marker "$stt_dir"
 
   ensure_mingle_app_prisma_client
 }
@@ -802,12 +860,14 @@ ensure_mingle_app_prisma_client() {
 }
 
 ensure_rn_workspace_dependencies() {
-  local rn_cli_bin="$ROOT_DIR/mingle-app/rn/node_modules/.bin/react-native"
-  local rn_gradle_plugin_dir="$ROOT_DIR/mingle-app/rn/node_modules/@react-native/gradle-plugin"
-  if [[ ! -x "$rn_cli_bin" || ! -d "$rn_gradle_plugin_dir" ]]; then
+  local rn_dir="$ROOT_DIR/mingle-app/rn"
+  local rn_cli_bin="$rn_dir/node_modules/.bin/react-native"
+  local rn_gradle_plugin_dir="$rn_dir/node_modules/@react-native/gradle-plugin"
+  if workspace_dependencies_need_install "$rn_dir" "$rn_cli_bin" "$rn_gradle_plugin_dir"; then
     log "installing dependencies: mingle-app/rn"
-    pnpm --dir "$ROOT_DIR/mingle-app/rn" install
+    pnpm --dir "$rn_dir" install --frozen-lockfile
   fi
+  write_workspace_dependency_install_marker "$rn_dir"
 }
 
 ensure_ios_pods_if_needed() {
