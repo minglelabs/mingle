@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
-import { buildClientApiPath } from '@/lib/api-contract'
+import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
@@ -139,6 +139,7 @@ type NativeSttStartCommand = {
     languages: string[]
     aecEnabled: boolean
     sonioxLanguageHints: string[]
+    sonioxManualFinalizeSilenceMs: number
   }
 }
 
@@ -516,6 +517,7 @@ interface UseRealtimeSTTOptions {
   onTtsCanceled?: (utteranceId: string) => void
   enableTts?: boolean
   enableAec?: boolean
+  sonioxManualFinalizeSilenceMs?: number
   usageLimitSec?: number | null
 }
 
@@ -1485,6 +1487,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
+  sonioxManualFinalizeSilenceMs = 1000,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
@@ -1495,26 +1498,10 @@ export default function useRealtimeSTT({
   const storedUtterancesRef = useRef<Utterance[]>([])
   const storageLoadedCountRef = useRef(0)
   const [hasOlderUtterances, setHasOlderUtterances] = useState(false)
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false)
+  const storageHydratedRef = useRef(false)
 
-  const [utteranceStore, setUtteranceStore] = useState<UtteranceStoreState>(() => {
-    if (typeof window === 'undefined') return createUtteranceStoreState([])
-    try {
-      const stored = localStorage.getItem(LS_KEY_UTTERANCES)
-      if (!stored) return createUtteranceStoreState([])
-      const parsed: Utterance[] = JSON.parse(stored)
-      // Deduplicate by id (fix corrupted data from previous bug)
-      const seen = new Set<string>()
-      const all = parsed.filter(u => {
-        if (seen.has(u.id)) return false
-        seen.add(u.id)
-        return true
-      }).map(normalizeStoredUtterance)
-      storedUtterancesRef.current = all
-      const initial = all.slice(-LOAD_BATCH_SIZE)
-      storageLoadedCountRef.current = initial.length
-      return createUtteranceStoreState(initial)
-    } catch { return createUtteranceStoreState([]) }
-  })
+  const [utteranceStore, setUtteranceStore] = useState<UtteranceStoreState>(() => createUtteranceStoreState([]))
   const utterances = utteranceStore.utterances
   const [partialTranscript, setPartialTranscript] = useState('')
   const [partialTranslations, setPartialTranslations] = useState<Record<string, string>>({})
@@ -1522,12 +1509,43 @@ export default function useRealtimeSTT({
   const [pendingTurnRenderVersion, setPendingTurnRenderVersion] = useState(0)
   const [partialTranslateTick, setPartialTranslateTick] = useState(0)
   const [volume, setVolume] = useState(0)
-  const [usageSec, setUsageSec] = useState(() => {
-    if (typeof window === 'undefined') return 0
+  const [usageSec, setUsageSec] = useState(0)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
     try {
-      return parseInt(localStorage.getItem(LS_KEY_USAGE) || '0', 10)
-    } catch { return 0 }
-  })
+      const stored = localStorage.getItem(LS_KEY_UTTERANCES)
+      if (stored) {
+        const parsed: Utterance[] = JSON.parse(stored)
+        const seen = new Set<string>()
+        const all = parsed.filter(u => {
+          if (seen.has(u.id)) return false
+          seen.add(u.id)
+          return true
+        }).map(normalizeStoredUtterance)
+        storedUtterancesRef.current = all
+        const initial = all.slice(-LOAD_BATCH_SIZE)
+        storageLoadedCountRef.current = initial.length
+        setUtteranceStore(createUtteranceStoreState(initial))
+        setHasOlderUtterances(all.length > initial.length)
+      }
+    } catch {
+      storedUtterancesRef.current = []
+      storageLoadedCountRef.current = 0
+      setUtteranceStore(createUtteranceStoreState([]))
+      setHasOlderUtterances(false)
+    }
+
+    try {
+      const parsedUsage = Number.parseInt(localStorage.getItem(LS_KEY_USAGE) || '0', 10)
+      setUsageSec(Number.isFinite(parsedUsage) && parsedUsage >= 0 ? parsedUsage : 0)
+    } catch {
+      setUsageSec(0)
+    }
+
+    storageHydratedRef.current = true
+    setIsStorageHydrated(true)
+  }, [])
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
@@ -1702,6 +1720,7 @@ export default function useRealtimeSTT({
   // Persist utterances to localStorage (debounced to avoid stringify on every update)
   const utterancePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    if (!storageHydratedRef.current) return
     if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
     utterancePersistTimerRef.current = setTimeout(() => {
       try {
@@ -1715,6 +1734,7 @@ export default function useRealtimeSTT({
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
+    if (!storageHydratedRef.current) return
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
       clearTimeout(utterancePersistTimerRef.current)
@@ -1729,6 +1749,7 @@ export default function useRealtimeSTT({
 
   // Persist usage to localStorage
   useEffect(() => {
+    if (!storageHydratedRef.current) return
     try {
       localStorage.setItem(LS_KEY_USAGE, String(usageSec))
     } catch { /* ignore */ }
@@ -1978,7 +1999,7 @@ export default function useRealtimeSTT({
     const apiPath = buildClientApiPath('/translate/finalize')
     const shouldRedetectSourceLanguage = (
       options?.isFinal === true
-      && /^\/api\/(?:ios|android)\/v1\.0\.4\/translate\/finalize\/?$/.test(apiPath)
+      && shouldRedetectFinalizeSourceLanguage(apiPath)
     )
     const langs = shouldRedetectSourceLanguage
       ? targetLanguages
@@ -3002,6 +3023,7 @@ export default function useRealtimeSTT({
             languages: targetLanguages,
             aecEnabled: enableAec,
             sonioxLanguageHints,
+            sonioxManualFinalizeSilenceMs,
           },
         })
         if (!posted) {
@@ -3047,6 +3069,7 @@ export default function useRealtimeSTT({
           sample_rate: context.sampleRate,
           languages: targetLanguages,
           soniox_language_hints: sonioxLanguageHints,
+          soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
         }
         socket.send(JSON.stringify(config))
       }
@@ -3089,7 +3112,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       setTimeout(() => setConnectionStatus('idle'), 3000)
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3532,5 +3555,6 @@ export default function useRealtimeSTT({
     appendUtterances,
     loadOlderUtterances,
     hasOlderUtterances,
+    isStorageHydrated,
   }
 }

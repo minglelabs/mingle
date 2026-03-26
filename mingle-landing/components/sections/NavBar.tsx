@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, Download } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { languages } from '@/lib/i18n'
+import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'
 
 interface LanguageSelectorProps {
   version?: string
@@ -83,10 +84,9 @@ function LanguageSelector({ version }: LanguageSelectorProps) {
 
 export interface NavBarProps {
   version?: string
-  openModal: (buttonType: string) => void
 }
 
-export default function NavBar({ version, openModal }: NavBarProps) {
+export default function NavBar({ version }: NavBarProps) {
   const { t } = useTranslation()
 
   return (
@@ -97,13 +97,7 @@ export default function NavBar({ version, openModal }: NavBarProps) {
         </div>
         <div className="flex items-center gap-4">
           <LanguageSelector version={version} />
-          <button
-            onClick={() => openModal('nav')}
-            className="px-3 sm:px-6 py-2.5 bg-gradient-to-r from-accent-primary to-accent-secondary rounded-lg font-semibold text-white hover:-translate-y-0.5 hover:shadow-lg hover:shadow-accent-primary/30 transition-all text-sm flex items-center gap-2"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">{t('nav.cta')}</span>
-          </button>
+          <StoreDownloadButtons size="sm" label={t('nav.cta')} />
         </div>
       </div>
     </nav>

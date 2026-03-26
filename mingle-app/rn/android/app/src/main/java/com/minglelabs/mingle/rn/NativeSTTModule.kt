@@ -51,6 +51,7 @@ class NativeSTTModule(
     val languages: List<String>,
     val aecEnabled: Boolean,
     val sonioxLanguageHints: List<String>,
+    val sonioxManualFinalizeSilenceMs: Int,
   )
 
   private data class PendingStartRequest(
@@ -138,6 +139,9 @@ class NativeSTTModule(
       languages = normalizeStringArray(options.getArray("languages")),
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
       sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
+      sonioxManualFinalizeSilenceMs = normalizeSonioxManualFinalizeSilenceMs(
+        if (options.hasKey("sonioxManualFinalizeSilenceMs")) options.getDouble("sonioxManualFinalizeSilenceMs") else null,
+      ),
     )
 
     if (hasRecordAudioPermission()) {
@@ -295,11 +299,15 @@ class NativeSTTModule(
           if (options.sttModel != null) {
             config.put("stt_model", options.sttModel)
           }
+            .put("soniox_manual_finalize_silence_ms", options.sonioxManualFinalizeSilenceMs)
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
           }
           webSocket.send(config.toString())
-          Log.i(TAG, "ws opened sampleRate=$currentSampleRate profile=${profile.label}")
+          Log.i(
+            TAG,
+            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs}",
+          )
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -808,6 +816,15 @@ class NativeSTTModule(
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
 
+  private fun normalizeSonioxManualFinalizeSilenceMs(raw: Double?): Int {
+    if (raw == null || !raw.isFinite()) {
+      return SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT
+    }
+    return raw
+      .toInt()
+      .coerceIn(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN, SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX)
+  }
+
   override fun onHostResume() {
     // Background capture is intentionally allowed while STT is active.
   }
@@ -833,6 +850,9 @@ class NativeSTTModule(
   companion object {
     private const val TAG = "NativeSTTModule"
     private const val REQUEST_RECORD_AUDIO = 44_002
+    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 1_000
+    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500
+    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3_000
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L
