@@ -32,6 +32,7 @@ type SttModel =
     | 'deepgram'
     | 'deepgram-multi'
     | 'fireworks'
+    | 'chirp-3'
     | 'soniox'
     | 'elevenlabs'
     | 'speechmatics';
@@ -177,6 +178,7 @@ wss.on('connection', (clientWs) => {
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
+    const googleCloudProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GCP_PROJECT_ID;
     const sonioxApiKey = process.env.SONIOX_API_KEY;
     const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
     const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
@@ -646,6 +648,26 @@ wss.on('connection', (clientWs) => {
                 clientWs.close(1011, 'Failed to connect to Fireworks service.');
             }
         }
+    };
+
+    // ===== CHIRP 3 연결 =====
+    const startChirp3Connection = async (_config: ClientConfig) => {
+        void _config;
+        console.error(
+            '[model-test] chirp-3 is not wired yet. Chirp 3 requires Google Cloud Speech-to-Text V2 authentication (ADC/service account), not GEMINI_API_KEY.',
+        );
+        console.error(
+            '[model-test] Set GOOGLE_APPLICATION_CREDENTIALS and Google Cloud project credentials before enabling this model.',
+        );
+
+        if (!googleCloudProjectId) {
+            console.error('[model-test] GOOGLE_CLOUD_PROJECT_ID or GCP_PROJECT_ID is missing.');
+        }
+
+        clientWs.close(
+            1011,
+            'Chirp 3 is not yet connected. Google Cloud Speech-to-Text V2 auth is required.',
+        );
     };
 
     // ===== ELEVENLABS 연결 =====
@@ -1173,6 +1195,8 @@ wss.on('connection', (clientWs) => {
                 startDeepgramMultiConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
+            } else if (currentModel === 'chirp-3') {
+                startChirp3Connection(data as ClientConfig);
             } else if (currentModel === 'elevenlabs') {
                 startElevenLabsConnection(data as ClientConfig);
             } else if (currentModel === 'speechmatics') {

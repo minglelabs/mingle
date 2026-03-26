@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT_CANON="$(cd "$ROOT_DIR" && pwd -P)"
 LOCAL_TOOLS_BIN="$ROOT_DIR/.tools/bin"
 DEVBOX_LOG_DIR="$ROOT_DIR/.devbox-logs"
+DEVBOX_ENV_FILE="$ROOT_DIR/.devbox.env"
 APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
@@ -16,12 +17,14 @@ MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT="$MINGLE_IOS_DIR/scripts/install-ios-simulat
 MINGLE_IOS_TEST_SCRIPT="$MINGLE_IOS_DIR/scripts/test-ios.sh"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.4"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.4"
-DEVBOX_FIXED_WEB_PORT=3518
-DEVBOX_FIXED_STT_PORT=5518
-DEVBOX_FIXED_METRO_PORT=8518
-DEVBOX_FIXED_NGROK_API_PORT=10518
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.6"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.5"
+DEVBOX_BASE_WEB_PORT=3518
+DEVBOX_BASE_STT_PORT=5518
+DEVBOX_BASE_METRO_PORT=8518
+DEVBOX_BASE_NGROK_API_PORT=10518
+DEVBOX_PORT_SLOT_SPACING=20
+DEVBOX_PORT_SLOT_LIMIT=1000
 
 if [[ -d "$LOCAL_TOOLS_BIN" ]]; then
   PATH="$LOCAL_TOOLS_BIN:$PATH"
@@ -134,7 +137,7 @@ Usage:
   scripts/devbox status
 
 Commands:
-  init         Generate fixed ports/config runtime files.
+  init         Generate worktree-aware ports/config runtime files.
   bootstrap    Read-only for .env.local; install deps and optionally push local env keys to Vault.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
@@ -403,6 +406,22 @@ read_devbox_shell_setting_value() {
   return 1
 }
 
+read_devbox_env_value_from_file() {
+  local file="$1"
+  local key="$2"
+  local value=""
+
+  [[ -f "$file" ]] || return 1
+  value="$(read_env_or_export_value_from_file "$key" "$file" || true)"
+  value="$(trim_whitespace "$value")"
+  [[ -n "$value" ]] || return 1
+  printf '%s' "$value"
+}
+
+read_devbox_env_value() {
+  read_devbox_env_value_from_file "$DEVBOX_ENV_FILE" "$1"
+}
+
 read_vault_cli_env_value_from_local_env_files() {
   local key="$1"
   local value=""
@@ -520,6 +539,15 @@ read_app_setting_value() {
     return 0
   fi
 
+  if [[ "$key" == DEVBOX_* ]]; then
+    value="$(read_devbox_env_value "$key" || true)"
+    value="$(trim_whitespace "$value")"
+    if [[ -n "$value" ]]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  fi
+
   if [[ -n "${DEVBOX_VAULT_APP_PATH:-}" ]] && command -v vault >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     value="$(read_env_value_from_vault "$DEVBOX_VAULT_APP_PATH" "$key" || true)"
     if [[ -n "$value" ]]; then
@@ -578,40 +606,86 @@ derive_worktree_name() {
 
 collect_reserved_ports() {
   RESERVED_ALL_PORTS=""
-  # .devbox.env is no longer used; port collision checks rely on active listeners.
+  local line="" worktree_path="" worktree_canon="" env_file="" port="" key=""
+
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *)
+        worktree_path="${line#worktree }"
+        worktree_canon="$(cd "$worktree_path" 2>/dev/null && pwd -P || true)"
+        [[ -n "$worktree_canon" ]] || continue
+        [[ "$worktree_canon" != "$ROOT_CANON" ]] || continue
+
+        env_file="$worktree_canon/.devbox.env"
+        [[ -f "$env_file" ]] || continue
+
+        for key in \
+          DEVBOX_WEB_PORT \
+          DEVBOX_STT_PORT \
+          DEVBOX_METRO_PORT \
+          DEVBOX_NGROK_API_PORT
+        do
+          port="$(read_devbox_env_value_from_file "$env_file" "$key" || true)"
+          if is_numeric "$port" && ! port_list_contains "$RESERVED_ALL_PORTS" "$port"; then
+            RESERVED_ALL_PORTS="$(append_port "$RESERVED_ALL_PORTS" "$port")"
+          fi
+        done
+        ;;
+    esac
+  done < <(git -C "$ROOT_DIR" worktree list --porcelain 2>/dev/null || true)
+}
+
+calc_slot_port() {
+  local base="$1"
+  local slot="$2"
+  printf '%s' "$((base + (slot * DEVBOX_PORT_SLOT_SPACING)))"
+}
+
+default_port_set_available() {
+  local web_port="$1"
+  local stt_port="$2"
+  local metro_port="$3"
+  local ngrok_api_port="$4"
+  local port=""
+
+  for port in "$web_port" "$stt_port" "$metro_port" "$ngrok_api_port"; do
+    (( port >= 1 && port <= 65535 )) || return 1
+    port_list_contains "$RESERVED_ALL_PORTS" "$port" && return 1
+    port_in_use "$port" && return 1
+  done
+
+  return 0
 }
 
 calc_default_ports() {
   collect_reserved_ports
-  DEFAULT_WEB_PORT="$DEVBOX_FIXED_WEB_PORT"
-  DEFAULT_STT_PORT="$DEVBOX_FIXED_STT_PORT"
-  DEFAULT_METRO_PORT="$DEVBOX_FIXED_METRO_PORT"
-  DEFAULT_NGROK_API_PORT="$DEVBOX_FIXED_NGROK_API_PORT"
-}
 
-enforce_fixed_ports() {
-  local requested_web="${DEVBOX_WEB_PORT:-}"
-  local requested_stt="${DEVBOX_STT_PORT:-}"
-  local requested_metro="${DEVBOX_METRO_PORT:-}"
-  local requested_ngrok_api="${DEVBOX_NGROK_API_PORT:-}"
+  local preferred_slot=0
+  local slot=0
+  local attempt=0
 
-  if [[ -n "$requested_web" && "$requested_web" != "$DEFAULT_WEB_PORT" ]]; then
-    warn "DEVBOX_WEB_PORT override($requested_web) ignored; using fixed port $DEFAULT_WEB_PORT"
-  fi
-  if [[ -n "$requested_stt" && "$requested_stt" != "$DEFAULT_STT_PORT" ]]; then
-    warn "DEVBOX_STT_PORT override($requested_stt) ignored; using fixed port $DEFAULT_STT_PORT"
-  fi
-  if [[ -n "$requested_metro" && "$requested_metro" != "$DEFAULT_METRO_PORT" ]]; then
-    warn "DEVBOX_METRO_PORT override($requested_metro) ignored; using fixed port $DEFAULT_METRO_PORT"
-  fi
-  if [[ -n "$requested_ngrok_api" && "$requested_ngrok_api" != "$DEFAULT_NGROK_API_PORT" ]]; then
-    warn "DEVBOX_NGROK_API_PORT override($requested_ngrok_api) ignored; using fixed port $DEFAULT_NGROK_API_PORT"
-  fi
+  preferred_slot="$(printf '%s' "$ROOT_CANON" | cksum | awk -v mod="$DEVBOX_PORT_SLOT_LIMIT" '{print $1 % mod}')"
 
-  DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
-  DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
-  DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
-  DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
+  while [[ "$attempt" -lt "$DEVBOX_PORT_SLOT_LIMIT" ]]; do
+    slot="$(((preferred_slot + attempt) % DEVBOX_PORT_SLOT_LIMIT))"
+    DEFAULT_WEB_PORT="$(calc_slot_port "$DEVBOX_BASE_WEB_PORT" "$slot")"
+    DEFAULT_STT_PORT="$(calc_slot_port "$DEVBOX_BASE_STT_PORT" "$slot")"
+    DEFAULT_METRO_PORT="$(calc_slot_port "$DEVBOX_BASE_METRO_PORT" "$slot")"
+    DEFAULT_NGROK_API_PORT="$(calc_slot_port "$DEVBOX_BASE_NGROK_API_PORT" "$slot")"
+
+    if default_port_set_available \
+      "$DEFAULT_WEB_PORT" \
+      "$DEFAULT_STT_PORT" \
+      "$DEFAULT_METRO_PORT" \
+      "$DEFAULT_NGROK_API_PORT"
+    then
+      return 0
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  die "unable to allocate devbox ports for this worktree after ${DEVBOX_PORT_SLOT_LIMIT} attempts"
 }
 
 ensure_file_parent() {
@@ -699,18 +773,76 @@ seed_env_from_main_worktree() {
     "$STT_ENV_FILE"
 }
 
-ensure_workspace_dependencies() {
-  local app_next_bin="$ROOT_DIR/mingle-app/node_modules/.bin/next"
-  local stt_tsnode_bin="$ROOT_DIR/mingle-stt/node_modules/.bin/ts-node"
+workspace_dependency_manifest_checksum() {
+  local workspace_dir="${1:-}"
+  local package_json="$workspace_dir/package.json"
+  local lockfile="$workspace_dir/pnpm-lock.yaml"
+  [[ -f "$package_json" && -f "$lockfile" ]] || return 1
 
-  if [[ ! -x "$app_next_bin" ]]; then
+  cat "$package_json" "$lockfile" | cksum | awk '{print $1 ":" $2}'
+}
+
+workspace_dependency_install_marker_path() {
+  local workspace_dir="${1:-}"
+  printf '%s/node_modules/.devbox-install-state' "$workspace_dir"
+}
+
+workspace_dependencies_need_install() {
+  local workspace_dir="${1:-}"
+  local primary_path="${2:-}"
+  shift 2 || true
+  local expected_state=""
+  local marker_path=""
+  local actual_state=""
+  local extra_path=""
+
+  [[ -n "$primary_path" ]] || return 0
+  [[ -e "$primary_path" ]] || return 0
+  for extra_path in "$@"; do
+    [[ -e "$extra_path" ]] || return 0
+  done
+
+  expected_state="$(workspace_dependency_manifest_checksum "$workspace_dir" || true)"
+  [[ -n "$expected_state" ]] || return 0
+
+  marker_path="$(workspace_dependency_install_marker_path "$workspace_dir")"
+  [[ -f "$marker_path" ]] || return 0
+
+  actual_state="$(tr -d '\r\n' < "$marker_path" 2>/dev/null || true)"
+  [[ "$actual_state" != "$expected_state" ]] && return 0
+
+  return 1
+}
+
+write_workspace_dependency_install_marker() {
+  local workspace_dir="${1:-}"
+  local expected_state=""
+  local marker_path=""
+
+  expected_state="$(workspace_dependency_manifest_checksum "$workspace_dir" || true)"
+  [[ -n "$expected_state" ]] || return 0
+  [[ -d "$workspace_dir/node_modules" ]] || return 0
+
+  marker_path="$(workspace_dependency_install_marker_path "$workspace_dir")"
+  printf '%s\n' "$expected_state" > "$marker_path"
+}
+
+ensure_workspace_dependencies() {
+  local app_dir="$ROOT_DIR/mingle-app"
+  local stt_dir="$ROOT_DIR/mingle-stt"
+  local app_next_bin="$app_dir/node_modules/.bin/next"
+  local stt_tsnode_bin="$stt_dir/node_modules/.bin/ts-node"
+
+  if workspace_dependencies_need_install "$app_dir" "$app_next_bin"; then
     log "installing dependencies: mingle-app"
-    pnpm --dir "$ROOT_DIR/mingle-app" install
+    pnpm --dir "$app_dir" install --frozen-lockfile
   fi
-  if [[ ! -x "$stt_tsnode_bin" ]]; then
+  if workspace_dependencies_need_install "$stt_dir" "$stt_tsnode_bin"; then
     log "installing dependencies: mingle-stt"
-    pnpm --dir "$ROOT_DIR/mingle-stt" install
+    pnpm --dir "$stt_dir" install --frozen-lockfile
   fi
+  write_workspace_dependency_install_marker "$app_dir"
+  write_workspace_dependency_install_marker "$stt_dir"
 
   ensure_mingle_app_prisma_client
 }
@@ -728,12 +860,14 @@ ensure_mingle_app_prisma_client() {
 }
 
 ensure_rn_workspace_dependencies() {
-  local rn_cli_bin="$ROOT_DIR/mingle-app/rn/node_modules/.bin/react-native"
-  local rn_gradle_plugin_dir="$ROOT_DIR/mingle-app/rn/node_modules/@react-native/gradle-plugin"
-  if [[ ! -x "$rn_cli_bin" || ! -d "$rn_gradle_plugin_dir" ]]; then
+  local rn_dir="$ROOT_DIR/mingle-app/rn"
+  local rn_cli_bin="$rn_dir/node_modules/.bin/react-native"
+  local rn_gradle_plugin_dir="$rn_dir/node_modules/@react-native/gradle-plugin"
+  if workspace_dependencies_need_install "$rn_dir" "$rn_cli_bin" "$rn_gradle_plugin_dir"; then
     log "installing dependencies: mingle-app/rn"
-    pnpm --dir "$ROOT_DIR/mingle-app/rn" install
+    pnpm --dir "$rn_dir" install --frozen-lockfile
   fi
+  write_workspace_dependency_install_marker "$rn_dir"
 }
 
 ensure_ios_pods_if_needed() {
@@ -1111,6 +1245,7 @@ require_devbox_env() {
   if [[ -z "$DEVBOX_WORKTREE_NAME" ]]; then
     DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
   fi
+  DEVBOX_ROOT_DIR="$ROOT_CANON"
 
   if [[ -z "${DEVBOX_VAULT_APP_PATH:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_VAULT_APP_PATH || true)")"
@@ -1131,8 +1266,26 @@ require_devbox_env() {
   fi
 
   calc_default_ports
-
-  enforce_fixed_ports
+  if [[ -z "${DEVBOX_WEB_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_WEB_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_WEB_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_STT_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_STT_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_STT_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_METRO_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_METRO_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_METRO_PORT="$value"
+  fi
+  if [[ -z "${DEVBOX_NGROK_API_PORT:-}" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value DEVBOX_NGROK_API_PORT || true)")"
+    [[ -n "$value" ]] && DEVBOX_NGROK_API_PORT="$value"
+  fi
+  [[ -n "${DEVBOX_WEB_PORT:-}" ]] || DEVBOX_WEB_PORT="$DEFAULT_WEB_PORT"
+  [[ -n "${DEVBOX_STT_PORT:-}" ]] || DEVBOX_STT_PORT="$DEFAULT_STT_PORT"
+  [[ -n "${DEVBOX_METRO_PORT:-}" ]] || DEVBOX_METRO_PORT="$DEFAULT_METRO_PORT"
+  [[ -n "${DEVBOX_NGROK_API_PORT:-}" ]] || DEVBOX_NGROK_API_PORT="$DEFAULT_NGROK_API_PORT"
 
   if [[ -z "${DEVBOX_PROFILE:-}" ]]; then
     value="$(trim_whitespace "$(read_app_setting_value DEVBOX_PROFILE || true)")"
@@ -1216,6 +1369,58 @@ require_devbox_env() {
   if [[ "$DEVBOX_PROFILE" == "local" ]]; then
     validate_host "$DEVBOX_LOCAL_HOST"
   fi
+}
+
+write_devbox_env_file() {
+  local key=""
+  local value=""
+
+  prepare_generated_file "$DEVBOX_ENV_FILE"
+  cat > "$DEVBOX_ENV_FILE" <<EOF
+# Auto-generated by scripts/devbox.
+# Worktree-local runtime configuration.
+EOF
+
+  for key in \
+    DEVBOX_WORKTREE_NAME \
+    DEVBOX_ROOT_DIR \
+    DEVBOX_PROFILE \
+    DEVBOX_WEB_PORT \
+    DEVBOX_STT_PORT \
+    DEVBOX_METRO_PORT \
+    DEVBOX_NGROK_API_PORT \
+    DEVBOX_LOCAL_HOST \
+    DEVBOX_SITE_URL \
+    DEVBOX_RN_WS_URL \
+    DEVBOX_PUBLIC_WS_URL \
+    DEVBOX_TEST_API_BASE_URL \
+    DEVBOX_TEST_WS_URL \
+    NEXT_PUBLIC_SITE_URL \
+    NEXTAUTH_URL \
+    NEXT_PUBLIC_WS_PORT \
+    NEXT_PUBLIC_WS_URL \
+    MINGLE_TEST_API_BASE_URL \
+    MINGLE_TEST_WS_URL \
+    RN_IOS_API_NAMESPACE \
+    RN_ANDROID_API_NAMESPACE \
+    DEVBOX_TUNNEL_PROVIDER \
+    DEVBOX_VAULT_APP_PATH \
+    DEVBOX_VAULT_STT_PATH \
+    DEVBOX_OPENCLAW_ROOT \
+    DEVBOX_IOS_TEAM_ID
+  do
+    case "$key" in
+      NEXT_PUBLIC_SITE_URL|NEXTAUTH_URL) value="${DEVBOX_SITE_URL:-}" ;;
+      NEXT_PUBLIC_WS_PORT) value="${DEVBOX_STT_PORT:-}" ;;
+      NEXT_PUBLIC_WS_URL) value="${DEVBOX_RN_WS_URL:-}" ;;
+      MINGLE_TEST_API_BASE_URL) value="${DEVBOX_TEST_API_BASE_URL:-}" ;;
+      MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
+      RN_IOS_API_NAMESPACE) value="${IOS_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      RN_ANDROID_API_NAMESPACE) value="${ANDROID_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      *) value="${!key:-}" ;;
+    esac
+    printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
+  done
 }
 
 write_app_env_block() {
@@ -1549,6 +1754,26 @@ cloudflared_named_log_file_path() {
   printf '%s/.devbox-cache/cloudflared/%s.named.log' "$ROOT_DIR" "$worktree"
 }
 
+cloudflared_named_config_file_path() {
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named.yml' "$ROOT_DIR" "$worktree"
+}
+
+cloudflared_named_bridge_pid_file_path() {
+  local kind="$1"
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named-bridge-%s.pid' "$ROOT_DIR" "$worktree" "$kind"
+}
+
+cloudflared_named_bridge_log_file_path() {
+  local kind="$1"
+  local worktree="${DEVBOX_WORKTREE_NAME:-$(derive_worktree_name)}"
+  worktree="${worktree//[^A-Za-z0-9._-]/-}"
+  printf '%s/.devbox-cache/cloudflared/%s.named-bridge-%s.log' "$ROOT_DIR" "$worktree" "$kind"
+}
+
 resolve_cloudflare_named_tunnel_settings() {
   local token web_host stt_host
   token="$(trim_whitespace "${DEVBOX_CLOUDFLARE_TUNNEL_TOKEN:-}")"
@@ -1647,6 +1872,108 @@ stop_cloudflared_named_tunnel_from_pidfile() {
   fi
 
   rm -f "$pid_file"
+}
+
+write_cloudflared_named_config() {
+  local config_file="$1"
+  local web_host="$2"
+  local stt_host="$3"
+
+  mkdir -p "$(dirname "$config_file")"
+  cat >"$config_file" <<EOF
+originRequest:
+  noTLSVerify: true
+  http2Origin: false
+ingress:
+  - hostname: $web_host
+    service: http://127.0.0.1:$DEVBOX_WEB_PORT
+  - hostname: $stt_host
+    service: http://127.0.0.1:$DEVBOX_STT_PORT
+  - service: http_status:404
+EOF
+}
+
+extract_cloudflared_named_service_port() {
+  local log_file="$1"
+  local hostname="$2"
+  [[ -f "$log_file" ]] || return 0
+
+  python3 - "$log_file" "$hostname" <<'PY'
+import re
+import sys
+
+log_file, hostname = sys.argv[1], sys.argv[2]
+pattern = re.compile(rf'"hostname":"{re.escape(hostname)}".*?"service":"http://localhost:(\d+)"')
+escaped_pattern = re.compile(
+    rf'\\"hostname\\":\\"{re.escape(hostname)}\\".*?\\"service\\":\\"http://localhost:(\d+)\\"'
+)
+port = ""
+with open(log_file, "r", encoding="utf-8", errors="ignore") as handle:
+    for line in handle:
+        match = pattern.search(line)
+        if not match:
+            match = escaped_pattern.search(line)
+        if match:
+            port = match.group(1)
+if port:
+    print(port)
+PY
+}
+
+stop_cloudflared_named_bridge() {
+  local kind="$1"
+  local pid_file
+  local pid
+
+  pid_file="$(cloudflared_named_bridge_pid_file_path "$kind")"
+  [[ -f "$pid_file" ]] || return 0
+
+  pid="$(cat "$pid_file" 2>/dev/null || true)"
+  if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+    log "stopping cloudflared named bridge($kind) (pid: $pid)"
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 1
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  rm -f "$pid_file"
+}
+
+ensure_cloudflared_named_bridge() {
+  local kind="$1"
+  local remote_port="$2"
+  local target_port="$3"
+  local tracked_pids_ref="${4:-}"
+  local pid_file log_file bridge_pid
+
+  [[ -n "$remote_port" ]] || return 0
+  if [[ "$remote_port" == "$target_port" ]]; then
+    stop_cloudflared_named_bridge "$kind"
+    return 0
+  fi
+
+  pid_file="$(cloudflared_named_bridge_pid_file_path "$kind")"
+  log_file="$(cloudflared_named_bridge_log_file_path "$kind")"
+  mkdir -p "$(dirname "$pid_file")"
+
+  stop_cloudflared_named_bridge "$kind"
+  rm -f "$log_file"
+  stop_listeners_by_port "cloudflared named bridge($kind)" "$remote_port"
+
+  log "starting cloudflared named bridge($kind): localhost:$remote_port -> 127.0.0.1:$target_port"
+  python3 "$ROOT_DIR/scripts/devbox-port-bridge.py" \
+    --listen-host 127.0.0.1 \
+    --listen-port "$remote_port" \
+    --target-host 127.0.0.1 \
+    --target-port "$target_port" >"$log_file" 2>&1 &
+  bridge_pid="$!"
+  printf '%s\n' "$bridge_pid" > "$pid_file"
+
+  if [[ -n "$tracked_pids_ref" ]]; then
+    eval "$tracked_pids_ref+=(\"$bridge_pid\")"
+  fi
 }
 
 detect_ios_coredevice_id() {
@@ -2609,6 +2936,11 @@ resolve_device_app_env_override() {
 }
 
 save_and_refresh() {
+  if [[ -z "${DEVBOX_WORKTREE_NAME:-}" ]]; then
+    DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
+  fi
+  DEVBOX_ROOT_DIR="$ROOT_CANON"
+  write_devbox_env_file
   refresh_runtime_files
 }
 
@@ -2784,6 +3116,7 @@ cmd_init() {
   local web_port="" stt_port="" metro_port="" ngrok_api_port="" host="127.0.0.1"
   local vault_app_override="" vault_stt_override=""
   local openclaw_root_override=""
+  local current_web_port="" current_stt_port="" current_metro_port="" current_ngrok_api_port=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -2808,25 +3141,16 @@ cmd_init() {
   fi
 
   DEVBOX_WORKTREE_NAME="$(derive_worktree_name)"
+  current_web_port="$(read_devbox_env_value DEVBOX_WEB_PORT || true)"
+  current_stt_port="$(read_devbox_env_value DEVBOX_STT_PORT || true)"
+  current_metro_port="$(read_devbox_env_value DEVBOX_METRO_PORT || true)"
+  current_ngrok_api_port="$(read_devbox_env_value DEVBOX_NGROK_API_PORT || true)"
   calc_default_ports
 
-  if [[ -n "$web_port" && "$web_port" != "$DEFAULT_WEB_PORT" ]]; then
-    die "web port is fixed to $DEFAULT_WEB_PORT; remove --web-port override"
-  fi
-  if [[ -n "$stt_port" && "$stt_port" != "$DEFAULT_STT_PORT" ]]; then
-    die "stt port is fixed to $DEFAULT_STT_PORT; remove --stt-port override"
-  fi
-  if [[ -n "$metro_port" && "$metro_port" != "$DEFAULT_METRO_PORT" ]]; then
-    die "metro port is fixed to $DEFAULT_METRO_PORT; remove --metro-port override"
-  fi
-  if [[ -n "$ngrok_api_port" && "$ngrok_api_port" != "$DEFAULT_NGROK_API_PORT" ]]; then
-    die "ngrok api port is fixed to $DEFAULT_NGROK_API_PORT; remove --ngrok-api-port override"
-  fi
-
-  web_port="$DEFAULT_WEB_PORT"
-  stt_port="$DEFAULT_STT_PORT"
-  metro_port="$DEFAULT_METRO_PORT"
-  ngrok_api_port="$DEFAULT_NGROK_API_PORT"
+  [[ -n "$web_port" ]] || web_port="${current_web_port:-$DEFAULT_WEB_PORT}"
+  [[ -n "$stt_port" ]] || stt_port="${current_stt_port:-$DEFAULT_STT_PORT}"
+  [[ -n "$metro_port" ]] || metro_port="${current_metro_port:-$DEFAULT_METRO_PORT}"
+  [[ -n "$ngrok_api_port" ]] || ngrok_api_port="${current_ngrok_api_port:-$DEFAULT_NGROK_API_PORT}"
 
   validate_port "web port" "$web_port"
   validate_port "stt port" "$stt_port"
@@ -3252,6 +3576,7 @@ cmd_ios_appstore_sync_metadata() {
   local dry_run="false"
   local no_fallback="false"
   local only_app_info="false"
+  local only_version_urls="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -3279,6 +3604,10 @@ cmd_ios_appstore_sync_metadata() {
         only_app_info="true"
         shift
         ;;
+      --only-version-urls)
+        only_version_urls="true"
+        shift
+        ;;
       -h|--help)
         cat <<EOF
 Usage: scripts/devbox ios-appstore-sync-metadata [options]
@@ -3290,6 +3619,7 @@ Options:
   --dry-run               Print planned updates only (no ASC write)
   --no-fallback           Do not fallback metadata locale when target locale is missing
   --only-app-info         Only sync app info localizations (title, subtitle); skip version localizations
+  --only-version-urls     Only sync version support/marketing URLs; skip other version metadata and app info
   -h, --help              Show help
 EOF
         return 0
@@ -3306,6 +3636,9 @@ EOF
 
   [[ -f "$copy_json" ]] || die "missing JSON: $copy_json"
   [[ -f "$api_key_json" ]] || die "missing API key JSON: $api_key_json"
+  if [[ "$only_app_info" == "true" && "$only_version_urls" == "true" ]]; then
+    die "--only-app-info and --only-version-urls cannot be used together"
+  fi
   require_cmd ruby
 
   log "syncing App Store Connect metadata from: $copy_json"
@@ -3314,7 +3647,7 @@ EOF
   PATH="/opt/homebrew/opt/ruby/bin:/opt/homebrew/Cellar/fastlane/2.232.2/libexec/bin:$PATH" \
   GEM_HOME="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}" \
   GEM_PATH="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}:/opt/homebrew/Cellar/fastlane/2.232.2/libexec" \
-  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" \
+  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" ONLY_VERSION_URLS="$only_version_urls" \
   ruby - <<'RUBY'
 require 'json'
 require 'spaceship'
@@ -3335,6 +3668,7 @@ app_identifier = ENV.fetch('APP_IDENTIFIER')
 dry_run = ENV.fetch('DRY_RUN') == 'true'
 no_fallback = ENV.fetch('NO_FALLBACK') == 'true'
 only_app_info = ENV.fetch('ONLY_APP_INFO') == 'true'
+only_version_urls = ENV.fetch('ONLY_VERSION_URLS') == 'true'
 
 payload = JSON.parse(File.read(copy_json))
 
@@ -3454,24 +3788,26 @@ version.get_app_store_version_localizations.each do |loc|
   metadata ||= {}
 
   attributes = {}
-  if metadata.key?('promotionalText')
-    attributes[:promotionalText] = metadata['promotionalText'].to_s
-  end
-  if metadata.key?('whatsNew')
-    attributes[:whatsNew] = metadata['whatsNew'].to_s
-  end
-  if metadata.key?('description')
-    attributes[:description] = metadata['description'].to_s
-  end
-  if metadata.key?('keywords')
-    raw_keywords = metadata['keywords']
-    attributes[:keywords] = raw_keywords.is_a?(Array) ? raw_keywords.map(&:to_s).join(',') : raw_keywords.to_s
-  end
   if metadata.key?('supportUrl')
     attributes[:supportUrl] = metadata['supportUrl'].to_s
   end
   if metadata.key?('marketingUrl')
     attributes[:marketingUrl] = metadata['marketingUrl'].to_s
+  end
+  unless only_version_urls
+    if metadata.key?('promotionalText')
+      attributes[:promotionalText] = metadata['promotionalText'].to_s
+    end
+    if metadata.key?('whatsNew')
+      attributes[:whatsNew] = metadata['whatsNew'].to_s
+    end
+    if metadata.key?('description')
+      attributes[:description] = metadata['description'].to_s
+    end
+    if metadata.key?('keywords')
+      raw_keywords = metadata['keywords']
+      attributes[:keywords] = raw_keywords.is_a?(Array) ? raw_keywords.map(&:to_s).join(',') : raw_keywords.to_s
+    end
   end
 
   attributes.delete_if { |_k, v| v.nil? }
@@ -3492,7 +3828,51 @@ version.get_app_store_version_localizations.each do |loc|
       )
     rescue => error
       message = error.to_s
-      if message.include?("cannot be edited at this time")
+      if only_version_urls &&
+         (message.include?("cannot be modified in the current state") ||
+          message.include?("can not be modified in the current state") ||
+          message.include?("cannot be edited at this time") ||
+          message.include?("can not be edited at this time"))
+        updated = false
+        attributes.each do |key, value|
+          begin
+            client.patch(
+              "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/#{loc.id}",
+              {
+                data: {
+                  type: 'appStoreVersionLocalizations',
+                  id: loc.id,
+                  attributes: {
+                    key => value
+                  }
+                }
+              }
+            )
+            puts "[version-loc] #{asc_locale} <- #{locale_key} #{key}-only"
+            updated = true
+          rescue => single_error
+            single_message = single_error.to_s
+            if single_message.include?("cannot be modified in the current state") ||
+               single_message.include?("can not be modified in the current state") ||
+               single_message.include?("cannot be edited at this time") ||
+               single_message.include?("can not be edited at this time")
+              puts "[skip version-loc] #{asc_locale} #{key} #{single_message.lines.first.to_s.strip}"
+              next
+            end
+            raise
+          end
+        end
+        if updated
+          version_loc_updates += 1
+        else
+          version_loc_skips += 1
+        end
+        next
+      end
+      if message.include?("cannot be modified in the current state") ||
+         message.include?("can not be modified in the current state") ||
+         message.include?("cannot be edited at this time") ||
+         message.include?("can not be edited at this time")
         puts "[skip version-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
         version_loc_skips += 1
         next
@@ -3504,93 +3884,95 @@ version.get_app_store_version_localizations.each do |loc|
 end
 end # unless only_app_info
 
-app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
-raise "appInfo not found for app #{app.id}" if app_infos.empty?
-editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
-preferred_app_info = app_infos.min_by do |ai|
-  state = ai.dig('attributes', 'appStoreState').to_s
-  idx = editable_states.index(state)
-  idx ? idx : editable_states.length
-end
-app_info_id = preferred_app_info&.dig('id')
-puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
-raise "appInfo not found for app #{app.id}" unless app_info_id
+unless only_version_urls
+  app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
+  raise "appInfo not found for app #{app.id}" if app_infos.empty?
+  editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
+  preferred_app_info = app_infos.min_by do |ai|
+    state = ai.dig('attributes', 'appStoreState').to_s
+    idx = editable_states.index(state)
+    idx ? idx : editable_states.length
+  end
+  app_info_id = preferred_app_info&.dig('id')
+  puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
+  raise "appInfo not found for app #{app.id}" unless app_info_id
 
-app_info_loc_refs = client.get(
-  "https://api.appstoreconnect.apple.com/v1/appInfos/#{app_info_id}/relationships/appInfoLocalizations"
-).body['data'] || []
+  app_info_loc_refs = client.get(
+    "https://api.appstoreconnect.apple.com/v1/appInfos/#{app_info_id}/relationships/appInfoLocalizations"
+  ).body['data'] || []
 
-app_info_loc_refs.each do |ref|
-  loc_id = ref['id']
-  instance = client.get("https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}").body['data']
-  asc_locale = instance.dig('attributes', 'locale').to_s
-  locale_key = json_locale_key_for_asc(asc_locale)
+  app_info_loc_refs.each do |ref|
+    loc_id = ref['id']
+    instance = client.get("https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}").body['data']
+    asc_locale = instance.dig('attributes', 'locale').to_s
+    locale_key = json_locale_key_for_asc(asc_locale)
 
-  name = title_map[locale_key] || title_map['en']
-  subtitle = subtitle_map[locale_key] || subtitle_map['en']
-  current_name = instance.dig('attributes', 'name').to_s
-  current_subtitle = instance.dig('attributes', 'subtitle').to_s
+    name = title_map[locale_key] || title_map['en']
+    subtitle = subtitle_map[locale_key] || subtitle_map['en']
+    current_name = instance.dig('attributes', 'name').to_s
+    current_subtitle = instance.dig('attributes', 'subtitle').to_s
 
-  attributes = {}
-  attributes[:name] = name if name && name.to_s != current_name
-  attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
-  next if attributes.empty?
+    attributes = {}
+    attributes[:name] = name if name && name.to_s != current_name
+    attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
+    next if attributes.empty?
 
-  puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
-  unless dry_run
-    begin
-      client.patch(
-        "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
-        {
-          data: {
-            type: 'appInfoLocalizations',
-            id: loc_id,
-            attributes: attributes
+    puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
+    unless dry_run
+      begin
+        client.patch(
+          "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+          {
+            data: {
+              type: 'appInfoLocalizations',
+              id: loc_id,
+              attributes: attributes
+            }
           }
-        }
-      )
-    rescue => error
-      message = error.to_s
-      if attributes[:subtitle] && attributes[:name] &&
-         (message.include?("cannot be modified in the current state") ||
-          message.include?("can not be modified in the current state") ||
-          message.include?("cannot be edited at this time") ||
-          message.include?("can not be edited at this time"))
-        begin
-          client.patch(
-            "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
-            {
-              data: {
-                type: 'appInfoLocalizations',
-                id: loc_id,
-                attributes: {
-                  subtitle: attributes[:subtitle]
+        )
+      rescue => error
+        message = error.to_s
+        if attributes[:subtitle] && attributes[:name] &&
+           (message.include?("cannot be modified in the current state") ||
+            message.include?("can not be modified in the current state") ||
+            message.include?("cannot be edited at this time") ||
+            message.include?("can not be edited at this time"))
+          begin
+            client.patch(
+              "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+              {
+                data: {
+                  type: 'appInfoLocalizations',
+                  id: loc_id,
+                  attributes: {
+                    subtitle: attributes[:subtitle]
+                  }
                 }
               }
-            }
-          )
-          app_info_loc_updates += 1
-          puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
-          next
-        rescue => subtitle_error
-          message = subtitle_error.to_s
+            )
+            app_info_loc_updates += 1
+            puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
+            next
+          rescue => subtitle_error
+            message = subtitle_error.to_s
+          end
         end
+        if message.include?("cannot be modified in the current state") ||
+           message.include?("can not be modified in the current state") ||
+           message.include?("cannot be edited at this time") ||
+           message.include?("can not be edited at this time")
+          puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+          app_info_loc_skips += 1
+          next
+        end
+        raise
       end
-      if message.include?("cannot be modified in the current state") ||
-         message.include?("can not be modified in the current state") ||
-         message.include?("cannot be edited at this time") ||
-         message.include?("can not be edited at this time")
-        puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
-        app_info_loc_skips += 1
-        next
-      end
-      raise
     end
+    app_info_loc_updates += 1
   end
-  app_info_loc_updates += 1
 end
 
-if copyright_value
+if copyright_value && !only_version_urls
   puts "[version] set copyright on #{version.version_string}"
   unless dry_run
     begin
@@ -3911,6 +4293,7 @@ cmd_up() {
   local cloudflared_stt_pid=""
   local cloudflared_named_log=""
   local cloudflared_named_pid_file=""
+  local cloudflared_named_config_file=""
   local cloudflared_named_token=""
   local cloudflared_named_web_host=""
   local cloudflared_named_stt_host=""
@@ -3974,13 +4357,18 @@ $(ngrok_plan_capacity_hint)"
 
             cloudflared_named_pid_file="$(cloudflared_named_pid_file_path)"
             cloudflared_named_log="$(cloudflared_named_log_file_path)"
+            cloudflared_named_config_file="$(cloudflared_named_config_file_path)"
             mkdir -p "$(dirname "$cloudflared_named_pid_file")"
 
             stop_cloudflared_named_tunnel_from_pidfile
             rm -f "$cloudflared_named_log"
+            write_cloudflared_named_config \
+              "$cloudflared_named_config_file" \
+              "$cloudflared_named_web_host" \
+              "$cloudflared_named_stt_host"
 
             log "starting cloudflared named tunnel connector"
-            cloudflared tunnel --no-autoupdate run --token "$cloudflared_named_token" >"$cloudflared_named_log" 2>&1 &
+            cloudflared --config "$cloudflared_named_config_file" tunnel --no-autoupdate run --token "$cloudflared_named_token" >"$cloudflared_named_log" 2>&1 &
             local cloudflared_named_pid="$!"
             printf '%s\n' "$cloudflared_named_pid" > "$cloudflared_named_pid_file"
             pids+=("$cloudflared_named_pid")
@@ -3990,6 +4378,13 @@ $(ngrok_plan_capacity_hint)"
               rm -f "$cloudflared_named_pid_file"
               die "cloudflared named tunnel startup failed (log: $cloudflared_named_log)"
             fi
+
+            local cloudflared_named_remote_web_port=""
+            local cloudflared_named_remote_stt_port=""
+            cloudflared_named_remote_web_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_web_host" || true)"
+            cloudflared_named_remote_stt_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_stt_host" || true)"
+            ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT" pids
+            ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT" pids
 
             cloudflared_web_url="https://$cloudflared_named_web_host"
             cloudflared_stt_url="https://$cloudflared_named_stt_host"
@@ -4262,6 +4657,9 @@ cmd_down() {
   stop_existing_cloudflared_by_local_port "$DEVBOX_WEB_PORT"
   stop_existing_cloudflared_by_local_port "$DEVBOX_STT_PORT"
   stop_cloudflared_named_tunnel_from_pidfile
+  stop_cloudflared_named_bridge "web"
+  stop_cloudflared_named_bridge "stt"
+  rm -f "$(cloudflared_named_config_file_path)"
 
   local next_lock_file="$ROOT_DIR/mingle-app/.next/dev/lock"
   if [[ -f "$next_lock_file" ]]; then
@@ -4456,6 +4854,7 @@ OpenClaw    : root=${DEVBOX_OPENCLAW_ROOT:-$(resolve_openclaw_root)}
 iOS Team ID : ${DEVBOX_IOS_TEAM_ID:-"(auto: mingle.xcodeproj DEVELOPMENT_TEAM)"}
 
 Files:
+- $DEVBOX_ENV_FILE
 - $APP_ENV_FILE
 - $STT_ENV_FILE
 - $NGROK_LOCAL_CONFIG

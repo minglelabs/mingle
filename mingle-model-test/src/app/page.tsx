@@ -24,6 +24,7 @@ type SttModel =
   | 'deepgram'
   | 'deepgram-multi'
   | 'fireworks'
+  | 'chirp-3'
   | 'soniox'
   | 'elevenlabs'
   | 'speechmatics'
@@ -364,10 +365,16 @@ export default function Home() {
             <option value="deepgram">Deepgram (AI 번역, 언어 1만 전사)</option>
             <option value="deepgram-multi">Deepgram Multi (AI 번역, 다국어 자동 감지)</option>
             <option value="fireworks">Fireworks (AI 번역)</option>
+            <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
+          {sttModel === 'chirp-3' && (
+            <p className="mt-1 text-xs text-amber-600">
+              Chirp 3는 GEMINI_API_KEY가 아니라 Google Cloud Speech-to-Text V2 인증(ADC/서비스 계정)이 필요합니다.
+            </p>
+          )}
           {sttModel === 'deepgram-multi' && (
             <p className="mt-1 text-xs text-amber-600">
               언어 선택 무시됨 - 10개 언어 자동 감지: EN, ES, FR, DE, HI, RU, PT, JA, IT, NL

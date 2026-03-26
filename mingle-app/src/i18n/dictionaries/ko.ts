@@ -9,6 +9,8 @@ export const koDictionary: AppDictionary = {
     connectionFailed: "연결 실패. 재시도 중...",
     muteTts: "음성 끄기",
     unmuteTts: "음성 켜기",
+    textSizeLabel: "텍스트 크기",
+    silenceFinalizeLabel: "발화 분리 기준 무음 시간",
   },
   tabs: {
     chats: "채팅",
