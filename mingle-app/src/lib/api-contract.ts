@@ -43,8 +43,13 @@ const envNamespace = parseAllowedApiNamespace(process.env.NEXT_PUBLIC_API_NAMESP
 const queryNamespace = readApiNamespaceFromLocation()
 
 export const clientApiNamespace = queryNamespace || envNamespace || DEFAULT_API_NAMESPACE
+const FINAL_SOURCE_REDETECTION_API_PATH_RE = /^\/api\/(?:android\/v1\.0\.(?:4|5)|ios\/v1\.0\.(?:4|5|6))\/translate\/finalize\/?$/
 
 export function buildClientApiPath(endpoint: `/${string}`): string {
   const namespacePrefix = clientApiNamespace ? `/${clientApiNamespace}` : ''
   return `/api${namespacePrefix}${endpoint}`
+}
+
+export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
+  return FINAL_SOURCE_REDETECTION_API_PATH_RE.test(pathname)
 }

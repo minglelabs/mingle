@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
-import { buildClientApiPath } from '@/lib/api-contract'
+import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
@@ -1991,7 +1991,7 @@ export default function useRealtimeSTT({
     const apiPath = buildClientApiPath('/translate/finalize')
     const shouldRedetectSourceLanguage = (
       options?.isFinal === true
-      && /^\/api\/(?:ios|android)\/v1\.0\.4\/translate\/finalize\/?$/.test(apiPath)
+      && shouldRedetectFinalizeSourceLanguage(apiPath)
     )
     const langs = shouldRedetectSourceLanguage
       ? targetLanguages
