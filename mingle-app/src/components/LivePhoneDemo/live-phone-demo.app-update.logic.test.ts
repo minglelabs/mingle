@@ -42,4 +42,16 @@ describe("live-phone-demo.app-update.logic", () => {
   it("falls back to English copy for unsupported locales", () => {
     expect(resolveNativeAppUpdateCopy("sv-SE").sectionLabel).toBe("App Update");
   });
+
+  it("preserves accented French copy", () => {
+    const copy = resolveNativeAppUpdateCopy("fr-FR");
+    expect(copy.sectionLabel).toBe("Mise à jour de l'app");
+    expect(copy.checkingMessage).toBe("Vérification des mises à jour.");
+  });
+
+  it("uses native Russian script copy", () => {
+    const copy = resolveNativeAppUpdateCopy("ru-RU");
+    expect(copy.sectionLabel).toBe("Обновление приложения");
+    expect(copy.updateButtonLabel).toBe("Обновить");
+  });
 });
