@@ -61,7 +61,9 @@ describe('api-contract namespace guard', () => {
 
   it.each([
     '/api/translate/finalize',
+    '/api/android/v1.0.0/translate/finalize',
     '/api/android/v1.0.3/translate/finalize',
+    '/api/ios/v1.0.2/translate/finalize',
     '/api/ios/v1.0.3/translate/finalize',
     '/api/android/v1.0.6/translate/finalize',
   ])('disables final source-language redetection for %s', async (pathname) => {

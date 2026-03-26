@@ -1,18 +1,24 @@
 const DEFAULT_API_NAMESPACE = ''
-const ALLOWED_API_NAMESPACES = new Set([
-  '',
-  'android/v1.0.0',
-  'android/v1.0.2',
-  'android/v1.0.3',
-  'android/v1.0.4',
-  'android/v1.0.5',
-  'ios/v1.0.0',
-  'ios/v1.0.2',
-  'ios/v1.0.3',
-  'ios/v1.0.4',
-  'ios/v1.0.5',
-  'ios/v1.0.6',
+const VERSIONED_API_NAMESPACE_RULES = [
+  { namespace: 'android/v1.0.0', enablesFinalizeSourceRedetection: false },
+  { namespace: 'android/v1.0.2', enablesFinalizeSourceRedetection: false },
+  { namespace: 'android/v1.0.3', enablesFinalizeSourceRedetection: false },
+  { namespace: 'android/v1.0.4', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v1.0.5', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
+  { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
+  { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
+  { namespace: 'ios/v1.0.4', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.0.5', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.0.6', enablesFinalizeSourceRedetection: true },
+] as const
+const ALLOWED_API_NAMESPACES = new Set<string>([
+  DEFAULT_API_NAMESPACE,
+  ...VERSIONED_API_NAMESPACE_RULES.map(rule => rule.namespace),
 ])
+const API_NAMESPACE_RULES_BY_NAMESPACE = new Map<string, (typeof VERSIONED_API_NAMESPACE_RULES)[number]>(
+  VERSIONED_API_NAMESPACE_RULES.map(rule => [rule.namespace, rule]),
+)
 
 function normalizeApiNamespace(raw: string): string {
   return raw.trim().replace(/^\/+/, '').replace(/\/+$/, '')
@@ -43,7 +49,11 @@ const envNamespace = parseAllowedApiNamespace(process.env.NEXT_PUBLIC_API_NAMESP
 const queryNamespace = readApiNamespaceFromLocation()
 
 export const clientApiNamespace = queryNamespace || envNamespace || DEFAULT_API_NAMESPACE
-const FINAL_SOURCE_REDETECTION_API_PATH_RE = /^\/api\/(?:android\/v1\.0\.(?:4|5)|ios\/v1\.0\.(?:4|5|6))\/translate\/finalize\/?$/
+
+function parseVersionedApiNamespaceFromFinalizePath(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/((?:android|ios)\/v\d+\.\d+\.\d+)\/translate\/finalize\/?$/)
+  return match?.[1] ? normalizeApiNamespace(match[1]) : null
+}
 
 export function buildClientApiPath(endpoint: `/${string}`): string {
   const namespacePrefix = clientApiNamespace ? `/${clientApiNamespace}` : ''
@@ -51,5 +61,7 @@ export function buildClientApiPath(endpoint: `/${string}`): string {
 }
 
 export function shouldRedetectFinalizeSourceLanguage(pathname: string): boolean {
-  return FINAL_SOURCE_REDETECTION_API_PATH_RE.test(pathname)
+  const namespace = parseVersionedApiNamespaceFromFinalizePath(pathname)
+  if (!namespace) return false
+  return API_NAMESPACE_RULES_BY_NAMESPACE.get(namespace)?.enablesFinalizeSourceRedetection === true
 }
