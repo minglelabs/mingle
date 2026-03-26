@@ -784,6 +784,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     usageLimitSec,
     loadOlderUtterances,
     hasOlderUtterances,
+    isStorageHydrated,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -1246,15 +1247,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [handleTopSafeAreaTap])
 
-  // On fresh mount/re-entry, pin to the latest messages first.
+  // Wait for stored conversation hydration, then pin to the latest messages once.
   // This prevents initial top-pagination from running before we settle at bottom.
   useLayoutEffect(() => {
-    if (!chatRef.current || hasInitialBottomAnchorRef.current) return
+    if (!chatRef.current || hasInitialBottomAnchorRef.current || !isStorageHydrated) return
     const node = chatRef.current
-    node.scrollTop = node.scrollHeight
-    shouldAutoScroll.current = true
-    suppressAutoScrollRef.current = false
-    autoScrollSchedulerRef.current.markPerformed()
+    if (utterances.length > 0) {
+      node.scrollTop = node.scrollHeight
+      shouldAutoScroll.current = true
+      suppressAutoScrollRef.current = false
+      autoScrollSchedulerRef.current.markPerformed()
+    }
     hasInitialBottomAnchorRef.current = true
 
     const rafId = window.requestAnimationFrame(() => {
@@ -1263,7 +1266,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
 
     return () => window.cancelAnimationFrame(rafId)
-  }, [updateScrollDerivedState, utterances.length])
+  }, [isStorageHydrated, updateScrollDerivedState, utterances.length])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {

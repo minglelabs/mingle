@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client/index'
 
 export function sanitizeText(value: unknown, maxLength = 512): string | null {
   if (typeof value !== 'string') return null
