@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2 } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -49,6 +49,13 @@ import {
   parseNativeUiScrollToTopDetail,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
+import {
+  DEFAULT_NATIVE_APP_UPDATE_DETAIL,
+  NATIVE_APP_UPDATE_EVENT,
+  parseNativeAppUpdateDetail,
+  resolveNativeAppUpdateCopy,
+  type NativeAppUpdateDetail,
+} from './live-phone-demo.app-update.logic'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
@@ -220,6 +227,17 @@ type TtsQueueItem = {
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
 
+type NativeOpenUpdateStoreCommand = {
+  type: 'native_open_update_store'
+  payload?: {
+    updateUrl?: string
+  }
+}
+
+type NativeAppUpdateWindow = Window & {
+  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
+}
+
 function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
   return (
     <span
@@ -266,6 +284,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showAccountActions = true,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -273,6 +292,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
+  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -341,6 +362,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       cancelled = true
     }
   }, [fallbackLanguages])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    setIsNativeAppRuntime(true)
+
+    const windowWithUpdate = window as NativeAppUpdateWindow
+    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
+    setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL)
+
+    const handleNativeAppUpdate = (event: Event) => {
+      const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail)
+      if (!detail) return
+      setNativeAppUpdate(detail)
+    }
+
+    window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
+    return () => {
+      window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
+    }
+  }, [])
 
   // Persist selected languages
   useEffect(() => {
@@ -1313,6 +1355,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     updateScrollDerivedState({ fromUserScroll: true })
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
+  const handleNativeAppUpdatePress = useCallback(() => {
+    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
+    if (!updateUrl) return
+
+    setMenuOpen(false)
+
+    const command: NativeOpenUpdateStoreCommand = {
+      type: 'native_open_update_store',
+      payload: { updateUrl },
+    }
+
+    if (isNativeApp()) {
+      try {
+        window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+        return
+      } catch {
+        // Fall back to browser navigation if the bridge errors.
+      }
+    }
+
+    window.location.href = updateUrl
+  }, [nativeAppUpdate?.updateUrl])
+
   useEffect(() => {
     if (!isNativeApp()) return
 
@@ -1327,6 +1392,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener)
     }
   }, [handleTopSafeAreaTap])
+
+  const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
+  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
+  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || ''
+  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === 'checking'
+    ? nativeAppUpdateCopy.checkingMessage
+    : nativeAppUpdateStatus.status === 'available'
+      ? nativeAppUpdateCopy.availableMessage
+      : nativeAppUpdateStatus.status === 'current'
+        ? nativeAppUpdateCopy.currentMessage
+        : nativeAppUpdateCopy.unknownMessage
+  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl)
 
   // Wait for stored conversation hydration, then pin to the latest messages once.
   // This prevents initial top-pagination from running before we settle at bottom.
@@ -1669,6 +1746,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </label>
                     </div>
+                    {isNativeAppRuntime && (
+                      <div className="border-b border-gray-200 px-3 py-3">
+                        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                                {nativeAppUpdateCopy.sectionLabel}
+                              </div>
+                              <div className="mt-2 text-sm font-semibold text-gray-900">
+                                {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
+                              </div>
+                              {nativeAppLatestVersion ? (
+                                <div className="mt-1 text-xs font-medium text-gray-600">
+                                  {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
+                                </div>
+                              ) : null}
+                              <div className="mt-2 text-xs leading-5 text-gray-600">
+                                {nativeAppUpdateStatusMessage}
+                              </div>
+                            </div>
+                            {showNativeAppUpdateAction ? (
+                              <button
+                                type="button"
+                                onClick={handleNativeAppUpdatePress}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                              >
+                                <Download size={13} strokeWidth={2.2} />
+                                <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {showAccountMenuItems && (
                       <>
                         <button
