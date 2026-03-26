@@ -17,7 +17,7 @@ MINGLE_IOS_SIMULATOR_INSTALL_SCRIPT="$MINGLE_IOS_DIR/scripts/install-ios-simulat
 MINGLE_IOS_TEST_SCRIPT="$MINGLE_IOS_DIR/scripts/test-ios.sh"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.5"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.6"
 ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.5"
 DEVBOX_BASE_WEB_PORT=3518
 DEVBOX_BASE_STT_PORT=5518
@@ -3516,6 +3516,7 @@ cmd_ios_appstore_sync_metadata() {
   local dry_run="false"
   local no_fallback="false"
   local only_app_info="false"
+  local only_version_urls="false"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -3543,6 +3544,10 @@ cmd_ios_appstore_sync_metadata() {
         only_app_info="true"
         shift
         ;;
+      --only-version-urls)
+        only_version_urls="true"
+        shift
+        ;;
       -h|--help)
         cat <<EOF
 Usage: scripts/devbox ios-appstore-sync-metadata [options]
@@ -3554,6 +3559,7 @@ Options:
   --dry-run               Print planned updates only (no ASC write)
   --no-fallback           Do not fallback metadata locale when target locale is missing
   --only-app-info         Only sync app info localizations (title, subtitle); skip version localizations
+  --only-version-urls     Only sync version support/marketing URLs; skip other version metadata and app info
   -h, --help              Show help
 EOF
         return 0
@@ -3570,6 +3576,9 @@ EOF
 
   [[ -f "$copy_json" ]] || die "missing JSON: $copy_json"
   [[ -f "$api_key_json" ]] || die "missing API key JSON: $api_key_json"
+  if [[ "$only_app_info" == "true" && "$only_version_urls" == "true" ]]; then
+    die "--only-app-info and --only-version-urls cannot be used together"
+  fi
   require_cmd ruby
 
   log "syncing App Store Connect metadata from: $copy_json"
@@ -3578,7 +3587,7 @@ EOF
   PATH="/opt/homebrew/opt/ruby/bin:/opt/homebrew/Cellar/fastlane/2.232.2/libexec/bin:$PATH" \
   GEM_HOME="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}" \
   GEM_PATH="${FASTLANE_GEM_HOME:-$HOME/.local/share/fastlane/4.0.0}:/opt/homebrew/Cellar/fastlane/2.232.2/libexec" \
-  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" \
+  COPY_JSON="$copy_json" API_KEY_JSON="$api_key_json" APP_IDENTIFIER="$app_identifier" DRY_RUN="$dry_run" NO_FALLBACK="$no_fallback" ONLY_APP_INFO="$only_app_info" ONLY_VERSION_URLS="$only_version_urls" \
   ruby - <<'RUBY'
 require 'json'
 require 'spaceship'
@@ -3599,6 +3608,7 @@ app_identifier = ENV.fetch('APP_IDENTIFIER')
 dry_run = ENV.fetch('DRY_RUN') == 'true'
 no_fallback = ENV.fetch('NO_FALLBACK') == 'true'
 only_app_info = ENV.fetch('ONLY_APP_INFO') == 'true'
+only_version_urls = ENV.fetch('ONLY_VERSION_URLS') == 'true'
 
 payload = JSON.parse(File.read(copy_json))
 
@@ -3718,24 +3728,26 @@ version.get_app_store_version_localizations.each do |loc|
   metadata ||= {}
 
   attributes = {}
-  if metadata.key?('promotionalText')
-    attributes[:promotionalText] = metadata['promotionalText'].to_s
-  end
-  if metadata.key?('whatsNew')
-    attributes[:whatsNew] = metadata['whatsNew'].to_s
-  end
-  if metadata.key?('description')
-    attributes[:description] = metadata['description'].to_s
-  end
-  if metadata.key?('keywords')
-    raw_keywords = metadata['keywords']
-    attributes[:keywords] = raw_keywords.is_a?(Array) ? raw_keywords.map(&:to_s).join(',') : raw_keywords.to_s
-  end
   if metadata.key?('supportUrl')
     attributes[:supportUrl] = metadata['supportUrl'].to_s
   end
   if metadata.key?('marketingUrl')
     attributes[:marketingUrl] = metadata['marketingUrl'].to_s
+  end
+  unless only_version_urls
+    if metadata.key?('promotionalText')
+      attributes[:promotionalText] = metadata['promotionalText'].to_s
+    end
+    if metadata.key?('whatsNew')
+      attributes[:whatsNew] = metadata['whatsNew'].to_s
+    end
+    if metadata.key?('description')
+      attributes[:description] = metadata['description'].to_s
+    end
+    if metadata.key?('keywords')
+      raw_keywords = metadata['keywords']
+      attributes[:keywords] = raw_keywords.is_a?(Array) ? raw_keywords.map(&:to_s).join(',') : raw_keywords.to_s
+    end
   end
 
   attributes.delete_if { |_k, v| v.nil? }
@@ -3756,7 +3768,51 @@ version.get_app_store_version_localizations.each do |loc|
       )
     rescue => error
       message = error.to_s
-      if message.include?("cannot be edited at this time")
+      if only_version_urls &&
+         (message.include?("cannot be modified in the current state") ||
+          message.include?("can not be modified in the current state") ||
+          message.include?("cannot be edited at this time") ||
+          message.include?("can not be edited at this time"))
+        updated = false
+        attributes.each do |key, value|
+          begin
+            client.patch(
+              "https://api.appstoreconnect.apple.com/v1/appStoreVersionLocalizations/#{loc.id}",
+              {
+                data: {
+                  type: 'appStoreVersionLocalizations',
+                  id: loc.id,
+                  attributes: {
+                    key => value
+                  }
+                }
+              }
+            )
+            puts "[version-loc] #{asc_locale} <- #{locale_key} #{key}-only"
+            updated = true
+          rescue => single_error
+            single_message = single_error.to_s
+            if single_message.include?("cannot be modified in the current state") ||
+               single_message.include?("can not be modified in the current state") ||
+               single_message.include?("cannot be edited at this time") ||
+               single_message.include?("can not be edited at this time")
+              puts "[skip version-loc] #{asc_locale} #{key} #{single_message.lines.first.to_s.strip}"
+              next
+            end
+            raise
+          end
+        end
+        if updated
+          version_loc_updates += 1
+        else
+          version_loc_skips += 1
+        end
+        next
+      end
+      if message.include?("cannot be modified in the current state") ||
+         message.include?("can not be modified in the current state") ||
+         message.include?("cannot be edited at this time") ||
+         message.include?("can not be edited at this time")
         puts "[skip version-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
         version_loc_skips += 1
         next
@@ -3768,93 +3824,95 @@ version.get_app_store_version_localizations.each do |loc|
 end
 end # unless only_app_info
 
-app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
-raise "appInfo not found for app #{app.id}" if app_infos.empty?
-editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
-preferred_app_info = app_infos.min_by do |ai|
-  state = ai.dig('attributes', 'appStoreState').to_s
-  idx = editable_states.index(state)
-  idx ? idx : editable_states.length
-end
-app_info_id = preferred_app_info&.dig('id')
-puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
-raise "appInfo not found for app #{app.id}" unless app_info_id
+unless only_version_urls
+  app_infos = client.get("https://api.appstoreconnect.apple.com/v1/apps/#{app.id}/appInfos").body['data'] || []
+  raise "appInfo not found for app #{app.id}" if app_infos.empty?
+  editable_states = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED METADATA_REJECTED REJECTED DEVELOPER_ACTION_NEEDED]
+  preferred_app_info = app_infos.min_by do |ai|
+    state = ai.dig('attributes', 'appStoreState').to_s
+    idx = editable_states.index(state)
+    idx ? idx : editable_states.length
+  end
+  app_info_id = preferred_app_info&.dig('id')
+  puts "[app-info] selected appInfo #{app_info_id} (state=#{preferred_app_info&.dig('attributes', 'appStoreState')})"
+  raise "appInfo not found for app #{app.id}" unless app_info_id
 
-app_info_loc_refs = client.get(
-  "https://api.appstoreconnect.apple.com/v1/appInfos/#{app_info_id}/relationships/appInfoLocalizations"
-).body['data'] || []
+  app_info_loc_refs = client.get(
+    "https://api.appstoreconnect.apple.com/v1/appInfos/#{app_info_id}/relationships/appInfoLocalizations"
+  ).body['data'] || []
 
-app_info_loc_refs.each do |ref|
-  loc_id = ref['id']
-  instance = client.get("https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}").body['data']
-  asc_locale = instance.dig('attributes', 'locale').to_s
-  locale_key = json_locale_key_for_asc(asc_locale)
+  app_info_loc_refs.each do |ref|
+    loc_id = ref['id']
+    instance = client.get("https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}").body['data']
+    asc_locale = instance.dig('attributes', 'locale').to_s
+    locale_key = json_locale_key_for_asc(asc_locale)
 
-  name = title_map[locale_key] || title_map['en']
-  subtitle = subtitle_map[locale_key] || subtitle_map['en']
-  current_name = instance.dig('attributes', 'name').to_s
-  current_subtitle = instance.dig('attributes', 'subtitle').to_s
+    name = title_map[locale_key] || title_map['en']
+    subtitle = subtitle_map[locale_key] || subtitle_map['en']
+    current_name = instance.dig('attributes', 'name').to_s
+    current_subtitle = instance.dig('attributes', 'subtitle').to_s
 
-  attributes = {}
-  attributes[:name] = name if name && name.to_s != current_name
-  attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
-  next if attributes.empty?
+    attributes = {}
+    attributes[:name] = name if name && name.to_s != current_name
+    attributes[:subtitle] = subtitle if subtitle && subtitle.to_s != current_subtitle
+    next if attributes.empty?
 
-  puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
-  unless dry_run
-    begin
-      client.patch(
-        "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
-        {
-          data: {
-            type: 'appInfoLocalizations',
-            id: loc_id,
-            attributes: attributes
+    puts "[app-info-loc] #{asc_locale} <- #{locale_key} #{attributes.keys.join(',')}"
+    unless dry_run
+      begin
+        client.patch(
+          "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+          {
+            data: {
+              type: 'appInfoLocalizations',
+              id: loc_id,
+              attributes: attributes
+            }
           }
-        }
-      )
-    rescue => error
-      message = error.to_s
-      if attributes[:subtitle] && attributes[:name] &&
-         (message.include?("cannot be modified in the current state") ||
-          message.include?("can not be modified in the current state") ||
-          message.include?("cannot be edited at this time") ||
-          message.include?("can not be edited at this time"))
-        begin
-          client.patch(
-            "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
-            {
-              data: {
-                type: 'appInfoLocalizations',
-                id: loc_id,
-                attributes: {
-                  subtitle: attributes[:subtitle]
+        )
+      rescue => error
+        message = error.to_s
+        if attributes[:subtitle] && attributes[:name] &&
+           (message.include?("cannot be modified in the current state") ||
+            message.include?("can not be modified in the current state") ||
+            message.include?("cannot be edited at this time") ||
+            message.include?("can not be edited at this time"))
+          begin
+            client.patch(
+              "https://api.appstoreconnect.apple.com/v1/appInfoLocalizations/#{loc_id}",
+              {
+                data: {
+                  type: 'appInfoLocalizations',
+                  id: loc_id,
+                  attributes: {
+                    subtitle: attributes[:subtitle]
+                  }
                 }
               }
-            }
-          )
-          app_info_loc_updates += 1
-          puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
-          next
-        rescue => subtitle_error
-          message = subtitle_error.to_s
+            )
+            app_info_loc_updates += 1
+            puts "[app-info-loc] #{asc_locale} <- #{locale_key} subtitle-only"
+            next
+          rescue => subtitle_error
+            message = subtitle_error.to_s
+          end
         end
+        if message.include?("cannot be modified in the current state") ||
+           message.include?("can not be modified in the current state") ||
+           message.include?("cannot be edited at this time") ||
+           message.include?("can not be edited at this time")
+          puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
+          app_info_loc_skips += 1
+          next
+        end
+        raise
       end
-      if message.include?("cannot be modified in the current state") ||
-         message.include?("can not be modified in the current state") ||
-         message.include?("cannot be edited at this time") ||
-         message.include?("can not be edited at this time")
-        puts "[skip app-info-loc] #{asc_locale} #{message.lines.first.to_s.strip}"
-        app_info_loc_skips += 1
-        next
-      end
-      raise
     end
+    app_info_loc_updates += 1
   end
-  app_info_loc_updates += 1
 end
 
-if copyright_value
+if copyright_value && !only_version_urls
   puts "[version] set copyright on #{version.version_string}"
   unless dry_run
     begin

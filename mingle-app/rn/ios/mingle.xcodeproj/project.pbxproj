@@ -299,7 +299,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = mingle/Info.plist;
@@ -308,8 +308,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.5;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.5;
+				MARKETING_VERSION = 1.0.6;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.6;
 				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
 				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";
@@ -339,7 +339,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -347,8 +347,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.5;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.5;
+				MARKETING_VERSION = 1.0.6;
+				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.6;
 				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
 				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";

@@ -408,6 +408,11 @@ function runMetadataSync(configJsonPath, options) {
   if (isNonEmptyString(options.packageName)) {
     args.push("--package-name", options.packageName);
   }
+  if (options.changesNotSentForReview) {
+    args.push("--changes-not-sent-for-review");
+  } else {
+    args.push("--no-changes-not-sent-for-review");
+  }
 
   const result = spawnSync(process.execPath, args, {
     cwd: REPO_ROOT,

@@ -8,11 +8,11 @@ import {
 
 describe('RN api namespace validation contract', () => {
   it('normalizes leading and trailing slashes', () => {
-    expect(normalizeApiNamespace(' /ios/v1.0.5/ ')).toBe('ios/v1.0.5')
+    expect(normalizeApiNamespace(' /ios/v1.0.6/ ')).toBe('ios/v1.0.6')
   })
 
   it('returns expected namespace by runtime os', () => {
-    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.5')
+    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.6')
     expect(resolveExpectedApiNamespace('android')).toBe('android/v1.0.5')
     expect(resolveExpectedApiNamespace('web')).toBe('')
   })
@@ -20,11 +20,11 @@ describe('RN api namespace validation contract', () => {
   it('accepts only matching iOS namespace', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'ios',
-      configuredApiNamespace: 'ios/v1.0.5',
+      configuredApiNamespace: 'ios/v1.0.6',
     })
 
-    expect(result.expectedApiNamespace).toBe('ios/v1.0.5')
-    expect(result.validatedApiNamespace).toBe('ios/v1.0.5')
+    expect(result.expectedApiNamespace).toBe('ios/v1.0.6')
+    expect(result.validatedApiNamespace).toBe('ios/v1.0.6')
   })
 
   it('accepts only matching Android namespace', () => {
@@ -40,7 +40,7 @@ describe('RN api namespace validation contract', () => {
   it('rejects mismatched namespace for Android runtime', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'android',
-      configuredApiNamespace: 'ios/v1.0.5',
+      configuredApiNamespace: 'ios/v1.0.6',
     })
 
     expect(result.expectedApiNamespace).toBe('android/v1.0.5')
