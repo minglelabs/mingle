@@ -1815,7 +1815,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     aria-hidden="true"
                   >
                     <path
-                      d="M12 4V96M12 96L6 89M12 96L18 89"
+                      d="M12 4V96M12 96L4 90M12 96L20 90"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.4"

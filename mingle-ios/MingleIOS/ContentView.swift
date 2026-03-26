@@ -416,10 +416,10 @@ struct ContentView: View {
                     path.addLine(to: CGPoint(x: midX, y: arrowBottom))
 
                     path.move(to: CGPoint(x: midX, y: arrowBottom))
-                    path.addLine(to: CGPoint(x: midX - 7, y: arrowBottom - 7))
+                    path.addLine(to: CGPoint(x: midX - 8, y: arrowBottom - 6))
 
                     path.move(to: CGPoint(x: midX, y: arrowBottom))
-                    path.addLine(to: CGPoint(x: midX + 7, y: arrowBottom - 7))
+                    path.addLine(to: CGPoint(x: midX + 8, y: arrowBottom - 6))
                 }
                 .stroke(
                     Color.gray.opacity(0.34),
