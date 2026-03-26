@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
+import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -1484,7 +1485,7 @@ export default function useRealtimeSTT({
   onTtsCanceled,
   enableTts,
   enableAec = false,
-  sonioxManualFinalizeSilenceMs = 1000,
+  sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')

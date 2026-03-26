@@ -180,19 +180,13 @@ const DEFAULT_WS_URL = resolveConfiguredUrl(
   NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
-const DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 1000;
-const MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 500;
-const MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 3000;
 
-function normalizeSonioxManualFinalizeSilenceMs(value: unknown): number {
+function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed)) {
-    return DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS;
+    return undefined;
   }
-  return Math.max(
-    MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS,
-    Math.min(MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS, Math.floor(parsed)),
-  );
+  return Math.floor(parsed);
 }
 
 const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
@@ -1258,7 +1252,7 @@ function AppInner(): React.JSX.Element {
         .map(language => language.trim())
         .filter(Boolean)
       : [];
-    const sonioxManualFinalizeSilenceMs = normalizeSonioxManualFinalizeSilenceMs(
+    const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
 
@@ -1269,7 +1263,9 @@ function AppInner(): React.JSX.Element {
         sttModel,
         aecEnabled,
         sonioxLanguageHints,
-        sonioxManualFinalizeSilenceMs,
+        ...(typeof sonioxManualFinalizeSilenceMs === 'number'
+          ? { sonioxManualFinalizeSilenceMs }
+          : {}),
       });
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
