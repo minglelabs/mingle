@@ -65,7 +65,7 @@ The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without run
 
 - Default (legacy): empty value (`''`) -> `/api/{existing-path}`
 - iOS versioned: `ios/v1.0.6` -> `/api/ios/v1.0.6/{existing-path}`
-- Android versioned: `android/v1.0.5` -> `/api/android/v1.0.5/{existing-path}`
+- Android versioned: `android/v1.0.6` -> `/api/android/v1.0.6/{existing-path}`
 - Previous mobile namespaces (`v1.0.0`, `v1.0.2`, `v1.0.3`, `v1.0.4`) remain allow-listed for backward compatibility.
 
 Release build commands:
@@ -79,8 +79,8 @@ pnpm build:release:android
 URL override (optional):
 
 - The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
-- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.6`
-- Example: `https://your-app/ko?apiNamespace=android/v1.0.5`
+- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.6`, `android/v1.0.6`
+- Example: `https://your-app/ko?apiNamespace=android/v1.0.6`
 - Unsupported values are ignored, and the env/default value is used instead.
 
 ### Client Version Policy
@@ -88,7 +88,7 @@ URL override (optional):
 - On app launch, the client calls `POST /api/client/version-policy` or the platform namespace route.
 - Namespace examples:
   - iOS: `POST /api/ios/v1.0.6/client/version-policy`
-  - Android: `POST /api/android/v1.0.5/client/version-policy`
+  - Android: `POST /api/android/v1.0.6/client/version-policy`
 - Request fields: `clientVersion` (`x.y.z`), `clientBuild`
 - Optional request field: `platform` (`ios` | `android`, defaults to `ios` when omitted)
 - Server env:
@@ -325,7 +325,7 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
 `pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.6` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.5` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.6` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`
