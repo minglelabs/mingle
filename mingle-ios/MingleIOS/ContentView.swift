@@ -74,6 +74,14 @@ struct ContentView: View {
         }
     }
 
+    private var showEmptyStatePrompt: Bool {
+        viewModel.utterances.isEmpty
+            && viewModel.partialTranscript.isEmpty
+            && !viewModel.isRecording
+            && !isConnecting
+            && !isError
+    }
+
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
             Text("Mingle")
@@ -144,17 +152,6 @@ struct ContentView: View {
                 }
             }
 
-            if viewModel.utterances.isEmpty && viewModel.partialTranscript.isEmpty && !viewModel.isRecording && !isConnecting && !isError {
-                VStack(spacing: 10) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 40, weight: .regular))
-                        .foregroundStyle(Color.gray.opacity(0.4))
-                    Text(tapPlayToStartLabel)
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             if isConnecting {
                 VStack(spacing: 8) {
                     ProgressView()
@@ -179,6 +176,10 @@ struct ContentView: View {
                     }
                 }
                 .padding(.vertical, 16)
+            }
+
+            if showEmptyStatePrompt {
+                emptyStatePrompt
             }
         }
         .background(Color(uiColor: .systemGray6))
@@ -394,6 +395,40 @@ struct ContentView: View {
         .padding(.bottom, 18)
         .padding(.horizontal, 14)
         .background(Color.white)
+    }
+
+    private var emptyStatePrompt: some View {
+        GeometryReader { geometry in
+            let midX = geometry.size.width / 2
+            let textY = geometry.size.height * 0.48
+            let arrowTop = textY + 26
+            let arrowBottom = max(arrowTop + 32, geometry.size.height - 16)
+
+            ZStack {
+                Text(tapPlayToStartLabel)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .position(x: midX, y: textY)
+
+                Path { path in
+                    path.move(to: CGPoint(x: midX, y: arrowTop))
+                    path.addLine(to: CGPoint(x: midX, y: arrowBottom))
+
+                    path.move(to: CGPoint(x: midX, y: arrowBottom))
+                    path.addLine(to: CGPoint(x: midX - 8, y: arrowBottom - 6))
+
+                    path.move(to: CGPoint(x: midX, y: arrowBottom))
+                    path.addLine(to: CGPoint(x: midX + 8, y: arrowBottom - 6))
+                }
+                .stroke(
+                    Color.gray.opacity(0.34),
+                    style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
     }
 
     private var leftUsageArea: some View {

@@ -1,24 +1,7 @@
-import * as PrismaClientPackage from "@prisma/client";
+import { PrismaClient } from "@prisma/client/index";
 import { ensureDatabaseSchemaParam } from "./database-url";
 
-type PrismaClientLike = import("@prisma/client").PrismaClient;
-
-type PrismaClientConstructor = new (options?: {
-  datasources?: {
-    db?: {
-      url?: string;
-    };
-  };
-}) => PrismaClientLike;
-
-const PrismaClientCtor = (PrismaClientPackage as unknown as {
-  PrismaClient?: PrismaClientConstructor;
-}).PrismaClient;
-
-if (!PrismaClientCtor) {
-  throw new Error("PrismaClient is not available. Make sure prisma generate runs during build.");
-}
-const ResolvedPrismaClientCtor: PrismaClientConstructor = PrismaClientCtor;
+type PrismaClientLike = PrismaClient;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClientLike | undefined;
@@ -27,7 +10,7 @@ const globalForPrisma = globalThis as unknown as {
 function prismaClientSingleton() {
   const databaseUrl = ensureDatabaseSchemaParam(process.env.DATABASE_URL, "app");
   if (databaseUrl) {
-    return new ResolvedPrismaClientCtor({
+    return new PrismaClient({
       datasources: {
         db: {
           url: databaseUrl,
@@ -35,7 +18,7 @@ function prismaClientSingleton() {
       },
     });
   }
-  return new ResolvedPrismaClientCtor();
+  return new PrismaClient();
 }
 
 export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();

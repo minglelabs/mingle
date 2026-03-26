@@ -31,5 +31,6 @@ scripts/ios-appstore-upload.sh --locale en-US
 scripts/ios-appstore-sync-upload-assets.sh
 scripts/devbox ios-appstore-sync-metadata --dry-run
 scripts/devbox ios-appstore-sync-metadata
+scripts/devbox ios-appstore-sync-metadata --only-version-urls
 pnpm dlx tsx scripts/ios-appstore-preview-clone-locale.ts --locale ja --target-project-name "Mingle Japanese"
 ```
