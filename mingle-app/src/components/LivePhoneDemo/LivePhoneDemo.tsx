@@ -1234,6 +1234,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [hasOlderUtterances, handleLoadOlder, uiLocale])
 
+  const pinConversationToBottom = useCallback(() => {
+    if (!chatRef.current) return false
+    clearPendingAutoScrollTimer()
+    shouldAutoScroll.current = true
+    suppressAutoScrollRef.current = false
+    chatRef.current.scrollTop = chatRef.current.scrollHeight
+    autoScrollSchedulerRef.current.markPerformed()
+    updateScrollDerivedState()
+    return true
+  }, [clearPendingAutoScrollTimer, updateScrollDerivedState])
+
   const handleScroll = useCallback(() => {
     const fromUserScroll = isUserScrollIntentActive()
     updateScrollDerivedState({ fromUserScroll })
@@ -1302,12 +1313,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // This prevents initial top-pagination from running before we settle at bottom.
   useLayoutEffect(() => {
     if (!chatRef.current || hasInitialBottomAnchorRef.current || !isStorageHydrated) return
-    const node = chatRef.current
     if (utterances.length > 0) {
-      node.scrollTop = node.scrollHeight
-      shouldAutoScroll.current = true
-      suppressAutoScrollRef.current = false
-      autoScrollSchedulerRef.current.markPerformed()
+      pinConversationToBottom()
     }
     hasInitialBottomAnchorRef.current = true
 
@@ -1317,7 +1324,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
 
     return () => window.cancelAnimationFrame(rafId)
-  }, [isStorageHydrated, updateScrollDerivedState, utterances.length])
+  }, [isStorageHydrated, pinConversationToBottom, updateScrollDerivedState, utterances.length])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
