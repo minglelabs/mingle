@@ -446,7 +446,23 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('redetects final source language on v1.0.4 routes and returns all selected languages', async () => {
+  it.each([
+    {
+      label: 'iOS v1.0.4',
+      loadRoute: () => import('@/app/api/ios/v1.0.4/translate/finalize/route'),
+      url: 'http://localhost:3000/api/ios/v1.0.4/translate/finalize',
+    },
+    {
+      label: 'Android v1.0.5',
+      loadRoute: () => import('@/app/api/android/v1.0.5/translate/finalize/route'),
+      url: 'http://localhost:3000/api/android/v1.0.5/translate/finalize',
+    },
+    {
+      label: 'iOS v1.0.6',
+      loadRoute: () => import('@/app/api/ios/v1.0.6/translate/finalize/route'),
+      url: 'http://localhost:3000/api/ios/v1.0.6/translate/finalize',
+    },
+  ])('redetects final source language on $label routes and returns all selected languages', async ({ loadRoute, url }) => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
@@ -463,7 +479,7 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     process.env.GEMINI_API_KEY = 'test-gemini-key'
-    const { POST } = await import('@/app/api/ios/v1.0.4/translate/finalize/route')
+    const { POST } = await loadRoute()
 
     try {
       const res = await POST(makeJsonRequest({
@@ -471,7 +487,7 @@ describe('/api/translate/finalize route', () => {
         sourceLanguage: 'ja',
         targetLanguages: ['en', 'ja', 'ko'],
         isFinal: true,
-      }, undefined, 'http://localhost:3000/api/ios/v1.0.4/translate/finalize') as never)
+      }, undefined, url) as never)
       const json = await res.json()
 
       expect(res.status).toBe(200)
