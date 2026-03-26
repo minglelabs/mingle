@@ -1,0 +1,124 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const {
+  mockGetServerSession,
+  mockUserFindUnique,
+  mockUserUpdateMany,
+} = vi.hoisted(() => ({
+  mockGetServerSession: vi.fn(),
+  mockUserFindUnique: vi.fn(),
+  mockUserUpdateMany: vi.fn(),
+}));
+
+vi.mock("next-auth", () => ({
+  getServerSession: mockGetServerSession,
+}));
+
+vi.mock("@/lib/auth-options", () => ({
+  getAuthOptions: () => ({}),
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findUnique: mockUserFindUnique,
+      updateMany: mockUserUpdateMany,
+    },
+  },
+}));
+
+import { GET, PATCH } from "@/app/api/account/preferences/route";
+
+describe("/api/account/preferences route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 401 for unauthenticated GET requests", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+
+    const response = await GET();
+    const json = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(json).toEqual({ error: "unauthorized" });
+  });
+
+  it("returns the stored DB-backed preferences for authenticated users", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: 4,
+      demoSilenceFinalizeMs: 1000,
+    });
+
+    const response = await GET();
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 4,
+      sonioxManualFinalizeSilenceMs: 1000,
+    });
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      select: {
+        demoTextSizeLevel: true,
+        demoSilenceFinalizeMs: true,
+      },
+    });
+  });
+
+  it("falls back to the 500ms DB default when silence finalize is unset", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: null,
+      demoSilenceFinalizeMs: null,
+    });
+
+    const response = await GET();
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 2,
+      sonioxManualFinalizeSilenceMs: 500,
+    });
+  });
+
+  it("clamps and persists silence finalize updates through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        sonioxManualFinalizeSilenceMs: 99999,
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoSilenceFinalizeMs: 3000,
+      },
+    });
+  });
+});

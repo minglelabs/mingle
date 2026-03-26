@@ -23,7 +23,6 @@ import {
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_LANGUAGES,
-  LS_KEY_SONIOX_SILENCE_MS,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
@@ -213,6 +212,21 @@ type TtsQueueItem = {
 }
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
+type AccountPreferencesResponse = {
+  sonioxManualFinalizeSilenceMs?: unknown
+}
+
+function normalizeSonioxManualFinalizeSilencePreference(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SONIOX_SILENCE_MS
+  }
+
+  return Math.max(
+    MIN_SONIOX_SILENCE_MS,
+    Math.min(MAX_SONIOX_SILENCE_MS, Math.floor(parsed)),
+  )
+}
 
 function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
   return (
@@ -292,6 +306,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
+  const accountPreferencesHydrationGenerationRef = useRef(0)
+  const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const silenceFinalizeLockedDescriptionId = useId()
 
   // Hydrate persisted preferences before paint without tripping the
@@ -310,11 +326,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
-      setSonioxManualFinalizeSilenceMs(
-        nextIsSilenceFinalizeSliderLocked
-          ? DEFAULT_SONIOX_SILENCE_MS
-          : next.sonioxManualFinalizeSilenceMs,
-      )
+      setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -342,17 +354,55 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch { /* ignore */ }
   }, [textSizeLevel])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_KEY_SONIOX_SILENCE_MS, String(sonioxManualFinalizeSilenceMs))
-    } catch { /* ignore */ }
-  }, [sonioxManualFinalizeSilenceMs])
-
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return
     window.clearTimeout(accountPreferencesSyncTimerRef.current)
     accountPreferencesSyncTimerRef.current = null
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    clearAccountPreferencesSyncTimer()
+
+    if (!showAccountActions) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
+    accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+
+    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`account_preferences_fetch_failed:${response.status}`)
+        }
+        return response.json() as Promise<AccountPreferencesResponse>
+      })
+      .then((body) => {
+        if (cancelled) return
+        if (isLegacySonioxSilenceSliderNamespace(clientApiNamespace)) {
+          setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
+          setAccountPreferencesHydratedGeneration(hydrationGeneration)
+          return
+        }
+        setSonioxManualFinalizeSilenceMs(
+          normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
+        )
+        setAccountPreferencesHydratedGeneration(hydrationGeneration)
+      })
+      .catch(() => {
+        if (cancelled) return
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [clearAccountPreferencesSyncTimer, showAccountActions])
 
   const syncAccountPreferences = useCallback(() => {
     if (!showAccountActions) return
@@ -365,7 +415,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs,
       }),
     }).catch(() => {
-      // Local settings stay authoritative; server sync is best-effort.
+      // Keep the current in-memory state and retry on the next change.
     })
   }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
 
@@ -376,6 +426,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     if (!showAccountActions) return
+    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return
 
     clearAccountPreferencesSyncTimer()
     accountPreferencesSyncTimerRef.current = window.setTimeout(() => {
@@ -384,7 +435,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }, ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS)
 
     return clearAccountPreferencesSyncTimer
-  }, [clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
     if (!menuOpen) return

@@ -29,7 +29,7 @@ model User {
   platform        String?
   pathname        String?
   demoTextSizeLevel Int?   @map("demo_text_size_level")
-  demoSilenceFinalizeMs Int? @map("demo_silence_finalize_ms")
+  demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
   totalUsageSec   Int      @default(0) @map("total_usage_sec")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")
