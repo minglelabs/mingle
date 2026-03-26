@@ -49,7 +49,7 @@ class NativeSTTModule(
     val sttModel: String,
     val aecEnabled: Boolean,
     val sonioxLanguageHints: List<String>,
-    val sonioxManualFinalizeSilenceMs: Int,
+    val sonioxManualFinalizeSilenceMs: Int?,
   )
 
   private data class PendingStartRequest(
@@ -136,8 +136,12 @@ class NativeSTTModule(
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
       sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
-      sonioxManualFinalizeSilenceMs = normalizeSonioxManualFinalizeSilenceMs(
-        if (options.hasKey("sonioxManualFinalizeSilenceMs")) options.getDouble("sonioxManualFinalizeSilenceMs") else null,
+      sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
+        if (options.hasKey("sonioxManualFinalizeSilenceMs") && !options.isNull("sonioxManualFinalizeSilenceMs")) {
+          options.getDouble("sonioxManualFinalizeSilenceMs")
+        } else {
+          null
+        },
       ),
     )
 
@@ -293,14 +297,16 @@ class NativeSTTModule(
           val config = JSONObject()
             .put("sample_rate", currentSampleRate)
             .put("stt_model", options.sttModel)
-            .put("soniox_manual_finalize_silence_ms", options.sonioxManualFinalizeSilenceMs)
+          options.sonioxManualFinalizeSilenceMs?.let {
+            config.put("soniox_manual_finalize_silence_ms", it)
+          }
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
           }
           webSocket.send(config.toString())
           Log.i(
             TAG,
-            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs}",
+            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"}",
           )
         }
 
@@ -810,13 +816,11 @@ class NativeSTTModule(
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
 
-  private fun normalizeSonioxManualFinalizeSilenceMs(raw: Double?): Int {
+  private fun parseOptionalSonioxManualFinalizeSilenceMs(raw: Double?): Int? {
     if (raw == null || !raw.isFinite()) {
-      return SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT
+      return null
     }
-    return raw
-      .toInt()
-      .coerceIn(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN, SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX)
+    return Math.floor(raw).toInt()
   }
 
   override fun onHostResume() {
@@ -844,9 +848,6 @@ class NativeSTTModule(
   companion object {
     private const val TAG = "NativeSTTModule"
     private const val REQUEST_RECORD_AUDIO = 44_002
-    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500
-    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500
-    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3_000
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L
