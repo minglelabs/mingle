@@ -1496,6 +1496,7 @@ export default function useRealtimeSTT({
   const storedUtterancesRef = useRef<Utterance[]>([])
   const storageLoadedCountRef = useRef(0)
   const [hasOlderUtterances, setHasOlderUtterances] = useState(false)
+  const [isStorageHydrated, setIsStorageHydrated] = useState(false)
   const storageHydratedRef = useRef(false)
 
   const [utteranceStore, setUtteranceStore] = useState<UtteranceStoreState>(() => createUtteranceStoreState([]))
@@ -1541,6 +1542,7 @@ export default function useRealtimeSTT({
     }
 
     storageHydratedRef.current = true
+    setIsStorageHydrated(true)
   }, [])
 
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -3537,5 +3539,6 @@ export default function useRealtimeSTT({
     appendUtterances,
     loadOlderUtterances,
     hasOlderUtterances,
+    isStorageHydrated,
   }
 }

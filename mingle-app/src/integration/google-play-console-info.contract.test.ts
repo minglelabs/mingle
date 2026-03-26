@@ -79,6 +79,7 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
     manualOnly?: {
       privacyPolicyUrl?: unknown;
       termsOfUseUrl?: unknown;
+      foregroundServiceDisclosure?: unknown;
     };
   };
 };
