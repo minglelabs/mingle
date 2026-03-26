@@ -4,7 +4,7 @@ export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_SONIOX_SILENCE_MS = 'mingle_demo_soniox_silence_ms'
 export const DEFAULT_TEXT_SIZE_LEVEL = 2
-export const DEFAULT_SONIOX_SILENCE_MS = 1000
+export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
 

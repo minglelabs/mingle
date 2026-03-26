@@ -844,7 +844,7 @@ class NativeSTTModule(
   companion object {
     private const val TAG = "NativeSTTModule"
     private const val REQUEST_RECORD_AUDIO = 44_002
-    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 1_000
+    private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500
     private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500
     private const val SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3_000
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L

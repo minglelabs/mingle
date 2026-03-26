@@ -180,7 +180,7 @@ const DEFAULT_WS_URL = resolveConfiguredUrl(
   NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
-const DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 1000;
+const DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 500;
 const MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 500;
 const MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 3000;
 
