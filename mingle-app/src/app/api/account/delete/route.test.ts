@@ -40,7 +40,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@prisma/client", () => ({
+vi.mock("@prisma/client/index", () => ({
   Prisma: {
     PrismaClientKnownRequestError: MockPrismaClientKnownRequestError,
   },

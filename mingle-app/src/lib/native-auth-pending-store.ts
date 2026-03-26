@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client/index";
 import type { NativeOAuthProvider } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
 

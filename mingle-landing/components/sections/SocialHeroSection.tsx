@@ -2,9 +2,10 @@
 
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Download, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import Image from 'next/image'
 import { logButtonClick } from '@/components/sections/tracking'
+import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'
 
 export interface SocialHeroSectionProps {
   version?: string
@@ -76,22 +77,7 @@ export default function SocialHeroSection({ version, openModal }: SocialHeroSect
 
           {/* 버튼 영역 */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-            <button
-              onClick={() => openModal('social-hero')}
-              className="group relative px-6 py-3.5 lg:px-8 lg:py-4 bg-gradient-to-r from-accent-primary to-accent-secondary rounded-xl hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent-primary/40 transition-all duration-300"
-            >
-              <div className="flex items-center justify-center gap-3">
-                <Download size={20} className="text-white" />
-                <div className="text-left">
-                  <div className="text-white font-bold text-base leading-tight">
-                    {tKey('ctaMain')}
-                  </div>
-                  <div className="text-white/80 text-xs mt-0.5">
-                    {tKey('ctaSub')}
-                  </div>
-                </div>
-              </div>
-            </button>
+            <StoreDownloadButtons size="md" label={tKey('ctaMain')} />
 
             {/* gaming 버전에서만 테스트 버튼 표시 */}
             {isGaming && (

@@ -7,6 +7,8 @@ export type AppDictionary = {
     connectionFailed: string;
     muteTts: string;
     unmuteTts: string;
+    textSizeLabel?: string;
+    silenceFinalizeLabel?: string;
   };
   tabs: {
     chats: string;

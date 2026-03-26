@@ -33,11 +33,7 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
-const SONIOX_MANUAL_FINALIZE_SILENCE_MS = (() => {
-    const raw = Number(process.env.SONIOX_MANUAL_FINALIZE_SILENCE_MS || '500');
-    if (!Number.isFinite(raw)) return 500;
-    return Math.max(100, Math.min(1000, Math.floor(raw)));
-})();
+const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 1000;
 const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     const raw = Number(process.env.SONIOX_MANUAL_FINALIZE_COOLDOWN_MS || '1200');
     if (!Number.isFinite(raw)) return 1200;
@@ -63,6 +59,7 @@ interface ClientConfig {
     stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
     lang_hints_strict?: boolean;
     soniox_language_hints?: string[];
+    soniox_manual_finalize_silence_ms?: number;
 }
 
 interface FinalTurnPayload {
@@ -547,6 +544,11 @@ wss.on('connection', (clientWs) => {
 
         try {
             sttWs = new WebSocket(SONIOX_WS_URL);
+            const sonioxManualFinalizeSilenceMs = (() => {
+                const raw = Number(config.soniox_manual_finalize_silence_ms);
+                if (!Number.isFinite(raw)) return SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT;
+                return Math.max(100, Math.min(3000, Math.floor(raw)));
+            })();
             type SonioxToken = {
                 text?: unknown;
                 start_ms?: unknown;
@@ -683,8 +685,8 @@ wss.on('connection', (clientWs) => {
                 }
 
                 const elapsedSinceProgress = now - globalFinalizeLastProgressAtMs;
-                if (elapsedSinceProgress < SONIOX_MANUAL_FINALIZE_SILENCE_MS) {
-                    scheduleGlobalFinalizeCheck(SONIOX_MANUAL_FINALIZE_SILENCE_MS - elapsedSinceProgress);
+                if (elapsedSinceProgress < sonioxManualFinalizeSilenceMs) {
+                    scheduleGlobalFinalizeCheck(sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
                     return;
                 }
 
@@ -734,7 +736,7 @@ wss.on('connection', (clientWs) => {
                 const elapsedSinceLastFinalize = globalFinalizeLastSentAtMs > 0
                     ? now - globalFinalizeLastSentAtMs
                     : Number.POSITIVE_INFINITY;
-                const waitForProgress = Math.max(0, SONIOX_MANUAL_FINALIZE_SILENCE_MS - elapsedSinceProgress);
+                const waitForProgress = Math.max(0, sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
                 const waitForCooldown = Number.isFinite(elapsedSinceLastFinalize)
                     ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - elapsedSinceLastFinalize)
                     : 0;
@@ -834,7 +836,7 @@ wss.on('connection', (clientWs) => {
                 if (existing) return existing;
 
                 const strategy = new SilenceTimerStrategy({
-                    silenceMs: SONIOX_MANUAL_FINALIZE_SILENCE_MS,
+                    silenceMs: sonioxManualFinalizeSilenceMs,
                     cooldownMs: SONIOX_MANUAL_FINALIZE_COOLDOWN_MS,
                     sendFinalizeCommand: () => undefined,
                     onCarryExpiry: () => {
@@ -1372,6 +1374,6 @@ wss.on('connection', (clientWs) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
     console.log(
-        `[stt-server] soniox_finalize_tuning silenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
+        `[stt-server] soniox_finalize_tuning defaultSilenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
     );
 });
