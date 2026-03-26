@@ -669,7 +669,7 @@ async function runFinalizeApiCheck(finalTurn: FinalTurn, fixtureName: string): P
     ) {
       throw new Error([
         '[live-test] Translation provider is not configured in the running API server environment.',
-        '- set GEMINI_API_KEY for Gemini, or set DEMO_TRANSLATE_PROVIDER=qwen with DEMO_TRANSLATE_BASE_URL and DEMO_TRANSLATE_API_KEY.',
+        '- set GEMINI_API_KEY for Gemini, or set TRANSLATE_PROVIDER=qwen with TRANSLATE_BASE_URL and TRANSLATE_API_KEY.',
       ].join('\n'))
     }
 

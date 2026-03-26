@@ -51,6 +51,11 @@ function buildBase64Audio(prefix: 'mpeg' | 'wav' = 'mpeg'): string {
 }
 
 function clearTranslationEnv() {
+  delete process.env.TRANSLATE_PROVIDER
+  delete process.env.TRANSLATE_MODEL
+  delete process.env.TRANSLATE_BASE_URL
+  delete process.env.TRANSLATE_API_KEY
+  delete process.env.TRANSLATE_EXTRA_BODY
   delete process.env.DEMO_TRANSLATE_PROVIDER
   delete process.env.DEMO_TRANSLATE_MODEL
   delete process.env.DEMO_TRANSLATE_BASE_URL
@@ -66,7 +71,7 @@ function clearTranslationEnv() {
 
 function setGeminiTranslateEnv() {
   clearTranslationEnv()
-  process.env.DEMO_TRANSLATE_PROVIDER = 'gemini'
+  process.env.TRANSLATE_PROVIDER = 'gemini'
   process.env.GEMINI_API_KEY = 'test-gemini-key'
 }
 
@@ -77,11 +82,11 @@ function setQwenTranslateEnv(args?: {
   extraBody?: Record<string, unknown>
 }) {
   clearTranslationEnv()
-  process.env.DEMO_TRANSLATE_PROVIDER = 'qwen'
-  if (args?.baseUrl) process.env.DEMO_TRANSLATE_BASE_URL = args.baseUrl
-  if (args?.apiKey) process.env.DEMO_TRANSLATE_API_KEY = args.apiKey
-  if (args?.model) process.env.DEMO_TRANSLATE_MODEL = args.model
-  if (args?.extraBody) process.env.DEMO_TRANSLATE_EXTRA_BODY = JSON.stringify(args.extraBody)
+  process.env.TRANSLATE_PROVIDER = 'qwen'
+  if (args?.baseUrl) process.env.TRANSLATE_BASE_URL = args.baseUrl
+  if (args?.apiKey) process.env.TRANSLATE_API_KEY = args.apiKey
+  if (args?.model) process.env.TRANSLATE_MODEL = args.model
+  if (args?.extraBody) process.env.TRANSLATE_EXTRA_BODY = JSON.stringify(args.extraBody)
 }
 
 async function importRouteWithEnv() {
@@ -386,9 +391,9 @@ describe('/api/translate/finalize route', () => {
     vi.stubGlobal('fetch', fetchMock)
     vi.resetModules()
     setQwenTranslateEnv()
-    delete process.env.DEMO_TRANSLATE_BASE_URL
-    delete process.env.DEMO_TRANSLATE_API_KEY
-    delete process.env.DEMO_TRANSLATE_MODEL
+    delete process.env.TRANSLATE_BASE_URL
+    delete process.env.TRANSLATE_API_KEY
+    delete process.env.TRANSLATE_MODEL
     process.env.DASHSCOPE_API_KEY = 'test-dashscope-key'
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
@@ -417,6 +422,50 @@ describe('/api/translate/finalize route', () => {
     expect(headers.Authorization).toBe('Bearer test-dashscope-key')
     expect(body.model).toBe('Qwen3.5-9B')
     expect(body.extra_body).toEqual({ enable_thinking: false })
+  })
+
+  it('accepts legacy demo-prefixed translation env names as fallback', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    clearTranslationEnv()
+    process.env.DEMO_TRANSLATE_PROVIDER = 'qwen'
+    process.env.DEMO_TRANSLATE_BASE_URL = 'https://openrouter.ai/api/v1'
+    process.env.DEMO_TRANSLATE_API_KEY = 'legacy-qwen-key'
+    process.env.DEMO_TRANSLATE_MODEL = 'qwen/qwen3.5-9b'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const headers = requestInit.headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer legacy-qwen-key')
   })
 
   it('returns 400 when text is missing', async () => {

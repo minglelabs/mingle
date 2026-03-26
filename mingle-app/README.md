@@ -133,44 +133,44 @@ Translation/TTS behavior:
 
 Default configuration:
 
-- `DEMO_TRANSLATE_PROVIDER=gemini`
+- `TRANSLATE_PROVIDER=gemini`
 - `GEMINI_API_KEY=...`
-- optional `DEMO_TRANSLATE_MODEL=gemini-2.5-flash-lite`
+- optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
 
 Qwen 3.5 9B via OpenRouter:
 
 ```bash
-DEMO_TRANSLATE_PROVIDER=qwen
-DEMO_TRANSLATE_MODEL=qwen/qwen3.5-9b
-DEMO_TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
-DEMO_TRANSLATE_API_KEY=your_openrouter_key
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=qwen/qwen3.5-9b
+TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
+TRANSLATE_API_KEY=your_openrouter_key
 ```
 
 Qwen 3.5 9B via Together:
 
 ```bash
-DEMO_TRANSLATE_PROVIDER=qwen
-DEMO_TRANSLATE_MODEL=Qwen/Qwen3.5-9B
-DEMO_TRANSLATE_BASE_URL=https://api.together.xyz/v1
-DEMO_TRANSLATE_API_KEY=your_together_key
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen/Qwen3.5-9B
+TRANSLATE_BASE_URL=https://api.together.xyz/v1
+TRANSLATE_API_KEY=your_together_key
 ```
 
 Qwen 3.5 9B via DashScope / Model Studio:
 
 ```bash
-DEMO_TRANSLATE_PROVIDER=qwen
-DEMO_TRANSLATE_MODEL=Qwen3.5-9B
-DEMO_TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-DEMO_TRANSLATE_API_KEY=your_dashscope_key
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen3.5-9B
+TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
 ```
 
 Notes:
 
-- When `DEMO_TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
+- When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
 - For DashScope, the handler sends `enable_thinking=false`.
 - For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false`.
-- You can override or extend the OpenAI-compatible request body with `DEMO_TRANSLATE_EXTRA_BODY` as a JSON object.
-- If `DEMO_TRANSLATE_BASE_URL` and `DEMO_TRANSLATE_API_KEY` are omitted, the server can infer them from `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, or `DASHSCOPE_API_KEY`.
+- You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.
+- If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer them from `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, or `DASHSCOPE_API_KEY`.
 
 ### Live E2E suites
 

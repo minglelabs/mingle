@@ -150,6 +150,14 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   return null
 }
 
+function readTranslateEnv(name: string): string {
+  const direct = process.env[name]
+  if (typeof direct === 'string') return direct
+
+  const legacyName = `DEMO_${name}`
+  return process.env[legacyName] || ''
+}
+
 function isDashScopeBaseUrl(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('dashscope.aliyuncs.com')
 }
@@ -163,11 +171,11 @@ function isTogetherBaseUrl(baseUrl: string): boolean {
 }
 
 function resolveTranslationProvider(): TranslationProvider {
-  return normalizeTranslationProvider(process.env.DEMO_TRANSLATE_PROVIDER || '') || 'gemini'
+  return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
 }
 
 function resolveOpenAICompatibleBaseUrl(): string {
-  const explicitBaseUrl = (process.env.DEMO_TRANSLATE_BASE_URL || '').trim()
+  const explicitBaseUrl = readTranslateEnv('TRANSLATE_BASE_URL').trim()
   if (explicitBaseUrl) return explicitBaseUrl
   if ((process.env.OPENROUTER_API_KEY || '').trim()) return OPENROUTER_BASE_URL
   if ((process.env.TOGETHER_API_KEY || '').trim()) return TOGETHER_BASE_URL
@@ -176,7 +184,7 @@ function resolveOpenAICompatibleBaseUrl(): string {
 }
 
 function resolveOpenAICompatibleApiKey(baseUrl: string): string {
-  const explicitApiKey = (process.env.DEMO_TRANSLATE_API_KEY || '').trim()
+  const explicitApiKey = readTranslateEnv('TRANSLATE_API_KEY').trim()
   if (explicitApiKey) return explicitApiKey
   if (isOpenRouterBaseUrl(baseUrl)) return (process.env.OPENROUTER_API_KEY || '').trim()
   if (isTogetherBaseUrl(baseUrl)) return (process.env.TOGETHER_API_KEY || '').trim()
@@ -188,7 +196,7 @@ function resolveTranslationModel(config: {
   provider: TranslationProvider
   baseUrl?: string
 }): string {
-  const explicitModel = (process.env.DEMO_TRANSLATE_MODEL || '').trim()
+  const explicitModel = readTranslateEnv('TRANSLATE_MODEL').trim()
   if (explicitModel) return explicitModel
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
@@ -202,7 +210,7 @@ function parseJsonObjectEnv(name: string): {
   value: Record<string, unknown> | null
   error?: string
 } {
-  const raw = (process.env[name] || '').trim()
+  const raw = readTranslateEnv(name).trim()
   if (!raw) return { value: null }
 
   try {
@@ -254,7 +262,7 @@ function resolveTranslationProviderConfig(): TranslationProviderResolution {
     return {
       ok: false,
       error: 'provider_misconfigured',
-      details: 'DEMO_TRANSLATE_BASE_URL is missing for the configured translation provider.',
+      details: 'TRANSLATE_BASE_URL is missing for the configured translation provider.',
     }
   }
 
@@ -267,7 +275,7 @@ function resolveTranslationProviderConfig(): TranslationProviderResolution {
     }
   }
 
-  const parsedExtraBody = parseJsonObjectEnv('DEMO_TRANSLATE_EXTRA_BODY')
+  const parsedExtraBody = parseJsonObjectEnv('TRANSLATE_EXTRA_BODY')
   if (parsedExtraBody.error) {
     return {
       ok: false,
