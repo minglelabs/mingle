@@ -28,6 +28,13 @@ import {
   MIN_SONIOX_SILENCE_MS,
   readPersistedLivePhoneDemoPreferences,
 } from './live-phone-demo.preferences'
+import {
+  buildHydratedAccountPreferences,
+  serializeAccountPreferencesSyncState,
+  shouldScheduleAccountPreferencesSync,
+  type AccountPreferencesResponse,
+  type LivePhoneDemoAccountPreferences,
+} from './live-phone-demo.account-preferences'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -212,21 +219,6 @@ type TtsQueueItem = {
 }
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
-type AccountPreferencesResponse = {
-  sonioxManualFinalizeSilenceMs?: unknown
-}
-
-function normalizeSonioxManualFinalizeSilencePreference(value: unknown): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    return DEFAULT_SONIOX_SILENCE_MS
-  }
-
-  return Math.max(
-    MIN_SONIOX_SILENCE_MS,
-    Math.min(MAX_SONIOX_SILENCE_MS, Math.floor(parsed)),
-  )
-}
 
 function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
   return (
@@ -308,7 +300,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
+  const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
+  const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
+    textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+    sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+  })
+  latestAccountPreferencesRef.current = {
+    textSizeLevel,
+    sonioxManualFinalizeSilenceMs,
+  }
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -365,6 +366,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     clearAccountPreferencesSyncTimer()
 
     if (!showAccountActions) {
+      accountPreferencesLastSyncedStateKeyRef.current = null
       return () => {
         cancelled = true
       }
@@ -385,18 +387,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
       .then((body) => {
         if (cancelled) return
-        if (isLegacySonioxSilenceSliderNamespace(clientApiNamespace)) {
-          setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
-          setAccountPreferencesHydratedGeneration(hydrationGeneration)
-          return
-        }
-        setSonioxManualFinalizeSilenceMs(
-          normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
+        const hydratedPreferences = buildHydratedAccountPreferences(
+          body,
+          isLegacySonioxSilenceSliderNamespace(clientApiNamespace),
         )
+        setTextSizeLevel(hydratedPreferences.textSizeLevel)
+        setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        accountPreferencesLastSyncedStateKeyRef.current =
+          serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
       .catch(() => {
         if (cancelled) return
+        accountPreferencesLastSyncedStateKeyRef.current =
+          serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
+        setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
 
     return () => {
@@ -406,27 +411,52 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const syncAccountPreferences = useCallback(() => {
     if (!showAccountActions) return
+    const currentPreferences = latestAccountPreferencesRef.current
+    const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        textSizeLevel,
-        sonioxManualFinalizeSilenceMs,
+        textSizeLevel: currentPreferences.textSizeLevel,
+        sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
       }),
-    }).catch(() => {
-      // Keep the current in-memory state and retry on the next change.
     })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`account_preferences_patch_failed:${response.status}`)
+        }
+        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+      })
+      .catch(() => {
+        // Keep the current in-memory state and retry on the next change.
+      })
   }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
 
   const flushAccountPreferencesSync = useCallback(() => {
+    if (!shouldScheduleAccountPreferencesSync({
+      showAccountActions,
+      hydratedGeneration: accountPreferencesHydratedGeneration,
+      requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
+      currentPreferences: latestAccountPreferencesRef.current,
+      lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
+    })) {
+      return
+    }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferences()
-  }, [clearAccountPreferencesSyncTimer, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
-    if (!showAccountActions) return
-    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return
+    if (!shouldScheduleAccountPreferencesSync({
+      showAccountActions,
+      hydratedGeneration: accountPreferencesHydratedGeneration,
+      requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
+      currentPreferences: latestAccountPreferencesRef.current,
+      lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
+    })) {
+      return
+    }
 
     clearAccountPreferencesSyncTimer()
     accountPreferencesSyncTimerRef.current = window.setTimeout(() => {
