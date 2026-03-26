@@ -424,6 +424,60 @@ describe('/api/translate/finalize route', () => {
     expect(body.extra_body).toEqual({ enable_thinking: false })
   })
 
+  it('treats DashScope international endpoints as DashScope-compatible', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setQwenTranslateEnv({
+      baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+      model: 'qwen3.5-flash',
+    })
+    delete process.env.TRANSLATE_API_KEY
+    process.env.DASHSCOPE_API_KEY = 'test-dashscope-intl-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.model).toBe('qwen3.5-flash')
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      model?: string
+      extra_body?: Record<string, unknown>
+    }
+    const headers = requestInit.headers as Record<string, string>
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions')
+    expect(headers.Authorization).toBe('Bearer test-dashscope-intl-key')
+    expect(body.model).toBe('qwen3.5-flash')
+    expect(body.extra_body).toEqual({ enable_thinking: false })
+  })
+
   it('accepts legacy demo-prefixed translation env names as fallback', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(

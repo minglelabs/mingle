@@ -159,7 +159,16 @@ function readTranslateEnv(name: string): string {
 }
 
 function isDashScopeBaseUrl(baseUrl: string): boolean {
-  return baseUrl.toLowerCase().includes('dashscope.aliyuncs.com')
+  const normalized = baseUrl.trim().toLowerCase()
+  if (!normalized) return false
+
+  return (
+    normalized.includes('dashscope.aliyuncs.com') ||
+    normalized.includes('dashscope-intl.aliyuncs.com') ||
+    normalized.includes('dashscope-us.aliyuncs.com') ||
+    normalized.includes('cn-hongkong.dashscope.aliyuncs.com') ||
+    normalized.includes('.maas.aliyuncs.com')
+  )
 }
 
 function isOpenRouterBaseUrl(baseUrl: string): boolean {

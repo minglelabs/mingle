@@ -164,6 +164,15 @@ TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 TRANSLATE_API_KEY=your_dashscope_key
 ```
 
+For Singapore / international DashScope, use:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=qwen3.5-flash
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
+```
+
 Notes:
 
 - When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
