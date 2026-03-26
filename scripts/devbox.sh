@@ -1914,25 +1914,66 @@ extract_cloudflared_named_service_port() {
   [[ -f "$log_file" ]] || return 0
 
   python3 - "$log_file" "$hostname" <<'PY'
+import json
 import re
 import sys
 
 log_file, hostname = sys.argv[1], sys.argv[2]
-pattern = re.compile(rf'"hostname":"{re.escape(hostname)}".*?"service":"http://localhost:(\d+)"')
-escaped_pattern = re.compile(
-    rf'\\"hostname\\":\\"{re.escape(hostname)}\\".*?\\"service\\":\\"http://localhost:(\d+)\\"'
-)
+config_pattern = re.compile(r'config="((?:\\.|[^"])*)"')
+service_pattern = re.compile(r"^http://localhost:(\d+)$")
 port = ""
 with open(log_file, "r", encoding="utf-8", errors="ignore") as handle:
     for line in handle:
-        match = pattern.search(line)
-        if not match:
-            match = escaped_pattern.search(line)
-        if match:
-            port = match.group(1)
+        if "Updated to new configuration" not in line:
+            continue
+        config_match = config_pattern.search(line)
+        if not config_match:
+            continue
+        try:
+            config_json = bytes(config_match.group(1), "utf-8").decode("unicode_escape")
+            payload = json.loads(config_json)
+        except Exception:
+            continue
+
+        for ingress in payload.get("ingress", []):
+            if ingress.get("hostname") != hostname:
+                continue
+            service = ingress.get("service", "")
+            service_match = service_pattern.match(service)
+            if service_match:
+                port = service_match.group(1)
+                break
+        if port:
+            break
 if port:
     print(port)
 PY
+}
+
+wait_for_cloudflared_named_service_port() {
+  local log_file="$1"
+  local pid="$2"
+  local hostname="$3"
+  local timeout_sec="${4:-15}"
+  local elapsed=0
+  local port=""
+
+  while (( elapsed < timeout_sec )); do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      return 1
+    fi
+
+    port="$(extract_cloudflared_named_service_port "$log_file" "$hostname" || true)"
+    if [[ -n "$port" ]]; then
+      printf '%s' "$port"
+      return 0
+    fi
+
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  return 1
 }
 
 stop_cloudflared_named_bridge() {
@@ -4236,8 +4277,16 @@ $(ngrok_plan_capacity_hint)"
 
             local cloudflared_named_remote_web_port=""
             local cloudflared_named_remote_stt_port=""
-            cloudflared_named_remote_web_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_web_host" || true)"
-            cloudflared_named_remote_stt_port="$(extract_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_stt_host" || true)"
+            if ! cloudflared_named_remote_web_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_web_host" 15)"; then
+              cleanup_processes "${pids[@]}"
+              rm -f "$cloudflared_named_pid_file"
+              die "cloudflared named tunnel did not publish web bridge port for $cloudflared_named_web_host (log: $cloudflared_named_log)"
+            fi
+            if ! cloudflared_named_remote_stt_port="$(wait_for_cloudflared_named_service_port "$cloudflared_named_log" "$cloudflared_named_pid" "$cloudflared_named_stt_host" 15)"; then
+              cleanup_processes "${pids[@]}"
+              rm -f "$cloudflared_named_pid_file"
+              die "cloudflared named tunnel did not publish stt bridge port for $cloudflared_named_stt_host (log: $cloudflared_named_log)"
+            fi
             ensure_cloudflared_named_bridge "web" "$cloudflared_named_remote_web_port" "$DEVBOX_WEB_PORT" pids
             ensure_cloudflared_named_bridge "stt" "$cloudflared_named_remote_stt_port" "$DEVBOX_STT_PORT" pids
 
@@ -4394,7 +4443,8 @@ $(ngrok_plan_capacity_hint)"
       set +a
     fi
     # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
-    # Use webpack + polling watcher mode for stable local device testing.
+    # Use webpack for device testing, but avoid forcing polling watchers because they can
+    # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
     DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
     DEVBOX_PROFILE="$DEVBOX_PROFILE" \
     DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
@@ -4409,8 +4459,8 @@ $(ngrok_plan_capacity_hint)"
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
     MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
     MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
-    WATCHPACK_POLLING="${WATCHPACK_POLLING:-true}" \
-    CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-1}" \
+    WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}" \
+    CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}" \
     pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
   ) &
   pids+=("$!")
