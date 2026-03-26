@@ -218,7 +218,7 @@ final class MingleAudioSessionCoordinator {
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
     private let wsQueue = DispatchQueue(label: "NativeSTTModule.wsQueue")
-    private let defaultSonioxManualFinalizeSilenceMs = 500
+    private let defaultSonioxManualFinalizeSilenceMs = 1000
     private let minSonioxManualFinalizeSilenceMs = 500
     private let maxSonioxManualFinalizeSilenceMs = 3000
 
