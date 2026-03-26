@@ -25,6 +25,42 @@ if [[ -d "$LOCAL_TOOLS_BIN" ]]; then
   PATH="$LOCAL_TOOLS_BIN:$PATH"
 fi
 
+prefer_supported_node_runtime() {
+  local current_node_path=""
+  local current_node_version=""
+  local current_node_major=""
+  local candidate_bin=""
+  local preferred_bin=""
+
+  current_node_path="$(command -v node 2>/dev/null || true)"
+  if [[ -n "$current_node_path" ]]; then
+    current_node_version="$("$current_node_path" -v 2>/dev/null || true)"
+    current_node_version="${current_node_version#v}"
+    current_node_major="${current_node_version%%.*}"
+  fi
+
+  for candidate_bin in \
+    "/opt/homebrew/opt/node@22/bin" \
+    "/usr/local/opt/node@22/bin"
+  do
+    if [[ -x "$candidate_bin/node" ]]; then
+      preferred_bin="$candidate_bin"
+      break
+    fi
+  done
+
+  [[ -n "$preferred_bin" ]] || return 0
+
+  if [[ -z "$current_node_major" || ! "$current_node_major" =~ ^[0-9]+$ || "$current_node_major" -gt 22 ]]; then
+    PATH="$preferred_bin:$PATH"
+    if [[ -n "$current_node_version" ]]; then
+      printf '[devbox] using Homebrew node@22 runtime instead of node v%s\n' "$current_node_version" >&2
+    fi
+  fi
+}
+
+prefer_supported_node_runtime
+
 APP_MANAGED_KEYS=(
   DEVBOX_WORKTREE_NAME
   DEVBOX_PROFILE
