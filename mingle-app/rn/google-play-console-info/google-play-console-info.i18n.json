@@ -628,8 +628,8 @@
       }
     },
     "manualOnly": {
-      "privacyPolicyUrl": "https://app.minglelabs.xyz/legal/privacy-policy.html",
-      "termsOfUseUrl": "https://app.minglelabs.xyz/legal/terms-of-use.html",
+      "privacyPolicyUrl": "https://translator.minglelabs.xyz/legal/privacy-policy.html",
+      "termsOfUseUrl": "https://translator.minglelabs.xyz/legal/terms-of-use.html",
       "category": null,
       "appType": "APPLICATION",
       "dataSafety": null,

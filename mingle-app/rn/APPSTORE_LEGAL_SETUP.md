@@ -21,19 +21,19 @@ Files:
 
 Use your production domain:
 
-- `https://app.minglelabs.xyz`
+- `https://translator.minglelabs.xyz`
 
 Recommended values:
 
-- Privacy Policy URL: `https://app.minglelabs.xyz/legal/privacy-policy.html`
-- Terms of Use URL: `https://app.minglelabs.xyz/legal/terms-of-use.html`
-- Support URL (if same site): `https://app.minglelabs.xyz/`
+- Privacy Policy URL: `https://translator.minglelabs.xyz/legal/privacy-policy.html`
+- Terms of Use URL: `https://translator.minglelabs.xyz/legal/terms-of-use.html`
+- Support URL (if same site): `https://translator.minglelabs.xyz/`
 
 Locale examples:
 
-- Korean Privacy: `https://app.minglelabs.xyz/legal/ko/privacy-policy.html`
-- Japanese Terms: `https://app.minglelabs.xyz/legal/ja/terms-of-use.html`
-- Simplified Chinese Privacy: `https://app.minglelabs.xyz/legal/zh-cn/privacy-policy.html`
+- Korean Privacy: `https://translator.minglelabs.xyz/legal/ko/privacy-policy.html`
+- Japanese Terms: `https://translator.minglelabs.xyz/legal/ja/terms-of-use.html`
+- Simplified Chinese Privacy: `https://translator.minglelabs.xyz/legal/zh-cn/privacy-policy.html`
 
 ## 3) App Store Connect input mapping
 
