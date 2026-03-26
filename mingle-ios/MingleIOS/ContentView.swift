@@ -46,12 +46,18 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(Color.gray.opacity(0.12))
-            timeline
-            Divider().overlay(Color.gray.opacity(0.12))
-            bottomControlBar
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                Divider().overlay(Color.gray.opacity(0.12))
+                timeline
+                Divider().overlay(Color.gray.opacity(0.12))
+                bottomControlBar
+            }
+
+            if showEmptyStatePrompt {
+                emptyStatePrompt
+            }
         }
         .background(Color(uiColor: .systemGray6).ignoresSafeArea())
         .sheet(item: $activeSheet) { sheet in
@@ -72,6 +78,14 @@ struct ContentView: View {
         .onChange(of: isAecEnabled) { newValue in
             viewModel.updateAec(enabled: newValue)
         }
+    }
+
+    private var showEmptyStatePrompt: Bool {
+        viewModel.utterances.isEmpty
+            && viewModel.partialTranscript.isEmpty
+            && !viewModel.isRecording
+            && !isConnecting
+            && !isError
     }
 
     private var header: some View {
@@ -142,10 +156,6 @@ struct ContentView: View {
                 .onChange(of: viewModel.partialTranscript) { _ in
                     scrollToBottom(proxy)
                 }
-            }
-
-            if viewModel.utterances.isEmpty && viewModel.partialTranscript.isEmpty && !viewModel.isRecording && !isConnecting && !isError {
-                emptyStatePrompt
             }
 
             if isConnecting {
@@ -390,29 +400,36 @@ struct ContentView: View {
     }
 
     private var emptyStatePrompt: some View {
-        VStack(spacing: 12) {
-            Text(tapPlayToStartLabel)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+        GeometryReader { geometry in
+            let midX = geometry.size.width / 2
+            let textY = geometry.size.height / 2
+            let arrowTop = textY + 26
+            let arrowBottom = max(arrowTop + 32, geometry.size.height - 112)
 
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(Color.gray.opacity(0.34))
-                    .frame(width: 3)
-                    .frame(maxHeight: .infinity)
+            ZStack {
+                Text(tapPlayToStartLabel)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .position(x: midX, y: textY)
 
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Color.gray.opacity(0.5))
-                    .offset(y: -2)
+                Path { path in
+                    path.move(to: CGPoint(x: midX, y: arrowTop))
+                    path.addLine(to: CGPoint(x: midX, y: arrowBottom))
+
+                    path.move(to: CGPoint(x: midX, y: arrowBottom))
+                    path.addLine(to: CGPoint(x: midX - 9, y: arrowBottom - 9))
+
+                    path.move(to: CGPoint(x: midX, y: arrowBottom))
+                    path.addLine(to: CGPoint(x: midX + 9, y: arrowBottom - 9))
+                }
+                .stroke(
+                    Color.gray.opacity(0.34),
+                    style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                )
             }
-            .frame(maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, 56)
-        .padding(.bottom, 6)
-        .padding(.horizontal, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
     }
 
