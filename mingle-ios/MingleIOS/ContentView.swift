@@ -46,18 +46,12 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                header
-                Divider().overlay(Color.gray.opacity(0.12))
-                timeline
-                Divider().overlay(Color.gray.opacity(0.12))
-                bottomControlBar
-            }
-
-            if showEmptyStatePrompt {
-                emptyStatePrompt
-            }
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(Color.gray.opacity(0.12))
+            timeline
+            Divider().overlay(Color.gray.opacity(0.12))
+            bottomControlBar
         }
         .background(Color(uiColor: .systemGray6).ignoresSafeArea())
         .sheet(item: $activeSheet) { sheet in
@@ -182,6 +176,10 @@ struct ContentView: View {
                     }
                 }
                 .padding(.vertical, 16)
+            }
+
+            if showEmptyStatePrompt {
+                emptyStatePrompt
             }
         }
         .background(Color(uiColor: .systemGray6))
@@ -402,9 +400,9 @@ struct ContentView: View {
     private var emptyStatePrompt: some View {
         GeometryReader { geometry in
             let midX = geometry.size.width / 2
-            let textY = geometry.size.height / 2
+            let textY = geometry.size.height * 0.48
             let arrowTop = textY + 26
-            let arrowBottom = max(arrowTop + 32, geometry.size.height - 112)
+            let arrowBottom = max(arrowTop + 32, geometry.size.height - 16)
 
             ZStack {
                 Text(tapPlayToStartLabel)

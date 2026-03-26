@@ -1793,38 +1793,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-
-          {showEmptyState && (
-            <div className="pointer-events-none absolute inset-0 z-10">
-              <p className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400">
-                {tapPlayToStartLabel}
-              </p>
-              <div
-                className="absolute left-1/2 w-8 -translate-x-1/2"
-                style={{
-                  top: 'calc(50% + 24px)',
-                  bottom: 'calc(env(safe-area-inset-bottom) + 82px)',
-                }}
-              >
-                <svg
-                  viewBox="0 0 24 100"
-                  preserveAspectRatio="none"
-                  className="h-full w-full text-gray-300/95"
-                  aria-hidden="true"
+            {showEmptyState && (
+              <div className="pointer-events-none absolute inset-0 z-10">
+                <p
+                  className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
+                  style={{ top: '48%' }}
                 >
-                  <path
-                    d="M12 4V96M12 96L4 88M12 96L20 88"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                  {tapPlayToStartLabel}
+                </p>
+                <div
+                  className="absolute left-1/2 w-8 -translate-x-1/2"
+                  style={{
+                    top: 'calc(48% + 24px)',
+                    bottom: '16px',
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 100"
+                    preserveAspectRatio="none"
+                    className="h-full w-full text-gray-300/95"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M12 4V96M12 96L4 88M12 96L20 88"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <AnimatePresence>
             {showAccountMenuItems && deleteAccountDialogOpen && (
