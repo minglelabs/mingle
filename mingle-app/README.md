@@ -168,7 +168,7 @@ For Singapore / international DashScope, use:
 
 ```bash
 TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=qwen3.5-flash
+TRANSLATE_MODEL=Qwen3.5-9B
 TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 TRANSLATE_API_KEY=your_dashscope_key
 ```

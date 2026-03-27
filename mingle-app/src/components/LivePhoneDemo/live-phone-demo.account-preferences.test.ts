@@ -23,11 +23,11 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: 2500,
-      translationModel: 'qwen/qwen3.5-flash-02-23',
+      translationModel: 'unsupported-model',
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
-      translationModel: 'qwen/qwen3.5-flash-02-23',
+      translationModel: 'gemini-2.5-flash-lite',
     })
   })
 })

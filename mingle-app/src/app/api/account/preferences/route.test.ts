@@ -139,7 +139,7 @@ describe("/api/account/preferences route", () => {
     const response = await PATCH(new Request("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-flash-02-23",
+        translationModel: "qwen/qwen3.5-9b",
       }),
     }));
     const json = await response.json();
@@ -149,7 +149,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        demoTranslateModel: "qwen/qwen3.5-flash-02-23",
+        demoTranslateModel: "qwen/qwen3.5-9b",
       },
     });
   });

@@ -553,7 +553,7 @@ describe('/api/translate/finalize route', () => {
   })
 
   it('uses a redetect json schema for qwen OpenRouter requests on versioned routes', async () => {
-    setAuthenticatedTranslationModel('qwen/qwen3.5-flash-02-23')
+    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -575,7 +575,7 @@ describe('/api/translate/finalize route', () => {
     setQwenTranslateEnv({
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: 'test-qwen-key',
-      model: 'qwen/qwen3.5-flash-02-23',
+      model: 'qwen/qwen3.5-9b',
     })
     process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
     process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
