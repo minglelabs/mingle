@@ -784,11 +784,10 @@ function inferDetectedSourceLanguageFromEcho(
   return ''
 }
 
-async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEngineResult | null> {
-  const resolution = resolveTranslationProviderConfig()
-  if (!resolution.ok || resolution.config.provider !== 'gemini') return null
-  const config = resolution.config
-
+async function translateWithGemini(
+  ctx: TranslateContext,
+  config: GeminiTranslationProviderConfig,
+): Promise<TranslationEngineResult | null> {
   const genAI = new GoogleGenerativeAI(config.apiKey)
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
   const promptLogPayload = {
@@ -1490,7 +1489,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         throw new Error('forced_provider_error_for_e2e')
       } else {
         selectedResult = providerConfig.provider === 'gemini'
-          ? await translateWithGemini(ctx)
+          ? await translateWithGemini(ctx, providerConfig)
           : await translateWithOpenAICompatible(ctx, providerConfig)
       }
     } catch (error) {
