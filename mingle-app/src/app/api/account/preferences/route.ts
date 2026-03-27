@@ -336,12 +336,16 @@ export async function PATCH(request: Request) {
     if (userId) {
       const result = await prisma.user.updateMany({
         where: { id: userId },
-        data,
+        data: {
+          ...data,
+          ...(identity.externalUserId ? { externalUserId: identity.externalUserId } : {}),
+        },
       });
       if (result.count > 0) {
         logAccountPreferencesDebug("patch_persisted", {
           via: "session_key_lookup",
           targetUserId: userId,
+          targetExternalUserId: identity.externalUserId || null,
           headerExternalUserId: resolveTrackingExternalUserId(request) || null,
           resolvedSessionKey: identity.sessionKey,
           translationModel: nextTranslationModel,

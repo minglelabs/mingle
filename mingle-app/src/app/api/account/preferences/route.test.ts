@@ -367,6 +367,46 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("reconciles the provided tracking user id onto the session-linked user when external lookup misses", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserUpdateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+        "x-mingle-session-key": "sess_local_storage_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { externalUserId: "anon_local_storage_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "user_from_session" },
+      data: {
+        externalUserId: "anon_local_storage_user",
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
   it("creates a tracked user and persists translation model for fresh anonymous sessions", async () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
