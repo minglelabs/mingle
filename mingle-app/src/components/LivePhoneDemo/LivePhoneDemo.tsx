@@ -481,14 +481,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         if (cancelled) return
         accountPreferencesLastSyncedStateKeyRef.current =
-          serializeAccountPreferencesSyncState(latestAccountPreferences)
+          serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions])
+  }, [clearAccountPreferencesSyncTimer, showAccountActions])
 
   const syncAccountPreferences = useCallback(() => {
     if (!showAccountActions) return
