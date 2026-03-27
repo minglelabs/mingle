@@ -23,6 +23,7 @@ type PreferencesBody = {
 type SessionUserIdentity = {
   id: string;
   email: string;
+  externalUserId: string;
 };
 
 type UserPreferencesRecord = {
@@ -41,7 +42,39 @@ function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: 
   return {
     id: typeof session?.user?.id === "string" ? session.user.id.trim() : "",
     email: typeof session?.user?.email === "string" ? session.user.email.trim().toLowerCase() : "",
+    externalUserId: "",
   };
+}
+
+function sanitizeTrackingValue(rawValue: string | null): string {
+  return (rawValue || "").trim().slice(0, 128);
+}
+
+function readCookieValue(request: Request, cookieName: string): string {
+  const cookieHeader = request.headers.get("cookie") || "";
+  for (const segment of cookieHeader.split(";")) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    const name = trimmed.slice(0, separatorIndex).trim();
+    if (name !== cookieName) continue;
+    const value = trimmed.slice(separatorIndex + 1).trim();
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return "";
+}
+
+function resolveTrackingExternalUserId(request: Request): string {
+  return sanitizeTrackingValue(
+    request.headers.get("x-mingle-user-id")
+    || readCookieValue(request, "mingle_uid")
+    || null,
+  );
 }
 
 async function findUserPreferences(identity: SessionUserIdentity): Promise<UserPreferencesRecord | null> {
@@ -71,16 +104,35 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     }
   }
 
+  if (identity.externalUserId) {
+    const record = await prisma.user.findUnique({
+      where: { externalUserId: identity.externalUserId },
+      select,
+    });
+    if (record) {
+      return record;
+    }
+  }
+
   return null;
 }
 
-export async function GET() {
+function hasIdentity(identity: SessionUserIdentity): boolean {
+  return Boolean(identity.id || identity.email || identity.externalUserId);
+}
+
+export async function GET(request: Request) {
   const session = await getServerSession(getAuthOptions());
-  if (!session?.user) {
+  const identity = {
+    ...normalizeSessionUserIdentity(session),
+    externalUserId: resolveTrackingExternalUserId(request),
+  };
+
+  if (!hasIdentity(identity)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const preferences = await findUserPreferences(normalizeSessionUserIdentity(session));
+  const preferences = await findUserPreferences(identity);
   if (!preferences) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
@@ -95,7 +147,12 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   const session = await getServerSession(getAuthOptions());
-  if (!session?.user) {
+  const identity = {
+    ...normalizeSessionUserIdentity(session),
+    externalUserId: resolveTrackingExternalUserId(request),
+  };
+
+  if (!hasIdentity(identity)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -112,8 +169,6 @@ export async function PATCH(request: Request) {
   if (nextTextSizeLevel === null && nextSilenceMs === null && nextTranslationModel === null) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
-
-  const identity = normalizeSessionUserIdentity(session);
 
   const data = {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
@@ -134,6 +189,16 @@ export async function PATCH(request: Request) {
   if (identity.email) {
     const result = await prisma.user.updateMany({
       where: { email: identity.email },
+      data,
+    });
+    if (result.count > 0) {
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  if (identity.externalUserId) {
+    const result = await prisma.user.updateMany({
+      where: { externalUserId: identity.externalUserId },
       data,
     });
     if (result.count > 0) {

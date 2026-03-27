@@ -518,6 +518,59 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('uses the tracking user translation model from DB for non-final requests without an auth session', async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
+      if (args.where?.externalUserId === 'anon_test_user') {
+        return { translationModel: 'qwen/qwen3.5-9b' }
+      }
+      return null
+    })
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+    }, {
+      'x-mingle-user-id': 'anon_test_user',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('defaults qwen to OpenRouter when only TRANSLATE_API_KEY is set', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()

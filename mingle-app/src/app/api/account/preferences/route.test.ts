@@ -37,7 +37,7 @@ describe("/api/account/preferences route", () => {
   it("returns 401 for unauthenticated GET requests", async () => {
     mockGetServerSession.mockResolvedValue(null);
 
-    const response = await GET();
+    const response = await GET(new Request("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(401);
@@ -57,7 +57,7 @@ describe("/api/account/preferences route", () => {
       translationModel: "qwen/qwen3.5-9b",
     });
 
-    const response = await GET();
+    const response = await GET(new Request("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -89,7 +89,7 @@ describe("/api/account/preferences route", () => {
       translationModel: null,
     });
 
-    const response = await GET();
+    const response = await GET(new Request("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -148,6 +148,62 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({ ok: true });
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("returns the stored DB-backed preferences for tracking users without a session", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: 3,
+      demoSilenceFinalizeMs: 1500,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+
+    const response = await GET(new Request("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-user-id": "anon_test_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 1500,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { externalUserId: "anon_test_user" },
+      select: {
+        demoTextSizeLevel: true,
+        demoSilenceFinalizeMs: true,
+        translationModel: true,
+      },
+    });
+  });
+
+  it("persists a supported translation model for tracking users without a session", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserUpdateMany.mockResolvedValue({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_test_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { externalUserId: "anon_test_user" },
       data: {
         translationModel: "qwen/qwen3.5-9b",
       },

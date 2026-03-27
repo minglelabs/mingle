@@ -127,6 +127,7 @@ type GeminiUsageMetadata = {
 type SessionUserIdentity = {
   id: string
   email: string
+  externalUserId: string
 }
 
 type GeminiResponseLike = {
@@ -214,10 +215,52 @@ function resolveTranslationProvider(): TranslationProvider {
   return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
 }
 
-function normalizeSessionUserIdentity(session: { user?: { id?: unknown, email?: unknown } } | null): SessionUserIdentity {
+function sanitizeTrackingValue(rawValue: string | null): string {
+  return (rawValue || '').trim().slice(0, 128)
+}
+
+function readCookieValueFromHeader(cookieHeader: string | null, cookieName: string): string {
+  const rawHeader = cookieHeader || ''
+  for (const segment of rawHeader.split(';')) {
+    const trimmed = segment.trim()
+    if (!trimmed) continue
+    const separatorIndex = trimmed.indexOf('=')
+    if (separatorIndex <= 0) continue
+    const name = trimmed.slice(0, separatorIndex).trim()
+    if (name !== cookieName) continue
+    const value = trimmed.slice(separatorIndex + 1).trim()
+    try {
+      return decodeURIComponent(value)
+    } catch {
+      return value
+    }
+  }
+  return ''
+}
+
+function resolveTrackingExternalUserId(request: NextRequest): string {
+  const cookieStore = (
+    typeof (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies === 'object'
+      ? (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies
+      : undefined
+  )
+
+  return sanitizeTrackingValue(
+    request.headers.get('x-mingle-user-id')
+    || cookieStore?.get?.('mingle_uid')?.value
+    || readCookieValueFromHeader(request.headers.get('cookie'), 'mingle_uid')
+    || null,
+  )
+}
+
+function normalizeSessionUserIdentity(
+  session: { user?: { id?: unknown, email?: unknown } } | null,
+  externalUserId = '',
+): SessionUserIdentity {
   return {
     id: typeof session?.user?.id === 'string' ? session.user.id.trim() : '',
     email: typeof session?.user?.email === 'string' ? session.user.email.trim().toLowerCase() : '',
+    externalUserId,
   }
 }
 
@@ -244,16 +287,35 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
     if (normalizedModel) return normalizedModel
   }
 
+  if (identity.externalUserId) {
+    const record = await prisma.user.findUnique({
+      where: { externalUserId: identity.externalUserId },
+      select,
+    })
+    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
+    if (normalizedModel) return normalizedModel
+  }
+
   return null
 }
 
-async function resolveSelectedTranslationModel(): Promise<UserSelectableTranslationModel> {
+async function resolveSelectedTranslationModel(request: NextRequest): Promise<UserSelectableTranslationModel> {
+  const externalUserId = resolveTrackingExternalUserId(request)
   try {
     const session = await getServerSession(getAuthOptions())
-    const selectedModel = await findUserSelectedTranslationModel(normalizeSessionUserIdentity(session))
+    const selectedModel = await findUserSelectedTranslationModel(
+      normalizeSessionUserIdentity(session, externalUserId),
+    )
     if (selectedModel) return selectedModel
   } catch {
-    // Ignore auth/session lookup failures and fall back below.
+    if (externalUserId) {
+      const selectedModel = await findUserSelectedTranslationModel({
+        id: '',
+        email: '',
+        externalUserId,
+      })
+      if (selectedModel) return selectedModel
+    }
   }
 
   return resolveDefaultSelectableTranslationModel()
@@ -1349,7 +1411,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const selectedTranslationModel = await resolveSelectedTranslationModel()
+  const selectedTranslationModel = await resolveSelectedTranslationModel(request)
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
