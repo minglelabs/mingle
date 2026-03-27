@@ -1993,7 +1993,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             aria-haspopup="listbox"
                             aria-expanded={translationModelMenuOpen}
                             aria-controls={translationModelListboxId}
-                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1rem] border border-gray-200/95 bg-gradient-to-r from-white via-amber-50/70 to-orange-50/85 px-3.5 text-left shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition duration-200 hover:border-gray-300 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                           >
                             <span
                               aria-hidden="true"
