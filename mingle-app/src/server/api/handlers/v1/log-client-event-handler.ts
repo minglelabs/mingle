@@ -49,6 +49,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const provider = sanitizeText(body.provider, 64)
   const infrastructureProvider = sanitizeText(body.infrastructureProvider, 64)
   const model = sanitizeText(body.model, 128)
+  const translationPromptTokens = sanitizeNonNegativeInt(body.translationPromptTokens)
+  const translationCompletionTokens = sanitizeNonNegativeInt(body.translationCompletionTokens)
+  const translationTotalTokens = sanitizeNonNegativeInt(body.translationTotalTokens)
   const translations = sanitizeTranslations(body.translations)
   const clientMetadata = sanitizeJsonObject(body.metadata)
   const clientContext = parseClientContext(body.clientContext)
@@ -98,6 +101,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
           sourceLanguage,
           translationProvider: infrastructureProvider ?? provider ?? undefined,
           translationModel: model ?? undefined,
+          translationPromptTokens: translationPromptTokens ?? undefined,
+          translationCompletionTokens: translationCompletionTokens ?? undefined,
+          translationTotalTokens: translationTotalTokens ?? undefined,
           sttDurationMs: sttDurationMs ?? undefined,
           totalDurationMs: totalDurationMs ?? undefined,
           metadata: messageMetadata,
@@ -107,6 +113,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
           sourceLanguage,
           translationProvider: infrastructureProvider ?? provider ?? undefined,
           translationModel: model ?? undefined,
+          translationPromptTokens: translationPromptTokens ?? undefined,
+          translationCompletionTokens: translationCompletionTokens ?? undefined,
+          translationTotalTokens: translationTotalTokens ?? undefined,
           sttDurationMs: sttDurationMs ?? undefined,
           totalDurationMs: totalDurationMs ?? undefined,
           metadata: messageMetadata,
@@ -174,6 +183,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
     if (provider) eventMetadata.provider = provider
     if (infrastructureProvider) eventMetadata.infrastructureProvider = infrastructureProvider
     if (model) eventMetadata.model = model
+    if (translationPromptTokens !== null) eventMetadata.translationPromptTokens = translationPromptTokens
+    if (translationCompletionTokens !== null) eventMetadata.translationCompletionTokens = translationCompletionTokens
+    if (translationTotalTokens !== null) eventMetadata.translationTotalTokens = translationTotalTokens
     if (sttDurationMs !== null) eventMetadata.sttDurationMs = sttDurationMs
     if (totalDurationMs !== null) eventMetadata.totalDurationMs = totalDurationMs
     if (clientMetadata) eventMetadata.clientMetadata = clientMetadata

@@ -396,6 +396,9 @@ describe('/api/translate/finalize route', () => {
     expect(json.provider).toBe('qwen')
     expect(json.infrastructureProvider).toBe('openrouter')
     expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(json.translationPromptTokens).toBe(14)
+    expect(json.translationCompletionTokens).toBe(9)
+    expect(json.translationTotalTokens).toBe(23)
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith(

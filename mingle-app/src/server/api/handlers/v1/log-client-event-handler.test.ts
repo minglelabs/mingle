@@ -61,6 +61,9 @@ describe("handleLogClientEventV1", () => {
         provider: "qwen",
         infrastructureProvider: "openrouter",
         model: "qwen/qwen3.5-9b",
+        translationPromptTokens: 321,
+        translationCompletionTokens: 123,
+        translationTotalTokens: 444,
         translations: {
           en: "Hello",
           ja: "こんにちは",
@@ -78,10 +81,16 @@ describe("handleLogClientEventV1", () => {
         create: expect.objectContaining({
           translationProvider: "openrouter",
           translationModel: "qwen/qwen3.5-9b",
+          translationPromptTokens: 321,
+          translationCompletionTokens: 123,
+          translationTotalTokens: 444,
         }),
         update: expect.objectContaining({
           translationProvider: "openrouter",
           translationModel: "qwen/qwen3.5-9b",
+          translationPromptTokens: 321,
+          translationCompletionTokens: 123,
+          translationTotalTokens: 444,
         }),
       }),
     );

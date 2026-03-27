@@ -1327,6 +1327,9 @@ interface TranslateApiResult {
   provider?: string
   infrastructureProvider?: string
   model?: string
+  translationPromptTokens?: number
+  translationCompletionTokens?: number
+  translationTotalTokens?: number
 }
 
 function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
@@ -1391,6 +1394,9 @@ interface ClientEventLogPayload {
   provider?: string
   infrastructureProvider?: string
   model?: string
+  translationPromptTokens?: number
+  translationCompletionTokens?: number
+  translationTotalTokens?: number
   metadata?: Record<string, unknown>
   keepalive?: boolean
 }
@@ -2054,6 +2060,9 @@ export default function useRealtimeSTT({
         provider: typeof data.provider === 'string' ? data.provider : undefined,
         infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
+        translationPromptTokens: typeof data.translationPromptTokens === 'number' ? data.translationPromptTokens : undefined,
+        translationCompletionTokens: typeof data.translationCompletionTokens === 'number' ? data.translationCompletionTokens : undefined,
+        translationTotalTokens: typeof data.translationTotalTokens === 'number' ? data.translationTotalTokens : undefined,
       }
     } catch {
       return { translations: {} }
@@ -2083,6 +2092,15 @@ export default function useRealtimeSTT({
       if (payload.provider) body.provider = payload.provider
       if (payload.infrastructureProvider) body.infrastructureProvider = payload.infrastructureProvider
       if (payload.model) body.model = payload.model
+      if (typeof payload.translationPromptTokens === 'number' && Number.isFinite(payload.translationPromptTokens) && payload.translationPromptTokens >= 0) {
+        body.translationPromptTokens = Math.floor(payload.translationPromptTokens)
+      }
+      if (typeof payload.translationCompletionTokens === 'number' && Number.isFinite(payload.translationCompletionTokens) && payload.translationCompletionTokens >= 0) {
+        body.translationCompletionTokens = Math.floor(payload.translationCompletionTokens)
+      }
+      if (typeof payload.translationTotalTokens === 'number' && Number.isFinite(payload.translationTotalTokens) && payload.translationTotalTokens >= 0) {
+        body.translationTotalTokens = Math.floor(payload.translationTotalTokens)
+      }
       if (payload.metadata) body.metadata = payload.metadata
 
       await fetch(buildClientApiPath('/log/client-event'), {
@@ -2439,6 +2457,9 @@ export default function useRealtimeSTT({
         provider: result.provider,
         infrastructureProvider: result.infrastructureProvider,
         model: result.model,
+        translationPromptTokens: result.translationPromptTokens,
+        translationCompletionTokens: result.translationCompletionTokens,
+        translationTotalTokens: result.translationTotalTokens,
         metadata: {
           reason: options?.reason || 'unknown',
           hasInlineTts: Boolean(result.ttsAudioBase64),

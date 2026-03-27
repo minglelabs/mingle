@@ -1545,6 +1545,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         provider: string
         infrastructureProvider: string
         model: string
+        usage?: TranslationUsage
         sourceLanguage?: string
         sourceLanguagesMixed?: boolean
         sourceTextHasForeignScript?: boolean
@@ -1568,6 +1569,15 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       }
       if (meta.usedFallbackFromPreviousState) {
         responsePayload.usedFallbackFromPreviousState = true
+      }
+      if (meta.usage?.promptTokens !== undefined) {
+        responsePayload.translationPromptTokens = meta.usage.promptTokens
+      }
+      if (meta.usage?.completionTokens !== undefined) {
+        responsePayload.translationCompletionTokens = meta.usage.completionTokens
+      }
+      if (meta.usage?.totalTokens !== undefined) {
+        responsePayload.translationTotalTokens = meta.usage.totalTokens
       }
 
       if (enableTts && ttsLanguage && targetLanguages.includes(ttsLanguage)) {
@@ -1697,6 +1707,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           provider: selectedResult.provider,
           infrastructureProvider: selectedResult.infrastructureProvider,
           model: selectedResult.model,
+          usage: selectedResult.usage,
           usedFallbackFromPreviousState: true,
         })
       }
@@ -1709,6 +1720,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       provider: selectedResult.provider,
       infrastructureProvider: selectedResult.infrastructureProvider,
       model: selectedResult.model,
+      usage: selectedResult.usage,
       sourceLanguage: selectedResult.sourceLanguage,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,
       sourceTextHasForeignScript: selectedResult.sourceTextHasForeignScript,
