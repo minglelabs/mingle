@@ -65,6 +65,7 @@ import {
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
+const ENABLE_ACCOUNT_PREFERENCES_CLIENT_DEBUG_LOGS = process.env.NODE_ENV !== 'production'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -81,6 +82,11 @@ const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+
+function logAccountPreferencesClientDebug(event: string, details: Record<string, unknown>) {
+  if (!ENABLE_ACCOUNT_PREFERENCES_CLIENT_DEBUG_LOGS) return
+  console.info('[account/preferences-client]', event, details)
+}
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -462,13 +468,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+    const sessionKey = getOrCreateSessionKey()
+    const trackingUserId = getOrCreateTrackingUserId()
+    logAccountPreferencesClientDebug('get_request_start', {
+      hydrationGeneration,
+      sessionKey,
+      trackingUserId,
+    })
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'GET',
       cache: 'no-store',
       headers: {
-        'x-mingle-session-key': getOrCreateSessionKey(),
-        'x-mingle-user-id': getOrCreateTrackingUserId(),
+        'x-mingle-session-key': sessionKey,
+        'x-mingle-user-id': trackingUserId,
       },
     })
       .then(async (response) => {
@@ -489,12 +502,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
+        logAccountPreferencesClientDebug('get_request_success', {
+          hydrationGeneration,
+          sessionKey,
+          trackingUserId,
+          hydratedPreferences,
+        })
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
+        logAccountPreferencesClientDebug('get_request_failure', {
+          hydrationGeneration,
+          sessionKey,
+          trackingUserId,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
 
     return () => {
@@ -506,13 +531,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!showAccountActions) return
     const currentPreferences = latestAccountPreferencesRef.current
     const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
+    const sessionKey = getOrCreateSessionKey()
+    const trackingUserId = getOrCreateTrackingUserId()
+    logAccountPreferencesClientDebug('patch_request_start', {
+      source: 'debounced_sync',
+      sessionKey,
+      trackingUserId,
+      currentPreferences,
+    })
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'x-mingle-session-key': getOrCreateSessionKey(),
-        'x-mingle-user-id': getOrCreateTrackingUserId(),
+        'x-mingle-session-key': sessionKey,
+        'x-mingle-user-id': trackingUserId,
       },
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
@@ -525,9 +558,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           throw new Error(`account_preferences_patch_failed:${response.status}`)
         }
         accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+        logAccountPreferencesClientDebug('patch_request_success', {
+          source: 'debounced_sync',
+          sessionKey,
+          trackingUserId,
+          currentPreferences,
+        })
       })
-      .catch(() => {
+      .catch((error) => {
         // Keep the current in-memory state and retry on the next change.
+        logAccountPreferencesClientDebug('patch_request_failure', {
+          source: 'debounced_sync',
+          sessionKey,
+          trackingUserId,
+          currentPreferences,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
   }, [showAccountActions])
 
@@ -535,13 +581,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!showAccountActions) return
     latestAccountPreferencesRef.current = nextPreferences
     const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
+    const sessionKey = getOrCreateSessionKey()
+    const trackingUserId = getOrCreateTrackingUserId()
+    logAccountPreferencesClientDebug('patch_request_start', {
+      source: 'immediate_override',
+      sessionKey,
+      trackingUserId,
+      nextPreferences,
+    })
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'x-mingle-session-key': getOrCreateSessionKey(),
-        'x-mingle-user-id': getOrCreateTrackingUserId(),
+        'x-mingle-session-key': sessionKey,
+        'x-mingle-user-id': trackingUserId,
       },
       body: JSON.stringify({
         textSizeLevel: nextPreferences.textSizeLevel,
@@ -554,13 +608,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           throw new Error(`account_preferences_patch_failed:${response.status}`)
         }
         accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+        logAccountPreferencesClientDebug('patch_request_success', {
+          source: 'immediate_override',
+          sessionKey,
+          trackingUserId,
+          nextPreferences,
+        })
       })
-      .catch(() => {
+      .catch((error) => {
         // Keep the current in-memory state and retry on the next change.
+        logAccountPreferencesClientDebug('patch_request_failure', {
+          source: 'immediate_override',
+          sessionKey,
+          trackingUserId,
+          nextPreferences,
+          error: error instanceof Error ? error.message : String(error),
+        })
       })
   }, [showAccountActions])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
+    logAccountPreferencesClientDebug('model_selected', {
+      nextTranslationModel,
+      sessionKey: getOrCreateSessionKey(),
+      trackingUserId: getOrCreateTrackingUserId(),
+    })
     setTranslationModelMenuOpen(false)
     setTranslationModel(nextTranslationModel)
     clearAccountPreferencesSyncTimer()
