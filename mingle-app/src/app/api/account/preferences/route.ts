@@ -17,6 +17,7 @@ const DEFAULT_TEXT_SIZE_LEVEL = 2;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
   textSizeLevel?: unknown;
@@ -51,6 +52,11 @@ const EMPTY_CLIENT_CONTEXT = {
   appVersion: null,
   usageSec: null,
 } as const;
+
+function logAccountPreferencesDebug(event: string, details: Record<string, unknown>) {
+  if (!ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS) return;
+  console.info("[account/preferences]", event, details);
+}
 
 function asClampedInteger(value: unknown, min: number, max: number): number | null {
   const asNumber = Number(value);
@@ -200,6 +206,12 @@ export async function GET(request: Request) {
     externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
     sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
   };
+  logAccountPreferencesDebug("get_request", {
+    headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+    resolvedExternalUserId: identity.externalUserId || null,
+    resolvedSessionUserId: identity.id || null,
+    resolvedSessionKey: identity.sessionKey || null,
+  });
 
   if (!hasIdentity(identity)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -240,6 +252,12 @@ export async function PATCH(request: Request) {
     externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
     sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
   };
+  logAccountPreferencesDebug("patch_request", {
+    headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+    resolvedExternalUserId: identity.externalUserId || null,
+    resolvedSessionUserId: identity.id || null,
+    resolvedSessionKey: identity.sessionKey || null,
+  });
 
   if (!hasIdentity(identity)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -271,6 +289,12 @@ export async function PATCH(request: Request) {
       data,
     });
     if (result.count > 0) {
+      logAccountPreferencesDebug("patch_persisted", {
+        via: "session_user_id",
+        targetUserId: identity.id,
+        headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        translationModel: nextTranslationModel,
+      });
       return NextResponse.json({ ok: true });
     }
   }
@@ -281,6 +305,12 @@ export async function PATCH(request: Request) {
       data,
     });
     if (result.count > 0) {
+      logAccountPreferencesDebug("patch_persisted", {
+        via: "session_email",
+        targetUserEmail: identity.email,
+        headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        translationModel: nextTranslationModel,
+      });
       return NextResponse.json({ ok: true });
     }
   }
@@ -291,6 +321,12 @@ export async function PATCH(request: Request) {
       data,
     });
     if (result.count > 0) {
+      logAccountPreferencesDebug("patch_persisted", {
+        via: "external_user_id",
+        targetExternalUserId: identity.externalUserId,
+        headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+        translationModel: nextTranslationModel,
+      });
       return NextResponse.json({ ok: true });
     }
   }
@@ -303,6 +339,13 @@ export async function PATCH(request: Request) {
         data,
       });
       if (result.count > 0) {
+        logAccountPreferencesDebug("patch_persisted", {
+          via: "session_key_lookup",
+          targetUserId: userId,
+          headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+          resolvedSessionKey: identity.sessionKey,
+          translationModel: nextTranslationModel,
+        });
         return NextResponse.json({ ok: true });
       }
     }
@@ -317,6 +360,14 @@ export async function PATCH(request: Request) {
     data,
   });
   if (createResult.count > 0) {
+    logAccountPreferencesDebug("patch_persisted", {
+      via: "tracked_user_create",
+      targetUserId: createdUserId,
+      targetExternalUserId: tracking.externalUserId,
+      headerExternalUserId: resolveTrackingExternalUserId(request) || null,
+      resolvedSessionKey: tracking.sessionKey,
+      translationModel: nextTranslationModel,
+    });
     const response = NextResponse.json({ ok: true });
     ensureTrackingContext(nextRequest, response, {
       externalUserIdHint: tracking.externalUserId,
