@@ -1993,7 +1993,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             aria-haspopup="listbox"
                             aria-expanded={translationModelMenuOpen}
                             aria-controls={translationModelListboxId}
-                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.2rem] border border-amber-200/90 bg-gradient-to-r from-white via-amber-50/70 to-orange-50/85 px-3.5 text-left shadow-[0_12px_28px_rgba(245,158,11,0.10)] transition duration-200 hover:border-amber-300 hover:shadow-[0_14px_32px_rgba(245,158,11,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1rem] border border-gray-200/95 bg-gradient-to-r from-white via-amber-50/70 to-orange-50/85 px-3.5 text-left shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition duration-200 hover:border-gray-300 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                           >
                             <span
                               aria-hidden="true"
@@ -2005,10 +2005,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
                             <span
-                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
+                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
                                 translationModelMenuOpen
-                                  ? 'border-amber-200 bg-amber-100/90 text-amber-700'
-                                  : 'border-gray-200 bg-white/90 text-gray-500 group-hover:border-amber-200 group-hover:text-amber-600'
+                                  ? 'bg-transparent text-amber-700'
+                                  : 'bg-transparent text-gray-500 group-hover:text-amber-600'
                               }`}
                             >
                               <ChevronDown
