@@ -46,6 +46,7 @@ type TranslationProvider = 'gemini' | 'qwen' | 'openai-compatible'
 type TranslationUsage = {
   promptTokens?: number
   completionTokens?: number
+  reasoningTokens?: number
   totalTokens?: number
 }
 
@@ -135,6 +136,9 @@ type OpenAICompatibleResponseLike = {
     prompt_tokens?: unknown
     completion_tokens?: unknown
     total_tokens?: unknown
+    completion_tokens_details?: {
+      reasoning_tokens?: unknown
+    }
   }
   error?: {
     message?: unknown
@@ -554,19 +558,22 @@ function buildPrompt(ctx: TranslateContext): { systemPrompt: string, userPrompt:
 function normalizeUsage(raw: {
   prompt?: unknown
   completion?: unknown
+  reasoning?: unknown
   total?: unknown
 }): TranslationUsage | undefined {
   const promptTokens = sanitizeNonNegativeInt(raw.prompt)
   const completionTokens = sanitizeNonNegativeInt(raw.completion)
+  const reasoningTokens = sanitizeNonNegativeInt(raw.reasoning)
   const totalTokens = sanitizeNonNegativeInt(raw.total)
 
-  if (promptTokens === null && completionTokens === null && totalTokens === null) {
+  if (promptTokens === null && completionTokens === null && reasoningTokens === null && totalTokens === null) {
     return undefined
   }
 
   const usage: TranslationUsage = {}
   if (promptTokens !== null) usage.promptTokens = promptTokens
   if (completionTokens !== null) usage.completionTokens = completionTokens
+  if (reasoningTokens !== null) usage.reasoningTokens = reasoningTokens
   if (totalTokens !== null) usage.totalTokens = totalTokens
   return usage
 }
@@ -963,6 +970,7 @@ async function translateWithOpenAICompatible(
   const content = rawContent.trim()
   const promptTokens = sanitizeNonNegativeInt(responsePayload.usage?.prompt_tokens)
   const completionTokens = sanitizeNonNegativeInt(responsePayload.usage?.completion_tokens)
+  const reasoningTokens = sanitizeNonNegativeInt(responsePayload.usage?.completion_tokens_details?.reasoning_tokens)
   const totalTokens = sanitizeNonNegativeInt(responsePayload.usage?.total_tokens)
   const responseLogPayload = {
     sourceLanguage: ctx.sourceLanguage,
@@ -977,12 +985,16 @@ async function translateWithOpenAICompatible(
     usage: {
       input_tokens: promptTokens,
       output_tokens: completionTokens,
+      reasoning_tokens: reasoningTokens,
       total_tokens: totalTokens,
     },
     finishReason: responsePayload.choices?.[0]?.finish_reason ?? null,
   }
 
   logTranslateFinalizeInfo(`${config.provider}_response`, responseLogPayload)
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+    console.info(`[translate/finalize] ${config.provider}_response`, responseLogPayload)
+  }
 
   if (!content) {
     logTranslateFinalizeError(`${config.provider}_empty_text`, {
@@ -991,6 +1003,7 @@ async function translateWithOpenAICompatible(
       usage: {
         input_tokens: promptTokens,
         output_tokens: completionTokens,
+        reasoning_tokens: reasoningTokens,
         total_tokens: totalTokens,
       },
     })
@@ -1026,6 +1039,7 @@ async function translateWithOpenAICompatible(
       usage: {
         input_tokens: promptTokens,
         output_tokens: completionTokens,
+        reasoning_tokens: reasoningTokens,
         total_tokens: totalTokens,
       },
     })
@@ -1053,6 +1067,7 @@ async function translateWithOpenAICompatible(
     usage: {
       input_tokens: promptTokens,
       output_tokens: completionTokens,
+      reasoning_tokens: reasoningTokens,
       total_tokens: totalTokens,
     },
   })
@@ -1067,6 +1082,7 @@ async function translateWithOpenAICompatible(
     usage: normalizeUsage({
       prompt: promptTokens,
       completion: completionTokens,
+      reasoning: reasoningTokens,
       total: totalTokens,
     }),
   }
