@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const {
   mockGetServerSession,
@@ -75,6 +75,56 @@ describe("/api/account/preferences route", () => {
       translationModel: "gemini-2.5-flash-lite",
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
+  });
+
+  it("hydrates and seeds a fresh anonymous GET with the provided x-mingle-user-id", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockUserFindUnique.mockResolvedValue(null);
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 2,
+      sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
+    });
+    expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.any(NextResponse),
+      expect.objectContaining({
+        externalUserIdHint: "anon_local_storage_user",
+      }),
+    );
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_local_storage_user",
+        sessionKey: "sess_seeded_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
   });
 
   it("returns the stored DB-backed preferences for authenticated users", async () => {
@@ -338,6 +388,62 @@ describe("/api/account/preferences route", () => {
       tracking: {
         externalUserId: "anon_seeded_user",
         sessionKey: "sess_seeded_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "seeded_user_id" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("persists translation model for fresh anonymous sessions using the provided x-mingle-user-id", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockUserUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+        "x-mingle-session-key": "sess_local_storage_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { externalUserId: "anon_local_storage_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_local_storage_user",
+        sessionKey: "sess_local_storage_user",
       },
       clientContext: {
         language: null,
