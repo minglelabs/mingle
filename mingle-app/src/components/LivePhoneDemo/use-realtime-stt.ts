@@ -1325,6 +1325,7 @@ interface TranslateApiResult {
   ttsAudioBase64?: string
   ttsAudioMime?: string
   provider?: string
+  infrastructureProvider?: string
   model?: string
 }
 
@@ -1388,6 +1389,7 @@ interface ClientEventLogPayload {
   sttDurationMs?: number
   totalDurationMs?: number
   provider?: string
+  infrastructureProvider?: string
   model?: string
   metadata?: Record<string, unknown>
   keepalive?: boolean
@@ -2050,6 +2052,7 @@ export default function useRealtimeSTT({
         ttsAudioBase64,
         ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
         provider: typeof data.provider === 'string' ? data.provider : undefined,
+        infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
       }
     } catch {
@@ -2078,6 +2081,7 @@ export default function useRealtimeSTT({
         body.totalDurationMs = Math.floor(payload.totalDurationMs)
       }
       if (payload.provider) body.provider = payload.provider
+      if (payload.infrastructureProvider) body.infrastructureProvider = payload.infrastructureProvider
       if (payload.model) body.model = payload.model
       if (payload.metadata) body.metadata = payload.metadata
 
@@ -2433,6 +2437,7 @@ export default function useRealtimeSTT({
         sttDurationMs: options?.sttDurationMs,
         totalDurationMs,
         provider: result.provider,
+        infrastructureProvider: result.infrastructureProvider,
         model: result.model,
         metadata: {
           reason: options?.reason || 'unknown',

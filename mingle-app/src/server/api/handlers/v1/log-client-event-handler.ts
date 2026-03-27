@@ -47,6 +47,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const sttDurationMs = sanitizeNonNegativeInt(body.sttDurationMs)
   const totalDurationMs = sanitizeNonNegativeInt(body.totalDurationMs)
   const provider = sanitizeText(body.provider, 64)
+  const infrastructureProvider = sanitizeText(body.infrastructureProvider, 64)
   const model = sanitizeText(body.model, 128)
   const translations = sanitizeTranslations(body.translations)
   const clientMetadata = sanitizeJsonObject(body.metadata)
@@ -75,6 +76,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
         clientMessageId,
         sourceLanguage,
         provider: provider ?? null,
+        infrastructureProvider: infrastructureProvider ?? null,
         model: model ?? null,
         translationLanguages: Object.keys(translations),
       }
@@ -94,6 +96,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
           sessionKey: tracking.sessionKey,
           clientMessageId,
           sourceLanguage,
+          translationProvider: infrastructureProvider ?? provider ?? undefined,
+          translationModel: model ?? undefined,
           sttDurationMs: sttDurationMs ?? undefined,
           totalDurationMs: totalDurationMs ?? undefined,
           metadata: messageMetadata,
@@ -101,6 +105,8 @@ export async function handleLogClientEventV1(request: NextRequest) {
         update: {
           userId,
           sourceLanguage,
+          translationProvider: infrastructureProvider ?? provider ?? undefined,
+          translationModel: model ?? undefined,
           sttDurationMs: sttDurationMs ?? undefined,
           totalDurationMs: totalDurationMs ?? undefined,
           metadata: messageMetadata,
@@ -124,12 +130,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
           contentType: 'SOURCE',
           language: sourceLanguage,
           text: sourceText,
-          provider: provider ?? undefined,
+          provider: infrastructureProvider ?? provider ?? undefined,
           model: model ?? undefined,
         },
         update: {
           text: sourceText,
-          provider: provider ?? undefined,
+          provider: infrastructureProvider ?? provider ?? undefined,
           model: model ?? undefined,
         },
       })
@@ -148,12 +154,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
             contentType: 'TRANSLATION_FINAL',
             language,
             text: translatedText,
-            provider: provider ?? undefined,
+            provider: infrastructureProvider ?? provider ?? undefined,
             model: model ?? undefined,
           },
           update: {
             text: translatedText,
-            provider: provider ?? undefined,
+            provider: infrastructureProvider ?? provider ?? undefined,
             model: model ?? undefined,
           },
         })
@@ -166,6 +172,7 @@ export async function handleLogClientEventV1(request: NextRequest) {
     if (sourceText) eventMetadata.sourceTextLength = sourceText.length
     if (Object.keys(translations).length > 0) eventMetadata.translations = translations
     if (provider) eventMetadata.provider = provider
+    if (infrastructureProvider) eventMetadata.infrastructureProvider = infrastructureProvider
     if (model) eventMetadata.model = model
     if (sttDurationMs !== null) eventMetadata.sttDurationMs = sttDurationMs
     if (totalDurationMs !== null) eventMetadata.totalDurationMs = totalDurationMs

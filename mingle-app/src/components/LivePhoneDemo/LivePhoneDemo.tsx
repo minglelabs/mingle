@@ -35,6 +35,11 @@ import {
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
+import {
+  DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  TRANSLATION_MODEL_OPTIONS,
+  type UserSelectableTranslationModel,
+} from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -213,6 +218,7 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  translationModelLabel: string
   silenceFinalizeLockedMessage: string
   silenceFinalizeLockedButtonLabel: string
   menuLabel: string
@@ -280,6 +286,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   unmuteTtsLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  translationModelLabel,
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
@@ -301,15 +308,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
-  const isNativeAppRuntime = useMemo(() => isNativeApp(), [])
-  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(() => {
-    if (!isNativeApp()) return null
-    const windowWithUpdate = window as NativeAppUpdateWindow
-    return parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
-      || DEFAULT_NATIVE_APP_UPDATE_DETAIL
-  })
+  const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
+  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -349,11 +352,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+    translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   })
   const latestAccountPreferences = useMemo(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
-  }), [sonioxManualFinalizeSilenceMs, textSizeLevel])
+    translationModel,
+  }), [sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -391,7 +396,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [fallbackLanguages])
 
   useEffect(() => {
-    if (!isNativeAppRuntime) return
+    if (!isNativeApp()) return
+
+    const nativeRuntimeTimerId = window.setTimeout(() => {
+      setIsNativeAppRuntime(true)
+    }, 0)
+
+    const windowWithUpdate = window as NativeAppUpdateWindow
+    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
+    const nativeUpdateTimerId = window.setTimeout(() => {
+      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL)
+    }, 0)
 
     const handleNativeAppUpdate = (event: Event) => {
       const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail)
@@ -401,9 +416,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     return () => {
+      window.clearTimeout(nativeRuntimeTimerId)
+      window.clearTimeout(nativeUpdateTimerId)
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
-  }, [isNativeAppRuntime])
+  }, [])
 
   // Persist selected languages
   useEffect(() => {
@@ -456,6 +473,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         )
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        setTranslationModel(hydratedPreferences.translationModel)
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -483,6 +501,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
+        translationModel: currentPreferences.translationModel,
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`account_preferences_patch_failed:${response.status}`)
+        }
+        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+      })
+      .catch(() => {
+        // Keep the current in-memory state and retry on the next change.
+      })
+  }, [showAccountActions])
+
+  const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
+    if (!showAccountActions) return
+    latestAccountPreferencesRef.current = nextPreferences
+    const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
+
+    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        textSizeLevel: nextPreferences.textSizeLevel,
+        sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
+        translationModel: nextPreferences.translationModel,
       }),
     })
       .then((response) => {
@@ -532,7 +576,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     if (!menuOpen) return
-    menuPanelRef.current?.focus()
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
@@ -1712,7 +1755,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             setMenuDragOffsetX(0)
             setIsMenuDragging(false)
             if (!deleteAccountDialogOpen) {
-              menuButtonRef.current?.focus()
+              try {
+                menuButtonRef.current?.focus({ preventScroll: true })
+              } catch {
+                menuButtonRef.current?.focus()
+              }
             }
           }}
         >
@@ -1722,7 +1769,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="absolute inset-0 z-50 bg-black/42"
+              className="absolute inset-0 z-50 overflow-hidden bg-black/42"
               onClick={() => setMenuOpen(false)}
             >
               <motion.div
@@ -1737,34 +1784,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 transition={
                   isMenuDragging
                     ? { duration: 0 }
-                    : { type: 'spring', stiffness: 420, damping: 38, mass: 0.9 }
+                    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
                 }
                 onClick={(event) => event.stopPropagation()}
                 onPointerDown={handleMenuPanelPointerDown}
                 onPointerMove={handleMenuPanelPointerMove}
                 onPointerUp={handleMenuPanelPointerUp}
                 onPointerCancel={handleMenuPanelPointerCancel}
-                className={`absolute inset-y-0 right-0 flex h-full w-[70%] max-w-[24rem] flex-col overflow-hidden border-l border-gray-200 ${navSurfaceClassName}`}
+                className={`absolute inset-y-0 right-0 flex h-full w-[70%] max-w-[24rem] flex-col overflow-hidden border-l border-gray-200 will-change-transform ${navSurfaceClassName}`}
                 style={{
                   boxShadow: '-18px 0 40px rgba(15, 23, 42, 0.22)',
                   touchAction: 'pan-y',
                 }}
               >
                 <div
-                  className="shrink-0 border-b border-gray-200 px-4 pb-4"
-                  style={{
-                    paddingTop: 'max(calc(env(safe-area-inset-top) + 12px), 18px)',
-                  }}
-                >
-                  <div className="mx-auto h-1.5 w-11 rounded-full bg-gray-200" />
-                  <p className="mt-4 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-gray-400">
-                    {menuLabel}
-                  </p>
-                </div>
-
-                <div
                   className="flex-1 overflow-y-auto overscroll-contain"
                   style={{
+                    paddingTop: 'max(calc(env(safe-area-inset-top) + 18px), 24px)',
                     paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)',
                   }}
                 >
@@ -1882,11 +1918,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           )}
                         </div>
                       </label>
+                      <label className="block">
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                          <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
+                        </div>
+                        <select
+                          value={translationModel}
+                          onChange={(event) => {
+                            const nextTranslationModel = event.target.value as UserSelectableTranslationModel
+                            setTranslationModel(nextTranslationModel)
+                            clearAccountPreferencesSyncTimer()
+                            syncAccountPreferencesOverride({
+                              ...latestAccountPreferencesRef.current,
+                              translationModel: nextTranslationModel,
+                            })
+                          }}
+                          className={`h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-amber-400 ${navSurfaceClassName}`}
+                          aria-label={translationModelLabel}
+                        >
+                          {TRANSLATION_MODEL_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   </div>
 
                   {isNativeAppRuntime && (
-                    <div className="border-b border-gray-200 px-4 py-4">
+                    <div className="px-4 py-4">
                       <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">

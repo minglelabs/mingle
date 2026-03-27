@@ -30,6 +30,7 @@ model User {
   pathname        String?
   demoTextSizeLevel Int?   @map("demo_text_size_level")
   demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
+  demoTranslateModel String? @map("demo_translate_model")
   totalUsageSec   Int      @default(0) @map("total_usage_sec")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")
@@ -61,6 +62,8 @@ model AppMessage {
   ttsTotalTokens              Int?     @map("tts_total_tokens")
   sttDurationMs               Int?     @map("stt_duration_ms")
   totalDurationMs             Int?     @map("total_duration_ms")
+  translationProvider         String?  @map("translation_provider")
+  translationModel            String?  @map("translation_model")
   metadata                    Json?
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")

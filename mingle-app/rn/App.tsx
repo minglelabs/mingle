@@ -39,6 +39,7 @@ import {
   resolveNativeAppUpdateSnapshot,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
+import { readPreferredRuntimeValue } from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -171,20 +172,25 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
 
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
-const WEB_APP_BASE_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL'],
-  ['http:', 'https:'],
-  { trimTrailingSlash: true },
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.webAppBaseUrl || '',
+const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
+);
+const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.defaultWsUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL']),
+);
+const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.apiNamespace,
+  readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
+);
+const WEB_APP_BASE_URL = normalizeConfiguredUrl(
+  RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
 ) || 'https://mingle-app-xi.vercel.app';
-const DEFAULT_WS_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL'],
-  ['ws:', 'wss:'],
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
+const DEFAULT_WS_URL = normalizeConfiguredUrl(
+  RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
 
@@ -204,8 +210,7 @@ const {
   validatedApiNamespace: VALIDATED_API_NAMESPACE,
 } = validateRnApiNamespace({
   runtimeOs: RN_RUNTIME_OS,
-  configuredApiNamespace: readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE'])
-    || (NATIVE_RUNTIME_CONFIG.apiNamespace || '').trim(),
+  configuredApiNamespace: RUNTIME_API_NAMESPACE,
 });
 
 const missingRuntimeConfig: string[] = [];
@@ -221,7 +226,7 @@ if (EXPECTED_API_NAMESPACE && !CONFIGURED_API_NAMESPACE) {
   missingRuntimeConfig.push(`NEXT_PUBLIC_API_NAMESPACE must match current platform namespace: ${EXPECTED_API_NAMESPACE}`);
 }
 const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
-  ? `Missing or invalid env: ${missingRuntimeConfig.join(', ')}`
+  ? `Missing or invalid runtime config: ${missingRuntimeConfig.join(', ')}`
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
@@ -712,11 +717,12 @@ function resolveRuntimeClientInfo(): RuntimeClientInfo {
 
   return {
     clientVersion: normalizeClientVersion(
-      envClientVersion
-      || NATIVE_RUNTIME_CONFIG.clientVersion
-      || '',
+      readPreferredRuntimeValue(NATIVE_RUNTIME_CONFIG.clientVersion, envClientVersion),
     ),
-    clientBuild: envClientBuild || NATIVE_RUNTIME_CONFIG.clientBuild || '',
+    clientBuild: readPreferredRuntimeValue(
+      NATIVE_RUNTIME_CONFIG.clientBuild,
+      envClientBuild,
+    ),
   };
 }
 

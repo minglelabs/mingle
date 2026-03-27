@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import {
+  normalizeSelectableTranslationModel,
+  resolveDefaultSelectableTranslationModel,
+} from "@/lib/translation-models";
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
@@ -13,6 +17,7 @@ const DEFAULT_SILENCE_MS = 500;
 type PreferencesBody = {
   textSizeLevel?: unknown;
   sonioxManualFinalizeSilenceMs?: unknown;
+  translationModel?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -23,6 +28,7 @@ type SessionUserIdentity = {
 type UserPreferencesRecord = {
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
+  demoTranslateModel: string | null;
 };
 
 function asClampedInteger(value: unknown, min: number, max: number): number | null {
@@ -42,6 +48,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
   const select = {
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
+    demoTranslateModel: true,
   } as const;
 
   if (identity.id) {
@@ -81,6 +88,8 @@ export async function GET() {
   return NextResponse.json({
     textSizeLevel: preferences.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: preferences.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
+    translationModel: normalizeSelectableTranslationModel(preferences.demoTranslateModel)
+      ?? resolveDefaultSelectableTranslationModel(),
   });
 }
 
@@ -99,7 +108,8 @@ export async function PATCH(request: Request) {
 
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
-  if (nextTextSizeLevel === null && nextSilenceMs === null) {
+  const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
+  if (nextTextSizeLevel === null && nextSilenceMs === null && nextTranslationModel === null) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
 
@@ -108,6 +118,7 @@ export async function PATCH(request: Request) {
   const data = {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
+    ...(nextTranslationModel !== null ? { demoTranslateModel: nextTranslationModel } : {}),
   };
 
   if (identity.id) {

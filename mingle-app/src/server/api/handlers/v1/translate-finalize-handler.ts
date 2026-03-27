@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
 import {
   ensureTrackingContext,
   sanitizeNonNegativeInt,
 } from '@/lib/app-analytics'
+import { getAuthOptions } from '@/lib/auth-options'
+import { prisma } from '@/lib/prisma'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
@@ -23,6 +26,13 @@ import {
   type RecentTurnContext,
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
+import {
+  normalizeSelectableTranslationModel,
+  resolveDefaultSelectableTranslationModel,
+  resolveTranslationRuntimeSelection,
+  type TranslationInfrastructureProvider,
+  type UserSelectableTranslationModel,
+} from '@/lib/translation-models'
 
 export const runtime = 'nodejs'
 
@@ -56,18 +66,21 @@ type TranslationEngineResult = {
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
   provider: TranslationProvider
+  infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   usage?: TranslationUsage
 }
 
 type GeminiTranslationProviderConfig = {
   provider: 'gemini'
+  infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
 }
 
 type OpenAICompatibleTranslationProviderConfig = {
   provider: 'qwen' | 'openai-compatible'
+  infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
   baseUrl: string
@@ -81,7 +94,7 @@ type TranslationProviderResolution = {
   config: TranslationProviderConfig
 } | {
   ok: false
-  error: 'missing_api_key' | 'provider_misconfigured'
+  error: 'missing_api_key' | 'provider_misconfigured' | 'unsupported_model'
   details: string
 }
 
@@ -109,6 +122,11 @@ type GeminiUsageMetadata = {
   promptTokenCount?: unknown
   candidatesTokenCount?: unknown
   totalTokenCount?: unknown
+}
+
+type SessionUserIdentity = {
+  id: string
+  email: string
 }
 
 type GeminiResponseLike = {
@@ -185,8 +203,63 @@ function isTogetherBaseUrl(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('together.xyz')
 }
 
+function resolveOpenAICompatibleInfrastructureProvider(baseUrl: string): string {
+  if (isOpenRouterBaseUrl(baseUrl)) return 'openrouter'
+  if (isTogetherBaseUrl(baseUrl)) return 'together'
+  if (isDashScopeBaseUrl(baseUrl)) return 'dashscope'
+  return 'openai-compatible'
+}
+
 function resolveTranslationProvider(): TranslationProvider {
   return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
+}
+
+function normalizeSessionUserIdentity(session: { user?: { id?: unknown, email?: unknown } } | null): SessionUserIdentity {
+  return {
+    id: typeof session?.user?.id === 'string' ? session.user.id.trim() : '',
+    email: typeof session?.user?.email === 'string' ? session.user.email.trim().toLowerCase() : '',
+  }
+}
+
+async function findUserSelectedTranslationModel(identity: SessionUserIdentity): Promise<UserSelectableTranslationModel | null> {
+  const select = {
+    demoTranslateModel: true,
+  } as const
+
+  if (identity.id) {
+    const record = await prisma.user.findUnique({
+      where: { id: identity.id },
+      select,
+    })
+    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    if (normalizedModel) return normalizedModel
+  }
+
+  if (identity.email) {
+    const record = await prisma.user.findUnique({
+      where: { email: identity.email },
+      select,
+    })
+    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    if (normalizedModel) return normalizedModel
+  }
+
+  return null
+}
+
+async function resolveSelectedTranslationModel(requestedModelRaw?: unknown): Promise<UserSelectableTranslationModel> {
+  try {
+    const session = await getServerSession(getAuthOptions())
+    const selectedModel = await findUserSelectedTranslationModel(normalizeSessionUserIdentity(session))
+    if (selectedModel) return selectedModel
+  } catch {
+    // Ignore auth/session lookup failures and fall back below.
+  }
+
+  const requestedModel = normalizeSelectableTranslationModel(requestedModelRaw)
+  if (requestedModel) return requestedModel
+
+  return resolveDefaultSelectableTranslationModel()
 }
 
 function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
@@ -250,7 +323,78 @@ function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai-compat
   return { chat_template_kwargs: { enable_thinking: false } }
 }
 
-function resolveTranslationProviderConfig(): TranslationProviderResolution {
+function resolveTranslationProviderConfig(requestedModelRaw?: unknown): TranslationProviderResolution {
+  const requestedModelSelection = resolveTranslationRuntimeSelection(requestedModelRaw)
+  if (typeof requestedModelRaw === 'string' && requestedModelRaw.trim() && !requestedModelSelection) {
+    return {
+      ok: false,
+      error: 'unsupported_model',
+      details: `Unsupported translation model: ${requestedModelRaw.trim()}`,
+    }
+  }
+
+  if (requestedModelSelection) {
+    if (requestedModelSelection.engineProvider === 'gemini') {
+      const apiKey = (process.env.GEMINI_API_KEY || '').trim()
+      if (!apiKey) {
+        return {
+          ok: false,
+          error: 'missing_api_key',
+          details: 'GEMINI_API_KEY is missing.',
+        }
+      }
+
+      return {
+        ok: true,
+        config: {
+          provider: 'gemini',
+          infrastructureProvider: requestedModelSelection.infrastructureProvider,
+          model: requestedModelSelection.runtimeModel,
+          apiKey,
+        },
+      }
+    }
+
+    const baseUrl = requestedModelSelection.baseUrl || OPENROUTER_BASE_URL
+    const apiKey = resolveOpenAICompatibleApiKey(baseUrl)
+    if (!apiKey) {
+      return {
+        ok: false,
+        error: 'missing_api_key',
+        details: 'No API key was found for the configured OpenAI-compatible translation provider.',
+      }
+    }
+
+    const parsedExtraBody = parseJsonObjectEnv('TRANSLATE_EXTRA_BODY')
+    if (parsedExtraBody.error) {
+      return {
+        ok: false,
+        error: 'provider_misconfigured',
+        details: parsedExtraBody.error,
+      }
+    }
+
+    const defaultExtraBody = buildDefaultOpenAICompatibleExtraBody('qwen', baseUrl)
+    const extraBody = defaultExtraBody || parsedExtraBody.value
+      ? {
+        ...(defaultExtraBody || {}),
+        ...(parsedExtraBody.value || {}),
+      }
+      : null
+
+    return {
+      ok: true,
+      config: {
+        provider: 'qwen',
+        infrastructureProvider: requestedModelSelection.infrastructureProvider,
+        model: requestedModelSelection.runtimeModel,
+        apiKey,
+        baseUrl,
+        extraBody,
+      },
+    }
+  }
+
   const provider = resolveTranslationProvider()
 
   if (provider === 'gemini') {
@@ -267,6 +411,7 @@ function resolveTranslationProviderConfig(): TranslationProviderResolution {
       ok: true,
       config: {
         provider,
+        infrastructureProvider: 'google',
         model: resolveTranslationModel({ provider }),
         apiKey,
       },
@@ -312,6 +457,7 @@ function resolveTranslationProviderConfig(): TranslationProviderResolution {
     ok: true,
     config: {
       provider,
+      infrastructureProvider: resolveOpenAICompatibleInfrastructureProvider(baseUrl),
       model: resolveTranslationModel({ provider, baseUrl }),
       apiKey,
       baseUrl,
@@ -813,6 +959,7 @@ async function translateWithGemini(ctx: TranslateContext): Promise<TranslationEn
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     provider: 'gemini',
+    infrastructureProvider: config.infrastructureProvider,
     model: config.model,
     usage: normalizeUsage({
       prompt: promptTokens,
@@ -1121,6 +1268,7 @@ async function translateWithOpenAICompatible(
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
     provider: config.provider,
+    infrastructureProvider: config.infrastructureProvider,
     model: config.model,
     usage: normalizeUsage({
       prompt: promptTokens,
@@ -1188,6 +1336,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
+  const requestedTranslationModel = typeof body.translationModel === 'string' ? body.translationModel.trim() : ''
   const clientBundleRev = typeof body.clientBundleRev === 'string' ? body.clientBundleRev.trim() : null
   const sessionKeyHint = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : null
   const isLocalLiveTestRequest = request.headers.get('x-mingle-live-test') === '1'
@@ -1205,7 +1354,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const providerResolution = resolveTranslationProviderConfig()
+  const selectedTranslationModel = await resolveSelectedTranslationModel(requestedTranslationModel)
+  const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
     logTranslateFinalizeError('provider_config_error', {
@@ -1219,8 +1369,10 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     const response = NextResponse.json({
       error: providerResolution.error === 'missing_api_key'
         ? 'No translation API key configured'
-        : 'translation_provider_misconfigured',
-    }, { status: 500 })
+        : providerResolution.error === 'unsupported_model'
+          ? 'unsupported_translation_model'
+          : 'translation_provider_misconfigured',
+    }, { status: providerResolution.error === 'unsupported_model' ? 400 : 500 })
     ensureTrackingContext(request, response, { sessionKeyHint })
     return response
   }
@@ -1260,6 +1412,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     isFinal,
     text,
     clientBundleRev,
+    requestedTranslationModel: requestedTranslationModel || null,
     hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
     hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
     currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),
@@ -1274,6 +1427,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       translations: Record<string, string>,
       meta: {
         provider: string
+        infrastructureProvider: string
         model: string
         sourceLanguage?: string
         sourceLanguagesMixed?: boolean
@@ -1284,6 +1438,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       const responsePayload: Record<string, unknown> = {
         translations,
         provider: meta.provider,
+        infrastructureProvider: meta.infrastructureProvider,
         model: meta.model,
       }
       if (meta.sourceLanguage) {
@@ -1330,6 +1485,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       } else if (testFaultMode === 'target_miss') {
         selectedResult = {
           provider: providerConfig.provider,
+          infrastructureProvider: providerConfig.infrastructureProvider,
           model: providerConfig.model,
           translations: {
             zz: 'forced_target_miss',
@@ -1366,6 +1522,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         })
         return await buildResponseWithOptionalTts(fallbackTranslations, {
           provider: providerConfig.provider,
+          infrastructureProvider: providerConfig.infrastructureProvider,
           model: providerConfig.model,
           usedFallbackFromPreviousState: true,
         })
@@ -1422,6 +1579,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         })
         return await buildResponseWithOptionalTts(fallbackTranslations, {
           provider: selectedResult.provider,
+          infrastructureProvider: selectedResult.infrastructureProvider,
           model: selectedResult.model,
           usedFallbackFromPreviousState: true,
         })
@@ -1433,6 +1591,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
 
     return await buildResponseWithOptionalTts(translations, {
       provider: selectedResult.provider,
+      infrastructureProvider: selectedResult.infrastructureProvider,
       model: selectedResult.model,
       sourceLanguage: selectedResult.sourceLanguage,
       sourceLanguagesMixed: selectedResult.sourceLanguagesMixed,

@@ -54,6 +54,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
+      demoTranslateModel: "qwen/qwen3.5-9b",
     });
 
     const response = await GET();
@@ -63,12 +64,14 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
+      translationModel: "qwen/qwen3.5-9b",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
       select: {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
+        demoTranslateModel: true,
       },
     });
   });
@@ -83,6 +86,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: null,
       demoSilenceFinalizeMs: null,
+      demoTranslateModel: null,
     });
 
     const response = await GET();
@@ -92,6 +96,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
     });
   });
 
@@ -118,6 +123,33 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoSilenceFinalizeMs: 3000,
+      },
+    });
+  });
+
+  it("persists a supported translation model through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoTranslateModel: "qwen/qwen3.5-9b",
       },
     });
   });
