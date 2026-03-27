@@ -223,7 +223,7 @@ function normalizeSessionUserIdentity(session: { user?: { id?: unknown, email?: 
 
 async function findUserSelectedTranslationModel(identity: SessionUserIdentity): Promise<UserSelectableTranslationModel | null> {
   const select = {
-    demoTranslateModel: true,
+    translationModel: true,
   } as const
 
   if (identity.id) {
@@ -231,7 +231,7 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
       where: { id: identity.id },
       select,
     })
-    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
     if (normalizedModel) return normalizedModel
   }
 
@@ -240,14 +240,14 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
       where: { email: identity.email },
       select,
     })
-    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
     if (normalizedModel) return normalizedModel
   }
 
   return null
 }
 
-async function resolveSelectedTranslationModel(requestedModelRaw?: unknown): Promise<UserSelectableTranslationModel> {
+async function resolveSelectedTranslationModel(): Promise<UserSelectableTranslationModel> {
   try {
     const session = await getServerSession(getAuthOptions())
     const selectedModel = await findUserSelectedTranslationModel(normalizeSessionUserIdentity(session))
@@ -255,9 +255,6 @@ async function resolveSelectedTranslationModel(requestedModelRaw?: unknown): Pro
   } catch {
     // Ignore auth/session lookup failures and fall back below.
   }
-
-  const requestedModel = normalizeSelectableTranslationModel(requestedModelRaw)
-  if (requestedModel) return requestedModel
 
   return resolveDefaultSelectableTranslationModel()
 }
@@ -1336,7 +1333,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   const enableTts = ttsPayload?.enabled === true
   const isFinal = body.isFinal === true
   const currentTurnPreviousState = parseCurrentTurnPreviousState(body.currentTurnPreviousState)
-  const requestedTranslationModel = typeof body.translationModel === 'string' ? body.translationModel.trim() : ''
   const clientBundleRev = typeof body.clientBundleRev === 'string' ? body.clientBundleRev.trim() : null
   const sessionKeyHint = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : null
   const isLocalLiveTestRequest = request.headers.get('x-mingle-live-test') === '1'
@@ -1354,7 +1350,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const selectedTranslationModel = await resolveSelectedTranslationModel(requestedTranslationModel)
+  const selectedTranslationModel = await resolveSelectedTranslationModel()
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
@@ -1412,7 +1408,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     isFinal,
     text,
     clientBundleRev,
-    requestedTranslationModel: requestedTranslationModel || null,
     hasImmediatePreviousTurn: Boolean(immediatePreviousTurn),
     hasCurrentTurnPreviousState: Boolean(currentTurnPreviousState),
     currentTurnPreviousLanguages: Object.keys(currentTurnPreviousState?.translations || {}),

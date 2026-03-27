@@ -165,7 +165,7 @@ function setAuthenticatedTranslationModel(model: string | null) {
     },
   })
   mockUserFindUnique.mockResolvedValue({
-    demoTranslateModel: model,
+    translationModel: model,
   })
 }
 
@@ -705,7 +705,7 @@ describe('/api/translate/finalize route', () => {
       },
     })
     mockUserFindUnique.mockResolvedValue({
-      demoTranslateModel: null,
+      translationModel: null,
     })
     mockGenerateContent.mockResolvedValue({
       response: {

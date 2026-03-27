@@ -54,7 +54,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
-      demoTranslateModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-9b",
     });
 
     const response = await GET();
@@ -71,7 +71,7 @@ describe("/api/account/preferences route", () => {
       select: {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
-        demoTranslateModel: true,
+        translationModel: true,
       },
     });
   });
@@ -86,7 +86,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: null,
       demoSilenceFinalizeMs: null,
-      demoTranslateModel: null,
+      translationModel: null,
     });
 
     const response = await GET();
@@ -149,7 +149,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        demoTranslateModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-9b",
       },
     });
   });
