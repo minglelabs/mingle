@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": true,
-      "releaseName": "1.0.6 (27)",
+      "releaseName": "1.0.6 (28)",
       "releaseNotes": {
         "en-US": "Version 1.0.6 updates support information, refreshes localized App Store text, and improves release messaging for a clearer Mingle listing.",
         "ar": "يحدّث الإصدار 1.0.6 معلومات الدعم، ويُجدّد نص App Store المترجم، ويُحسّن رسالة الإصدار لتجربة أوضح في صفحة Mingle.",
