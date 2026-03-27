@@ -624,7 +624,7 @@
         "th": "• Mingle รองรับการล่ามและแปลแบบทุกทิศทางมากกว่า 3 ภาษา แม้ในบทสนทนาเดียวจะมีหลายภาษาปะปนกัน ระบบก็แปลแบบเรียลไทม์ทั้งหมดได้ โดยไม่ต้องเลือกหรือสลับภาษาเองทุกครั้งที่ผู้พูดเปลี่ยน\n• ให้การแปลต่อเนื่องพร้อมสคริปต์แบบเรียลไทม์ ไม่ได้หยุดแปลทีละประโยค แต่แปลต่อเนื่องตามทั้งบริบทของบทสนทนาหรือการประชุม ทำให้เข้าใจเนื้อหาได้เป็นธรรมชาติ\n• แม้เป็นเสียงจากแอปอื่นก็แสดงซับและคำแปลแบบเรียลไทม์ได้ เมื่อเปิดลำโพงสำหรับสายโทร วิทยุ หรือแอปเสียงอย่าง Discord ไว้เบื้องหลัง และเปิด Mingle ไว้ด้านหน้า เสียงนั้นจะเข้ามาเป็นอินพุตของ Mingle และแสดงสคริปต์กับคำแปลทันที\n• สามารถฟังคำแปลเป็นเสียงแบบล่ามพร้อมกันเรียลไทม์ได้ เมื่อเปิดเสียงออก ระบบจะอ่านคำแปลเหมือนมีล่ามอยู่ข้าง ๆ ทำให้เข้าใจได้แม้ไม่ต้องมองหน้าจอ และใช้งานระหว่างวิ่งได้สะดวก\n• แม้สลับแอปหรือล็อกหน้าจอ การแปลก็ยังทำงานต่อได้ Mingle จะใช้บริการไมโครโฟนแบบ foreground ระหว่างเซสชันแปลแบบเรียลไทม์ที่กำลังทำงาน และแสดงการแจ้งเตือนแบบถาวรเพื่อให้คุณทราบเสมอว่ากำลังจับเสียงอยู่ เมื่อสลับไปยังแอปโทรศัพท์ แอปแชต หรือแอปอื่นใด การแปลจะยังทำงานต่อในเบื้องหลังอย่างไม่สะดุด แตะหยุดในแอปหรือปัดปิดการแจ้งเตือนเพื่อยุติบริการไมโครโฟนได้ทันที"
       },
       "video": {
-        "en": "https://www.youtube.com/watch?v=EA--1emAoYE"
+        "en": "https://www.youtube.com/shorts/GCg3FG4PdaA"
       }
     },
     "manualOnly": {
@@ -637,7 +637,8 @@
       "targetAudience": null,
       "adsDeclaration": null,
       "accountDeletionUrl": null,
-      "foregroundServiceDisclosure": "Mingle uses a microphone foreground service to maintain live speech-to-text translation while the user switches to other apps or locks the screen. When the user taps Start Translation, the service begins capturing audio through the device microphone, displays a persistent notification ('Mingle microphone active'), and continues transcribing and translating speech even when the app moves to the background. This enables key scenarios such as keeping translation active during a phone call or Discord voice chat running in another app. The user can stop the service at any time by tapping Stop in the app or dismissing the notification. The service runs only for the duration of the active translation session and is never started without explicit user action."
+      "foregroundServiceDisclosure": "Mingle uses a microphone foreground service to maintain live speech-to-text translation while the user switches to other apps or locks the screen. When the user taps Start Translation, the service begins capturing audio through the device microphone, displays a persistent notification ('Mingle microphone active'), and continues transcribing and translating speech even when the app moves to the background. This enables key scenarios such as keeping translation active during a phone call or Discord voice chat running in another app. The user can stop the service at any time by tapping Stop in the app or dismissing the notification. The service runs only for the duration of the active translation session and is never started without explicit user action.",
+      "foregroundServiceDisclosureVideoUrl": "https://www.youtube.com/shorts/GCg3FG4PdaA"
     }
   }
 }
