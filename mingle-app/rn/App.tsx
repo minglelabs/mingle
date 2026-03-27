@@ -33,6 +33,14 @@ import {
   type NativeAuthProvider,
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
+import {
+  createCheckingNativeAppUpdateSnapshot,
+  createUnknownNativeAppUpdateSnapshot,
+  normalizeClientVersion,
+  resolveNativeAppUpdateSnapshot,
+  type NativeAppUpdateSnapshot,
+} from './src/appUpdateStatus';
+import { readPreferredRuntimeValue } from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -170,35 +178,34 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
 
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
-const WEB_APP_BASE_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL'],
-  ['http:', 'https:'],
-  { trimTrailingSlash: true },
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.webAppBaseUrl || '',
+const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
+);
+const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.defaultWsUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL']),
+);
+const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.apiNamespace,
+  readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
+);
+const WEB_APP_BASE_URL = normalizeConfiguredUrl(
+  RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
 ) || 'https://mingle-app-xi.vercel.app';
-const DEFAULT_WS_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL'],
-  ['ws:', 'wss:'],
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
+const DEFAULT_WS_URL = normalizeConfiguredUrl(
+  RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
-const DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 1000;
-const MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 500;
-const MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS = 3000;
 
-function normalizeSonioxManualFinalizeSilenceMs(value: unknown): number {
+function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed)) {
-    return DEFAULT_SONIOX_MANUAL_FINALIZE_SILENCE_MS;
+    return undefined;
   }
-  return Math.max(
-    MIN_SONIOX_MANUAL_FINALIZE_SILENCE_MS,
-    Math.min(MAX_SONIOX_MANUAL_FINALIZE_SILENCE_MS, Math.floor(parsed)),
-  );
+  return Math.floor(parsed);
 }
 
 const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
@@ -210,8 +217,7 @@ const {
   validatedApiNamespace: VALIDATED_API_NAMESPACE,
 } = validateRnApiNamespace({
   runtimeOs: RN_RUNTIME_OS,
-  configuredApiNamespace: readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE'])
-    || (NATIVE_RUNTIME_CONFIG.apiNamespace || '').trim(),
+  configuredApiNamespace: RUNTIME_API_NAMESPACE,
 });
 
 const missingRuntimeConfig: string[] = [];
@@ -227,7 +233,7 @@ if (EXPECTED_API_NAMESPACE && !CONFIGURED_API_NAMESPACE) {
   missingRuntimeConfig.push(`NEXT_PUBLIC_API_NAMESPACE must match current platform namespace: ${EXPECTED_API_NAMESPACE}`);
 }
 const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
-  ? `Missing or invalid env: ${missingRuntimeConfig.join(', ')}`
+  ? `Missing or invalid runtime config: ${missingRuntimeConfig.join(', ')}`
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
@@ -240,6 +246,7 @@ const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
 const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
+const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const WEB_SUPPORTED_LOCALES = new Set([
   'ko',
@@ -647,13 +654,21 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeOpenUpdateStoreCommand = {
+  type: 'native_open_update_store';
+  payload?: {
+    updateUrl?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
-  | NativeAuthResetCommand;
+  | NativeAuthResetCommand
+  | NativeOpenUpdateStoreCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -690,9 +705,6 @@ type RecommendUpdatePrompt = {
   updateLabel: string;
   laterLabel: string;
 };
-function normalizeClientVersion(raw: string): string {
-  return raw.trim().replace(/^v/i, '');
-}
 
 function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
   const normalizedNamespace = apiNamespace.trim().replace(/^\/+/, '').replace(/\/+$/, '');
@@ -706,6 +718,28 @@ function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android
   if (runtimeOs === 'android') return 'android';
   return 'ios';
 }
+
+type RuntimeClientInfo = {
+  clientVersion: string;
+  clientBuild: string;
+};
+
+function resolveRuntimeClientInfo(): RuntimeClientInfo {
+  const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
+  const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
+
+  return {
+    clientVersion: normalizeClientVersion(
+      readPreferredRuntimeValue(NATIVE_RUNTIME_CONFIG.clientVersion, envClientVersion),
+    ),
+    clientBuild: readPreferredRuntimeValue(
+      NATIVE_RUNTIME_CONFIG.clientBuild,
+      envClientBuild,
+    ),
+  };
+}
+
+const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -969,6 +1003,9 @@ function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
   const { width: windowWidthPx } = useWindowDimensions();
+  const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
+    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
+  );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -1124,6 +1161,21 @@ function AppInner(): React.JSX.Element {
     presentRecommendPrompt(pendingPrompt);
   }, [presentRecommendPrompt]);
 
+  const emitAppUpdateToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const serialized = JSON.stringify(nativeAppUpdateRef.current);
+    if (__DEV__) {
+      console.log(`[NativeAppUpdate→Web] ${serialized.slice(0, 160)}`);
+    }
+    const script = `window.__MINGLE_NATIVE_APP_UPDATE_STATUS = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_APP_UPDATE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current?.injectJavaScript(script);
+  }, []);
+
+  const setNativeAppUpdateSnapshot = useCallback((snapshot: NativeAppUpdateSnapshot) => {
+    nativeAppUpdateRef.current = snapshot;
+    emitAppUpdateToWeb();
+  }, [emitAppUpdateToWeb]);
+
   useEffect(() => {
     if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) {
       return;
@@ -1132,15 +1184,9 @@ function AppInner(): React.JSX.Element {
     let active = true;
     let settled = false;
     const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const nativeRuntimeConfig = readNativeRuntimeConfig();
-    const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
-    const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
-    const clientVersion = normalizeClientVersion(
-      envClientVersion
-      || nativeRuntimeConfig?.clientVersion
-      || '',
-    );
-    const clientBuild = envClientBuild || nativeRuntimeConfig?.clientBuild || '';
+    const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
+    const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
+    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
 
     const fallbackToReady = (reason: string, details?: string) => {
       if (!active || settled) return;
@@ -1148,6 +1194,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[VersionPolicy] bypass (${reason})${details ? `: ${details}` : ''}`);
       }
+      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion));
       setVersionGate({ status: 'ready' });
     };
 
@@ -1175,6 +1222,7 @@ function AppInner(): React.JSX.Element {
       })
       .then((policy) => {
         if (!active || settled) return;
+        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {
           settled = true;
@@ -1243,7 +1291,7 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [presentRecommendPrompt, versionPolicyFallback, versionPolicyLocale]);
+  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -1408,7 +1456,7 @@ function AppInner(): React.JSX.Element {
         .map(language => language.trim())
         .filter(Boolean)
       : [];
-    const sonioxManualFinalizeSilenceMs = normalizeSonioxManualFinalizeSilenceMs(
+    const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
 
@@ -1419,7 +1467,9 @@ function AppInner(): React.JSX.Element {
         sttModel,
         aecEnabled,
         sonioxLanguageHints,
-        sonioxManualFinalizeSilenceMs,
+        ...(typeof sonioxManualFinalizeSilenceMs === 'number'
+          ? { sonioxManualFinalizeSilenceMs }
+          : {}),
       });
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
@@ -1561,6 +1611,16 @@ function AppInner(): React.JSX.Element {
       return;
     }
     if (!parsed || typeof parsed !== 'object') return;
+
+    if (parsed.type === 'native_open_update_store') {
+      const requestedUrl = typeof parsed.payload?.updateUrl === 'string'
+        ? parsed.payload.updateUrl.trim()
+        : '';
+      const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
+      if (!updateUrl) return;
+      void Linking.openURL(updateUrl);
+      return;
+    }
 
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
@@ -1770,9 +1830,10 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {

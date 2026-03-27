@@ -19,7 +19,7 @@ Standalone STT relay server for Mingle.
 
 The Soniox manual finalize silence window comes from the client session config
 (`soniox_manual_finalize_silence_ms`). The server clamps that value to the
-`100..3000` range and falls back to `1000` when the client does not provide a
+`500..3000` range and falls back to `500` when the client does not provide a
 valid value. If no new Soniox realtime text arrives during this interval, the
 server requests a manual finalize.
 
