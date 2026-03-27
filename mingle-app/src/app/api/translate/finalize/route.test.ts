@@ -343,6 +343,7 @@ describe('/api/translate/finalize route', () => {
 
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
     expect(json.model).toBe('qwen/qwen3.5-9b')
     expect(json.translations).toEqual({ ko: '안녕하세요' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -391,6 +392,69 @@ describe('/api/translate/finalize route', () => {
     })
     expect(body.messages?.[0]?.role).toBe('system')
     expect(body.messages?.[1]?.role).toBe('user')
+  })
+
+  it('overrides the env default when the request specifies a supported translation model', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+      translationModel: 'qwen/qwen3.5-9b',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 when the request specifies an unsupported translation model', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      translationModel: 'not-a-real-model',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(json).toEqual({ error: 'unsupported_translation_model' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
   it('defaults qwen to OpenRouter when only TRANSLATE_API_KEY is set', async () => {

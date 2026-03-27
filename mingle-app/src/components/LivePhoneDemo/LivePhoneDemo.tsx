@@ -35,6 +35,11 @@ import {
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
+import {
+  DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  TRANSLATION_MODEL_OPTIONS,
+  type UserSelectableTranslationModel,
+} from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -202,6 +207,7 @@ interface LivePhoneDemoProps {
   unmuteTtsLabel: string
   textSizeLabel: string
   silenceFinalizeLabel: string
+  translationModelLabel: string
   silenceFinalizeLockedMessage: string
   silenceFinalizeLockedButtonLabel: string
   menuLabel: string
@@ -269,6 +275,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   unmuteTtsLabel,
   textSizeLabel,
   silenceFinalizeLabel,
+  translationModelLabel,
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
@@ -290,6 +297,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuOpen, setMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
@@ -326,11 +334,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+    translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   })
-  latestAccountPreferencesRef.current = {
-    textSizeLevel,
-    sonioxManualFinalizeSilenceMs,
-  }
+
+  useEffect(() => {
+    latestAccountPreferencesRef.current = {
+      textSizeLevel,
+      sonioxManualFinalizeSilenceMs,
+      translationModel,
+    }
+  }, [textSizeLevel, sonioxManualFinalizeSilenceMs, translationModel])
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -366,11 +379,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     if (!isNativeApp()) return
 
-    setIsNativeAppRuntime(true)
+    const nativeRuntimeTimerId = window.setTimeout(() => {
+      setIsNativeAppRuntime(true)
+    }, 0)
 
     const windowWithUpdate = window as NativeAppUpdateWindow
     const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
-    setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL)
+    const nativeUpdateTimerId = window.setTimeout(() => {
+      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL)
+    }, 0)
 
     const handleNativeAppUpdate = (event: Event) => {
       const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail)
@@ -380,6 +397,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     return () => {
+      window.clearTimeout(nativeRuntimeTimerId)
+      window.clearTimeout(nativeUpdateTimerId)
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
   }, [])
@@ -435,6 +454,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         )
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
+        setTranslationModel(hydratedPreferences.translationModel)
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -462,6 +482,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
+        translationModel: currentPreferences.translationModel,
       }),
     })
       .then((response) => {
@@ -473,7 +494,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
+  }, [showAccountActions])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -922,6 +943,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    translationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
@@ -1745,9 +1767,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           )}
                         </div>
                       </label>
+                      <label className="block">
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                          <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
+                        </div>
+                        <select
+                          value={translationModel}
+                          onChange={(event) => {
+                            setTranslationModel(event.target.value as UserSelectableTranslationModel)
+                          }}
+                          className={`h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-amber-400 ${navSurfaceClassName}`}
+                          aria-label={translationModelLabel}
+                        >
+                          {TRANSLATION_MODEL_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
+                    {showAccountMenuItems && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            onLogout()
+                          }}
+                          disabled={isAuthActionPending || !showAccountActions}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <LogOut size={15} strokeWidth={2} />
+                          <span>{logoutLabel}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            setDeleteAccountDialogOpen(true)
+                          }}
+                          disabled={isAuthActionPending || !showAccountActions}
+                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 size={15} strokeWidth={2} />
+                          <span>{deleteAccountLabel}</span>
+                        </button>
+                      </>
+                    )}
                     {isNativeAppRuntime && (
-                      <div className="border-b border-gray-200 px-3 py-3">
+                      <div className={`${showAccountMenuItems ? 'border-t' : ''} border-gray-200 px-3 py-3`}>
                         <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -1779,34 +1848,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         </div>
                       </div>
-                    )}
-                    {showAccountMenuItems && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            onLogout()
-                          }}
-                          disabled={isAuthActionPending || !showAccountActions}
-                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <LogOut size={15} strokeWidth={2} />
-                          <span>{logoutLabel}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            setDeleteAccountDialogOpen(true)
-                          }}
-                          disabled={isAuthActionPending || !showAccountActions}
-                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 size={15} strokeWidth={2} />
-                          <span>{deleteAccountLabel}</span>
-                        </button>
-                      </>
                     )}
                   </div>
                 )}

@@ -5,6 +5,7 @@ import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
+import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -516,6 +517,7 @@ interface UseRealtimeSTTOptions {
   enableTts?: boolean
   enableAec?: boolean
   sonioxManualFinalizeSilenceMs?: number
+  translationModel?: UserSelectableTranslationModel
   usageLimitSec?: number | null
 }
 
@@ -1325,6 +1327,7 @@ interface TranslateApiResult {
   ttsAudioBase64?: string
   ttsAudioMime?: string
   provider?: string
+  infrastructureProvider?: string
   model?: string
 }
 
@@ -1388,6 +1391,7 @@ interface ClientEventLogPayload {
   sttDurationMs?: number
   totalDurationMs?: number
   provider?: string
+  infrastructureProvider?: string
   model?: string
   metadata?: Record<string, unknown>
   keepalive?: boolean
@@ -1486,6 +1490,7 @@ export default function useRealtimeSTT({
   enableTts,
   enableAec = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
+  translationModel,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
@@ -2025,6 +2030,9 @@ export default function useRealtimeSTT({
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
       }
+      if (translationModel) {
+        body.translationModel = translationModel
+      }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang && options?.isFinal !== true) {
@@ -2050,12 +2058,13 @@ export default function useRealtimeSTT({
         ttsAudioBase64,
         ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
         provider: typeof data.provider === 'string' ? data.provider : undefined,
+        infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
       }
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
@@ -2078,6 +2087,7 @@ export default function useRealtimeSTT({
         body.totalDurationMs = Math.floor(payload.totalDurationMs)
       }
       if (payload.provider) body.provider = payload.provider
+      if (payload.infrastructureProvider) body.infrastructureProvider = payload.infrastructureProvider
       if (payload.model) body.model = payload.model
       if (payload.metadata) body.metadata = payload.metadata
 
@@ -2433,6 +2443,7 @@ export default function useRealtimeSTT({
         sttDurationMs: options?.sttDurationMs,
         totalDurationMs,
         provider: result.provider,
+        infrastructureProvider: result.infrastructureProvider,
         model: result.model,
         metadata: {
           reason: options?.reason || 'unknown',

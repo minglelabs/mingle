@@ -4,6 +4,11 @@ import {
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
 } from './live-phone-demo.preferences'
+import {
+  DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+  normalizeSelectableTranslationModel,
+  type UserSelectableTranslationModel,
+} from '@/lib/translation-models'
 
 const MIN_TEXT_SIZE_LEVEL = 1
 const MAX_TEXT_SIZE_LEVEL = 5
@@ -11,11 +16,13 @@ const MAX_TEXT_SIZE_LEVEL = 5
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
   sonioxManualFinalizeSilenceMs?: unknown
+  translationModel?: unknown
 }
 
 export interface LivePhoneDemoAccountPreferences {
   textSizeLevel: number
   sonioxManualFinalizeSilenceMs: number
+  translationModel: UserSelectableTranslationModel
 }
 
 function normalizeIntegerPreference(
@@ -49,13 +56,14 @@ export function buildHydratedAccountPreferences(
     sonioxManualFinalizeSilenceMs: isLegacySonioxSilenceSliderNamespace
       ? DEFAULT_SONIOX_SILENCE_MS
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
+    translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   }
 }
 
 export function serializeAccountPreferencesSyncState(
   preferences: LivePhoneDemoAccountPreferences,
 ): string {
-  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}`
+  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}:${preferences.translationModel}`
 }
 
 export function shouldScheduleAccountPreferencesSync(args: {

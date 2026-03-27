@@ -11,9 +11,11 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      translationModel: 'qwen/qwen3.5-9b',
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      translationModel: 'qwen/qwen3.5-9b',
     })
   })
 
@@ -21,9 +23,11 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: 2500,
+      translationModel: 'qwen/qwen3.5-flash-02-23',
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+      translationModel: 'qwen/qwen3.5-flash-02-23',
     })
   })
 })
@@ -37,6 +41,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 3,
         sonioxManualFinalizeSilenceMs: 500,
+        translationModel: 'gemini-2.5-flash-lite',
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -46,6 +51,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
     const currentPreferences = {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
+      translationModel: 'gemini-2.5-flash-lite',
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -65,10 +71,12 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
+        translationModel: 'qwen/qwen3.5-9b',
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
         sonioxManualFinalizeSilenceMs: 500,
+        translationModel: 'gemini-2.5-flash-lite',
       }),
     })).toBe(true)
   })
