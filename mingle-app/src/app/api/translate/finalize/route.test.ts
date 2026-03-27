@@ -368,7 +368,22 @@ describe('/api/translate/finalize route', () => {
     expect(body.model).toBe('qwen/qwen3.5-9b')
     expect(body.extra_body).toBeUndefined()
     expect(body.response_format).toEqual({
-      type: 'json_object',
+      type: 'json_schema',
+      json_schema: {
+        name: 'translate_finalize_response',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            ko: {
+              type: 'string',
+              description: 'Translated text for ko.',
+            },
+          },
+          required: ['ko'],
+          additionalProperties: false,
+        },
+      },
     })
     expect(body.reasoning).toEqual({
       effort: 'none',
@@ -427,10 +442,127 @@ describe('/api/translate/finalize route', () => {
     }
     const headers = requestInit.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
-    expect(body.response_format).toEqual({ type: 'json_object' })
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'translate_finalize_response',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            ko: {
+              type: 'string',
+              description: 'Translated text for ko.',
+            },
+          },
+          required: ['ko'],
+          additionalProperties: false,
+        },
+      },
+    })
     expect(body.reasoning).toEqual({
       effort: 'none',
       exclude: true,
+    })
+  })
+
+  it('uses a redetect json schema for qwen OpenRouter requests on versioned routes', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"en":"Hello","ja":"こんにちは","ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setQwenTranslateEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'test-qwen-key',
+      model: 'qwen/qwen3.5-flash-02-23',
+    })
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/ios/v1.0.6/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: '그래도 느리네.',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en', 'ja', 'ko'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.0.6/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.sourceLanguage).toBe('ko')
+    expect(json.sourceLanguagesMixed).toBe(false)
+    expect(json.sourceTextHasForeignScript).toBe(false)
+    expect(json.translations).toEqual({
+      en: 'Hello',
+      ja: 'こんにちは',
+      ko: '안녕하세요',
+    })
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      response_format?: Record<string, unknown>
+    }
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: {
+        name: 'translate_finalize_response',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            sourceLanguage: {
+              type: 'string',
+              description: 'Detected source language code.',
+            },
+            sourceLanguagesMixed: {
+              type: 'boolean',
+              description: 'Whether the current utterance meaningfully mixes multiple source languages.',
+            },
+            sourceTextHasForeignScript: {
+              type: 'boolean',
+              description: 'Whether the current utterance contains substantive foreign script for the detected source language.',
+            },
+            en: {
+              type: 'string',
+              description: 'Translated text for en.',
+            },
+            ja: {
+              type: 'string',
+              description: 'Translated text for ja.',
+            },
+            ko: {
+              type: 'string',
+              description: 'Translated text for ko.',
+            },
+          },
+          required: [
+            'sourceLanguage',
+            'sourceLanguagesMixed',
+            'sourceTextHasForeignScript',
+            'en',
+            'ja',
+            'ko',
+          ],
+          additionalProperties: false,
+        },
+      },
     })
   })
 

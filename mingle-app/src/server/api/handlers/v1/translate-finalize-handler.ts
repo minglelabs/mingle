@@ -838,6 +838,49 @@ function extractOpenAICompatibleText(responsePayload: OpenAICompatibleResponseLi
     .join('\n')
 }
 
+function buildOpenRouterQwenJsonSchemaResponseFormat(ctx: TranslateContext): Record<string, unknown> {
+  const properties: Record<string, unknown> = {}
+  const required: string[] = []
+
+  if (ctx.shouldRedetectSourceLanguage) {
+    properties.sourceLanguage = {
+      type: 'string',
+      description: 'Detected source language code.',
+    }
+    properties.sourceLanguagesMixed = {
+      type: 'boolean',
+      description: 'Whether the current utterance meaningfully mixes multiple source languages.',
+    }
+    properties.sourceTextHasForeignScript = {
+      type: 'boolean',
+      description: 'Whether the current utterance contains substantive foreign script for the detected source language.',
+    }
+    required.push('sourceLanguage', 'sourceLanguagesMixed', 'sourceTextHasForeignScript')
+  }
+
+  for (const language of ctx.targetLanguages) {
+    properties[language] = {
+      type: 'string',
+      description: `Translated text for ${language}.`,
+    }
+    required.push(language)
+  }
+
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: ctx.isFinal ? 'translate_finalize_response' : 'translate_interim_response',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties,
+        required,
+        additionalProperties: false,
+      },
+    },
+  }
+}
+
 async function createOpenAICompatibleCompletion(
   ctx: TranslateContext,
   config: OpenAICompatibleTranslationProviderConfig,
@@ -854,7 +897,7 @@ async function createOpenAICompatibleCompletion(
   }
 
   if (config.provider === 'qwen' && isOpenRouterBaseUrl(config.baseUrl)) {
-    payload.response_format = { type: 'json_object' }
+    payload.response_format = buildOpenRouterQwenJsonSchemaResponseFormat(ctx)
     payload.reasoning = {
       effort: 'none',
       exclude: true,
