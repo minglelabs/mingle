@@ -128,6 +128,7 @@ type SessionUserIdentity = {
   id: string
   email: string
   externalUserId: string
+  sessionKey: string
 }
 
 type GeminiResponseLike = {
@@ -219,6 +220,22 @@ function sanitizeTrackingValue(rawValue: string | null): string {
   return (rawValue || '').trim().slice(0, 128)
 }
 
+function resolveTrackingSessionKey(request: NextRequest, sessionKeyHint?: string | null): string {
+  const cookieStore = (
+    typeof (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies === 'object'
+      ? (request as { cookies?: { get?: (name: string) => { value?: string } | undefined } }).cookies
+      : undefined
+  )
+
+  return sanitizeTrackingValue(
+    sessionKeyHint
+    || request.headers.get('x-mingle-session-key')
+    || cookieStore?.get?.('mingle_sid')?.value
+    || readCookieValueFromHeader(request.headers.get('cookie'), 'mingle_sid')
+    || null,
+  )
+}
+
 function readCookieValueFromHeader(cookieHeader: string | null, cookieName: string): string {
   const rawHeader = cookieHeader || ''
   for (const segment of rawHeader.split(';')) {
@@ -256,12 +273,38 @@ function resolveTrackingExternalUserId(request: NextRequest): string {
 function normalizeSessionUserIdentity(
   session: { user?: { id?: unknown, email?: unknown } } | null,
   externalUserId = '',
+  sessionKey = '',
 ): SessionUserIdentity {
   return {
     id: typeof session?.user?.id === 'string' ? session.user.id.trim() : '',
     email: typeof session?.user?.email === 'string' ? session.user.email.trim().toLowerCase() : '',
     externalUserId,
+    sessionKey,
   }
+}
+
+async function findUserIdBySessionKey(sessionKey: string): Promise<string | null> {
+  if (!sessionKey) return null
+
+  const recentEvent = await prisma.appEventLog.findFirst({
+    where: {
+      sessionKey,
+      userId: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { userId: true },
+  })
+  if (recentEvent?.userId) return recentEvent.userId
+
+  const recentMessage = await prisma.appMessage.findFirst({
+    where: {
+      sessionKey,
+      userId: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { userId: true },
+  })
+  return recentMessage?.userId || null
 }
 
 async function findUserSelectedTranslationModel(identity: SessionUserIdentity): Promise<UserSelectableTranslationModel | null> {
@@ -296,23 +339,40 @@ async function findUserSelectedTranslationModel(identity: SessionUserIdentity): 
     if (normalizedModel) return normalizedModel
   }
 
+  if (identity.sessionKey) {
+    const userId = await findUserIdBySessionKey(identity.sessionKey)
+    if (userId) {
+      const record = await prisma.user.findUnique({
+        where: { id: userId },
+        select,
+      })
+      const normalizedModel = normalizeSelectableTranslationModel(record?.translationModel)
+      if (normalizedModel) return normalizedModel
+    }
+  }
+
   return null
 }
 
-async function resolveSelectedTranslationModel(request: NextRequest): Promise<UserSelectableTranslationModel> {
+async function resolveSelectedTranslationModel(
+  request: NextRequest,
+  sessionKeyHint?: string | null,
+): Promise<UserSelectableTranslationModel> {
   const externalUserId = resolveTrackingExternalUserId(request)
+  const sessionKey = resolveTrackingSessionKey(request, sessionKeyHint)
   try {
     const session = await getServerSession(getAuthOptions())
     const selectedModel = await findUserSelectedTranslationModel(
-      normalizeSessionUserIdentity(session, externalUserId),
+      normalizeSessionUserIdentity(session, externalUserId, sessionKey),
     )
     if (selectedModel) return selectedModel
   } catch {
-    if (externalUserId) {
+    if (externalUserId || sessionKey) {
       const selectedModel = await findUserSelectedTranslationModel({
         id: '',
         email: '',
         externalUserId,
+        sessionKey,
       })
       if (selectedModel) return selectedModel
     }
@@ -1411,7 +1471,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const selectedTranslationModel = await resolveSelectedTranslationModel(request)
+  const selectedTranslationModel = await resolveSelectedTranslationModel(request, sessionKeyHint)
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {

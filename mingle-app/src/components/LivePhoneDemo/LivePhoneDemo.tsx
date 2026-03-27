@@ -10,7 +10,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
-import { mergeDisplayUtterances } from './use-realtime-stt'
+import { getOrCreateSessionKey, mergeDisplayUtterances } from './use-realtime-stt'
 import { clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -458,6 +458,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'GET',
       cache: 'no-store',
+      headers: {
+        'x-mingle-session-key': getOrCreateSessionKey(),
+      },
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -497,7 +500,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-mingle-session-key': getOrCreateSessionKey(),
+      },
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
@@ -522,7 +528,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-mingle-session-key': getOrCreateSessionKey(),
+      },
       body: JSON.stringify({
         textSizeLevel: nextPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,

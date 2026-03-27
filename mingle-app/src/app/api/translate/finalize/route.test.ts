@@ -3,9 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   mockGetServerSession,
   mockUserFindUnique,
+  mockAppEventLogFindFirst,
+  mockAppMessageFindFirst,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockAppEventLogFindFirst: vi.fn(),
+  mockAppMessageFindFirst: vi.fn(),
 }))
 
 const mockGenerateContent = vi.fn()
@@ -26,6 +30,12 @@ vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: mockUserFindUnique,
+    },
+    appEventLog: {
+      findFirst: mockAppEventLogFindFirst,
+    },
+    appMessage: {
+      findFirst: mockAppMessageFindFirst,
     },
   },
 }))
@@ -177,6 +187,8 @@ describe('/api/translate/finalize route', () => {
     })
     mockGetServerSession.mockResolvedValue(null)
     mockUserFindUnique.mockResolvedValue(null)
+    mockAppEventLogFindFirst.mockResolvedValue(null)
+    mockAppMessageFindFirst.mockResolvedValue(null)
   })
 
   afterEach(() => {
@@ -567,6 +579,69 @@ describe('/api/translate/finalize route', () => {
     expect(json.provider).toBe('qwen')
     expect(json.infrastructureProvider).toBe('openrouter')
     expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
+  it('uses the session-linked tracking user translation model for non-final requests when user id cookies are unavailable', async () => {
+    mockGetServerSession.mockResolvedValue(null)
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: 'user_from_session' })
+    mockUserFindUnique.mockImplementation(async (args: { where?: Record<string, string> }) => {
+      if (args.where?.id === 'user_from_session') {
+        return { translationModel: 'qwen/qwen3.5-9b' }
+      }
+      return null
+    })
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+      sessionKey: 'sess_test_user',
+    }, {
+      'x-mingle-session-key': 'sess_test_user',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('qwen/qwen3.5-9b')
+    expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
+      where: {
+        sessionKey: 'sess_test_user',
+        userId: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { userId: true },
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })

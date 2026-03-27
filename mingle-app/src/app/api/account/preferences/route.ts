@@ -24,6 +24,7 @@ type SessionUserIdentity = {
   id: string;
   email: string;
   externalUserId: string;
+  sessionKey: string;
 };
 
 type UserPreferencesRecord = {
@@ -43,11 +44,20 @@ function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: 
     id: typeof session?.user?.id === "string" ? session.user.id.trim() : "",
     email: typeof session?.user?.email === "string" ? session.user.email.trim().toLowerCase() : "",
     externalUserId: "",
+    sessionKey: "",
   };
 }
 
 function sanitizeTrackingValue(rawValue: string | null): string {
   return (rawValue || "").trim().slice(0, 128);
+}
+
+function resolveTrackingSessionKey(request: Request): string {
+  return sanitizeTrackingValue(
+    request.headers.get("x-mingle-session-key")
+    || readCookieValue(request, "mingle_sid")
+    || null,
+  );
 }
 
 function readCookieValue(request: Request, cookieName: string): string {
@@ -75,6 +85,30 @@ function resolveTrackingExternalUserId(request: Request): string {
     || readCookieValue(request, "mingle_uid")
     || null,
   );
+}
+
+async function findUserIdBySessionKey(sessionKey: string): Promise<string | null> {
+  if (!sessionKey) return null;
+
+  const recentEvent = await prisma.appEventLog.findFirst({
+    where: {
+      sessionKey,
+      userId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { userId: true },
+  });
+  if (recentEvent?.userId) return recentEvent.userId;
+
+  const recentMessage = await prisma.appMessage.findFirst({
+    where: {
+      sessionKey,
+      userId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { userId: true },
+  });
+  return recentMessage?.userId || null;
 }
 
 async function findUserPreferences(identity: SessionUserIdentity): Promise<UserPreferencesRecord | null> {
@@ -114,11 +148,24 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     }
   }
 
+  if (identity.sessionKey) {
+    const userId = await findUserIdBySessionKey(identity.sessionKey);
+    if (userId) {
+      const record = await prisma.user.findUnique({
+        where: { id: userId },
+        select,
+      });
+      if (record) {
+        return record;
+      }
+    }
+  }
+
   return null;
 }
 
 function hasIdentity(identity: SessionUserIdentity): boolean {
-  return Boolean(identity.id || identity.email || identity.externalUserId);
+  return Boolean(identity.id || identity.email || identity.externalUserId || identity.sessionKey);
 }
 
 export async function GET(request: Request) {
@@ -126,6 +173,7 @@ export async function GET(request: Request) {
   const identity = {
     ...normalizeSessionUserIdentity(session),
     externalUserId: resolveTrackingExternalUserId(request),
+    sessionKey: resolveTrackingSessionKey(request),
   };
 
   if (!hasIdentity(identity)) {
@@ -150,6 +198,7 @@ export async function PATCH(request: Request) {
   const identity = {
     ...normalizeSessionUserIdentity(session),
     externalUserId: resolveTrackingExternalUserId(request),
+    sessionKey: resolveTrackingSessionKey(request),
   };
 
   if (!hasIdentity(identity)) {
@@ -203,6 +252,19 @@ export async function PATCH(request: Request) {
     });
     if (result.count > 0) {
       return NextResponse.json({ ok: true });
+    }
+  }
+
+  if (identity.sessionKey) {
+    const userId = await findUserIdBySessionKey(identity.sessionKey);
+    if (userId) {
+      const result = await prisma.user.updateMany({
+        where: { id: userId },
+        data,
+      });
+      if (result.count > 0) {
+        return NextResponse.json({ ok: true });
+      }
     }
   }
 

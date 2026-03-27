@@ -1409,7 +1409,7 @@ function createSpeakerAvatarSeed(): string {
   return `avatar_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
-function getOrCreateSessionKey(): string {
+export function getOrCreateSessionKey(): string {
   if (typeof window === 'undefined') return createSessionKey()
   try {
     const existing = window.localStorage.getItem(LS_KEY_SESSION)?.trim()

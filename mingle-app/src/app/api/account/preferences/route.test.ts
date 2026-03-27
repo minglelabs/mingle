@@ -4,10 +4,14 @@ const {
   mockGetServerSession,
   mockUserFindUnique,
   mockUserUpdateMany,
+  mockAppEventLogFindFirst,
+  mockAppMessageFindFirst,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserUpdateMany: vi.fn(),
+  mockAppEventLogFindFirst: vi.fn(),
+  mockAppMessageFindFirst: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -24,6 +28,12 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mockUserFindUnique,
       updateMany: mockUserUpdateMany,
     },
+    appEventLog: {
+      findFirst: mockAppEventLogFindFirst,
+    },
+    appMessage: {
+      findFirst: mockAppMessageFindFirst,
+    },
   },
 }));
 
@@ -32,6 +42,8 @@ import { GET, PATCH } from "@/app/api/account/preferences/route";
 describe("/api/account/preferences route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageFindFirst.mockResolvedValue(null);
   });
 
   it("returns 401 for unauthenticated GET requests", async () => {
@@ -204,6 +216,72 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({ ok: true });
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("returns stored preferences by session key when tracking cookies are unavailable", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: 3,
+      demoSilenceFinalizeMs: 900,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+
+    const response = await GET(new Request("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-session-key": "sess_test_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 900,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+    expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
+      where: {
+        sessionKey: "sess_test_user",
+        userId: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { userId: true },
+    });
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { id: "user_from_session" },
+      select: {
+        demoTextSizeLevel: true,
+        demoSilenceFinalizeMs: true,
+        translationModel: true,
+      },
+    });
+  });
+
+  it("persists translation model by session key when tracking cookies are unavailable", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-session-key": "sess_test_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_from_session" },
       data: {
         translationModel: "qwen/qwen3.5-9b",
       },
