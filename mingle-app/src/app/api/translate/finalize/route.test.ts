@@ -418,6 +418,49 @@ describe('/api/translate/finalize route', () => {
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
   })
 
+  it('falls back to previous-state translations for non-final qwen provider errors', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          error: {
+            message: 'Provider returned error',
+            code: 503,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'qwen/qwen3.5-9b',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: '응',
+      sourceLanguage: 'ko',
+      targetLanguages: ['en', 'ja'],
+      isFinal: false,
+      currentTurnPreviousState: {
+        sourceLanguage: 'ko',
+        sourceText: '응',
+        translations: {
+          en: 'Yeah.',
+          ja: 'うん。',
+        },
+      },
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.usedFallbackFromPreviousState).toBe(true)
+    expect(json.translations).toEqual({
+      en: 'Yeah.',
+      ja: 'うん。',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('uses DashScope defaults for qwen when only DASHSCOPE_API_KEY is set', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(

@@ -33,6 +33,8 @@ const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
+const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
+const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 12_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
@@ -451,8 +453,14 @@ function isRetryableOpenAICompatibleError(error: unknown): boolean {
     || normalizedMessage.includes('network')
     || normalizedMessage.includes('timed out')
     || normalizedMessage.includes('timeout')
+    || normalizedMessage.includes('aborted')
+    || normalizedMessage.includes('aborterror')
     || normalizedMessage.includes('rate limit')
   )
+}
+
+function resolveOpenAICompatibleRequestTimeoutMs(isFinal: boolean): number {
+  return isFinal ? OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS : OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS
 }
 
 function formatSingleTurnForPromptWithOptions(
@@ -860,11 +868,16 @@ async function createOpenAICompatibleCompletion(
   }
 
   const executeRequest = async () => {
+    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal)
+    const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+      ? AbortSignal.timeout(timeoutMs)
+      : undefined
     const response = await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
       cache: 'no-store',
+      ...(signal ? { signal } : {}),
     })
 
     const rawText = await response.text()
@@ -875,17 +888,26 @@ async function createOpenAICompatibleCompletion(
       parsedBody = null
     }
 
+    const providerErrorMessage = typeof parsedBody?.error?.message === 'string'
+      ? parsedBody.error.message.trim()
+      : ''
+    const providerErrorCode = parsedBody?.error?.code
+
     if (!response.ok) {
-      const errorMessage = (
-        typeof parsedBody?.error?.message === 'string' && parsedBody.error.message.trim()
-      )
-        ? parsedBody.error.message.trim()
-        : rawText.trim() || `HTTP ${response.status}`
+      const errorMessage = providerErrorMessage || rawText.trim() || `HTTP ${response.status}`
       throw new Error(`OpenAI-compatible provider error [${response.status}] ${errorMessage}`)
     }
 
     if (!parsedBody) {
       throw new Error('OpenAI-compatible provider returned non-JSON response.')
+    }
+
+    if (providerErrorMessage || typeof providerErrorCode !== 'undefined') {
+      const normalizedProviderErrorCode = typeof providerErrorCode === 'string' || typeof providerErrorCode === 'number'
+        ? String(providerErrorCode).trim()
+        : ''
+      const providerErrorLabel = normalizedProviderErrorCode ? ` [${normalizedProviderErrorCode}]` : ''
+      throw new Error(`OpenAI-compatible provider error${providerErrorLabel} ${providerErrorMessage || 'Unknown provider error'}`)
     }
 
     return parsedBody
@@ -894,7 +916,7 @@ async function createOpenAICompatibleCompletion(
   try {
     return await executeRequest()
   } catch (error) {
-    if (!isRetryableOpenAICompatibleError(error)) throw error
+    if (!ctx.isFinal || !isRetryableOpenAICompatibleError(error)) throw error
 
     console.warn('[translate/finalize] provider_retry_scheduled', {
       ...buildTranslateFinalizeLogContext(ctx),
@@ -1269,11 +1291,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         reason: providerRequestFailed ? 'provider_error' : 'provider_empty_or_unparseable',
         responseStatus: 502,
       })
-      if (!ctx.isFinal && !providerRequestFailed && Object.keys(fallbackTranslations).length > 0) {
+      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
-          reason: 'provider_empty_response',
+          reason: providerRequestFailed ? 'provider_error' : 'provider_empty_response',
         })
         return await buildResponseWithOptionalTts(fallbackTranslations, {
           provider: providerConfig.provider,
