@@ -1995,11 +1995,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             aria-controls={translationModelListboxId}
                             className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                           >
-                            <span
-                              aria-hidden="true"
-                              className="absolute inset-y-2 left-2 w-1.5 rounded-full bg-gradient-to-b from-amber-400 via-orange-400 to-amber-300"
-                            />
-                            <div className="min-w-0 flex-1 pl-2.5">
+                            <div className="min-w-0 flex-1">
                               <div className="truncate text-[0.95rem] font-semibold text-gray-900">
                                 {selectedTranslationModelOption.label}
                               </div>
