@@ -74,6 +74,8 @@ const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
+const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
+const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -185,6 +187,15 @@ function deriveRangeValueFromPointer(
   return Number.isFinite(bounded) ? bounded : min
 }
 
+function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest(
+      'button, input, select, textarea, a, label, [role="button"], [data-menu-swipe-ignore="true"]',
+    ),
+  )
+}
+
 export interface LivePhoneDemoRef {
   startRecording: () => void
 }
@@ -292,8 +303,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
-  const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
-  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
+  const isNativeAppRuntime = useMemo(() => isNativeApp(), [])
+  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(() => {
+    if (!isNativeApp()) return null
+    const windowWithUpdate = window as NativeAppUpdateWindow
+    return parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
+      || DEFAULT_NATIVE_APP_UPDATE_DETAIL
+  })
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -317,8 +333,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
+  const menuSwipeSessionRef = useRef<{
+    pointerId: number
+    startX: number
+    startedAt: number
+  } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
+  const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
+  const [isMenuDragging, setIsMenuDragging] = useState(false)
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
@@ -327,10 +350,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
   })
-  latestAccountPreferencesRef.current = {
+  const latestAccountPreferences = useMemo(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
-  }
+  }), [sonioxManualFinalizeSilenceMs, textSizeLevel])
+
+  useEffect(() => {
+    latestAccountPreferencesRef.current = latestAccountPreferences
+  }, [latestAccountPreferences])
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -364,13 +391,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [fallbackLanguages])
 
   useEffect(() => {
-    if (!isNativeApp()) return
-
-    setIsNativeAppRuntime(true)
-
-    const windowWithUpdate = window as NativeAppUpdateWindow
-    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
-    setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL)
+    if (!isNativeAppRuntime) return
 
     const handleNativeAppUpdate = (event: Event) => {
       const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail)
@@ -382,7 +403,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
-  }, [])
+  }, [isNativeAppRuntime])
 
   // Persist selected languages
   useEffect(() => {
@@ -442,14 +463,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         if (cancelled) return
         accountPreferencesLastSyncedStateKeyRef.current =
-          serializeAccountPreferencesSyncState(latestAccountPreferencesRef.current)
+          serializeAccountPreferencesSyncState(latestAccountPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, showAccountActions])
+  }, [clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions])
 
   const syncAccountPreferences = useCallback(() => {
     if (!showAccountActions) return
@@ -473,28 +494,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [showAccountActions, textSizeLevel, sonioxManualFinalizeSilenceMs])
+  }, [showAccountActions])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
       showAccountActions,
       hydratedGeneration: accountPreferencesHydratedGeneration,
       requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
-      currentPreferences: latestAccountPreferencesRef.current,
+      currentPreferences: latestAccountPreferences,
       lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
     })) {
       return
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferences()
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
     if (!shouldScheduleAccountPreferencesSync({
       showAccountActions,
       hydratedGeneration: accountPreferencesHydratedGeneration,
       requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
-      currentPreferences: latestAccountPreferencesRef.current,
+      currentPreferences: latestAccountPreferences,
       lastSyncedStateKey: accountPreferencesLastSyncedStateKeyRef.current,
     })) {
       return
@@ -507,29 +528,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }, ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS)
 
     return clearAccountPreferencesSyncTimer
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, showAccountActions, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions, syncAccountPreferences])
 
   useEffect(() => {
     if (!menuOpen) return
+    menuPanelRef.current?.focus()
 
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (!target) return
-      if (menuButtonRef.current?.contains(target)) return
-      if (menuPanelRef.current?.contains(target)) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
       setMenuOpen(false)
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMenuOpen(false)
-      }
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('keydown', handleKeyDown)
     return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [menuOpen])
@@ -539,6 +551,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const closeMenuState = window.setTimeout(() => {
       setMenuOpen(false)
+      setMenuDragOffsetX(0)
+      setIsMenuDragging(false)
       setDeleteAccountDialogOpen(false)
     }, 0)
 
@@ -551,6 +565,66 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isAuthActionPending) return
     setDeleteAccountDialogOpen(false)
   }, [isAuthActionPending])
+
+  const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
+    const swipeSession = menuSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== pointerId) return
+
+    const offsetX = Math.max(0, currentX - swipeSession.startX)
+    const elapsedMs = Math.max(1, performance.now() - swipeSession.startedAt)
+    const velocityPxPerMs = offsetX / elapsedMs
+
+    menuSwipeSessionRef.current = null
+    setIsMenuDragging(false)
+
+    if (
+      offsetX >= MENU_PANEL_CLOSE_DRAG_DISTANCE_PX
+      || velocityPxPerMs >= MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS
+    ) {
+      setMenuOpen(false)
+      return
+    }
+
+    setMenuDragOffsetX(0)
+  }, [])
+
+  const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') return
+    if (shouldIgnoreMenuSwipeTarget(event.target)) return
+
+    menuSwipeSessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startedAt: performance.now(),
+    }
+    setIsMenuDragging(true)
+    setMenuDragOffsetX(0)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [])
+
+  const handleMenuPanelPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const swipeSession = menuSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== event.pointerId) return
+
+    const nextOffset = Math.max(0, event.clientX - swipeSession.startX)
+    setMenuDragOffsetX(nextOffset)
+  }, [])
+
+  const handleMenuPanelPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    finishMenuSwipe(event.pointerId, event.clientX)
+  }, [finishMenuSwipe])
+
+  const handleMenuPanelPointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    menuSwipeSessionRef.current = null
+    setIsMenuDragging(false)
+    setMenuDragOffsetX(0)
+  }, [])
 
   const handleDeleteAccountConfirm = useCallback(() => {
     if (isAuthActionPending) return
@@ -1623,19 +1697,81 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   disabled={isAuthActionPending}
                   className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
+                  aria-haspopup="dialog"
                   aria-expanded={menuOpen}
                 >
                   <Menu size={16} strokeWidth={2} />
                 </button>
-                {menuOpen && (
-                  <div
-                    ref={menuPanelRef}
-                    style={{ width: '20rem', maxWidth: 'calc(100vw - 1rem)', flexShrink: 0 }}
-                    className={`absolute right-0 top-full z-50 mt-1 border border-gray-200 p-0 ${navSurfaceClassName}`}
-                  >
-                    <div className="space-y-2.5 border-b border-gray-200 px-3 py-2.5">
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <AnimatePresence
+          onExitComplete={() => {
+            setMenuDragOffsetX(0)
+            setIsMenuDragging(false)
+            if (!deleteAccountDialogOpen) {
+              menuButtonRef.current?.focus()
+            }
+          }}
+        >
+          {menuOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="absolute inset-0 z-50 bg-black/42"
+              onClick={() => setMenuOpen(false)}
+            >
+              <motion.div
+                ref={menuPanelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label={menuLabel}
+                tabIndex={-1}
+                initial={{ x: '100%' }}
+                animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
+                exit={{ x: '100%' }}
+                transition={
+                  isMenuDragging
+                    ? { duration: 0 }
+                    : { type: 'spring', stiffness: 420, damping: 38, mass: 0.9 }
+                }
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={handleMenuPanelPointerDown}
+                onPointerMove={handleMenuPanelPointerMove}
+                onPointerUp={handleMenuPanelPointerUp}
+                onPointerCancel={handleMenuPanelPointerCancel}
+                className={`absolute inset-y-0 right-0 flex h-full w-[70%] max-w-[24rem] flex-col overflow-hidden border-l border-gray-200 ${navSurfaceClassName}`}
+                style={{
+                  boxShadow: '-18px 0 40px rgba(15, 23, 42, 0.22)',
+                  touchAction: 'pan-y',
+                }}
+              >
+                <div
+                  className="shrink-0 border-b border-gray-200 px-4 pb-4"
+                  style={{
+                    paddingTop: 'max(calc(env(safe-area-inset-top) + 12px), 18px)',
+                  }}
+                >
+                  <div className="mx-auto h-1.5 w-11 rounded-full bg-gray-200" />
+                  <p className="mt-4 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    {menuLabel}
+                  </p>
+                </div>
+
+                <div
+                  className="flex-1 overflow-y-auto overscroll-contain"
+                  style={{
+                    paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)',
+                  }}
+                >
+                  <div className="border-b border-gray-200 px-4 py-4">
+                    <div className="space-y-4">
                       <label className="block">
-                        <div className="mb-0.5 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                        <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
                           <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
                           <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
                         </div>
@@ -1669,9 +1805,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           aria-label={`${textSizeLabel} level`}
                         />
                       </label>
+
                       <label className="block">
                         <div
-                          className={`mb-0.5 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
+                          className={`mb-1 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
                             isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                           }`}
                         >
@@ -1746,74 +1883,78 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         </div>
                       </label>
                     </div>
-                    {isNativeAppRuntime && (
-                      <div className="border-b border-gray-200 px-3 py-3">
-                        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-                                {nativeAppUpdateCopy.sectionLabel}
-                              </div>
-                              <div className="mt-2 text-sm font-semibold text-gray-900">
-                                {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
-                              </div>
-                              {nativeAppLatestVersion ? (
-                                <div className="mt-1 text-xs font-medium text-gray-600">
-                                  {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
-                                </div>
-                              ) : null}
-                              <div className="mt-2 text-xs leading-5 text-gray-600">
-                                {nativeAppUpdateStatusMessage}
-                              </div>
+                  </div>
+
+                  {isNativeAppRuntime && (
+                    <div className="border-b border-gray-200 px-4 py-4">
+                      <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                              {nativeAppUpdateCopy.sectionLabel}
                             </div>
-                            {showNativeAppUpdateAction ? (
-                              <button
-                                type="button"
-                                onClick={handleNativeAppUpdatePress}
-                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                              >
-                                <Download size={13} strokeWidth={2.2} />
-                                <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
-                              </button>
+                            <div className="mt-2 text-sm font-semibold text-gray-900">
+                              {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
+                            </div>
+                            {nativeAppLatestVersion ? (
+                              <div className="mt-1 text-xs font-medium text-gray-600">
+                                {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
+                              </div>
                             ) : null}
+                            <div className="mt-2 text-xs leading-5 text-gray-600">
+                              {nativeAppUpdateStatusMessage}
+                            </div>
                           </div>
+                          {showNativeAppUpdateAction ? (
+                            <button
+                              type="button"
+                              onClick={handleNativeAppUpdatePress}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                            >
+                              <Download size={13} strokeWidth={2.2} />
+                              <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
+                            </button>
+                          ) : null}
                         </div>
                       </div>
-                    )}
-                    {showAccountMenuItems && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            onLogout()
-                          }}
-                          disabled={isAuthActionPending || !showAccountActions}
-                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 transition-colors hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <LogOut size={15} strokeWidth={2} />
-                          <span>{logoutLabel}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            setDeleteAccountDialogOpen(true)
-                          }}
-                          disabled={isAuthActionPending || !showAccountActions}
-                          className="inline-flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Trash2 size={15} strokeWidth={2} />
-                          <span>{deleteAccountLabel}</span>
-                        </button>
-                      </>
-                    )}
+                    </div>
+                  )}
+                </div>
+
+                {showAccountMenuItems && (
+                  <div className="shrink-0 border-t border-gray-200 px-4 py-4">
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          onLogout()
+                        }}
+                        disabled={isAuthActionPending || !showAccountActions}
+                        className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <LogOut size={16} strokeWidth={2} />
+                        <span>{logoutLabel}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setDeleteAccountDialogOpen(true)
+                        }}
+                        disabled={isAuthActionPending || !showAccountActions}
+                        className="inline-flex w-full items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 size={16} strokeWidth={2} />
+                        <span>{deleteAccountLabel}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
-              </div>
-            ) : null}
-          </div>
-        </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           {/* Chat Area */}
