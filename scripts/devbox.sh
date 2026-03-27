@@ -209,32 +209,68 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
-resolve_bundle_cmd() {
-  bundle_cmd_ruby_version() {
-    local bundle_cmd_path="$1"
-    local ruby_path=""
-
-    [[ -x "$bundle_cmd_path" ]] || return 1
-    ruby_path="$(head -n 1 "$bundle_cmd_path" 2>/dev/null | sed -n 's/^#!//p')"
-    [[ -n "$ruby_path" ]] || return 1
-    [[ -x "$ruby_path" ]] || return 1
-    "$ruby_path" -e 'print RUBY_VERSION' 2>/dev/null || return 1
-  }
-
-  local candidate=""
+read_rn_gemfile_lock_ruby_version_base() {
   local gemfile_lock="$ROOT_DIR/mingle-app/rn/Gemfile.lock"
   local ruby_version=""
+
+  [[ -f "$gemfile_lock" ]] || return 1
+  ruby_version="$(awk '
+    $1 == "RUBY" && $2 == "VERSION" { getline; gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); print $2; exit }
+  ' "$gemfile_lock" 2>/dev/null || true)"
+  ruby_version="${ruby_version%%p*}"
+  [[ -n "$ruby_version" ]] || return 1
+  printf "%s" "$ruby_version"
+}
+
+bundle_cmd_ruby_path() {
+  local bundle_cmd_path="$1"
+  local ruby_path=""
+
+  [[ -x "$bundle_cmd_path" ]] || return 1
+  ruby_path="$(head -n 1 "$bundle_cmd_path" 2>/dev/null | sed -n 's/^#!//p')"
+  [[ -n "$ruby_path" ]] || return 1
+  [[ -x "$ruby_path" ]] || return 1
+  printf "%s" "$ruby_path"
+}
+
+bundle_cmd_ruby_version() {
+  local bundle_cmd_path="$1"
+  local ruby_path=""
+
+  ruby_path="$(bundle_cmd_ruby_path "$bundle_cmd_path" || true)"
+  [[ -n "$ruby_path" ]] || return 1
+  "$ruby_path" -e 'print RUBY_VERSION' 2>/dev/null || return 1
+}
+
+resolve_direct_pod_runner() {
+  local ruby_cmd="$1"
+  local ruby_api_version=""
+  local pod_cmd=""
+
+  [[ -x "$ruby_cmd" ]] || return 1
+  ruby_api_version="$("$ruby_cmd" -e 'require "rbconfig"; print RbConfig::CONFIG["ruby_version"]' 2>/dev/null || true)"
+  [[ -n "$ruby_api_version" ]] || return 1
+
+  for pod_cmd in \
+    "/opt/homebrew/lib/ruby/gems/${ruby_api_version}/bin/pod" \
+    "/usr/local/lib/ruby/gems/${ruby_api_version}/bin/pod"
+  do
+    [[ -x "$pod_cmd" ]] || continue
+    printf "%s\n%s\n" "$ruby_cmd" "$pod_cmd"
+    return 0
+  done
+
+  return 1
+}
+
+resolve_bundle_cmd() {
+  local candidate=""
   local ruby_version_base=""
   local current_bundle=""
   local current_bundle_ruby_version=""
   local env_bundle_cmd="${DEVBOX_BUNDLE_CMD:-}"
 
-  if [[ -f "$gemfile_lock" ]]; then
-    ruby_version="$(awk '
-      $1 == "RUBY" && $2 == "VERSION" { getline; gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0); print $2; exit }
-    ' "$gemfile_lock" 2>/dev/null || true)"
-    ruby_version_base="${ruby_version%%p*}"
-  fi
+  ruby_version_base="$(read_rn_gemfile_lock_ruby_version_base || true)"
 
   if [[ -n "$env_bundle_cmd" && -x "$env_bundle_cmd" ]]; then
     printf "%s" "$env_bundle_cmd"
@@ -951,6 +987,11 @@ ensure_ios_pods_if_needed() {
   local podfile_lock="$ios_dir/Podfile.lock"
   local manifest_lock="$ios_dir/Pods/Manifest.lock"
   local bundle_cmd=""
+  local bundle_home="$ROOT_DIR/.devbox-cache/bundle/rn"
+  local bundle_ruby_cmd=""
+  local direct_pod_payload=""
+  local direct_pod_ruby_cmd=""
+  local direct_pod_cmd=""
   local needs_install=0
   local reason="already synced"
 
@@ -982,26 +1023,49 @@ ensure_ios_pods_if_needed() {
 
   bundle_cmd="$(resolve_bundle_cmd || true)"
   if [[ -n "$bundle_cmd" ]]; then
+    bundle_ruby_cmd="$(bundle_cmd_ruby_path "$bundle_cmd" || true)"
     (
       cd "$ROOT_DIR/mingle-app/rn/ios"
-      local bundle_home="$ROOT_DIR/.devbox-cache/bundle/rn"
       mkdir -p "$bundle_home"
       if ! BUNDLE_USER_HOME="$bundle_home" \
         BUNDLE_PATH="$bundle_home" \
         BUNDLE_DISABLE_SHARED_GEMS=true \
           "$bundle_cmd" check >/dev/null 2>&1; then
         log "installing RN ruby gems for CocoaPods via: $bundle_cmd"
+        if ! BUNDLE_USER_HOME="$bundle_home" \
+          BUNDLE_PATH="$bundle_home" \
+          BUNDLE_DISABLE_SHARED_GEMS=true \
+            "$bundle_cmd" install; then
+          warn "bundle install failed for RN CocoaPods; attempting direct pod fallback"
+        else
+          BUNDLE_USER_HOME="$bundle_home" \
+          BUNDLE_PATH="$bundle_home" \
+          BUNDLE_DISABLE_SHARED_GEMS=true \
+            "$bundle_cmd" exec pod install
+          exit $?
+        fi
+      else
         BUNDLE_USER_HOME="$bundle_home" \
         BUNDLE_PATH="$bundle_home" \
         BUNDLE_DISABLE_SHARED_GEMS=true \
-          "$bundle_cmd" install
+          "$bundle_cmd" exec pod install
+        exit $?
       fi
-      BUNDLE_USER_HOME="$bundle_home" \
-      BUNDLE_PATH="$bundle_home" \
-      BUNDLE_DISABLE_SHARED_GEMS=true \
-        "$bundle_cmd" exec pod install
-    )
-    return 0
+    ) && return 0
+  fi
+
+  if [[ -n "$bundle_ruby_cmd" ]]; then
+    direct_pod_payload="$(resolve_direct_pod_runner "$bundle_ruby_cmd" || true)"
+    direct_pod_ruby_cmd="$(printf '%s\n' "$direct_pod_payload" | sed -n '1p')"
+    direct_pod_cmd="$(printf '%s\n' "$direct_pod_payload" | sed -n '2p')"
+    if [[ -n "$direct_pod_ruby_cmd" && -n "$direct_pod_cmd" ]]; then
+      warn "using direct pod fallback via: $direct_pod_ruby_cmd $direct_pod_cmd"
+      (
+        cd "$ROOT_DIR/mingle-app/rn/ios"
+        "$direct_pod_ruby_cmd" "$direct_pod_cmd" install
+      )
+      return 0
+    fi
   fi
 
   if command -v pod >/dev/null 2>&1; then
