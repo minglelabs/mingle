@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Menu, LogOut, Trash2, Download } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -306,6 +306,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
@@ -336,6 +337,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
+  const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
+  const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
@@ -349,6 +352,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
+  const translationModelListboxId = useId()
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
@@ -359,6 +363,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxManualFinalizeSilenceMs,
     translationModel,
   }), [sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  const selectedTranslationModelOption = useMemo(
+    () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
+    [translationModel],
+  )
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -549,6 +557,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
   }, [showAccountActions])
 
+  const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
+    setTranslationModelMenuOpen(false)
+    setTranslationModel(nextTranslationModel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      translationModel: nextTranslationModel,
+    })
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+
+  const closeMenuPanel = useCallback(() => {
+    setTranslationModelMenuOpen(false)
+    setMenuOpen(false)
+  }, [])
+
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
       showAccountActions,
@@ -589,6 +612,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      if (translationModelMenuOpen) {
+        setTranslationModelMenuOpen(false)
+        try {
+          translationModelButtonRef.current?.focus({ preventScroll: true })
+        } catch {
+          translationModelButtonRef.current?.focus()
+        }
+        return
+      }
       setMenuOpen(false)
     }
 
@@ -596,13 +628,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen])
+  }, [menuOpen, translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!translationModelMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      if (translationModelDropdownRef.current?.contains(event.target)) return
+      setTranslationModelMenuOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [translationModelMenuOpen])
 
   useEffect(() => {
     if (showMenuButton) return
 
     const closeMenuState = window.setTimeout(() => {
-      setMenuOpen(false)
+      closeMenuPanel()
       setMenuDragOffsetX(0)
       setIsMenuDragging(false)
       setDeleteAccountDialogOpen(false)
@@ -611,7 +658,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(closeMenuState)
     }
-  }, [showMenuButton])
+  }, [closeMenuPanel, showMenuButton])
 
   const closeDeleteAccountDialog = useCallback(() => {
     if (isAuthActionPending) return
@@ -633,12 +680,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       offsetX >= MENU_PANEL_CLOSE_DRAG_DISTANCE_PX
       || velocityPxPerMs >= MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS
     ) {
-      setMenuOpen(false)
+      closeMenuPanel()
       return
     }
 
     setMenuDragOffsetX(0)
-  }, [])
+  }, [closeMenuPanel])
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
@@ -1485,7 +1532,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
     if (!updateUrl) return
 
-    setMenuOpen(false)
+    closeMenuPanel()
 
     const command: NativeOpenUpdateStoreCommand = {
       type: 'native_open_update_store',
@@ -1502,7 +1549,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     window.location.href = updateUrl
-  }, [nativeAppUpdate?.updateUrl])
+  }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -1703,7 +1750,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 ref={langSelectorButtonRef}
                 type="button"
                 onClick={() => {
-                  setMenuOpen(false)
+                  closeMenuPanel()
                   setLangSelectorOpen(o => !o)
                 }}
                 aria-haspopup="menu"
@@ -1744,7 +1791,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   type="button"
                   onClick={() => {
                     setLangSelectorOpen(false)
-                    setMenuOpen(o => !o)
+                    setMenuOpen((open) => {
+                      const nextOpen = !open
+                      if (!nextOpen) {
+                        setTranslationModelMenuOpen(false)
+                      }
+                      return nextOpen
+                    })
                   }}
                   disabled={isAuthActionPending}
                   className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
@@ -1779,7 +1832,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="absolute inset-0 z-50 overflow-hidden bg-black/42"
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenuPanel}
             >
               <motion.div
                 ref={menuPanelRef}
@@ -1927,31 +1980,108 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           )}
                         </div>
                       </label>
-                      <label className="block">
+                      <div className="block">
                         <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
                           <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
                         </div>
-                        <select
-                          value={translationModel}
-                          onChange={(event) => {
-                            const nextTranslationModel = event.target.value as UserSelectableTranslationModel
-                            setTranslationModel(nextTranslationModel)
-                            clearAccountPreferencesSyncTimer()
-                            syncAccountPreferencesOverride({
-                              ...latestAccountPreferencesRef.current,
-                              translationModel: nextTranslationModel,
-                            })
-                          }}
-                          className={`h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-amber-400 ${navSurfaceClassName}`}
-                          aria-label={translationModelLabel}
-                        >
-                          {TRANSLATION_MODEL_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                        <div ref={translationModelDropdownRef} className="relative">
+                          <button
+                            ref={translationModelButtonRef}
+                            type="button"
+                            onClick={() => setTranslationModelMenuOpen((open) => !open)}
+                            aria-label={translationModelLabel}
+                            aria-haspopup="listbox"
+                            aria-expanded={translationModelMenuOpen}
+                            aria-controls={translationModelListboxId}
+                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.2rem] border border-amber-200/90 bg-gradient-to-r from-white via-amber-50/70 to-orange-50/85 px-3.5 text-left shadow-[0_12px_28px_rgba(245,158,11,0.10)] transition duration-200 hover:border-amber-300 hover:shadow-[0_14px_32px_rgba(245,158,11,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-y-2 left-2 w-1.5 rounded-full bg-gradient-to-b from-amber-400 via-orange-400 to-amber-300"
+                            />
+                            <div className="min-w-0 flex-1 pl-2.5">
+                              <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                {selectedTranslationModelOption.label}
+                              </div>
+                            </div>
+                            <span
+                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ${
+                                translationModelMenuOpen
+                                  ? 'border-amber-200 bg-amber-100/90 text-amber-700'
+                                  : 'border-gray-200 bg-white/90 text-gray-500 group-hover:border-amber-200 group-hover:text-amber-600'
+                              }`}
+                            >
+                              <ChevronDown
+                                size={16}
+                                strokeWidth={2.3}
+                                className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                  translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                }`}
+                              />
+                            </span>
+                          </button>
+                          <AnimatePresence initial={false}>
+                            {translationModelMenuOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                              >
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                  className="overflow-hidden"
+                                >
+                                  <div
+                                    id={translationModelListboxId}
+                                    role="listbox"
+                                    aria-label={translationModelLabel}
+                                    className="space-y-1.5 p-2.5"
+                                  >
+                                    {TRANSLATION_MODEL_OPTIONS.map((option) => {
+                                      const isSelected = option.value === translationModel
+
+                                      return (
+                                        <button
+                                          key={option.value}
+                                          type="button"
+                                          role="option"
+                                          aria-selected={isSelected}
+                                          onClick={() => handleTranslationModelSelect(option.value)}
+                                          className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                            isSelected
+                                              ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                              : 'bg-white text-gray-800 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          <div className="min-w-0 flex-1">
+                                            <div className="truncate text-[0.94rem] font-semibold">
+                                              {option.label}
+                                            </div>
+                                          </div>
+                                          <span
+                                            className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                              isSelected
+                                                ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                            }`}
+                                          >
+                                            <Check size={14} strokeWidth={2.6} />
+                                          </span>
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </motion.div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1997,7 +2127,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <button
                         type="button"
                         onClick={() => {
-                          setMenuOpen(false)
+                          closeMenuPanel()
                           onLogout()
                         }}
                         disabled={isAuthActionPending || !showAccountActions}
@@ -2009,7 +2139,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <button
                         type="button"
                         onClick={() => {
-                          setMenuOpen(false)
+                          closeMenuPanel()
                           setDeleteAccountDialogOpen(true)
                         }}
                         disabled={isAuthActionPending || !showAccountActions}
