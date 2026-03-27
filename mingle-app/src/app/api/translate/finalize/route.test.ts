@@ -165,7 +165,7 @@ function setAuthenticatedTranslationModel(model: string | null) {
     },
   })
   mockUserFindUnique.mockResolvedValue({
-    demoTranslateModel: model,
+    translationModel: model,
   })
 }
 
@@ -478,6 +478,46 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).not.toHaveBeenCalled()
   })
 
+  it('uses the authenticated user gemini translation model from DB even when env prefers qwen', async () => {
+    setAuthenticatedTranslationModel('gemini-2.5-flash-lite')
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setQwenTranslateEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'test-qwen-key',
+      model: 'qwen/qwen3.5-9b',
+    })
+    process.env.GEMINI_API_KEY = 'test-gemini-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemini')
+    expect(json.infrastructureProvider).toBe('google')
+    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('defaults qwen to OpenRouter when only TRANSLATE_API_KEY is set', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
@@ -705,7 +745,7 @@ describe('/api/translate/finalize route', () => {
       },
     })
     mockUserFindUnique.mockResolvedValue({
-      demoTranslateModel: null,
+      translationModel: null,
     })
     mockGenerateContent.mockResolvedValue({
       response: {

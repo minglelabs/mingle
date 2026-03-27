@@ -28,7 +28,7 @@ type SessionUserIdentity = {
 type UserPreferencesRecord = {
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
-  demoTranslateModel: string | null;
+  translationModel: string | null;
 };
 
 function asClampedInteger(value: unknown, min: number, max: number): number | null {
@@ -48,7 +48,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
   const select = {
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
-    demoTranslateModel: true,
+    translationModel: true,
   } as const;
 
   if (identity.id) {
@@ -88,7 +88,7 @@ export async function GET() {
   return NextResponse.json({
     textSizeLevel: preferences.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: preferences.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
-    translationModel: normalizeSelectableTranslationModel(preferences.demoTranslateModel)
+    translationModel: normalizeSelectableTranslationModel(preferences.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
   });
 }
@@ -118,7 +118,7 @@ export async function PATCH(request: Request) {
   const data = {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
-    ...(nextTranslationModel !== null ? { demoTranslateModel: nextTranslationModel } : {}),
+    ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
   };
 
   if (identity.id) {
