@@ -11,6 +11,7 @@ export const koDictionary: AppDictionary = {
     unmuteTts: "음성 켜기",
     textSizeLabel: "텍스트 크기",
     silenceFinalizeLabel: "발화 분리 기준 무음 시간",
+    translationModelLabel: "번역 모델",
   },
   tabs: {
     chats: "채팅",

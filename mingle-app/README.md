@@ -127,6 +127,60 @@ Translation/TTS behavior:
 - Test stdout prints the original Soniox transcript and the finalize translation results.
 - If the finalize response includes TTS output, the audio file is saved to `test-fixtures/audio/local/tts-output/` (local only, gitignored).
 
+### Translation Provider Configuration
+
+`/api/{namespace}/translate/finalize` supports multiple translation backends through environment variables.
+
+Default configuration:
+
+- `TRANSLATE_PROVIDER=gemini`
+- `GEMINI_API_KEY=...`
+- optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
+
+Qwen 3.5 9B via OpenRouter:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=qwen/qwen3.5-9b
+TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
+TRANSLATE_API_KEY=your_openrouter_key
+```
+
+Qwen 3.5 9B via Together:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen/Qwen3.5-9B
+TRANSLATE_BASE_URL=https://api.together.xyz/v1
+TRANSLATE_API_KEY=your_together_key
+```
+
+Qwen 3.5 9B via DashScope / Model Studio:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen3.5-9B
+TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
+```
+
+For Singapore / international DashScope, use:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen3.5-9B
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
+```
+
+Notes:
+
+- When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
+- For DashScope, the handler sends `enable_thinking=false`.
+- For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false`.
+- You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.
+- If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer them from `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, or `DASHSCOPE_API_KEY`.
+
 ### Live E2E suites
 
 Suites executed by `pnpm test:live` (or `pnpm test:all`):

@@ -14,6 +14,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "取消静音 TTS",
       "textSizeLabel": "文字大小",
       "silenceFinalizeLabel": "语音分段静音时长",
+      "translationModelLabel": "翻译模型",
     },
     "tabs": {
       "chats": "聊天记录",
@@ -163,6 +164,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "取消靜音 TTS",
       "textSizeLabel": "文字大小",
       "silenceFinalizeLabel": "語音分段靜音時長",
+      "translationModelLabel": "翻譯模型",
     },
     "tabs": {
       "chats": "聊天記錄",
@@ -312,6 +314,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "Включить звук TTS",
       "textSizeLabel": "Размер текста",
       "silenceFinalizeLabel": "Длительность тишины для разделения реплик",
+      "translationModelLabel": "Модель перевода",
     },
     "tabs": {
       "chats": "Чаты",
@@ -461,6 +464,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "إلغاء كتم تحويل النص إلى كلام",
       "textSizeLabel": "حجم النص",
       "silenceFinalizeLabel": "مدة الصمت لفصل المقاطع الكلامية",
+      "translationModelLabel": "نموذج الترجمة",
     },
     "tabs": {
       "chats": "الدردشات",
@@ -3403,6 +3407,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "टीटीएस को अनम्यूट करें",
       "textSizeLabel": "पाठ आकार",
       "silenceFinalizeLabel": "वाक्य विभाजन हेतु मौन अवधि",
+      "translationModelLabel": "अनुवाद मॉडल",
     },
     "tabs": {
       "chats": "चैट",
@@ -4140,6 +4145,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "เปิดเสียง TTS",
       "textSizeLabel": "ขนาดข้อความ",
       "silenceFinalizeLabel": "ระยะเวลาเงียบสำหรับแยกช่วงคำพูด",
+      "translationModelLabel": "โมเดลแปลภาษา",
     },
     "tabs": {
       "chats": "แชท",
@@ -7523,6 +7529,7 @@ export const generatedLocaleDictionaries = {
       "unmuteTts": "Bật tiếng TTS",
       "textSizeLabel": "Kích thước chữ",
       "silenceFinalizeLabel": "Thời lượng im lặng để tách đoạn lời nói",
+      "translationModelLabel": "Mô hình dịch",
     },
     "tabs": {
       "chats": "Trò chuyện",

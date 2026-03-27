@@ -19,6 +19,7 @@ const DEFAULT_USAGE_LIMIT_SEC = 60
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
 const LS_KEY_SESSION = 'mingle_demo_session_key'
+const LS_KEY_TRACKING_USER = 'mingle_demo_tracking_user_id'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
@@ -1325,7 +1326,11 @@ interface TranslateApiResult {
   ttsAudioBase64?: string
   ttsAudioMime?: string
   provider?: string
+  infrastructureProvider?: string
   model?: string
+  translationPromptTokens?: number
+  translationCompletionTokens?: number
+  translationTotalTokens?: number
 }
 
 function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
@@ -1388,7 +1393,11 @@ interface ClientEventLogPayload {
   sttDurationMs?: number
   totalDurationMs?: number
   provider?: string
+  infrastructureProvider?: string
   model?: string
+  translationPromptTokens?: number
+  translationCompletionTokens?: number
+  translationTotalTokens?: number
   metadata?: Record<string, unknown>
   keepalive?: boolean
 }
@@ -1400,6 +1409,13 @@ function createSessionKey(): string {
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
+function createTrackingUserId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `anon_${crypto.randomUUID().replace(/-/g, '')}`
+  }
+  return `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
 function createSpeakerAvatarSeed(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `avatar_${crypto.randomUUID().replace(/-/g, '')}`
@@ -1407,7 +1423,7 @@ function createSpeakerAvatarSeed(): string {
   return `avatar_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
-function getOrCreateSessionKey(): string {
+export function getOrCreateSessionKey(): string {
   if (typeof window === 'undefined') return createSessionKey()
   try {
     const existing = window.localStorage.getItem(LS_KEY_SESSION)?.trim()
@@ -1417,6 +1433,19 @@ function getOrCreateSessionKey(): string {
     return generated
   } catch {
     return createSessionKey()
+  }
+}
+
+export function getOrCreateTrackingUserId(): string {
+  if (typeof window === 'undefined') return createTrackingUserId()
+  try {
+    const existing = window.localStorage.getItem(LS_KEY_TRACKING_USER)?.trim()
+    if (existing) return existing
+    const generated = createTrackingUserId()
+    window.localStorage.setItem(LS_KEY_TRACKING_USER, generated)
+    return generated
+  } catch {
+    return createTrackingUserId()
   }
 }
 
@@ -2032,7 +2061,10 @@ export default function useRealtimeSTT({
       }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify(body),
         signal: options?.signal,
       })
@@ -2050,7 +2082,11 @@ export default function useRealtimeSTT({
         ttsAudioBase64,
         ttsAudioMime: typeof data.ttsAudioMime === 'string' ? data.ttsAudioMime : undefined,
         provider: typeof data.provider === 'string' ? data.provider : undefined,
+        infrastructureProvider: typeof data.infrastructureProvider === 'string' ? data.infrastructureProvider : undefined,
         model: typeof data.model === 'string' ? data.model : undefined,
+        translationPromptTokens: typeof data.translationPromptTokens === 'number' ? data.translationPromptTokens : undefined,
+        translationCompletionTokens: typeof data.translationCompletionTokens === 'number' ? data.translationCompletionTokens : undefined,
+        translationTotalTokens: typeof data.translationTotalTokens === 'number' ? data.translationTotalTokens : undefined,
       }
     } catch {
       return { translations: {} }
@@ -2078,12 +2114,25 @@ export default function useRealtimeSTT({
         body.totalDurationMs = Math.floor(payload.totalDurationMs)
       }
       if (payload.provider) body.provider = payload.provider
+      if (payload.infrastructureProvider) body.infrastructureProvider = payload.infrastructureProvider
       if (payload.model) body.model = payload.model
+      if (typeof payload.translationPromptTokens === 'number' && Number.isFinite(payload.translationPromptTokens) && payload.translationPromptTokens >= 0) {
+        body.translationPromptTokens = Math.floor(payload.translationPromptTokens)
+      }
+      if (typeof payload.translationCompletionTokens === 'number' && Number.isFinite(payload.translationCompletionTokens) && payload.translationCompletionTokens >= 0) {
+        body.translationCompletionTokens = Math.floor(payload.translationCompletionTokens)
+      }
+      if (typeof payload.translationTotalTokens === 'number' && Number.isFinite(payload.translationTotalTokens) && payload.translationTotalTokens >= 0) {
+        body.translationTotalTokens = Math.floor(payload.translationTotalTokens)
+      }
       if (payload.metadata) body.metadata = payload.metadata
 
       await fetch(buildClientApiPath('/log/client-event'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify(body),
         keepalive: payload.keepalive === true,
       })
@@ -2099,7 +2148,10 @@ export default function useRealtimeSTT({
     try {
       const res = await fetch(buildClientApiPath('/tts/inworld'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify({
           text: normalizedText,
           language: normalizedLang,
@@ -2433,7 +2485,11 @@ export default function useRealtimeSTT({
         sttDurationMs: options?.sttDurationMs,
         totalDurationMs,
         provider: result.provider,
+        infrastructureProvider: result.infrastructureProvider,
         model: result.model,
+        translationPromptTokens: result.translationPromptTokens,
+        translationCompletionTokens: result.translationCompletionTokens,
+        translationTotalTokens: result.translationTotalTokens,
         metadata: {
           reason: options?.reason || 'unknown',
           hasInlineTts: Boolean(result.ttsAudioBase64),

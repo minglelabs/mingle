@@ -1,13 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
 
 const {
   mockGetServerSession,
   mockUserFindUnique,
   mockUserUpdateMany,
+  mockAppEventLogFindFirst,
+  mockAppMessageFindFirst,
+  mockEnsureTrackingContext,
+  mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserUpdateMany: vi.fn(),
+  mockAppEventLogFindFirst: vi.fn(),
+  mockAppMessageFindFirst: vi.fn(),
+  mockEnsureTrackingContext: vi.fn(),
+  mockUpsertTrackedUser: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -24,7 +33,18 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mockUserFindUnique,
       updateMany: mockUserUpdateMany,
     },
+    appEventLog: {
+      findFirst: mockAppEventLogFindFirst,
+    },
+    appMessage: {
+      findFirst: mockAppMessageFindFirst,
+    },
   },
+}));
+
+vi.mock("@/lib/app-analytics", () => ({
+  ensureTrackingContext: mockEnsureTrackingContext,
+  upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
 import { GET, PATCH } from "@/app/api/account/preferences/route";
@@ -32,16 +52,79 @@ import { GET, PATCH } from "@/app/api/account/preferences/route";
 describe("/api/account/preferences route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageFindFirst.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "anon_seeded_user",
+      sessionKey: "sess_seeded_user",
+    });
+    mockUpsertTrackedUser.mockResolvedValue("seeded_user_id");
   });
 
-  it("returns 401 for unauthenticated GET requests", async () => {
+  it("returns default preferences for fresh anonymous GET requests", async () => {
     mockGetServerSession.mockResolvedValue(null);
+    mockUserFindUnique.mockResolvedValue(null);
 
-    const response = await GET();
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(json).toEqual({ error: "unauthorized" });
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 2,
+      sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
+    });
+    expect(mockUpsertTrackedUser).toHaveBeenCalled();
+  });
+
+  it("hydrates and seeds a fresh anonymous GET with the provided x-mingle-user-id", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockUserFindUnique.mockResolvedValue(null);
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 2,
+      sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
+    });
+    expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.any(NextResponse),
+      expect.objectContaining({
+        externalUserIdHint: "anon_local_storage_user",
+      }),
+    );
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_local_storage_user",
+        sessionKey: "sess_seeded_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
   });
 
   it("returns the stored DB-backed preferences for authenticated users", async () => {
@@ -54,21 +137,24 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
+      translationModel: "qwen/qwen3.5-9b",
     });
 
-    const response = await GET();
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
+      translationModel: "qwen/qwen3.5-9b",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
       select: {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
+        translationModel: true,
       },
     });
   });
@@ -83,15 +169,17 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: null,
       demoSilenceFinalizeMs: null,
+      translationModel: null,
     });
 
-    const response = await GET();
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
     expect(json).toEqual({
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
     });
   });
 
@@ -104,7 +192,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
         sonioxManualFinalizeSilenceMs: 99999,
@@ -118,6 +206,304 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         demoSilenceFinalizeMs: 3000,
+      },
+    });
+  });
+
+  it("persists a supported translation model through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("returns the stored DB-backed preferences for tracking users without a session", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: 3,
+      demoSilenceFinalizeMs: 1500,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-user-id": "anon_test_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 1500,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { externalUserId: "anon_test_user" },
+      select: {
+        demoTextSizeLevel: true,
+        demoSilenceFinalizeMs: true,
+        translationModel: true,
+      },
+    });
+  });
+
+  it("persists a supported translation model for tracking users without a session", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserUpdateMany.mockResolvedValue({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_test_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { externalUserId: "anon_test_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("returns stored preferences by session key when tracking cookies are unavailable", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "",
+      sessionKey: "sess_test_user",
+    });
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserFindUnique.mockResolvedValue({
+      demoTextSizeLevel: 3,
+      demoSilenceFinalizeMs: 900,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-session-key": "sess_test_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 900,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+    expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
+      where: {
+        sessionKey: "sess_test_user",
+        userId: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { userId: true },
+    });
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { id: "user_from_session" },
+      select: {
+        demoTextSizeLevel: true,
+        demoSilenceFinalizeMs: true,
+        translationModel: true,
+      },
+    });
+  });
+
+  it("persists translation model by session key when tracking cookies are unavailable", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "",
+      sessionKey: "sess_test_user",
+    });
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-session-key": "sess_test_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_from_session" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("reconciles the provided tracking user id onto the session-linked user when external lookup misses", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
+    mockUserUpdateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+        "x-mingle-session-key": "sess_local_storage_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { externalUserId: "anon_local_storage_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "user_from_session" },
+      data: {
+        externalUserId: "anon_local_storage_user",
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("creates a tracked user and persists translation model for fresh anonymous sessions", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-session-key": "sess_new_desktop_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_seeded_user",
+        sessionKey: "sess_seeded_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "seeded_user_id" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("persists translation model for fresh anonymous sessions using the provided x-mingle-user-id", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
+      externalUserId: hints?.externalUserIdHint ?? "anon_seeded_user",
+      sessionKey: hints?.sessionKeyHint ?? "sess_seeded_user",
+    }));
+    mockUserUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+        "x-mingle-session-key": "sess_local_storage_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { externalUserId: "anon_local_storage_user" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_local_storage_user",
+        sessionKey: "sess_local_storage_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "seeded_user_id" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
       },
     });
   });

@@ -4,6 +4,7 @@ import {
   buildHydratedAccountPreferences,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
+  type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
 
 describe('buildHydratedAccountPreferences', () => {
@@ -11,9 +12,11 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      translationModel: 'qwen/qwen3.5-9b',
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
+      translationModel: 'qwen/qwen3.5-9b',
     })
   })
 
@@ -21,9 +24,11 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: 2500,
+      translationModel: 'unsupported-model',
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
+      translationModel: 'gemini-2.5-flash-lite',
     })
   })
 })
@@ -31,25 +36,27 @@ describe('buildHydratedAccountPreferences', () => {
 describe('shouldScheduleAccountPreferencesSync', () => {
   it('does not schedule sync before hydration finishes', () => {
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 0,
       requestedHydrationGeneration: 1,
       currentPreferences: {
         textSizeLevel: 3,
         sonioxManualFinalizeSilenceMs: 500,
+        translationModel: 'gemini-2.5-flash-lite',
       },
       lastSyncedStateKey: null,
     })).toBe(false)
   })
 
   it('does not schedule sync when the current preferences match the last synced state', () => {
-    const currentPreferences = {
+    const currentPreferences: LivePhoneDemoAccountPreferences = {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
+      translationModel: 'gemini-2.5-flash-lite',
     }
 
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 1,
       requestedHydrationGeneration: 1,
       currentPreferences,
@@ -59,17 +66,33 @@ describe('shouldScheduleAccountPreferencesSync', () => {
 
   it('schedules sync when hydrated preferences diverge from the last synced state', () => {
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 3,
       requestedHydrationGeneration: 3,
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
+        translationModel: 'qwen/qwen3.5-9b',
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
         sonioxManualFinalizeSilenceMs: 500,
+        translationModel: 'gemini-2.5-flash-lite',
       }),
     })).toBe(true)
+  })
+
+  it('does not schedule sync when preference syncing is disabled', () => {
+    expect(shouldScheduleAccountPreferencesSync({
+      allowSync: false,
+      hydratedGeneration: 1,
+      requestedHydrationGeneration: 1,
+      currentPreferences: {
+        textSizeLevel: 4,
+        sonioxManualFinalizeSilenceMs: 700,
+        translationModel: 'qwen/qwen3.5-9b',
+      },
+      lastSyncedStateKey: null,
+    })).toBe(false)
   })
 })

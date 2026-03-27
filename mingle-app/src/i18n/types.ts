@@ -9,6 +9,7 @@ export type AppDictionary = {
     unmuteTts: string;
     textSizeLabel?: string;
     silenceFinalizeLabel?: string;
+    translationModelLabel?: string;
   };
   tabs: {
     chats: string;
