@@ -4,6 +4,7 @@ import {
   buildHydratedAccountPreferences,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
+  type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
 
 describe('buildHydratedAccountPreferences', () => {
@@ -48,7 +49,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
   })
 
   it('does not schedule sync when the current preferences match the last synced state', () => {
-    const currentPreferences = {
+    const currentPreferences: LivePhoneDemoAccountPreferences = {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: 'gemini-2.5-flash-lite',
