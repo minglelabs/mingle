@@ -238,6 +238,7 @@ interface LivePhoneDemoProps {
   isAuthActionPending?: boolean
   showMenuButton?: boolean
   showAccountActions?: boolean
+  enableAccountPreferencesSync?: boolean
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -306,6 +307,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   isAuthActionPending = false,
   showMenuButton = true,
   showAccountActions = true,
+  enableAccountPreferencesSync = true,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
@@ -459,7 +461,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     let cancelled = false
     clearAccountPreferencesSyncTimer()
 
-    if (!showAccountActions) {
+    if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
       return () => {
         cancelled = true
@@ -525,10 +527,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, showAccountActions])
+  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync])
 
   const syncAccountPreferences = useCallback(() => {
-    if (!showAccountActions) return
+    if (!enableAccountPreferencesSync) return
     const currentPreferences = latestAccountPreferencesRef.current
     const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
     const sessionKey = getOrCreateSessionKey()
@@ -575,10 +577,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           error: error instanceof Error ? error.message : String(error),
         })
       })
-  }, [showAccountActions])
+  }, [enableAccountPreferencesSync])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
-    if (!showAccountActions) return
+    if (!enableAccountPreferencesSync) return
     latestAccountPreferencesRef.current = nextPreferences
     const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
     const sessionKey = getOrCreateSessionKey()
@@ -625,7 +627,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           error: error instanceof Error ? error.message : String(error),
         })
       })
-  }, [showAccountActions])
+  }, [enableAccountPreferencesSync])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     logAccountPreferencesClientDebug('model_selected', {
@@ -649,7 +651,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
-      showAccountActions,
+      allowSync: enableAccountPreferencesSync,
       hydratedGeneration: accountPreferencesHydratedGeneration,
       requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
       currentPreferences: latestAccountPreferences,
@@ -659,11 +661,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     clearAccountPreferencesSyncTimer()
     syncAccountPreferences()
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
     if (!shouldScheduleAccountPreferencesSync({
-      showAccountActions,
+      allowSync: enableAccountPreferencesSync,
       hydratedGeneration: accountPreferencesHydratedGeneration,
       requestedHydrationGeneration: accountPreferencesHydrationGenerationRef.current,
       currentPreferences: latestAccountPreferences,
@@ -679,7 +681,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }, ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS)
 
     return clearAccountPreferencesSyncTimer
-  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, latestAccountPreferences, showAccountActions, syncAccountPreferences])
+  }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
     if (!menuOpen) return

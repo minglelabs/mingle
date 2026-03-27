@@ -36,7 +36,7 @@ describe('buildHydratedAccountPreferences', () => {
 describe('shouldScheduleAccountPreferencesSync', () => {
   it('does not schedule sync before hydration finishes', () => {
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 0,
       requestedHydrationGeneration: 1,
       currentPreferences: {
@@ -56,7 +56,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
     }
 
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 1,
       requestedHydrationGeneration: 1,
       currentPreferences,
@@ -66,7 +66,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
 
   it('schedules sync when hydrated preferences diverge from the last synced state', () => {
     expect(shouldScheduleAccountPreferencesSync({
-      showAccountActions: true,
+      allowSync: true,
       hydratedGeneration: 3,
       requestedHydrationGeneration: 3,
       currentPreferences: {
@@ -80,5 +80,19 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         translationModel: 'gemini-2.5-flash-lite',
       }),
     })).toBe(true)
+  })
+
+  it('does not schedule sync when preference syncing is disabled', () => {
+    expect(shouldScheduleAccountPreferencesSync({
+      allowSync: false,
+      hydratedGeneration: 1,
+      requestedHydrationGeneration: 1,
+      currentPreferences: {
+        textSizeLevel: 4,
+        sonioxManualFinalizeSilenceMs: 700,
+        translationModel: 'qwen/qwen3.5-9b',
+      },
+      lastSyncedStateKey: null,
+    })).toBe(false)
   })
 })

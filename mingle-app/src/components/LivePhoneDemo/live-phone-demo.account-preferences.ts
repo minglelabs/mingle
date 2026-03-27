@@ -67,13 +67,13 @@ export function serializeAccountPreferencesSyncState(
 }
 
 export function shouldScheduleAccountPreferencesSync(args: {
-  showAccountActions: boolean
+  allowSync: boolean
   hydratedGeneration: number
   requestedHydrationGeneration: number
   currentPreferences: LivePhoneDemoAccountPreferences
   lastSyncedStateKey: string | null
 }): boolean {
-  if (!args.showAccountActions) return false
+  if (!args.allowSync) return false
   if (args.hydratedGeneration !== args.requestedHydrationGeneration) return false
 
   return serializeAccountPreferencesSyncState(args.currentPreferences) !== args.lastSyncedStateKey
