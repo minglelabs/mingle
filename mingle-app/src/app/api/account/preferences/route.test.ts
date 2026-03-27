@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 const {
   mockGetServerSession,
@@ -6,12 +7,16 @@ const {
   mockUserUpdateMany,
   mockAppEventLogFindFirst,
   mockAppMessageFindFirst,
+  mockEnsureTrackingContext,
+  mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserUpdateMany: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockAppMessageFindFirst: vi.fn(),
+  mockEnsureTrackingContext: vi.fn(),
+  mockUpsertTrackedUser: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -37,6 +42,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/app-analytics", () => ({
+  ensureTrackingContext: mockEnsureTrackingContext,
+  upsertTrackedUser: mockUpsertTrackedUser,
+}));
+
 import { GET, PATCH } from "@/app/api/account/preferences/route";
 
 describe("/api/account/preferences route", () => {
@@ -44,16 +54,27 @@ describe("/api/account/preferences route", () => {
     vi.clearAllMocks();
     mockAppEventLogFindFirst.mockResolvedValue(null);
     mockAppMessageFindFirst.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "anon_seeded_user",
+      sessionKey: "sess_seeded_user",
+    });
+    mockUpsertTrackedUser.mockResolvedValue("seeded_user_id");
   });
 
-  it("returns 401 for unauthenticated GET requests", async () => {
+  it("returns default preferences for fresh anonymous GET requests", async () => {
     mockGetServerSession.mockResolvedValue(null);
+    mockUserFindUnique.mockResolvedValue(null);
 
-    const response = await GET(new Request("https://example.com/api/account/preferences"));
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(json).toEqual({ error: "unauthorized" });
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 2,
+      sonioxManualFinalizeSilenceMs: 500,
+      translationModel: "gemini-2.5-flash-lite",
+    });
+    expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
 
   it("returns the stored DB-backed preferences for authenticated users", async () => {
@@ -69,7 +90,7 @@ describe("/api/account/preferences route", () => {
       translationModel: "qwen/qwen3.5-9b",
     });
 
-    const response = await GET(new Request("https://example.com/api/account/preferences"));
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -101,7 +122,7 @@ describe("/api/account/preferences route", () => {
       translationModel: null,
     });
 
-    const response = await GET(new Request("https://example.com/api/account/preferences"));
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
@@ -121,7 +142,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
         sonioxManualFinalizeSilenceMs: 99999,
@@ -148,7 +169,7 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
         translationModel: "qwen/qwen3.5-9b",
@@ -174,7 +195,7 @@ describe("/api/account/preferences route", () => {
       translationModel: "qwen/qwen3.5-9b",
     });
 
-    const response = await GET(new Request("https://example.com/api/account/preferences", {
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
       headers: {
         "x-mingle-user-id": "anon_test_user",
       },
@@ -201,7 +222,7 @@ describe("/api/account/preferences route", () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserUpdateMany.mockResolvedValue({ count: 0 }).mockResolvedValueOnce({ count: 1 });
 
-    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       headers: {
         "x-mingle-user-id": "anon_test_user",
@@ -224,6 +245,10 @@ describe("/api/account/preferences route", () => {
 
   it("returns stored preferences by session key when tracking cookies are unavailable", async () => {
     mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "",
+      sessionKey: "sess_test_user",
+    });
     mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
@@ -231,7 +256,7 @@ describe("/api/account/preferences route", () => {
       translationModel: "qwen/qwen3.5-9b",
     });
 
-    const response = await GET(new Request("https://example.com/api/account/preferences", {
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
       headers: {
         "x-mingle-session-key": "sess_test_user",
       },
@@ -264,10 +289,14 @@ describe("/api/account/preferences route", () => {
 
   it("persists translation model by session key when tracking cookies are unavailable", async () => {
     mockGetServerSession.mockResolvedValue(null);
+    mockEnsureTrackingContext.mockReturnValue({
+      externalUserId: "",
+      sessionKey: "sess_test_user",
+    });
     mockAppEventLogFindFirst.mockResolvedValue({ userId: "user_from_session" });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const response = await PATCH(new Request("https://example.com/api/account/preferences", {
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       headers: {
         "x-mingle-session-key": "sess_test_user",
@@ -282,6 +311,51 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({ ok: true });
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_from_session" },
+      data: {
+        translationModel: "qwen/qwen3.5-9b",
+      },
+    });
+  });
+
+  it("creates a tracked user and persists translation model for fresh anonymous sessions", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+    mockUserUpdateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      headers: {
+        "x-mingle-session-key": "sess_new_desktop_user",
+      },
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.5-9b",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
+      tracking: {
+        externalUserId: "anon_seeded_user",
+        sessionKey: "sess_seeded_user",
+      },
+      clientContext: {
+        language: null,
+        pageLanguage: null,
+        referrer: null,
+        fullUrl: null,
+        queryParams: null,
+        screenWidth: null,
+        screenHeight: null,
+        timezone: null,
+        platform: null,
+        pathname: null,
+        appVersion: null,
+        usageSec: null,
+      },
+    });
+    expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "seeded_user_id" },
       data: {
         translationModel: "qwen/qwen3.5-9b",
       },

@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import {
+  ensureTrackingContext,
+  upsertTrackedUser,
+} from "@/lib/app-analytics";
 import {
   normalizeSelectableTranslationModel,
   resolveDefaultSelectableTranslationModel,
@@ -32,6 +36,21 @@ type UserPreferencesRecord = {
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
 };
+
+const EMPTY_CLIENT_CONTEXT = {
+  language: null,
+  pageLanguage: null,
+  referrer: null,
+  fullUrl: null,
+  queryParams: null,
+  screenWidth: null,
+  screenHeight: null,
+  timezone: null,
+  platform: null,
+  pathname: null,
+  appVersion: null,
+  usageSec: null,
+} as const;
 
 function asClampedInteger(value: unknown, min: number, max: number): number | null {
   const asNumber = Number(value);
@@ -169,36 +188,57 @@ function hasIdentity(identity: SessionUserIdentity): boolean {
 }
 
 export async function GET(request: Request) {
+  const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  const trackingSeedResponse = new NextResponse();
+  const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
+    externalUserIdHint: resolveTrackingExternalUserId(request) || null,
+    sessionKeyHint: resolveTrackingSessionKey(request) || null,
+  });
   const identity = {
     ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request),
-    sessionKey: resolveTrackingSessionKey(request),
+    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
+    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
   };
 
   if (!hasIdentity(identity)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const preferences = await findUserPreferences(identity);
-  if (!preferences) {
-    return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  let preferences = await findUserPreferences(identity);
+  if (!preferences && identity.externalUserId) {
+    await upsertTrackedUser({
+      tracking,
+      clientContext: EMPTY_CLIENT_CONTEXT,
+    });
+    preferences = await findUserPreferences(identity);
   }
 
-  return NextResponse.json({
-    textSizeLevel: preferences.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
-    sonioxManualFinalizeSilenceMs: preferences.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
-    translationModel: normalizeSelectableTranslationModel(preferences.translationModel)
+  const response = NextResponse.json({
+    textSizeLevel: preferences?.demoTextSizeLevel ?? DEFAULT_TEXT_SIZE_LEVEL,
+    sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
+    translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
   });
+  ensureTrackingContext(nextRequest, response, {
+    externalUserIdHint: tracking.externalUserId,
+    sessionKeyHint: tracking.sessionKey,
+  });
+  return response;
 }
 
 export async function PATCH(request: Request) {
+  const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  const trackingSeedResponse = new NextResponse();
+  const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
+    externalUserIdHint: resolveTrackingExternalUserId(request) || null,
+    sessionKeyHint: resolveTrackingSessionKey(request) || null,
+  });
   const identity = {
     ...normalizeSessionUserIdentity(session),
-    externalUserId: resolveTrackingExternalUserId(request),
-    sessionKey: resolveTrackingSessionKey(request),
+    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
+    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
   };
 
   if (!hasIdentity(identity)) {
@@ -268,5 +308,27 @@ export async function PATCH(request: Request) {
     }
   }
 
-  return NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  const createdUserId = await upsertTrackedUser({
+    tracking,
+    clientContext: EMPTY_CLIENT_CONTEXT,
+  });
+  const createResult = await prisma.user.updateMany({
+    where: { id: createdUserId },
+    data,
+  });
+  if (createResult.count > 0) {
+    const response = NextResponse.json({ ok: true });
+    ensureTrackingContext(nextRequest, response, {
+      externalUserIdHint: tracking.externalUserId,
+      sessionKeyHint: tracking.sessionKey,
+    });
+    return response;
+  }
+
+  const notFoundResponse = NextResponse.json({ error: "user_not_found" }, { status: 404 });
+  ensureTrackingContext(nextRequest, notFoundResponse, {
+    externalUserIdHint: tracking.externalUserId,
+    sessionKeyHint: tracking.sessionKey,
+  });
+  return notFoundResponse;
 }
