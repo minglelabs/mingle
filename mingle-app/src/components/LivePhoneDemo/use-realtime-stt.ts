@@ -5,7 +5,6 @@ import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
-import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -517,7 +516,6 @@ interface UseRealtimeSTTOptions {
   enableTts?: boolean
   enableAec?: boolean
   sonioxManualFinalizeSilenceMs?: number
-  translationModel?: UserSelectableTranslationModel
   usageLimitSec?: number | null
 }
 
@@ -1490,7 +1488,6 @@ export default function useRealtimeSTT({
   enableTts,
   enableAec = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
-  translationModel,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
@@ -2030,9 +2027,6 @@ export default function useRealtimeSTT({
       if (options?.currentTurnPreviousState) {
         body.currentTurnPreviousState = options.currentTurnPreviousState
       }
-      if (translationModel) {
-        body.translationModel = translationModel
-      }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang && options?.isFinal !== true) {
@@ -2064,7 +2058,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {

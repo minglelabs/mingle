@@ -496,6 +496,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
   }, [showAccountActions])
 
+  const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
+    if (!showAccountActions) return
+    latestAccountPreferencesRef.current = nextPreferences
+    const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
+
+    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        textSizeLevel: nextPreferences.textSizeLevel,
+        sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
+        translationModel: nextPreferences.translationModel,
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`account_preferences_patch_failed:${response.status}`)
+        }
+        accountPreferencesLastSyncedStateKeyRef.current = currentSyncStateKey
+      })
+      .catch(() => {
+        // Keep the current in-memory state and retry on the next change.
+      })
+  }, [showAccountActions])
+
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
       showAccountActions,
@@ -943,7 +968,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
-    translationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
@@ -1774,7 +1798,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <select
                           value={translationModel}
                           onChange={(event) => {
-                            setTranslationModel(event.target.value as UserSelectableTranslationModel)
+                            const nextTranslationModel = event.target.value as UserSelectableTranslationModel
+                            setTranslationModel(nextTranslationModel)
+                            clearAccountPreferencesSyncTimer()
+                            syncAccountPreferencesOverride({
+                              ...latestAccountPreferencesRef.current,
+                              translationModel: nextTranslationModel,
+                            })
                           }}
                           className={`h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none transition focus:border-amber-400 ${navSurfaceClassName}`}
                           aria-label={translationModelLabel}

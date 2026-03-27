@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { GoogleGenerativeAI, SchemaType, type ResponseSchema } from '@google/generative-ai'
 import {
   ensureTrackingContext,
   sanitizeNonNegativeInt,
 } from '@/lib/app-analytics'
+import { getAuthOptions } from '@/lib/auth-options'
+import { prisma } from '@/lib/prisma'
 import { getTranslationLanguageName } from '@/lib/translation-languages'
 import { getInworldAuthHeaderValue } from '@/server/api/shared/inworld-auth'
 import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-utils'
@@ -24,8 +27,11 @@ import {
 } from '@/app/api/translate/finalize/utils'
 import { shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import {
+  normalizeSelectableTranslationModel,
+  resolveDefaultSelectableTranslationModel,
   resolveTranslationRuntimeSelection,
   type TranslationInfrastructureProvider,
+  type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 
 export const runtime = 'nodejs'
@@ -118,6 +124,11 @@ type GeminiUsageMetadata = {
   totalTokenCount?: unknown
 }
 
+type SessionUserIdentity = {
+  id: string
+  email: string
+}
+
 type GeminiResponseLike = {
   text: () => string
   usageMetadata?: GeminiUsageMetadata
@@ -201,6 +212,54 @@ function resolveOpenAICompatibleInfrastructureProvider(baseUrl: string): string 
 
 function resolveTranslationProvider(): TranslationProvider {
   return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
+}
+
+function normalizeSessionUserIdentity(session: { user?: { id?: unknown, email?: unknown } } | null): SessionUserIdentity {
+  return {
+    id: typeof session?.user?.id === 'string' ? session.user.id.trim() : '',
+    email: typeof session?.user?.email === 'string' ? session.user.email.trim().toLowerCase() : '',
+  }
+}
+
+async function findUserSelectedTranslationModel(identity: SessionUserIdentity): Promise<UserSelectableTranslationModel | null> {
+  const select = {
+    demoTranslateModel: true,
+  } as const
+
+  if (identity.id) {
+    const record = await prisma.user.findUnique({
+      where: { id: identity.id },
+      select,
+    })
+    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    if (normalizedModel) return normalizedModel
+  }
+
+  if (identity.email) {
+    const record = await prisma.user.findUnique({
+      where: { email: identity.email },
+      select,
+    })
+    const normalizedModel = normalizeSelectableTranslationModel(record?.demoTranslateModel)
+    if (normalizedModel) return normalizedModel
+  }
+
+  return null
+}
+
+async function resolveSelectedTranslationModel(requestedModelRaw?: unknown): Promise<UserSelectableTranslationModel> {
+  try {
+    const session = await getServerSession(getAuthOptions())
+    const selectedModel = await findUserSelectedTranslationModel(normalizeSessionUserIdentity(session))
+    if (selectedModel) return selectedModel
+  } catch {
+    // Ignore auth/session lookup failures and fall back below.
+  }
+
+  const requestedModel = normalizeSelectableTranslationModel(requestedModelRaw)
+  if (requestedModel) return requestedModel
+
+  return resolveDefaultSelectableTranslationModel()
 }
 
 function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
@@ -1295,7 +1354,8 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const providerResolution = resolveTranslationProviderConfig(requestedTranslationModel)
+  const selectedTranslationModel = await resolveSelectedTranslationModel(requestedTranslationModel)
+  const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {
     logTranslateFinalizeError('provider_config_error', {
