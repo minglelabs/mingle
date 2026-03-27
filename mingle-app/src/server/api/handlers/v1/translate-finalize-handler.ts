@@ -183,12 +183,13 @@ function resolveTranslationProvider(): TranslationProvider {
   return normalizeTranslationProvider(readTranslateEnv('TRANSLATE_PROVIDER')) || 'gemini'
 }
 
-function resolveOpenAICompatibleBaseUrl(): string {
+function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
   const explicitBaseUrl = readTranslateEnv('TRANSLATE_BASE_URL').trim()
   if (explicitBaseUrl) return explicitBaseUrl
   if ((process.env.OPENROUTER_API_KEY || '').trim()) return OPENROUTER_BASE_URL
   if ((process.env.TOGETHER_API_KEY || '').trim()) return TOGETHER_BASE_URL
   if ((process.env.DASHSCOPE_API_KEY || '').trim()) return DASHSCOPE_BASE_URL
+  if (provider === 'qwen' && readTranslateEnv('TRANSLATE_API_KEY').trim()) return OPENROUTER_BASE_URL
   return (process.env.OPENAI_BASE_URL || '').trim()
 }
 
@@ -266,7 +267,7 @@ function resolveTranslationProviderConfig(): TranslationProviderResolution {
     }
   }
 
-  const baseUrl = resolveOpenAICompatibleBaseUrl()
+  const baseUrl = resolveOpenAICompatibleBaseUrl(provider)
   if (!baseUrl) {
     return {
       ok: false,
