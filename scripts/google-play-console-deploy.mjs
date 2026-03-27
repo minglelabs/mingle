@@ -342,6 +342,8 @@ function buildReleasePlan(config, workspaceRoot, options) {
   const releaseStatus =
     options.releaseStatus || release.defaultReleaseStatus || "draft";
   const releaseName = options.releaseName || release.releaseName || "";
+  const releaseVersion =
+    typeof release.version === "string" ? release.version.trim() : "";
   const changesNotSentForReview =
     options.changesNotSentForReview ?? Boolean(release.changesNotSentForReview);
   const releaseNotesSource =
@@ -359,6 +361,8 @@ function buildReleasePlan(config, workspaceRoot, options) {
     track,
     releaseStatus,
     releaseName,
+    releaseVersion,
+    runtimeApiNamespace: releaseVersion ? `android/v${releaseVersion}` : "android/v1.0.6",
     changesNotSentForReview,
     releaseNotes,
     userFraction: options.userFraction,
@@ -426,10 +430,19 @@ function runMetadataSync(configJsonPath, options) {
 }
 
 function buildReleaseAab(plan) {
+  const buildEnv = {
+    ...process.env,
+    NEXT_PUBLIC_SITE_URL:
+      process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://mingle-app-xi.vercel.app",
+    NEXT_PUBLIC_WS_URL:
+      process.env.NEXT_PUBLIC_WS_URL?.trim() || "wss://mingle.up.railway.app",
+    NEXT_PUBLIC_API_NAMESPACE: plan.runtimeApiNamespace,
+    RN_API_NAMESPACE: plan.runtimeApiNamespace,
+  };
   const result = spawnSync("./gradlew", ["bundleRelease"], {
     cwd: DEFAULT_ANDROID_DIR,
     stdio: "inherit",
-    env: process.env,
+    env: buildEnv,
   });
 
   if (result.status !== 0) {
