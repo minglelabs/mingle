@@ -19,6 +19,7 @@ const DEFAULT_USAGE_LIMIT_SEC = 60
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
 const LS_KEY_SESSION = 'mingle_demo_session_key'
+const LS_KEY_TRACKING_USER = 'mingle_demo_tracking_user_id'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
@@ -1408,6 +1409,13 @@ function createSessionKey(): string {
   return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
+function createTrackingUserId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `anon_${crypto.randomUUID().replace(/-/g, '')}`
+  }
+  return `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
 function createSpeakerAvatarSeed(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `avatar_${crypto.randomUUID().replace(/-/g, '')}`
@@ -1425,6 +1433,19 @@ export function getOrCreateSessionKey(): string {
     return generated
   } catch {
     return createSessionKey()
+  }
+}
+
+export function getOrCreateTrackingUserId(): string {
+  if (typeof window === 'undefined') return createTrackingUserId()
+  try {
+    const existing = window.localStorage.getItem(LS_KEY_TRACKING_USER)?.trim()
+    if (existing) return existing
+    const generated = createTrackingUserId()
+    window.localStorage.setItem(LS_KEY_TRACKING_USER, generated)
+    return generated
+  } catch {
+    return createTrackingUserId()
   }
 }
 
@@ -2040,7 +2061,10 @@ export default function useRealtimeSTT({
       }
       const res = await fetch(buildClientApiPath('/translate/finalize'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify(body),
         signal: options?.signal,
       })
@@ -2105,7 +2129,10 @@ export default function useRealtimeSTT({
 
       await fetch(buildClientApiPath('/log/client-event'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify(body),
         keepalive: payload.keepalive === true,
       })
@@ -2121,7 +2148,10 @@ export default function useRealtimeSTT({
     try {
       const res = await fetch(buildClientApiPath('/tts/inworld'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mingle-user-id': getOrCreateTrackingUserId(),
+        },
         body: JSON.stringify({
           text: normalizedText,
           language: normalizedLang,

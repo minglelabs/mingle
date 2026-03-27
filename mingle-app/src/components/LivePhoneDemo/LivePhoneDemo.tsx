@@ -10,7 +10,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
-import { getOrCreateSessionKey, mergeDisplayUtterances } from './use-realtime-stt'
+import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import { clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -468,6 +468,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       cache: 'no-store',
       headers: {
         'x-mingle-session-key': getOrCreateSessionKey(),
+        'x-mingle-user-id': getOrCreateTrackingUserId(),
       },
     })
       .then(async (response) => {
@@ -511,6 +512,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       headers: {
         'Content-Type': 'application/json',
         'x-mingle-session-key': getOrCreateSessionKey(),
+        'x-mingle-user-id': getOrCreateTrackingUserId(),
       },
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
@@ -539,6 +541,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       headers: {
         'Content-Type': 'application/json',
         'x-mingle-session-key': getOrCreateSessionKey(),
+        'x-mingle-user-id': getOrCreateTrackingUserId(),
       },
       body: JSON.stringify({
         textSizeLevel: nextPreferences.textSizeLevel,
