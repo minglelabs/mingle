@@ -241,9 +241,9 @@ function parseJsonObjectEnv(name: string): {
 
 function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
   if (provider !== 'qwen') return null
-  return isDashScopeBaseUrl(baseUrl)
-    ? { enable_thinking: false }
-    : { chat_template_kwargs: { enable_thinking: false } }
+  if (isDashScopeBaseUrl(baseUrl)) return { enable_thinking: false }
+  if (isOpenRouterBaseUrl(baseUrl)) return null
+  return { chat_template_kwargs: { enable_thinking: false } }
 }
 
 function resolveTranslationProviderConfig(): TranslationProviderResolution {
@@ -844,6 +844,14 @@ async function createOpenAICompatibleCompletion(
       { role: 'user', content: userPrompt },
     ],
     temperature: 0,
+  }
+
+  if (config.provider === 'qwen' && isOpenRouterBaseUrl(config.baseUrl)) {
+    payload.response_format = { type: 'json_object' }
+    payload.reasoning = {
+      effort: 'none',
+      exclude: true,
+    }
   }
 
   if (config.extraBody) {

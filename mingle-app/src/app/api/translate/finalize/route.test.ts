@@ -358,14 +358,21 @@ describe('/api/translate/finalize route', () => {
       model?: string
       messages?: Array<{ role?: string, content?: string }>
       extra_body?: Record<string, unknown>
+      response_format?: Record<string, unknown>
+      reasoning?: Record<string, unknown>
     }
     const headers = requestInit.headers as Record<string, string>
 
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
     expect(headers['X-Title']).toBe('mingle-app')
     expect(body.model).toBe('qwen/qwen3.5-9b')
-    expect(body.extra_body).toEqual({
-      chat_template_kwargs: { enable_thinking: false },
+    expect(body.extra_body).toBeUndefined()
+    expect(body.response_format).toEqual({
+      type: 'json_object',
+    })
+    expect(body.reasoning).toEqual({
+      effort: 'none',
+      exclude: true,
     })
     expect(body.messages?.[0]?.role).toBe('system')
     expect(body.messages?.[1]?.role).toBe('user')
@@ -414,8 +421,17 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://openrouter.ai/api/v1/chat/completions')
 
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      response_format?: Record<string, unknown>
+      reasoning?: Record<string, unknown>
+    }
     const headers = requestInit.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer test-qwen-key')
+    expect(body.response_format).toEqual({ type: 'json_object' })
+    expect(body.reasoning).toEqual({
+      effort: 'none',
+      exclude: true,
+    })
   })
 
   it('falls back to previous-state translations for non-final qwen provider errors', async () => {
