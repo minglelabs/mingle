@@ -20,8 +20,8 @@ The RN app requires the following environment variables.
 - `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
 - `RN_ADMOB_APP_ID_IOS` (optional override, defaults to the production app ID)
 - `RN_ADMOB_APP_ID_ANDROID` (optional override, defaults to the production app ID)
-- `RN_ADMOB_BANNER_UNIT_ID_IOS` (required when iOS banner is enabled)
-- `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (required when Android banner is enabled)
+- `RN_ADMOB_BANNER_UNIT_ID_IOS` (optional override, defaults to the production banner ad unit ID)
+- `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (optional override, defaults to the production banner ad unit ID)
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
