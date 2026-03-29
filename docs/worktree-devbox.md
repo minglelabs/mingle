@@ -123,6 +123,7 @@ scripts/devbox up --profile device --with-ios-install --with-ios-clean-install
 ### C) 로컬 `.env.local` 값을 Vault에 다시 반영해야 할 때
 
 ```bash
+scripts/devbox vault-up --seed
 scripts/devbox bootstrap --vault-push
 ```
 
@@ -159,6 +160,13 @@ scripts/devbox bootstrap --vault-push
   - `.devbox.env`가 있으면 전달한 Vault 경로를 저장하고 재적용
   - `--vault-push`를 주면 `mingle-app/.env.local`, `mingle-stt/.env.local`의
     비관리 키를 Vault 경로로 업로드
+    - Vault 경로가 비어 있으면 안전하게 최초 1회 `kv put`으로 생성
+    - Vault 경로가 이미 있으면 계속 `kv patch`만 사용하고 파괴적 fallback은 거부
+
+- `scripts/devbox vault-up [--seed]`
+  - Homebrew `vault` 서비스를 시작
+  - `--seed`를 주면 현재 `.env.local`의 비관리 키를 Vault로 즉시 반영
+  - 재부팅 후 로컬 Vault가 내려갔을 때 복구용으로 사용
 
 - `scripts/devbox profile --profile local --host <LAN_IP>`
   - 같은 네트워크에서 실기기 직접 접속할 때 사용
@@ -267,3 +275,5 @@ scripts/devbox bootstrap --vault-push
 - `VAULT_ADDR`/`VAULT_NAMESPACE`는 셸(`.zshrc`) 또는 `.env.local`에 둘 수 있습니다.
 - devbox는 Vault 값을 `.env.local`에 자동 반영하지 않습니다(런타임 주입만 수행).
 - `--vault-push`는 `.env.local`의 비관리 키를 Vault로 업로드합니다.
+- Homebrew 로컬 Vault를 다시 올릴 때는 `scripts/devbox vault-up` 또는
+  `brew services start hashicorp/tap/vault`를 사용할 수 있습니다.

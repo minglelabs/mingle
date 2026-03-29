@@ -14,6 +14,12 @@ export interface NativeAppUpdateDetail {
   updateAvailable: boolean;
 }
 
+export interface NativeAppTrackingContext {
+  appVersion: string | null;
+  apiNamespace: string | null;
+  clientPlatform: "ios" | "android" | null;
+}
+
 export interface NativeAppUpdateCopy {
   sectionLabel: string;
   installedLabel: string;
@@ -38,6 +44,27 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeSemver(value: string): string {
+  const normalized = value.trim().replace(/^v/i, "");
+  return /^\d+\.\d+\.\d+$/.test(normalized) ? normalized : "";
+}
+
+function normalizeApiNamespace(value: string): string {
+  const normalized = value.trim().replace(/^\/+/, "");
+  return /^(ios|android)\/v\d+\.\d+\.\d+$/.test(normalized) ? normalized : "";
+}
+
+export function readRequestedApiNamespaceFromSearch(search: string): string {
+  if (!search) return "";
+
+  const params = new URLSearchParams(search);
+  return normalizeApiNamespace(
+    params.get("apiNamespace")
+    || params.get("apiNs")
+    || "",
+  );
+}
+
 export function parseNativeAppUpdateDetail(
   detail: unknown
 ): NativeAppUpdateDetail | null {
@@ -60,6 +87,36 @@ export function parseNativeAppUpdateDetail(
     latestVersion: readString(payload.latestVersion),
     updateUrl: readString(payload.updateUrl),
     updateAvailable: payload.updateAvailable === true,
+  };
+}
+
+export function resolveNativeAppTrackingContext(args: {
+  detail?: unknown;
+  apiNamespace?: string | null;
+  isNativeAppRuntime?: boolean;
+}): NativeAppTrackingContext {
+  if (args.isNativeAppRuntime !== true) {
+    return {
+      appVersion: null,
+      apiNamespace: null,
+      clientPlatform: null,
+    };
+  }
+
+  const parsedDetail = parseNativeAppUpdateDetail(args.detail);
+  const apiNamespace = normalizeApiNamespace(args.apiNamespace || "");
+  const namespaceVersion = apiNamespace.match(/\/v(\d+\.\d+\.\d+)$/)?.[1] || "";
+  const appVersion = normalizeSemver(parsedDetail?.clientVersion || namespaceVersion);
+  const clientPlatform = apiNamespace.startsWith("ios/")
+    ? "ios"
+    : apiNamespace.startsWith("android/")
+      ? "android"
+      : null;
+
+  return {
+    appVersion: appVersion || null,
+    apiNamespace: apiNamespace || null,
+    clientPlatform,
   };
 }
 

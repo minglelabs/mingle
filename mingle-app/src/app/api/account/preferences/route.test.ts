@@ -4,18 +4,22 @@ import { NextRequest, NextResponse } from "next/server";
 const {
   mockGetServerSession,
   mockUserFindUnique,
+  mockUserUpdate,
   mockUserUpdateMany,
   mockAppEventLogFindFirst,
   mockAppMessageFindFirst,
   mockEnsureTrackingContext,
+  mockParseClientContext,
   mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockUserUpdate: vi.fn(),
   mockUserUpdateMany: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
   mockAppMessageFindFirst: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
+  mockParseClientContext: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
 }));
 
@@ -31,6 +35,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       findUnique: mockUserFindUnique,
+      update: mockUserUpdate,
       updateMany: mockUserUpdateMany,
     },
     appEventLog: {
@@ -44,6 +49,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/app-analytics", () => ({
   ensureTrackingContext: mockEnsureTrackingContext,
+  parseClientContext: mockParseClientContext,
   upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
@@ -58,6 +64,23 @@ describe("/api/account/preferences route", () => {
       externalUserId: "anon_seeded_user",
       sessionKey: "sess_seeded_user",
     });
+    mockParseClientContext.mockImplementation((payload: Record<string, unknown> | undefined) => ({
+      language: null,
+      pageLanguage: null,
+      referrer: null,
+      fullUrl: null,
+      queryParams: null,
+      screenWidth: null,
+      screenHeight: null,
+      timezone: null,
+      platform: null,
+      clientPlatform: typeof payload?.clientPlatform === "string" ? payload.clientPlatform : null,
+      apiNamespace: typeof payload?.apiNamespace === "string" ? payload.apiNamespace : null,
+      pathname: null,
+      appVersion: typeof payload?.appVersion === "string" ? payload.appVersion : null,
+      usageSec: null,
+    }));
+    mockUserUpdate.mockResolvedValue({ id: "user_123" });
     mockUpsertTrackedUser.mockResolvedValue("seeded_user_id");
   });
 
@@ -122,6 +145,8 @@ describe("/api/account/preferences route", () => {
         screenHeight: null,
         timezone: null,
         platform: null,
+        clientPlatform: null,
+        apiNamespace: null,
         pathname: null,
         appVersion: null,
         usageSec: null,
@@ -156,10 +181,60 @@ describe("/api/account/preferences route", () => {
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
       select: {
+        id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
         adBannerPosition: true,
+      },
+    });
+  });
+
+  it("syncs native app version history onto an existing user during GET", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserFindUnique
+      .mockResolvedValueOnce({
+        id: "user_123",
+        demoTextSizeLevel: 4,
+        demoSilenceFinalizeMs: 1000,
+        translationModel: "qwen/qwen3.5-9b",
+      })
+      .mockResolvedValueOnce({
+        id: "user_123",
+        latestAppVersion: "1.0.5",
+        latestApiNamespace: "ios/v1.0.5",
+        latestClientPlatform: "ios",
+        appVersionHistory: ["1.0.5"],
+        apiNamespaceHistory: ["ios/v1.0.5"],
+      });
+
+    const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
+      headers: {
+        "x-mingle-app-version": "1.0.6",
+        "x-mingle-api-namespace": "ios/v1.0.6",
+        "x-mingle-client-platform": "ios",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      textSizeLevel: 4,
+      sonioxManualFinalizeSilenceMs: 1000,
+      translationModel: "qwen/qwen3.5-9b",
+    });
+    expect(mockUserUpdate).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        latestAppVersion: "1.0.6",
+        latestApiNamespace: "ios/v1.0.6",
+        appVersionHistory: ["1.0.5", "1.0.6"],
+        apiNamespaceHistory: ["ios/v1.0.5", "ios/v1.0.6"],
       },
     });
   });
@@ -297,6 +372,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
       select: {
+        id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
@@ -369,6 +445,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_from_session" },
       select: {
+        id: true,
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
@@ -479,6 +556,8 @@ describe("/api/account/preferences route", () => {
         screenHeight: null,
         timezone: null,
         platform: null,
+        clientPlatform: null,
+        apiNamespace: null,
         pathname: null,
         appVersion: null,
         usageSec: null,
@@ -535,6 +614,8 @@ describe("/api/account/preferences route", () => {
         screenHeight: null,
         timezone: null,
         platform: null,
+        clientPlatform: null,
+        apiNamespace: null,
         pathname: null,
         appVersion: null,
         usageSec: null,

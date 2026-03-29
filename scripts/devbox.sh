@@ -192,6 +192,7 @@ Usage:
   scripts/devbox [--log-file PATH|auto] <command> [options]
   scripts/devbox init [--web-port N] [--stt-port N] [--metro-port N] [--ngrok-api-port N] [--host HOST] [--vault-app-path PATH] [--vault-stt-path PATH] [--openclaw-root PATH]
   scripts/devbox bootstrap [--vault-app-path PATH] [--vault-stt-path PATH] [--vault-push] [--openclaw-root PATH]
+  scripts/devbox vault-up [--seed] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox profile --profile local|device [--host HOST]
   scripts/devbox ngrok-config
   scripts/devbox gateway [--openclaw-root PATH] [--mode dev|run] [--]
@@ -207,6 +208,7 @@ Usage:
 Commands:
   init         Generate worktree-aware ports/config runtime files.
   bootstrap    Read-only for .env.local; install deps and optionally push local env keys to Vault.
+  vault-up     Start local Vault via Homebrew service and optionally seed local env keys.
   profile      Apply local/device profile to managed env files.
   ngrok-config Regenerate ngrok.mobile.local.yml from current ports.
   gateway      Run OpenClaw gateway from configured openclaw root.
@@ -358,6 +360,12 @@ trim_whitespace() {
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   printf '%s' "$value"
+}
+
+normalize_cli_output() {
+  local value="${1:-}"
+  value="$(printf '%s' "$value" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
+  trim_whitespace "$value"
 }
 
 is_truthy() {
@@ -604,6 +612,48 @@ prepare_vault_cli_env() {
       export VAULT_NAMESPACE="$value"
     fi
   fi
+}
+
+vault_mount_exists_for_path() {
+  local path="$1"
+  local mount=""
+  local payload=""
+
+  [[ -n "$path" ]] || return 1
+  mount="${path%%/*}/"
+
+  require_cmd vault
+  require_cmd jq
+  prepare_vault_cli_env
+
+  payload="$(vault secrets list -format=json 2>/dev/null)" || return 1
+  printf '%s' "$payload" | jq -e --arg mount "$mount" '.[$mount] != null' >/dev/null 2>&1
+}
+
+vault_output_indicates_missing_path() {
+  local output="${1:-}"
+  local lower=""
+
+  lower="$(printf '%s' "$output" | tr '[:upper:]' '[:lower:]')"
+  [[ "$lower" == *"no value found at"* ]] && return 0
+  [[ "$lower" == *"/data/"* && "$lower" == *"code: 404"* ]] && return 0
+  return 1
+}
+
+wait_for_vault_ready() {
+  local attempts="${1:-20}"
+  local sleep_seconds="${2:-1}"
+  local i=0
+
+  while [[ "$i" -lt "$attempts" ]]; do
+    if vault status >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep "$sleep_seconds"
+    i=$((i + 1))
+  done
+
+  return 1
 }
 
 read_env_value_from_vault() {
@@ -1278,6 +1328,9 @@ push_env_file_to_vault_path() {
   local target="$1"
   local path="$2"
   local file="$3"
+  local inspect_output=""
+  local patch_output=""
+  local put_output=""
   [[ -n "$path" ]] || return 0
   [[ -f "$file" ]] || {
     warn "skip vault push (${target}): env file not found: $file"
@@ -1285,6 +1338,7 @@ push_env_file_to_vault_path() {
   }
 
   require_cmd vault
+  require_cmd jq
   prepare_vault_cli_env
   local line raw_line key value_raw value count
   local -a kv_args=()
@@ -1318,12 +1372,75 @@ push_env_file_to_vault_path() {
   fi
 
   log "pushing ${count} keys from ${target} env to vault path: $path"
-  if vault kv patch "$path" "${kv_args[@]}" >/dev/null 2>&1; then
-    log "pushed ${count} keys to vault (${target}, patch)"
-    return 0
+  if inspect_output="$(vault kv get -format=json "$path" 2>&1)"; then
+    if patch_output="$(vault kv patch "$path" "${kv_args[@]}" 2>&1)"; then
+      log "pushed ${count} keys to vault (${target}, patch)"
+      return 0
+    fi
+
+    patch_output="$(normalize_cli_output "$patch_output")"
+    if [[ -n "$patch_output" ]]; then
+      die "failed to push ${target} env keys to vault path: $path (${patch_output}; refusing destructive kv put fallback)"
+    fi
+    die "failed to push ${target} env keys to vault path: $path (patch failed; refusing destructive kv put fallback)"
   fi
 
-  die "failed to push ${target} env keys to vault path: $path (patch failed; refusing destructive kv put fallback)"
+  inspect_output="$(normalize_cli_output "$inspect_output")"
+  if vault_output_indicates_missing_path "$inspect_output" && vault_mount_exists_for_path "$path"; then
+    log "vault path is empty; seeding initial values at: $path"
+    if put_output="$(vault kv put "$path" "${kv_args[@]}" 2>&1)"; then
+      log "seeded ${count} keys to vault (${target}, put)"
+      return 0
+    fi
+
+    put_output="$(normalize_cli_output "$put_output")"
+    if [[ -n "$put_output" ]]; then
+      die "failed to seed ${target} env keys to vault path: $path (${put_output})"
+    fi
+    die "failed to seed ${target} env keys to vault path: $path (kv put failed)"
+  fi
+
+  if [[ -n "$inspect_output" ]]; then
+    die "failed to inspect vault path for ${target}: $path (${inspect_output})"
+  fi
+  die "failed to inspect vault path for ${target}: $path"
+}
+
+cmd_vault_up() {
+  local seed=0
+  local vault_app_override=""
+  local vault_stt_override=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --seed) seed=1; shift ;;
+      --vault-app-path) vault_app_override="${2:-}"; shift 2 ;;
+      --vault-stt-path) vault_stt_override="${2:-}"; shift 2 ;;
+      *) die "unknown option for vault-up: $1" ;;
+    esac
+  done
+
+  require_cmd brew
+  require_cmd vault
+
+  prepare_vault_cli_env
+  if vault status >/dev/null 2>&1; then
+    log "vault is already reachable at ${VAULT_ADDR:-"(default)"}"
+  else
+    log "starting local vault via Homebrew service"
+    brew services start hashicorp/tap/vault >/dev/null || die "failed to start Homebrew vault service"
+    wait_for_vault_ready 20 1 || die "vault did not become ready after start"
+    log "vault is ready at ${VAULT_ADDR:-"(default)"}"
+  fi
+
+  if [[ "$seed" -eq 1 ]]; then
+    require_devbox_env
+    resolve_vault_paths "$vault_app_override" "$vault_stt_override"
+    [[ -n "$DEVBOX_VAULT_APP_PATH" ]] || die "missing vault app path for --seed (set --vault-app-path or bootstrap once with detected path)"
+    [[ -n "$DEVBOX_VAULT_STT_PATH" ]] || die "missing vault stt path for --seed (set --vault-stt-path or bootstrap once with detected path)"
+    vault token lookup >/dev/null 2>&1 || die "vault is running but token lookup failed (run: vault login)"
+    push_env_to_vault_paths "$DEVBOX_VAULT_APP_PATH" "$DEVBOX_VAULT_STT_PATH"
+  fi
 }
 
 push_env_to_vault_paths() {
@@ -5072,6 +5189,7 @@ Files:
 - $RN_IOS_RUNTIME_XCCONFIG
 
 Run:
+- scripts/devbox vault-up --seed
 - scripts/devbox up --profile local
 - scripts/devbox up --profile device
 - scripts/devbox up --profile device --tunnel-provider cloudflare
@@ -5187,6 +5305,7 @@ main() {
   case "$cmd" in
     init) cmd_init "$@" ;;
     bootstrap) cmd_bootstrap "$@" ;;
+    vault-up) cmd_vault_up "$@" ;;
     profile) cmd_profile "$@" ;;
     profile-local) cmd_profile --profile local "$@" ;;
     profile-device|profile-ngrok) cmd_profile --profile device "$@" ;;

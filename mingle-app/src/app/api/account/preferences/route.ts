@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import {
   ensureTrackingContext,
+  parseClientContext,
   upsertTrackedUser,
 } from "@/lib/app-analytics";
 import {
@@ -35,6 +36,7 @@ type SessionUserIdentity = {
 };
 
 type UserPreferencesRecord = {
+  id: string;
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
@@ -51,6 +53,8 @@ const EMPTY_CLIENT_CONTEXT = {
   screenHeight: null,
   timezone: null,
   platform: null,
+  clientPlatform: null,
+  apiNamespace: null,
   pathname: null,
   appVersion: null,
   usageSec: null,
@@ -123,6 +127,62 @@ function resolveTrackingExternalUserId(request: Request): string {
   );
 }
 
+function resolveTrackingClientContext(request: Request) {
+  return parseClientContext({
+    appVersion: request.headers.get("x-mingle-app-version"),
+    apiNamespace: request.headers.get("x-mingle-api-namespace"),
+    clientPlatform: request.headers.get("x-mingle-client-platform"),
+  });
+}
+
+function mergeUniqueHistory(history: string[], nextValue: string | null): string[] | null {
+  if (!nextValue || history.includes(nextValue)) return null;
+  return [...history, nextValue];
+}
+
+async function syncUserVersionContext(userId: string, request: Request) {
+  const clientContext = resolveTrackingClientContext(request);
+  if (!clientContext.appVersion && !clientContext.apiNamespace && !clientContext.clientPlatform) {
+    return;
+  }
+
+  const record = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      latestAppVersion: true,
+      latestApiNamespace: true,
+      latestClientPlatform: true,
+      appVersionHistory: true,
+      apiNamespaceHistory: true,
+    },
+  });
+  if (!record) return;
+
+  const nextAppVersionHistory = mergeUniqueHistory(record.appVersionHistory, clientContext.appVersion);
+  const nextApiNamespaceHistory = mergeUniqueHistory(record.apiNamespaceHistory, clientContext.apiNamespace);
+  const data = {
+    ...(clientContext.appVersion && record.latestAppVersion !== clientContext.appVersion
+      ? { latestAppVersion: clientContext.appVersion }
+      : {}),
+    ...(clientContext.apiNamespace && record.latestApiNamespace !== clientContext.apiNamespace
+      ? { latestApiNamespace: clientContext.apiNamespace }
+      : {}),
+    ...(clientContext.clientPlatform && record.latestClientPlatform !== clientContext.clientPlatform
+      ? { latestClientPlatform: clientContext.clientPlatform }
+      : {}),
+    ...(nextAppVersionHistory ? { appVersionHistory: nextAppVersionHistory } : {}),
+    ...(nextApiNamespaceHistory ? { apiNamespaceHistory: nextApiNamespaceHistory } : {}),
+  };
+
+  if (Object.keys(data).length === 0) return;
+
+  await prisma.user.update({
+    where: { id: userId },
+    data,
+  });
+}
+
 async function findUserIdBySessionKey(sessionKey: string): Promise<string | null> {
   if (!sessionKey) return null;
 
@@ -149,6 +209,7 @@ async function findUserIdBySessionKey(sessionKey: string): Promise<string | null
 
 async function findUserPreferences(identity: SessionUserIdentity): Promise<UserPreferencesRecord | null> {
   const select = {
+    id: true,
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
     translationModel: true,
@@ -208,6 +269,7 @@ function hasIdentity(identity: SessionUserIdentity): boolean {
 export async function GET(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
@@ -230,10 +292,16 @@ export async function GET(request: Request) {
   }
 
   let preferences = await findUserPreferences(identity);
+  if (preferences) {
+    await syncUserVersionContext(preferences.id, request);
+  }
   if (!preferences && identity.externalUserId) {
     await upsertTrackedUser({
       tracking,
-      clientContext: EMPTY_CLIENT_CONTEXT,
+      clientContext: {
+        ...EMPTY_CLIENT_CONTEXT,
+        ...requestClientContext,
+      },
     });
     preferences = await findUserPreferences(identity);
   }
@@ -255,6 +323,7 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const nextRequest = request as NextRequest;
   const session = await getServerSession(getAuthOptions());
+  const requestClientContext = resolveTrackingClientContext(request);
   const trackingSeedResponse = new NextResponse();
   const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
@@ -381,7 +450,10 @@ export async function PATCH(request: Request) {
 
   const createdUserId = await upsertTrackedUser({
     tracking,
-    clientContext: EMPTY_CLIENT_CONTEXT,
+    clientContext: {
+      ...EMPTY_CLIENT_CONTEXT,
+      ...requestClientContext,
+    },
   });
   const createResult = await prisma.user.updateMany({
     where: { id: createdUserId },
