@@ -16,12 +16,13 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const PORT = 3001;
+const PORT = Number.parseInt(process.env.STT_PORT || '3001', 10);
 const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
+const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime';
 const SPEECHMATICS_JWT_TTL_SEC = 60;
 
 const server = createServer();
@@ -31,6 +32,7 @@ type SttModel =
     | 'gladia-stt'
     | 'deepgram'
     | 'deepgram-multi'
+    | 'gpt-4o-mini-transcribe'
     | 'fireworks'
     | 'chirp-3'
     | 'soniox'
@@ -145,6 +147,14 @@ const getSpeechmaticsTranscriptLanguage = (
 };
 
 const ELEVENLABS_SUPPORTED_SAMPLE_RATES = [8000, 16000, 22050, 24000, 44100, 48000] as const;
+const OPENAI_REALTIME_SAMPLE_RATE = 24000;
+const OPENAI_REALTIME_MODEL = 'gpt-4o-mini-transcribe';
+const OPENAI_PARTIAL_COMMIT_INTERVAL_MS = 700;
+const OPENAI_MIN_COMMIT_AUDIO_MS = 320;
+const OPENAI_MIN_SERVER_COMMIT_AUDIO_MS = 120;
+const OPENAI_FINAL_SILENCE_MS = 420;
+const OPENAI_VOICE_RMS_THRESHOLD = 0.018;
+const OPENAI_PREROLL_MAX_MS = 240;
 
 const resolveElevenLabsAudioFormat = (sampleRate: number) => {
     const rounded = Math.round(sampleRate);
@@ -164,8 +174,90 @@ const resolveElevenLabsAudioFormat = (sampleRate: number) => {
     return null;
 };
 
+const resamplePcm16Mono = (
+    pcm: Int16Array,
+    inputSampleRate: number,
+    targetSampleRate: number,
+) => {
+    if (pcm.length === 0) {
+        return new Int16Array(0);
+    }
+
+    if (
+        !Number.isFinite(inputSampleRate)
+        || !Number.isFinite(targetSampleRate)
+        || inputSampleRate <= 0
+        || targetSampleRate <= 0
+    ) {
+        return new Int16Array(pcm);
+    }
+
+    if (inputSampleRate === targetSampleRate) {
+        return new Int16Array(pcm);
+    }
+
+    const ratio = inputSampleRate / targetSampleRate;
+    const outputLength = Math.max(1, Math.round(pcm.length / ratio));
+    const output = new Int16Array(outputLength);
+
+    for (let index = 0; index < outputLength; index += 1) {
+        const position = index * ratio;
+        const leftIndex = Math.floor(position);
+        const rightIndex = Math.min(leftIndex + 1, pcm.length - 1);
+        const weight = position - leftIndex;
+        const left = pcm[leftIndex] ?? 0;
+        const right = pcm[rightIndex] ?? left;
+        output[index] = Math.round(left + (right - left) * weight);
+    }
+
+    return output;
+};
+
+const encodePcm16ForOpenAI = (pcmChunk: Buffer, inputSampleRate: number) => {
+    const input = new Int16Array(
+        pcmChunk.buffer,
+        pcmChunk.byteOffset,
+        Math.floor(pcmChunk.byteLength / Int16Array.BYTES_PER_ELEMENT),
+    );
+    const resampled = resamplePcm16Mono(input, inputSampleRate, OPENAI_REALTIME_SAMPLE_RATE);
+    return Buffer.from(resampled.buffer, resampled.byteOffset, resampled.byteLength).toString('base64');
+};
+
+const calculatePcm16NormalizedRms = (pcmChunk: Buffer) => {
+    const sampleCount = Math.floor(pcmChunk.byteLength / Int16Array.BYTES_PER_ELEMENT);
+    if (sampleCount === 0) return 0;
+
+    const samples = new Int16Array(
+        pcmChunk.buffer,
+        pcmChunk.byteOffset,
+        sampleCount,
+    );
+
+    let sumSquares = 0;
+    for (const sample of samples) {
+        const normalized = sample / 0x7fff;
+        sumSquares += normalized * normalized;
+    }
+
+    return Math.sqrt(sumSquares / sampleCount);
+};
+
+const joinTranscriptParts = (left: string, right: string) => {
+    const trimmedLeft = left.trim();
+    const trimmedRight = right.trim();
+
+    if (!trimmedLeft) return trimmedRight;
+    if (!trimmedRight) return trimmedLeft;
+
+    const shouldOmitSpace = /^[,.;:!?)]/.test(trimmedRight) || /[([]$/.test(trimmedLeft);
+    return shouldOmitSpace
+        ? `${trimmedLeft}${trimmedRight}`
+        : `${trimmedLeft} ${trimmedRight}`;
+};
+
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
+    let openAIRealtimeWs: WebSocket | null = null;
     let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
@@ -202,10 +294,22 @@ wss.on('connection', (clientWs) => {
             sttWs = null;
         }
 
+        if (openAIRealtimeWs) {
+            if (
+                openAIRealtimeWs.readyState === WebSocket.OPEN
+                || openAIRealtimeWs.readyState === WebSocket.CONNECTING
+            ) {
+                openAIRealtimeWs.close();
+            }
+            openAIRealtimeWs = null;
+        }
+
         if (speechmaticsClient) {
             void speechmaticsClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
             speechmaticsClient = null;
         }
+
+        delete (clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void }).__handleOpenAIAudioChunk;
     };
 
     // ===== GLADIA 연결 =====
@@ -554,6 +658,289 @@ wss.on('connection', (clientWs) => {
             console.error('Error starting Deepgram Multi connection:', error);
             if (isClientConnected) {
                 clientWs.close(1011, 'Failed to connect to Deepgram Multi transcription service.');
+            }
+        }
+    };
+
+    // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
+    const startOpenAIRealtimeConnection = async (config: ClientConfig) => {
+        if (!process.env.OPENAI_API_KEY) {
+            console.error('OPENAI_API_KEY environment variable not set!');
+            clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
+            return;
+        }
+
+        try {
+            const partialTranscripts = new Map<string, string>();
+            const pendingCommitKinds: Array<'partial' | 'final'> = [];
+            const itemCommitKinds = new Map<string, 'partial' | 'final'>();
+            const preRollChunks: Array<{ audio: string; durationMs: number }> = [];
+            const uniqueLanguages = [...new Set(config.languages.filter(Boolean))];
+            const hintedLanguage = config.lang_hints_strict && uniqueLanguages.length === 1
+                ? uniqueLanguages[0]
+                : undefined;
+            let aggregateTranscript = '';
+            let activeUtterance = false;
+            let bufferedAudioMs = 0;
+            let lastSpeechAt = 0;
+            let lastPartialCommitAt = 0;
+            const transcriptionSession = await openai.beta.realtime.transcriptionSessions.create({
+                input_audio_format: 'pcm16',
+                input_audio_noise_reduction: {
+                    type: 'near_field',
+                },
+                input_audio_transcription: {
+                    model: OPENAI_REALTIME_MODEL,
+                    ...(hintedLanguage ? { language: hintedLanguage } : {}),
+                },
+                turn_detection: null as never,
+                include: ['item.input_audio_transcription.logprobs'],
+            });
+
+            if (!isClientConnected) {
+                return;
+            }
+
+            const sendOpenAITranscript = (text: string, isFinal: boolean) => {
+                const cleaned = text.trim();
+                if (!cleaned || !isClientConnected) return;
+
+                clientWs.send(JSON.stringify({
+                    type: 'transcript',
+                    data: {
+                        is_final: isFinal,
+                        utterance: {
+                            text: cleaned,
+                            language: 'auto',
+                        },
+                    },
+                }));
+            };
+
+            const finalizeAggregateTranscript = () => {
+                const completedText = aggregateTranscript.trim();
+                if (!completedText) return;
+
+                sendOpenAITranscript(completedText, true);
+                if (translationEnabled && selectedLanguages.length > 0) {
+                    translateText(completedText, 'auto', selectedLanguages, clientWs);
+                }
+
+                aggregateTranscript = '';
+                activeUtterance = false;
+                bufferedAudioMs = 0;
+                lastSpeechAt = 0;
+                preRollChunks.length = 0;
+            };
+
+            const commitOpenAIAudioBuffer = (kind: 'partial' | 'final'): boolean => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) {
+                    return false;
+                }
+
+                if (kind === 'partial' && bufferedAudioMs < OPENAI_MIN_COMMIT_AUDIO_MS) {
+                    return false;
+                }
+
+                if (bufferedAudioMs < OPENAI_MIN_SERVER_COMMIT_AUDIO_MS) {
+                    return false;
+                }
+
+                pendingCommitKinds.push(kind);
+                openAIRealtimeWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                bufferedAudioMs = 0;
+                if (kind === 'partial') {
+                    lastPartialCommitAt = Date.now();
+                }
+                return true;
+            };
+
+            const appendOpenAIAudioChunk = (audio: string, durationMs: number) => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                openAIRealtimeWs.send(JSON.stringify({
+                    type: 'input_audio_buffer.append',
+                    audio,
+                }));
+                bufferedAudioMs += durationMs;
+            };
+
+            openAIRealtimeWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
+                headers: {
+                    Authorization: `Bearer ${transcriptionSession.client_secret.value}`,
+                    'OpenAI-Beta': 'realtime=v1',
+                },
+            });
+
+            openAIRealtimeWs.onmessage = (event) => {
+                if (!isClientConnected) return;
+
+                try {
+                    const msg = JSON.parse(event.data.toString()) as Record<string, unknown>;
+                    const messageType = typeof msg.type === 'string' ? msg.type : '';
+
+                    if (
+                        messageType === 'transcription_session.created'
+                        || messageType === 'transcription_session.updated'
+                    ) {
+                        clientWs.send(JSON.stringify({ status: 'ready' }));
+                        return;
+                    }
+
+                    if (messageType === 'input_audio_buffer.committed') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const kind = pendingCommitKinds.shift() ?? 'partial';
+                        if (itemId) {
+                            itemCommitKinds.set(itemId, kind);
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.delta') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const delta = typeof msg.delta === 'string' ? msg.delta : '';
+                        if (!itemId || !delta) return;
+
+                        const nextTranscript = `${partialTranscripts.get(itemId) || ''}${delta}`;
+                        partialTranscripts.set(itemId, nextTranscript);
+
+                        sendOpenAITranscript(joinTranscriptParts(aggregateTranscript, nextTranscript), false);
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.completed') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const transcript = typeof msg.transcript === 'string' ? msg.transcript.trim() : '';
+                        const commitKind = itemCommitKinds.get(itemId) ?? 'partial';
+                        if (itemId) {
+                            partialTranscripts.delete(itemId);
+                            itemCommitKinds.delete(itemId);
+                        }
+                        if (!transcript) {
+                            if (commitKind === 'final' && pendingCommitKinds.length === 0 && partialTranscripts.size === 0) {
+                                finalizeAggregateTranscript();
+                            }
+                            return;
+                        }
+
+                        aggregateTranscript = joinTranscriptParts(aggregateTranscript, transcript);
+                        if (commitKind === 'final') {
+                            finalizeAggregateTranscript();
+                        } else {
+                            sendOpenAITranscript(aggregateTranscript, false);
+                            if (
+                                activeUtterance
+                                && bufferedAudioMs === 0
+                                && partialTranscripts.size === 0
+                                && pendingCommitKinds.length === 0
+                                && lastSpeechAt > 0
+                                && Date.now() - lastSpeechAt >= OPENAI_FINAL_SILENCE_MS
+                            ) {
+                                finalizeAggregateTranscript();
+                            }
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.failed') {
+                        console.error('OpenAI transcription failed:', msg.error);
+                        return;
+                    }
+
+                    if (messageType === 'error') {
+                        console.error('OpenAI Realtime error:', msg.error);
+                        if (isClientConnected) {
+                            clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                        }
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing OpenAI Realtime message:', parseError);
+                }
+            };
+
+            openAIRealtimeWs.onerror = (error) => {
+                console.error('OpenAI Realtime WebSocket error:', error);
+                if (isClientConnected) {
+                    clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                }
+            };
+
+            openAIRealtimeWs.onclose = () => {
+                openAIRealtimeWs = null;
+                pendingCommitKinds.length = 0;
+                itemCommitKinds.clear();
+                partialTranscripts.clear();
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+
+            const handleOpenAIAudioChunk = (pcmData: Buffer) => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) return;
+
+                const normalizedRms = calculatePcm16NormalizedRms(pcmData);
+                const isSpeechChunk = normalizedRms >= OPENAI_VOICE_RMS_THRESHOLD;
+                const resampledAudio = encodePcm16ForOpenAI(pcmData, currentSampleRate);
+                const durationMs = Math.round(
+                    (pcmData.byteLength / Int16Array.BYTES_PER_ELEMENT / currentSampleRate) * 1000,
+                );
+                const now = Date.now();
+
+                if (!activeUtterance) {
+                    preRollChunks.push({ audio: resampledAudio, durationMs });
+                    let preRollTotalMs = preRollChunks.reduce((sum, chunk) => sum + chunk.durationMs, 0);
+                    while (preRollTotalMs > OPENAI_PREROLL_MAX_MS && preRollChunks.length > 1) {
+                        const removed = preRollChunks.shift();
+                        preRollTotalMs -= removed?.durationMs ?? 0;
+                    }
+
+                    if (!isSpeechChunk) {
+                        return;
+                    }
+
+                    activeUtterance = true;
+                    lastSpeechAt = now;
+                    for (const chunk of preRollChunks) {
+                        appendOpenAIAudioChunk(chunk.audio, chunk.durationMs);
+                    }
+                    preRollChunks.length = 0;
+                } else {
+                    appendOpenAIAudioChunk(resampledAudio, durationMs);
+                    if (isSpeechChunk) {
+                        lastSpeechAt = now;
+                    }
+                }
+
+                if (
+                    isSpeechChunk
+                    && bufferedAudioMs >= OPENAI_MIN_COMMIT_AUDIO_MS
+                    && now - lastPartialCommitAt >= OPENAI_PARTIAL_COMMIT_INTERVAL_MS
+                ) {
+                    commitOpenAIAudioBuffer('partial');
+                    return;
+                }
+
+                if (
+                    activeUtterance
+                    && !isSpeechChunk
+                    && lastSpeechAt > 0
+                    && now - lastSpeechAt >= OPENAI_FINAL_SILENCE_MS
+                ) {
+                    if (bufferedAudioMs > 0) {
+                        commitOpenAIAudioBuffer('final');
+                    } else if (partialTranscripts.size === 0 && pendingCommitKinds.length === 0) {
+                        finalizeAggregateTranscript();
+                    }
+                }
+            };
+
+            (clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void }).__handleOpenAIAudioChunk = handleOpenAIAudioChunk;
+        } catch (error) {
+            console.error('Error starting OpenAI Realtime connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
             }
         }
     };
@@ -1193,6 +1580,8 @@ wss.on('connection', (clientWs) => {
                 startDeepgramConnection(data as ClientConfig);
             } else if (currentModel === 'deepgram-multi') {
                 startDeepgramMultiConnection(data as ClientConfig);
+            } else if (currentModel === 'gpt-4o-mini-transcribe') {
+                startOpenAIRealtimeConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
             } else if (currentModel === 'chirp-3') {
@@ -1220,6 +1609,12 @@ wss.on('connection', (clientWs) => {
                     audio_base_64: data.data.chunk,
                     sample_rate: currentSampleRate,
                 }));
+            }
+        } else if (currentModel === 'gpt-4o-mini-transcribe' && openAIRealtimeWs?.readyState === WebSocket.OPEN) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                const openAIClientWs = clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void };
+                openAIClientWs.__handleOpenAIAudioChunk?.(pcmData);
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송

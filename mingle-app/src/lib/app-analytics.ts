@@ -22,6 +22,8 @@ export type ClientContext = {
   screenHeight: number | null;
   timezone: string | null;
   platform: string | null;
+  clientPlatform: string | null;
+  apiNamespace: string | null;
   pathname: string | null;
   appVersion: string | null;
   usageSec: number | null;
@@ -42,6 +44,49 @@ function sanitizeText(value: unknown, maxLength = 512): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLength);
+}
+
+function normalizeClientPlatform(value: string | null, apiNamespace: string | null): string | null {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "ios" || normalized === "iphone" || normalized === "ipad") {
+    return "ios";
+  }
+  if (normalized === "android" || normalized === "aos") {
+    return "android";
+  }
+  if (apiNamespace?.startsWith("ios/")) {
+    return "ios";
+  }
+  if (apiNamespace?.startsWith("android/")) {
+    return "android";
+  }
+  return null;
+}
+
+function normalizeApiNamespace(value: string | null): string | null {
+  const normalized = (value || "").trim().replace(/^\/+/, "");
+  if (!normalized) return null;
+  if (!/^(ios|android)\/v\d+\.\d+\.\d+$/.test(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function normalizeAppVersion(value: string | null, apiNamespace: string | null): string | null {
+  const normalized = (value || "").trim().replace(/^v/i, "");
+  if (normalized && /^\d+\.\d+\.\d+$/.test(normalized)) {
+    return normalized;
+  }
+
+  const namespaceMatch = apiNamespace?.match(/\/v(\d+\.\d+\.\d+)$/);
+  return namespaceMatch?.[1] || null;
+}
+
+function appendUniqueHistory(history: string[], nextValue: string | null): string[] | null {
+  if (!nextValue || history.includes(nextValue)) {
+    return null;
+  }
+  return [...history, nextValue];
 }
 
 export function sanitizeNonNegativeInt(value: unknown): number | null {
@@ -91,6 +136,11 @@ function generateStableId(prefix: string): string {
 
 export function parseClientContext(raw: unknown): ClientContext {
   const payload = (raw && typeof raw === "object") ? raw as Record<string, unknown> : {};
+  const apiNamespace = normalizeApiNamespace(sanitizeText(payload.apiNamespace, 64));
+  const clientPlatform = normalizeClientPlatform(
+    sanitizeText(payload.clientPlatform, 32),
+    apiNamespace,
+  );
   return {
     language: sanitizeText(payload.language, 32),
     pageLanguage: sanitizeText(payload.pageLanguage, 32),
@@ -101,8 +151,10 @@ export function parseClientContext(raw: unknown): ClientContext {
     screenHeight: sanitizeNonNegativeInt(payload.screenHeight),
     timezone: sanitizeText(payload.timezone, 128),
     platform: sanitizeText(payload.platform, 128),
+    clientPlatform,
+    apiNamespace,
     pathname: sanitizeText(payload.pathname, 1024),
-    appVersion: sanitizeText(payload.appVersion, 64),
+    appVersion: normalizeAppVersion(sanitizeText(payload.appVersion, 64), apiNamespace),
     usageSec: sanitizeNonNegativeInt(payload.usageSec),
   };
 }
@@ -175,6 +227,9 @@ export async function upsertTrackedUser(args: {
   const fullUrl = clientContext.fullUrl ?? tracking.requestFullUrl;
   const pathname = clientContext.pathname ?? tracking.requestPathname;
   const latestUserAgent = tracking.userAgent;
+  const apiNamespace = normalizeApiNamespace(clientContext.apiNamespace);
+  const latestAppVersion = normalizeAppVersion(clientContext.appVersion, apiNamespace);
+  const latestClientPlatform = normalizeClientPlatform(clientContext.clientPlatform, apiNamespace);
 
   const user = await prisma.user.upsert({
     where: { externalUserId: tracking.externalUserId },
@@ -191,6 +246,11 @@ export async function upsertTrackedUser(args: {
       screenHeight: clientContext.screenHeight ?? undefined,
       timezone: clientContext.timezone ?? undefined,
       platform: clientContext.platform ?? undefined,
+      latestClientPlatform: latestClientPlatform ?? undefined,
+      latestAppVersion: latestAppVersion ?? undefined,
+      latestApiNamespace: apiNamespace ?? undefined,
+      appVersionHistory: latestAppVersion ? [latestAppVersion] : undefined,
+      apiNamespaceHistory: apiNamespace ? [apiNamespace] : undefined,
       pathname: pathname ?? undefined,
       totalUsageSec: usageSec ?? 0,
       firstSeenAt: now,
@@ -208,19 +268,32 @@ export async function upsertTrackedUser(args: {
       screenHeight: clientContext.screenHeight ?? undefined,
       timezone: clientContext.timezone ?? undefined,
       platform: clientContext.platform ?? undefined,
+      latestClientPlatform: latestClientPlatform ?? undefined,
+      latestAppVersion: latestAppVersion ?? undefined,
+      latestApiNamespace: apiNamespace ?? undefined,
       pathname: pathname ?? undefined,
       lastSeenAt: now,
     },
     select: {
       id: true,
       totalUsageSec: true,
+      appVersionHistory: true,
+      apiNamespaceHistory: true,
     },
   });
 
-  if (usageSec !== null && usageSec > user.totalUsageSec) {
+  const nextAppVersionHistory = appendUniqueHistory(user.appVersionHistory, latestAppVersion);
+  const nextApiNamespaceHistory = appendUniqueHistory(user.apiNamespaceHistory, apiNamespace);
+  const data = {
+    ...(usageSec !== null && usageSec > user.totalUsageSec ? { totalUsageSec: usageSec } : {}),
+    ...(nextAppVersionHistory ? { appVersionHistory: nextAppVersionHistory } : {}),
+    ...(nextApiNamespaceHistory ? { apiNamespaceHistory: nextApiNamespaceHistory } : {}),
+  };
+
+  if (Object.keys(data).length > 0) {
     await prisma.user.update({
       where: { id: user.id },
-      data: { totalUsageSec: usageSec },
+      data,
     });
   }
 

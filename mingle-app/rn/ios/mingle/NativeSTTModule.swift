@@ -218,9 +218,6 @@ final class MingleAudioSessionCoordinator {
 class NativeSTTModule: RCTEventEmitter {
     private let audioEngine = AVAudioEngine()
     private let wsQueue = DispatchQueue(label: "NativeSTTModule.wsQueue")
-    private let defaultSonioxManualFinalizeSilenceMs = 1000
-    private let minSonioxManualFinalizeSilenceMs = 500
-    private let maxSonioxManualFinalizeSilenceMs = 3000
 
     private var webSocketSession: URLSession?
     private var socketTask: URLSessionWebSocketTask?
@@ -313,18 +310,17 @@ class NativeSTTModule: RCTEventEmitter {
         return ""
     }
 
-    private func normalizeSonioxManualFinalizeSilenceMs(_ rawValue: NSNumber?) -> Int {
-        guard let rawValue else {
-            return defaultSonioxManualFinalizeSilenceMs
+    private func parseOptionalSonioxManualFinalizeSilenceMs(_ rawValue: Any?) -> Int? {
+        guard let rawValue = rawValue as? NSNumber else {
+            return nil
         }
 
         let raw = rawValue.doubleValue
         guard raw.isFinite else {
-            return defaultSonioxManualFinalizeSilenceMs
+            return nil
         }
 
-        let floored = Int(raw.rounded(.down))
-        return min(max(floored, minSonioxManualFinalizeSilenceMs), maxSonioxManualFinalizeSilenceMs)
+        return Int(raw.rounded(.down))
     }
 
     override func constantsToExport() -> [AnyHashable: Any]! {
@@ -762,7 +758,7 @@ class NativeSTTModule: RCTEventEmitter {
         languages: [String],
         aecEnabled: Bool,
         sonioxLanguageHints: [String],
-        sonioxManualFinalizeSilenceMs: Int,
+        sonioxManualFinalizeSilenceMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -844,8 +840,10 @@ class NativeSTTModule: RCTEventEmitter {
         var configPayload: [String: Any] = [
             "sample_rate": sampleRate,
             "languages": languages,
-            "soniox_manual_finalize_silence_ms": sonioxManualFinalizeSilenceMs,
         ]
+        if let sonioxManualFinalizeSilenceMs {
+            configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
+        }
         if let sttModel, !sttModel.isEmpty {
             configPayload["stt_model"] = sttModel
         }
@@ -855,7 +853,8 @@ class NativeSTTModule: RCTEventEmitter {
         sendJson(configPayload)
 
         emitStatus("running")
-        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%d", sampleRate, wsUrlString, sonioxManualFinalizeSilenceMs)
+        let silenceLogValue = sonioxManualFinalizeSilenceMs.map(String.init) ?? "server-default"
+        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@", sampleRate, wsUrlString, silenceLogValue)
         resolve([
             "sampleRate": sampleRate,
         ])
@@ -889,8 +888,8 @@ class NativeSTTModule: RCTEventEmitter {
         let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let sonioxManualFinalizeSilenceMs = normalizeSonioxManualFinalizeSilenceMs(
-            options["sonioxManualFinalizeSilenceMs"] as? NSNumber
+        let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
+            options["sonioxManualFinalizeSilenceMs"]
         )
 
         let audioSession = AVAudioSession.sharedInstance()

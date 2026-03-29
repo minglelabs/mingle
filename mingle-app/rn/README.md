@@ -13,19 +13,19 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.6`, Android: `android/v1.0.5`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.6`, Android: `android/v1.0.6`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
 `pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.6` before launch.
-`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.5` before launch.
+`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.6` before launch.
 
 On startup, the RN app calls the version-policy API and applies `force_update | recommend_update | none`.
 
 - iOS: `/api/ios/v1.0.6/client/version-policy`
-- Android: `/api/android/v1.0.5/client/version-policy`
+- Android: `/api/android/v1.0.6/client/version-policy`
 - The request body includes `platform` (`ios` | `android`).
 
 The iOS runtime URL prefers the following keys from `Info.plist`.
