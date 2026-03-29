@@ -525,7 +525,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const displayedAdBannerPosition = adBannerPosition
     || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
     || nativeBannerPositionFromQuery
-    || (isNativeAppRuntime ? 'top' : null)
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
@@ -806,7 +805,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const nextBannerPosition = adBannerPosition
       || nativeBannerPositionFromQuery
-      || 'top'
+    if (!nextBannerPosition) return
     const command: NativeSetAdBannerPositionCommand = {
       type: 'native_set_ad_banner_position',
       payload: { position: nextBannerPosition },

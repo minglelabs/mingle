@@ -16,7 +16,7 @@ The RN app requires the following environment variables.
 - `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.6`, Android: `android/v1.0.6`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
-- `RN_AD_BANNER_POSITION` (optional: `off` | `top` | `bottom`, default: `off`)
+- `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `top`)
 - `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
 - `RN_ADMOB_APP_ID_IOS` (required when iOS banner is enabled)
 - `RN_ADMOB_APP_ID_ANDROID` (required when Android banner is enabled)
@@ -51,7 +51,6 @@ RN can render a native ad banner overlay with a build-time/env option.
 
 - `RN_AD_BANNER_POSITION=top`: render banner below the native top area.
 - `RN_AD_BANNER_POSITION=bottom`: render banner above the native bottom area.
-- `RN_AD_BANNER_POSITION=off`: disable banner.
 
 When banner is enabled, RN forwards these query params to web:
 

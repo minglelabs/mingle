@@ -227,6 +227,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: null,
     });
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },

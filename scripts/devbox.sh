@@ -822,14 +822,14 @@ resolve_devbox_ad_banner_position() {
   value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
 
   case "$value" in
-    top|bottom|off)
+    top|bottom)
       printf '%s' "$value"
       ;;
     "")
       printf '%s' "top"
       ;;
     *)
-      printf '%s' "off"
+      printf '%s' "top"
       ;;
   esac
 }

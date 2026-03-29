@@ -8,7 +8,7 @@ export interface NativeUiScrollToTopEventDetail {
 
 export interface NativeUiBannerLayoutEventDetail {
   type: 'banner_layout'
-  position: 'off' | 'top' | 'bottom'
+  position: 'top' | 'bottom'
   topInsetPx: number
   bottomInsetPx: number
 }
@@ -40,7 +40,7 @@ export function parseNativeUiBannerLayoutDetail(
   const payload = detail as Record<string, unknown>
   if (payload.type !== 'banner_layout') return null
 
-  const position = payload.position === 'top' || payload.position === 'bottom' || payload.position === 'off'
+  const position = payload.position === 'top' || payload.position === 'bottom'
     ? payload.position
     : null
   if (!position) return null
