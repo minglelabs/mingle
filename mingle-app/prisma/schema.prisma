@@ -27,6 +27,11 @@ model User {
   screenHeight    Int?     @map("screen_height")
   timezone        String?
   platform        String?
+  latestClientPlatform String? @map("latest_client_platform")
+  latestAppVersion String? @map("latest_app_version")
+  latestApiNamespace String? @map("latest_api_namespace")
+  appVersionHistory String[] @default([]) @map("app_version_history")
+  apiNamespaceHistory String[] @default([]) @map("api_namespace_history")
   pathname        String?
   demoTextSizeLevel Int?   @map("demo_text_size_level")
   demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")

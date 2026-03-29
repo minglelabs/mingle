@@ -58,6 +58,8 @@ import {
   DEFAULT_NATIVE_APP_UPDATE_DETAIL,
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
+  readRequestedApiNamespaceFromSearch,
+  resolveNativeAppTrackingContext,
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
 } from './live-phone-demo.app-update.logic'
@@ -254,6 +256,38 @@ type NativeOpenUpdateStoreCommand = {
 
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
+}
+
+function buildTrackingRequestHeaders(args: {
+  sessionKey: string
+  trackingUserId: string
+  nativeAppUpdate: NativeAppUpdateDetail | null
+}): Record<string, string> {
+  const headers: Record<string, string> = {
+    'x-mingle-session-key': args.sessionKey,
+    'x-mingle-user-id': args.trackingUserId,
+  }
+
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+  const trackingContext = resolveNativeAppTrackingContext({
+    detail: args.nativeAppUpdate,
+    apiNamespace,
+    isNativeAppRuntime: isNativeApp(),
+  })
+
+  if (trackingContext.appVersion) {
+    headers['x-mingle-app-version'] = trackingContext.appVersion
+  }
+  if (trackingContext.apiNamespace) {
+    headers['x-mingle-api-namespace'] = trackingContext.apiNamespace
+  }
+  if (trackingContext.clientPlatform) {
+    headers['x-mingle-client-platform'] = trackingContext.clientPlatform
+  }
+
+  return headers
 }
 
 function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
@@ -470,10 +504,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
       method: 'GET',
       cache: 'no-store',
-      headers: {
-        'x-mingle-session-key': sessionKey,
-        'x-mingle-user-id': trackingUserId,
-      },
+      headers: buildTrackingRequestHeaders({
+        sessionKey,
+        trackingUserId,
+        nativeAppUpdate,
+      }),
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -517,8 +552,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'x-mingle-session-key': sessionKey,
-        'x-mingle-user-id': trackingUserId,
+        ...buildTrackingRequestHeaders({
+          sessionKey,
+          trackingUserId,
+          nativeAppUpdate,
+        }),
       },
       body: JSON.stringify({
         textSizeLevel: currentPreferences.textSizeLevel,
@@ -548,8 +586,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'x-mingle-session-key': sessionKey,
-        'x-mingle-user-id': trackingUserId,
+        ...buildTrackingRequestHeaders({
+          sessionKey,
+          trackingUserId,
+          nativeAppUpdate,
+        }),
       },
       body: JSON.stringify({
         textSizeLevel: nextPreferences.textSizeLevel,
