@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
@@ -111,6 +111,30 @@ function parseNativeInsetPxFromSearch(search: string, queryKey: string): number 
   } catch {
     return 0
   }
+}
+
+function subscribeToLocationSearch(onStoreChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  window.addEventListener('popstate', onStoreChange)
+  window.addEventListener('hashchange', onStoreChange)
+  return () => {
+    window.removeEventListener('popstate', onStoreChange)
+    window.removeEventListener('hashchange', onStoreChange)
+  }
+}
+
+function readNativeInsetPxFromWindow(queryKey: string): number {
+  if (typeof window === 'undefined') return 0
+  return parseNativeInsetPxFromSearch(window.location.search || '', queryKey)
+}
+
+function useNativeInsetPx(queryKey: string): number {
+  return useSyncExternalStore(
+    subscribeToLocationSearch,
+    () => readNativeInsetPxFromWindow(queryKey),
+    () => 0,
+  )
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -1725,14 +1749,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
-  const nativeTopInsetPx = useMemo(() => {
-    if (typeof window === 'undefined') return 0
-    return parseNativeInsetPxFromSearch(window.location.search || '', 'nativeTopInsetPx')
-  }, [])
-  const nativeBottomInsetPx = useMemo(() => {
-    if (typeof window === 'undefined') return 0
-    return parseNativeInsetPxFromSearch(window.location.search || '', 'nativeBottomInsetPx')
-  }, [])
+  const nativeTopInsetPx = useNativeInsetPx('nativeTopInsetPx')
+  const nativeBottomInsetPx = useNativeInsetPx('nativeBottomInsetPx')
   const chatPaddingTop = nativeTopInsetPx > 0 ? `calc(0.625rem + ${nativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = nativeBottomInsetPx > 0 ? `calc(0.625rem + ${nativeBottomInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
