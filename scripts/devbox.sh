@@ -719,8 +719,23 @@ is_nonprod_mobile_build() {
 
 resolve_devbox_ad_banner_position() {
   local platform="${1:-${DEVBOX_ACTIVE_MOBILE_PLATFORM:-}}"
+  local platform_key=""
   local value=""
-  value="$(trim_whitespace "$(read_app_setting_value RN_AD_BANNER_POSITION || true)")"
+  case "$platform" in
+    ios)
+      platform_key="RN_AD_BANNER_POSITION_IOS"
+      ;;
+    android)
+      platform_key="RN_AD_BANNER_POSITION_ANDROID"
+      ;;
+  esac
+
+  if [[ -n "$platform_key" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value "$platform_key" || true)")"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value RN_AD_BANNER_POSITION || true)")"
+  fi
   value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
 
   case "$value" in
