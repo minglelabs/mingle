@@ -3,7 +3,6 @@ import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import 'dotenv/config';
 import OpenAI from 'openai';
-import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createSpeechmaticsJWT } from '@speechmatics/auth';
@@ -23,6 +22,7 @@ const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
+const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime';
 const SPEECHMATICS_JWT_TTL_SEC = 60;
 
 const server = createServer();
@@ -219,7 +219,7 @@ const encodePcm16ForOpenAI = (pcmChunk: Buffer, inputSampleRate: number) => {
 
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
-    let openAIRealtime: OpenAIRealtimeWebSocket | null = null;
+    let openAIRealtimeWs: WebSocket | null = null;
     let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
@@ -256,9 +256,14 @@ wss.on('connection', (clientWs) => {
             sttWs = null;
         }
 
-        if (openAIRealtime) {
-            openAIRealtime.close({ code: 1000, reason: 'Client disconnected' });
-            openAIRealtime = null;
+        if (openAIRealtimeWs) {
+            if (
+                openAIRealtimeWs.readyState === WebSocket.OPEN
+                || openAIRealtimeWs.readyState === WebSocket.CONNECTING
+            ) {
+                openAIRealtimeWs.close();
+            }
+            openAIRealtimeWs = null;
         }
 
         if (speechmaticsClient) {
@@ -618,9 +623,7 @@ wss.on('connection', (clientWs) => {
     };
 
     // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
-    const startOpenAIRealtimeConnection = async (_config: ClientConfig) => {
-        void _config;
-
+    const startOpenAIRealtimeConnection = async (config: ClientConfig) => {
         if (!process.env.OPENAI_API_KEY) {
             console.error('OPENAI_API_KEY environment variable not set!');
             clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
@@ -629,98 +632,129 @@ wss.on('connection', (clientWs) => {
 
         try {
             const partialTranscripts = new Map<string, string>();
-
-            openAIRealtime = await OpenAIRealtimeWebSocket.create(openai, {
-                model: OPENAI_REALTIME_MODEL,
+            const uniqueLanguages = [...new Set(config.languages.filter(Boolean))];
+            const hintedLanguage = config.lang_hints_strict && uniqueLanguages.length === 1
+                ? uniqueLanguages[0]
+                : undefined;
+            const transcriptionSession = await openai.beta.realtime.transcriptionSessions.create({
+                input_audio_format: 'pcm16',
+                input_audio_noise_reduction: {
+                    type: 'near_field',
+                },
+                input_audio_transcription: {
+                    model: OPENAI_REALTIME_MODEL,
+                    ...(hintedLanguage ? { language: hintedLanguage } : {}),
+                },
+                turn_detection: {
+                    type: 'server_vad',
+                    threshold: 0.5,
+                    prefix_padding_ms: 300,
+                    silence_duration_ms: 500,
+                },
+                include: ['item.input_audio_transcription.logprobs'],
             });
 
-            openAIRealtime.on('error', (error) => {
-                console.error('OpenAI Realtime error:', error);
+            if (!isClientConnected) {
+                return;
+            }
+
+            openAIRealtimeWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
+                headers: {
+                    Authorization: `Bearer ${transcriptionSession.client_secret.value}`,
+                    'OpenAI-Beta': 'realtime=v1',
+                },
+            });
+
+            openAIRealtimeWs.onmessage = (event) => {
+                if (!isClientConnected) return;
+
+                try {
+                    const msg = JSON.parse(event.data.toString()) as Record<string, unknown>;
+                    const messageType = typeof msg.type === 'string' ? msg.type : '';
+
+                    if (
+                        messageType === 'transcription_session.created'
+                        || messageType === 'transcription_session.updated'
+                    ) {
+                        clientWs.send(JSON.stringify({ status: 'ready' }));
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.delta') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const delta = typeof msg.delta === 'string' ? msg.delta : '';
+                        if (!itemId || !delta) return;
+
+                        const nextTranscript = `${partialTranscripts.get(itemId) || ''}${delta}`;
+                        partialTranscripts.set(itemId, nextTranscript);
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: false,
+                                utterance: {
+                                    text: nextTranscript,
+                                    language: 'auto',
+                                },
+                            },
+                        }));
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.completed') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const transcript = typeof msg.transcript === 'string' ? msg.transcript.trim() : '';
+                        if (itemId) {
+                            partialTranscripts.delete(itemId);
+                        }
+                        if (!transcript) return;
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: true,
+                                utterance: {
+                                    text: transcript,
+                                    language: 'auto',
+                                },
+                            },
+                        }));
+
+                        if (translationEnabled && selectedLanguages.length > 0) {
+                            translateText(transcript, 'auto', selectedLanguages, clientWs);
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.failed') {
+                        console.error('OpenAI transcription failed:', msg.error);
+                        return;
+                    }
+
+                    if (messageType === 'error') {
+                        console.error('OpenAI Realtime error:', msg.error);
+                        if (isClientConnected) {
+                            clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                        }
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing OpenAI Realtime message:', parseError);
+                }
+            };
+
+            openAIRealtimeWs.onerror = (error) => {
+                console.error('OpenAI Realtime WebSocket error:', error);
                 if (isClientConnected) {
                     clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
                 }
-            });
+            };
 
-            openAIRealtime.on('event', (event) => {
-                const rawEvent = event as { type?: string };
-                if (rawEvent.type === 'transcription_session.updated' && isClientConnected) {
-                    clientWs.send(JSON.stringify({ status: 'ready' }));
-                }
-            });
-
-            openAIRealtime.on('conversation.item.input_audio_transcription.delta', (event) => {
-                if (!isClientConnected) return;
-
-                const delta = event.delta ?? '';
-                if (!delta) return;
-
-                const nextTranscript = `${partialTranscripts.get(event.item_id) || ''}${delta}`;
-                partialTranscripts.set(event.item_id, nextTranscript);
-
-                clientWs.send(JSON.stringify({
-                    type: 'transcript',
-                    data: {
-                        is_final: false,
-                        utterance: {
-                            text: nextTranscript,
-                            language: 'auto',
-                        },
-                    },
-                }));
-            });
-
-            openAIRealtime.on('conversation.item.input_audio_transcription.completed', (event) => {
-                if (!isClientConnected) return;
-
-                const transcript = event.transcript?.trim();
-                partialTranscripts.delete(event.item_id);
-                if (!transcript) return;
-
-                clientWs.send(JSON.stringify({
-                    type: 'transcript',
-                    data: {
-                        is_final: true,
-                        utterance: {
-                            text: transcript,
-                            language: 'auto',
-                        },
-                    },
-                }));
-
-                if (translationEnabled && selectedLanguages.length > 0) {
-                    translateText(transcript, 'auto', selectedLanguages, clientWs);
-                }
-            });
-
-            openAIRealtime.on('conversation.item.input_audio_transcription.failed', (event) => {
-                console.error('OpenAI transcription failed:', event.error);
-            });
-
-            openAIRealtime.socket.addEventListener('open', () => {
-                openAIRealtime?.send({
-                    type: 'transcription_session.update',
-                    session: {
-                        input_audio_format: 'pcm16',
-                        input_audio_noise_reduction: { type: 'near_field' },
-                        input_audio_transcription: {
-                            model: OPENAI_REALTIME_MODEL,
-                        },
-                        turn_detection: {
-                            type: 'server_vad',
-                            threshold: 0.5,
-                            prefix_padding_ms: 300,
-                            silence_duration_ms: 500,
-                        },
-                    },
-                } as never);
-            });
-
-            openAIRealtime.socket.addEventListener('close', () => {
-                openAIRealtime = null;
+            openAIRealtimeWs.onclose = () => {
+                openAIRealtimeWs = null;
                 if (isClientConnected) {
                     clientWs.close();
                 }
-            });
+            };
         } catch (error) {
             console.error('Error starting OpenAI Realtime connection:', error);
             if (isClientConnected) {
@@ -1394,14 +1428,14 @@ wss.on('connection', (clientWs) => {
                     sample_rate: currentSampleRate,
                 }));
             }
-        } else if (currentModel === 'gpt-4o-mini-transcribe' && openAIRealtime) {
+        } else if (currentModel === 'gpt-4o-mini-transcribe' && openAIRealtimeWs?.readyState === WebSocket.OPEN) {
             if (data.type === 'audio_chunk' && data.data?.chunk) {
                 const pcmData = Buffer.from(data.data.chunk, 'base64');
                 const audio = encodePcm16ForOpenAI(pcmData, currentSampleRate);
-                openAIRealtime.send({
+                openAIRealtimeWs.send(JSON.stringify({
                     type: 'input_audio_buffer.append',
                     audio,
-                });
+                }));
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
