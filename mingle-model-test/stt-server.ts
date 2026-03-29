@@ -151,6 +151,7 @@ const OPENAI_REALTIME_SAMPLE_RATE = 24000;
 const OPENAI_REALTIME_MODEL = 'gpt-4o-mini-transcribe';
 const OPENAI_PARTIAL_COMMIT_INTERVAL_MS = 700;
 const OPENAI_MIN_COMMIT_AUDIO_MS = 320;
+const OPENAI_MIN_SERVER_COMMIT_AUDIO_MS = 120;
 const OPENAI_FINAL_SILENCE_MS = 420;
 const OPENAI_VOICE_RMS_THRESHOLD = 0.018;
 const OPENAI_PREROLL_MAX_MS = 240;
@@ -732,9 +733,17 @@ wss.on('connection', (clientWs) => {
                 preRollChunks.length = 0;
             };
 
-            const commitOpenAIAudioBuffer = (kind: 'partial' | 'final') => {
-                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN || bufferedAudioMs <= 0) {
-                    return;
+            const commitOpenAIAudioBuffer = (kind: 'partial' | 'final'): boolean => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) {
+                    return false;
+                }
+
+                if (kind === 'partial' && bufferedAudioMs < OPENAI_MIN_COMMIT_AUDIO_MS) {
+                    return false;
+                }
+
+                if (bufferedAudioMs < OPENAI_MIN_SERVER_COMMIT_AUDIO_MS) {
+                    return false;
                 }
 
                 pendingCommitKinds.push(kind);
@@ -743,6 +752,7 @@ wss.on('connection', (clientWs) => {
                 if (kind === 'partial') {
                     lastPartialCommitAt = Date.now();
                 }
+                return true;
             };
 
             const appendOpenAIAudioChunk = (audio: string, durationMs: number) => {
