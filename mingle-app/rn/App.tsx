@@ -1256,7 +1256,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
-  const canRenderNativeBanner = versionGate.status === 'ready' && !startupSplashVisible;
+  const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
