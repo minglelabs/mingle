@@ -289,6 +289,13 @@ type NativeOpenUpdateStoreCommand = {
   }
 }
 
+type NativeUiOverlayStateCommand = {
+  type: 'native_ui_overlay_state'
+  payload?: {
+    menuOpen?: boolean
+  }
+}
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -619,6 +626,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setTranslationModelMenuOpen(false)
     setMenuOpen(false)
   }, [])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    const command: NativeUiOverlayStateCommand = {
+      type: 'native_ui_overlay_state',
+      payload: { menuOpen },
+    }
+
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+    } catch {
+      // Ignore bridge errors and leave the native banner state unchanged.
+    }
+
+    return () => {
+      try {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+          type: 'native_ui_overlay_state',
+          payload: { menuOpen: false },
+        } satisfies NativeUiOverlayStateCommand))
+      } catch {
+        // Ignore bridge errors during teardown.
+      }
+    }
+  }, [menuOpen])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({

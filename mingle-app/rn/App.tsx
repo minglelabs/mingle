@@ -683,6 +683,13 @@ type NativeOpenUpdateStoreCommand = {
   };
 };
 
+type NativeUiOverlayStateCommand = {
+  type: 'native_ui_overlay_state';
+  payload?: {
+    menuOpen?: boolean;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -690,7 +697,8 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
-  | NativeOpenUpdateStoreCommand;
+  | NativeOpenUpdateStoreCommand
+  | NativeUiOverlayStateCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -974,6 +982,7 @@ function NativeAdBanner(props: {
   adModule: NativeAdModule | null;
   ready: boolean;
   reloadToken: number;
+  hidden?: boolean;
 }): React.JSX.Element | null {
   const {
     position,
@@ -985,8 +994,9 @@ function NativeAdBanner(props: {
     adModule,
     ready,
     reloadToken,
+    hidden = false,
   } = props;
-  if (position === 'off' || !unitId || !ready) return null;
+  if (hidden || position === 'off' || !unitId || !ready) return null;
   if (!adModule?.BannerAd || !adModule?.BannerAdSize) return null;
 
   const BannerAd = adModule.BannerAd;
@@ -1212,6 +1222,7 @@ function AppInner(): React.JSX.Element {
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     nativeBannerPosition === 'off' || !nativeBannerUnitId
   ));
+  const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1756,6 +1767,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_ui_overlay_state') {
+      setIsNativeMenuOverlayOpen(Boolean(parsed.payload?.menuOpen));
+      return;
+    }
+
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
         ? parsed.payload.provider
@@ -1950,6 +1966,7 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
+    setIsNativeMenuOverlayOpen(false);
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -2105,6 +2122,7 @@ function AppInner(): React.JSX.Element {
           bottomOffsetPx={nativeBannerBottomOffsetPx}
           ready={nativeAdsReady}
           reloadToken={nativeBannerReloadToken}
+          hidden={isNativeMenuOverlayOpen}
         />
       ) : null}
     </View>
