@@ -56,6 +56,17 @@ type NativeRuntimeConfig = {
   adBannerUnitIdAndroid?: string;
   adBannerHeightPx?: string | number;
 };
+type NativeAdModule = {
+  default?: {
+    initialize?: () => Promise<unknown>;
+  };
+  BannerAd?: React.ComponentType<{
+    unitId: string;
+    size: string;
+    requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
+  }>;
+  BannerAdSize?: { ADAPTIVE_BANNER: string };
+};
 type NativeBannerPosition = 'off' | 'top' | 'bottom';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionGateState =
@@ -949,6 +960,8 @@ function NativeAdBanner(props: {
   frameWidthPx: number;
   topOffsetPx: number;
   bottomOffsetPx: number;
+  adModule: NativeAdModule | null;
+  ready: boolean;
 }): React.JSX.Element | null {
   const {
     position,
@@ -957,27 +970,10 @@ function NativeAdBanner(props: {
     frameWidthPx,
     topOffsetPx,
     bottomOffsetPx,
+    adModule,
+    ready,
   } = props;
-  if (position === 'off' || !unitId) return null;
-
-  // Keep app boot-safe when native ad sdk is not linked yet.
-  type BannerAdProps = {
-    unitId: string;
-    size: string;
-    requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
-  };
-  type NativeAdModule = {
-    BannerAd?: React.ComponentType<BannerAdProps>;
-    BannerAdSize?: { ADAPTIVE_BANNER: string };
-  };
-  const adModule = (() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('react-native-google-mobile-ads') as NativeAdModule;
-    } catch {
-      return null;
-    }
-  })();
+  if (position === 'off' || !unitId || !ready) return null;
   if (!adModule?.BannerAd || !adModule?.BannerAdSize) return null;
 
   const BannerAd = adModule.BannerAd;
@@ -1072,6 +1068,14 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
+  const nativeAdModule = useMemo<NativeAdModule | null>(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('react-native-google-mobile-ads') as NativeAdModule;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
@@ -1128,10 +1132,41 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
+  const [nativeAdsReady, setNativeAdsReady] = useState(() => (
+    nativeBannerPosition === 'off' || !nativeBannerUnitId
+  ));
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
   }, [updateSafeAreaPalette, webUrl]);
+
+  useEffect(() => {
+    if (nativeBannerPosition === 'off' || !nativeBannerUnitId) {
+      setNativeAdsReady(true);
+      return;
+    }
+    if (!nativeAdModule?.default?.initialize) {
+      setNativeAdsReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setNativeAdsReady(false);
+    nativeAdModule.default.initialize()
+      .then(() => {
+        if (!cancelled) {
+          setNativeAdsReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNativeAdsReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeAdModule, nativeBannerPosition, nativeBannerUnitId]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1962,12 +1997,14 @@ function AppInner(): React.JSX.Element {
       ) : null}
       {!startupSplashVisible && versionGate.status !== 'force_update' ? (
         <NativeAdBanner
+          adModule={nativeAdModule}
           position={nativeBannerPosition}
           unitId={nativeBannerUnitId}
           heightPx={nativeBannerHeightPx}
           frameWidthPx={nativeBannerFrameWidthPx}
           topOffsetPx={nativeBannerTopOffsetPx}
           bottomOffsetPx={nativeBannerBottomOffsetPx}
+          ready={nativeAdsReady}
         />
       ) : null}
     </View>

@@ -18,6 +18,8 @@ The RN app requires the following environment variables.
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `off` | `top` | `bottom`, default: `off`)
 - `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
+- `RN_ADMOB_APP_ID_IOS` (required when iOS banner is enabled)
+- `RN_ADMOB_APP_ID_ANDROID` (required when Android banner is enabled)
 - `RN_ADMOB_BANNER_UNIT_ID_IOS` (required when iOS banner is enabled)
 - `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (required when Android banner is enabled)
 
@@ -41,7 +43,7 @@ When building for an iOS device, `scripts/devbox` generates and injects `rn/ios/
 to override those values with the current worktree / ngrok URLs.
 Regular builds that do not use devbox keep the default Xcode project values (production URLs).
 
-Android runtime URLs and the namespace are injected through Gradle `BuildConfig` and `NativeRuntimeConfigModule`.
+Android runtime URLs, AdMob values, and the namespace are injected through Gradle `BuildConfig`, the app manifest, and `NativeRuntimeConfigModule`.
 
 ## Native Ad Banner Placement
 
@@ -57,6 +59,8 @@ When banner is enabled, RN forwards these query params to web:
 - `nativeBottomInsetPx`
 
 `LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
+
+For `scripts/devbox mobile --device-app-env dev`, devbox falls back to Google's official sample AdMob app IDs and banner unit IDs when the AdMob env vars are unset, so local release verification can proceed without production credentials.
 
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
