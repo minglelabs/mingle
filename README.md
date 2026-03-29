@@ -27,6 +27,8 @@ To automatically isolate local test environments per branch and worktree:
 ```bash
 scripts/devbox init
 scripts/devbox bootstrap
+# Reboot recovery: start local Vault and seed missing dev paths from .env.local
+scripts/devbox vault-up --seed
 # Optional if you use Vault
 # scripts/devbox bootstrap --vault-app-path secret/mingle-app/dev --vault-stt-path secret/mingle-stt/dev
 # Optional if you want to upload `.env.local` values to Vault
@@ -61,9 +63,13 @@ scripts/devbox status
 - `scripts/devbox bootstrap` is read-only and does not modify `.env.local`.
   It only installs dependencies and runs validation checks.
   (If `@prisma/client` artifacts are missing, it automatically runs `db:generate`, and it also checks RN/Pods.)
+- `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely seeds
+  missing Vault KV paths from `mingle-app/.env.local` and `mingle-stt/.env.local`.
 - When using Vault, you can save `--vault-app-path` and `--vault-stt-path` for later reuse.
 - `scripts/devbox bootstrap --vault-push` uploads unmanaged keys from
   `mingle-app/.env.local` and `mingle-stt/.env.local` to Vault.
+  If the target path does not exist yet, devbox creates it once with `kv put`.
+  If the path already exists, devbox keeps using `kv patch` and refuses destructive overwrite fallback.
 - If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in your shell (`.zshrc`) or in
   `mingle-app/.env.local` / `mingle-stt/.env.local`, devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
