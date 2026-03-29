@@ -1256,6 +1256,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const canRenderNativeBanner = versionGate.status === 'ready' && !startupSplashVisible;
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -2173,7 +2174,7 @@ function AppInner(): React.JSX.Element {
           />
         </View>
       ) : null}
-      {!startupSplashVisible && versionGate.status !== 'force_update' ? (
+      {canRenderNativeBanner ? (
         <NativeAdBanner
           adModule={nativeAdModule}
           position={nativeBannerPosition}
