@@ -58,7 +58,9 @@ type NativeRuntimeConfig = {
   adBannerHeightPx?: string | number;
 };
 type NativeAdModule = {
-  default?: {
+  default?: (() => {
+    initialize?: () => Promise<unknown>;
+  }) | {
     initialize?: () => Promise<unknown>;
   };
   BannerAd?: React.ComponentType<{
@@ -1212,14 +1214,19 @@ function AppInner(): React.JSX.Element {
       setNativeAdsReady(true);
       return;
     }
-    if (!nativeAdModule?.default?.initialize) {
+    const mobileAdsFactory = nativeAdModule?.default;
+    const mobileAdsInstance = typeof mobileAdsFactory === 'function'
+      ? mobileAdsFactory()
+      : mobileAdsFactory;
+
+    if (!mobileAdsInstance?.initialize) {
       setNativeAdsReady(false);
       return;
     }
 
     let cancelled = false;
     setNativeAdsReady(false);
-    nativeAdModule.default.initialize()
+    mobileAdsInstance.initialize()
       .then(() => {
         if (!cancelled) {
           setNativeAdsReady(true);
