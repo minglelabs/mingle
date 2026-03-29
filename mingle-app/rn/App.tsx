@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Image,
   Linking,
   NativeModules,
@@ -63,9 +64,16 @@ type NativeAdModule = {
   BannerAd?: React.ComponentType<{
     unitId: string;
     size: string;
+    width?: number;
     requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
+    onAdLoaded?: (dimensions: { width: number; height: number }) => void;
+    onAdFailedToLoad?: (error: Error) => void;
+    onSizeChange?: (dimensions: { width: number; height: number }) => void;
   }>;
-  BannerAdSize?: { ADAPTIVE_BANNER: string };
+  BannerAdSize?: {
+    ADAPTIVE_BANNER?: string;
+    LARGE_ANCHORED_ADAPTIVE_BANNER?: string;
+  };
 };
 type NativeBannerPosition = 'off' | 'top' | 'bottom';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
@@ -962,6 +970,7 @@ function NativeAdBanner(props: {
   bottomOffsetPx: number;
   adModule: NativeAdModule | null;
   ready: boolean;
+  reloadToken: number;
 }): React.JSX.Element | null {
   const {
     position,
@@ -972,23 +981,59 @@ function NativeAdBanner(props: {
     bottomOffsetPx,
     adModule,
     ready,
+    reloadToken,
   } = props;
   if (position === 'off' || !unitId || !ready) return null;
   if (!adModule?.BannerAd || !adModule?.BannerAdSize) return null;
 
   const BannerAd = adModule.BannerAd;
   const BannerAdSize = adModule.BannerAdSize;
+  const [renderHeightPx, setRenderHeightPx] = useState(heightPx);
+  const bannerSize = BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize.ADAPTIVE_BANNER;
+
+  useEffect(() => {
+    setRenderHeightPx(heightPx);
+  }, [heightPx, position, reloadToken, unitId]);
+
+  const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
+    const nextHeight = Number(dimensions?.height ?? '');
+    if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+    setRenderHeightPx(Math.max(heightPx, Math.round(nextHeight)));
+  }, [heightPx]);
+
+  const handleAdLoaded = useCallback((dimensions: { width: number; height: number }) => {
+    if (__DEV__) {
+      console.log(`[NativeAdBanner] loaded ${dimensions.width}x${dimensions.height}`);
+    }
+    applyBannerDimensions(dimensions);
+  }, [applyBannerDimensions]);
+
+  const handleAdFailedToLoad = useCallback((error: Error) => {
+    console.warn('[NativeAdBanner] failed_to_load', {
+      unitId,
+      platform: Platform.OS,
+      message: error.message,
+    });
+  }, [unitId]);
+
   const containerStyle = position === 'top'
-    ? [styles.nativeBannerContainer, { top: topOffsetPx, height: heightPx }]
-    : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: heightPx }];
+    ? [styles.nativeBannerContainer, { top: topOffsetPx, height: renderHeightPx }]
+    : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: renderHeightPx }];
+
+  if (!bannerSize) return null;
 
   return (
     <View pointerEvents="box-none" style={containerStyle}>
-      <View style={[styles.nativeBannerSlot, { width: frameWidthPx, height: heightPx }]}>
+      <View style={[styles.nativeBannerSlot, { width: frameWidthPx, height: renderHeightPx }]}>
         <BannerAd
+          key={`${unitId}:${reloadToken}`}
           unitId={unitId}
-          size={BannerAdSize.ADAPTIVE_BANNER}
+          size={bannerSize}
+          width={frameWidthPx}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          onAdLoaded={handleAdLoaded}
+          onSizeChange={applyBannerDimensions}
+          onAdFailedToLoad={handleAdFailedToLoad}
         />
       </View>
     </View>
@@ -1132,6 +1177,7 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
+  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     nativeBannerPosition === 'off' || !nativeBannerUnitId
   ));
@@ -1167,6 +1213,23 @@ function AppInner(): React.JSX.Element {
       cancelled = true;
     };
   }, [nativeAdModule, nativeBannerPosition, nativeBannerUnitId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    if (nativeBannerPosition === 'off' || !nativeBannerUnitId) return;
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (!becameActive) return;
+      setNativeBannerReloadToken((current) => current + 1);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [nativeBannerPosition, nativeBannerUnitId]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -2005,6 +2068,7 @@ function AppInner(): React.JSX.Element {
           topOffsetPx={nativeBannerTopOffsetPx}
           bottomOffsetPx={nativeBannerBottomOffsetPx}
           ready={nativeAdsReady}
+          reloadToken={nativeBannerReloadToken}
         />
       ) : null}
     </View>
