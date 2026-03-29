@@ -326,7 +326,7 @@
 				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.6;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
-				NEXT_PUBLIC_RN_AD_BANNER_POSITION = off;
+				NEXT_PUBLIC_RN_AD_BANNER_POSITION = top;
 				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
 				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";
@@ -340,7 +340,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn;
 				PRODUCT_NAME = mingle;
-				RN_ADMOB_APP_ID_IOS = "";
+				RN_ADMOB_APP_ID_IOS = "ca-app-pub-7057041881494735~7844963551";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -369,7 +369,7 @@
 				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.6;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
-				NEXT_PUBLIC_RN_AD_BANNER_POSITION = off;
+				NEXT_PUBLIC_RN_AD_BANNER_POSITION = top;
 				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
 				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";
@@ -383,7 +383,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn;
 				PRODUCT_NAME = mingle;
-				RN_ADMOB_APP_ID_IOS = "";
+				RN_ADMOB_APP_ID_IOS = "ca-app-pub-7057041881494735~7844963551";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
