@@ -93,7 +93,16 @@ export function parseNativeAppUpdateDetail(
 export function resolveNativeAppTrackingContext(args: {
   detail?: unknown;
   apiNamespace?: string | null;
+  isNativeAppRuntime?: boolean;
 }): NativeAppTrackingContext {
+  if (args.isNativeAppRuntime !== true) {
+    return {
+      appVersion: null,
+      apiNamespace: null,
+      clientPlatform: null,
+    };
+  }
+
   const parsedDetail = parseNativeAppUpdateDetail(args.detail);
   const apiNamespace = normalizeApiNamespace(args.apiNamespace || "");
   const namespaceVersion = apiNamespace.match(/\/v(\d+\.\d+\.\d+)$/)?.[1] || "";

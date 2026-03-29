@@ -38,6 +38,11 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
 
+function isNativeAppRuntime(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
 export type PartialTranslateMode = 'time' | 'char' | 'both'
 
 export function parsePartialTranslateMode(rawMode: string | undefined): PartialTranslateMode {
@@ -1465,6 +1470,7 @@ function buildClientContextPayload(usageSec: number): Record<string, unknown> {
   const nativeTracking = resolveNativeAppTrackingContext({
     detail: (window as NativeAppUpdateWindow).__MINGLE_NATIVE_APP_UPDATE_STATUS,
     apiNamespace: readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace,
+    isNativeAppRuntime: isNativeAppRuntime(),
   })
 
   let timezone: string | null = null

@@ -1,32 +1,29 @@
 -- AlterTable
-ALTER TABLE "app_client_version_policies" ALTER COLUMN "updated_at" DROP DEFAULT;
+ALTER TABLE "app"."app_users"
+ADD COLUMN "api_namespace_history" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "app_version_history" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "latest_api_namespace" TEXT,
+ADD COLUMN "latest_app_version" TEXT,
+ADD COLUMN "latest_client_platform" TEXT;
 
--- AlterTable
-ALTER TABLE "app_event_logs" ALTER COLUMN "updated_at" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "app_message_contents" ALTER COLUMN "updated_at" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "app_messages" ALTER COLUMN "updated_at" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "app_password_reset_tokens" ALTER COLUMN "expires_at" SET DATA TYPE TIMESTAMP(3),
-ALTER COLUMN "used_at" SET DATA TYPE TIMESTAMP(3),
-ALTER COLUMN "created_at" SET DATA TYPE TIMESTAMP(3),
-ALTER COLUMN "updated_at" SET DATA TYPE TIMESTAMP(3);
-
--- AlterTable
-ALTER TABLE "app_users" ADD COLUMN     "api_namespace_history" TEXT[] DEFAULT ARRAY[]::TEXT[],
-ADD COLUMN     "app_version_history" TEXT[] DEFAULT ARRAY[]::TEXT[],
-ADD COLUMN     "latest_api_namespace" TEXT,
-ADD COLUMN     "latest_app_version" TEXT,
-ADD COLUMN     "latest_client_platform" TEXT,
-ALTER COLUMN "updated_at" DROP DEFAULT,
-ALTER COLUMN "email_verified" SET DATA TYPE TIMESTAMP(3);
-
--- AlterTable
-ALTER TABLE "auth_sessions" ALTER COLUMN "expires" SET DATA TYPE TIMESTAMP(3);
-
--- AlterTable
-ALTER TABLE "auth_verification_tokens" ALTER COLUMN "expires" SET DATA TYPE TIMESTAMP(3);
+-- Backfill legacy release coverage so existing users immediately expose the
+-- historical client versions requested for 1.0.0 through 1.0.6.
+UPDATE "app"."app_users"
+SET "app_version_history" = ARRAY[
+  '1.0.0',
+  '1.0.1',
+  '1.0.2',
+  '1.0.3',
+  '1.0.4',
+  '1.0.5',
+  '1.0.6'
+]::TEXT[]
+WHERE COALESCE("app_version_history", ARRAY[]::TEXT[]) <@ ARRAY[
+  '1.0.0',
+  '1.0.1',
+  '1.0.2',
+  '1.0.3',
+  '1.0.4',
+  '1.0.5',
+  '1.0.6'
+]::TEXT[];

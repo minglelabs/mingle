@@ -274,6 +274,7 @@ function buildTrackingRequestHeaders(args: {
   const trackingContext = resolveNativeAppTrackingContext({
     detail: args.nativeAppUpdate,
     apiNamespace,
+    isNativeAppRuntime: isNativeApp(),
   })
 
   if (trackingContext.appVersion) {

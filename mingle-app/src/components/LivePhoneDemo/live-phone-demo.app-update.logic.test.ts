@@ -48,6 +48,7 @@ describe("live-phone-demo.app-update.logic", () => {
     expect(
       resolveNativeAppTrackingContext({
         apiNamespace: "ios/v1.0.1",
+        isNativeAppRuntime: true,
       })
     ).toEqual({
       appVersion: "1.0.1",
@@ -60,6 +61,7 @@ describe("live-phone-demo.app-update.logic", () => {
     expect(
       resolveNativeAppTrackingContext({
         apiNamespace: "android/v1.0.5",
+        isNativeAppRuntime: true,
         detail: {
           status: "current",
           clientVersion: "1.0.6",
@@ -72,6 +74,26 @@ describe("live-phone-demo.app-update.logic", () => {
       appVersion: "1.0.6",
       apiNamespace: "android/v1.0.5",
       clientPlatform: "android",
+    });
+  });
+
+  it("does not derive native tracking context outside the native runtime", () => {
+    expect(
+      resolveNativeAppTrackingContext({
+        apiNamespace: "android/v1.0.6",
+        detail: {
+          status: "current",
+          clientVersion: "1.0.6",
+          latestVersion: "1.0.6",
+          updateUrl: "",
+          updateAvailable: false,
+        },
+        isNativeAppRuntime: false,
+      })
+    ).toEqual({
+      appVersion: null,
+      apiNamespace: null,
+      clientPlatform: null,
     });
   });
 
