@@ -33,6 +33,7 @@ On startup, the RN app calls the version-policy API and applies `force_update | 
 - iOS: `/api/ios/v1.0.6/client/version-policy`
 - Android: `/api/android/v1.0.6/client/version-policy`
 - The request body includes `platform` (`ios` | `android`).
+- The response can optionally override the banner ad unit ID via server env, while the built-in production IDs remain the fallback.
 
 The iOS runtime URL prefers the following keys from `Info.plist`.
 

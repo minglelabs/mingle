@@ -80,6 +80,9 @@ type NativeAdModule = {
 };
 type NativeBannerPosition = 'top' | 'bottom';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
+type VersionPolicyAdMobConfig = {
+  bannerUnitId?: string;
+};
 type VersionGateState =
   | { status: 'checking' }
   | { status: 'ready' }
@@ -104,6 +107,7 @@ type VersionPolicyResponse = {
   clientVersion?: string;
   updateButtonLabel?: string;
   laterButtonLabel?: string;
+  adMob?: VersionPolicyAdMobConfig;
 };
 type IOSSettingsManager = {
   settings?: {
@@ -973,6 +977,12 @@ function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition |
   return null;
 }
 
+function normalizeServerBannerUnitId(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') return null;
+  const normalized = rawValue.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function resolveNativeBannerHeightPx(rawValue: string | number | undefined): number {
   const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? '');
   if (!Number.isFinite(numeric)) return NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX;
@@ -1152,7 +1162,7 @@ function AppInner(): React.JSX.Element {
     ),
     [],
   );
-  const nativeBannerUnitId = useMemo(() => {
+  const defaultNativeBannerUnitId = useMemo(() => {
     const platformEnvKeys = Platform.OS === 'ios'
       ? ['RN_ADMOB_BANNER_UNIT_ID_IOS', 'NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS']
       : ['RN_ADMOB_BANNER_UNIT_ID_ANDROID', 'NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID'];
@@ -1161,6 +1171,8 @@ function AppInner(): React.JSX.Element {
       : NATIVE_RUNTIME_CONFIG.adBannerUnitIdAndroid || '';
     return (readRuntimeEnvValue(platformEnvKeys) || runtimeFallback).trim();
   }, []);
+  const [serverBannerUnitIdOverride, setServerBannerUnitIdOverride] = useState<string | null>(null);
+  const nativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
   const nativeCanvasScale = useMemo(
     () => resolveNativeCanvasScale(windowWidthPx),
     [windowWidthPx],
@@ -1388,6 +1400,7 @@ function AppInner(): React.JSX.Element {
       })
       .then((policy) => {
         if (!active || settled) return;
+        setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
         setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {

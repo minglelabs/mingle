@@ -94,9 +94,11 @@ URL override (optional):
 - Server env:
   - iOS: `IOS_CLIENT_MIN_SUPPORTED_VERSION`, `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`, `IOS_CLIENT_LATEST_VERSION`, `IOS_APPSTORE_URL`
   - Android: `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`, `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`, `ANDROID_CLIENT_LATEST_VERSION`, `ANDROID_PLAYSTORE_URL`
+  - Optional AdMob banner overrides: `RN_ADMOB_BANNER_UNIT_ID_IOS`, `RN_ADMOB_BANNER_UNIT_ID_ANDROID`
 - Fallback behavior:
   - If Android env is missing, the API falls back to the iOS env once.
   - If the required min version env is missing or has an invalid semver, the API fails closed with `force_update`.
+  - If the AdMob banner env is missing, the RN app keeps its built-in banner unit ID.
 - Response `action`:
   - `force_update`: show a mandatory update screen
   - `recommend_update`: show a recommended update prompt
