@@ -5,6 +5,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.0.3', enablesFinalizeSourceRedetection: false },
   { namespace: 'android/v1.0.4', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.0.5', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v1.0.6', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },

@@ -47,4 +47,4 @@ scripts/google-play-console-deploy.mjs --service-account-json /path/to/service-a
   - ads declaration
   - account deletion
   - foreground service disclosure form
-- For this app, API commits must be created with `changesNotSentForReview=true`, then the final review submission is completed from the Play Console UI.
+- For this app, API commits must be created with `changesNotSentForReview=true` and a default release status of `draft`, then the final review submission is completed from the Play Console UI.

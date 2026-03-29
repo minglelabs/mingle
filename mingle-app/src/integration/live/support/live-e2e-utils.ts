@@ -854,10 +854,16 @@ export async function callFinalizeApi(args: {
     args.env.apiTimeoutMs,
   )
 
-  if (status === 500 && json.error === 'No translation API key configured') {
+  if (
+    status === 500
+    && (
+      json.error === 'No translation API key configured'
+      || json.error === 'translation_provider_misconfigured'
+    )
+  ) {
     throw new Error([
-      '[live-test] GEMINI_API_KEY is missing in the running API server environment.',
-      '- set GEMINI_API_KEY in the API server env and run pnpm test again.',
+      '[live-test] Translation provider is not configured in the running API server environment.',
+      '- set GEMINI_API_KEY for Gemini, or set TRANSLATE_PROVIDER=qwen with TRANSLATE_BASE_URL and TRANSLATE_API_KEY.',
     ].join('\n'))
   }
 
@@ -882,7 +888,7 @@ export async function callFinalizeApi(args: {
   if (emitLogs) {
     if (status === 200) {
       console.info([
-        '[live-test][gemini]',
+        '[live-test][translate]',
         `fixture=${args.fixtureName}`,
         `sourceLanguage=${args.finalTurn.language}`,
         `targets=${plan.targetLanguages.join(',')}`,
@@ -891,7 +897,7 @@ export async function callFinalizeApi(args: {
     } else {
       const error = typeof json.error === 'string' ? json.error : 'unknown'
       console.warn([
-        '[live-test][gemini]',
+        '[live-test][translate]',
         `fixture=${args.fixtureName}`,
         `status=${status}`,
         `error=${error}`,

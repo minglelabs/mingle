@@ -1582,6 +1582,7 @@ export default function MingleHome(props: MingleHomeProps) {
         unmuteTtsLabel={props.dictionary.demo.unmuteTts}
         textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
         silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+        translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
         silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
         silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
         menuLabel={props.dictionary.profile.menuLabel}

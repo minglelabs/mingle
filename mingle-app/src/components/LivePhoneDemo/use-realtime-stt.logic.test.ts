@@ -15,6 +15,7 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
@@ -26,6 +27,26 @@ import {
   shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
+
+function createLocalStorageMock(seed: Record<string, string> = {}) {
+  const store = new Map(Object.entries(seed))
+  return {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value)
+    },
+    removeItem: (key: string) => {
+      store.delete(key)
+    },
+    clear: () => {
+      store.clear()
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size
+    },
+  }
+}
 
 describe('use-realtime-stt pure logic', () => {
   const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL
@@ -69,6 +90,31 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('generates and persists a stable anonymous tracking user id in localStorage', () => {
+    const localStorage = createLocalStorageMock()
+    vi.stubGlobal('crypto', {
+      randomUUID: () => '12345678-1234-1234-1234-123456789abc',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    const first = getOrCreateTrackingUserId()
+    const second = getOrCreateTrackingUserId()
+
+    expect(first).toBe('anon_12345678123412341234123456789abc')
+    expect(second).toBe(first)
+    expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe(first)
+  })
+
+  it('reuses a previously persisted anonymous tracking user id', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_tracking_user_id: 'anon_existing_user',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    expect(getOrCreateTrackingUserId()).toBe('anon_existing_user')
+    expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe('anon_existing_user')
   })
 
   it('parses transcript message payload and normalizes text', () => {

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LS_KEY_LANGUAGES,
-  LS_KEY_SONIOX_SILENCE_MS,
   LS_KEY_TEXT_SIZE_LEVEL,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
@@ -49,16 +48,14 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko', 'ja'])).toEqual({
       selectedLanguages: ['en', 'ko', 'ja'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
-      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     })
   })
 
-  it('reads and sanitizes stored preferences', () => {
+  it('reads and sanitizes stored local preferences while keeping silence finalize at the default', () => {
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US', 'en', 'bad'])
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '5'
-        if (key === LS_KEY_SONIOX_SILENCE_MS) return '2500'
         return null
       }),
     } as unknown as Storage)
@@ -66,7 +63,6 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
       selectedLanguages: ['ja', 'en'],
       textSizeLevel: 5,
-      sonioxManualFinalizeSilenceMs: 2500,
     })
   })
 
@@ -75,7 +71,6 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return '{not-json}'
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '0'
-        if (key === LS_KEY_SONIOX_SILENCE_MS) return '-100'
         return null
       }),
     } as unknown as Storage)
@@ -83,7 +78,6 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko'])).toEqual({
       selectedLanguages: ['en', 'ko'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
-      sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     })
   })
 })

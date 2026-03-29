@@ -5,7 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Play, Loader2 } from 'lucide-react'
 
 const VOLUME_THRESHOLD = 0.05 // 목소리 감지 민감도
-const STT_PROXY_URL = 'ws://localhost:3001'
+const DEFAULT_STT_PORT = process.env.NEXT_PUBLIC_STT_PORT || '3001'
+
+function getSttProxyUrl() {
+  if (typeof window === 'undefined') {
+    return `ws://localhost:${DEFAULT_STT_PORT}`
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${protocol}://${window.location.hostname}:${DEFAULT_STT_PORT}`
+}
 
 // 연결 상태: idle(대기) -> connecting(연결 중) -> ready(음성 인식 가능)
 type ConnectionStatus = 'idle' | 'connecting' | 'ready'
@@ -23,6 +32,7 @@ type SttModel =
   | 'gladia-stt'
   | 'deepgram'
   | 'deepgram-multi'
+  | 'gpt-4o-mini-transcribe'
   | 'fireworks'
   | 'chirp-3'
   | 'soniox'
@@ -192,7 +202,7 @@ export default function Home() {
       const context = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       audioContextRef.current = context
 
-      const socket = new WebSocket(STT_PROXY_URL)
+      const socket = new WebSocket(getSttProxyUrl())
       socketRef.current = socket
 
       socket.onopen = () => {
@@ -364,6 +374,7 @@ export default function Home() {
             <option value="gladia-stt">Gladia STT (AI 번역, 다국어 코드 스위칭)</option>
             <option value="deepgram">Deepgram (AI 번역, 언어 1만 전사)</option>
             <option value="deepgram-multi">Deepgram Multi (AI 번역, 다국어 자동 감지)</option>
+            <option value="gpt-4o-mini-transcribe">OpenAI GPT-4o mini Transcribe (AI 번역, 실시간 partial)</option>
             <option value="fireworks">Fireworks (AI 번역)</option>
             <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
@@ -378,6 +389,11 @@ export default function Home() {
           {sttModel === 'deepgram-multi' && (
             <p className="mt-1 text-xs text-amber-600">
               언어 선택 무시됨 - 10개 언어 자동 감지: EN, ES, FR, DE, HI, RU, PT, JA, IT, NL
+            </p>
+          )}
+          {sttModel === 'gpt-4o-mini-transcribe' && (
+            <p className="mt-1 text-xs text-amber-600">
+              자동 언어 감지는 켜지지만, OpenAI Realtime transcription 이벤트에는 언어 코드가 없어 원본 태그가 AUTO로 표시됩니다.
             </p>
           )}
           {sttModel === 'speechmatics' && (
