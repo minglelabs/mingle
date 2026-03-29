@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
 import 'dotenv/config';
 import OpenAI from 'openai';
+import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createSpeechmaticsJWT } from '@speechmatics/auth';
@@ -31,6 +32,7 @@ type SttModel =
     | 'gladia-stt'
     | 'deepgram'
     | 'deepgram-multi'
+    | 'gpt-4o-mini-transcribe'
     | 'fireworks'
     | 'chirp-3'
     | 'soniox'
@@ -145,6 +147,8 @@ const getSpeechmaticsTranscriptLanguage = (
 };
 
 const ELEVENLABS_SUPPORTED_SAMPLE_RATES = [8000, 16000, 22050, 24000, 44100, 48000] as const;
+const OPENAI_REALTIME_SAMPLE_RATE = 24000;
+const OPENAI_REALTIME_MODEL = 'gpt-4o-mini-transcribe';
 
 const resolveElevenLabsAudioFormat = (sampleRate: number) => {
     const rounded = Math.round(sampleRate);
@@ -164,8 +168,58 @@ const resolveElevenLabsAudioFormat = (sampleRate: number) => {
     return null;
 };
 
+const resamplePcm16Mono = (
+    pcm: Int16Array,
+    inputSampleRate: number,
+    targetSampleRate: number,
+) => {
+    if (pcm.length === 0) {
+        return new Int16Array(0);
+    }
+
+    if (
+        !Number.isFinite(inputSampleRate)
+        || !Number.isFinite(targetSampleRate)
+        || inputSampleRate <= 0
+        || targetSampleRate <= 0
+    ) {
+        return new Int16Array(pcm);
+    }
+
+    if (inputSampleRate === targetSampleRate) {
+        return new Int16Array(pcm);
+    }
+
+    const ratio = inputSampleRate / targetSampleRate;
+    const outputLength = Math.max(1, Math.round(pcm.length / ratio));
+    const output = new Int16Array(outputLength);
+
+    for (let index = 0; index < outputLength; index += 1) {
+        const position = index * ratio;
+        const leftIndex = Math.floor(position);
+        const rightIndex = Math.min(leftIndex + 1, pcm.length - 1);
+        const weight = position - leftIndex;
+        const left = pcm[leftIndex] ?? 0;
+        const right = pcm[rightIndex] ?? left;
+        output[index] = Math.round(left + (right - left) * weight);
+    }
+
+    return output;
+};
+
+const encodePcm16ForOpenAI = (pcmChunk: Buffer, inputSampleRate: number) => {
+    const input = new Int16Array(
+        pcmChunk.buffer,
+        pcmChunk.byteOffset,
+        Math.floor(pcmChunk.byteLength / Int16Array.BYTES_PER_ELEMENT),
+    );
+    const resampled = resamplePcm16Mono(input, inputSampleRate, OPENAI_REALTIME_SAMPLE_RATE);
+    return Buffer.from(resampled.buffer, resampled.byteOffset, resampled.byteLength).toString('base64');
+};
+
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
+    let openAIRealtime: OpenAIRealtimeWebSocket | null = null;
     let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
@@ -200,6 +254,11 @@ wss.on('connection', (clientWs) => {
                 sttWs.close();
             }
             sttWs = null;
+        }
+
+        if (openAIRealtime) {
+            openAIRealtime.close({ code: 1000, reason: 'Client disconnected' });
+            openAIRealtime = null;
         }
 
         if (speechmaticsClient) {
@@ -554,6 +613,118 @@ wss.on('connection', (clientWs) => {
             console.error('Error starting Deepgram Multi connection:', error);
             if (isClientConnected) {
                 clientWs.close(1011, 'Failed to connect to Deepgram Multi transcription service.');
+            }
+        }
+    };
+
+    // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
+    const startOpenAIRealtimeConnection = async (_config: ClientConfig) => {
+        void _config;
+
+        if (!process.env.OPENAI_API_KEY) {
+            console.error('OPENAI_API_KEY environment variable not set!');
+            clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
+            return;
+        }
+
+        try {
+            const partialTranscripts = new Map<string, string>();
+
+            openAIRealtime = await OpenAIRealtimeWebSocket.create(openai, {
+                model: OPENAI_REALTIME_MODEL,
+            });
+
+            openAIRealtime.on('error', (error) => {
+                console.error('OpenAI Realtime error:', error);
+                if (isClientConnected) {
+                    clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                }
+            });
+
+            openAIRealtime.on('event', (event) => {
+                const rawEvent = event as { type?: string };
+                if (rawEvent.type === 'transcription_session.updated' && isClientConnected) {
+                    clientWs.send(JSON.stringify({ status: 'ready' }));
+                }
+            });
+
+            openAIRealtime.on('conversation.item.input_audio_transcription.delta', (event) => {
+                if (!isClientConnected) return;
+
+                const delta = event.delta ?? '';
+                if (!delta) return;
+
+                const nextTranscript = `${partialTranscripts.get(event.item_id) || ''}${delta}`;
+                partialTranscripts.set(event.item_id, nextTranscript);
+
+                clientWs.send(JSON.stringify({
+                    type: 'transcript',
+                    data: {
+                        is_final: false,
+                        utterance: {
+                            text: nextTranscript,
+                            language: 'auto',
+                        },
+                    },
+                }));
+            });
+
+            openAIRealtime.on('conversation.item.input_audio_transcription.completed', (event) => {
+                if (!isClientConnected) return;
+
+                const transcript = event.transcript?.trim();
+                partialTranscripts.delete(event.item_id);
+                if (!transcript) return;
+
+                clientWs.send(JSON.stringify({
+                    type: 'transcript',
+                    data: {
+                        is_final: true,
+                        utterance: {
+                            text: transcript,
+                            language: 'auto',
+                        },
+                    },
+                }));
+
+                if (translationEnabled && selectedLanguages.length > 0) {
+                    translateText(transcript, 'auto', selectedLanguages, clientWs);
+                }
+            });
+
+            openAIRealtime.on('conversation.item.input_audio_transcription.failed', (event) => {
+                console.error('OpenAI transcription failed:', event.error);
+            });
+
+            openAIRealtime.socket.addEventListener('open', () => {
+                openAIRealtime?.send({
+                    type: 'transcription_session.update',
+                    session: {
+                        input_audio_format: 'pcm16',
+                        input_audio_noise_reduction: { type: 'near_field' },
+                        input_audio_transcription: {
+                            model: OPENAI_REALTIME_MODEL,
+                        },
+                        turn_detection: {
+                            type: 'server_vad',
+                            threshold: 0.5,
+                            prefix_padding_ms: 300,
+                            silence_duration_ms: 500,
+                        },
+                    },
+                } as never);
+            });
+
+            openAIRealtime.socket.addEventListener('close', () => {
+                openAIRealtime = null;
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            });
+        } catch (error) {
+            console.error('Error starting OpenAI Realtime connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
             }
         }
     };
@@ -1193,6 +1364,8 @@ wss.on('connection', (clientWs) => {
                 startDeepgramConnection(data as ClientConfig);
             } else if (currentModel === 'deepgram-multi') {
                 startDeepgramMultiConnection(data as ClientConfig);
+            } else if (currentModel === 'gpt-4o-mini-transcribe') {
+                startOpenAIRealtimeConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
             } else if (currentModel === 'chirp-3') {
@@ -1220,6 +1393,15 @@ wss.on('connection', (clientWs) => {
                     audio_base_64: data.data.chunk,
                     sample_rate: currentSampleRate,
                 }));
+            }
+        } else if (currentModel === 'gpt-4o-mini-transcribe' && openAIRealtime) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                const audio = encodePcm16ForOpenAI(pcmData, currentSampleRate);
+                openAIRealtime.send({
+                    type: 'input_audio_buffer.append',
+                    audio,
+                });
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
