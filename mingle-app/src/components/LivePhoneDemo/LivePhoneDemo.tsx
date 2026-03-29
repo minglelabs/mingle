@@ -87,6 +87,8 @@ const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const WEB_CANVAS_BASE_WIDTH_PX = 400
+const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -127,6 +129,38 @@ function subscribeToLocationSearch(onStoreChange: () => void): () => void {
     window.removeEventListener('popstate', onStoreChange)
     window.removeEventListener('hashchange', onStoreChange)
   }
+}
+
+function subscribeToViewportWidth(onStoreChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  window.addEventListener('resize', onStoreChange)
+  return () => {
+    window.removeEventListener('resize', onStoreChange)
+  }
+}
+
+function readViewportWidthPx(): number {
+  if (typeof window === 'undefined') return WEB_CANVAS_BASE_WIDTH_PX
+  const width = Number(window.innerWidth)
+  if (!Number.isFinite(width) || width <= 0) return WEB_CANVAS_BASE_WIDTH_PX
+  return Math.round(width)
+}
+
+function useViewportWidthPx(): number {
+  return useSyncExternalStore(
+    subscribeToViewportWidth,
+    readViewportWidthPx,
+    () => WEB_CANVAS_BASE_WIDTH_PX,
+  )
+}
+
+function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
+  const canvasScale = viewportWidthPx > 0
+    ? Math.min(1, viewportWidthPx / WEB_CANVAS_BASE_WIDTH_PX)
+    : 1
+  const safeCanvasScale = canvasScale > 0 ? canvasScale : 1
+  return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
 }
 
 function readNativeInsetPxFromWindow(queryKey: string): number {
@@ -1876,13 +1910,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
+  const viewportWidthPx = useViewportWidthPx()
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
   const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
-  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + nativeBottomInsetPx
-  const chatPaddingTop = nativeTopInsetPx > 0 ? `calc(0.625rem + ${nativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = nativeBottomInsetPx > 0 ? `calc(0.625rem + ${nativeBottomInsetPx}px)` : '0.625rem'
+  const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
+  const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
+    ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
+    : nativeTopInsetPx
+  const effectiveNativeBottomInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
+    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    : nativeBottomInsetPx
+  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + effectiveNativeBottomInsetPx
+  const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
