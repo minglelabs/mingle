@@ -1293,7 +1293,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [nativeAdModule, nativeBannerPosition, nativeBannerUnitId]);
+  }, [nativeAdModule, nativeBannerUnitId]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
