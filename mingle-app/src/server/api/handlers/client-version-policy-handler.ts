@@ -26,6 +26,10 @@ type VersionPolicySource =
   | 'fallback_no_policy'
   | 'fallback_invalid'
 
+type VersionPolicyAdMobConfig = {
+  bannerUnitId: string
+}
+
 type VersionPolicyReadResult = {
   snapshot: VersionPolicySnapshot
   source: VersionPolicySource
@@ -61,6 +65,14 @@ const VERSION_POLICY_ENV_KEYS: Record<
     recommendedBelowVersion: 'ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION',
     latestVersion: 'ANDROID_CLIENT_LATEST_VERSION',
     updateUrl: 'ANDROID_PLAYSTORE_URL',
+  },
+}
+const VERSION_POLICY_ADMOB_ENV_KEYS: Record<ClientPlatform, { bannerUnitId: string }> = {
+  ios: {
+    bannerUnitId: 'RN_ADMOB_BANNER_UNIT_ID_IOS',
+  },
+  android: {
+    bannerUnitId: 'RN_ADMOB_BANNER_UNIT_ID_ANDROID',
   },
 }
 
@@ -282,6 +294,14 @@ function readVersionPolicyEnvForPlatform(
   }
 }
 
+function readVersionPolicyAdMobConfig(
+  platform: ClientPlatform,
+): VersionPolicyAdMobConfig {
+  return {
+    bannerUnitId: readEnvValue(VERSION_POLICY_ADMOB_ENV_KEYS[platform].bannerUnitId),
+  }
+}
+
 async function readActiveVersionPolicy(
   requestedPlatform: ClientPlatform,
 ): Promise<VersionPolicyReadResult> {
@@ -376,6 +396,7 @@ export async function handleClientVersionPolicy(
   const clientVersion = parseSemver3(clientVersionRaw)
 
   const policyRead = await readActiveVersionPolicy(clientPlatform)
+  const adMobConfig = readVersionPolicyAdMobConfig(clientPlatform)
 
   const action = policyRead.source === 'env'
     ? resolvePolicy({
@@ -412,6 +433,7 @@ export async function handleClientVersionPolicy(
     message,
     updateButtonLabel: VERSION_POLICY_COPY[localizedLocale].updateButtonLabel,
     laterButtonLabel: VERSION_POLICY_COPY[localizedLocale].laterButtonLabel,
+    adMob: adMobConfig,
   }
 
   return NextResponse.json(responseBody, { status: 200 })

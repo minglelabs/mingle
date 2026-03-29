@@ -3,6 +3,8 @@ import {
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
+  normalizeLivePhoneDemoAdBannerPosition,
+  type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
@@ -17,12 +19,14 @@ export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
   sonioxManualFinalizeSilenceMs?: unknown
   translationModel?: unknown
+  adBannerPosition?: unknown
 }
 
 export interface LivePhoneDemoAccountPreferences {
   textSizeLevel: number
   sonioxManualFinalizeSilenceMs: number
   translationModel: UserSelectableTranslationModel
+  adBannerPosition: LivePhoneDemoAdBannerPosition | null
 }
 
 function normalizeIntegerPreference(
@@ -57,13 +61,14 @@ export function buildHydratedAccountPreferences(
       ? DEFAULT_SONIOX_SILENCE_MS
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition),
   }
 }
 
 export function serializeAccountPreferencesSyncState(
   preferences: LivePhoneDemoAccountPreferences,
 ): string {
-  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}:${preferences.translationModel}`
+  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}:${preferences.translationModel}:${preferences.adBannerPosition ?? ''}`
 }
 
 export function shouldScheduleAccountPreferencesSync(args: {

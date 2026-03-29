@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  LS_KEY_AD_BANNER_POSITION,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
+  normalizeLivePhoneDemoAdBannerPosition,
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
 } from './live-phone-demo.preferences'
@@ -35,6 +37,19 @@ describe('readPersistedIntegerPreference', () => {
   })
 })
 
+describe('normalizeLivePhoneDemoAdBannerPosition', () => {
+  it('normalizes top and bottom values', () => {
+    expect(normalizeLivePhoneDemoAdBannerPosition('top')).toBe('top')
+    expect(normalizeLivePhoneDemoAdBannerPosition(' BOTTOM ')).toBe('bottom')
+  })
+
+  it('returns null for unsupported values', () => {
+    expect(normalizeLivePhoneDemoAdBannerPosition('off')).toBeNull()
+    expect(normalizeLivePhoneDemoAdBannerPosition('')).toBeNull()
+    expect(normalizeLivePhoneDemoAdBannerPosition(null)).toBeNull()
+  })
+})
+
 describe('readPersistedLivePhoneDemoPreferences', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
@@ -48,6 +63,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko', 'ja'])).toEqual({
       selectedLanguages: ['en', 'ko', 'ja'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      adBannerPosition: null,
     })
   })
 
@@ -56,6 +72,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US', 'en', 'bad'])
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '5'
+        if (key === LS_KEY_AD_BANNER_POSITION) return 'bottom'
         return null
       }),
     } as unknown as Storage)
@@ -63,6 +80,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
       selectedLanguages: ['ja', 'en'],
       textSizeLevel: 5,
+      adBannerPosition: 'bottom',
     })
   })
 
@@ -71,6 +89,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return '{not-json}'
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '0'
+        if (key === LS_KEY_AD_BANNER_POSITION) return 'off'
         return null
       }),
     } as unknown as Storage)
@@ -78,6 +97,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko'])).toEqual({
       selectedLanguages: ['en', 'ko'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      adBannerPosition: null,
     })
   })
 })

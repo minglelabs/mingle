@@ -36,6 +36,7 @@ model User {
   demoTextSizeLevel Int?   @map("demo_text_size_level")
   demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
   translationModel  String?  @map("translation_model")
+  adBannerPosition  String?  @map("ad_banner_position")
   totalUsageSec   Int      @default(0) @map("total_usage_sec")
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime @default(now()) @map("last_seen_at")

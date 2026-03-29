@@ -51,6 +51,22 @@ function findClosestFile(startDir, fileName) {
   }
 }
 
+function ensurePrismaAppSchemaUrl(rawValue) {
+  if (typeof rawValue !== 'string') return rawValue;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return rawValue;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (!parsed.searchParams.has('schema')) {
+      parsed.searchParams.set('schema', 'app');
+    }
+    return parsed.toString();
+  } catch {
+    return rawValue;
+  }
+}
+
 const cwd = process.cwd();
 const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
 const localEnvPath = findClosestFile(cwd, '.env.local');
@@ -60,6 +76,13 @@ if (devboxEnvPath) {
 }
 if (localEnvPath) {
   loadEnvFile(localEnvPath);
+}
+
+if (process.env.DATABASE_URL !== undefined) {
+  process.env.DATABASE_URL = ensurePrismaAppSchemaUrl(process.env.DATABASE_URL);
+}
+if (process.env.DIRECT_DATABASE_URL !== undefined) {
+  process.env.DIRECT_DATABASE_URL = ensurePrismaAppSchemaUrl(process.env.DIRECT_DATABASE_URL);
 }
 
 const [command, ...args] = process.argv.slice(2);

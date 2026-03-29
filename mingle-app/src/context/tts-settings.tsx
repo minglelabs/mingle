@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useCallback, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 
 const LS_KEY_TTS_ENABLED = 'mingle_tts_enabled'
 const LS_KEY_AEC_ENABLED = 'mingle_aec_enabled'
+const SETTINGS_EVENT = 'mingle:tts-settings-changed'
 
 interface TtsSettingsContextValue {
   ttsEnabled: boolean
@@ -14,37 +15,59 @@ interface TtsSettingsContextValue {
 
 const TtsSettingsContext = createContext<TtsSettingsContextValue | null>(null)
 
-export function TtsSettingsProvider({ children }: { children: ReactNode }) {
-  const [ttsEnabled, setTtsEnabledState] = useState(() => {
-    if (typeof window === 'undefined') return false
-    try {
-      const stored = window.localStorage.getItem(LS_KEY_TTS_ENABLED)
-      if (stored === 'true') return true
-    } catch { /* ignore */ }
+function readStoredBoolean(key: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(key) === 'true'
+  } catch {
     return false
-  })
+  }
+}
 
-  const [aecEnabled, setAecEnabledState] = useState(() => {
-    if (typeof window === 'undefined') return false
-    try {
-      const stored = window.localStorage.getItem(LS_KEY_AEC_ENABLED)
-      if (stored === 'true') return true
-    } catch { /* ignore */ }
-    return false
-  })
+function subscribeToStoredBoolean(onStoreChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  const handleStorage = () => {
+    onStoreChange()
+  }
+
+  window.addEventListener('storage', handleStorage)
+  window.addEventListener(SETTINGS_EVENT, handleStorage)
+  return () => {
+    window.removeEventListener('storage', handleStorage)
+    window.removeEventListener(SETTINGS_EVENT, handleStorage)
+  }
+}
+
+function useStoredBoolean(key: string): boolean {
+  return useSyncExternalStore(
+    subscribeToStoredBoolean,
+    () => readStoredBoolean(key),
+    () => false,
+  )
+}
+
+function notifyStoredBooleanChanged(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(SETTINGS_EVENT))
+}
+
+export function TtsSettingsProvider({ children }: { children: ReactNode }) {
+  const ttsEnabled = useStoredBoolean(LS_KEY_TTS_ENABLED)
+  const aecEnabled = useStoredBoolean(LS_KEY_AEC_ENABLED)
 
   const setTtsEnabled = useCallback((value: boolean) => {
-    setTtsEnabledState(value)
     try {
       window.localStorage.setItem(LS_KEY_TTS_ENABLED, String(value))
     } catch { /* ignore */ }
+    notifyStoredBooleanChanged()
   }, [])
 
   const setAecEnabled = useCallback((value: boolean) => {
-    setAecEnabledState(value)
     try {
       window.localStorage.setItem(LS_KEY_AEC_ENABLED, String(value))
     } catch { /* ignore */ }
+    notifyStoredBooleanChanged()
   }, [])
 
   const value = useMemo(

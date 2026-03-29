@@ -1121,9 +1121,19 @@ describe('/api/translate/finalize route', () => {
       url: 'http://localhost:3000/api/android/v1.0.6/translate/finalize',
     },
     {
+      label: 'Android v1.0.7',
+      loadRoute: () => import('@/app/api/android/v1.0.7/translate/finalize/route'),
+      url: 'http://localhost:3000/api/android/v1.0.7/translate/finalize',
+    },
+    {
       label: 'iOS v1.0.6',
       loadRoute: () => import('@/app/api/ios/v1.0.6/translate/finalize/route'),
       url: 'http://localhost:3000/api/ios/v1.0.6/translate/finalize',
+    },
+    {
+      label: 'iOS v1.0.7',
+      loadRoute: () => import('@/app/api/ios/v1.0.7/translate/finalize/route'),
+      url: 'http://localhost:3000/api/ios/v1.0.7/translate/finalize',
     },
   ])('redetects final source language on $label routes and returns all selected languages', async ({ loadRoute, url }) => {
     mockGenerateContent.mockResolvedValue({

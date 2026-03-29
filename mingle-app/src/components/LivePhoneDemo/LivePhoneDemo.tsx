@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,11 +22,14 @@ import {
 import {
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
+  LS_KEY_AD_BANNER_POSITION,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
+  normalizeLivePhoneDemoAdBannerPosition,
   readPersistedLivePhoneDemoPreferences,
+  type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
   buildHydratedAccountPreferences,
@@ -51,8 +54,10 @@ import {
 import {
   NATIVE_UI_EVENT,
   isNativeUiBridgeEnabledFromSearch,
+  parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   shouldEnableIosTopTapFallback,
+  type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
 import {
   DEFAULT_NATIVE_APP_UPDATE_DETAIL,
@@ -80,9 +85,12 @@ const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
+const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const WEB_CANVAS_BASE_WIDTH_PX = 400
+const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -91,7 +99,6 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   4: 'text-base',
   5: 'text-[18px]',
 }
-
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -100,6 +107,97 @@ function isNativeApp(): boolean {
 function isLikelyIOSPlatform(): boolean {
   if (typeof window === 'undefined') return false
   return isLikelyIOSNavigator(window.navigator)
+}
+
+function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
+  try {
+    const params = new URLSearchParams(search)
+    const raw = (params.get(queryKey) || '').trim()
+    if (!raw) return 0
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return 0
+    return Math.max(0, Math.min(NATIVE_INSET_QUERY_MAX_PX, Math.round(parsed)))
+  } catch {
+    return 0
+  }
+}
+
+function subscribeToLocationSearch(onStoreChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  window.addEventListener('popstate', onStoreChange)
+  window.addEventListener('hashchange', onStoreChange)
+  return () => {
+    window.removeEventListener('popstate', onStoreChange)
+    window.removeEventListener('hashchange', onStoreChange)
+  }
+}
+
+function subscribeToViewportWidth(onStoreChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+
+  window.addEventListener('resize', onStoreChange)
+  return () => {
+    window.removeEventListener('resize', onStoreChange)
+  }
+}
+
+function readViewportWidthPx(): number {
+  if (typeof window === 'undefined') return WEB_CANVAS_BASE_WIDTH_PX
+  const width = Number(window.innerWidth)
+  if (!Number.isFinite(width) || width <= 0) return WEB_CANVAS_BASE_WIDTH_PX
+  return Math.round(width)
+}
+
+function useViewportWidthPx(): number {
+  return useSyncExternalStore(
+    subscribeToViewportWidth,
+    readViewportWidthPx,
+    () => WEB_CANVAS_BASE_WIDTH_PX,
+  )
+}
+
+function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
+  const canvasScale = viewportWidthPx > 0
+    ? Math.min(1, viewportWidthPx / WEB_CANVAS_BASE_WIDTH_PX)
+    : 1
+  const safeCanvasScale = canvasScale > 0 ? canvasScale : 1
+  return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
+}
+
+function readNativeInsetPxFromWindow(queryKey: string): number {
+  if (typeof window === 'undefined') return 0
+  return parseNativeInsetPxFromSearch(window.location.search || '', queryKey)
+}
+
+function useNativeInsetPx(queryKey: string): number {
+  return useSyncExternalStore(
+    subscribeToLocationSearch,
+    () => readNativeInsetPxFromWindow(queryKey),
+    () => 0,
+  )
+}
+
+function parseNativeBannerPositionFromSearch(search: string): LivePhoneDemoAdBannerPosition | null {
+  try {
+    const params = new URLSearchParams(search)
+    return normalizeLivePhoneDemoAdBannerPosition(params.get('nativeBannerPosition'))
+  } catch {
+    return null
+  }
+}
+
+function readNativeBannerPositionFromWindow(): LivePhoneDemoAdBannerPosition | null {
+  if (typeof window === 'undefined') return null
+  return parseNativeBannerPositionFromSearch(window.location.search || '')
+}
+
+function useNativeBannerPositionFromSearch(): LivePhoneDemoAdBannerPosition | null {
+  return useSyncExternalStore(
+    subscribeToLocationSearch,
+    readNativeBannerPositionFromWindow,
+    () => null,
+  )
 }
 
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -221,6 +319,9 @@ interface LivePhoneDemoProps {
   textSizeLabel: string
   silenceFinalizeLabel: string
   translationModelLabel: string
+  adBannerPositionLabel: string
+  adBannerPositionTopLabel: string
+  adBannerPositionBottomLabel: string
   silenceFinalizeLockedMessage: string
   silenceFinalizeLockedButtonLabel: string
   menuLabel: string
@@ -251,6 +352,20 @@ type NativeOpenUpdateStoreCommand = {
   type: 'native_open_update_store'
   payload?: {
     updateUrl?: string
+  }
+}
+
+type NativeUiOverlayStateCommand = {
+  type: 'native_ui_overlay_state'
+  payload?: {
+    menuOpen?: boolean
+  }
+}
+
+type NativeSetAdBannerPositionCommand = {
+  type: 'native_set_ad_banner_position'
+  payload?: {
+    position?: LivePhoneDemoAdBannerPosition | ''
   }
 }
 
@@ -322,6 +437,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   textSizeLabel,
   silenceFinalizeLabel,
   translationModelLabel,
+  adBannerPositionLabel,
+  adBannerPositionTopLabel,
+  adBannerPositionBottomLabel,
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
@@ -346,10 +464,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
+  const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
+  const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
@@ -389,16 +509,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
   const translationModelListboxId = useId()
+  const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
+    adBannerPosition: null,
   })
   const latestAccountPreferences = useMemo(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
-  }), [sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    adBannerPosition,
+  }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  const displayedAdBannerPosition = adBannerPosition
+    || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
+    || nativeBannerPositionFromQuery
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
@@ -425,6 +551,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
+      setAdBannerPosition(next.adBannerPosition)
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -479,6 +606,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch { /* ignore */ }
   }, [textSizeLevel])
 
+  useEffect(() => {
+    try {
+      if (adBannerPosition) {
+        localStorage.setItem(LS_KEY_AD_BANNER_POSITION, adBannerPosition)
+      } else {
+        localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
+      }
+    } catch { /* ignore */ }
+  }, [adBannerPosition])
+
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return
     window.clearTimeout(accountPreferencesSyncTimerRef.current)
@@ -525,6 +662,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setTextSizeLevel(hydratedPreferences.textSizeLevel)
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
+        setAdBannerPosition(hydratedPreferences.adBannerPosition)
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -562,6 +700,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         textSizeLevel: currentPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: currentPreferences.translationModel,
+        adBannerPosition: currentPreferences.adBannerPosition,
       }),
     })
       .then((response) => {
@@ -596,6 +735,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         textSizeLevel: nextPreferences.textSizeLevel,
         sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: nextPreferences.translationModel,
+        adBannerPosition: nextPreferences.adBannerPosition,
       }),
     })
       .then((response) => {
@@ -619,10 +759,64 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
+  const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
+    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) return
+    setAdBannerPosition(nextAdBannerPosition)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      adBannerPosition: nextAdBannerPosition,
+    })
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+
   const closeMenuPanel = useCallback(() => {
     setTranslationModelMenuOpen(false)
     setMenuOpen(false)
   }, [])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    const command: NativeUiOverlayStateCommand = {
+      type: 'native_ui_overlay_state',
+      payload: { menuOpen },
+    }
+
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+    } catch {
+      // Ignore bridge errors and leave the native banner state unchanged.
+    }
+
+    return () => {
+      try {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+          type: 'native_ui_overlay_state',
+          payload: { menuOpen: false },
+        } satisfies NativeUiOverlayStateCommand))
+      } catch {
+        // Ignore bridge errors during teardown.
+      }
+    }
+  }, [menuOpen])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    const nextBannerPosition = adBannerPosition
+      || nativeBannerPositionFromQuery
+    if (!nextBannerPosition) return
+    const command: NativeSetAdBannerPositionCommand = {
+      type: 'native_set_ad_banner_position',
+      payload: { position: nextBannerPosition },
+    }
+
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+    } catch {
+      // Ignore bridge errors and leave the native banner position unchanged.
+    }
+  }, [adBannerPosition, nativeBannerPositionFromQuery])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -1607,8 +1801,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!isNativeApp()) return
 
     const handleNativeUiEvent = (event: Event) => {
-      const detail = parseNativeUiScrollToTopDetail((event as CustomEvent<unknown>).detail)
-      if (!detail) return
+      const detail = (event as CustomEvent<unknown>).detail
+      const bannerLayout = parseNativeUiBannerLayoutDetail(detail)
+      if (bannerLayout) {
+        setNativeBannerLayout(bannerLayout)
+        return
+      }
+
+      const scrollToTop = parseNativeUiScrollToTopDetail(detail)
+      if (!scrollToTop) return
       handleTopSafeAreaTap()
     }
 
@@ -1753,6 +1954,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ),
   )
   const navSurfaceClassName = 'bg-white'
+  const viewportWidthPx = useViewportWidthPx()
+  const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
+  const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
+  const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
+  const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
+  const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
+  const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
+    ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
+    : nativeTopInsetPx
+  const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
+    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    : nativeBottomInsetPx
+  const scrollToBottomButtonReservedPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
+    ? effectiveNativeBottomContentInsetPx
+    : 0
+  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
+  const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -2130,6 +2349,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </AnimatePresence>
                         </div>
                       </div>
+                      {isNativeAppRuntime && (
+                        <div className="block">
+                          <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                            <span className="shrink-0 whitespace-nowrap">{adBannerPositionLabel}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {([
+                              { value: 'top', label: adBannerPositionTopLabel },
+                              { value: 'bottom', label: adBannerPositionBottomLabel },
+                            ] satisfies Array<{ value: LivePhoneDemoAdBannerPosition, label: string }>).map((option) => {
+                              const isSelected = displayedAdBannerPosition === option.value
+
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  onClick={() => handleAdBannerPositionSelect(option.value)}
+                                  className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                    isSelected
+                                      ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                      : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2215,6 +2465,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onPointerDown={markUserScrollIntent}
               className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
               style={{
+                paddingTop: chatPaddingTop,
+                paddingBottom: chatPaddingBottom,
                 paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
                 paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
               }}
@@ -2359,7 +2611,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   exit={{ opacity: 0, y: 8, scale: 0.98 }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="pointer-events-none absolute inset-x-0 z-20 flex justify-center"
-                  style={{ bottom: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX }}
+                  style={{ bottom: scrollToBottomButtonBottomPx }}
                 >
                   <button
                     type="button"

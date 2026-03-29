@@ -1583,6 +1583,9 @@ export default function MingleHome(props: MingleHomeProps) {
         textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
         silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
         translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
+        adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
+        adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
+        adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
         silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
         silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
         menuLabel={props.dictionary.profile.menuLabel}
