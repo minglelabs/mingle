@@ -1931,12 +1931,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
     : nativeTopInsetPx
-  const effectiveNativeBottomInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerBottomReservedPx)
+  const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
+    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
-  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + effectiveNativeBottomInsetPx
+  const scrollToBottomButtonReservedPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
+    ? estimatedNativeBannerBottomReservedPx
+    : effectiveNativeBottomContentInsetPx
+  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
