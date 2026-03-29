@@ -146,6 +146,39 @@ die() {
   exit 1
 }
 
+ensure_prisma_app_schema_url() {
+  local raw_value="${1:-}"
+
+  if [[ -z "$raw_value" || "$raw_value" == *"schema="* ]]; then
+    printf '%s' "$raw_value"
+    return 0
+  fi
+
+  if [[ "$raw_value" == *\?* ]]; then
+    printf '%s&schema=app' "$raw_value"
+    return 0
+  fi
+
+  printf '%s?schema=app' "$raw_value"
+}
+
+normalize_prisma_database_env() {
+  if [[ -n "${DATABASE_URL:-}" ]]; then
+    DATABASE_URL="$(ensure_prisma_app_schema_url "$DATABASE_URL")"
+    export DATABASE_URL
+  fi
+
+  if [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
+    DIRECT_DATABASE_URL="$(ensure_prisma_app_schema_url "$DIRECT_DATABASE_URL")"
+    export DIRECT_DATABASE_URL
+  fi
+
+  if [[ -n "${POSTGRES_PRISMA_URL:-}" ]]; then
+    POSTGRES_PRISMA_URL="$(ensure_prisma_app_schema_url "$POSTGRES_PRISMA_URL")"
+    export POSTGRES_PRISMA_URL
+  fi
+}
+
 best_effort_raise_nofile_limit() {
   local target="${DEVBOX_ULIMIT_NOFILE:-65536}"
   if [[ "$target" =~ ^[0-9]+$ ]]; then
@@ -4823,6 +4856,7 @@ $(ngrok_plan_capacity_hint)"
       . "$runtime_app_env_file"
       set +a
     fi
+    normalize_prisma_database_env
     # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
     # Use webpack for device testing, but avoid forcing polling watchers because they can
     # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
@@ -4857,6 +4891,7 @@ $(ngrok_plan_capacity_hint)"
         . "$runtime_app_env_file"
         set +a
       fi
+      normalize_prisma_database_env
       DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
       DEVBOX_PROFILE="$DEVBOX_PROFILE" \
       DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \

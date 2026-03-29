@@ -89,6 +89,7 @@ const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
+const NATIVE_AD_BANNER_ESTIMATED_BOTTOM_OFFSET_PX = 94
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -161,6 +162,16 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
     : 1
   const safeCanvasScale = canvasScale > 0 ? canvasScale : 1
   return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
+}
+
+function resolveEstimatedNativeBannerBottomReservedPx(viewportWidthPx: number): number {
+  const canvasScale = viewportWidthPx > 0
+    ? Math.min(1, viewportWidthPx / WEB_CANVAS_BASE_WIDTH_PX)
+    : 1
+  return Math.max(
+    0,
+    resolveEstimatedNativeBannerInsetPx(viewportWidthPx) + Math.round(NATIVE_AD_BANNER_ESTIMATED_BOTTOM_OFFSET_PX * canvasScale),
+  )
 }
 
 function readNativeInsetPxFromWindow(queryKey: string): number {
@@ -1916,11 +1927,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
   const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
+  const estimatedNativeBannerBottomReservedPx = resolveEstimatedNativeBannerBottomReservedPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
     : nativeTopInsetPx
   const effectiveNativeBottomInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerBottomReservedPx)
     : nativeBottomInsetPx
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + effectiveNativeBottomInsetPx
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
