@@ -73,6 +73,7 @@ type NativeAdModule = {
     onSizeChange?: (dimensions: { width: number; height: number }) => void;
   }>;
   BannerAdSize?: {
+    BANNER?: string;
     ADAPTIVE_BANNER?: string;
     LARGE_ANCHORED_ADAPTIVE_BANNER?: string;
   };
@@ -990,10 +991,16 @@ function NativeAdBanner(props: {
 
   const BannerAd = adModule.BannerAd;
   const BannerAdSize = adModule.BannerAdSize;
+  const prefersFixedHeightBanner = Platform.OS === 'ios';
   const [renderHeightPx, setRenderHeightPx] = useState(heightPx);
   const [adLoadState, setAdLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [lastErrorMessage, setLastErrorMessage] = useState('');
-  const bannerSize = BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize.ADAPTIVE_BANNER;
+  const bannerSize = prefersFixedHeightBanner
+    ? BannerAdSize.BANNER
+    : (BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize.ADAPTIVE_BANNER);
+  const bannerSlotWidthPx = prefersFixedHeightBanner
+    ? Math.min(frameWidthPx, 320)
+    : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
   useEffect(() => {
@@ -1003,10 +1010,11 @@ function NativeAdBanner(props: {
   }, [heightPx, position, reloadToken, unitId]);
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
+    if (prefersFixedHeightBanner) return;
     const nextHeight = Number(dimensions?.height ?? '');
     if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
     setRenderHeightPx(Math.max(heightPx, Math.round(nextHeight)));
-  }, [heightPx]);
+  }, [heightPx, prefersFixedHeightBanner]);
 
   const handleAdLoaded = useCallback((dimensions: { width: number; height: number }) => {
     if (__DEV__) {
@@ -1035,7 +1043,7 @@ function NativeAdBanner(props: {
 
   return (
     <View pointerEvents="box-none" style={containerStyle}>
-      <View style={[styles.nativeBannerSlot, { width: frameWidthPx, height: renderHeightPx }]}>
+      <View style={[styles.nativeBannerSlot, { width: bannerSlotWidthPx, height: renderHeightPx }]}>
         {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
           <View style={styles.nativeBannerDebugPlaceholder}>
             <Text style={styles.nativeBannerDebugTitle}>
@@ -1044,7 +1052,7 @@ function NativeAdBanner(props: {
             <Text style={styles.nativeBannerDebugBody} numberOfLines={2}>
               {adLoadState === 'failed'
                 ? (lastErrorMessage || 'Unknown banner load error')
-                : `slot=${position} width=${frameWidthPx} unit=test-ios-adaptive`}
+                : `slot=${position} width=${bannerSlotWidthPx} unit=test-ios-banner`}
             </Text>
           </View>
         ) : null}
@@ -1052,7 +1060,7 @@ function NativeAdBanner(props: {
           key={`${unitId}:${reloadToken}`}
           unitId={unitId}
           size={bannerSize}
-          width={frameWidthPx}
+          width={bannerSlotWidthPx}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
           onAdLoaded={handleAdLoaded}
           onSizeChange={applyBannerDimensions}
