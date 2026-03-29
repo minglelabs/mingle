@@ -2,9 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
-import { buildClientApiPath, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
+import {
+  readRequestedApiNamespaceFromSearch,
+  resolveNativeAppTrackingContext,
+} from './live-phone-demo.app-update.logic'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -29,6 +33,10 @@ const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
+
+type NativeAppUpdateWindow = Window & {
+  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
+}
 
 export type PartialTranslateMode = 'time' | 'char' | 'both'
 
@@ -1454,6 +1462,11 @@ function buildClientContextPayload(usageSec: number): Record<string, unknown> {
     return { usageSec }
   }
 
+  const nativeTracking = resolveNativeAppTrackingContext({
+    detail: (window as NativeAppUpdateWindow).__MINGLE_NATIVE_APP_UPDATE_STATUS,
+    apiNamespace: readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace,
+  })
+
   let timezone: string | null = null
   try {
     timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null
@@ -1472,7 +1485,9 @@ function buildClientContextPayload(usageSec: number): Record<string, unknown> {
     screenHeight: window.screen?.height ?? null,
     timezone,
     platform: navigator.platform || null,
-    appVersion: process.env.NEXT_PUBLIC_APP_VERSION || null,
+    clientPlatform: nativeTracking.clientPlatform,
+    apiNamespace: nativeTracking.apiNamespace,
+    appVersion: nativeTracking.appVersion || process.env.NEXT_PUBLIC_APP_VERSION || null,
     usageSec,
   }
 }
