@@ -776,15 +776,7 @@ resolve_devbox_ad_banner_position() {
       printf '%s' "$value"
       ;;
     "")
-      if is_nonprod_mobile_build; then
-        if [[ "$platform" == "ios" ]]; then
-          printf '%s' "top"
-        else
-          printf '%s' "off"
-        fi
-      else
-        printf '%s' "off"
-      fi
+      printf '%s' "top"
       ;;
     *)
       printf '%s' "off"

@@ -966,6 +966,14 @@ function resolveNativeBannerPosition(rawValue: string): NativeBannerPosition {
   return 'off';
 }
 
+function resolveConfiguredNativeBannerPosition(rawValue: string): NativeBannerPosition {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'top') return 'top';
+  if (normalized === 'bottom') return 'bottom';
+  if (normalized === 'off') return 'off';
+  return 'top';
+}
+
 function resolveNativeBannerHeightPx(rawValue: string | number | undefined): number {
   const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? '');
   if (!Number.isFinite(numeric)) return NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX;
@@ -1144,7 +1152,7 @@ function AppInner(): React.JSX.Element {
   }, [windowWidthPx]);
   const webUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
-    const bannerPosition = resolveNativeBannerPosition(
+    const bannerPosition = resolveConfiguredNativeBannerPosition(
       readRuntimeEnvValue(['RN_AD_BANNER_POSITION', 'NEXT_PUBLIC_RN_AD_BANNER_POSITION'])
       || (NATIVE_RUNTIME_CONFIG.adBannerPosition || ''),
     );
@@ -1201,7 +1209,7 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
   const defaultNativeBannerPosition = useMemo(
-    () => resolveNativeBannerPosition(
+    () => resolveConfiguredNativeBannerPosition(
       readRuntimeEnvValue(['RN_AD_BANNER_POSITION', 'NEXT_PUBLIC_RN_AD_BANNER_POSITION'])
       || (NATIVE_RUNTIME_CONFIG.adBannerPosition || ''),
     ),
