@@ -989,10 +989,15 @@ function NativeAdBanner(props: {
   const BannerAd = adModule.BannerAd;
   const BannerAdSize = adModule.BannerAdSize;
   const [renderHeightPx, setRenderHeightPx] = useState(heightPx);
+  const [adLoadState, setAdLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const [lastErrorMessage, setLastErrorMessage] = useState('');
   const bannerSize = BannerAdSize.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize.ADAPTIVE_BANNER;
+  const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
   useEffect(() => {
     setRenderHeightPx(heightPx);
+    setAdLoadState('loading');
+    setLastErrorMessage('');
   }, [heightPx, position, reloadToken, unitId]);
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
@@ -1005,10 +1010,14 @@ function NativeAdBanner(props: {
     if (__DEV__) {
       console.log(`[NativeAdBanner] loaded ${dimensions.width}x${dimensions.height}`);
     }
+    setAdLoadState('loaded');
+    setLastErrorMessage('');
     applyBannerDimensions(dimensions);
   }, [applyBannerDimensions]);
 
   const handleAdFailedToLoad = useCallback((error: Error) => {
+    setAdLoadState('failed');
+    setLastErrorMessage(error.message);
     console.warn('[NativeAdBanner] failed_to_load', {
       unitId,
       platform: Platform.OS,
@@ -1025,6 +1034,18 @@ function NativeAdBanner(props: {
   return (
     <View pointerEvents="box-none" style={containerStyle}>
       <View style={[styles.nativeBannerSlot, { width: frameWidthPx, height: renderHeightPx }]}>
+        {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
+          <View style={styles.nativeBannerDebugPlaceholder}>
+            <Text style={styles.nativeBannerDebugTitle}>
+              {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
+            </Text>
+            <Text style={styles.nativeBannerDebugBody} numberOfLines={2}>
+              {adLoadState === 'failed'
+                ? (lastErrorMessage || 'Unknown banner load error')
+                : `slot=${position} width=${frameWidthPx} unit=test-ios-adaptive`}
+            </Text>
+          </View>
+        ) : null}
         <BannerAd
           key={`${unitId}:${reloadToken}`}
           unitId={unitId}
@@ -2201,6 +2222,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  nativeBannerDebugPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17, 24, 39, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.7)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    paddingHorizontal: 12,
+  },
+  nativeBannerDebugTitle: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  nativeBannerDebugBody: {
+    marginTop: 2,
+    color: '#374151',
+    fontSize: 11,
+    textAlign: 'center',
   },
 });
 
