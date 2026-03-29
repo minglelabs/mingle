@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": true,
-      "releaseName": "1.0.7 (29)",
+      "releaseName": "1.0.7 (30)",
       "releaseNotes": {
         "en-US": "Version 1.0.7 adds configurable AdMob banner placement, improves banner spacing around menus and navigation, and stabilizes update checks.",
         "ar": "يضيف الإصدار 1.0.7 إمكانية اختيار موضع بانر AdMob، ويحسّن المسافات حول القوائم والتنقل، ويزيد من استقرار التحقق من التحديثات.",
