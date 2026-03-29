@@ -17,12 +17,14 @@ const DEFAULT_TEXT_SIZE_LEVEL = 2;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
   textSizeLevel?: unknown;
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
+  adBannerPosition?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -36,6 +38,7 @@ type UserPreferencesRecord = {
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
+  adBannerPosition: string | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -62,6 +65,14 @@ function asClampedInteger(value: unknown, min: number, max: number): number | nu
   const asNumber = Number(value);
   if (!Number.isFinite(asNumber)) return null;
   return Math.max(min, Math.min(max, Math.round(asNumber)));
+}
+
+function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return AD_BANNER_POSITIONS.has(normalized)
+    ? (normalized as "top" | "bottom")
+    : null;
 }
 
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
@@ -141,6 +152,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
     translationModel: true,
+    adBannerPosition: true,
   } as const;
 
   if (identity.id) {
@@ -231,6 +243,7 @@ export async function GET(request: Request) {
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
+    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -273,7 +286,13 @@ export async function PATCH(request: Request) {
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
-  if (nextTextSizeLevel === null && nextSilenceMs === null && nextTranslationModel === null) {
+  const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  if (
+    nextTextSizeLevel === null
+    && nextSilenceMs === null
+    && nextTranslationModel === null
+    && nextAdBannerPosition === null
+  ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
 
@@ -281,6 +300,7 @@ export async function PATCH(request: Request) {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
+    ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
   };
 
   if (identity.id) {
@@ -294,6 +314,7 @@ export async function PATCH(request: Request) {
         targetUserId: identity.id,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -310,6 +331,7 @@ export async function PATCH(request: Request) {
         targetUserEmail: identity.email,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -326,6 +348,7 @@ export async function PATCH(request: Request) {
         targetExternalUserId: identity.externalUserId,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -349,6 +372,7 @@ export async function PATCH(request: Request) {
           headerExternalUserId: resolveTrackingExternalUserId(request) || null,
           resolvedSessionKey: identity.sessionKey,
           translationModel: nextTranslationModel,
+          adBannerPosition: nextAdBannerPosition,
         });
         return NextResponse.json({ ok: true });
       }
@@ -371,6 +395,7 @@ export async function PATCH(request: Request) {
       headerExternalUserId: resolveTrackingExternalUserId(request) || null,
       resolvedSessionKey: tracking.sessionKey,
       translationModel: nextTranslationModel,
+      adBannerPosition: nextAdBannerPosition,
     });
     const response = NextResponse.json({ ok: true });
     ensureTrackingContext(nextRequest, response, {

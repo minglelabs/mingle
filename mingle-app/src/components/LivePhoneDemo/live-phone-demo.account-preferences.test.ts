@@ -13,10 +13,12 @@ describe('buildHydratedAccountPreferences', () => {
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
+      adBannerPosition: 'bottom',
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
+      adBannerPosition: 'bottom',
     })
   })
 
@@ -25,10 +27,12 @@ describe('buildHydratedAccountPreferences', () => {
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: 2500,
       translationModel: 'unsupported-model',
+      adBannerPosition: 'invalid',
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
       translationModel: 'gemini-2.5-flash-lite',
+      adBannerPosition: null,
     })
   })
 })
@@ -43,6 +47,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         textSizeLevel: 3,
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
+        adBannerPosition: null,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -53,6 +58,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: 'gemini-2.5-flash-lite',
+      adBannerPosition: 'top',
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -73,11 +79,13 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
+        adBannerPosition: 'bottom',
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
+        adBannerPosition: 'top',
       }),
     })).toBe(true)
   })
@@ -91,6 +99,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
+        adBannerPosition: 'bottom',
       },
       lastSyncedStateKey: null,
     })).toBe(false)

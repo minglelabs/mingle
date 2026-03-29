@@ -73,6 +73,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
+      adBannerPosition: null,
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalled();
   });
@@ -97,6 +98,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
+      adBannerPosition: null,
     });
     expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
       expect.any(NextRequest),
@@ -138,6 +140,7 @@ describe("/api/account/preferences route", () => {
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "bottom",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -148,6 +151,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "bottom",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user_123" },
@@ -155,6 +159,7 @@ describe("/api/account/preferences route", () => {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
+        adBannerPosition: true,
       },
     });
   });
@@ -170,6 +175,7 @@ describe("/api/account/preferences route", () => {
       demoTextSizeLevel: null,
       demoSilenceFinalizeMs: null,
       translationModel: null,
+      adBannerPosition: null,
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences"));
@@ -180,6 +186,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 2,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
+      adBannerPosition: null,
     });
   });
 
@@ -237,12 +244,40 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists a supported ad banner position through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        adBannerPosition: "bottom",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        adBannerPosition: "bottom",
+      },
+    });
+  });
+
   it("returns the stored DB-backed preferences for tracking users without a session", async () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 1500,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "top",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
@@ -257,6 +292,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 1500,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "top",
     });
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
@@ -264,6 +300,7 @@ describe("/api/account/preferences route", () => {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
+        adBannerPosition: true,
       },
     });
   });
@@ -304,6 +341,7 @@ describe("/api/account/preferences route", () => {
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 900,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "bottom",
     });
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
@@ -318,6 +356,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 900,
       translationModel: "qwen/qwen3.5-9b",
+      adBannerPosition: "bottom",
     });
     expect(mockAppEventLogFindFirst).toHaveBeenCalledWith({
       where: {
@@ -333,6 +372,7 @@ describe("/api/account/preferences route", () => {
         demoTextSizeLevel: true,
         demoSilenceFinalizeMs: true,
         translationModel: true,
+        adBannerPosition: true,
       },
     });
   });
