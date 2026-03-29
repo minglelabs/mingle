@@ -1175,11 +1175,17 @@ push_env_file_to_vault_path() {
   fi
 
   log "pushing ${count} keys from ${target} env to vault path: $path"
-  if vault kv patch "$path" "${kv_args[@]}" >/dev/null 2>&1; then
+  local patch_output=""
+  if patch_output="$(vault kv patch "$path" "${kv_args[@]}" 2>&1)"; then
     log "pushed ${count} keys to vault (${target}, patch)"
     return 0
   fi
 
+  patch_output="$(printf '%s' "$patch_output" | tr '\n' ' ' | sed -E 's/[[:space:]]+/ /g')"
+  patch_output="$(trim_whitespace "$patch_output")"
+  if [[ -n "$patch_output" ]]; then
+    die "failed to push ${target} env keys to vault path: $path (${patch_output}; refusing destructive kv put fallback)"
+  fi
   die "failed to push ${target} env keys to vault path: $path (patch failed; refusing destructive kv put fallback)"
 }
 
