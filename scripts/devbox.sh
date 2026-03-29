@@ -718,6 +718,7 @@ is_nonprod_mobile_build() {
 }
 
 resolve_devbox_ad_banner_position() {
+  local platform="${1:-${DEVBOX_ACTIVE_MOBILE_PLATFORM:-}}"
   local value=""
   value="$(trim_whitespace "$(read_app_setting_value RN_AD_BANNER_POSITION || true)")"
   value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
@@ -728,7 +729,11 @@ resolve_devbox_ad_banner_position() {
       ;;
     "")
       if is_nonprod_mobile_build; then
-        printf '%s' "top"
+        if [[ "$platform" == "ios" ]]; then
+          printf '%s' "top"
+        else
+          printf '%s' "off"
+        fi
       else
         printf '%s' "off"
       fi
@@ -1814,7 +1819,7 @@ write_rn_ios_runtime_xcconfig() {
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
   escaped_ws_url="${escaped_ws_url//\//\\/}"
-  ad_banner_position="$(resolve_devbox_ad_banner_position)"
+  ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   admob_banner_unit_id_ios="$(resolve_devbox_admob_banner_unit_id_ios)"
@@ -2639,7 +2644,7 @@ run_android_mobile_install() {
   fi
   local app_id
   app_id="$(resolve_android_application_id)"
-  runtime_ad_banner_position="$(resolve_devbox_ad_banner_position)"
+  runtime_ad_banner_position="$(resolve_devbox_ad_banner_position android)"
   runtime_ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
