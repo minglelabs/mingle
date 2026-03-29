@@ -1880,6 +1880,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
   const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
+  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + nativeBottomInsetPx
   const chatPaddingTop = nativeTopInsetPx > 0 ? `calc(0.625rem + ${nativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = nativeBottomInsetPx > 0 ? `calc(0.625rem + ${nativeBottomInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
@@ -2521,7 +2522,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   exit={{ opacity: 0, y: 8, scale: 0.98 }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   className="pointer-events-none absolute inset-x-0 z-20 flex justify-center"
-                  style={{ bottom: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX }}
+                  style={{ bottom: scrollToBottomButtonBottomPx }}
                 >
                   <button
                     type="button"
