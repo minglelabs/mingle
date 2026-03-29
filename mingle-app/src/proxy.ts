@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { DEFAULT_LOCALE, isSupportedLocale, resolveSupportedLocaleTag, type AppLocale } from "@/i18n";
+import {
+  DEFAULT_LOCALE,
+  isSupportedLocale,
+  resolveSupportedLocaleTag,
+  type AppLocale,
+} from "@/i18n/config";
 
-export { resolveSupportedLocaleTag } from "@/i18n";
+export { resolveSupportedLocaleTag } from "@/i18n/config";
 
 function pickPreferredLocale(headerValue: string | null): AppLocale {
   if (!headerValue) {

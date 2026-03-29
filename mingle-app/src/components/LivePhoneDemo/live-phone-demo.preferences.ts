@@ -2,16 +2,14 @@ import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
-export const LS_KEY_SONIOX_SILENCE_MS = 'mingle_demo_soniox_silence_ms'
 export const DEFAULT_TEXT_SIZE_LEVEL = 2
-export const DEFAULT_SONIOX_SILENCE_MS = 1000
+export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
 
 export interface LivePhoneDemoPersistedPreferences {
   selectedLanguages: string[]
   textSizeLevel: number
-  sonioxManualFinalizeSilenceMs: number
 }
 
 export function readPersistedIntegerPreference(
@@ -50,7 +48,6 @@ export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[
   const next: LivePhoneDemoPersistedPreferences = {
     selectedLanguages: [...fallbackLanguages],
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
-    sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
   }
 
   const storage = typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage
@@ -71,15 +68,6 @@ export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[
       DEFAULT_TEXT_SIZE_LEVEL,
       1,
       5,
-    )
-  } catch { /* ignore */ }
-
-  try {
-    next.sonioxManualFinalizeSilenceMs = readPersistedIntegerPreference(
-      storage.getItem(LS_KEY_SONIOX_SILENCE_MS),
-      DEFAULT_SONIOX_SILENCE_MS,
-      MIN_SONIOX_SILENCE_MS,
-      MAX_SONIOX_SILENCE_MS,
     )
   } catch { /* ignore */ }
 

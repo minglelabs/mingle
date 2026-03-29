@@ -11,6 +11,7 @@ export const jaDictionary: AppDictionary = {
     unmuteTts: "音声再生をミュート解除",
     textSizeLabel: "文字サイズ",
     silenceFinalizeLabel: "発話分離の無音基準時間",
+    translationModelLabel: "翻訳モデル",
   },
   tabs: {
     chats: "チャット",

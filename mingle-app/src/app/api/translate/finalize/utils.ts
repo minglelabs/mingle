@@ -72,7 +72,10 @@ export function normalizeTargetLanguages(raw: unknown[], sourceLanguage: string)
 }
 
 function parseTranslationJson(raw: string): ParsedTranslationJson | null {
-  const base = raw.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '')
+  const withoutThinking = raw
+    .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '')
+    .trim()
+  const base = withoutThinking.replace(/^```json?\n?/, '').replace(/\n?```$/, '')
   let parsed: ParsedTranslationJson | null = null
 
   try {
