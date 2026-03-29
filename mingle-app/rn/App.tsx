@@ -1001,7 +1001,7 @@ function NativeAdBanner(props: {
 
   const BannerAd = adModule.BannerAd;
   const BannerAdSize = adModule.BannerAdSize;
-  const prefersFixedHeightBanner = Platform.OS === 'ios';
+  const prefersFixedHeightBanner = true;
   const [renderHeightPx, setRenderHeightPx] = useState(heightPx);
   const [adLoadState, setAdLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
   const [lastErrorMessage, setLastErrorMessage] = useState('');
