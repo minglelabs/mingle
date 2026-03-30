@@ -667,6 +667,23 @@
     "generalInfo": {
       "appInfo": {
         "title": {
+          "ar": "Mingle: أسهل مترجم",
+          "de": "Mingle: Einfacher Übersetzer",
+          "en": "Mingle: The Easiest Translator",
+          "es": "Mingle: El traductor más fácil",
+          "fr": "Mingle: Traducteur facile",
+          "hi": "Mingle: सबसे आसान अनुवादक",
+          "it": "Mingle: Traduttore facile",
+          "ja": "Mingle: いちばん簡単な翻訳機",
+          "ko": "Mingle: 제일 쉬운 번역기",
+          "pt": "Mingle: O tradutor mais fácil",
+          "ru": "Mingle: Простой переводчик",
+          "th": "Mingle: นักแปลที่ง่ายที่สุด",
+          "vi": "Mingle: Trình dịch dễ nhất",
+          "zh-cn": "Mingle：最简单的翻译器",
+          "zh-tw": "Mingle：最簡單的翻譯器"
+        },
+        "subtitle": {
           "ar": "Mingle: Global Hangout",
           "de": "Mingle: Global Hangout",
           "en": "Mingle: Global Hangout",
@@ -674,31 +691,14 @@
           "fr": "Mingle: Global Hangout",
           "hi": "Mingle: Global Hangout",
           "it": "Mingle: Global Hangout",
-          "ja": "Mingle: 世界中の友達づくり",
+          "ja": "Mingle: Global Hangout",
           "ko": "Mingle: 글로벌 친구 만들기",
           "pt": "Mingle: Global Hangout",
           "ru": "Mingle: Global Hangout",
-          "th": "Mingle: หาเพื่อนทั่วโลก",
-          "vi": "Mingle: Kết bạn toàn cầu",
-          "zh-cn": "Mingle：全球交友",
-          "zh-tw": "Mingle：全球交友"
-        },
-        "subtitle": {
-          "ar": "مترجم صوتي فوري",
-          "de": "Echtzeit-Sprachübersetzer",
-          "en": "Real-Time Voice Translator",
-          "es": "Traductor de voz en vivo",
-          "fr": "Traducteur vocal en temps réel",
-          "hi": "रीयल-टाइम वॉइस अनुवादक",
-          "it": "Traduttore vocale live",
-          "ja": "リアルタイム音声翻訳機",
-          "ko": "실시간 음성 번역기",
-          "pt": "Tradutor de voz em tempo real",
-          "ru": "Голосовой переводчик онлайн",
-          "th": "เครื่องแปลเสียงแบบเรียลไทม์",
-          "vi": "Dịch giọng nói trực tiếp",
-          "zh-cn": "实时语音翻译器",
-          "zh-tw": "即時語音翻譯器"
+          "th": "Mingle: Global Hangout",
+          "vi": "Mingle: Global Hangout",
+          "zh-cn": "Mingle: Global Hangout",
+          "zh-tw": "Mingle: Global Hangout"
         }
       }
     }
