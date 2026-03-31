@@ -274,6 +274,7 @@ const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
 const NATIVE_BOTTOM_TAB_BAR_HEIGHT_PX = 72;
+const IOS_NATIVE_BANNER_BOTTOM_OFFSET_HEIGHT_PX = 64;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -1335,7 +1336,11 @@ function AppInner(): React.JSX.Element {
     [nativeCanvasScale, safeAreaInsets.top],
   );
   const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + Math.round(NATIVE_BOTTOM_TAB_BAR_HEIGHT_PX * nativeCanvasScale),
+    () => safeAreaInsets.bottom + Math.round(
+      (Platform.OS === 'ios'
+        ? IOS_NATIVE_BANNER_BOTTOM_OFFSET_HEIGHT_PX
+        : NATIVE_BOTTOM_TAB_BAR_HEIGHT_PX) * nativeCanvasScale,
+    ),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);

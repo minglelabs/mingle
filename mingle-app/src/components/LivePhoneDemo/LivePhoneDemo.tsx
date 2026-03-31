@@ -350,6 +350,7 @@ interface LivePhoneDemoProps {
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
 const COMPACT_BOTTOM_BAR_HEIGHT_PX = 64
+const IOS_COMPACT_BOTTOM_BAR_HEIGHT_PX = 56
 
 type TtsQueueItem = {
   utteranceId: string
@@ -484,6 +485,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
+  const [isNativeIosAppRuntime, setIsNativeIosAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
@@ -591,6 +593,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const nativeRuntimeTimerId = window.setTimeout(() => {
       setIsNativeAppRuntime(true)
+      setIsNativeIosAppRuntime(isLikelyIOSPlatform())
     }, 0)
 
     const windowWithUpdate = window as NativeAppUpdateWindow
@@ -2016,8 +2019,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const compactBottomBarHeightPx = isConversationMode && isNativeIosAppRuntime
+    ? IOS_COMPACT_BOTTOM_BAR_HEIGHT_PX
+    : COMPACT_BOTTOM_BAR_HEIGHT_PX
   const bottomBarHeightStyle = isConversationMode
-    ? `calc(${COMPACT_BOTTOM_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`
+    ? `calc(${compactBottomBarHeightPx}px + env(safe-area-inset-bottom, 0px))`
     : undefined
   const bottomBarPaddingTop = isConversationMode ? "0px" : "10px"
   const bottomBarPaddingBottom = isConversationMode
