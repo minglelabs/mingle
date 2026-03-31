@@ -566,6 +566,7 @@ export default function ConversationList({
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const isConversationOverlayOpen = activeConversation !== null;
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => mapConversationSummaryToItem(conversation, locale)),
@@ -743,10 +744,12 @@ export default function ConversationList({
             ))}
           </div>
         )}
-        <NativeBottomTabBannerSlot hidden={showSearch} />
+        <NativeBottomTabBannerSlot hidden={showSearch || isConversationOverlayOpen} />
       </div>
 
-      <BottomTabBar locale={locale} dictionary={dictionary} />
+      {!isConversationOverlayOpen ? (
+        <BottomTabBar locale={locale} dictionary={dictionary} />
+      ) : null}
 
       <AnimatePresence>
         {activeConversation ? (
@@ -756,7 +759,7 @@ export default function ConversationList({
             animate={{ x: "0%" }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 z-50 overflow-hidden bg-white"
+            className="absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-white"
           >
             <MingleHome
               key={activeConversation.id}
