@@ -4,6 +4,7 @@ import type { AppDictionary } from "@/i18n/types";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle } from "lucide-react";
+import { useEffect } from "react";
 
 type BottomTabBarProps = {
   locale: string;
@@ -11,6 +12,12 @@ type BottomTabBarProps = {
   activeRoute?: "conversations" | "mypage" | null;
   onConversationsPress?: () => void;
   onMypagePress?: () => void;
+};
+
+type NativeBridgeWindow = Window & {
+  ReactNativeWebView?: {
+    postMessage?: (message: string) => void;
+  };
 };
 
 const PRESERVED_NATIVE_QUERY_KEYS = [
@@ -86,6 +93,7 @@ export default function BottomTabBar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const baseTabBarHeightPx = 72;
+  const searchParamsKey = searchParams.toString();
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
@@ -101,6 +109,25 @@ export default function BottomTabBar({
 
   const activeColor = "#f59e0b";
   const inactiveColor = "#9ca3af";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const bridgeWindow = window as NativeBridgeWindow;
+    if (typeof bridgeWindow.ReactNativeWebView?.postMessage !== "function") return;
+
+    try {
+      bridgeWindow.ReactNativeWebView.postMessage(JSON.stringify({
+        type: "native_navigation_state",
+        payload: {
+          url: window.location.href,
+          canGoBack: window.history.length > 1,
+        },
+      }));
+    } catch {
+      // Ignore bridge sync failures outside the native shell.
+    }
+  }, [pathname, searchParamsKey]);
 
   return (
     <nav
