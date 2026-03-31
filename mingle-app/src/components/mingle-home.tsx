@@ -3,6 +3,7 @@
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import NativeAdBannerSuppressor from "@/components/native-ad-banner-suppressor";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
@@ -1016,6 +1017,7 @@ export default function MingleHome(props: MingleHomeProps) {
         className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
         style={{ background: "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)" }}
       >
+        <NativeAdBannerSuppressor source="auth-screen" />
         <style>{`@keyframes fade-in {
             from { opacity: 0; }
             to   { opacity: 1; }
