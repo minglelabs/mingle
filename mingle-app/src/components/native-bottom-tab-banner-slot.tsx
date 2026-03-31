@@ -56,38 +56,25 @@ export default function NativeBottomTabBannerSlot({
     });
   }, [nativeUiBridgeEnabled]);
 
-  useEffect(() => {
-    if (!nativeUiBridgeEnabled) return;
-    postToNativeBridge({
-      type: "native_ui_overlay_state",
-      payload: { pageOverlayOpen: nativeBannerHidden },
-    });
-
-    return () => {
-      postToNativeBridge({
-        type: "native_ui_overlay_state",
-        payload: { pageOverlayOpen: false },
-      });
-    };
-  }, [nativeBannerHidden, nativeUiBridgeEnabled]);
-
-  if (!nativeUiBridgeEnabled || hidden) return null;
+  if (!nativeUiBridgeEnabled) return null;
 
   return (
     <>
       <NativeAdBannerSceneController
         source={source}
-        mode="visible"
-        active={!hidden}
+        mode={nativeBannerHidden ? "hidden" : "visible"}
+        active={nativeBannerHidden ? true : !hidden}
         showDelayMs={NATIVE_BOTTOM_TAB_BANNER_SHOW_DELAY_MS}
         position="bottom"
       />
-      <section
-        aria-hidden="true"
-        data-native-bottom-tab-banner-slot=""
-        className="w-full shrink-0 bg-white"
-        style={{ height: `${NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX}px` }}
-      />
+      {!hidden ? (
+        <section
+          aria-hidden="true"
+          data-native-bottom-tab-banner-slot=""
+          className="w-full shrink-0 bg-white"
+          style={{ height: `${NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX}px` }}
+        />
+      ) : null}
     </>
   );
 }

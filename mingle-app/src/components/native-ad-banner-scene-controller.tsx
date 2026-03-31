@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 
 type NativeAdBannerSceneMode = "visible" | "hidden";
-type NativeAdBannerSceneState = "inactive" | "visible" | "hidden";
 type NativeBannerPosition = "top" | "bottom";
 
 type NativeAdBannerSceneControllerProps = {
@@ -21,6 +20,7 @@ type NativeBridgeWindow = Window & {
   ReactNativeWebView?: {
     postMessage?: (message: string) => void;
   };
+  __MINGLE_NATIVE_BANNER_OVERLAY_SOURCES__?: Record<string, true>;
 };
 
 function canPostToNativeBridge(): boolean {
@@ -38,6 +38,23 @@ function postToNativeBridge(command: unknown): void {
   } catch {
     // Ignore bridge serialization failures.
   }
+}
+
+function getActiveOverlaySources(): Record<string, true> {
+  if (typeof window === "undefined") return {};
+  const bridgeWindow = window as NativeBridgeWindow;
+  if (!bridgeWindow.__MINGLE_NATIVE_BANNER_OVERLAY_SOURCES__) {
+    bridgeWindow.__MINGLE_NATIVE_BANNER_OVERLAY_SOURCES__ = {};
+  }
+  return bridgeWindow.__MINGLE_NATIVE_BANNER_OVERLAY_SOURCES__;
+}
+
+function syncOverlayStateToNative(): void {
+  const activeOverlaySources = getActiveOverlaySources();
+  postToNativeBridge({
+    type: "native_ui_overlay_state",
+    payload: { pageOverlayOpen: Object.keys(activeOverlaySources).length > 0 },
+  });
 }
 
 export default function NativeAdBannerSceneController({
@@ -61,15 +78,20 @@ export default function NativeAdBannerSceneController({
     timerRef.current = null;
   }, []);
 
-  const postSceneState = useCallback((state: NativeAdBannerSceneState) => {
-    if (!nativeUiBridgeEnabled || !source) return;
-    postToNativeBridge({
-      type: "native_set_ad_banner_scene",
-      payload: {
-        source,
-        state,
-      },
-    });
+  const activateOverlaySource = useCallback(() => {
+    if (!nativeUiBridgeEnabled || !source || typeof window === "undefined") return;
+    const activeOverlaySources = getActiveOverlaySources();
+    if (activeOverlaySources[source]) return;
+    activeOverlaySources[source] = true;
+    syncOverlayStateToNative();
+  }, [nativeUiBridgeEnabled, source]);
+
+  const deactivateOverlaySource = useCallback(() => {
+    if (!nativeUiBridgeEnabled || !source || typeof window === "undefined") return;
+    const activeOverlaySources = getActiveOverlaySources();
+    if (!activeOverlaySources[source]) return;
+    delete activeOverlaySources[source];
+    syncOverlayStateToNative();
   }, [nativeUiBridgeEnabled, source]);
 
   useEffect(() => {
@@ -84,45 +106,46 @@ export default function NativeAdBannerSceneController({
     clearTimer();
 
     if (!nativeUiBridgeEnabled || !source) {
-      postSceneState("inactive");
+      deactivateOverlaySource();
       return;
     }
 
     if (active) {
       if (mode === "hidden") {
-        postSceneState("hidden");
+        activateOverlaySource();
         return;
       }
 
-      postSceneState("hidden");
+      activateOverlaySource();
       if (showDelayMs <= 0 || typeof window === "undefined") {
-        postSceneState("visible");
+        deactivateOverlaySource();
         return;
       }
 
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
-        postSceneState("visible");
+        deactivateOverlaySource();
       }, showDelayMs);
       return;
     }
 
     if (mode === "hidden" && releaseDelayMs > 0 && typeof window !== "undefined") {
-      postSceneState("hidden");
+      activateOverlaySource();
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
-        postSceneState("inactive");
+        deactivateOverlaySource();
       }, releaseDelayMs);
       return;
     }
 
-    postSceneState("inactive");
+    deactivateOverlaySource();
   }, [
     active,
+    activateOverlaySource,
     clearTimer,
+    deactivateOverlaySource,
     mode,
     nativeUiBridgeEnabled,
-    postSceneState,
     releaseDelayMs,
     showDelayMs,
     source,
@@ -130,8 +153,8 @@ export default function NativeAdBannerSceneController({
 
   useEffect(() => () => {
     clearTimer();
-    postSceneState("inactive");
-  }, [clearTimer, postSceneState]);
+    deactivateOverlaySource();
+  }, [clearTimer, deactivateOverlaySource]);
 
   return null;
 }
