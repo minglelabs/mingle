@@ -46,8 +46,6 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mingle uses your microphone for real-time speech translation.</string>
-	<key>GADApplicationIdentifier</key>
-	<string>$(RN_ADMOB_APP_ID_IOS)</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>

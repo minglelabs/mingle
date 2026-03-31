@@ -1208,8 +1208,8 @@ function AppInner(): React.JSX.Element {
   const configuredNativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
-      // iOS crashes when the package root eagerly initializes TurboModule-backed event emitters.
-      // Load banner-only entry points there and keep the root import on Android for initialize().
+      // iOS previously avoided the package root import because it eagerly wires event emitters.
+      // Use the lower-level native module for initialize() there so banner requests do not stall.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const bannerModule = require('react-native-google-mobile-ads/lib/commonjs/ads/BannerAd') as {
         BannerAd?: NativeAdModule['BannerAd'];
@@ -1220,7 +1220,14 @@ function AppInner(): React.JSX.Element {
       };
 
       if (Platform.OS === 'ios') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const nativeGoogleMobileAdsModule = require('react-native-google-mobile-ads/lib/commonjs/specs/modules/NativeGoogleMobileAdsModule') as {
+          default?: {
+            initialize?: () => Promise<unknown>;
+          };
+        };
         return {
+          default: nativeGoogleMobileAdsModule.default,
           BannerAd: bannerModule.BannerAd,
           BannerAdSize: bannerAdSizeModule.BannerAdSize,
         };
