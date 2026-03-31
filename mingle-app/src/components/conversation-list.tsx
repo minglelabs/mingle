@@ -15,6 +15,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, MessageCirclePlus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -751,35 +752,40 @@ export default function ConversationList({
         <BottomTabBar locale={locale} dictionary={dictionary} />
       ) : null}
 
-      <AnimatePresence>
-        {activeConversation ? (
-          <motion.div
-            key={activeConversation.id}
-            initial={{ x: "100%" }}
-            animate={{ x: "0%" }}
-            exit={{ x: "100%" }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0 z-50 flex min-h-0 flex-col overflow-hidden bg-white"
-          >
-            <MingleHome
-              key={activeConversation.id}
-              dictionary={dictionary}
-              locale={locale}
-              appleWebOAuthEnabled={translatorConfig.appleWebOAuthEnabled}
-              appleNativeAuthEnabled={translatorConfig.appleNativeAuthEnabled}
-              googleOAuthEnabled={translatorConfig.googleOAuthEnabled}
-              initialNativePlatform={translatorConfig.initialNativePlatform}
-              headerMode="conversation"
-              onBack={handleCloseActiveConversation}
-              sessionKeyOverride={activeConversation.sessionKey}
-              storageNamespace={activeConversation.id}
-              bottomTabActiveRoute={null}
-              onConversationsTabPress={handleCloseActiveConversation}
-              onMypageTabPress={handleNavigateToMypage}
-            />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {typeof document !== "undefined"
+        ? createPortal(
+          <AnimatePresence>
+            {activeConversation ? (
+              <motion.div
+                key={activeConversation.id}
+                initial={{ x: "100%" }}
+                animate={{ x: "0%" }}
+                exit={{ x: "100%" }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white"
+              >
+                <MingleHome
+                  key={activeConversation.id}
+                  dictionary={dictionary}
+                  locale={locale}
+                  appleWebOAuthEnabled={translatorConfig.appleWebOAuthEnabled}
+                  appleNativeAuthEnabled={translatorConfig.appleNativeAuthEnabled}
+                  googleOAuthEnabled={translatorConfig.googleOAuthEnabled}
+                  initialNativePlatform={translatorConfig.initialNativePlatform}
+                  headerMode="conversation"
+                  onBack={handleCloseActiveConversation}
+                  sessionKeyOverride={activeConversation.sessionKey}
+                  storageNamespace={activeConversation.id}
+                  bottomTabActiveRoute={null}
+                  onConversationsTabPress={handleCloseActiveConversation}
+                  onMypageTabPress={handleNavigateToMypage}
+                />
+              </motion.div>
+            ) : null}
+          </AnimatePresence>,
+          document.body,
+        )
+        : null}
     </main>
   );
 }
