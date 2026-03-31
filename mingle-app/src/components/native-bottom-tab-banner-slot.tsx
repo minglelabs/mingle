@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 
-const NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX = 78;
+const NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX = 50;
 
 type NativeBottomTabBannerSlotProps = {
   hidden?: boolean;
