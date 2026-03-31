@@ -14,20 +14,38 @@ function isLocaleSegment(value: string | undefined): boolean {
   return /^[a-z]{2}(?:-[a-z]{2})?$/.test(normalized);
 }
 
-export function shouldHideNativeBannerForUrl(rawUrl: string): boolean {
+function resolveRouteSegments(rawUrl: string): string[] {
   const pathname = resolvePathname(rawUrl);
-  if (!pathname || pathname === "/") return true;
+  if (!pathname || pathname === "/") return [];
 
   const segments = pathname
     .split("/")
     .map((segment) => segment.trim())
     .filter(Boolean);
-  if (segments.length === 0) return true;
+  if (segments.length === 0) return [];
 
-  if (segments[0] === "auth") return true;
-  if (isLocaleSegment(segments[0]) && segments.length === 1) return true;
-  if (isLocaleSegment(segments[0]) && segments[1] === "auth") return true;
-  if (isLocaleSegment(segments[0]) && segments[1] === "translator") return true;
+  if (isLocaleSegment(segments[0])) {
+    return segments.slice(1);
+  }
 
-  return false;
+  return segments;
+}
+
+function matchesSingleRoute(rawUrl: string, route: string): boolean {
+  const segments = resolveRouteSegments(rawUrl);
+  return segments.length === 1 && segments[0] === route;
+}
+
+export function resolveForcedNativeBannerPositionForUrl(
+  rawUrl: string,
+): "bottom" | null {
+  if (matchesSingleRoute(rawUrl, "conversations")) return "bottom";
+  if (matchesSingleRoute(rawUrl, "mypage")) return "bottom";
+  return null;
+}
+
+export function shouldHideNativeBannerForUrl(rawUrl: string): boolean {
+  if (matchesSingleRoute(rawUrl, "translator")) return false;
+  if (resolveForcedNativeBannerPositionForUrl(rawUrl)) return false;
+  return true;
 }

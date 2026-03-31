@@ -15,6 +15,7 @@ import {
 import { Search, MessageCirclePlus } from "lucide-react";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import MingleWordmark from "@/components/mingle-wordmark";
+import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
@@ -578,6 +579,7 @@ export default function ConversationList({
             ))}
           </div>
         )}
+        <NativeBottomTabBannerSlot hidden={showSearch} />
       </div>
 
       {/* ── 하단 탭바 ── */}

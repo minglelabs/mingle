@@ -1,16 +1,29 @@
-import { shouldHideNativeBannerForUrl } from '../src/nativeChrome';
+import {
+  resolveForcedNativeBannerPositionForUrl,
+  shouldHideNativeBannerForUrl,
+} from '../src/nativeChrome';
 
 describe('shouldHideNativeBannerForUrl', () => {
-  it('hides the native banner on auth-like routes', () => {
+  it('hides the native banner on non-banner routes', () => {
     expect(shouldHideNativeBannerForUrl('https://mingle.local/')).toBe(true);
     expect(shouldHideNativeBannerForUrl('https://mingle.local/ko')).toBe(true);
-    expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/translator')).toBe(true);
     expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/auth/native')).toBe(true);
     expect(shouldHideNativeBannerForUrl('https://mingle.local/auth/signin')).toBe(true);
+    expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/account')).toBe(true);
   });
 
-  it('keeps the native banner on in-app conversation routes', () => {
+  it('keeps the native banner on translator and bottom-tab routes', () => {
+    expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/translator')).toBe(false);
     expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/conversations')).toBe(false);
-    expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/account')).toBe(false);
+    expect(shouldHideNativeBannerForUrl('https://mingle.local/ko/mypage')).toBe(false);
+  });
+});
+
+describe('resolveForcedNativeBannerPositionForUrl', () => {
+  it('forces the bottom position on bottom-tab routes only', () => {
+    expect(resolveForcedNativeBannerPositionForUrl('https://mingle.local/ko/conversations')).toBe('bottom');
+    expect(resolveForcedNativeBannerPositionForUrl('https://mingle.local/ko/mypage')).toBe('bottom');
+    expect(resolveForcedNativeBannerPositionForUrl('https://mingle.local/ko/translator')).toBeNull();
+    expect(resolveForcedNativeBannerPositionForUrl('https://mingle.local/ko/auth/native')).toBeNull();
   });
 });

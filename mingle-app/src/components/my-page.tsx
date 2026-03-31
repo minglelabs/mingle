@@ -6,18 +6,18 @@ import { useSession, signOut } from "next-auth/react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
 import { normalizeAppLocale, resolveAppLocale } from "@/lib/app-locale";
+import {
+  NATIONALITY_OPTIONS,
+  resolveNationalityCode,
+  resolveNationalityOption,
+} from "@/lib/profile-nationality";
 import {
   Plus, Menu, Globe, LogOut, Trash2,
   Share2, Edit3, ChevronLeft, ChevronRight,
 } from "lucide-react";
 
-// ── 로케일 → 국기 ────────────────────────────────────────────────────────
-const LOCALE_FLAG: Record<string, string> = {
-  ko: "🇰🇷", ja: "🇯🇵", en: "🇺🇸", zh: "🇨🇳", "zh-CN": "🇨🇳", "zh-TW": "🇹🇼",
-  fr: "🇫🇷", de: "🇩🇪", es: "🇪🇸", pt: "🇧🇷", it: "🇮🇹",
-  ru: "🇷🇺", ar: "🇸🇦", hi: "🇮🇳", th: "🇹🇭", vi: "🇻🇳",
-};
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: string }> = [
   { locale: "ko", label: "한국어", flag: "🇰🇷" },
   { locale: "ja", label: "日本語", flag: "🇯🇵" },
@@ -41,7 +41,6 @@ function getLanguageOption(locale: string | null | undefined) {
   if (!normalizedLocale) return null;
   return LANGUAGE_OPTIONS.find((option) => option.locale === normalizedLocale) ?? null;
 }
-const UNIQUE_FLAGS = Array.from(new Set(Object.values(LOCALE_FLAG)));
 const DUMMY_POSTS: { id: number; color: string }[] = [];
 
 // ── 프로필 아바타 + 국기 배지 컴포넌트 (하나로 통합) ─────────────────────
@@ -388,6 +387,12 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   // flag: customFlag(프로필 편집에서 설정) or 현재 locale 기반 (언어 설정과 무관)
   const flag = customFlag ?? localeToFlag(locale);
   const selectedLanguage = getLanguageOption(selectedLocale);
+  const shouldHideBottomTabBannerSlot = showSettings
+    || showLanguage
+    || followState.open
+    || showEdit
+    || showComingSoon
+    || showDeleteConfirm;
 
   // DB에서 프로필 초기값 로드
   useEffect(() => {
@@ -587,7 +592,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
             </div>
           )}
         </div>
-        <div className="h-6" />
+        <NativeBottomTabBannerSlot hidden={shouldHideBottomTabBannerSlot} />
       </div>
 
       <BottomTabBar locale={locale} dictionary={dictionary} />

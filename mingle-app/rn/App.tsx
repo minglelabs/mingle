@@ -42,7 +42,10 @@ import {
   resolveNativeAppUpdateSnapshot,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
-import { shouldHideNativeBannerForUrl } from './src/nativeChrome';
+import {
+  resolveForcedNativeBannerPositionForUrl,
+  shouldHideNativeBannerForUrl,
+} from './src/nativeChrome';
 import { readPreferredRuntimeValue } from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
@@ -1047,12 +1050,13 @@ function NativeAdBanner(props: {
     : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
-  // Reset banner render state when the slot configuration changes.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // Reset banner render state when the slot configuration changes.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setRenderHeightPx(heightPx);
     setAdLoadState('loading');
     setLastErrorMessage('');
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [heightPx, position, reloadToken, unitId]);
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
@@ -1162,8 +1166,11 @@ function AppInner(): React.JSX.Element {
     ),
     [],
   );
-  const [nativeBannerPositionOverride, setNativeBannerPositionOverride] = useState<NativeBannerPosition | null>(null);
-  const nativeBannerPosition = nativeBannerPositionOverride ?? defaultNativeBannerPosition;
+  const [routeNativeBannerPositionOverride, setRouteNativeBannerPositionOverride] = useState<NativeBannerPosition | null>(null);
+  const [webNativeBannerPositionOverride, setWebNativeBannerPositionOverride] = useState<NativeBannerPosition | null>(null);
+  const nativeBannerPosition = routeNativeBannerPositionOverride
+    ?? webNativeBannerPositionOverride
+    ?? defaultNativeBannerPosition;
   const nativeBannerHeightPx = useMemo(
     () => resolveNativeBannerHeightPx(
       readRuntimeEnvValue(['RN_AD_BANNER_HEIGHT_PX', 'NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX'])
@@ -1262,6 +1269,10 @@ function AppInner(): React.JSX.Element {
     });
     setIsNativeBannerRouteHidden((current) => {
       const next = shouldHideNativeBannerForUrl(resolvedUrl);
+      return current === next ? current : next;
+    });
+    setRouteNativeBannerPositionOverride((current) => {
+      const next = resolveForcedNativeBannerPositionForUrl(resolvedUrl);
       return current === next ? current : next;
     });
   }, [webUrl]);
@@ -1872,11 +1883,11 @@ function AppInner(): React.JSX.Element {
         ? parsed.payload.position.trim()
         : '';
       if (!rawPosition) {
-        setNativeBannerPositionOverride(null);
+        setWebNativeBannerPositionOverride(null);
         return;
       }
       const nextPosition = normalizeNativeBannerPosition(rawPosition);
-      setNativeBannerPositionOverride(nextPosition);
+      setWebNativeBannerPositionOverride(nextPosition);
       return;
     }
 
@@ -2217,6 +2228,7 @@ function AppInner(): React.JSX.Element {
       ) : null}
       {startupSplashVisible ? (
         <View style={styles.startupSplashOverlay}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <Image
             source={STARTUP_SPLASH_LOGO}
             resizeMode="contain"
