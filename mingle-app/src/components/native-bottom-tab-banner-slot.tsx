@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import NativeAdBannerSceneController from "@/components/native-ad-banner-scene-controller";
-import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 
 const NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX = 50;
 const NATIVE_BOTTOM_TAB_BANNER_SHOW_DELAY_MS = 300;
@@ -42,21 +40,15 @@ export default function NativeBottomTabBannerSlot({
   hidden = false,
   nativeBannerHidden = hidden,
 }: NativeBottomTabBannerSlotProps) {
-  const searchParams = useSearchParams();
-  const nativeUiBridgeEnabled = useMemo(() => {
-    const search = searchParams.toString();
-    return isNativeUiBridgeEnabledFromSearch(search ? `?${search}` : "");
-  }, [searchParams]);
-
   useEffect(() => {
-    if (!nativeUiBridgeEnabled) return;
+    if (!canPostToNativeBridge()) return;
     postToNativeBridge({
       type: "native_set_ad_banner_position",
       payload: { position: "bottom" },
     });
-  }, [nativeUiBridgeEnabled]);
+  }, []);
 
-  if (!nativeUiBridgeEnabled) return null;
+  if (!canPostToNativeBridge()) return null;
 
   return (
     <>

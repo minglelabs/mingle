@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useSearchParams } from "next/navigation";
-import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
+import { useCallback, useEffect, useRef } from "react";
 
 type NativeAdBannerSceneMode = "visible" | "hidden";
+type NativeAdBannerSceneState = "visible" | "hidden" | "inactive";
 type NativeBannerPosition = "top" | "bottom";
 
 type NativeAdBannerSceneControllerProps = {
@@ -57,6 +56,20 @@ function syncOverlayStateToNative(): void {
   });
 }
 
+function syncSceneStateToNative(
+  source: string,
+  state: NativeAdBannerSceneState,
+): void {
+  if (!source) return;
+  postToNativeBridge({
+    type: "native_set_ad_banner_scene",
+    payload: {
+      source,
+      state,
+    },
+  });
+}
+
 export default function NativeAdBannerSceneController({
   source,
   mode,
@@ -65,12 +78,7 @@ export default function NativeAdBannerSceneController({
   releaseDelayMs = 0,
   position,
 }: NativeAdBannerSceneControllerProps) {
-  const searchParams = useSearchParams();
   const timerRef = useRef<number | null>(null);
-  const nativeUiBridgeEnabled = useMemo(() => {
-    const search = searchParams.toString();
-    return isNativeUiBridgeEnabledFromSearch(search ? `?${search}` : "");
-  }, [searchParams]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current === null || typeof window === "undefined") return;
@@ -78,83 +86,95 @@ export default function NativeAdBannerSceneController({
     timerRef.current = null;
   }, []);
 
+  const syncSceneState = useCallback((state: NativeAdBannerSceneState) => {
+    if (!source) return;
+    syncSceneStateToNative(source, state);
+  }, [source]);
+
   const activateOverlaySource = useCallback(() => {
-    if (!nativeUiBridgeEnabled || !source || typeof window === "undefined") return;
+    if (!canPostToNativeBridge() || !source || typeof window === "undefined") return;
     const activeOverlaySources = getActiveOverlaySources();
     if (activeOverlaySources[source]) return;
     activeOverlaySources[source] = true;
     syncOverlayStateToNative();
-  }, [nativeUiBridgeEnabled, source]);
+  }, [source]);
 
   const deactivateOverlaySource = useCallback(() => {
-    if (!nativeUiBridgeEnabled || !source || typeof window === "undefined") return;
+    if (!canPostToNativeBridge() || !source || typeof window === "undefined") return;
     const activeOverlaySources = getActiveOverlaySources();
     if (!activeOverlaySources[source]) return;
     delete activeOverlaySources[source];
     syncOverlayStateToNative();
-  }, [nativeUiBridgeEnabled, source]);
+  }, [source]);
 
   useEffect(() => {
-    if (!nativeUiBridgeEnabled || !active || mode !== "visible" || !position) return;
+    if (!canPostToNativeBridge() || !active || mode !== "visible" || !position) return;
     postToNativeBridge({
       type: "native_set_ad_banner_position",
       payload: { position },
     });
-  }, [active, mode, nativeUiBridgeEnabled, position]);
+  }, [active, mode, position]);
 
   useEffect(() => {
     clearTimer();
 
-    if (!nativeUiBridgeEnabled || !source) {
+    if (!canPostToNativeBridge() || !source) {
       deactivateOverlaySource();
+      syncSceneState("inactive");
       return;
     }
 
     if (active) {
       if (mode === "hidden") {
         activateOverlaySource();
+        syncSceneState("hidden");
         return;
       }
 
-      activateOverlaySource();
+      deactivateOverlaySource();
       if (showDelayMs <= 0 || typeof window === "undefined") {
-        deactivateOverlaySource();
+        syncSceneState("visible");
         return;
       }
 
+      syncSceneState("inactive");
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
-        deactivateOverlaySource();
+        syncSceneState("visible");
       }, showDelayMs);
       return;
     }
 
     if (mode === "hidden" && releaseDelayMs > 0 && typeof window !== "undefined") {
       activateOverlaySource();
+      syncSceneState("hidden");
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null;
         deactivateOverlaySource();
+        syncSceneState("inactive");
       }, releaseDelayMs);
       return;
     }
 
     deactivateOverlaySource();
+    syncSceneState("inactive");
   }, [
     active,
     activateOverlaySource,
     clearTimer,
     deactivateOverlaySource,
     mode,
-    nativeUiBridgeEnabled,
     releaseDelayMs,
     showDelayMs,
     source,
+    syncSceneState,
   ]);
 
   useEffect(() => () => {
     clearTimer();
     deactivateOverlaySource();
-  }, [clearTimer, deactivateOverlaySource]);
+    syncSceneState("inactive");
+  }, [clearTimer, deactivateOverlaySource, syncSceneState]);
 
   return null;
 }

@@ -1306,6 +1306,7 @@ function AppInner(): React.JSX.Element {
       : '';
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${nativePlatformQuery}${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
   }, [defaultNativeBannerPosition, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
+  const [currentWebUrl, setCurrentWebUrl] = useState(webUrl);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
@@ -1320,6 +1321,7 @@ function AppInner(): React.JSX.Element {
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const resolvedUrl = candidateUrl || webUrl;
+    setCurrentWebUrl((current) => (current === resolvedUrl ? current : resolvedUrl));
     const nextPalette = resolveSafeAreaPaletteForUrl(resolvedUrl);
     setSafeAreaPalette((current) => {
       if (
@@ -1378,8 +1380,8 @@ function AppInner(): React.JSX.Element {
   const [isNativeBannerRouteHidden, setIsNativeBannerRouteHidden] = useState(() => shouldHideNativeBannerForUrl(webUrl));
   const [nativeAdBannerSceneStates, setNativeAdBannerSceneStates] = useState<Record<string, NativeAdBannerSceneState>>({});
   const shouldRequireNativeBannerScene = useMemo(
-    () => shouldRequireNativeBannerSceneForUrl(webUrl),
-    [webUrl],
+    () => shouldRequireNativeBannerSceneForUrl(currentWebUrl),
+    [currentWebUrl],
   );
   const hasVisibleNativeBannerScene = useMemo(
     () => Object.values(nativeAdBannerSceneStates).some((state) => state === 'visible'),
