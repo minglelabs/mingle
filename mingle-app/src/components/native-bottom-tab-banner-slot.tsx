@@ -8,6 +8,7 @@ const NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX = 78;
 
 type NativeBottomTabBannerSlotProps = {
   hidden?: boolean;
+  nativeBannerHidden?: boolean;
 };
 
 type NativeBridgeWindow = Window & {
@@ -35,6 +36,7 @@ function postToNativeBridge(command: unknown): void {
 
 export default function NativeBottomTabBannerSlot({
   hidden = false,
+  nativeBannerHidden = hidden,
 }: NativeBottomTabBannerSlotProps) {
   const searchParams = useSearchParams();
   const nativeUiBridgeEnabled = useMemo(() => {
@@ -54,7 +56,7 @@ export default function NativeBottomTabBannerSlot({
     if (!nativeUiBridgeEnabled) return;
     postToNativeBridge({
       type: "native_ui_overlay_state",
-      payload: { pageOverlayOpen: hidden },
+      payload: { pageOverlayOpen: nativeBannerHidden },
     });
 
     return () => {
@@ -63,7 +65,7 @@ export default function NativeBottomTabBannerSlot({
         payload: { pageOverlayOpen: false },
       });
     };
-  }, [hidden, nativeUiBridgeEnabled]);
+  }, [nativeBannerHidden, nativeUiBridgeEnabled]);
 
   if (!nativeUiBridgeEnabled || hidden) return null;
 

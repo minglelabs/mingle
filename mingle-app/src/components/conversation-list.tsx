@@ -30,6 +30,7 @@ const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const ACTIVE_STATUS_LABEL = "Live session";
 const PAUSED_STATUS_LABEL = "Paused";
+const CONVERSATION_QUERY_KEY = "conversation";
 const PRESERVED_NATIVE_QUERY_KEYS = [
   "apiNamespace",
   "nativeAuth",
@@ -179,6 +180,45 @@ function buildNativeAwarePath(
 
   const nextSearch = nextSearchParams.toString();
   return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+}
+
+function readConversationIdFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const value = (new URL(window.location.href).searchParams.get(CONVERSATION_QUERY_KEY) || "").trim();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildConversationOverlayUrl(conversationId: string): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
+    return nextUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
+function replaceConversationOverlayUrl(conversationId: string | null): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const nextUrl = new URL(window.location.href);
+    if (conversationId) {
+      nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
+    } else {
+      nextUrl.searchParams.delete(CONVERSATION_QUERY_KEY);
+    }
+    window.history.replaceState(window.history.state, "", nextUrl.toString());
+  } catch {
+    // Ignore history synchronization failures in restricted environments.
+  }
 }
 
 function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
@@ -567,6 +607,7 @@ export default function ConversationList({
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const isConversationOverlayOpen = activeConversation !== null;
 
   const conversationItems = useMemo(
@@ -605,6 +646,10 @@ export default function ConversationList({
       searchOverlayRef.current?.focusInput();
     }, 180);
   }, []);
+
+  useEffect(() => {
+    activeConversationRef.current = activeConversation;
+  }, [activeConversation]);
 
   const handleCreateConversation = useCallback(async () => {
     if (isCreatingConversation || mutatingConversationId) return;
@@ -648,9 +693,20 @@ export default function ConversationList({
   const handleCloseActiveConversation = useCallback(async () => {
     if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
 
+    const currentConversationId = readConversationIdFromLocation();
+    if (
+      typeof window !== "undefined"
+      && currentConversationId === activeConversation.id
+      && window.history.length > 1
+    ) {
+      window.history.back();
+      return;
+    }
+
     try {
       const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
       if (!pausedConversation) return;
+      replaceConversationOverlayUrl(null);
       setActiveConversation(null);
     } catch {
       window.alert("Failed to pause the conversation.");
@@ -662,6 +718,8 @@ export default function ConversationList({
       try {
         const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
         if (!pausedConversation) return;
+        replaceConversationOverlayUrl(null);
+        setActiveConversation(null);
       } catch {
         window.alert("Failed to pause the conversation.");
         return;
@@ -671,6 +729,44 @@ export default function ConversationList({
     const mypageHref = buildNativeAwarePath(`/${locale}/mypage`, searchParams);
     router.push(mypageHref);
   }, [activeConversation, locale, router, searchParams, updateConversationStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeConversation) return;
+
+    const currentConversationId = readConversationIdFromLocation();
+    if (currentConversationId === activeConversation.id) return;
+
+    const nextUrl = buildConversationOverlayUrl(activeConversation.id);
+    if (!nextUrl) return;
+    window.history.pushState({ conversationId: activeConversation.id }, "", nextUrl);
+  }, [activeConversation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      const currentActiveConversation = activeConversationRef.current;
+      if (!currentActiveConversation) return;
+      if (readConversationIdFromLocation() === currentActiveConversation.id) return;
+
+      void (async () => {
+        try {
+          const pausedConversation = await updateConversationStatus(currentActiveConversation.id, "paused");
+          if (!pausedConversation) return;
+          setActiveConversation((current) => (
+            current?.id === currentActiveConversation.id ? null : current
+          ));
+        } catch {
+          window.alert("Failed to pause the conversation.");
+        }
+      })();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [updateConversationStatus]);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -745,7 +841,10 @@ export default function ConversationList({
             ))}
           </div>
         )}
-        <NativeBottomTabBannerSlot hidden={showSearch || isConversationOverlayOpen} />
+        <NativeBottomTabBannerSlot
+          hidden={showSearch || isConversationOverlayOpen}
+          nativeBannerHidden={showSearch}
+        />
       </div>
 
       {!isConversationOverlayOpen ? (

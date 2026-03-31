@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppState,
+  BackHandler,
   Image,
   Linking,
   NativeModules,
@@ -350,7 +351,10 @@ const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
       try {
         bridge.postMessage(JSON.stringify({
           type: 'native_navigation_state',
-          payload: { url: window.location.href }
+          payload: {
+            url: window.location.href,
+            canGoBack: window.history.length > 1,
+          }
         }));
       } catch (error) {
         // Ignore bridge serialization failures.
@@ -715,6 +719,7 @@ type NativeAuthResetCommand = {
 type NativeNavigationStateCommand = {
   type: 'native_navigation_state';
   payload?: {
+    canGoBack?: boolean;
     url?: string;
   };
 };
@@ -1138,6 +1143,7 @@ function AppInner(): React.JSX.Element {
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
+  const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [versionGate, setVersionGate] = useState<VersionGateState>(() => (
     (Platform.OS === 'ios' || Platform.OS === 'android') && WEB_APP_BASE_URL && !REQUIRED_CONFIG_ERROR
       ? { status: 'checking' }
@@ -1389,6 +1395,20 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!canWebViewGoBack) return false;
+      webViewRef.current?.goBack();
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [canWebViewGoBack]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1900,6 +1920,9 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
+      if (typeof parsed.payload?.canGoBack === 'boolean') {
+        setCanWebViewGoBack(parsed.payload.canGoBack);
+      }
       updateSafeAreaPalette(url);
       return;
     }
@@ -2166,7 +2189,11 @@ function AppInner(): React.JSX.Element {
     setLoadError(formatWebViewLoadError(description, webUrl));
   }, [webUrl]);
 
-  const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
+  const handleNavigationStateChange = useCallback((navigationState: {
+    canGoBack?: boolean;
+    url: string;
+  }) => {
+    setCanWebViewGoBack(Boolean(navigationState.canGoBack));
     updateSafeAreaPalette(navigationState.url);
   }, [updateSafeAreaPalette]);
 
@@ -2208,7 +2235,7 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures={false}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios'}
             injectedJavaScriptBeforeContentLoaded={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}

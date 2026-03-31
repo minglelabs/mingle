@@ -345,6 +345,7 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
+const COMPACT_BOTTOM_BAR_HEIGHT_PX = 72
 
 type TtsQueueItem = {
   utteranceId: string
@@ -1971,6 +1972,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
+  const isConversationMode = headerMode === 'conversation'
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
@@ -1988,6 +1990,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const bottomBarHeightStyle = isConversationMode
+    ? `calc(${COMPACT_BOTTOM_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`
+    : undefined
+  const bottomBarPaddingTop = isConversationMode ? "6px" : "10px"
+  const bottomBarPaddingBottom = isConversationMode
+    ? "env(safe-area-inset-bottom, 0px)"
+    : "max(calc(env(safe-area-inset-bottom) + 16px), 20px)"
+  const micButtonClassName = isConversationMode
+    ? "relative flex h-[3rem] w-[3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+    : "relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+  const micIconSize = isConversationMode ? 24 : 30
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -2744,8 +2757,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div
             className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
             style={{
-              paddingTop: "10px",
-              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
+              height: bottomBarHeightStyle,
+              paddingTop: bottomBarPaddingTop,
+              paddingBottom: bottomBarPaddingBottom,
               paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
               paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
             }}
@@ -2779,7 +2793,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onPointerDown={handleMicPointerDown}
                 onClick={handleMicClick}
                 disabled={isConnecting || isError}
-                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                className={micButtonClassName}
               >
                 {showRipple && (
                   <span
@@ -2804,9 +2818,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 >
                   {isConnecting ? (
-                    <Loader2 size={30} className="animate-spin text-white" />
+                    <Loader2 size={micIconSize} className="animate-spin text-white" />
                   ) : (
-                    <Play size={30} className="text-white" />
+                    <Play size={micIconSize} className="text-white" />
                   )}
                 </span>
               </button>

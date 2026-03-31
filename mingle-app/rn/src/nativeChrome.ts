@@ -9,6 +9,14 @@ function resolvePathname(rawUrl: string): string {
   }
 }
 
+function resolveSearchParams(rawUrl: string): URLSearchParams {
+  try {
+    return new URL(rawUrl, "https://mingle.local").searchParams;
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
 function isLocaleSegment(value: string | undefined): boolean {
   const normalized = (value || "").trim().toLowerCase();
   return /^[a-z]{2}(?:-[a-z]{2})?$/.test(normalized);
@@ -36,16 +44,26 @@ function matchesSingleRoute(rawUrl: string, route: string): boolean {
   return segments.length === 1 && segments[0] === route;
 }
 
+function hasConversationOverlayQuery(rawUrl: string): boolean {
+  const value = (resolveSearchParams(rawUrl).get("conversation") || "").trim();
+  return value.length > 0;
+}
+
 export function resolveForcedNativeBannerPositionForUrl(
   rawUrl: string,
 ): "bottom" | null {
-  if (matchesSingleRoute(rawUrl, "conversations")) return "bottom";
+  if (matchesSingleRoute(rawUrl, "conversations") && !hasConversationOverlayQuery(rawUrl)) {
+    return "bottom";
+  }
   if (matchesSingleRoute(rawUrl, "mypage")) return "bottom";
   return null;
 }
 
 export function shouldHideNativeBannerForUrl(rawUrl: string): boolean {
   if (matchesSingleRoute(rawUrl, "translator")) return false;
+  if (matchesSingleRoute(rawUrl, "conversations") && hasConversationOverlayQuery(rawUrl)) {
+    return false;
+  }
   if (resolveForcedNativeBannerPositionForUrl(rawUrl)) return false;
   return true;
 }
