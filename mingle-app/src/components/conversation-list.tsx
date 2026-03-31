@@ -264,12 +264,13 @@ function formatConversationTime(isoTimestamp: string, locale: string): string {
 function mapConversationSummaryToItem(
   conversation: ConversationChannelSummary,
   locale: string,
+  timeLabelsReady: boolean,
 ): ConversationItem {
   return {
     id: conversation.id,
     title: conversation.title,
     preview: conversation.status === "active" ? ACTIVE_STATUS_LABEL : PAUSED_STATUS_LABEL,
-    timeLabel: formatConversationTime(conversation.updatedAt, locale),
+    timeLabel: timeLabelsReady ? formatConversationTime(conversation.updatedAt, locale) : "",
     status: conversation.status,
     avatarText: String(conversation.sequenceNumber),
     avatarColor:
@@ -606,13 +607,16 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const isConversationOverlayOpen = activeConversation !== null;
 
   const conversationItems = useMemo(
-    () => conversations.map((conversation) => mapConversationSummaryToItem(conversation, locale)),
-    [conversations, locale],
+    () => conversations.map((conversation) => (
+      mapConversationSummaryToItem(conversation, locale, timeLabelsReady)
+    )),
+    [conversations, locale, timeLabelsReady],
   );
   const actionDisabled = isCreatingConversation || mutatingConversationId !== null;
 
@@ -650,6 +654,10 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    setTimeLabelsReady(true);
+  }, []);
 
   const handleCreateConversation = useCallback(async () => {
     if (isCreatingConversation || mutatingConversationId) return;
