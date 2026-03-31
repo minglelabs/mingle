@@ -71,6 +71,23 @@ type NativeBannerAdProps = {
   onAdFailedToLoad?: (error: Error) => void;
   onSizeChange?: (dimensions: { width: number; height: number }) => void;
 };
+type NativeBannerViewEvent = {
+  nativeEvent?: {
+    type?: string;
+    width?: number;
+    height?: number;
+    code?: string;
+    message?: string;
+  };
+};
+type NativeBannerViewProps = {
+  style?: unknown;
+  sizeConfig: { sizes: string[]; maxHeight?: number; width?: number };
+  unitId: string;
+  request: string;
+  manualImpressionsEnabled: boolean;
+  onNativeEvent?: (event: NativeBannerViewEvent) => void;
+};
 type NativeAdModule = {
   default?: (() => {
     initialize?: () => Promise<unknown>;
@@ -78,6 +95,7 @@ type NativeAdModule = {
     initialize?: () => Promise<unknown>;
   };
   BannerAd?: React.ComponentType<NativeBannerAdProps>;
+  BannerViewNativeComponent?: React.ComponentType<NativeBannerViewProps>;
   BannerAdSize?: {
     BANNER?: string;
     ANCHORED_ADAPTIVE_BANNER?: string;
@@ -1057,7 +1075,10 @@ function NativeAdBanner(props: {
   const [lastErrorMessage, setLastErrorMessage] = useState('');
   const BannerAd = adModule?.BannerAd ?? null;
   const BannerAdComponent = BannerAd as React.ComponentClass<NativeBannerAdProps> | null;
+  const NativeBannerView = adModule?.BannerViewNativeComponent ?? null;
+  const NativeBannerViewComponent = NativeBannerView as React.ComponentType<NativeBannerViewProps> | null;
   const BannerAdSize = adModule?.BannerAdSize ?? null;
+  const usesDirectNativeBannerView = Platform.OS === 'ios' && NativeBannerViewComponent !== null;
   const usesAdaptiveBannerSize = Platform.OS === 'ios';
   const bannerSize = usesAdaptiveBannerSize
     ? (BannerAdSize?.ANCHORED_ADAPTIVE_BANNER
@@ -1075,6 +1096,15 @@ function NativeAdBanner(props: {
     ? bannerSlotWidthPx
     : undefined;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
+  const shouldShowLoadingPlaceholder = shouldShowDebugPlaceholder
+    && adLoadState === 'loading'
+    && !usesDirectNativeBannerView;
+  const shouldShowFailedPlaceholder = shouldShowDebugPlaceholder && adLoadState === 'failed';
+  const shouldRenderDebugPlaceholder = shouldShowLoadingPlaceholder || shouldShowFailedPlaceholder;
+  const bannerRequestPayload = useMemo(
+    () => JSON.stringify({ requestNonPersonalizedAdsOnly: true }),
+    [],
+  );
 
   useEffect(() => {
     // Reset banner render state when the slot configuration changes.
@@ -1110,17 +1140,38 @@ function NativeAdBanner(props: {
       message: error.message,
     });
   }, [unitId]);
+  const handleNativeBannerEvent = useCallback((event: NativeBannerViewEvent) => {
+    const nativeEvent = event.nativeEvent;
+    if (!nativeEvent?.type) return;
+    if (nativeEvent.type === 'onAdLoaded') {
+      handleAdLoaded({
+        width: Number(nativeEvent.width ?? bannerSlotWidthPx),
+        height: Number(nativeEvent.height ?? heightPx),
+      });
+      return;
+    }
+    if (nativeEvent.type === 'onSizeChange') {
+      applyBannerDimensions({
+        width: Number(nativeEvent.width ?? bannerSlotWidthPx),
+        height: Number(nativeEvent.height ?? heightPx),
+      });
+      return;
+    }
+    if (nativeEvent.type === 'onAdFailedToLoad') {
+      handleAdFailedToLoad(new Error(nativeEvent.message || 'Unknown banner load error'));
+    }
+  }, [applyBannerDimensions, bannerSlotWidthPx, handleAdFailedToLoad, handleAdLoaded, heightPx]);
 
   const containerStyle = position === 'top'
     ? [styles.nativeBannerContainer, { top: topOffsetPx, height: renderHeightPx }]
     : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: renderHeightPx }];
 
-  if (hidden || !unitId || !ready || !BannerAdComponent || !bannerSize) return null;
+  if (hidden || !unitId || !ready || !bannerSize || (!BannerAdComponent && !NativeBannerViewComponent)) return null;
 
   return (
     <View pointerEvents="box-none" style={containerStyle}>
       <View style={[styles.nativeBannerSlot, { width: bannerSlotWidthPx, height: renderHeightPx }]}>
-        {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
+        {shouldRenderDebugPlaceholder ? (
           <View style={styles.nativeBannerDebugPlaceholder}>
             <Text style={styles.nativeBannerDebugTitle}>
               {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
@@ -1132,16 +1183,28 @@ function NativeAdBanner(props: {
             </Text>
           </View>
         ) : null}
-        <BannerAdComponent
-          key={`${unitId}:${reloadToken}`}
-          unitId={unitId}
-          size={bannerSize}
-          width={bannerRequestWidthPx}
-          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
-          onAdLoaded={handleAdLoaded}
-          onSizeChange={applyBannerDimensions}
-          onAdFailedToLoad={handleAdFailedToLoad}
-        />
+        {usesDirectNativeBannerView && NativeBannerViewComponent ? (
+          <NativeBannerViewComponent
+            key={`${unitId}:${reloadToken}`}
+            style={{ width: bannerSlotWidthPx, height: renderHeightPx }}
+            unitId={unitId}
+            sizeConfig={{ sizes: [bannerSize], width: bannerRequestWidthPx }}
+            request={bannerRequestPayload}
+            manualImpressionsEnabled={false}
+            onNativeEvent={handleNativeBannerEvent}
+          />
+        ) : BannerAdComponent ? (
+          <BannerAdComponent
+            key={`${unitId}:${reloadToken}`}
+            unitId={unitId}
+            size={bannerSize}
+            width={bannerRequestWidthPx}
+            requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+            onAdLoaded={handleAdLoaded}
+            onSizeChange={applyBannerDimensions}
+            onAdFailedToLoad={handleAdFailedToLoad}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -1229,6 +1292,12 @@ function AppInner(): React.JSX.Element {
         BannerAd?: NativeAdModule['BannerAd'];
       };
       // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bannerNativeComponentModule = require(
+        'react-native-google-mobile-ads/lib/commonjs/specs/components/GoogleMobileAdsBannerViewNativeComponent'
+      ) as {
+        default?: NativeAdModule['BannerViewNativeComponent'];
+      };
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const bannerAdSizeModule = require('react-native-google-mobile-ads/lib/commonjs/BannerAdSize') as {
         BannerAdSize?: NativeAdModule['BannerAdSize'];
       };
@@ -1236,6 +1305,7 @@ function AppInner(): React.JSX.Element {
       if (Platform.OS === 'ios') {
         return {
           BannerAd: bannerModule.BannerAd,
+          BannerViewNativeComponent: bannerNativeComponentModule.default,
           BannerAdSize: bannerAdSizeModule.BannerAdSize,
         };
       }
