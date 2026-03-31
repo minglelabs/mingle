@@ -9,25 +9,6 @@
     "start": "react-native start",
     "test": "jest"
   },
-  "codegenConfig": {
-    "libraries": [
-      {
-        "name": "RNGoogleMobileAdsSpec",
-        "type": "all",
-        "jsSrcsDir": "./node_modules/react-native-google-mobile-ads/src/specs",
-        "ios": {
-          "componentProvider": {
-            "RNGoogleMobileAdsBannerView": "RNGoogleMobileAdsBannerView",
-            "RNGoogleMobileAdsNativeView": "RNGoogleMobileAdsNativeView",
-            "RNGoogleMobileAdsMediaView": "RNGoogleMobileAdsMediaView"
-          }
-        },
-        "android": {
-          "javaPackageName": "io.invertase.googlemobileads"
-        }
-      }
-    ]
-  },
   "dependencies": {
     "@react-native/new-app-screen": "0.84.0",
     "react": "19.2.3",
