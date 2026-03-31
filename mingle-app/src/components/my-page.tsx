@@ -42,6 +42,7 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: 
 const MYPAGE_PANEL_HISTORY_KEY = "__MINGLE_MYPAGE_PANEL__";
 
 type MyPageHistoryPanel = "settings" | "language" | "followers" | "following" | "edit";
+type MyPagePanelTransitionMode = "animate" | "instant";
 
 function getLanguageOption(locale: string | null | undefined) {
   const normalizedLocale = normalizeAppLocale(locale);
@@ -179,12 +180,12 @@ function SwipeBack({ children, onBack }: { children: React.ReactNode; onBack: ()
 }
 
 // ── FullPanel: 오른쪽 슬라이드 ────────────────────────────────────────────
-function FullPanel({ open, children, onClose, zIndex = 50 }: {
-  open: boolean; onClose: () => void; children: React.ReactNode; zIndex?: number;
+function FullPanel({ open, children, onClose, zIndex = 50, transitionMode = "animate" }: {
+  open: boolean; onClose: () => void; children: React.ReactNode; zIndex?: number; transitionMode?: MyPagePanelTransitionMode;
 }) {
   return (
     <div
-      className="absolute inset-0 transition-transform duration-300 ease-in-out"
+      className={`absolute inset-0 transition-transform ease-in-out ${transitionMode === "instant" ? "duration-0" : "duration-300"}`}
       style={{
         transform: open ? "translateX(0)" : "translateX(100%)",
         pointerEvents: open ? "auto" : "none",
@@ -263,13 +264,14 @@ function DeleteAccountModal({ open, onClose, onConfirm, loading, dictionary }: {
 }
 
 // ── 언어 설정 패널 (설정 패널에서 한 뎁스 더 오른쪽) ─────────────────────
-function LanguagePanel({ open, onClose, currentLocale, onSelect, dictionary }: {
+function LanguagePanel({ open, onClose, currentLocale, onSelect, dictionary, transitionMode }: {
   open: boolean; onClose: () => void;
   currentLocale: AppLocale; onSelect: (locale: AppLocale) => void;
   dictionary: AppDictionary;
+  transitionMode?: MyPagePanelTransitionMode;
 }) {
   return (
-    <FullPanel open={open} onClose={onClose} zIndex={60}>
+    <FullPanel open={open} onClose={onClose} zIndex={60} transitionMode={transitionMode}>
       <PanelHeader
         title={dictionary.myPage.languageSettings}
         onBack={onClose}
@@ -301,15 +303,16 @@ function LanguagePanel({ open, onClose, currentLocale, onSelect, dictionary }: {
 
 // ── 설정 패널 ─────────────────────────────────────────────────────────────
 function SettingsPanel({
-  open, onClose, onLogout, onDeleteAccount, onLanguage, selectedLanguage, dictionary,
+  open, onClose, onLogout, onDeleteAccount, onLanguage, selectedLanguage, dictionary, transitionMode,
 }: {
   open: boolean; onClose: () => void;
   onLogout: () => void; onDeleteAccount: () => void; onLanguage: () => void;
   selectedLanguage: { flag: string; label: string } | null;
   dictionary: AppDictionary;
+  transitionMode?: MyPagePanelTransitionMode;
 }) {
   return (
-    <FullPanel open={open} onClose={onClose} zIndex={50}>
+    <FullPanel open={open} onClose={onClose} zIndex={50} transitionMode={transitionMode}>
       <PanelHeader
         title={dictionary.profile.menuLabel}
         onBack={onClose}
@@ -358,16 +361,17 @@ function SettingsPanel({
 
 // ── 팔로워/팔로잉 패널 ────────────────────────────────────────────────────
 type FollowTab = "followers" | "following";
-function FollowPanel({ open, defaultTab, username, onClose, dictionary }: {
+function FollowPanel({ open, defaultTab, username, onClose, dictionary, transitionMode }: {
   open: boolean; defaultTab: FollowTab; username: string; onClose: () => void;
   dictionary: AppDictionary;
+  transitionMode?: MyPagePanelTransitionMode;
 }) {
   const [tab, setTab] = useState<FollowTab>(defaultTab);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (open) setTab(defaultTab); }, [open, defaultTab]);
 
   return (
-    <FullPanel open={open} onClose={onClose} zIndex={50}>
+    <FullPanel open={open} onClose={onClose} zIndex={50} transitionMode={transitionMode}>
       <PanelHeader title={username} onBack={onClose} backLabel={dictionary.myPage.backButtonLabel} />
       <div className="flex shrink-0 border-b border-gray-100">
         {(["followers", "following"] as FollowTab[]).map((t) => (
@@ -396,6 +400,7 @@ function EditProfilePanel({
   onClose,
   onSave,
   dictionary,
+  transitionMode,
 }: {
   open: boolean;
   username: string;
@@ -405,6 +410,7 @@ function EditProfilePanel({
   onClose: () => void;
   onSave: (d: { username: string; bio: string; nationalityCode: string | null }) => void;
   dictionary: AppDictionary;
+  transitionMode?: MyPagePanelTransitionMode;
 }) {
   const [lu, setLu] = useState(username);
   const [lb, setLb] = useState(bio);
@@ -412,7 +418,7 @@ function EditProfilePanel({
   const selectedNationality = resolveNationalityOption(ln);
 
   return (
-    <FullPanel open={open} onClose={onClose} zIndex={50}>
+    <FullPanel open={open} onClose={onClose} zIndex={50} transitionMode={transitionMode}>
       <PanelHeader
         title={dictionary.myPage.editProfileTitle}
         onBack={onClose}
@@ -487,9 +493,12 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   // nationalityCode: 프로필 편집에서 수동 지정한 국적 코드 (언어 설정과 완전 별개)
   const [nationalityCode, setNationalityCode] = useState<string | null>(null);
   const [selectedLocale, setSelectedLocale] = useState<AppLocale>(() => resolveAppLocale(locale));
+  const [panelTransitionMode, setPanelTransitionMode] = useState<MyPagePanelTransitionMode>("animate");
 
   const postsRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const pendingHistoryPanelTransitionModeRef = useRef<MyPagePanelTransitionMode>("instant");
+  const panelTransitionResetTimeoutRef = useRef<number | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const username = customUsername ?? user?.name ?? dictionary.myPage.anonymousUser;
@@ -525,6 +534,21 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
       })
       .catch(() => {});
   }, [locale]);
+
+  useEffect(() => () => {
+    if (typeof window === "undefined") return;
+    if (panelTransitionResetTimeoutRef.current === null) return;
+    window.clearTimeout(panelTransitionResetTimeoutRef.current);
+  }, []);
+
+  const requestHistoryPanelClose = useCallback((panel: MyPageHistoryPanel) => {
+    if (typeof window === "undefined") return false;
+    if (readMyPageHistoryPanel() !== panel || window.history.length <= 1) return false;
+
+    pendingHistoryPanelTransitionModeRef.current = "animate";
+    window.history.back();
+    return true;
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     setShowSettings(false);
@@ -579,57 +603,45 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   }, []);
 
   const handleOpenSettings = useCallback(() => {
+    setPanelTransitionMode("animate");
     setShowSettings(true);
   }, []);
 
   const handleCloseSettings = useCallback(() => {
-    if (typeof window !== "undefined" && readMyPageHistoryPanel() === "settings" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
+    if (requestHistoryPanelClose("settings")) return;
     setShowSettings(false);
-  }, []);
+  }, [requestHistoryPanelClose]);
 
   const handleOpenLanguage = useCallback(() => {
+    setPanelTransitionMode("animate");
     setShowLanguage(true);
   }, []);
 
   const handleCloseLanguage = useCallback(() => {
-    if (typeof window !== "undefined" && readMyPageHistoryPanel() === "language" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
+    if (requestHistoryPanelClose("language")) return;
     setShowLanguage(false);
-  }, []);
+  }, [requestHistoryPanelClose]);
 
   const handleOpenFollow = useCallback((tab: FollowTab) => {
+    setPanelTransitionMode("animate");
     setFollowState({ open: true, tab });
   }, []);
 
   const handleCloseFollow = useCallback(() => {
-    if (
-      typeof window !== "undefined"
-      && (readMyPageHistoryPanel() === "followers" || readMyPageHistoryPanel() === "following")
-      && window.history.length > 1
-    ) {
-      window.history.back();
-      return;
-    }
+    if (requestHistoryPanelClose(followState.tab)) return;
     setFollowState((current) => ({ ...current, open: false }));
-  }, []);
+  }, [followState.tab, requestHistoryPanelClose]);
 
   const handleOpenEditProfile = useCallback(() => {
     setEditPanelVersion((currentVersion) => currentVersion + 1);
+    setPanelTransitionMode("animate");
     setShowEdit(true);
   }, []);
 
   const handleCloseEditProfile = useCallback(() => {
-    if (typeof window !== "undefined" && readMyPageHistoryPanel() === "edit" && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
+    if (requestHistoryPanelClose("edit")) return;
     setShowEdit(false);
-  }, []);
+  }, [requestHistoryPanelClose]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !activeHistoryPanel) return;
@@ -646,6 +658,10 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
     if (typeof window === "undefined") return;
 
     const syncPanelsFromHistory = () => {
+      const nextTransitionMode = pendingHistoryPanelTransitionModeRef.current;
+      pendingHistoryPanelTransitionModeRef.current = "instant";
+      setPanelTransitionMode(nextTransitionMode);
+
       const historyPanel = readMyPageHistoryPanel();
       setShowSettings(historyPanel === "settings" || historyPanel === "language");
       setShowLanguage(historyPanel === "language");
@@ -664,6 +680,14 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
           open: false,
         };
       });
+
+      if (panelTransitionResetTimeoutRef.current !== null) {
+        window.clearTimeout(panelTransitionResetTimeoutRef.current);
+      }
+      panelTransitionResetTimeoutRef.current = window.setTimeout(() => {
+        setPanelTransitionMode("animate");
+        panelTransitionResetTimeoutRef.current = null;
+      }, 0);
     };
 
     syncPanelsFromHistory();
@@ -744,6 +768,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         onLanguage={handleOpenLanguage}
         selectedLanguage={selectedLanguage}
         dictionary={dictionary}
+        transitionMode={panelTransitionMode}
       />
       {/* 언어 설정 패널: 설정 위에 z-60으로 쌓임 */}
       <LanguagePanel
@@ -752,11 +777,13 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         currentLocale={selectedLocale}
         onSelect={handleLanguageSelect}
         dictionary={dictionary}
+        transitionMode={panelTransitionMode}
       />
       <FollowPanel
         open={followState.open} defaultTab={followState.tab} username={username}
         onClose={handleCloseFollow}
         dictionary={dictionary}
+        transitionMode={panelTransitionMode}
       />
       <EditProfilePanel
         key={`edit-profile:${editPanelVersion}`}
@@ -782,6 +809,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
           });
         }}
         dictionary={dictionary}
+        transitionMode={panelTransitionMode}
       />
 
       {/* ── 상단 헤더 ── */}
