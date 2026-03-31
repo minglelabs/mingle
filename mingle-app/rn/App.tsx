@@ -44,6 +44,7 @@ import {
 } from './src/appUpdateStatus';
 import {
   resolveForcedNativeBannerPositionForUrl,
+  shouldRequireNativeBannerSceneForUrl,
   shouldHideNativeBannerForUrl,
 } from './src/nativeChrome';
 import { readPreferredRuntimeValue } from './src/runtimeConfig';
@@ -750,6 +751,14 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeSetAdBannerSceneCommand = {
+  type: 'native_set_ad_banner_scene';
+  payload?: {
+    source?: string;
+    state?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -760,7 +769,8 @@ type WebViewCommand =
   | NativeNavigationStateCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
-  | NativeSetAdBannerPositionCommand;
+  | NativeSetAdBannerPositionCommand
+  | NativeSetAdBannerSceneCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -996,6 +1006,16 @@ function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition |
   const normalized = rawValue.trim().toLowerCase();
   if (normalized === 'top') return 'top';
   if (normalized === 'bottom') return 'bottom';
+  return null;
+}
+
+type NativeAdBannerSceneState = 'visible' | 'hidden' | 'inactive';
+
+function normalizeNativeAdBannerSceneState(rawValue: string): NativeAdBannerSceneState | null {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'visible') return 'visible';
+  if (normalized === 'hidden') return 'hidden';
+  if (normalized === 'inactive') return 'inactive';
   return null;
 }
 
@@ -1356,6 +1376,22 @@ function AppInner(): React.JSX.Element {
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [isNativePageOverlayOpen, setIsNativePageOverlayOpen] = useState(false);
   const [isNativeBannerRouteHidden, setIsNativeBannerRouteHidden] = useState(() => shouldHideNativeBannerForUrl(webUrl));
+  const [nativeAdBannerSceneStates, setNativeAdBannerSceneStates] = useState<Record<string, NativeAdBannerSceneState>>({});
+  const shouldRequireNativeBannerScene = useMemo(
+    () => shouldRequireNativeBannerSceneForUrl(webUrl),
+    [webUrl],
+  );
+  const hasVisibleNativeBannerScene = useMemo(
+    () => Object.values(nativeAdBannerSceneStates).some((state) => state === 'visible'),
+    [nativeAdBannerSceneStates],
+  );
+  const hasHiddenNativeBannerScene = useMemo(
+    () => Object.values(nativeAdBannerSceneStates).some((state) => state === 'hidden'),
+    [nativeAdBannerSceneStates],
+  );
+  const isNativeBannerSceneHidden = shouldRequireNativeBannerScene
+    ? hasHiddenNativeBannerScene || !hasVisibleNativeBannerScene
+    : hasHiddenNativeBannerScene;
   const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
@@ -2000,6 +2036,32 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_set_ad_banner_scene') {
+      const source = typeof parsed.payload?.source === 'string'
+        ? parsed.payload.source.trim()
+        : '';
+      const nextState = typeof parsed.payload?.state === 'string'
+        ? normalizeNativeAdBannerSceneState(parsed.payload.state)
+        : null;
+      if (!source || !nextState) return;
+
+      setNativeAdBannerSceneStates((current) => {
+        if (nextState === 'inactive') {
+          if (!(source in current)) return current;
+          const next = { ...current };
+          delete next[source];
+          return next;
+        }
+
+        if (current[source] === nextState) return current;
+        return {
+          ...current,
+          [source]: nextState,
+        };
+      });
+      return;
+    }
+
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
         ? parsed.payload.provider
@@ -2199,6 +2261,7 @@ function AppInner(): React.JSX.Element {
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
     setIsNativeMenuOverlayOpen(false);
+    setNativeAdBannerSceneStates({});
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -2363,7 +2426,12 @@ function AppInner(): React.JSX.Element {
           bottomOffsetPx={nativeBannerBottomOffsetPx}
           ready={nativeAdsReady}
           reloadToken={nativeBannerReloadToken}
-          hidden={isNativeMenuOverlayOpen || isNativePageOverlayOpen || isNativeBannerRouteHidden}
+          hidden={
+            isNativeMenuOverlayOpen
+            || isNativePageOverlayOpen
+            || isNativeBannerRouteHidden
+            || isNativeBannerSceneHidden
+          }
         />
       ) : null}
     </View>

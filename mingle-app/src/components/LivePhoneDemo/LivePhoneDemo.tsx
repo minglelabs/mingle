@@ -9,6 +9,7 @@ import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import MingleWordmark from '@/components/mingle-wordmark'
+import NativeConversationAdBannerScene from '@/components/native-conversation-ad-banner-scene'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
@@ -2784,6 +2785,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </motion.div>
             )}
           </AnimatePresence>
+
+          {isConversationMode ? (
+            <NativeConversationAdBannerScene active={isNativeAppRuntime} />
+          ) : null}
 
           {/* Bottom Bar with Mic Button */}
           <div

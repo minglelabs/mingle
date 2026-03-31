@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import NativeAdBannerSceneController from "@/components/native-ad-banner-scene-controller";
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 
 const NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX = 50;
+const NATIVE_BOTTOM_TAB_BANNER_SHOW_DELAY_MS = 300;
 
 type NativeBottomTabBannerSlotProps = {
+  source: string;
   hidden?: boolean;
   nativeBannerHidden?: boolean;
 };
@@ -35,6 +38,7 @@ function postToNativeBridge(command: unknown): void {
 }
 
 export default function NativeBottomTabBannerSlot({
+  source,
   hidden = false,
   nativeBannerHidden = hidden,
 }: NativeBottomTabBannerSlotProps) {
@@ -70,11 +74,20 @@ export default function NativeBottomTabBannerSlot({
   if (!nativeUiBridgeEnabled || hidden) return null;
 
   return (
-    <section
-      aria-hidden="true"
-      data-native-bottom-tab-banner-slot=""
-      className="w-full shrink-0 bg-white"
-      style={{ height: `${NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX}px` }}
-    />
+    <>
+      <NativeAdBannerSceneController
+        source={source}
+        mode="visible"
+        active={!hidden}
+        showDelayMs={NATIVE_BOTTOM_TAB_BANNER_SHOW_DELAY_MS}
+        position="bottom"
+      />
+      <section
+        aria-hidden="true"
+        data-native-bottom-tab-banner-slot=""
+        className="w-full shrink-0 bg-white"
+        style={{ height: `${NATIVE_BOTTOM_TAB_BANNER_SLOT_HEIGHT_PX}px` }}
+      />
+    </>
   );
 }

@@ -59,6 +59,12 @@ export function resolveForcedNativeBannerPositionForUrl(
   return null;
 }
 
+export function shouldRequireNativeBannerSceneForUrl(rawUrl: string): boolean {
+  if (matchesSingleRoute(rawUrl, "conversations")) return true;
+  if (matchesSingleRoute(rawUrl, "mypage")) return true;
+  return false;
+}
+
 export function shouldHideNativeBannerForUrl(rawUrl: string): boolean {
   if (matchesSingleRoute(rawUrl, "translator")) return false;
   if (matchesSingleRoute(rawUrl, "conversations") && hasConversationOverlayQuery(rawUrl)) {

@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import NativeAdBannerSuppressor from "@/components/native-ad-banner-suppressor";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
 import {
   clearNativeHistoryBackAnimateFlag,
@@ -520,6 +521,10 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
     || showEdit
     || showComingSoon
     || showDeleteConfirm;
+  const shouldSuppressNativeBannerForPanels = showSettings
+    || showLanguage
+    || followState.open
+    || showEdit;
 
   // DB에서 프로필 초기값 로드
   useEffect(() => {
@@ -758,6 +763,10 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         loading={deleteLoading}
         dictionary={dictionary}
       />
+      <NativeAdBannerSuppressor
+        source="mypage-overlay-panels"
+        active={shouldSuppressNativeBannerForPanels}
+      />
 
       {/* ── 슬라이딩 패널 ── */}
       <SettingsPanel
@@ -903,7 +912,10 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
             </div>
           )}
         </div>
-        <NativeBottomTabBannerSlot hidden={shouldHideBottomTabBannerSlot} />
+        <NativeBottomTabBannerSlot
+          source="mypage-bottom-tab"
+          hidden={shouldHideBottomTabBannerSlot}
+        />
       </div>
 
       <BottomTabBar locale={locale} dictionary={dictionary} />

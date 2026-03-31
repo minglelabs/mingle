@@ -920,6 +920,7 @@ export default function ConversationList({
           </div>
         )}
         <NativeBottomTabBannerSlot
+          source="conversations-bottom-tab"
           hidden={showSearch || isConversationOverlayOpen}
           nativeBannerHidden={showSearch}
         />
