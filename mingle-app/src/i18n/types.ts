@@ -13,6 +13,8 @@ export type AppDictionary = {
     adBannerPositionLabel?: string;
     adBannerPositionTopLabel?: string;
     adBannerPositionBottomLabel?: string;
+    adPrivacyChoicesLabel?: string;
+    adInspectorLabel?: string;
   };
   tabs: {
     chats: string;

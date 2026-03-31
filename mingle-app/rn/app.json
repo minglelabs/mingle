@@ -3,6 +3,8 @@
   "displayName": "mingle",
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-7057041881494735~1471126891",
-    "ios_app_id": "ca-app-pub-7057041881494735~7844963551"
+    "ios_app_id": "ca-app-pub-7057041881494735~7844963551",
+    "delay_app_measurement_init": true,
+    "user_tracking_usage_description": "This identifier is used to personalize ads when you allow tracking."
   }
 }

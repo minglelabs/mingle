@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, Shield, Bug } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -200,6 +200,24 @@ function useNativeBannerPositionFromSearch(): LivePhoneDemoAdBannerPosition | nu
   )
 }
 
+function readNativeAdDebugFlagFromWindow(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const params = new URLSearchParams(window.location.search || '')
+    return params.get('nativeAdDebug') === '1'
+  } catch {
+    return false
+  }
+}
+
+function useNativeAdDebugFlag(): boolean {
+  return useSyncExternalStore(
+    subscribeToLocationSearch,
+    readNativeAdDebugFlagFromWindow,
+    () => false,
+  )
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   const bytes = new Uint8Array(buffer)
@@ -322,6 +340,8 @@ interface LivePhoneDemoProps {
   adBannerPositionLabel: string
   adBannerPositionTopLabel: string
   adBannerPositionBottomLabel: string
+  adPrivacyChoicesLabel: string
+  adInspectorLabel: string
   silenceFinalizeLockedMessage: string
   silenceFinalizeLockedButtonLabel: string
   menuLabel: string
@@ -367,6 +387,14 @@ type NativeSetAdBannerPositionCommand = {
   payload?: {
     position?: LivePhoneDemoAdBannerPosition | ''
   }
+}
+
+type NativeOpenAdPrivacyChoicesCommand = {
+  type: 'native_open_ad_privacy_choices'
+}
+
+type NativeOpenAdInspectorCommand = {
+  type: 'native_open_ad_inspector'
 }
 
 type NativeAppUpdateWindow = Window & {
@@ -440,6 +468,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   adBannerPositionLabel,
   adBannerPositionTopLabel,
   adBannerPositionBottomLabel,
+  adPrivacyChoicesLabel,
+  adInspectorLabel,
   silenceFinalizeLockedMessage,
   silenceFinalizeLockedButtonLabel,
   menuLabel,
@@ -457,6 +487,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
+  const nativeAdDebugEnabled = useNativeAdDebugFlag()
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -773,6 +804,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setTranslationModelMenuOpen(false)
     setMenuOpen(false)
   }, [])
+
+  const handleOpenAdPrivacyChoices = useCallback(() => {
+    if (!isNativeApp()) return
+
+    const command: NativeOpenAdPrivacyChoicesCommand = {
+      type: 'native_open_ad_privacy_choices',
+    }
+
+    closeMenuPanel()
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+    } catch {
+      // Ignore bridge errors and leave the current menu state unchanged.
+    }
+  }, [closeMenuPanel])
+
+  const handleOpenAdInspector = useCallback(() => {
+    if (!isNativeApp()) return
+
+    const command: NativeOpenAdInspectorCommand = {
+      type: 'native_open_ad_inspector',
+    }
+
+    closeMenuPanel()
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify(command))
+    } catch {
+      // Ignore bridge errors and leave the current menu state unchanged.
+    }
+  }, [closeMenuPanel])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -2382,6 +2443,31 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       )}
                     </div>
                   </div>
+
+                  {isNativeAppRuntime && (
+                    <div className="px-4 pt-4">
+                      <div className="space-y-2 rounded-2xl border border-gray-200 bg-white px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={handleOpenAdPrivacyChoices}
+                          className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                        >
+                          <Shield size={16} strokeWidth={2} />
+                          <span>{adPrivacyChoicesLabel}</span>
+                        </button>
+                        {nativeAdDebugEnabled && (
+                          <button
+                            type="button"
+                            onClick={handleOpenAdInspector}
+                            className="inline-flex w-full items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-left text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 hover:text-amber-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                          >
+                            <Bug size={16} strokeWidth={2} />
+                            <span>{adInspectorLabel}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {isNativeAppRuntime && (
                     <div className="px-4 py-4">

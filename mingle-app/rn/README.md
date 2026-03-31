@@ -23,6 +23,14 @@ The RN app requires the following environment variables.
 - `RN_ADMOB_BANNER_UNIT_ID_IOS` (optional override, defaults to the production banner ad unit ID)
 - `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (optional override, defaults to the production banner ad unit ID)
 
+AdMob consent is managed through the Google UMP flow in native runtime.
+
+- On app launch, RN gathers the latest consent state before starting ad requests.
+- In native runtime, the slide-over menu exposes an `Ad Privacy Choices` action so users can reopen the privacy form when required.
+- Dev/test native builds also expose an `Open Ad Inspector` action in the same menu.
+- `rn/app.json` enables delayed app measurement and an ATT usage description for personalized ads.
+- Android release builds keep the UMP consent SDK classes via `android/app/proguard-rules.pro`.
+
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
 `pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.7` before launch.
@@ -61,6 +69,12 @@ When banner is enabled, RN forwards these query params to web:
 `LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
 
 For `scripts/devbox mobile --device-app-env dev`, devbox falls back to Google's official sample AdMob app IDs and banner unit IDs when the AdMob env vars are unset, so local release verification can proceed without production credentials.
+
+## AdMob Console Checklist
+
+- `Account > Seller information (sellers.json)`: set to `Transparent`.
+- `Privacy & messaging`: create or update the EU/EEA consent message and the iOS ATT message before shipping personalized ads.
+- When AppLovin is approved later, add `AppLovin Corp.` to the AdMob ad partners list for EU/US privacy regulations and then wire the mediation keys/zones.
 
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 

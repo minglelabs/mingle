@@ -1586,6 +1586,8 @@ export default function MingleHome(props: MingleHomeProps) {
         adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
         adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
         adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+        adPrivacyChoicesLabel={props.dictionary.demo.adPrivacyChoicesLabel ?? "Ad Privacy Choices"}
+        adInspectorLabel={props.dictionary.demo.adInspectorLabel ?? "Open Ad Inspector"}
         silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
         silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
         menuLabel={props.dictionary.profile.menuLabel}
