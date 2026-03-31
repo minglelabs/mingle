@@ -1,6 +1,6 @@
 import MingleHome from "@/components/mingle-home";
 import { getDictionary, isSupportedLocale } from "@/i18n";
-import { getAuthOptions, isAppleOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
+import { getAuthOptions, isAppleWebOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
 import { resolveNativeRuntimePlatformFromSearchParam } from "@/lib/native-runtime-platform";
 import { getUserPreferredLocale } from "@/lib/user-preferred-locale";
 import { getServerSession } from "next-auth";
@@ -32,7 +32,7 @@ export default async function LocalePage({ params, searchParams }: LocalePagePro
   return (
     <MingleHome
       dictionary={getDictionary(locale)}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
+      appleWebOAuthEnabled={isAppleWebOAuthConfigured()}
       appleNativeAuthEnabled={isNativeAppleAuthConfigured()}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
       initialNativePlatform={resolveNativeRuntimePlatformFromSearchParam(query.nativePlatform)}

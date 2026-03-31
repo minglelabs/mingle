@@ -1,6 +1,6 @@
 import MingleHome from "@/components/mingle-home";
 import { getDictionary, isSupportedLocale } from "@/i18n";
-import { isAppleOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
+import { isAppleWebOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
 import { resolveNativeRuntimePlatformFromSearchParam } from "@/lib/native-runtime-platform";
 import { notFound } from "next/navigation";
 
@@ -24,7 +24,7 @@ export default async function TranslatorPage({ params, searchParams }: Translato
   return (
     <MingleHome
       dictionary={getDictionary(locale)}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
+      appleWebOAuthEnabled={isAppleWebOAuthConfigured()}
       appleNativeAuthEnabled={isNativeAppleAuthConfigured()}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
       initialNativePlatform={resolveNativeRuntimePlatformFromSearchParam(query.nativePlatform)}

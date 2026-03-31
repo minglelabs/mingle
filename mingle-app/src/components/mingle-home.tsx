@@ -15,7 +15,7 @@ import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy"
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
-  appleOAuthEnabled: boolean;
+  appleWebOAuthEnabled: boolean;
   appleNativeAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
   initialNativePlatform?: NativeRuntimePlatform | null;
@@ -266,7 +266,7 @@ export default function MingleHome(props: MingleHomeProps) {
   const appleSignInVisible = !isAndroidNativeRuntime;
   const appleSignInEnabled = isIosNativeRuntime
     ? props.appleNativeAuthEnabled
-    : props.appleOAuthEnabled;
+    : props.appleWebOAuthEnabled;
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
     [props.locale],

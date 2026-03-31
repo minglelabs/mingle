@@ -4,7 +4,11 @@ import AppleProvider from "next-auth/providers/apple";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/apple-oauth";
+import {
+  isAppleWebOAuthEnabledFromEnv,
+  resolveAppleOAuthCredentials,
+  type AppleOAuthCredentials,
+} from "@/lib/apple-oauth";
 import { isNativeAppleAuthConfiguredFromEnv } from "@/lib/apple-sign-in";
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
@@ -178,6 +182,13 @@ function shouldRefreshAppleCredentials(nowEpochMs: number): boolean {
 
 function resolveAppleOAuthCredentialsWithRefresh(): AppleOAuthCredentials | null {
   const nowEpochMs = Date.now();
+  if (!isAppleWebOAuthEnabledFromEnv(process.env)) {
+    appleOAuthCredentialsCache.credentials = null;
+    appleOAuthCredentialsCache.expiresAtEpochMs = null;
+    appleOAuthCredentialsCache.resolvedAtEpochMs = nowEpochMs;
+    return null;
+  }
+
   if (!shouldRefreshAppleCredentials(nowEpochMs)) {
     return appleOAuthCredentialsCache.credentials;
   }
@@ -199,7 +210,7 @@ function resolveAppleOAuthCredentialsWithRefresh(): AppleOAuthCredentials | null
     return credentials;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[auth-options] failed to configure Apple OAuth: ${message}`);
+    console.warn(`[auth-options] failed to configure Apple web OAuth: ${message}`);
     appleOAuthCredentialsCache.credentials = null;
     appleOAuthCredentialsCache.expiresAtEpochMs = null;
     appleOAuthCredentialsCache.resolvedAtEpochMs = nowEpochMs;
@@ -323,9 +334,11 @@ function buildProviders(): NextAuthOptions["providers"] {
   return providers;
 }
 
-export function isAppleOAuthConfigured(): boolean {
+export function isAppleWebOAuthConfigured(): boolean {
   return Boolean(resolveAppleOAuthCredentialsWithRefresh());
 }
+
+export const isAppleOAuthConfigured = isAppleWebOAuthConfigured;
 
 export function isNativeAppleAuthConfigured(): boolean {
   return isNativeAppleAuthConfiguredFromEnv(process.env);

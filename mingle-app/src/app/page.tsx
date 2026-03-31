@@ -1,6 +1,6 @@
 import MingleHome from "@/components/mingle-home";
 import { DEFAULT_LOCALE, getDictionary } from "@/i18n";
-import { isAppleOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
+import { isAppleWebOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
 import { resolveNativeRuntimePlatformFromSearchParam } from "@/lib/native-runtime-platform";
 
 type PageProps = {
@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: PageProps) {
   return (
     <MingleHome
       dictionary={dictionary}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
+      appleWebOAuthEnabled={isAppleWebOAuthConfigured()}
       appleNativeAuthEnabled={isNativeAppleAuthConfigured()}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
       initialNativePlatform={resolveNativeRuntimePlatformFromSearchParam(query.nativePlatform)}

@@ -1,6 +1,10 @@
 import { generateKeyPairSync } from "crypto";
 import { describe, expect, it } from "vitest";
-import { createAppleClientSecret, resolveAppleOAuthCredentials } from "@/lib/apple-oauth";
+import {
+  createAppleClientSecret,
+  isAppleWebOAuthEnabledFromEnv,
+  resolveAppleOAuthCredentials,
+} from "@/lib/apple-oauth";
 
 function decodeBase64UrlToJson(segment: string): Record<string, unknown> {
   const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
@@ -9,6 +13,18 @@ function decodeBase64UrlToJson(segment: string): Record<string, unknown> {
 }
 
 describe("apple-oauth", () => {
+  it("keeps Apple web OAuth disabled by default", () => {
+    expect(isAppleWebOAuthEnabledFromEnv({})).toBe(false);
+    expect(
+      resolveAppleOAuthCredentials({
+        env: {
+          AUTH_APPLE_ID: "com.mingle.web",
+          AUTH_APPLE_SECRET: "static_secret_value",
+        },
+      }),
+    ).toBeNull();
+  });
+
   it("creates a JWT Apple client secret with expected claims", () => {
     const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -41,6 +57,7 @@ describe("apple-oauth", () => {
   it("prefers AUTH_APPLE_SECRET when provided", () => {
     const credentials = resolveAppleOAuthCredentials({
       env: {
+        AUTH_APPLE_WEB_ENABLED: "true",
         AUTH_APPLE_ID: "com.mingle.web",
         AUTH_APPLE_SECRET: "static_secret_value",
       },
@@ -58,6 +75,7 @@ describe("apple-oauth", () => {
     const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
     const credentials = resolveAppleOAuthCredentials({
       env: {
+        AUTH_APPLE_WEB_ENABLED: "true",
         AUTH_APPLE_ID: "com.mingle.web",
         AUTH_APPLE_TEAM_ID: "TEAM123456",
         AUTH_APPLE_KEY_ID: "KEY1234567",
@@ -83,6 +101,7 @@ describe("apple-oauth", () => {
     const privateKeyPem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
     const credentials = resolveAppleOAuthCredentials({
       env: {
+        AUTH_APPLE_WEB_ENABLED: "true",
         AUTH_APPLE_ID: "com.mingle.web",
         AUTH_APPLE_TEAM_ID: "TEAM123456",
         AUTH_APPLE_KEY_ID: "KEY1234567",

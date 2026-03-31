@@ -253,9 +253,10 @@ Google OAuth:
 http://localhost:3000/api/auth/callback/google
 ```
 
-Apple OAuth:
+Apple web OAuth (optional, disabled by default):
 
 - env required:
+  - `AUTH_APPLE_WEB_ENABLED=true`
   - `AUTH_APPLE_ID`
   - either `AUTH_APPLE_SECRET` directly
   - or (`AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, `AUTH_APPLE_PRIVATE_KEY`)
@@ -278,7 +279,17 @@ Generate `AUTH_APPLE_SECRET` from `.p8` key env values:
 pnpm auth:apple:secret
 ```
 
-If both Apple and Google OAuth env vars are missing, no social sign-in provider is available.
+Apple native sign-in (iOS / RN bridge):
+
+- env required:
+  - `AUTH_SECRET`
+  - `AUTH_APPLE_NATIVE_AUDIENCES`
+    - or `AUTH_APPLE_NATIVE_ID`
+    - or `AUTH_APPLE_BUNDLE_ID`
+
+If `AUTH_APPLE_WEB_ENABLED` is missing or false, the server does not register the Apple web OAuth provider. Native Apple sign-in remains available through the native auth bridge.
+
+If both Apple web OAuth and Google OAuth are unavailable, no web social sign-in provider is available.
 
 ## Database (Supabase, app schema)
 

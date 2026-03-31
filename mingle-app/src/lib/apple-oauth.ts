@@ -19,6 +19,16 @@ export type AppleOAuthCredentials = {
   source: "static_secret" | "generated_secret";
 };
 
+export type AppleOAuthEnv = Record<string, string | undefined> & {
+  AUTH_APPLE_WEB_ENABLED?: string;
+  AUTH_APPLE_ID?: string;
+  AUTH_APPLE_SECRET?: string;
+  AUTH_APPLE_TEAM_ID?: string;
+  AUTH_APPLE_KEY_ID?: string;
+  AUTH_APPLE_PRIVATE_KEY?: string;
+  AUTH_APPLE_CLIENT_SECRET_TTL_SECONDS?: string;
+};
+
 function base64UrlEncode(input: Buffer | string): string {
   const buffer = typeof input === "string" ? Buffer.from(input, "utf8") : input;
   return buffer
@@ -38,6 +48,11 @@ function decodeEscapedMultilineText(value: string): string {
 
 function normalizePrivateKey(rawValue: string): string {
   return decodeEscapedMultilineText(rawValue).trim();
+}
+
+export function isAppleWebOAuthEnabledFromEnv(env: AppleOAuthEnv = process.env): boolean {
+  const normalized = (env.AUTH_APPLE_WEB_ENABLED || "").trim().toLowerCase();
+  return ["1", "true", "on", "yes", "y"].includes(normalized);
 }
 
 function parseTtlSeconds(rawValue: string | undefined): number {
@@ -92,7 +107,7 @@ export function createAppleClientSecret(input: AppleClientSecretInput): string {
 }
 
 type ResolveAppleOAuthCredentialsInput = {
-  env?: Record<string, string | undefined>;
+  env?: AppleOAuthEnv;
   nowEpochSeconds?: number;
 };
 
@@ -100,6 +115,9 @@ export function resolveAppleOAuthCredentials(
   input: ResolveAppleOAuthCredentialsInput = {},
 ): AppleOAuthCredentials | null {
   const env = input.env ?? process.env;
+  if (!isAppleWebOAuthEnabledFromEnv(env)) {
+    return null;
+  }
   const clientId = (env.AUTH_APPLE_ID || "").trim();
   const staticSecret = (env.AUTH_APPLE_SECRET || "").trim();
 
