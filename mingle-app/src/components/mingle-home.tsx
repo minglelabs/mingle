@@ -1063,7 +1063,7 @@ export default function MingleHome(props: MingleHomeProps) {
         {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
         <section
           aria-busy={isLoading || disabled}
-          className="rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4"
+          className="min-h-[42svh] rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-5 sm:min-h-[24rem]"
         >
           {isLoading ? (
             /* Loading state: spinner only */
@@ -1082,7 +1082,7 @@ export default function MingleHome(props: MingleHomeProps) {
                   authPanelStep === "terms" ? "-translate-x-1/2" : "translate-x-0"
                 }`}
               >
-                <div className="w-1/2 shrink-0">
+                <div className="w-1/2 shrink-0 pt-5">
                   <div className="space-y-3">
                     {appleSignInVisible ? (
                       <button
@@ -1146,7 +1146,7 @@ export default function MingleHome(props: MingleHomeProps) {
                   </div>
                 </div>
 
-                <div className="w-1/2 shrink-0 pl-4">
+                <div className="w-1/2 shrink-0 pl-4 pt-5">
                   <div className="text-white">
                     <h2 className="text-[1.22rem] font-semibold leading-tight">
                       {props.dictionary.profile.serviceTermsTitle}
