@@ -46,6 +46,7 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+  const baseTabBarHeightPx = 66;
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
@@ -64,7 +65,7 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
       style={{
         // safe area 즉시 적용: iOS WKWebView에서 초기 렌더부터 반영
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        height: "calc(60px + env(safe-area-inset-bottom, 0px))",
+        height: `calc(${baseTabBarHeightPx}px + env(safe-area-inset-bottom, 0px))`,
       }}
       aria-label={dictionary.navigation.bottomTabBarLabel}
     >
