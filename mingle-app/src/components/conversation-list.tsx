@@ -31,6 +31,7 @@ const EMPTY_RECENT_SEARCHES: string[] = [];
 const ACTIVE_STATUS_LABEL = "Live session";
 const PAUSED_STATUS_LABEL = "Paused";
 const CONVERSATION_QUERY_KEY = "conversation";
+const NATIVE_HISTORY_BACK_ANIMATE_FLAG = "__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__";
 const PRESERVED_NATIVE_QUERY_KEYS = [
   "apiNamespace",
   "nativeAuth",
@@ -95,6 +96,10 @@ interface ConversationItem {
   updatedAt: string;
   pausedAt: string | null;
 }
+
+type ConversationListWindow = Window & {
+  [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
+};
 
 function normalizeSearchTerm(rawValue: string): string {
   return rawValue.trim().replace(/\s+/g, " ");
@@ -238,6 +243,15 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
   } catch {
     // Ignore history synchronization failures in restricted environments.
   }
+}
+
+function consumeNativeHistoryCloseAnimationFlag(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const conversationWindow = window as ConversationListWindow;
+  const shouldAnimate = conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] === true;
+  conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] = false;
+  return shouldAnimate;
 }
 
 function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
@@ -813,7 +827,8 @@ export default function ConversationList({
       if (!currentActiveConversation) return;
       if (readConversationIdFromLocation() === currentActiveConversation.id) return;
 
-      const animateExit = pendingHistoryCloseAnimationRef.current === "animate";
+      const animateExit = pendingHistoryCloseAnimationRef.current === "animate"
+        || consumeNativeHistoryCloseAnimationFlag();
       pendingHistoryCloseAnimationRef.current = "instant";
       closeConversationOverlay(currentActiveConversation, { animateExit });
     };
