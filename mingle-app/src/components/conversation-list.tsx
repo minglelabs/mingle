@@ -16,7 +16,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Loader2, MessageCirclePlus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import BottomTabBar from "@/components/bottom-tab-bar";
@@ -51,9 +51,28 @@ const CONVERSATION_AVATAR_COLORS = [
   "#a78bfa",
   "#f97316",
 ] as const;
+const CONVERSATION_OVERLAY_TRANSITION = {
+  duration: 0.28,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
+
+type ConversationOverlayExitMode = "animate" | "instant";
+
+const conversationOverlayVariants: Variants = {
+  initial: { x: "100%" },
+  active: {
+    x: "0%",
+    transition: CONVERSATION_OVERLAY_TRANSITION,
+  },
+  exit: (exitMode: ConversationOverlayExitMode) => (
+    exitMode === "animate"
+      ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
+      : { x: "0%", transition: { duration: 0 } }
+  ),
+};
 
 type TranslatorConfig = {
   appleWebOAuthEnabled: boolean;
@@ -607,7 +626,7 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
-  const [shouldAnimateOverlayExit, setShouldAnimateOverlayExit] = useState(true);
+  const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
@@ -668,7 +687,7 @@ export default function ConversationList({
       replaceUrl?: boolean;
     },
   ) => {
-    const animateExit = options?.animateExit ?? false;
+    const exitMode: ConversationOverlayExitMode = options?.animateExit ? "animate" : "instant";
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
@@ -676,7 +695,7 @@ export default function ConversationList({
       replaceConversationOverlayUrl(null);
     }
 
-    setShouldAnimateOverlayExit(animateExit);
+    setOverlayExitMode(exitMode);
     setActiveConversation((current) => (
       current?.id === previousConversation.id ? null : current
     ));
@@ -708,7 +727,7 @@ export default function ConversationList({
       });
       const nextConversation = await readConversationResponse(response);
       setConversations((current) => upsertConversation(current, nextConversation));
-      setShouldAnimateOverlayExit(true);
+      setOverlayExitMode("animate");
       setActiveConversation(nextConversation);
     } catch {
       window.alert("Failed to create a conversation.");
@@ -725,7 +744,7 @@ export default function ConversationList({
 
     if (matchedConversation.status === "active") {
       setShowSearch(false);
-      setShouldAnimateOverlayExit(true);
+      setOverlayExitMode("animate");
       setActiveConversation(matchedConversation);
       return;
     }
@@ -734,7 +753,7 @@ export default function ConversationList({
       const nextConversation = await updateConversationStatus(matchedConversation.id, "active");
       if (!nextConversation) return;
       setShowSearch(false);
-      setShouldAnimateOverlayExit(true);
+      setOverlayExitMode("animate");
       setActiveConversation(nextConversation);
     } catch {
       window.alert("Failed to open the conversation.");
@@ -890,16 +909,15 @@ export default function ConversationList({
 
       {typeof document !== "undefined"
         ? createPortal(
-          <AnimatePresence>
+          <AnimatePresence custom={overlayExitMode}>
             {activeConversation ? (
               <motion.div
                 key={activeConversation.id}
-                initial={{ x: "100%" }}
-                animate={{ x: "0%" }}
-                exit={shouldAnimateOverlayExit ? { x: "100%" } : { x: "0%" }}
-                transition={shouldAnimateOverlayExit
-                  ? { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-                  : { duration: 0 }}
+                custom={overlayExitMode}
+                variants={conversationOverlayVariants}
+                initial="initial"
+                animate="active"
+                exit="exit"
                 className="fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white"
               >
                 <MingleHome
