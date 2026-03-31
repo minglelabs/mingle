@@ -3,10 +3,11 @@
 import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Mic, Download } from 'lucide-react'
+import { Mic } from 'lucide-react'
 import LivePhoneDemo from '@/components/LivePhoneDemo/LivePhoneDemo'
 import type { LivePhoneDemoRef } from '@/components/LivePhoneDemo/LivePhoneDemo'
 import { logButtonClick } from '@/components/sections/tracking'
+import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'
 
 export interface HeroSectionProps {
   version?: string
@@ -39,13 +40,9 @@ export default function HeroSection({ version, openModal }: HeroSectionProps) {
             {t(`hero.${version}.subtitle`, { defaultValue: t('hero.subtitle') })}
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <button
-              onClick={() => openModal('hero')}
-              className="px-8 py-4 bg-gradient-to-r from-accent-primary to-accent-secondary rounded-xl font-semibold text-white flex items-center gap-2 hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent-primary/40 transition-all"
-            >
-              <Download size={20} />
-              {t('hero.cta')}
-            </button>
+            <div className="inline-flex">
+              <StoreDownloadButtons size="md" label={t('hero.cta')} />
+            </div>
             <button
               onClick={() => {
                 logButtonClick('try-translator')

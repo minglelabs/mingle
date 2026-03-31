@@ -5,44 +5,277 @@ import 'dotenv/config';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { createSpeechmaticsJWT } from '@speechmatics/auth';
+import {
+    RealtimeClient,
+    type AddPartialTranscript,
+    type AddTranscript,
+} from '@speechmatics/real-time-client';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-const PORT = 3001;
+const PORT = Number.parseInt(process.env.STT_PORT || '3001', 10);
 const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
+const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
+const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime';
+const SPEECHMATICS_JWT_TTL_SEC = 60;
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
-
-
+type SttModel =
+    | 'gladia'
+    | 'gladia-stt'
+    | 'deepgram'
+    | 'deepgram-multi'
+    | 'gpt-4o-mini-transcribe'
+    | 'fireworks'
+    | 'chirp-3'
+    | 'soniox'
+    | 'elevenlabs'
+    | 'speechmatics';
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
 
 interface ClientConfig {
     sample_rate: number;
     languages: string[];
-    stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
+    stt_model: SttModel;
     translate_model?: TranslateModel;
+    translation_enabled?: boolean;
     lang_hints_strict?: boolean;
 }
 
+interface SpeechmaticsSessionConfig {
+    language: string;
+    domain?: string;
+    fallbackLanguage: string;
+    note?: string;
+}
+
+const speechmaticsLanguageMap: Record<string, string> = {
+    en: 'en',
+    ko: 'ko',
+    th: 'th',
+    zh: 'cmn',
+    ja: 'ja',
+    es: 'es',
+    fr: 'fr',
+    de: 'de',
+    ru: 'ru',
+    pt: 'pt',
+    ar: 'ar',
+    hi: 'hi',
+    vi: 'vi',
+    it: 'it',
+    id: 'id',
+    tr: 'tr',
+    pl: 'pl',
+    nl: 'nl',
+    sv: 'sv',
+    ms: 'ms',
+};
+
+const normalizeSpeechmaticsLanguage = (language: string) => (
+    language === 'cmn' ? 'zh' : language
+);
+
+const resolveSpeechmaticsSessionConfig = (languages: string[]): SpeechmaticsSessionConfig => {
+    const unique = [...new Set(languages.filter(Boolean))];
+    const normalized = unique.map((lang) => speechmaticsLanguageMap[lang] || lang);
+    const has = (lang: string) => normalized.includes(lang);
+
+    if (normalized.length === 2 && has('ar') && has('en')) {
+        return {
+            language: 'ar_en',
+            fallbackLanguage: 'ar_en',
+            note: 'Using Speechmatics bilingual Arabic-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('es') && has('en')) {
+        return {
+            language: 'es',
+            domain: 'bilingual-en',
+            fallbackLanguage: 'es_en',
+            note: 'Using Speechmatics bilingual Spanish-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('cmn') && has('en')) {
+        return {
+            language: 'cmn_en',
+            fallbackLanguage: 'zh_en',
+            note: 'Using Speechmatics bilingual Mandarin-English pack.',
+        };
+    }
+
+    if (normalized.length === 2 && has('en') && has('ms')) {
+        return {
+            language: 'en_ms',
+            fallbackLanguage: 'en_ms',
+            note: 'Using Speechmatics bilingual English-Malay pack.',
+        };
+    }
+
+    const primaryLanguage = normalizeSpeechmaticsLanguage(normalized[0] || 'en');
+    return {
+        language: normalized[0] || 'en',
+        fallbackLanguage: primaryLanguage,
+        note: normalized.length > 1
+            ? `Speechmatics public realtime API does not expose this language combination directly. Falling back to primary language "${primaryLanguage}".`
+            : undefined,
+    };
+};
+
+const getSpeechmaticsTranscriptLanguage = (
+    message: AddPartialTranscript | AddTranscript,
+    fallbackLanguage: string,
+) => {
+    for (const result of message.results) {
+        for (const alternative of result.alternatives ?? []) {
+            if (alternative.language) {
+                return normalizeSpeechmaticsLanguage(alternative.language);
+            }
+        }
+    }
+    return fallbackLanguage;
+};
+
+const ELEVENLABS_SUPPORTED_SAMPLE_RATES = [8000, 16000, 22050, 24000, 44100, 48000] as const;
+const OPENAI_REALTIME_SAMPLE_RATE = 24000;
+const OPENAI_REALTIME_MODEL = 'gpt-4o-mini-transcribe';
+const OPENAI_PARTIAL_COMMIT_INTERVAL_MS = 700;
+const OPENAI_MIN_COMMIT_AUDIO_MS = 320;
+const OPENAI_MIN_SERVER_COMMIT_AUDIO_MS = 120;
+const OPENAI_FINAL_SILENCE_MS = 420;
+const OPENAI_VOICE_RMS_THRESHOLD = 0.018;
+const OPENAI_PREROLL_MAX_MS = 240;
+
+const resolveElevenLabsAudioFormat = (sampleRate: number) => {
+    const rounded = Math.round(sampleRate);
+    const exact = ELEVENLABS_SUPPORTED_SAMPLE_RATES.find((rate) => rate === rounded);
+    if (exact) {
+        return `pcm_${exact}`;
+    }
+
+    const closest = ELEVENLABS_SUPPORTED_SAMPLE_RATES.reduce((best, candidate) => {
+        return Math.abs(candidate - rounded) < Math.abs(best - rounded) ? candidate : best;
+    });
+
+    if (Math.abs(closest - rounded) <= 400) {
+        return `pcm_${closest}`;
+    }
+
+    return null;
+};
+
+const resamplePcm16Mono = (
+    pcm: Int16Array,
+    inputSampleRate: number,
+    targetSampleRate: number,
+) => {
+    if (pcm.length === 0) {
+        return new Int16Array(0);
+    }
+
+    if (
+        !Number.isFinite(inputSampleRate)
+        || !Number.isFinite(targetSampleRate)
+        || inputSampleRate <= 0
+        || targetSampleRate <= 0
+    ) {
+        return new Int16Array(pcm);
+    }
+
+    if (inputSampleRate === targetSampleRate) {
+        return new Int16Array(pcm);
+    }
+
+    const ratio = inputSampleRate / targetSampleRate;
+    const outputLength = Math.max(1, Math.round(pcm.length / ratio));
+    const output = new Int16Array(outputLength);
+
+    for (let index = 0; index < outputLength; index += 1) {
+        const position = index * ratio;
+        const leftIndex = Math.floor(position);
+        const rightIndex = Math.min(leftIndex + 1, pcm.length - 1);
+        const weight = position - leftIndex;
+        const left = pcm[leftIndex] ?? 0;
+        const right = pcm[rightIndex] ?? left;
+        output[index] = Math.round(left + (right - left) * weight);
+    }
+
+    return output;
+};
+
+const encodePcm16ForOpenAI = (pcmChunk: Buffer, inputSampleRate: number) => {
+    const input = new Int16Array(
+        pcmChunk.buffer,
+        pcmChunk.byteOffset,
+        Math.floor(pcmChunk.byteLength / Int16Array.BYTES_PER_ELEMENT),
+    );
+    const resampled = resamplePcm16Mono(input, inputSampleRate, OPENAI_REALTIME_SAMPLE_RATE);
+    return Buffer.from(resampled.buffer, resampled.byteOffset, resampled.byteLength).toString('base64');
+};
+
+const calculatePcm16NormalizedRms = (pcmChunk: Buffer) => {
+    const sampleCount = Math.floor(pcmChunk.byteLength / Int16Array.BYTES_PER_ELEMENT);
+    if (sampleCount === 0) return 0;
+
+    const samples = new Int16Array(
+        pcmChunk.buffer,
+        pcmChunk.byteOffset,
+        sampleCount,
+    );
+
+    let sumSquares = 0;
+    for (const sample of samples) {
+        const normalized = sample / 0x7fff;
+        sumSquares += normalized * normalized;
+    }
+
+    return Math.sqrt(sumSquares / sampleCount);
+};
+
+const joinTranscriptParts = (left: string, right: string) => {
+    const trimmedLeft = left.trim();
+    const trimmedRight = right.trim();
+
+    if (!trimmedLeft) return trimmedRight;
+    if (!trimmedRight) return trimmedLeft;
+
+    const shouldOmitSpace = /^[,.;:!?)]/.test(trimmedRight) || /[([]$/.test(trimmedLeft);
+    return shouldOmitSpace
+        ? `${trimmedLeft}${trimmedRight}`
+        : `${trimmedLeft} ${trimmedRight}`;
+};
+
 wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
+    let openAIRealtimeWs: WebSocket | null = null;
+    let speechmaticsClient: RealtimeClient | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
-    let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
+    let currentModel: SttModel = 'gladia';
+    let currentSampleRate = 16000;
     let selectedLanguages: string[] = [];
     let translateModel: TranslateModel = 'claude-haiku-4-5';
+    let translationEnabled = true;
 
     const gladiaApiKey = process.env.GLADIA_API_KEY;
     const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
     const fireworksApiKey = process.env.FIREWORKS_API_KEY;
+    const googleCloudProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GCP_PROJECT_ID;
     const sonioxApiKey = process.env.SONIOX_API_KEY;
+    const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+    const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
+    const speechmaticsRegion = process.env.SPEECHMATICS_REGION as 'eu' | 'usa' | 'au' | undefined;
+    const speechmaticsRtUrl = process.env.SPEECHMATICS_RT_URL;
 
     const cleanup = () => {
         isClientConnected = false;
@@ -60,6 +293,23 @@ wss.on('connection', (clientWs) => {
             }
             sttWs = null;
         }
+
+        if (openAIRealtimeWs) {
+            if (
+                openAIRealtimeWs.readyState === WebSocket.OPEN
+                || openAIRealtimeWs.readyState === WebSocket.CONNECTING
+            ) {
+                openAIRealtimeWs.close();
+            }
+            openAIRealtimeWs = null;
+        }
+
+        if (speechmaticsClient) {
+            void speechmaticsClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
+            speechmaticsClient = null;
+        }
+
+        delete (clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void }).__handleOpenAIAudioChunk;
     };
 
     // ===== GLADIA 연결 =====
@@ -146,7 +396,7 @@ wss.on('connection', (clientWs) => {
                     clientWs.send(raw);
 
                     // Gladia-STT (번역 미사용) 모드에서 GPT 번역 적용
-                    if (!enableTranslation && selectedLanguages.length > 0) {
+                    if (!enableTranslation && translationEnabled && selectedLanguages.length > 0) {
                         try {
                             const msg = JSON.parse(raw);
                             if (msg.type === 'transcript' && msg.data?.is_final && msg.data?.utterance?.text) {
@@ -412,6 +662,289 @@ wss.on('connection', (clientWs) => {
         }
     };
 
+    // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
+    const startOpenAIRealtimeConnection = async (config: ClientConfig) => {
+        if (!process.env.OPENAI_API_KEY) {
+            console.error('OPENAI_API_KEY environment variable not set!');
+            clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
+            return;
+        }
+
+        try {
+            const partialTranscripts = new Map<string, string>();
+            const pendingCommitKinds: Array<'partial' | 'final'> = [];
+            const itemCommitKinds = new Map<string, 'partial' | 'final'>();
+            const preRollChunks: Array<{ audio: string; durationMs: number }> = [];
+            const uniqueLanguages = [...new Set(config.languages.filter(Boolean))];
+            const hintedLanguage = config.lang_hints_strict && uniqueLanguages.length === 1
+                ? uniqueLanguages[0]
+                : undefined;
+            let aggregateTranscript = '';
+            let activeUtterance = false;
+            let bufferedAudioMs = 0;
+            let lastSpeechAt = 0;
+            let lastPartialCommitAt = 0;
+            const transcriptionSession = await openai.beta.realtime.transcriptionSessions.create({
+                input_audio_format: 'pcm16',
+                input_audio_noise_reduction: {
+                    type: 'near_field',
+                },
+                input_audio_transcription: {
+                    model: OPENAI_REALTIME_MODEL,
+                    ...(hintedLanguage ? { language: hintedLanguage } : {}),
+                },
+                turn_detection: null as never,
+                include: ['item.input_audio_transcription.logprobs'],
+            });
+
+            if (!isClientConnected) {
+                return;
+            }
+
+            const sendOpenAITranscript = (text: string, isFinal: boolean) => {
+                const cleaned = text.trim();
+                if (!cleaned || !isClientConnected) return;
+
+                clientWs.send(JSON.stringify({
+                    type: 'transcript',
+                    data: {
+                        is_final: isFinal,
+                        utterance: {
+                            text: cleaned,
+                            language: 'auto',
+                        },
+                    },
+                }));
+            };
+
+            const finalizeAggregateTranscript = () => {
+                const completedText = aggregateTranscript.trim();
+                if (!completedText) return;
+
+                sendOpenAITranscript(completedText, true);
+                if (translationEnabled && selectedLanguages.length > 0) {
+                    translateText(completedText, 'auto', selectedLanguages, clientWs);
+                }
+
+                aggregateTranscript = '';
+                activeUtterance = false;
+                bufferedAudioMs = 0;
+                lastSpeechAt = 0;
+                preRollChunks.length = 0;
+            };
+
+            const commitOpenAIAudioBuffer = (kind: 'partial' | 'final'): boolean => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) {
+                    return false;
+                }
+
+                if (kind === 'partial' && bufferedAudioMs < OPENAI_MIN_COMMIT_AUDIO_MS) {
+                    return false;
+                }
+
+                if (bufferedAudioMs < OPENAI_MIN_SERVER_COMMIT_AUDIO_MS) {
+                    return false;
+                }
+
+                pendingCommitKinds.push(kind);
+                openAIRealtimeWs.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+                bufferedAudioMs = 0;
+                if (kind === 'partial') {
+                    lastPartialCommitAt = Date.now();
+                }
+                return true;
+            };
+
+            const appendOpenAIAudioChunk = (audio: string, durationMs: number) => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                openAIRealtimeWs.send(JSON.stringify({
+                    type: 'input_audio_buffer.append',
+                    audio,
+                }));
+                bufferedAudioMs += durationMs;
+            };
+
+            openAIRealtimeWs = new WebSocket(OPENAI_REALTIME_WS_URL, {
+                headers: {
+                    Authorization: `Bearer ${transcriptionSession.client_secret.value}`,
+                    'OpenAI-Beta': 'realtime=v1',
+                },
+            });
+
+            openAIRealtimeWs.onmessage = (event) => {
+                if (!isClientConnected) return;
+
+                try {
+                    const msg = JSON.parse(event.data.toString()) as Record<string, unknown>;
+                    const messageType = typeof msg.type === 'string' ? msg.type : '';
+
+                    if (
+                        messageType === 'transcription_session.created'
+                        || messageType === 'transcription_session.updated'
+                    ) {
+                        clientWs.send(JSON.stringify({ status: 'ready' }));
+                        return;
+                    }
+
+                    if (messageType === 'input_audio_buffer.committed') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const kind = pendingCommitKinds.shift() ?? 'partial';
+                        if (itemId) {
+                            itemCommitKinds.set(itemId, kind);
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.delta') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const delta = typeof msg.delta === 'string' ? msg.delta : '';
+                        if (!itemId || !delta) return;
+
+                        const nextTranscript = `${partialTranscripts.get(itemId) || ''}${delta}`;
+                        partialTranscripts.set(itemId, nextTranscript);
+
+                        sendOpenAITranscript(joinTranscriptParts(aggregateTranscript, nextTranscript), false);
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.completed') {
+                        const itemId = typeof msg.item_id === 'string' ? msg.item_id : '';
+                        const transcript = typeof msg.transcript === 'string' ? msg.transcript.trim() : '';
+                        const commitKind = itemCommitKinds.get(itemId) ?? 'partial';
+                        if (itemId) {
+                            partialTranscripts.delete(itemId);
+                            itemCommitKinds.delete(itemId);
+                        }
+                        if (!transcript) {
+                            if (commitKind === 'final' && pendingCommitKinds.length === 0 && partialTranscripts.size === 0) {
+                                finalizeAggregateTranscript();
+                            }
+                            return;
+                        }
+
+                        aggregateTranscript = joinTranscriptParts(aggregateTranscript, transcript);
+                        if (commitKind === 'final') {
+                            finalizeAggregateTranscript();
+                        } else {
+                            sendOpenAITranscript(aggregateTranscript, false);
+                            if (
+                                activeUtterance
+                                && bufferedAudioMs === 0
+                                && partialTranscripts.size === 0
+                                && pendingCommitKinds.length === 0
+                                && lastSpeechAt > 0
+                                && Date.now() - lastSpeechAt >= OPENAI_FINAL_SILENCE_MS
+                            ) {
+                                finalizeAggregateTranscript();
+                            }
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'conversation.item.input_audio_transcription.failed') {
+                        console.error('OpenAI transcription failed:', msg.error);
+                        return;
+                    }
+
+                    if (messageType === 'error') {
+                        console.error('OpenAI Realtime error:', msg.error);
+                        if (isClientConnected) {
+                            clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                        }
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing OpenAI Realtime message:', parseError);
+                }
+            };
+
+            openAIRealtimeWs.onerror = (error) => {
+                console.error('OpenAI Realtime WebSocket error:', error);
+                if (isClientConnected) {
+                    clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+                }
+            };
+
+            openAIRealtimeWs.onclose = () => {
+                openAIRealtimeWs = null;
+                pendingCommitKinds.length = 0;
+                itemCommitKinds.clear();
+                partialTranscripts.clear();
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+
+            const handleOpenAIAudioChunk = (pcmData: Buffer) => {
+                if (openAIRealtimeWs?.readyState !== WebSocket.OPEN) return;
+
+                const normalizedRms = calculatePcm16NormalizedRms(pcmData);
+                const isSpeechChunk = normalizedRms >= OPENAI_VOICE_RMS_THRESHOLD;
+                const resampledAudio = encodePcm16ForOpenAI(pcmData, currentSampleRate);
+                const durationMs = Math.round(
+                    (pcmData.byteLength / Int16Array.BYTES_PER_ELEMENT / currentSampleRate) * 1000,
+                );
+                const now = Date.now();
+
+                if (!activeUtterance) {
+                    preRollChunks.push({ audio: resampledAudio, durationMs });
+                    let preRollTotalMs = preRollChunks.reduce((sum, chunk) => sum + chunk.durationMs, 0);
+                    while (preRollTotalMs > OPENAI_PREROLL_MAX_MS && preRollChunks.length > 1) {
+                        const removed = preRollChunks.shift();
+                        preRollTotalMs -= removed?.durationMs ?? 0;
+                    }
+
+                    if (!isSpeechChunk) {
+                        return;
+                    }
+
+                    activeUtterance = true;
+                    lastSpeechAt = now;
+                    for (const chunk of preRollChunks) {
+                        appendOpenAIAudioChunk(chunk.audio, chunk.durationMs);
+                    }
+                    preRollChunks.length = 0;
+                } else {
+                    appendOpenAIAudioChunk(resampledAudio, durationMs);
+                    if (isSpeechChunk) {
+                        lastSpeechAt = now;
+                    }
+                }
+
+                if (
+                    isSpeechChunk
+                    && bufferedAudioMs >= OPENAI_MIN_COMMIT_AUDIO_MS
+                    && now - lastPartialCommitAt >= OPENAI_PARTIAL_COMMIT_INTERVAL_MS
+                ) {
+                    commitOpenAIAudioBuffer('partial');
+                    return;
+                }
+
+                if (
+                    activeUtterance
+                    && !isSpeechChunk
+                    && lastSpeechAt > 0
+                    && now - lastSpeechAt >= OPENAI_FINAL_SILENCE_MS
+                ) {
+                    if (bufferedAudioMs > 0) {
+                        commitOpenAIAudioBuffer('final');
+                    } else if (partialTranscripts.size === 0 && pendingCommitKinds.length === 0) {
+                        finalizeAggregateTranscript();
+                    }
+                }
+            };
+
+            (clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void }).__handleOpenAIAudioChunk = handleOpenAIAudioChunk;
+        } catch (error) {
+            console.error('Error starting OpenAI Realtime connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to OpenAI Realtime transcription service.');
+            }
+        }
+    };
+
     // ===== FIREWORKS 연결 =====
     const startFireworksConnection = async (config: ClientConfig) => {
         if (!fireworksApiKey) {
@@ -500,6 +1033,269 @@ wss.on('connection', (clientWs) => {
             console.error('Error starting Fireworks connection:', error);
             if (isClientConnected) {
                 clientWs.close(1011, 'Failed to connect to Fireworks service.');
+            }
+        }
+    };
+
+    // ===== CHIRP 3 연결 =====
+    const startChirp3Connection = async (_config: ClientConfig) => {
+        void _config;
+        console.error(
+            '[model-test] chirp-3 is not wired yet. Chirp 3 requires Google Cloud Speech-to-Text V2 authentication (ADC/service account), not GEMINI_API_KEY.',
+        );
+        console.error(
+            '[model-test] Set GOOGLE_APPLICATION_CREDENTIALS and Google Cloud project credentials before enabling this model.',
+        );
+
+        if (!googleCloudProjectId) {
+            console.error('[model-test] GOOGLE_CLOUD_PROJECT_ID or GCP_PROJECT_ID is missing.');
+        }
+
+        clientWs.close(
+            1011,
+            'Chirp 3 is not yet connected. Google Cloud Speech-to-Text V2 auth is required.',
+        );
+    };
+
+    // ===== ELEVENLABS 연결 =====
+    const startElevenLabsConnection = async (config: ClientConfig) => {
+        if (!elevenLabsApiKey) {
+            console.error("ELEVENLABS_API_KEY environment variable not set!");
+            clientWs.close(1011, "Server configuration error: ElevenLabs API key not found.");
+            return;
+        }
+
+        try {
+            const audioFormat = resolveElevenLabsAudioFormat(config.sample_rate);
+            let detectedLanguage = 'unknown';
+            let lastCommittedText = '';
+            let readySent = false;
+
+            const wsUrl = new URL(ELEVENLABS_WS_URL);
+            wsUrl.searchParams.set('model_id', 'scribe_v2_realtime');
+            wsUrl.searchParams.set('include_timestamps', 'true');
+            wsUrl.searchParams.set('include_language_detection', 'true');
+            wsUrl.searchParams.set('commit_strategy', 'vad');
+            wsUrl.searchParams.set('vad_silence_threshold_secs', '0.6');
+            if (audioFormat) {
+                wsUrl.searchParams.set('audio_format', audioFormat);
+            }
+
+            sttWs = new WebSocket(wsUrl.toString(), {
+                headers: {
+                    'xi-api-key': elevenLabsApiKey,
+                },
+            });
+
+            sttWs.onopen = () => {
+                if (!audioFormat) {
+                    console.warn(
+                        `[ElevenLabs] unsupported sample rate ${config.sample_rate}; sending chunk sample_rate only`,
+                    );
+                }
+            };
+
+            sttWs.onmessage = (event) => {
+                if (!isClientConnected) return;
+
+                try {
+                    const raw = event.data.toString();
+                    console.log(`[ElevenLabs] inbound ${raw}`);
+                    const msg = JSON.parse(raw) as Record<string, unknown>;
+                    const messageType = typeof msg.message_type === 'string' ? msg.message_type : '';
+                    const messageLanguageCode = typeof msg.language_code === 'string'
+                        ? msg.language_code.trim()
+                        : '';
+
+                    if (messageType === 'session_started') {
+                        if (!readySent) {
+                            readySent = true;
+                            clientWs.send(JSON.stringify({ status: 'ready' }));
+                        }
+                        return;
+                    }
+
+                    if (messageType === 'partial_transcript') {
+                        const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+                        if (!text) return;
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: false,
+                                utterance: {
+                                    text,
+                                    language: detectedLanguage,
+                                },
+                            },
+                        }));
+                        return;
+                    }
+
+                    if (messageType === 'committed_transcript') {
+                        // When timestamps are enabled, ElevenLabs also sends
+                        // committed_transcript_with_timestamps with language_code.
+                        // Ignore the plain committed event so we do not lock in
+                        // an "unknown" language before the richer event arrives.
+                        return;
+                    }
+
+                    if (messageType === 'committed_transcript_with_timestamps') {
+                        const text = typeof msg.text === 'string' ? msg.text.trim() : '';
+                        if (!text) return;
+                        if (text === lastCommittedText) return;
+                        lastCommittedText = text;
+
+                        if (messageLanguageCode) {
+                            detectedLanguage = messageLanguageCode;
+                        }
+
+                        clientWs.send(JSON.stringify({
+                            type: 'transcript',
+                            data: {
+                                is_final: true,
+                                utterance: {
+                                    text,
+                                    language: detectedLanguage,
+                                },
+                            },
+                        }));
+
+                        if (translationEnabled && selectedLanguages.length > 0) {
+                            translateText(text, detectedLanguage, selectedLanguages, clientWs);
+                        }
+                        return;
+                    }
+
+                    if (messageType.includes('error')) {
+                        const errorMessage = typeof msg.error === 'string'
+                            ? msg.error
+                            : typeof msg.detail === 'string'
+                                ? msg.detail
+                                : messageType;
+                        console.error(`[ElevenLabs] ${messageType}: ${errorMessage}`);
+                        clientWs.close(1011, `ElevenLabs error: ${errorMessage}`);
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing ElevenLabs message:', parseError);
+                }
+            };
+
+            sttWs.onerror = (error) => {
+                console.error('ElevenLabs WebSocket error:', error);
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+
+            sttWs.onclose = () => {
+                if (isClientConnected) {
+                    clientWs.close();
+                }
+            };
+        } catch (error) {
+            console.error('Error starting ElevenLabs connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to ElevenLabs transcription service.');
+            }
+        }
+    };
+
+    // ===== SPEECHMATICS 연결 =====
+    const startSpeechmaticsConnection = async (config: ClientConfig) => {
+        if (!speechmaticsApiKey) {
+            console.error("SPEECHMATICS_API_KEY environment variable not set!");
+            clientWs.close(1011, "Server configuration error: Speechmatics API key not found.");
+            return;
+        }
+
+        const sessionConfig = resolveSpeechmaticsSessionConfig(config.languages);
+        if (sessionConfig.note) {
+            console.log(`[Speechmatics] ${sessionConfig.note}`);
+        }
+
+        try {
+            const jwt = await createSpeechmaticsJWT({
+                type: 'rt',
+                apiKey: speechmaticsApiKey,
+                ttl: SPEECHMATICS_JWT_TTL_SEC,
+                ...(speechmaticsRegion ? { region: speechmaticsRegion } : {}),
+            });
+
+            if (!isClientConnected) return;
+
+            const realtimeClient = new RealtimeClient(
+                speechmaticsRtUrl ? { url: speechmaticsRtUrl } : undefined,
+            );
+            speechmaticsClient = realtimeClient;
+
+            realtimeClient.addEventListener('receiveMessage', ({ data }) => {
+                if (!isClientConnected) return;
+
+                if (data.message === 'AddPartialTranscript' || data.message === 'AddTranscript') {
+                    const text = data.metadata?.transcript?.trim();
+                    if (!text) return;
+
+                    const detectedLanguage = getSpeechmaticsTranscriptLanguage(
+                        data,
+                        sessionConfig.fallbackLanguage,
+                    );
+
+                    clientWs.send(JSON.stringify({
+                        type: 'transcript',
+                        data: {
+                            is_final: data.message === 'AddTranscript',
+                            utterance: {
+                                text,
+                                language: detectedLanguage,
+                            },
+                        },
+                    }));
+
+                    if (data.message === 'AddTranscript' && selectedLanguages.length > 0) {
+                        translateText(text, detectedLanguage, selectedLanguages, clientWs);
+                    }
+                    return;
+                }
+
+                if (data.message === 'Warning') {
+                    console.warn(`[Speechmatics] Warning (${data.type}): ${data.reason}`);
+                    return;
+                }
+
+                if (data.message === 'Error') {
+                    console.error(`[Speechmatics] Error (${data.type}): ${data.reason}`);
+                    clientWs.close(1011, `Speechmatics error: ${data.type}`);
+                }
+            });
+
+            await realtimeClient.start(jwt, {
+                audio_format: {
+                    type: 'raw',
+                    encoding: 'pcm_s16le',
+                    sample_rate: config.sample_rate,
+                },
+                transcription_config: {
+                    language: sessionConfig.language,
+                    ...(sessionConfig.domain ? { domain: sessionConfig.domain } : {}),
+                    enable_partials: true,
+                    max_delay: 0.7,
+                    operating_point: 'enhanced',
+                    conversation_config: {
+                        end_of_utterance_silence_trigger: 0.4,
+                    },
+                },
+            });
+
+            if (isClientConnected) {
+                clientWs.send(JSON.stringify({ status: 'ready' }));
+            } else {
+                void realtimeClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
+            }
+        } catch (error) {
+            console.error('Error starting Speechmatics connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to connect to Speechmatics transcription service.');
             }
         }
     };
@@ -698,6 +1494,7 @@ wss.on('connection', (clientWs) => {
     };
 
     const translateText = async (text: string, sourceLang: string, targetLangs: string[], ws: WebSocket, isPartial = false) => {
+        if (!translationEnabled) return;
         const langs = targetLangs.filter(l => l !== sourceLang);
         if (langs.length === 0 || !text.trim()) return;
 
@@ -770,25 +1567,63 @@ wss.on('connection', (clientWs) => {
 
         if (data.sample_rate && data.languages) {
             currentModel = data.stt_model || 'gladia';
-            selectedLanguages = data.languages;
+            currentSampleRate = data.sample_rate;
             translateModel = data.translate_model || 'claude-haiku-4-5';
+            translationEnabled = data.translation_enabled !== false;
+            selectedLanguages = translationEnabled ? data.languages : [];
+
+            console.log(
+                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
+            );
             
             if (currentModel === 'deepgram') {
                 startDeepgramConnection(data as ClientConfig);
             } else if (currentModel === 'deepgram-multi') {
                 startDeepgramMultiConnection(data as ClientConfig);
+            } else if (currentModel === 'gpt-4o-mini-transcribe') {
+                startOpenAIRealtimeConnection(data as ClientConfig);
             } else if (currentModel === 'fireworks') {
                 startFireworksConnection(data as ClientConfig);
+            } else if (currentModel === 'chirp-3') {
+                startChirp3Connection(data as ClientConfig);
+            } else if (currentModel === 'elevenlabs') {
+                startElevenLabsConnection(data as ClientConfig);
+            } else if (currentModel === 'speechmatics') {
+                startSpeechmaticsConnection(data as ClientConfig);
             } else if (currentModel === 'soniox') {
                 startSonioxConnection(data as ClientConfig);
             } else if (currentModel === 'gladia-stt') {
                 startGladiaConnection(data as ClientConfig, false);
             } else {
-                startGladiaConnection(data as ClientConfig, true);
+                startGladiaConnection(data as ClientConfig, translationEnabled);
+            }
+        } else if (currentModel === 'speechmatics' && speechmaticsClient?.socketState === 'open') {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                speechmaticsClient.sendAudio(pcmData);
+            }
+        } else if (currentModel === 'elevenlabs' && sttWs?.readyState === WebSocket.OPEN) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                sttWs.send(JSON.stringify({
+                    message_type: 'input_audio_chunk',
+                    audio_base_64: data.data.chunk,
+                    sample_rate: currentSampleRate,
+                }));
+            }
+        } else if (currentModel === 'gpt-4o-mini-transcribe' && openAIRealtimeWs?.readyState === WebSocket.OPEN) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                const openAIClientWs = clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void };
+                openAIClientWs.__handleOpenAIAudioChunk?.(pcmData);
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
-            if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {
+            if (
+                currentModel === 'deepgram'
+                || currentModel === 'deepgram-multi'
+                || currentModel === 'fireworks'
+                || currentModel === 'soniox'
+            ) {
                 // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
                     const pcmData = Buffer.from(data.data.chunk, 'base64');

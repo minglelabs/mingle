@@ -74,10 +74,12 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
       title?: Record<string, unknown>;
       shortDescription?: Record<string, unknown>;
       fullDescription?: Record<string, unknown>;
+      video?: Record<string, unknown>;
     };
     manualOnly?: {
       privacyPolicyUrl?: unknown;
       termsOfUseUrl?: unknown;
+      foregroundServiceDisclosure?: unknown;
     };
   };
 };
@@ -87,8 +89,8 @@ describe("google-play-console-info contract", () => {
     const release = payload.googlePlay?.release;
 
     expect(isNonEmptyString(release?.defaultTrack)).toBe(true);
-    expect(isNonEmptyString(release?.defaultReleaseStatus)).toBe(true);
-    expect(typeof release?.changesNotSentForReview).toBe("boolean");
+    expect(release?.defaultReleaseStatus).toBe("draft");
+    expect(release?.changesNotSentForReview).toBe(true);
     expect(isNonEmptyString(release?.releaseName)).toBe(true);
     expect(isNonEmptyString(release?.releaseNotes?.["en-US"])).toBe(true);
   });
@@ -162,6 +164,13 @@ describe("google-play-console-info contract", () => {
         `missing fullDescription for Play locale ${uploadLocale} (${copyLocale})`,
       ).toBe(true);
 
+      if (copyLocale === "en") {
+        expect(
+          isNonEmptyString(storeListing?.video?.[copyLocale]),
+          "missing Play listing video for the default locale",
+        ).toBe(true);
+      }
+
       const imageFiles = fs
         .readdirSync(path.join(screenshotRoot, uploadLocale), { withFileTypes: true })
         .filter((entry) => entry.isFile() && !entry.name.startsWith("."))
@@ -179,5 +188,6 @@ describe("google-play-console-info contract", () => {
     const manualOnly = payload.googlePlay?.manualOnly;
     expect(isNonEmptyString(manualOnly?.privacyPolicyUrl)).toBe(true);
     expect(isNonEmptyString(manualOnly?.termsOfUseUrl)).toBe(true);
+    expect(isNonEmptyString(manualOnly?.foregroundServiceDisclosure)).toBe(true);
   });
 });

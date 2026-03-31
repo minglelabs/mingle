@@ -1,0 +1,92 @@
+import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
+
+export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
+export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
+export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
+export const DEFAULT_TEXT_SIZE_LEVEL = 2
+export const DEFAULT_SONIOX_SILENCE_MS = 500
+export const MIN_SONIOX_SILENCE_MS = 500
+export const MAX_SONIOX_SILENCE_MS = 3000
+export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
+
+export interface LivePhoneDemoPersistedPreferences {
+  selectedLanguages: string[]
+  textSizeLevel: number
+  adBannerPosition: LivePhoneDemoAdBannerPosition | null
+}
+
+export function readPersistedIntegerPreference(
+  rawValue: string | null,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (rawValue === null) return fallback
+
+  const trimmed = rawValue.trim()
+  if (trimmed === '') return fallback
+
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback
+
+  return Math.max(min, Math.min(max, Math.floor(parsed)))
+}
+
+function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[]): string[] {
+  if (!Array.isArray(rawValue)) return [...fallbackLanguages]
+
+  const deduped: string[] = []
+  for (const item of rawValue) {
+    if (typeof item !== 'string') continue
+    const normalized = canonicalizeSttLanguageCode(item)
+    if (!normalized || deduped.includes(normalized)) continue
+    deduped.push(normalized)
+    if (deduped.length >= 5) break
+  }
+
+  return deduped.length > 0 ? deduped : [...fallbackLanguages]
+}
+
+export function normalizeLivePhoneDemoAdBannerPosition(value: unknown): LivePhoneDemoAdBannerPosition | null {
+  if (typeof value !== 'string') return null
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'top' || normalized === 'bottom'
+    ? normalized
+    : null
+}
+
+export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[]): LivePhoneDemoPersistedPreferences {
+  const next: LivePhoneDemoPersistedPreferences = {
+    selectedLanguages: [...fallbackLanguages],
+    textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+    adBannerPosition: null,
+  }
+
+  const storage = typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage
+  if (!storage) return next
+
+  try {
+    const storedLanguages = storage.getItem(LS_KEY_LANGUAGES)
+    if (storedLanguages) {
+      next.selectedLanguages = sanitizeSelectedLanguages(JSON.parse(storedLanguages), fallbackLanguages)
+    }
+  } catch {
+    next.selectedLanguages = [...fallbackLanguages]
+  }
+
+  try {
+    next.textSizeLevel = readPersistedIntegerPreference(
+      storage.getItem(LS_KEY_TEXT_SIZE_LEVEL),
+      DEFAULT_TEXT_SIZE_LEVEL,
+      1,
+      5,
+    )
+  } catch { /* ignore */ }
+
+  try {
+    next.adBannerPosition = normalizeLivePhoneDemoAdBannerPosition(storage.getItem(LS_KEY_AD_BANNER_POSITION))
+  } catch { /* ignore */ }
+
+  return next
+}

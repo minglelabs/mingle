@@ -62,6 +62,12 @@ export type BaseAppDictionary = {
     connectionFailed: string;
     muteTts: string;
     unmuteTts: string;
+    textSizeLabel?: string;
+    silenceFinalizeLabel?: string;
+    translationModelLabel?: string;
+    adBannerPositionLabel?: string;
+    adBannerPositionTopLabel?: string;
+    adBannerPositionBottomLabel?: string;
   };
   tabs: {
     chats: string;

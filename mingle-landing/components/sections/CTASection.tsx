@@ -2,14 +2,13 @@
 
 import { motion } from 'framer-motion'
 import { useTranslation } from 'react-i18next'
-import { Download } from 'lucide-react'
 import { fadeInUp } from '@/components/sections/shared'
+import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'
 
 export interface CTASectionProps {
-  openModal: (buttonType: string) => void
 }
 
-export default function CTASection({ openModal }: CTASectionProps) {
+export default function CTASection({}: CTASectionProps) {
   const { t } = useTranslation()
 
   return (
@@ -30,13 +29,7 @@ export default function CTASection({ openModal }: CTASectionProps) {
           <p className="text-lg text-text-secondary mb-12">
             {t('cta.subtitle')}
           </p>
-          <button
-            onClick={() => openModal('cta')}
-            className="px-10 py-5 bg-gradient-to-r from-accent-primary to-accent-secondary rounded-xl font-semibold text-lg text-white flex items-center gap-3 mx-auto hover:-translate-y-1 hover:shadow-2xl hover:shadow-accent-primary/40 transition-all"
-          >
-            <Download size={24} />
-            {t('cta.button')}
-          </button>
+          <StoreDownloadButtons className="justify-center" size="md" label={t('cta.button')} />
         </motion.div>
       </div>
     </section>

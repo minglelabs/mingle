@@ -9,6 +9,9 @@ export const itDictionary: BaseAppDictionary = {
     connectionFailed: "Connessione non riuscita. Nuovo tentativo...",
     muteTts: "Disattiva TTS",
     unmuteTts: "Attiva TTS",
+    textSizeLabel: "Dimensione testo",
+    silenceFinalizeLabel: "Durata di silenzio per separare il parlato",
+    translationModelLabel: "Modello di traduzione",
   },
   tabs: {
     chats: "Chat",

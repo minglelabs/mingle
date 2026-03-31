@@ -10,7 +10,6 @@ export const SPEAKER_AVATARS: SpeakerAvatar[] = [
   { name: 'Jellyfish', src: '/avatars/animals/jellyfish.svg' },
   { name: 'Penguin', src: '/avatars/animals/penguin.svg' },
   { name: 'Cow', src: '/avatars/animals/the-cow.svg' },
-  { name: 'Turtle', src: '/avatars/animals/turtle.svg' },
   { name: 'Bear', src: '/avatars/animals/bear.svg' },
   { name: 'Shrimp', src: '/avatars/animals/shrimp.svg' },
   { name: 'Rabbit', src: '/avatars/animals/rabbit.svg' },

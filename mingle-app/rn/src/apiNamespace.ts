@@ -1,6 +1,6 @@
 export const EXPECTED_API_NAMESPACE_BY_OS = {
-  android: 'android/v1.0.2',
-  ios: 'ios/v1.0.2',
+  android: 'android/v1.0.7',
+  ios: 'ios/v1.0.7',
 } as const
 
 export function normalizeApiNamespace(raw: string): string {

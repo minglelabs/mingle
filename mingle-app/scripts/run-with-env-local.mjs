@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return;
@@ -34,7 +34,56 @@ function loadEnvFile(filePath) {
   }
 }
 
-loadEnvFile(resolve(process.cwd(), '.env.local'));
+function findClosestFile(startDir, fileName) {
+  let currentDir = resolve(startDir);
+
+  while (true) {
+    const candidate = resolve(currentDir, fileName);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      return null;
+    }
+    currentDir = parentDir;
+  }
+}
+
+function ensurePrismaAppSchemaUrl(rawValue) {
+  if (typeof rawValue !== 'string') return rawValue;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return rawValue;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (!parsed.searchParams.has('schema')) {
+      parsed.searchParams.set('schema', 'app');
+    }
+    return parsed.toString();
+  } catch {
+    return rawValue;
+  }
+}
+
+const cwd = process.cwd();
+const devboxEnvPath = findClosestFile(cwd, '.devbox.env');
+const localEnvPath = findClosestFile(cwd, '.env.local');
+
+if (devboxEnvPath) {
+  loadEnvFile(devboxEnvPath);
+}
+if (localEnvPath) {
+  loadEnvFile(localEnvPath);
+}
+
+if (process.env.DATABASE_URL !== undefined) {
+  process.env.DATABASE_URL = ensurePrismaAppSchemaUrl(process.env.DATABASE_URL);
+}
+if (process.env.DIRECT_DATABASE_URL !== undefined) {
+  process.env.DIRECT_DATABASE_URL = ensurePrismaAppSchemaUrl(process.env.DIRECT_DATABASE_URL);
+}
 
 const [command, ...args] = process.argv.slice(2);
 

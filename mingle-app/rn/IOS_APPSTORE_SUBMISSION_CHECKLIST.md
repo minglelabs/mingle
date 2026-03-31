@@ -12,7 +12,7 @@ Date: 2026-03-21
 ## 2. Must-do before upload
 
 - [ ] Decide release version/build number:
-  - current release target: `MARKETING_VERSION` (`1.0.2`) and `CURRENT_PROJECT_VERSION` (`17`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
+  - current release target: `MARKETING_VERSION` (`1.0.4`) and `CURRENT_PROJECT_VERSION` (`21`) in `mingle-app/rn/ios/mingle.xcodeproj/project.pbxproj`
 - [ ] Create App Store Connect app entry for bundle ID `com.minglelabs.mingle.rn` (if first upload)
 - [ ] Prepare signing for App Store distribution (team: `3RFBMN8TKZ`)
 - [ ] Archive + validate + upload from devbox/Xcode:
@@ -23,10 +23,10 @@ Date: 2026-03-21
 - [ ] Upload metadata:
   - app description, keywords, support/privacy URLs
   - suggested legal URLs (prod):
-    - `https://app.minglelabs.xyz/legal/privacy-policy.html`
-    - `https://app.minglelabs.xyz/legal/terms-of-use.html`
+    - `https://translator.minglelabs.xyz/legal/privacy-policy.html`
+    - `https://translator.minglelabs.xyz/legal/terms-of-use.html`
   - locale-specific legal docs (15 locales):
-    - `https://app.minglelabs.xyz/legal/` (language index)
+    - `https://translator.minglelabs.xyz/legal/` (language index)
   - age rating, categories
   - screenshots (required device sets)
     - auto-generate command:

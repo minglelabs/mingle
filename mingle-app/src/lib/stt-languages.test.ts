@@ -6,6 +6,7 @@ import {
   STT_LANGUAGE_NAME_MAP,
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
+  deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
 
@@ -23,6 +24,16 @@ describe('STT language catalog', () => {
 
   it('preserves the default starter languages', () => {
     expect(DEFAULT_STT_LANGUAGES).toEqual(['en', 'ko', 'ja'])
+  })
+
+  it('derives locale-aware starter languages with English-first priority', () => {
+    expect(deriveDefaultSttLanguagesForLocale('ja-JP')).toEqual(['en', 'ko', 'ja'])
+    expect(deriveDefaultSttLanguagesForLocale('ko-KR')).toEqual(['en', 'ko', 'ja'])
+    expect(deriveDefaultSttLanguagesForLocale('en-US')).toEqual(['en', 'ko', 'ja'])
+    expect(deriveDefaultSttLanguagesForLocale('zh-TW')).toEqual(['en', 'zh', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('fr-FR')).toEqual(['en', 'fr', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('eo-EO')).toEqual(['en', 'ko', 'ja'])
+    expect(deriveDefaultSttLanguagesForLocale('')).toEqual(['en', 'ko', 'ja'])
   })
 
   it('exposes stable names and canonicalization for STT hints', () => {

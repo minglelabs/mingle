@@ -27,7 +27,16 @@ model User {
   screenHeight    Int?      @map("screen_height")
   timezone        String?
   platform        String?
+  latestClientPlatform String? @map("latest_client_platform")
+  latestAppVersion String? @map("latest_app_version")
+  latestApiNamespace String? @map("latest_api_namespace")
+  appVersionHistory String[] @default([]) @map("app_version_history")
+  apiNamespaceHistory String[] @default([]) @map("api_namespace_history")
   pathname        String?
+  demoTextSizeLevel Int?   @map("demo_text_size_level")
+  demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
+  translationModel  String?  @map("translation_model")
+  adBannerPosition  String?  @map("ad_banner_position")
   totalUsageSec   Int       @default(0) @map("total_usage_sec")
   firstSeenAt     DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt      DateTime  @default(now()) @map("last_seen_at")
@@ -60,11 +69,10 @@ model AppMessage {
   translationPromptTokens     Int?     @map("translation_prompt_tokens")
   translationCompletionTokens Int?     @map("translation_completion_tokens")
   translationTotalTokens      Int?     @map("translation_total_tokens")
-  ttsInputTokens              Int?     @map("tts_input_tokens")
-  ttsOutputTokens             Int?     @map("tts_output_tokens")
-  ttsTotalTokens              Int?     @map("tts_total_tokens")
   sttDurationMs               Int?     @map("stt_duration_ms")
   totalDurationMs             Int?     @map("total_duration_ms")
+  translationProvider         String?  @map("translation_provider")
+  translationModel            String?  @map("translation_model")
   metadata                    Json?
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")

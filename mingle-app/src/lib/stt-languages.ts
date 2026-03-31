@@ -12,6 +12,7 @@ export type SttLanguageOption = {
 }
 
 export const DEFAULT_STT_LANGUAGES = ['en', 'ko', 'ja'] as const satisfies readonly SttLanguageCode[]
+const DEFAULT_STT_LANGUAGE_SET = new Set<SttLanguageCode>(DEFAULT_STT_LANGUAGES)
 
 const STT_LANGUAGE_FLAG_MAP: Record<SttLanguageCode, string> = {
   af: '🇿🇦',
@@ -89,6 +90,26 @@ export const STT_LANGUAGE_NAME_MAP: Record<SttLanguageCode, string> = Object.fro
 
 export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode | '' {
   return canonicalizeTranslationLanguageCode(rawValue)
+}
+
+export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | undefined): SttLanguageCode[] {
+  const localeLanguage = typeof rawLocale === 'string'
+    ? canonicalizeSttLanguageCode(rawLocale)
+    : ''
+
+  if (!localeLanguage || DEFAULT_STT_LANGUAGE_SET.has(localeLanguage)) {
+    return [...DEFAULT_STT_LANGUAGES]
+  }
+
+  const prioritized: SttLanguageCode[] = ['en', localeLanguage, 'ko', 'ja']
+  const deduped: SttLanguageCode[] = []
+  for (const language of prioritized) {
+    if (deduped.includes(language)) continue
+    deduped.push(language)
+    if (deduped.length >= DEFAULT_STT_LANGUAGES.length) break
+  }
+
+  return deduped
 }
 
 export function getSttLanguageFlag(rawValue: string): string {

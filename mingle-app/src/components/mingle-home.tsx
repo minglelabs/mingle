@@ -1,19 +1,13 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-
-const LivePhoneDemo = dynamic(
-  () => import("@/components/LivePhoneDemo/LivePhoneDemo"),
-  {
-    ssr: false,
-  },
-);
+import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
+import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -23,7 +17,7 @@ type MingleHomeProps = {
 };
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
-const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24시간 — OAuth는 사용자가 얼마든지 시간을 쓸 수 있어야 함
+const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
 type NativeAuthProvider = "apple" | "google";
 type NativeAuthStartCommand = {
   type: "native_auth_start";
@@ -123,9 +117,9 @@ function postNativeAuthAck(detail: NativeAuthBridgeEvent): void {
   }
 }
 
-// polling 경로에서 provider/outcome만으로 RN에 ACK를 전송하는 헬퍼.
-// polling 성공 시 postNativeAuthAck를 호출하지 않으면 RN의 pendingAuthEventRef가
-// 유지되어 scheduleAuthDispatchRetry가 재로그인 타이밍에 stale 이벤트를 쏘는 버그 발생.
+// Helper for the polling path where only provider/outcome is available for the RN ACK.
+// Without this ACK after a polling success, RN keeps pendingAuthEventRef alive and
+// scheduleAuthDispatchRetry can replay a stale auth event on the next login attempt.
 function postNativeAuthAckForPolling(
   provider: NativeAuthProvider,
   outcome: "success" | "error",
@@ -199,6 +193,10 @@ function GoogleMark() {
 
 export default function MingleHome(props: MingleHomeProps) {
   const { status } = useSession();
+  const silenceSliderUpgradeCopy = useMemo(
+    () => getSilenceSliderUpgradeCopy(props.locale),
+    [props.locale],
+  );
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
@@ -331,7 +329,7 @@ export default function MingleHome(props: MingleHomeProps) {
       pendingNativeProviderRef.current = null;
 
       if (payload.status === "error") {
-        // polling 경로 에러: RN에 ACK 전송하여 pendingAuthEventRef 클리어.
+        // Polling-path error: ACK RN so pendingAuthEventRef is cleared.
         postNativeAuthAckForPolling(provider, "error");
         setIsSigningIn(false);
         setSigningInProvider(null);
@@ -354,13 +352,13 @@ export default function MingleHome(props: MingleHomeProps) {
         return;
       }
       if (bridgeToken === lastHandledBridgeTokenRef.current) {
-        // 이미 bridge 경로에서 처리된 토큰 — 중복 signIn 방지.
-        // ACK는 반드시 전송해야 RN의 pendingAuthEventRef가 클리어됨.
+        // Token already handled through the bridge path; avoid duplicate signIn.
+        // The ACK is still required so RN clears pendingAuthEventRef.
         postNativeAuthAckForPolling(provider, "success", bridgeToken);
         return;
       }
       lastHandledBridgeTokenRef.current = bridgeToken;
-      // polling 경로 성공: RN에 ACK 전송.
+      // Polling-path success: notify RN with an ACK.
       postNativeAuthAckForPolling(provider, "success", bridgeToken);
 
       const nextCallbackUrl = (payload.callbackUrl || "").trim() || callbackUrl;
@@ -413,11 +411,10 @@ export default function MingleHome(props: MingleHomeProps) {
 
   useEffect(() => {
     if (status !== "loading") {
-      // 인증 완료 시(authenticated) 또는 로그아웃 시(unauthenticated) 공통 리셋.
-      // 단, native auth flow가 진행 중(pendingNativeProviderRef != null)일 때는
-      // pendingNativeProviderRef/RequestId 를 리셋하지 않는다.
-      // 리셋하면 ASWebAuthSession 결과가 도착할 때 L414 가드가 이벤트를 무시하게 돼
-      // signIn이 호출되지 않고 로그인 화면에서 멈추는 문제가 발생함.
+      // Shared reset for both completed auth (authenticated) and logout (unauthenticated).
+      // Do not clear pendingNativeProviderRef/requestId while a native auth flow is active.
+      // Clearing them too early can cause the ASWebAuthSession callback to be ignored,
+      // which prevents signIn from running and leaves the UI stuck on the login screen.
       const hasActiveFlow = pendingNativeProviderRef.current !== null;
 
       clearNativeAuthTimeout();
@@ -445,15 +442,14 @@ export default function MingleHome(props: MingleHomeProps) {
       setForgotPasswordEmail("");
 
       if (!hasActiveFlow) {
-        // 진행 중인 flow 없을 때만 ref 리셋 (flow 중에는 event handler가 완료 후 리셋)
+        // Reset refs only when no flow is active. Active flows reset them after completion.
         pendingNativeRequestIdRef.current = null;
         pendingNativeProviderRef.current = null;
       }
 
-      // RN 레이어에 auth 상태 리셋 명령 전송.
-      // 로그아웃/세션 만료 시 RN의 pendingAuthEventRef와 retry 타이머를
-      // 클리어해서 이전 세션의 auth 이벤트가 재전송되지 않도록 함.
-      // 단, 현재 진행 중인 flow가 있을 때는 reset 명령을 보내지 않는다.
+      // Tell the RN layer to reset auth state.
+      // On logout/session expiry this clears pendingAuthEventRef and retry timers so
+      // auth events from a previous session are not replayed. Skip this while a flow is active.
       if (!hasActiveFlow && isNativeAuthBridgeEnabled()) {
         try {
           const resetCommand: NativeAuthResetCommand = { type: "native_auth_reset" };
@@ -521,7 +517,7 @@ export default function MingleHome(props: MingleHomeProps) {
         return;
       }
       if (bridgeToken === lastHandledBridgeTokenRef.current) {
-        // 이미 polling 경로에서 처리된 토큰 — ACK만 전송하고 중복 signIn 방지.
+        // Token already handled through polling; only ACK RN and avoid duplicate signIn.
         postNativeAuthAck(detail);
         return;
       }
@@ -651,7 +647,7 @@ export default function MingleHome(props: MingleHomeProps) {
       setEmailAuthErrorCode(null);
       setIsEmailSubmitting(false);
       setSelectedProvider(provider);
-      // 약관은 기본 체크 상태로 진입 (사용자가 직접 해제 가능)
+      // Start with the required agreements checked by default; users can still opt out manually.
       setAgreedPrivacy(true);
       setAgreedTerms(true);
       setAuthPanelStep("terms");
@@ -962,15 +958,15 @@ export default function MingleHome(props: MingleHomeProps) {
     props.locale,
   ]);
 
-  // loading 상태와 unauthenticated 상태를 하나의 레이아웃으로 통합
-  // — 패널은 항상 렌더, 내부 콘텐츠만 전환 (툭 튀어나오는 pop-in 방지)
+  // Keep loading and unauthenticated states within one stable layout.
+  // The panel always stays mounted and only its inner content changes to avoid pop-in.
   if (status === "loading" || status !== "authenticated") {
     const isLoading = status === "loading";
     const disabled = isSigningIn || isLoading;
     const emailSheetDisabled = isEmailSubmitting || isLoading;
 
     return (
-      // ① main bg = 다크 (#1C1C1E) → 가장자리 흰색 제거
+      // 1) Use a full-background gradient so the outer edges never flash white.
       <main
         className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
         style={{ background: "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)" }}
@@ -1012,33 +1008,33 @@ export default function MingleHome(props: MingleHomeProps) {
             to   { transform: translateY(100%); }
           }`}</style>
 
-        {/* 스크린리더 로딩 상태 공지 */}
+        {/* Screen-reader loading status announcement */}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {isLoading || signingInProvider !== null
             ? props.dictionary.profile.loginLoading
             : ""}
         </div>
 
-        {/* 상단 Mingle 텍스트 로고 영역 */}
+        {/* Top Mingle text logo area */}
         <div className="flex flex-1 items-center justify-center">
           <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
             Mingle
           </span>
         </div>
 
-        {/* ③ 하단 다크 패널 — 항상 렌더, 내용만 조건부 */}
+        {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
         <section
           aria-busy={isLoading || disabled}
           className="rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4"
         >
           {isLoading ? (
-            /* 로딩 중 — 스피너만 */
+            /* Loading state: spinner only */
             <div className="flex items-center justify-center gap-3 py-3 text-sm text-white/60">
               <Loader2 size={18} className="animate-spin" aria-hidden />
               <span>{props.dictionary.profile.loginLoading}</span>
             </div>
           ) : (
-            /* 버튼/약관 패널 슬라이드 영역 */
+            /* Sliding area for buttons and legal-agreement content */
             <div
               className="overflow-hidden"
               style={{ animation: "fade-in 0.25s ease both" }}
@@ -1580,6 +1576,14 @@ export default function MingleHome(props: MingleHomeProps) {
           connectionFailedLabel={props.dictionary.demo.connectionFailed}
           muteTtsLabel={props.dictionary.demo.muteTts}
           unmuteTtsLabel={props.dictionary.demo.unmuteTts}
+          textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
+          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+          translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
+          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
+          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
+          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+          silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
+          silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
           menuLabel={props.dictionary.profile.menuLabel}
           logoutLabel={props.dictionary.profile.logout}
           deleteAccountLabel={props.dictionary.profile.deleteAccount}
@@ -1589,6 +1593,8 @@ export default function MingleHome(props: MingleHomeProps) {
           onLogout={handleSignOut}
           onDeleteAccount={handleDeleteAccount}
           isAuthActionPending={isDeletingAccount}
+          showMenuButton
+          showAccountActions={status === "authenticated"}
         />
       </div>
       <BottomTabBar locale={props.locale} dictionary={props.dictionary} />

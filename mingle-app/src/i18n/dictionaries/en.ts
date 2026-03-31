@@ -9,6 +9,12 @@ export const enDictionary: BaseAppDictionary = {
     connectionFailed: "Connection failed. Retrying...",
     muteTts: "Mute TTS",
     unmuteTts: "Unmute TTS",
+    textSizeLabel: "Text Size",
+    silenceFinalizeLabel: "Silence Duration for Speech Split",
+    translationModelLabel: "Translation Model",
+    adBannerPositionLabel: "Ad Position",
+    adBannerPositionTopLabel: "Top",
+    adBannerPositionBottomLabel: "Bottom",
   },
   tabs: {
     chats: "Chats",

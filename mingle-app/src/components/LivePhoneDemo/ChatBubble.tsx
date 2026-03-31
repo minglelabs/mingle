@@ -21,6 +21,8 @@ export interface Utterance {
   speakerAvatarIndex?: number
   originalText: string
   originalLang: string
+  sourceLanguagesMixed?: boolean
+  sourceTextHasForeignScript?: boolean
   targetLanguages?: string[]
   translations: Record<string, string>
   translationFinalized?: Record<string, boolean>
@@ -33,14 +35,27 @@ interface ChatBubbleProps {
   isDraft?: boolean
   isSpeaking?: boolean
   speakingLanguage?: string | null
+  bubbleTextClassName?: string
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
   return (rawLanguage || '').trim().replace('_', '-').toLowerCase().split('-')[0] || ''
 }
 
+function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
+  const normalized = normalizeLanguageCode(rawLanguage)
+  if (!normalized || normalized === 'unknown') {
+    return '❓'
+  }
+  return rawLanguage
+}
+
 function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   const sourceLanguage = normalizeLanguageCode(utterance.originalLang)
+  const keepSourceLanguageBubble = (
+    utterance.sourceLanguagesMixed === true
+    || utterance.sourceTextHasForeignScript === true
+  )
   const targetLanguages: string[] = []
   const seen = new Set<string>()
 
@@ -48,7 +63,7 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
     const language = (rawLanguage || '').trim()
     if (!language) return
     const normalized = normalizeLanguageCode(language)
-    if (sourceLanguage && normalized === sourceLanguage) return
+    if (!keepSourceLanguageBubble && sourceLanguage && normalized === sourceLanguage) return
     const key = normalized || language.toLowerCase()
     if (seen.has(key)) return
     seen.add(key)
@@ -79,8 +94,10 @@ function ChatBubble({
   isDraft = false,
   isSpeaking = false,
   speakingLanguage = null,
+  bubbleTextClassName = 'text-sm',
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
+  const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
   const avatar = getSpeakerAvatar(
     utterance.speaker,
     utterance.speakerAvatarSeed,
@@ -98,7 +115,9 @@ function ChatBubble({
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
-  const originalTextClassName = isDraft ? 'text-sm text-gray-400' : 'text-sm text-gray-900'
+  const originalTextClassName = isDraft
+    ? `${bubbleTextClassName} text-gray-400`
+    : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
 
   return (
@@ -145,7 +164,7 @@ function ChatBubble({
                   >
                     <span className="text-base leading-none">{flag}</span>
                     <span className="text-[11px] font-semibold uppercase leading-none">
-                      {utterance.originalLang}
+                      {originalLanguageBadgeLabel}
                     </span>
                   </span>
                   <span data-original-bubble-text className="align-middle">
@@ -168,7 +187,7 @@ function ChatBubble({
             bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-            contentClassName="text-sm text-gray-700"
+            contentClassName={`${bubbleTextClassName} text-gray-700`}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />
@@ -205,6 +224,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.isDraft !== next.isDraft) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
+  if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
@@ -216,6 +236,8 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false
+    if (pu.sourceLanguagesMixed !== nu.sourceLanguagesMixed) return false
+    if (pu.sourceTextHasForeignScript !== nu.sourceTextHasForeignScript) return false
     if (pu.targetLanguages !== nu.targetLanguages) {
       const pt = pu.targetLanguages || []
       const nt = nu.targetLanguages || []

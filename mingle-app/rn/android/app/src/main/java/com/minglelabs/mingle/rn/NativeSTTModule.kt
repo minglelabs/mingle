@@ -22,6 +22,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -47,6 +48,8 @@ class NativeSTTModule(
     val wsUrl: String,
     val sttModel: String,
     val aecEnabled: Boolean,
+    val sonioxLanguageHints: List<String>,
+    val sonioxManualFinalizeSilenceMs: Int?,
   )
 
   private data class PendingStartRequest(
@@ -132,6 +135,14 @@ class NativeSTTModule(
       wsUrl = wsUrl,
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
+      sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
+      sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
+        if (options.hasKey("sonioxManualFinalizeSilenceMs") && !options.isNull("sonioxManualFinalizeSilenceMs")) {
+          options.getDouble("sonioxManualFinalizeSilenceMs")
+        } else {
+          null
+        },
+      ),
     )
 
     if (hasRecordAudioPermission()) {
@@ -230,6 +241,17 @@ class NativeSTTModule(
       true
     }
 
+  private fun normalizeStringArray(array: ReadableArray?): List<String> {
+    if (array == null) return emptyList()
+    val seen = LinkedHashSet<String>()
+    for (index in 0 until array.size()) {
+      val value = array.getString(index)?.trim().orEmpty()
+      if (value.isEmpty()) continue
+      seen.add(value)
+    }
+    return seen.toList()
+  }
+
   private fun startSession(
     options: StartOptions,
     promise: Promise,
@@ -275,8 +297,17 @@ class NativeSTTModule(
           val config = JSONObject()
             .put("sample_rate", currentSampleRate)
             .put("stt_model", options.sttModel)
+          options.sonioxManualFinalizeSilenceMs?.let {
+            config.put("soniox_manual_finalize_silence_ms", it)
+          }
+          if (options.sonioxLanguageHints.isNotEmpty()) {
+            config.put("soniox_language_hints", options.sonioxLanguageHints)
+          }
           webSocket.send(config.toString())
-          Log.i(TAG, "ws opened sampleRate=$currentSampleRate profile=${profile.label}")
+          Log.i(
+            TAG,
+            "ws opened sampleRate=$currentSampleRate profile=${profile.label} silenceMs=${options.sonioxManualFinalizeSilenceMs?.toString() ?: "server-default"}",
+          )
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -784,6 +815,13 @@ class NativeSTTModule(
       reactApplicationContext,
       Manifest.permission.RECORD_AUDIO,
     ) == PackageManager.PERMISSION_GRANTED
+
+  private fun parseOptionalSonioxManualFinalizeSilenceMs(raw: Double?): Int? {
+    if (raw == null || !raw.isFinite()) {
+      return null
+    }
+    return Math.floor(raw).toInt()
+  }
 
   override fun onHostResume() {
     // Background capture is intentionally allowed while STT is active.

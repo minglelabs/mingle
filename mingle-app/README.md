@@ -26,7 +26,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 Live integration tests run only when explicitly invoked:
 
 1. Streams an audio fixture to local STT WebSocket server
-2. Sends the finalized transcript to `/api/translate/finalize` (or `/api/ios/v1.0.2/translate/finalize`)
+2. Sends the finalized transcript to `/api/translate/finalize` (or `/api/ios/v1.0.7/translate/finalize`)
 
 Useful commands:
 
@@ -64,9 +64,9 @@ MINGLE_TEST_TTS_OUTPUT_DIR=/absolute/path/to/tts-output
 The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without runtime branching.
 
 - Default (legacy): empty value (`''`) -> `/api/{existing-path}`
-- iOS versioned: `ios/v1.0.2` -> `/api/ios/v1.0.2/{existing-path}`
-- Android versioned: `android/v1.0.2` -> `/api/android/v1.0.2/{existing-path}`
-- Backward-compatible mobile namespaces remain allow-listed for `v1.0.0`.
+- iOS versioned: `ios/v1.0.7` -> `/api/ios/v1.0.7/{existing-path}`
+- Android versioned: `android/v1.0.7` -> `/api/android/v1.0.7/{existing-path}`
+- Previous mobile namespaces (`v1.0.0`, `v1.0.2`, `v1.0.3`, `v1.0.4`) remain allow-listed for backward compatibility.
 
 Release build commands:
 
@@ -79,24 +79,26 @@ pnpm build:release:android
 URL override (optional):
 
 - The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
-- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`
-- Example: `https://your-app/ko?apiNamespace=android/v1.0.2`
+- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.7`, `android/v1.0.7`
+- Example: `https://your-app/ko?apiNamespace=android/v1.0.7`
 - Unsupported values are ignored, and the env/default value is used instead.
 
 ### Client Version Policy
 
 - On app launch, the client calls `POST /api/client/version-policy` or the platform namespace route.
 - Namespace examples:
-  - iOS: `POST /api/ios/v1.0.2/client/version-policy`
-  - Android: `POST /api/android/v1.0.2/client/version-policy`
+  - iOS: `POST /api/ios/v1.0.7/client/version-policy`
+  - Android: `POST /api/android/v1.0.7/client/version-policy`
 - Request fields: `clientVersion` (`x.y.z`), `clientBuild`
 - Optional request field: `platform` (`ios` | `android`, defaults to `ios` when omitted)
 - Server env:
   - iOS: `IOS_CLIENT_MIN_SUPPORTED_VERSION`, `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`, `IOS_CLIENT_LATEST_VERSION`, `IOS_APPSTORE_URL`
   - Android: `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`, `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`, `ANDROID_CLIENT_LATEST_VERSION`, `ANDROID_PLAYSTORE_URL`
+  - Optional AdMob banner overrides: `RN_ADMOB_BANNER_UNIT_ID_IOS`, `RN_ADMOB_BANNER_UNIT_ID_ANDROID`
 - Fallback behavior:
   - If Android env is missing, the API falls back to the iOS env once.
   - If the required min version env is missing or has an invalid semver, the API fails closed with `force_update`.
+  - If the AdMob banner env is missing, the RN app keeps its built-in banner unit ID.
 - Response `action`:
   - `force_update`: show a mandatory update screen
   - `recommend_update`: show a recommended update prompt
@@ -126,6 +128,60 @@ Translation/TTS behavior:
 - For any other source, the default targets are `ko,en`.
 - Test stdout prints the original Soniox transcript and the finalize translation results.
 - If the finalize response includes TTS output, the audio file is saved to `test-fixtures/audio/local/tts-output/` (local only, gitignored).
+
+### Translation Provider Configuration
+
+`/api/{namespace}/translate/finalize` supports multiple translation backends through environment variables.
+
+Default configuration:
+
+- `TRANSLATE_PROVIDER=gemini`
+- `GEMINI_API_KEY=...`
+- optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
+
+Qwen 3.5 9B via OpenRouter:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=qwen/qwen3.5-9b
+TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
+TRANSLATE_API_KEY=your_openrouter_key
+```
+
+Qwen 3.5 9B via Together:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen/Qwen3.5-9B
+TRANSLATE_BASE_URL=https://api.together.xyz/v1
+TRANSLATE_API_KEY=your_together_key
+```
+
+Qwen 3.5 9B via DashScope / Model Studio:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen3.5-9B
+TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
+```
+
+For Singapore / international DashScope, use:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=Qwen3.5-9B
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+TRANSLATE_API_KEY=your_dashscope_key
+```
+
+Notes:
+
+- When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
+- For DashScope, the handler sends `enable_thinking=false`.
+- For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false`.
+- You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.
+- If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer them from `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, or `DASHSCOPE_API_KEY`.
 
 ### Live E2E suites
 
@@ -287,8 +343,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.0.2`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.0.2`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.0.7`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.0.7`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -315,7 +371,7 @@ Example (`.env.local`):
 IOS_CLIENT_MIN_SUPPORTED_VERSION=1.0.0
 IOS_CLIENT_RECOMMENDED_BELOW_VERSION=1.2.0
 IOS_CLIENT_LATEST_VERSION=1.3.0
-IOS_APPSTORE_URL=https://apps.apple.com/app/id1234567890
+IOS_APPSTORE_URL=https://apps.apple.com/app/id6759795134
 
 ANDROID_CLIENT_MIN_SUPPORTED_VERSION=2.0.0
 ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION=2.1.0
@@ -324,8 +380,8 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 ```
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
-`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.2` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.2` validation before launch.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.7` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.7` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

@@ -5,7 +5,16 @@ import { Button } from '@/components/ui/button'
 import { Play, Loader2 } from 'lucide-react'
 
 const VOLUME_THRESHOLD = 0.05 // 목소리 감지 민감도
-const STT_PROXY_URL = 'ws://localhost:3001'
+const DEFAULT_STT_PORT = process.env.NEXT_PUBLIC_STT_PORT || '3001'
+
+function getSttProxyUrl() {
+  if (typeof window === 'undefined') {
+    return `ws://localhost:${DEFAULT_STT_PORT}`
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${protocol}://${window.location.hostname}:${DEFAULT_STT_PORT}`
+}
 
 // 연결 상태: idle(대기) -> connecting(연결 중) -> ready(음성 인식 가능)
 type ConnectionStatus = 'idle' | 'connecting' | 'ready'
@@ -17,6 +26,18 @@ interface Utterance {
   originalLang: string
   translations: Record<string, string>  // { 'ko': '한국어 번역', 'ja': '일본어 번역' }
 }
+
+type SttModel =
+  | 'gladia'
+  | 'gladia-stt'
+  | 'deepgram'
+  | 'deepgram-multi'
+  | 'gpt-4o-mini-transcribe'
+  | 'fireworks'
+  | 'chirp-3'
+  | 'soniox'
+  | 'elevenlabs'
+  | 'speechmatics'
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -65,7 +86,8 @@ export default function Home() {
   const [lang3, setLang3] = useState('ja');
   // selectedLanguages is derived from individual lang selectors
   const selectedLanguages = [lang1, lang2, lang3].filter(Boolean);
-  const [sttModel, setSttModel] = useState<'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox'>('soniox');
+  const [sttModel, setSttModel] = useState<SttModel>('soniox');
+  const [translationEnabled, setTranslationEnabled] = useState(true);
   const [translateModel, setTranslateModel] = useState<'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview'>('gemini-2.5-flash-lite');
   const [langHintsStrict, setLangHintsStrict] = useState(true);
   const [sessionUsageSec, setSessionUsageSec] = useState(0)
@@ -180,7 +202,7 @@ export default function Home() {
       const context = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       audioContextRef.current = context
 
-      const socket = new WebSocket(STT_PROXY_URL)
+      const socket = new WebSocket(getSttProxyUrl())
       socketRef.current = socket
 
       socket.onopen = () => {
@@ -189,6 +211,7 @@ export default function Home() {
           sample_rate: context.sampleRate,
           languages: languages,
           stt_model: sttModel,
+          translation_enabled: translationEnabled,
           translate_model: translateModel,
           lang_hints_strict: langHintsStrict
         }
@@ -343,7 +366,7 @@ export default function Home() {
           <select 
             id="sttModel" 
             value={sttModel} 
-            onChange={(e) => setSttModel(e.target.value as 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox')}
+            onChange={(e) => setSttModel(e.target.value as SttModel)}
             disabled={isActive} 
             className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
           >
@@ -351,12 +374,36 @@ export default function Home() {
             <option value="gladia-stt">Gladia STT (AI 번역, 다국어 코드 스위칭)</option>
             <option value="deepgram">Deepgram (AI 번역, 언어 1만 전사)</option>
             <option value="deepgram-multi">Deepgram Multi (AI 번역, 다국어 자동 감지)</option>
+            <option value="gpt-4o-mini-transcribe">OpenAI GPT-4o mini Transcribe (AI 번역, 실시간 partial)</option>
             <option value="fireworks">Fireworks (AI 번역)</option>
+            <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
+            <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
+            <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
+          {sttModel === 'chirp-3' && (
+            <p className="mt-1 text-xs text-amber-600">
+              Chirp 3는 GEMINI_API_KEY가 아니라 Google Cloud Speech-to-Text V2 인증(ADC/서비스 계정)이 필요합니다.
+            </p>
+          )}
           {sttModel === 'deepgram-multi' && (
             <p className="mt-1 text-xs text-amber-600">
               언어 선택 무시됨 - 10개 언어 자동 감지: EN, ES, FR, DE, HI, RU, PT, JA, IT, NL
+            </p>
+          )}
+          {sttModel === 'gpt-4o-mini-transcribe' && (
+            <p className="mt-1 text-xs text-amber-600">
+              자동 언어 감지는 켜지지만, OpenAI Realtime transcription 이벤트에는 언어 코드가 없어 원본 태그가 AUTO로 표시됩니다.
+            </p>
+          )}
+          {sttModel === 'speechmatics' && (
+            <p className="mt-1 text-xs text-amber-600">
+              기본은 언어 1 고정 전사입니다. 예외적으로 EN+AR, EN+ES, EN+ZH, EN+MS 조합만 공개 bilingual pack을 사용합니다.
+            </p>
+          )}
+          {sttModel === 'elevenlabs' && (
+            <p className="mt-1 text-xs text-amber-600">
+              언어 선택은 번역 대상 위주입니다. STT는 Scribe v2 Realtime의 자동 언어 감지와 VAD 세그먼트를 사용합니다.
             </p>
           )}
           {sttModel === 'soniox' && (
@@ -372,8 +419,25 @@ export default function Home() {
             </label>
           )}
         </div>
+        <div className="mb-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={translationEnabled}
+              onChange={(e) => setTranslationEnabled(e.target.checked)}
+              disabled={isActive}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            번역 사용
+          </label>
+          {!translationEnabled && (
+            <p className="mt-1 text-xs text-amber-600">
+              번역 API 호출을 모두 끄고 STT만 테스트합니다.
+            </p>
+          )}
+        </div>
         {/* 번역 모델 선택 (Gladia 자체 번역 제외) */}
-        {sttModel !== 'gladia' && (
+        {translationEnabled && sttModel !== 'gladia' && (
           <div className="mb-4">
             <label htmlFor="translateModel" className="block text-sm font-medium text-gray-700">번역 모델</label>
             <select

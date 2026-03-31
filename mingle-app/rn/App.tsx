@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Image,
   Linking,
   NativeModules,
@@ -9,6 +10,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -32,6 +34,14 @@ import {
   type NativeAuthProvider,
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
+import {
+  createCheckingNativeAppUpdateSnapshot,
+  createUnknownNativeAppUpdateSnapshot,
+  normalizeClientVersion,
+  resolveNativeAppUpdateSnapshot,
+  type NativeAppUpdateSnapshot,
+} from './src/appUpdateStatus';
+import { readPreferredRuntimeValue } from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -42,8 +52,37 @@ type NativeRuntimeConfig = {
   clientBuild?: string;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
+  adBannerPosition?: string;
+  adBannerUnitIdIos?: string;
+  adBannerUnitIdAndroid?: string;
+  adBannerHeightPx?: string | number;
 };
+type NativeAdModule = {
+  default?: (() => {
+    initialize?: () => Promise<unknown>;
+  }) | {
+    initialize?: () => Promise<unknown>;
+  };
+  BannerAd?: React.ComponentType<{
+    unitId: string;
+    size: string;
+    width?: number;
+    requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
+    onAdLoaded?: (dimensions: { width: number; height: number }) => void;
+    onAdFailedToLoad?: (error: Error) => void;
+    onSizeChange?: (dimensions: { width: number; height: number }) => void;
+  }>;
+  BannerAdSize?: {
+    BANNER?: string;
+    ADAPTIVE_BANNER?: string;
+    LARGE_ANCHORED_ADAPTIVE_BANNER?: string;
+  };
+};
+type NativeBannerPosition = 'top' | 'bottom';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
+type VersionPolicyAdMobConfig = {
+  bannerUnitId?: string;
+};
 type VersionGateState =
   | { status: 'checking' }
   | { status: 'ready' }
@@ -68,6 +107,7 @@ type VersionPolicyResponse = {
   clientVersion?: string;
   updateButtonLabel?: string;
   laterButtonLabel?: string;
+  adMob?: VersionPolicyAdMobConfig;
 };
 type IOSSettingsManager = {
   settings?: {
@@ -132,14 +172,6 @@ function normalizeConfiguredUrl(
   }
 }
 
-function resolveConfiguredUrl(
-  keys: string[],
-  allowedProtocols: string[],
-  options?: { trimTrailingSlash?: boolean },
-): string {
-  return normalizeConfiguredUrl(readRuntimeEnvValue(keys), allowedProtocols, options);
-}
-
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
   return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1';
@@ -164,23 +196,38 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
 
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
-const WEB_APP_BASE_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL'],
-  ['http:', 'https:'],
-  { trimTrailingSlash: true },
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.webAppBaseUrl || '',
+const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
+);
+const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.defaultWsUrl,
+  readRuntimeEnvValue(['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL']),
+);
+const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
+  NATIVE_RUNTIME_CONFIG.apiNamespace,
+  readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
+);
+const WEB_APP_BASE_URL = normalizeConfiguredUrl(
+  RUNTIME_WEB_APP_BASE_URL,
   ['http:', 'https:'],
   { trimTrailingSlash: true },
 ) || 'https://mingle-app-xi.vercel.app';
-const DEFAULT_WS_URL = resolveConfiguredUrl(
-  ['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL'],
-  ['ws:', 'wss:'],
-) || normalizeConfiguredUrl(
-  NATIVE_RUNTIME_CONFIG.defaultWsUrl || '',
+const DEFAULT_WS_URL = normalizeConfiguredUrl(
+  RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
+
+function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return Math.floor(parsed);
+}
+
 const STARTUP_SPLASH_BACKGROUND = '#F3C35A';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const STARTUP_SPLASH_LOGO = require('./ios/mingle/Images.xcassets/LaunchLogo.imageset/launch-logo.png');
 const {
   expectedApiNamespace: EXPECTED_API_NAMESPACE,
@@ -188,8 +235,7 @@ const {
   validatedApiNamespace: VALIDATED_API_NAMESPACE,
 } = validateRnApiNamespace({
   runtimeOs: RN_RUNTIME_OS,
-  configuredApiNamespace: readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE'])
-    || (NATIVE_RUNTIME_CONFIG.apiNamespace || '').trim(),
+  configuredApiNamespace: RUNTIME_API_NAMESPACE,
 });
 
 const missingRuntimeConfig: string[] = [];
@@ -205,13 +251,20 @@ if (EXPECTED_API_NAMESPACE && !CONFIGURED_API_NAMESPACE) {
   missingRuntimeConfig.push(`NEXT_PUBLIC_API_NAMESPACE must match current platform namespace: ${EXPECTED_API_NAMESPACE}`);
 }
 const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
-  ? `Missing or invalid env: ${missingRuntimeConfig.join(', ')}`
+  ? `Missing or invalid runtime config: ${missingRuntimeConfig.join(', ')}`
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const WEB_CANVAS_BASE_WIDTH_PX = 400;
+const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
+const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
+const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
+const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
+const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
+const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const WEB_SUPPORTED_LOCALES = new Set([
   'ko',
@@ -589,6 +642,8 @@ type NativeSttStartPayload = {
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  sonioxLanguageHints?: string[];
+  sonioxManualFinalizeSilenceMs?: number;
 };
 
 type NativeSttStopPayload = {
@@ -657,6 +712,27 @@ type NativeNavigationStateCommand = {
   };
 };
 
+type NativeOpenUpdateStoreCommand = {
+  type: 'native_open_update_store';
+  payload?: {
+    updateUrl?: string;
+  };
+};
+
+type NativeUiOverlayStateCommand = {
+  type: 'native_ui_overlay_state';
+  payload?: {
+    menuOpen?: boolean;
+  };
+};
+
+type NativeSetAdBannerPositionCommand = {
+  type: 'native_set_ad_banner_position';
+  payload?: {
+    position?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -664,7 +740,10 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
-  | NativeNavigationStateCommand;
+  | NativeNavigationStateCommand
+  | NativeOpenUpdateStoreCommand
+  | NativeUiOverlayStateCommand
+  | NativeSetAdBannerPositionCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -675,6 +754,11 @@ type NativeSttEvent =
 type NativeUiEvent = {
   type: 'scroll_to_top';
   source: string;
+} | {
+  type: 'banner_layout';
+  position: NativeBannerPosition;
+  topInsetPx: number;
+  bottomInsetPx: number;
 };
 
 type NativeAuthEvent =
@@ -701,9 +785,6 @@ type RecommendUpdatePrompt = {
   updateLabel: string;
   laterLabel: string;
 };
-function normalizeClientVersion(raw: string): string {
-  return raw.trim().replace(/^v/i, '');
-}
 
 function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
   const normalizedNamespace = apiNamespace.trim().replace(/^\/+/, '').replace(/\/+$/, '');
@@ -717,6 +798,28 @@ function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android
   if (runtimeOs === 'android') return 'android';
   return 'ios';
 }
+
+type RuntimeClientInfo = {
+  clientVersion: string;
+  clientBuild: string;
+};
+
+function resolveRuntimeClientInfo(): RuntimeClientInfo {
+  const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
+  const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
+
+  return {
+    clientVersion: normalizeClientVersion(
+      readPreferredRuntimeValue(NATIVE_RUNTIME_CONFIG.clientVersion, envClientVersion),
+    ),
+    clientBuild: readPreferredRuntimeValue(
+      NATIVE_RUNTIME_CONFIG.clientBuild,
+      envClientBuild,
+    ),
+  };
+}
+
+const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
 
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
@@ -865,9 +968,160 @@ function resolveTrustedOrigin(rawUrl: string): string {
   }
 }
 
+function resolveNativeBannerPosition(rawValue: string): NativeBannerPosition {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'top') return 'top';
+  if (normalized === 'bottom') return 'bottom';
+  return 'top';
+}
+
+function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition | null {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'top') return 'top';
+  if (normalized === 'bottom') return 'bottom';
+  return null;
+}
+
+function normalizeServerBannerUnitId(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') return null;
+  const normalized = rawValue.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveNativeBannerHeightPx(rawValue: string | number | undefined): number {
+  const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? '');
+  if (!Number.isFinite(numeric)) return NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX;
+  return Math.max(
+    NATIVE_AD_BANNER_MIN_HEIGHT_PX,
+    Math.min(NATIVE_AD_BANNER_MAX_HEIGHT_PX, Math.round(numeric)),
+  );
+}
+
+function resolveNativeCanvasScale(windowWidthPx: number): number {
+  if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) return 1;
+  return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
+}
+
+function resolveNativeTranscriptInsetPx(bannerHeightPx: number, canvasScale: number): number {
+  const safeScale = canvasScale > 0 ? canvasScale : 1;
+  return Math.max(0, Math.round(bannerHeightPx / safeScale));
+}
+
+function NativeAdBanner(props: {
+  position: NativeBannerPosition;
+  unitId: string;
+  heightPx: number;
+  frameWidthPx: number;
+  topOffsetPx: number;
+  bottomOffsetPx: number;
+  adModule: NativeAdModule | null;
+  ready: boolean;
+  reloadToken: number;
+  hidden?: boolean;
+}): React.JSX.Element | null {
+  const {
+    position,
+    unitId,
+    heightPx,
+    frameWidthPx,
+    topOffsetPx,
+    bottomOffsetPx,
+    adModule,
+    ready,
+    reloadToken,
+    hidden = false,
+  } = props;
+  const prefersFixedHeightBanner = true;
+  const [renderHeightPx, setRenderHeightPx] = useState(heightPx);
+  const [adLoadState, setAdLoadState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const [lastErrorMessage, setLastErrorMessage] = useState('');
+  const BannerAd = adModule?.BannerAd ?? null;
+  const BannerAdSize = adModule?.BannerAdSize ?? null;
+  const bannerSize = prefersFixedHeightBanner
+    ? (BannerAdSize?.BANNER ?? null)
+    : (BannerAdSize?.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize?.ADAPTIVE_BANNER || null);
+  const bannerSlotWidthPx = prefersFixedHeightBanner
+    ? Math.min(frameWidthPx, 320)
+    : frameWidthPx;
+  const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
+
+  // Reset banner render state when the slot configuration changes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setRenderHeightPx(heightPx);
+    setAdLoadState('loading');
+    setLastErrorMessage('');
+  }, [heightPx, position, reloadToken, unitId]);
+
+  const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
+    if (prefersFixedHeightBanner) return;
+    const nextHeight = Number(dimensions?.height ?? '');
+    if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+    setRenderHeightPx(Math.max(heightPx, Math.round(nextHeight)));
+  }, [heightPx, prefersFixedHeightBanner]);
+
+  const handleAdLoaded = useCallback((dimensions: { width: number; height: number }) => {
+    if (__DEV__) {
+      console.log(`[NativeAdBanner] loaded ${dimensions.width}x${dimensions.height}`);
+    }
+    setAdLoadState('loaded');
+    setLastErrorMessage('');
+    applyBannerDimensions(dimensions);
+  }, [applyBannerDimensions]);
+
+  const handleAdFailedToLoad = useCallback((error: Error) => {
+    setAdLoadState('failed');
+    setLastErrorMessage(error.message);
+    console.warn('[NativeAdBanner] failed_to_load', {
+      unitId,
+      platform: Platform.OS,
+      message: error.message,
+    });
+  }, [unitId]);
+
+  const containerStyle = position === 'top'
+    ? [styles.nativeBannerContainer, { top: topOffsetPx, height: renderHeightPx }]
+    : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: renderHeightPx }];
+
+  if (hidden || !unitId || !ready || !BannerAd || !bannerSize) return null;
+
+  return (
+    <View pointerEvents="box-none" style={containerStyle}>
+      <View style={[styles.nativeBannerSlot, { width: bannerSlotWidthPx, height: renderHeightPx }]}>
+        {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
+          <View style={styles.nativeBannerDebugPlaceholder}>
+            <Text style={styles.nativeBannerDebugTitle}>
+              {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
+            </Text>
+            <Text style={styles.nativeBannerDebugBody} numberOfLines={2}>
+              {adLoadState === 'failed'
+                ? (lastErrorMessage || 'Unknown banner load error')
+                : `slot=${position} width=${bannerSlotWidthPx} unit=test-ios-banner`}
+            </Text>
+          </View>
+        ) : null}
+        <BannerAd
+          key={`${unitId}:${reloadToken}`}
+          unitId={unitId}
+          size={bannerSize}
+          width={bannerSlotWidthPx}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+          onAdLoaded={handleAdLoaded}
+          onSizeChange={applyBannerDimensions}
+          onAdFailedToLoad={handleAdFailedToLoad}
+        />
+      </View>
+    </View>
+  );
+}
+
 function AppInner(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
   const isPageReadyRef = useRef(false);
+  const { width: windowWidthPx } = useWindowDimensions();
+  const nativeAppUpdateRef = useRef<NativeAppUpdateSnapshot>(
+    createCheckingNativeAppUpdateSnapshot(RUNTIME_CLIENT_INFO.clientVersion),
+  );
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
@@ -899,19 +1153,72 @@ function AppInner(): React.JSX.Element {
     () => getVersionPolicyFallbackCopy(versionPolicyLocale),
     [versionPolicyLocale],
   );
+  const defaultNativeBannerPosition = useMemo(
+    () => resolveNativeBannerPosition(
+      readRuntimeEnvValue(['RN_AD_BANNER_POSITION', 'NEXT_PUBLIC_RN_AD_BANNER_POSITION'])
+      || (NATIVE_RUNTIME_CONFIG.adBannerPosition || ''),
+    ),
+    [],
+  );
+  const [nativeBannerPositionOverride, setNativeBannerPositionOverride] = useState<NativeBannerPosition | null>(null);
+  const nativeBannerPosition = nativeBannerPositionOverride ?? defaultNativeBannerPosition;
+  const nativeBannerHeightPx = useMemo(
+    () => resolveNativeBannerHeightPx(
+      readRuntimeEnvValue(['RN_AD_BANNER_HEIGHT_PX', 'NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX'])
+      || NATIVE_RUNTIME_CONFIG.adBannerHeightPx,
+    ),
+    [],
+  );
+  const defaultNativeBannerUnitId = useMemo(() => {
+    const platformEnvKeys = Platform.OS === 'ios'
+      ? ['RN_ADMOB_BANNER_UNIT_ID_IOS', 'NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS']
+      : ['RN_ADMOB_BANNER_UNIT_ID_ANDROID', 'NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID'];
+    const runtimeFallback = Platform.OS === 'ios'
+      ? NATIVE_RUNTIME_CONFIG.adBannerUnitIdIos || ''
+      : NATIVE_RUNTIME_CONFIG.adBannerUnitIdAndroid || '';
+    return (readRuntimeEnvValue(platformEnvKeys) || runtimeFallback).trim();
+  }, []);
+  const [serverBannerUnitIdOverride, setServerBannerUnitIdOverride] = useState<string | null>(null);
+  const nativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
+  const nativeCanvasScale = useMemo(
+    () => resolveNativeCanvasScale(windowWidthPx),
+    [windowWidthPx],
+  );
+  const nativeBannerFrameWidthPx = useMemo(() => {
+    if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) {
+      return WEB_CANVAS_BASE_WIDTH_PX;
+    }
+    return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
+  }, [windowWidthPx]);
   const webUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
+    const transcriptInsetPx = nativeBannerUnitId
+      ? resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale)
+      : 0;
+    const transcriptTopInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'top' ? transcriptInsetPx : 0;
+    const transcriptBottomInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'bottom' ? transcriptInsetPx : 0;
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
-  }, [nativeAvailable, webLocale]);
+    const nativeBannerQuery = nativeBannerUnitId
+      ? `&nativeBannerPosition=${encodeURIComponent(defaultNativeBannerPosition)}&nativeTopInsetPx=${transcriptTopInsetPx}&nativeBottomInsetPx=${transcriptBottomInsetPx}`
+      : '';
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
+  }, [defaultNativeBannerPosition, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
+  const nativeAdModule = useMemo<NativeAdModule | null>(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('react-native-google-mobile-ads') as NativeAdModule;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
@@ -937,10 +1244,80 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
+  const nativeBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.top],
+  );
+  const nativeBannerBottomOffsetPx = useMemo(
+    () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.bottom],
+  );
+  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
+  const nativeTranscriptInsetPx = useMemo(
+    () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
+    [nativeBannerHeightPx, nativeCanvasScale],
+  );
+  const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
+  const nativeBannerBottomInsetPx = nativeBannerPosition === 'bottom' ? nativeTranscriptInsetPx : 0;
+  const [nativeAdsReady, setNativeAdsReady] = useState(() => (
+    !nativeBannerUnitId
+  ));
+  const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
   }, [updateSafeAreaPalette, webUrl]);
+
+  useEffect(() => {
+    if (!nativeBannerUnitId) {
+      setNativeAdsReady(true);
+      return;
+    }
+    const mobileAdsFactory = nativeAdModule?.default;
+    const mobileAdsInstance = typeof mobileAdsFactory === 'function'
+      ? mobileAdsFactory()
+      : mobileAdsFactory;
+
+    if (!mobileAdsInstance?.initialize) {
+      setNativeAdsReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setNativeAdsReady(false);
+    mobileAdsInstance.initialize()
+      .then(() => {
+        if (!cancelled) {
+          setNativeAdsReady(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNativeAdsReady(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeAdModule, nativeBannerUnitId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    if (!nativeBannerUnitId) return;
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (!becameActive) return;
+      setNativeBannerReloadToken((current) => current + 1);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [nativeBannerPosition, nativeBannerUnitId]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -970,6 +1347,21 @@ function AppInner(): React.JSX.Element {
     presentRecommendPrompt(pendingPrompt);
   }, [presentRecommendPrompt]);
 
+  const emitAppUpdateToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const serialized = JSON.stringify(nativeAppUpdateRef.current);
+    if (__DEV__) {
+      console.log(`[NativeAppUpdate→Web] ${serialized.slice(0, 160)}`);
+    }
+    const script = `window.__MINGLE_NATIVE_APP_UPDATE_STATUS = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_APP_UPDATE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current?.injectJavaScript(script);
+  }, []);
+
+  const setNativeAppUpdateSnapshot = useCallback((snapshot: NativeAppUpdateSnapshot) => {
+    nativeAppUpdateRef.current = snapshot;
+    emitAppUpdateToWeb();
+  }, [emitAppUpdateToWeb]);
+
   useEffect(() => {
     if ((Platform.OS !== 'ios' && Platform.OS !== 'android') || !WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) {
       return;
@@ -978,15 +1370,9 @@ function AppInner(): React.JSX.Element {
     let active = true;
     let settled = false;
     const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const nativeRuntimeConfig = readNativeRuntimeConfig();
-    const envClientVersion = readRuntimeEnvValue(['RN_CLIENT_VERSION']);
-    const envClientBuild = readRuntimeEnvValue(['RN_CLIENT_BUILD']);
-    const clientVersion = normalizeClientVersion(
-      envClientVersion
-      || nativeRuntimeConfig?.clientVersion
-      || '',
-    );
-    const clientBuild = envClientBuild || nativeRuntimeConfig?.clientBuild || '';
+    const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
+    const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
+    setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
 
     const fallbackToReady = (reason: string, details?: string) => {
       if (!active || settled) return;
@@ -994,6 +1380,7 @@ function AppInner(): React.JSX.Element {
       if (__DEV__) {
         console.log(`[VersionPolicy] bypass (${reason})${details ? `: ${details}` : ''}`);
       }
+      setNativeAppUpdateSnapshot(createUnknownNativeAppUpdateSnapshot(clientVersion));
       setVersionGate({ status: 'ready' });
     };
 
@@ -1021,6 +1408,8 @@ function AppInner(): React.JSX.Element {
       })
       .then((policy) => {
         if (!active || settled) return;
+        setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
+        setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {
           settled = true;
@@ -1089,7 +1478,7 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [presentRecommendPrompt, versionPolicyFallback, versionPolicyLocale]);
+  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -1130,6 +1519,16 @@ function AppInner(): React.JSX.Element {
     const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
+
+  const emitBannerLayoutToWeb = useCallback(() => {
+    if (!nativeBannerUnitId) return;
+    emitUiToWeb({
+      type: 'banner_layout',
+      position: nativeBannerPosition,
+      topInsetPx: nativeBannerTopInsetPx,
+      bottomInsetPx: nativeBannerBottomInsetPx,
+    });
+  }, [emitUiToWeb, nativeBannerBottomInsetPx, nativeBannerPosition, nativeBannerTopInsetPx, nativeBannerUnitId]);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
     const serialized = JSON.stringify(payload);
@@ -1209,10 +1608,6 @@ function AppInner(): React.JSX.Element {
     };
   }, [clearAuthDispatchRetryTimer]);
 
-  const handleIosTopTapOverlayPress = useCallback(() => {
-    emitUiToWeb({ type: 'scroll_to_top', source: 'ios_status_bar_overlay' });
-  }, [emitUiToWeb]);
-
   const resolveCurrentTtsIdentity = useCallback((event?: { utteranceId?: string; playbackId?: string }) => {
     const active = currentTtsPlaybackRef.current;
     const eventPlaybackId = typeof event?.playbackId === 'string' ? event.playbackId : '';
@@ -1252,6 +1647,15 @@ function AppInner(): React.JSX.Element {
       ? payload.sttModel.trim()
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
+    const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
+      ? payload.sonioxLanguageHints
+        .filter((language): language is string => typeof language === 'string')
+        .map(language => language.trim())
+        .filter(Boolean)
+      : [];
+    const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
+      payload?.sonioxManualFinalizeSilenceMs,
+    );
 
     try {
       nativeStatusRef.current = 'starting';
@@ -1259,6 +1663,10 @@ function AppInner(): React.JSX.Element {
         wsUrl,
         sttModel,
         aecEnabled,
+        sonioxLanguageHints,
+        ...(typeof sonioxManualFinalizeSilenceMs === 'number'
+          ? { sonioxManualFinalizeSilenceMs }
+          : {}),
       });
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
@@ -1404,6 +1812,34 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       updateSafeAreaPalette(url);
+      return;
+    }
+
+    if (parsed.type === 'native_open_update_store') {
+      const requestedUrl = typeof parsed.payload?.updateUrl === 'string'
+        ? parsed.payload.updateUrl.trim()
+        : '';
+      const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
+      if (!updateUrl) return;
+      void Linking.openURL(updateUrl);
+      return;
+    }
+
+    if (parsed.type === 'native_ui_overlay_state') {
+      setIsNativeMenuOverlayOpen(Boolean(parsed.payload?.menuOpen));
+      return;
+    }
+
+    if (parsed.type === 'native_set_ad_banner_position') {
+      const rawPosition = typeof parsed.payload?.position === 'string'
+        ? parsed.payload.position.trim()
+        : '';
+      if (!rawPosition) {
+        setNativeBannerPositionOverride(null);
+        return;
+      }
+      const nextPosition = normalizeNativeBannerPosition(rawPosition);
+      setNativeBannerPositionOverride(nextPosition);
       return;
     }
 
@@ -1599,8 +2035,13 @@ function AppInner(): React.JSX.Element {
     };
   }, [emitTtsToWeb, resolveCurrentTtsIdentity]);
 
+  useEffect(() => {
+    emitBannerLayoutToWeb();
+  }, [emitBannerLayoutToWeb]);
+
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
+    setIsNativeMenuOverlayOpen(false);
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -1615,9 +2056,11 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitBannerLayoutToWeb();
+    emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
@@ -1654,14 +2097,8 @@ function AppInner(): React.JSX.Element {
         />
       ) : null}
       <StatusBar barStyle={safeAreaPalette.statusBarStyle} />
-      {Platform.OS === 'ios' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Scroll to top"
-          onPress={handleIosTopTapOverlayPress}
-          style={[styles.iosTopTapOverlay, { height: iosTopTapOverlayHeight }]}
-        />
-      ) : null}
+      {/* iOS top-tap fallback is handled in web UI to avoid native overlay
+          intercepting touches on WebView content. */}
       <View style={[styles.webViewContainer, { backgroundColor: safeAreaPalette.webViewColor }]}>
         {versionGate.status !== 'force_update' ? (
           <WebView
@@ -1750,6 +2187,20 @@ function AppInner(): React.JSX.Element {
             style={styles.startupSplashLogo}
           />
         </View>
+      ) : null}
+      {canRenderNativeBanner ? (
+        <NativeAdBanner
+          adModule={nativeAdModule}
+          position={nativeBannerPosition}
+          unitId={nativeBannerUnitId}
+          heightPx={nativeBannerHeightPx}
+          frameWidthPx={nativeBannerFrameWidthPx}
+          topOffsetPx={nativeBannerTopOffsetPx}
+          bottomOffsetPx={nativeBannerBottomOffsetPx}
+          ready={nativeAdsReady}
+          reloadToken={nativeBannerReloadToken}
+          hidden={isNativeMenuOverlayOpen}
+        />
       ) : null}
     </View>
   );
@@ -1868,6 +2319,40 @@ const styles = StyleSheet.create({
     color: '#f9fafb',
     fontSize: 13,
     fontWeight: '700',
+  },
+  nativeBannerContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nativeBannerSlot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  nativeBannerDebugPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17, 24, 39, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.7)',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    paddingHorizontal: 12,
+  },
+  nativeBannerDebugTitle: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  nativeBannerDebugBody: {
+    marginTop: 2,
+    color: '#374151',
+    fontSize: 11,
+    textAlign: 'center',
   },
 });
 

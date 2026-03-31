@@ -27,6 +27,8 @@ To automatically isolate local test environments per branch and worktree:
 ```bash
 scripts/devbox init
 scripts/devbox bootstrap
+# Reboot recovery: start local Vault and seed missing dev paths from .env.local
+scripts/devbox vault-up --seed
 # Optional if you use Vault
 # scripts/devbox bootstrap --vault-app-path secret/mingle-app/dev --vault-stt-path secret/mingle-stt/dev
 # Optional if you want to upload `.env.local` values to Vault
@@ -45,23 +47,15 @@ scripts/devbox up --profile device --device-app-env prod --with-ios-install --wi
 # scripts/devbox up --profile device --with-mobile-install
 # Install only iOS
 # scripts/devbox up --profile device --with-ios-install
-# Install only native iOS
-# scripts/devbox up --profile device --with-ios-install --ios-runtime native
-# Build `mingle-ios` only (no install)
-# scripts/devbox ios-native-build --ios-configuration Debug
 # Archive/export an RN iOS IPA for App Store or TestFlight
 # scripts/devbox ios-rn-ipa --device-app-env prod
 # scripts/devbox ios-rn-ipa-prod
-# Or install RN and native apps together
-# scripts/devbox mobile --platform ios --ios-runtime both
 # Write full logs to a file
 # scripts/devbox --log-file auto up --profile device --with-ios-install
 # Tests
 scripts/devbox test --target app
 # Live STT integration tests require an explicit flag
 # scripts/devbox test --target app --with-live
-# scripts/devbox test --target ios-native
-# scripts/devbox test --target all
 scripts/devbox status
 ```
 
@@ -69,13 +63,19 @@ scripts/devbox status
 - `scripts/devbox bootstrap` is read-only and does not modify `.env.local`.
   It only installs dependencies and runs validation checks.
   (If `@prisma/client` artifacts are missing, it automatically runs `db:generate`, and it also checks RN/Pods.)
+- `scripts/devbox vault-up --seed` starts the local Homebrew Vault service and safely seeds
+  missing Vault KV paths from `mingle-app/.env.local` and `mingle-stt/.env.local`.
 - When using Vault, you can save `--vault-app-path` and `--vault-stt-path` for later reuse.
 - `scripts/devbox bootstrap --vault-push` uploads unmanaged keys from
   `mingle-app/.env.local` and `mingle-stt/.env.local` to Vault.
+  If the target path does not exist yet, devbox creates it once with `kv put`.
+  If the path already exists, devbox keeps using `kv patch` and refuses destructive overwrite fallback.
 - If Vault CLI environment variables (`VAULT_ADDR`, `VAULT_NAMESPACE`) exist in your shell (`.zshrc`) or in
   `mingle-app/.env.local` / `mingle-stt/.env.local`, devbox automatically picks them up.
 - `scripts/devbox gateway --mode dev|run` integrates gateway execution from `/Users/nam/openclaw` into devbox commands.
-- The default devbox behavior is stateless: it does not touch `.env.local` and uses ngrok/xcconfig-based configuration.
+- Devbox keeps worktree-local runtime settings in `.devbox.env` while leaving `.env.local` user-managed.
+- Frontend and app build entrypoints also read `.devbox.env`, so `pnpm dev`, `pnpm build`, `pnpm start`,
+  React Native Android builds, and RN iOS flows all resolve the current worktree URLs and namespaces.
 - `scripts/devbox up`, `init`, `mobile`, and `bootstrap` do not auto-sync `.env.local`.
 - If a saved Vault path exists, `scripts/devbox up` injects unmanaged keys (such as API keys)
   into the server process environment at runtime without writing them to files.
@@ -85,7 +85,7 @@ scripts/devbox status
   - Without those settings, it falls back to the existing Quick Tunnel (`*.trycloudflare.com`) mode.
 - With `--profile device`, `--device-app-env dev|prod` reads mobile app build URLs from
   `secret/mingle-app/dev` or `secret/mingle-app/prod` and injects them.
-  This supports both RN and `mingle-ios` native URL keys.
+  This supports the current RN mobile URL keys.
   `--device-app-env prod` skips ngrok and local server startup during `up`.
 - Each worktree uses a separate ngrok inspector port (`DEVBOX_NGROK_API_PORT`) to reduce collisions during concurrent runs.
 - `--profile device` only allows `https` / `wss` tunnels that match the current worktree ports.
@@ -97,9 +97,7 @@ scripts/devbox status
   If you pass `auto`, it creates a timestamped file under `.devbox-logs/`.
   When ngrok runs in a separate terminal, check ngrok logs there.
   The `.devbox-logs/` directory is gitignored so logs are not committed.
-- `scripts/devbox mobile --platform ios|android|all` automates RN/native app build and installation when a device is connected.
-  iOS supports `--ios-runtime rn|native|both`, and you can select the native install target with `--ios-coredevice-id`.
-- `scripts/devbox ios-native-build --ios-configuration Debug|Release` builds `mingle-ios` only, without installation.
+- `scripts/devbox mobile --platform ios|android|all` automates RN app build and installation when a device is connected.
 - `scripts/devbox ios-rn-ipa --device-app-env prod` or `scripts/devbox ios-rn-ipa-prod`
   creates RN iOS `.xcarchive` / `.ipa` artifacts for App Store upload.
   These commands also work without `.devbox.env` (recommended: `--device-app-env`, `--site-url`, `--ws-url`),
@@ -107,7 +105,7 @@ scripts/devbox status
   To pin the Team ID, add `export DEVBOX_IOS_TEAM_ID=3RFBMN8TKZ` to `.zshrc` (or your shell),
   or set the same key in `.devbox.env`.
 - `scripts/devbox up --profile device --with-mobile-install` prepares the server and installs the mobile app in one run.
-- For `scripts/devbox test --target app|ios-native|all`, the `app` target runs unit tests only by default.
+- For `scripts/devbox test --target app`, the `app` target runs unit tests only by default.
   Live tests run only when `--with-live` is provided.
 
 ## Learn More

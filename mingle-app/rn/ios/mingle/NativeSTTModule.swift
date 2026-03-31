@@ -310,6 +310,19 @@ class NativeSTTModule: RCTEventEmitter {
         return ""
     }
 
+    private func parseOptionalSonioxManualFinalizeSilenceMs(_ rawValue: Any?) -> Int? {
+        guard let rawValue = rawValue as? NSNumber else {
+            return nil
+        }
+
+        let raw = rawValue.doubleValue
+        guard raw.isFinite else {
+            return nil
+        }
+
+        return Int(raw.rounded(.down))
+    }
+
     override func constantsToExport() -> [AnyHashable: Any]! {
         return [
             "runtimeConfig": [
@@ -326,6 +339,9 @@ class NativeSTTModule: RCTEventEmitter {
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
+                "adBannerPosition": Self.readRuntimeConfigValue("MingleAdBannerPosition"),
+                "adBannerHeightPx": Self.readRuntimeConfigValue("MingleAdBannerHeightPx"),
+                "adBannerUnitIdIos": Self.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
                 "deviceLocaleTag": Self.readDeviceLocaleTag(),
                 "devicePreferredLanguages": Self.readDevicePreferredLanguages(),
             ],
@@ -351,6 +367,9 @@ class NativeSTTModule: RCTEventEmitter {
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
+            "adBannerPosition": Self.readRuntimeConfigValue("MingleAdBannerPosition"),
+            "adBannerHeightPx": Self.readRuntimeConfigValue("MingleAdBannerHeightPx"),
+            "adBannerUnitIdIos": Self.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
             "deviceLocaleTag": Self.readDeviceLocaleTag(),
             "devicePreferredLanguages": Self.readDevicePreferredLanguages(),
         ])
@@ -743,6 +762,8 @@ class NativeSTTModule: RCTEventEmitter {
         wsUrlString: String,
         sttModel: String,
         aecEnabled: Bool,
+        sonioxLanguageHints: [String],
+        sonioxManualFinalizeSilenceMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -821,13 +842,21 @@ class NativeSTTModule: RCTEventEmitter {
             return
         }
 
-        sendJson([
+        var configPayload: [String: Any] = [
             "sample_rate": sampleRate,
             "stt_model": sttModel,
-        ])
+        ]
+        if let sonioxManualFinalizeSilenceMs {
+            configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
+        }
+        if !sonioxLanguageHints.isEmpty {
+            configPayload["soniox_language_hints"] = sonioxLanguageHints
+        }
+        sendJson(configPayload)
 
         emitStatus("running")
-        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@", sampleRate, wsUrlString)
+        let silenceLogValue = sonioxManualFinalizeSilenceMs.map(String.init) ?? "server-default"
+        NSLog("[NativeSTTModule] started sampleRate=%d ws=%@ silenceMs=%@", sampleRate, wsUrlString, silenceLogValue)
         resolve([
             "sampleRate": sampleRate,
         ])
@@ -853,6 +882,12 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
+            options["sonioxManualFinalizeSilenceMs"]
+        )
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -862,6 +897,8 @@ class NativeSTTModule: RCTEventEmitter {
                 wsUrlString: wsUrlString,
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
+                sonioxLanguageHints: sonioxLanguageHints,
+                sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 resolve: resolve,
                 reject: reject
             )
@@ -878,6 +915,8 @@ class NativeSTTModule: RCTEventEmitter {
                             wsUrlString: wsUrlString,
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
+                            sonioxLanguageHints: sonioxLanguageHints,
+                            sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             resolve: resolve,
                             reject: reject
                         )

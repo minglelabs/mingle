@@ -10,12 +10,12 @@
   - `IOS_CLIENT_MIN_SUPPORTED_VERSION`
   - `IOS_CLIENT_RECOMMENDED_BELOW_VERSION`
   - `IOS_CLIENT_LATEST_VERSION`
-  - `IOS_APPSTORE_URL`
+  - `IOS_APPSTORE_URL=https://apps.apple.com/app/id6759795134`
 - Android client version policy:
   - `ANDROID_CLIENT_MIN_SUPPORTED_VERSION`
   - `ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION`
   - `ANDROID_CLIENT_LATEST_VERSION`
-  - `ANDROID_PLAYSTORE_URL`
+  - `ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn`
 
 ## mingle-landing
 
@@ -27,9 +27,9 @@
 RN은 WebView URL에 query로 namespace를 주입합니다.
 
 - iOS build env:
-  - `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.2`
+  - `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.3`
 - Android build env:
-  - `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.2`
+  - `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.3`
 
 ## Optional CLI pattern
 

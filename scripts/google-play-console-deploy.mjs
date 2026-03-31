@@ -40,6 +40,7 @@ Options:
   --service-account-json <path>  Google service account JSON file path
   --package-name <name>          Override Android package name
   --aab <path>                   Explicit AAB path (default: app/build/outputs/bundle/release/app-release.aab)
+  --existing-version-code <n>    Reuse an already uploaded versionCode without uploading a new AAB
   --track <name>                 Release track (default: googlePlay.release.defaultTrack or internal)
   --release-status <status>      Release status: draft|completed|inProgress|halted
   --release-name <name>          Override release name
@@ -72,6 +73,7 @@ function parseArgs(argv) {
         : ""),
     packageName: "",
     aabPath: DEFAULT_AAB_PATH,
+    existingVersionCode: "",
     track: "",
     releaseStatus: "",
     releaseName: "",
@@ -100,6 +102,10 @@ function parseArgs(argv) {
         break;
       case "--aab":
         options.aabPath = argv[index + 1] ?? "";
+        index += 1;
+        break;
+      case "--existing-version-code":
+        options.existingVersionCode = argv[index + 1] ?? "";
         index += 1;
         break;
       case "--track":
@@ -342,6 +348,8 @@ function buildReleasePlan(config, workspaceRoot, options) {
   const releaseStatus =
     options.releaseStatus || release.defaultReleaseStatus || "draft";
   const releaseName = options.releaseName || release.releaseName || "";
+  const releaseVersion =
+    typeof release.version === "string" ? release.version.trim() : "";
   const changesNotSentForReview =
     options.changesNotSentForReview ?? Boolean(release.changesNotSentForReview);
   const releaseNotesSource =
@@ -359,6 +367,8 @@ function buildReleasePlan(config, workspaceRoot, options) {
     track,
     releaseStatus,
     releaseName,
+    releaseVersion,
+    runtimeApiNamespace: releaseVersion ? `android/v${releaseVersion}` : "android/v1.0.7",
     changesNotSentForReview,
     releaseNotes,
     userFraction: options.userFraction,
@@ -379,7 +389,11 @@ function buildReleasePlan(config, workspaceRoot, options) {
     }
   }
 
-  if (!options.build && !fs.existsSync(plan.aabPath)) {
+  if (
+    !options.build
+    && !isNonEmptyString(options.existingVersionCode)
+    && !fs.existsSync(plan.aabPath)
+  ) {
     throw new Error(`AAB does not exist: ${plan.aabPath}`);
   }
 
@@ -390,6 +404,9 @@ function printPlan(plan, options) {
   console.log(`Package name: ${plan.packageName}`);
   console.log(`AAB path: ${plan.aabPath}`);
   console.log(`Track: ${plan.track}`);
+  if (isNonEmptyString(options.existingVersionCode)) {
+    console.log(`Existing versionCode: ${options.existingVersionCode}`);
+  }
   console.log(`Release status: ${plan.releaseStatus}`);
   console.log(`Release name: ${isNonEmptyString(plan.releaseName) ? plan.releaseName : "(none)"}`);
   console.log(`Release notes: ${plan.releaseNotes.length}`);
@@ -408,6 +425,11 @@ function runMetadataSync(configJsonPath, options) {
   if (isNonEmptyString(options.packageName)) {
     args.push("--package-name", options.packageName);
   }
+  if (options.changesNotSentForReview) {
+    args.push("--changes-not-sent-for-review");
+  } else {
+    args.push("--no-changes-not-sent-for-review");
+  }
 
   const result = spawnSync(process.execPath, args, {
     cwd: REPO_ROOT,
@@ -421,10 +443,19 @@ function runMetadataSync(configJsonPath, options) {
 }
 
 function buildReleaseAab(plan) {
+  const buildEnv = {
+    ...process.env,
+    NEXT_PUBLIC_SITE_URL:
+      process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://mingle-app-xi.vercel.app",
+    NEXT_PUBLIC_WS_URL:
+      process.env.NEXT_PUBLIC_WS_URL?.trim() || "wss://mingle.up.railway.app",
+    NEXT_PUBLIC_API_NAMESPACE: plan.runtimeApiNamespace,
+    RN_API_NAMESPACE: plan.runtimeApiNamespace,
+  };
   const result = spawnSync("./gradlew", ["bundleRelease"], {
     cwd: DEFAULT_ANDROID_DIR,
     stdio: "inherit",
-    env: process.env,
+    env: buildEnv,
   });
 
   if (result.status !== 0) {
@@ -557,8 +588,14 @@ async function main() {
   const editId = await createEdit(accessToken, plan.packageName);
 
   try {
-    const versionCode = await uploadBundle(accessToken, plan.packageName, editId, plan.aabPath);
-    console.log(`[ok] Uploaded AAB versionCode=${versionCode}`);
+    const versionCode = isNonEmptyString(options.existingVersionCode)
+      ? options.existingVersionCode.trim()
+      : await uploadBundle(accessToken, plan.packageName, editId, plan.aabPath);
+    if (isNonEmptyString(options.existingVersionCode)) {
+      console.log(`[ok] Reusing existing versionCode=${versionCode}`);
+    } else {
+      console.log(`[ok] Uploaded AAB versionCode=${versionCode}`);
+    }
     await updateTrack(accessToken, plan.packageName, editId, plan, versionCode);
     console.log(`[ok] Updated track: ${plan.track}`);
     await finalizeEdit(accessToken, plan.packageName, editId, options, plan);

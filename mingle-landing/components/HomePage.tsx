@@ -47,7 +47,7 @@ export default function HomePage({ version, locale }: HomePageProps) {
       <EmailModal isOpen={isModalOpen} onClose={closeModal} />
 
       {/* Navigation - 항상 표시 */}
-      <NavBar version={version} openModal={openModal} />
+      <NavBar version={version} />
 
       {/* 버전 설정에 따라 섹션을 동적으로 렌더링 */}
       {config.sections.map((section) => {

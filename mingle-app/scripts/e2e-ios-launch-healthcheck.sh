@@ -46,7 +46,7 @@ if ! command -v xctrace >/dev/null 2>&1; then
   exit ${launch_status}
 fi
 
-TRACE_OUTPUT="${MINGLE_TEST_IOS_XCTRACE_OUTPUT:-/tmp/mingle-ios-healthcheck-$(date +%s).trace}"
+TRACE_OUTPUT="${MINGLE_TEST_IOS_XCTRACE_OUTPUT:-/tmp/mingle-rn-ios-healthcheck-$(date +%s).trace}"
 
 echo "[ios-e2e] launch fallback via xctrace"
 set +e

@@ -37,6 +37,8 @@ Options:
   --skip-icon                    Skip icon upload
   --skip-feature-graphic         Skip feature graphic upload
   --skip-screenshots             Skip phone screenshot upload
+  --changes-not-sent-for-review  Commit with changesNotSentForReview=true
+  --no-changes-not-sent-for-review
   -h, --help                     Show help
 
 Environment:
@@ -67,6 +69,7 @@ function parseArgs(argv) {
     skipIcon: false,
     skipFeatureGraphic: false,
     skipScreenshots: false,
+    changesNotSentForReview: undefined,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -114,6 +117,12 @@ function parseArgs(argv) {
         break;
       case "--skip-screenshots":
         options.skipScreenshots = true;
+        break;
+      case "--changes-not-sent-for-review":
+        options.changesNotSentForReview = true;
+        break;
+      case "--no-changes-not-sent-for-review":
+        options.changesNotSentForReview = false;
         break;
       case "-h":
       case "--help":
@@ -578,14 +587,22 @@ async function uploadImage(accessToken, packageName, editId, language, imageType
   );
 }
 
-async function finalizeEdit(accessToken, packageName, editId, validateOnly) {
+async function finalizeEdit(
+  accessToken,
+  packageName,
+  editId,
+  validateOnly,
+  changesNotSentForReview,
+) {
   const endpoint = validateOnly ? "validate" : "commit";
-  await googleApiRequest(
-    accessToken,
-    "POST",
+  const commitUrl = new URL(
     `${ANDROID_PUBLISHER_BASE}/applications/${encodeURIComponent(packageName)}/edits/${encodeURIComponent(editId)}:${endpoint}`,
-    "",
   );
+  if (!validateOnly && changesNotSentForReview) {
+    commitUrl.searchParams.set("changesNotSentForReview", "true");
+  }
+
+  await googleApiRequest(accessToken, "POST", commitUrl.toString(), "");
 }
 
 async function main() {
@@ -687,7 +704,13 @@ async function main() {
       }
     }
 
-    await finalizeEdit(accessToken, packageName, editId, options.validateOnly);
+    await finalizeEdit(
+      accessToken,
+      packageName,
+      editId,
+      options.validateOnly,
+      Boolean(options.changesNotSentForReview),
+    );
     console.log(options.validateOnly ? "[ok] Validated edit" : "[ok] Committed edit");
   } catch (error) {
     await googleApiRequest(
