@@ -1193,16 +1193,32 @@ function AppInner(): React.JSX.Element {
   const configuredNativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
+      // iOS crashes when the package root eagerly initializes TurboModule-backed event emitters.
+      // Load banner-only entry points there and keep the root import on Android for initialize().
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bannerModule = require('react-native-google-mobile-ads/lib/commonjs/ads/BannerAd') as {
+        BannerAd?: NativeAdModule['BannerAd'];
+      };
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const bannerAdSizeModule = require('react-native-google-mobile-ads/lib/commonjs/BannerAdSize') as {
+        BannerAdSize?: NativeAdModule['BannerAdSize'];
+      };
+
+      if (Platform.OS === 'ios') {
+        return {
+          BannerAd: bannerModule.BannerAd,
+          BannerAdSize: bannerAdSizeModule.BannerAdSize,
+        };
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const adsModule = require('react-native-google-mobile-ads') as {
         default?: NativeAdModule['default'];
-        BannerAd?: NativeAdModule['BannerAd'];
-        BannerAdSize?: NativeAdModule['BannerAdSize'];
       };
       return {
         default: adsModule.default,
-        BannerAd: adsModule.BannerAd,
-        BannerAdSize: adsModule.BannerAdSize,
+        BannerAd: bannerModule.BannerAd,
+        BannerAdSize: bannerAdSizeModule.BannerAdSize,
       };
     } catch {
       return null;
@@ -1316,13 +1332,17 @@ function AppInner(): React.JSX.Element {
       setNativeAdsReady(true);
       return;
     }
+    if (!nativeAdModule) {
+      setNativeAdsReady(false);
+      return;
+    }
     const mobileAdsFactory = nativeAdModule?.default;
     const mobileAdsInstance = typeof mobileAdsFactory === 'function'
       ? mobileAdsFactory()
       : mobileAdsFactory;
 
     if (!mobileAdsInstance?.initialize) {
-      setNativeAdsReady(false);
+      setNativeAdsReady(true);
       return;
     }
 
