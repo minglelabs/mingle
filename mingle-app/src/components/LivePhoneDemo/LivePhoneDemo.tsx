@@ -345,7 +345,7 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
-const COMPACT_BOTTOM_BAR_HEIGHT_PX = 72
+const COMPACT_BOTTOM_BAR_HEIGHT_PX = 64
 
 type TtsQueueItem = {
   utteranceId: string
@@ -1993,12 +1993,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bottomBarHeightStyle = isConversationMode
     ? `calc(${COMPACT_BOTTOM_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`
     : undefined
-  const bottomBarPaddingTop = isConversationMode ? "6px" : "10px"
+  const bottomBarPaddingTop = isConversationMode ? "0px" : "10px"
   const bottomBarPaddingBottom = isConversationMode
     ? "env(safe-area-inset-bottom, 0px)"
     : "max(calc(env(safe-area-inset-bottom) + 16px), 20px)"
-  const micButtonClassName = "relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-  const micIconSize = 30
+  const micButtonClassName = isConversationMode
+    ? "relative flex h-[3.5rem] w-[3.5rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+    : "relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+  const micIconSize = isConversationMode ? 28 : 30
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
