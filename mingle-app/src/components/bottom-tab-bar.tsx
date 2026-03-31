@@ -92,7 +92,7 @@ export default function BottomTabBar({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const baseTabBarHeightPx = 64;
+  const baseTabBarHeightPx = 72;
   const searchParamsKey = searchParams.toString();
 
   const conversationsPath = `/${locale}/conversations`;
