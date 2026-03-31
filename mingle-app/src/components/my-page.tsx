@@ -65,7 +65,6 @@ function ProfileAvatarBadge({
   flag?: string | null;
 }) {
   const badgeSize = Math.max(24, Math.round(size * 0.32));
-  const iconSize = Math.round(size * 0.52);
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -80,7 +79,7 @@ function ProfileAvatarBadge({
             className="h-full w-full object-cover"
           />
         ) : (
-          <DefaultProfileIcon size={iconSize} />
+          <DefaultProfileIcon size={size} />
         )}
       </div>
       {flag ? (
