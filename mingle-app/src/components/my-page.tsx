@@ -598,7 +598,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         <section className="px-4 pb-3 pt-4">
           {/* 프로필 사진 + 통계 (인스타 레이아웃) */}
           <div className="flex items-center">
-            <div className="translate-x-3">
+            <div className="translate-x-4">
               <ProfileAvatarBadge
                 size={86}
                 imageUrl={user?.image}
@@ -606,7 +606,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
                 flag={selectedNationality?.flag}
               />
             </div>
-            <div className="ml-8 grid flex-1 grid-cols-3 gap-1">
+            <div className="ml-6 grid flex-1 grid-cols-3 gap-1">
               <button type="button" onClick={() => postsRef.current?.scrollIntoView({ behavior: "smooth" })}
                 className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">{DUMMY_POSTS.length}</span>
@@ -627,8 +627,8 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
 
           {/* bio (id 없이 바로 소개) */}
           {bio
-            ? <p className="ml-3 mt-3 text-[14px] leading-snug text-slate-800">{bio}</p>
-            : <p className="ml-3 mt-3 text-[14px] text-gray-400">{dictionary.myPage.addBioPrompt}</p>}
+            ? <p className="ml-4 mt-3 text-[14px] leading-snug text-slate-800">{bio}</p>
+            : <p className="ml-4 mt-3 text-[14px] text-gray-400">{dictionary.myPage.addBioPrompt}</p>}
 
           {/* 프로필 편집 / 공유 버튼 */}
           <div className="mt-3 flex gap-2">
