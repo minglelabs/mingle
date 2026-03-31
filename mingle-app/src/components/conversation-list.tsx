@@ -607,9 +607,11 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [shouldAnimateOverlayExit, setShouldAnimateOverlayExit] = useState(true);
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
+  const pendingHistoryCloseAnimationRef = useRef<"animate" | "instant">("instant");
   const isConversationOverlayOpen = activeConversation !== null;
 
   const conversationItems = useMemo(
@@ -659,6 +661,44 @@ export default function ConversationList({
     setTimeLabelsReady(true);
   }, []);
 
+  const closeConversationOverlay = useCallback((
+    conversation: ConversationChannelSummary,
+    options?: {
+      animateExit?: boolean;
+      replaceUrl?: boolean;
+    },
+  ) => {
+    const animateExit = options?.animateExit ?? false;
+    const shouldReplaceUrl = options?.replaceUrl ?? false;
+    const previousConversation = conversation;
+
+    if (shouldReplaceUrl) {
+      replaceConversationOverlayUrl(null);
+    }
+
+    setShouldAnimateOverlayExit(animateExit);
+    setActiveConversation((current) => (
+      current?.id === previousConversation.id ? null : current
+    ));
+    setConversations((current) => current.map((item) => {
+      if (item.id !== previousConversation.id) return item;
+      return {
+        ...item,
+        status: "paused",
+        pausedAt: item.pausedAt ?? new Date().toISOString(),
+      };
+    }));
+
+    void (async () => {
+      try {
+        await updateConversationStatus(previousConversation.id, "paused");
+      } catch {
+        setConversations((current) => upsertConversation(current, previousConversation));
+        window.alert("Failed to pause the conversation.");
+      }
+    })();
+  }, [updateConversationStatus]);
+
   const handleCreateConversation = useCallback(async () => {
     if (isCreatingConversation || mutatingConversationId) return;
     setIsCreatingConversation(true);
@@ -668,6 +708,7 @@ export default function ConversationList({
       });
       const nextConversation = await readConversationResponse(response);
       setConversations((current) => upsertConversation(current, nextConversation));
+      setShouldAnimateOverlayExit(true);
       setActiveConversation(nextConversation);
     } catch {
       window.alert("Failed to create a conversation.");
@@ -684,6 +725,7 @@ export default function ConversationList({
 
     if (matchedConversation.status === "active") {
       setShowSearch(false);
+      setShouldAnimateOverlayExit(true);
       setActiveConversation(matchedConversation);
       return;
     }
@@ -692,6 +734,7 @@ export default function ConversationList({
       const nextConversation = await updateConversationStatus(matchedConversation.id, "active");
       if (!nextConversation) return;
       setShowSearch(false);
+      setShouldAnimateOverlayExit(true);
       setActiveConversation(nextConversation);
     } catch {
       window.alert("Failed to open the conversation.");
@@ -707,19 +750,13 @@ export default function ConversationList({
       && currentConversationId === activeConversation.id
       && window.history.length > 1
     ) {
+      pendingHistoryCloseAnimationRef.current = "animate";
       window.history.back();
       return;
     }
 
-    try {
-      const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
-      if (!pausedConversation) return;
-      replaceConversationOverlayUrl(null);
-      setActiveConversation(null);
-    } catch {
-      window.alert("Failed to pause the conversation.");
-    }
-  }, [activeConversation, isCreatingConversation, mutatingConversationId, updateConversationStatus]);
+    closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
+  }, [activeConversation, closeConversationOverlay, isCreatingConversation, mutatingConversationId]);
 
   const handleNavigateToMypage = useCallback(async () => {
     if (activeConversation) {
@@ -757,24 +794,16 @@ export default function ConversationList({
       if (!currentActiveConversation) return;
       if (readConversationIdFromLocation() === currentActiveConversation.id) return;
 
-      void (async () => {
-        try {
-          const pausedConversation = await updateConversationStatus(currentActiveConversation.id, "paused");
-          if (!pausedConversation) return;
-          setActiveConversation((current) => (
-            current?.id === currentActiveConversation.id ? null : current
-          ));
-        } catch {
-          window.alert("Failed to pause the conversation.");
-        }
-      })();
+      const animateExit = pendingHistoryCloseAnimationRef.current === "animate";
+      pendingHistoryCloseAnimationRef.current = "instant";
+      closeConversationOverlay(currentActiveConversation, { animateExit });
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [updateConversationStatus]);
+  }, [closeConversationOverlay]);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -867,8 +896,10 @@ export default function ConversationList({
                 key={activeConversation.id}
                 initial={{ x: "100%" }}
                 animate={{ x: "0%" }}
-                exit={{ x: "100%" }}
-                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                exit={shouldAnimateOverlayExit ? { x: "100%" } : { x: "0%" }}
+                transition={shouldAnimateOverlayExit
+                  ? { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
+                  : { duration: 0 }}
                 className="fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white"
               >
                 <MingleHome
