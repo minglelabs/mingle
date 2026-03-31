@@ -54,13 +54,13 @@ export default function NativeBottomTabBannerSlot({
     if (!nativeUiBridgeEnabled) return;
     postToNativeBridge({
       type: "native_ui_overlay_state",
-      payload: { menuOpen: hidden },
+      payload: { pageOverlayOpen: hidden },
     });
 
     return () => {
       postToNativeBridge({
         type: "native_ui_overlay_state",
-        payload: { menuOpen: false },
+        payload: { pageOverlayOpen: false },
       });
     };
   }, [hidden, nativeUiBridgeEnabled]);

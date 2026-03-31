@@ -729,6 +729,7 @@ type NativeUiOverlayStateCommand = {
   type: 'native_ui_overlay_state';
   payload?: {
     menuOpen?: boolean;
+    pageOverlayOpen?: boolean;
   };
 };
 
@@ -1193,7 +1194,16 @@ function AppInner(): React.JSX.Element {
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('react-native-google-mobile-ads') as NativeAdModule;
+      const adsModule = require('react-native-google-mobile-ads') as {
+        default?: NativeAdModule['default'];
+        BannerAd?: NativeAdModule['BannerAd'];
+        BannerAdSize?: NativeAdModule['BannerAdSize'];
+      };
+      return {
+        default: adsModule.default,
+        BannerAd: adsModule.BannerAd,
+        BannerAdSize: adsModule.BannerAdSize,
+      };
     } catch {
       return null;
     }
@@ -1293,6 +1303,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [isNativePageOverlayOpen, setIsNativePageOverlayOpen] = useState(false);
   const [isNativeBannerRouteHidden, setIsNativeBannerRouteHidden] = useState(() => shouldHideNativeBannerForUrl(webUrl));
   const canRenderNativeBanner = versionGate.status === 'ready';
 
@@ -1865,7 +1876,13 @@ function AppInner(): React.JSX.Element {
     }
 
     if (parsed.type === 'native_ui_overlay_state') {
-      setIsNativeMenuOverlayOpen(Boolean(parsed.payload?.menuOpen));
+      const payload = parsed.payload;
+      if (payload && typeof payload === 'object' && 'menuOpen' in payload) {
+        setIsNativeMenuOverlayOpen(Boolean(payload.menuOpen));
+      }
+      if (payload && typeof payload === 'object' && 'pageOverlayOpen' in payload) {
+        setIsNativePageOverlayOpen(Boolean(payload.pageOverlayOpen));
+      }
       return;
     }
 
@@ -2239,7 +2256,7 @@ function AppInner(): React.JSX.Element {
           bottomOffsetPx={nativeBannerBottomOffsetPx}
           ready={nativeAdsReady}
           reloadToken={nativeBannerReloadToken}
-          hidden={isNativeMenuOverlayOpen || isNativeBannerRouteHidden}
+          hidden={isNativeMenuOverlayOpen || isNativePageOverlayOpen || isNativeBannerRouteHidden}
         />
       ) : null}
     </View>
