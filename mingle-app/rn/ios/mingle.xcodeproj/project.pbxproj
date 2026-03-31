@@ -316,6 +316,8 @@
 				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
+				INFOPLIST_KEY_CFBundleDisplayName = Mingle;
+				INFOPLIST_KEY_CFBundleName = Mingle;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -339,7 +341,7 @@
 					"-lc++",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn;
-				PRODUCT_NAME = mingle;
+				PRODUCT_NAME = Mingle;
 				RN_ADMOB_APP_ID_IOS = "ca-app-pub-7057041881494735~7844963551";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -359,6 +361,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 27;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
+				INFOPLIST_KEY_CFBundleDisplayName = Mingle;
+				INFOPLIST_KEY_CFBundleName = Mingle;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -382,7 +386,7 @@
 					"-lc++",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.minglelabs.mingle.rn;
-				PRODUCT_NAME = mingle;
+				PRODUCT_NAME = Mingle;
 				RN_ADMOB_APP_ID_IOS = "ca-app-pub-7057041881494735~7844963551";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
