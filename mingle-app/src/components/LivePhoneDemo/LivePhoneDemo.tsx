@@ -1997,10 +1997,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bottomBarPaddingBottom = isConversationMode
     ? "env(safe-area-inset-bottom, 0px)"
     : "max(calc(env(safe-area-inset-bottom) + 16px), 20px)"
-  const micButtonClassName = isConversationMode
-    ? "relative flex h-[3rem] w-[3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-    : "relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-  const micIconSize = isConversationMode ? 24 : 30
+  const micButtonClassName = "relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+  const micIconSize = 30
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
