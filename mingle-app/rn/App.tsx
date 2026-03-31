@@ -83,6 +83,7 @@ type NativeAdModule = {
   BannerAd?: React.ComponentType<NativeBannerAdProps>;
   BannerAdSize?: {
     BANNER?: string;
+    ANCHORED_ADAPTIVE_BANNER?: string;
     ADAPTIVE_BANNER?: string;
     LARGE_ANCHORED_ADAPTIVE_BANNER?: string;
   };
@@ -1060,13 +1061,22 @@ function NativeAdBanner(props: {
   const BannerAdComponent = BannerAd as React.ComponentClass<NativeBannerAdProps> | null;
   const BannerAdSize = adModule?.BannerAdSize ?? null;
   const bannerRef = useRef<NativeBannerAdHandle | null>(null);
-  const bannerSize = prefersFixedHeightBanner
-    ? (BannerAdSize?.BANNER ?? null)
-    : (BannerAdSize?.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize?.ADAPTIVE_BANNER || null);
+  const usesAdaptiveBannerSize = Platform.OS === 'ios';
+  const bannerSize = usesAdaptiveBannerSize
+    ? (BannerAdSize?.ANCHORED_ADAPTIVE_BANNER
+      || BannerAdSize?.ADAPTIVE_BANNER
+      || BannerAdSize?.LARGE_ANCHORED_ADAPTIVE_BANNER
+      || BannerAdSize?.BANNER
+      || null)
+    : (prefersFixedHeightBanner
+      ? (BannerAdSize?.BANNER ?? null)
+      : (BannerAdSize?.LARGE_ANCHORED_ADAPTIVE_BANNER || BannerAdSize?.ADAPTIVE_BANNER || null));
   const bannerSlotWidthPx = prefersFixedHeightBanner
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
-  const bannerRequestWidthPx = prefersFixedHeightBanner ? undefined : bannerSlotWidthPx;
+  const bannerRequestWidthPx = usesAdaptiveBannerSize || !prefersFixedHeightBanner
+    ? bannerSlotWidthPx
+    : undefined;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
   useEffect(() => {
