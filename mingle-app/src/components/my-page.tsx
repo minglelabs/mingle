@@ -434,6 +434,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   const [showLanguage, setShowLanguage] = useState(false);
   const [followState, setFollowState] = useState<{ open: boolean; tab: FollowTab }>({ open: false, tab: "followers" });
   const [showEdit, setShowEdit] = useState(false);
+  const [editPanelVersion, setEditPanelVersion] = useState(0);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -525,6 +526,11 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
     container.scrollTo({ top: nextTop, behavior: "smooth" });
   }, []);
 
+  const handleOpenEditProfile = useCallback(() => {
+    setEditPanelVersion((currentVersion) => currentVersion + 1);
+    setShowEdit(true);
+  }, []);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
@@ -566,7 +572,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         dictionary={dictionary}
       />
       <EditProfilePanel
-        key={`edit-profile:${showEdit ? "open" : "closed"}:${username}:${bio}:${selectedNationality?.code ?? "none"}`}
+        key={`edit-profile:${editPanelVersion}`}
         open={showEdit}
         username={username}
         bio={bio}
@@ -650,7 +656,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
 
           {/* 프로필 편집 / 공유 버튼 */}
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => setShowEdit(true)}
+            <button type="button" onClick={handleOpenEditProfile}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-gray-100 py-[10px] text-[13px] font-semibold transition active:bg-gray-200">
               <Edit3 size={14} /> {dictionary.profile.editProfile}
             </button>
