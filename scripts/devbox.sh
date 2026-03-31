@@ -851,6 +851,11 @@ resolve_devbox_admob_app_id_ios() {
     printf '%s' "$value"
     return 0
   fi
+  value="$(read_rn_mobile_ads_app_id ios_app_id)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
   if is_nonprod_mobile_build; then
     printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
     return 0
@@ -865,11 +870,39 @@ resolve_devbox_admob_app_id_android() {
     printf '%s' "$value"
     return 0
   fi
+  value="$(read_rn_mobile_ads_app_id android_app_id)"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
   if is_nonprod_mobile_build; then
     printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
     return 0
   fi
   printf '%s' ""
+}
+
+read_rn_mobile_ads_app_id() {
+  local key="${1:-}"
+  local value=""
+
+  [[ -z "$key" ]] && {
+    printf '%s' ""
+    return 0
+  }
+
+  [[ -f "$RN_APP_JSON_FILE" ]] || {
+    printf '%s' ""
+    return 0
+  }
+
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '%s' ""
+    return 0
+  fi
+
+  value="$(jq -r --arg key "$key" '.["react-native-google-mobile-ads"][$key] // empty' "$RN_APP_JSON_FILE" 2>/dev/null || true)"
+  printf '%s' "$(trim_whitespace "$value")"
 }
 
 resolve_devbox_admob_banner_unit_id_ios() {
