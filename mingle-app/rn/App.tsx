@@ -42,6 +42,7 @@ import {
   resolveNativeAppUpdateSnapshot,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
+import { shouldHideNativeBannerForUrl } from './src/nativeChrome';
 import { readPreferredRuntimeValue } from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
@@ -320,13 +321,13 @@ type SafeAreaPalette = {
 };
 
 const DEFAULT_SAFE_AREA_PALETTE: SafeAreaPalette = {
-  topColor: '#ffffff',
+  topColor: 'transparent',
   topOverlayColor: 'transparent',
-  bottomColor: '#ffffff',
+  bottomColor: 'transparent',
   webViewColor: '#ffffff',
   statusBarStyle: 'dark-content',
-  topEdgeMode: 'fill',
-  bottomEdgeMode: 'fill',
+  topEdgeMode: 'transparent',
+  bottomEdgeMode: 'transparent',
 };
 
 const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
@@ -1224,10 +1225,11 @@ function AppInner(): React.JSX.Element {
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
+    const nativePlatformQuery = `&nativePlatform=${encodeURIComponent(Platform.OS)}`;
     const nativeBannerQuery = nativeBannerUnitId
       ? `&nativeBannerPosition=${encodeURIComponent(defaultNativeBannerPosition)}&nativeTopInsetPx=${transcriptTopInsetPx}&nativeBottomInsetPx=${transcriptBottomInsetPx}`
       : '';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${nativePlatformQuery}${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
   }, [defaultNativeBannerPosition, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
@@ -1242,7 +1244,8 @@ function AppInner(): React.JSX.Element {
   }, [configuredNativeBannerUnitId, nativeAdModule]);
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
-    const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
+    const resolvedUrl = candidateUrl || webUrl;
+    const nextPalette = resolveSafeAreaPaletteForUrl(resolvedUrl);
     setSafeAreaPalette((current) => {
       if (
         current.topColor === nextPalette.topColor
@@ -1256,6 +1259,10 @@ function AppInner(): React.JSX.Element {
         return current;
       }
       return nextPalette;
+    });
+    setIsNativeBannerRouteHidden((current) => {
+      const next = shouldHideNativeBannerForUrl(resolvedUrl);
+      return current === next ? current : next;
     });
   }, [webUrl]);
 
@@ -1284,6 +1291,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [isNativeBannerRouteHidden, setIsNativeBannerRouteHidden] = useState(() => shouldHideNativeBannerForUrl(webUrl));
   const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
@@ -1719,6 +1727,14 @@ function AppInner(): React.JSX.Element {
       ? payload.provider
       : null;
     if (!provider) {
+      return;
+    }
+    if (provider === 'apple' && Platform.OS !== 'ios') {
+      emitAuthToWeb({
+        type: 'error',
+        provider,
+        message: 'native_auth_unsupported_provider',
+      });
       return;
     }
 
@@ -2220,7 +2236,7 @@ function AppInner(): React.JSX.Element {
           bottomOffsetPx={nativeBannerBottomOffsetPx}
           ready={nativeAdsReady}
           reloadToken={nativeBannerReloadToken}
-          hidden={isNativeMenuOverlayOpen}
+          hidden={isNativeMenuOverlayOpen || isNativeBannerRouteHidden}
         />
       ) : null}
     </View>

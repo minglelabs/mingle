@@ -7,12 +7,18 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
+import {
+  resolveNativeRuntimePlatformFromUserAgent,
+  type NativeRuntimePlatform,
+} from "@/lib/native-runtime-platform";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
   appleOAuthEnabled: boolean;
+  appleNativeAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
+  initialNativePlatform?: NativeRuntimePlatform | null;
   locale: AppLocale;
 };
 
@@ -94,6 +100,15 @@ function isNativeAuthBridgeEnabled(): boolean {
 function getWindowWithNativeAuthCache(): MingleWindowWithNativeAuthCache | null {
   if (typeof window === "undefined") return null;
   return window as MingleWindowWithNativeAuthCache;
+}
+
+function resolveInitialNativeRuntimePlatform(
+  initialValue: NativeRuntimePlatform | null | undefined,
+): NativeRuntimePlatform | null {
+  if (initialValue) return initialValue;
+  if (typeof window === "undefined") return null;
+  if (!isNativeAuthBridgeEnabled()) return null;
+  return resolveNativeRuntimePlatformFromUserAgent(window.navigator.userAgent);
 }
 
 function postNativeAuthAck(detail: NativeAuthBridgeEvent): void {
@@ -203,6 +218,9 @@ export default function MingleHome(props: MingleHomeProps) {
   const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
   const [selectedProvider, setSelectedProvider] =
     useState<AuthProvider | null>(null);
+  const [nativeRuntimePlatform, setNativeRuntimePlatform] = useState<NativeRuntimePlatform | null>(
+    () => resolveInitialNativeRuntimePlatform(props.initialNativePlatform),
+  );
   const [agreedPrivacy, setAgreedPrivacy] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [legalSheetKind, setLegalSheetKind] = useState<LegalSheetKind | null>(
@@ -243,6 +261,12 @@ export default function MingleHome(props: MingleHomeProps) {
     () => `/${props.locale}/conversations`,
     [props.locale],
   );
+  const isAndroidNativeRuntime = nativeRuntimePlatform === "android";
+  const isIosNativeRuntime = nativeRuntimePlatform === "ios";
+  const appleSignInVisible = !isAndroidNativeRuntime;
+  const appleSignInEnabled = isIosNativeRuntime
+    ? props.appleNativeAuthEnabled
+    : props.appleOAuthEnabled;
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
     [props.locale],
@@ -408,6 +432,20 @@ export default function MingleHome(props: MingleHomeProps) {
       document.documentElement.lang = props.locale;
     }
   }, [props.locale]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isNativeAuthBridgeEnabled()) return;
+
+    const detectedPlatform = resolveNativeRuntimePlatformFromUserAgent(
+      window.navigator.userAgent,
+    );
+    if (!detectedPlatform) return;
+
+    setNativeRuntimePlatform((current) => (
+      current === detectedPlatform ? current : detectedPlatform
+    ));
+  }, []);
 
   useEffect(() => {
     if (status !== "loading") {
@@ -1046,22 +1084,24 @@ export default function MingleHome(props: MingleHomeProps) {
               >
                 <div className="w-1/2 shrink-0">
                   <div className="space-y-3">
-                    <button
-                      type="button"
-                      aria-label={
-                        signingInProvider === "apple"
-                          ? props.dictionary.profile.loginLoading
-                          : props.dictionary.profile.loginApple
-                      }
-                      onClick={() => handleProviderSelect("apple")}
-                      disabled={!props.appleOAuthEnabled || disabled}
-                      className="relative inline-flex w-full items-center justify-center rounded-2xl bg-black py-[0.92rem] text-[0.95rem] font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <span className="absolute left-5">
-                        <AppleMark />
-                      </span>
-                      {props.dictionary.profile.loginApple}
-                    </button>
+                    {appleSignInVisible ? (
+                      <button
+                        type="button"
+                        aria-label={
+                          signingInProvider === "apple"
+                            ? props.dictionary.profile.loginLoading
+                            : props.dictionary.profile.loginApple
+                        }
+                        onClick={() => handleProviderSelect("apple")}
+                        disabled={!appleSignInEnabled || disabled}
+                        className="relative inline-flex w-full items-center justify-center rounded-2xl bg-black py-[0.92rem] text-[0.95rem] font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="absolute left-5">
+                          <AppleMark />
+                        </span>
+                        {props.dictionary.profile.loginApple}
+                      </button>
+                    ) : null}
 
                     <button
                       type="button"
@@ -1093,7 +1133,7 @@ export default function MingleHome(props: MingleHomeProps) {
                       {props.dictionary.profile.loginEmail}
                     </button>
 
-                    {!props.appleOAuthEnabled ? (
+                    {appleSignInVisible && !appleSignInEnabled ? (
                       <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
                         {props.dictionary.profile.appleNotConfigured}
                       </p>

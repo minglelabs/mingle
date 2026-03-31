@@ -5,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/apple-oauth";
+import { isNativeAppleAuthConfiguredFromEnv } from "@/lib/apple-sign-in";
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
@@ -324,6 +325,10 @@ function buildProviders(): NextAuthOptions["providers"] {
 
 export function isAppleOAuthConfigured(): boolean {
   return Boolean(resolveAppleOAuthCredentialsWithRefresh());
+}
+
+export function isNativeAppleAuthConfigured(): boolean {
+  return isNativeAppleAuthConfiguredFromEnv(process.env);
 }
 
 export function isGoogleOAuthConfigured(): boolean {
