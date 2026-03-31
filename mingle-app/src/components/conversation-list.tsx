@@ -23,6 +23,7 @@ import BottomTabBar from "@/components/bottom-tab-bar";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
@@ -790,6 +791,12 @@ export default function ConversationList({
 
     closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
   }, [activeConversation, closeConversationOverlay, isCreatingConversation, mutatingConversationId]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!activeConversation || isCreatingConversation || mutatingConversationId) return false;
+    void handleCloseActiveConversation();
+    return true;
+  }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
 
   const handleNavigateToMypage = useCallback(async () => {
     if (activeConversation) {

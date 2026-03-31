@@ -61,6 +61,10 @@ import {
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
 import {
+  clearNativeHistoryBackAnimateFlag,
+  registerNativeBackHandler,
+} from '@/lib/native-back-handler'
+import {
   DEFAULT_NATIVE_APP_UPDATE_DETAIL,
   NATIVE_APP_UPDATE_EVENT,
   parseNativeAppUpdateDetail,
@@ -790,6 +794,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setMenuOpen(false)
   }, [])
 
+  const requestCloseMenuPanel = useCallback(() => {
+    clearNativeHistoryBackAnimateFlag()
+    setDeleteAccountDialogOpen(false)
+    closeMenuPanel()
+    setMenuDragOffsetX(0)
+    setIsMenuDragging(false)
+  }, [closeMenuPanel])
+
   useEffect(() => {
     if (!isNativeApp()) return
 
@@ -911,20 +923,34 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (showMenuButton) return
 
     const closeMenuState = window.setTimeout(() => {
-      closeMenuPanel()
-      setMenuDragOffsetX(0)
-      setIsMenuDragging(false)
-      setDeleteAccountDialogOpen(false)
+      requestCloseMenuPanel()
     }, 0)
 
     return () => {
       window.clearTimeout(closeMenuState)
     }
-  }, [closeMenuPanel, showMenuButton])
+  }, [requestCloseMenuPanel, showMenuButton])
   const closeDeleteAccountDialog = useCallback(() => {
     if (isAuthActionPending) return
     setDeleteAccountDialogOpen(false)
   }, [isAuthActionPending])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (isAuthActionPending) return false
+    if (deleteAccountDialogOpen) {
+      clearNativeHistoryBackAnimateFlag()
+      setDeleteAccountDialogOpen(false)
+      return true
+    }
+    if (translationModelMenuOpen) {
+      clearNativeHistoryBackAnimateFlag()
+      setTranslationModelMenuOpen(false)
+      return true
+    }
+    if (!menuOpen) return false
+    requestCloseMenuPanel()
+    return true
+  }, 20), [deleteAccountDialogOpen, isAuthActionPending, menuOpen, requestCloseMenuPanel, translationModelMenuOpen])
 
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
@@ -941,12 +967,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       offsetX >= MENU_PANEL_CLOSE_DRAG_DISTANCE_PX
       || velocityPxPerMs >= MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS
     ) {
-      closeMenuPanel()
+      requestCloseMenuPanel()
       return
     }
 
     setMenuDragOffsetX(0)
-  }, [closeMenuPanel])
+  }, [requestCloseMenuPanel])
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
@@ -1795,7 +1821,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
     if (!updateUrl) return
 
-    closeMenuPanel()
+    requestCloseMenuPanel()
 
     const command: NativeOpenUpdateStoreCommand = {
       type: 'native_open_update_store',
@@ -1812,7 +1838,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     window.location.href = updateUrl
-  }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
+  }, [nativeAppUpdate?.updateUrl, requestCloseMenuPanel])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -2141,7 +2167,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="absolute inset-0 z-50 overflow-hidden bg-black/42"
-              onClick={closeMenuPanel}
+              onClick={requestCloseMenuPanel}
             >
               <motion.div
                 ref={menuPanelRef}
@@ -2462,8 +2488,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <div className="space-y-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          closeMenuPanel()
+                      onClick={() => {
+                          requestCloseMenuPanel()
                           onLogout()
                         }}
                         disabled={isAuthActionPending || !showAccountActions}
@@ -2474,8 +2500,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          closeMenuPanel()
+                      onClick={() => {
+                          requestCloseMenuPanel()
                           setDeleteAccountDialogOpen(true)
                         }}
                         disabled={isAuthActionPending || !showAccountActions}

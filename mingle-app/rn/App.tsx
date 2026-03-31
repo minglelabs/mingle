@@ -1435,10 +1435,25 @@ function AppInner(): React.JSX.Element {
     if (Platform.OS !== 'android') return;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (!canWebViewGoBack) return false;
+      if (!canWebViewGoBack && !isNativeMenuOverlayOpen && !isNativePageOverlayOpen) {
+        return false;
+      }
       webViewRef.current?.injectJavaScript(`
-        window[${JSON.stringify(NATIVE_HISTORY_BACK_ANIMATE_FLAG)}] = true;
-        window.history.back();
+        (function () {
+          try {
+            if (typeof window.__MINGLE_HANDLE_NATIVE_BACK__ === 'function' && window.__MINGLE_HANDLE_NATIVE_BACK__()) {
+              return true;
+            }
+          } catch (error) {
+            // Fall through to the browser history path.
+          }
+
+          if (window.history.length > 1) {
+            window[${JSON.stringify(NATIVE_HISTORY_BACK_ANIMATE_FLAG)}] = true;
+            window.history.back();
+          }
+          return true;
+        })();
         true;
       `);
       return true;
@@ -1447,7 +1462,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack]);
+  }, [canWebViewGoBack, isNativeMenuOverlayOpen, isNativePageOverlayOpen]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {

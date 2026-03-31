@@ -7,6 +7,10 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import BottomTabBar from "@/components/bottom-tab-bar";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
+import {
+  clearNativeHistoryBackAnimateFlag,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { normalizeAppLocale, resolveAppLocale } from "@/lib/app-locale";
 import {
   NATIONALITY_OPTIONS,
@@ -526,10 +530,83 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
     container.scrollTo({ top: nextTop, behavior: "smooth" });
   }, []);
 
+  const handleOpenSettings = useCallback(() => {
+    setShowSettings(true);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setShowSettings(false);
+  }, []);
+
+  const handleOpenLanguage = useCallback(() => {
+    setShowLanguage(true);
+  }, []);
+
+  const handleCloseLanguage = useCallback(() => {
+    setShowLanguage(false);
+  }, []);
+
+  const handleOpenFollow = useCallback((tab: FollowTab) => {
+    setFollowState({ open: true, tab });
+  }, []);
+
+  const handleCloseFollow = useCallback(() => {
+    setFollowState((current) => ({ ...current, open: false }));
+  }, []);
+
   const handleOpenEditProfile = useCallback(() => {
     setEditPanelVersion((currentVersion) => currentVersion + 1);
     setShowEdit(true);
   }, []);
+
+  const handleCloseEditProfile = useCallback(() => {
+    setShowEdit(false);
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (showDeleteConfirm) {
+      clearNativeHistoryBackAnimateFlag();
+      setShowDeleteConfirm(false);
+      return true;
+    }
+    if (showComingSoon) {
+      clearNativeHistoryBackAnimateFlag();
+      setShowComingSoon(false);
+      return true;
+    }
+    if (showLanguage) {
+      clearNativeHistoryBackAnimateFlag();
+      handleCloseLanguage();
+      return true;
+    }
+    if (showEdit) {
+      clearNativeHistoryBackAnimateFlag();
+      handleCloseEditProfile();
+      return true;
+    }
+    if (followState.open) {
+      clearNativeHistoryBackAnimateFlag();
+      handleCloseFollow();
+      return true;
+    }
+    if (showSettings) {
+      clearNativeHistoryBackAnimateFlag();
+      handleCloseSettings();
+      return true;
+    }
+    return false;
+  }, 10), [
+    followState.open,
+    handleCloseEditProfile,
+    handleCloseFollow,
+    handleCloseLanguage,
+    handleCloseSettings,
+    showComingSoon,
+    showDeleteConfirm,
+    showEdit,
+    showLanguage,
+    showSettings,
+  ]);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -551,24 +628,24 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
       {/* ── 슬라이딩 패널 ── */}
       <SettingsPanel
         open={showSettings}
-        onClose={() => setShowSettings(false)}
+        onClose={handleCloseSettings}
         onLogout={handleSignOut}
-        onDeleteAccount={() => { setShowSettings(false); setShowDeleteConfirm(true); }}
-        onLanguage={() => setShowLanguage(true)}
+        onDeleteAccount={() => { handleCloseSettings(); setShowDeleteConfirm(true); }}
+        onLanguage={handleOpenLanguage}
         selectedLanguage={selectedLanguage}
         dictionary={dictionary}
       />
       {/* 언어 설정 패널: 설정 위에 z-60으로 쌓임 */}
       <LanguagePanel
         open={showLanguage}
-        onClose={() => setShowLanguage(false)}
+        onClose={handleCloseLanguage}
         currentLocale={selectedLocale}
         onSelect={handleLanguageSelect}
         dictionary={dictionary}
       />
       <FollowPanel
         open={followState.open} defaultTab={followState.tab} username={username}
-        onClose={() => setFollowState((s) => ({ ...s, open: false }))}
+        onClose={handleCloseFollow}
         dictionary={dictionary}
       />
       <EditProfilePanel
@@ -578,7 +655,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         bio={bio}
         nationalityCode={selectedNationality?.code ?? null}
         profileImageUrl={user?.image}
-        onClose={() => setShowEdit(false)}
+        onClose={handleCloseEditProfile}
         onSave={async (d) => {
           // 로컸 상태 먼저 업데이트 (낙관적 UI)
           setCustomUsername(d.username);
@@ -607,7 +684,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
           <Plus size={24} strokeWidth={2} />
         </button>
         <span className="mx-auto text-[17px] font-bold">{username}</span>
-        <button type="button" onClick={() => setShowSettings(true)} aria-label={dictionary.profile.menuLabel}
+        <button type="button" onClick={handleOpenSettings} aria-label={dictionary.profile.menuLabel}
           className="flex h-9 w-9 items-center justify-center rounded-full transition active:bg-gray-100">
           <Menu size={22} strokeWidth={2} />
         </button>
@@ -636,12 +713,12 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
                 <span className="text-[18px] font-semibold leading-tight">{DUMMY_POSTS.length}</span>
                 <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.postsLabel}</span>
               </button>
-              <button type="button" onClick={() => setFollowState({ open: true, tab: "followers" })}
+              <button type="button" onClick={() => handleOpenFollow("followers")}
                 className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">0</span>
                 <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.followersLabel}</span>
               </button>
-              <button type="button" onClick={() => setFollowState({ open: true, tab: "following" })}
+              <button type="button" onClick={() => handleOpenFollow("following")}
                 className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">0</span>
                 <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.followingLabel}</span>
