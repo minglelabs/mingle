@@ -46,7 +46,7 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const baseTabBarHeightPx = 66;
+  const baseTabBarHeightPx = 72;
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
