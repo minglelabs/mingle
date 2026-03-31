@@ -37,22 +37,21 @@ export default function NativeBottomTabBannerSlot({
   hidden = false,
 }: NativeBottomTabBannerSlotProps) {
   const searchParams = useSearchParams();
-  const nativeBridgeEnabled = useMemo(() => {
+  const nativeUiBridgeEnabled = useMemo(() => {
     const search = searchParams.toString();
-    if (canPostToNativeBridge()) return true;
     return isNativeUiBridgeEnabledFromSearch(search ? `?${search}` : "");
   }, [searchParams]);
 
   useEffect(() => {
-    if (!nativeBridgeEnabled) return;
+    if (!nativeUiBridgeEnabled) return;
     postToNativeBridge({
       type: "native_set_ad_banner_position",
       payload: { position: "bottom" },
     });
-  }, [nativeBridgeEnabled]);
+  }, [nativeUiBridgeEnabled]);
 
   useEffect(() => {
-    if (!nativeBridgeEnabled) return;
+    if (!nativeUiBridgeEnabled) return;
     postToNativeBridge({
       type: "native_ui_overlay_state",
       payload: { menuOpen: hidden },
@@ -64,9 +63,9 @@ export default function NativeBottomTabBannerSlot({
         payload: { menuOpen: false },
       });
     };
-  }, [hidden, nativeBridgeEnabled]);
+  }, [hidden, nativeUiBridgeEnabled]);
 
-  if (!nativeBridgeEnabled || hidden) return null;
+  if (!nativeUiBridgeEnabled || hidden) return null;
 
   return (
     <section
