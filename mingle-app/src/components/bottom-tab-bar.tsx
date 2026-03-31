@@ -131,7 +131,7 @@ export default function BottomTabBar({
 
   return (
     <nav
-      className="flex w-full shrink-0 items-stretch border-t border-[#f4d6a2] bg-white"
+      className="flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
       style={{
         // safe area 즉시 적용: iOS WKWebView에서 초기 렌더부터 반영
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
