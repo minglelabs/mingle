@@ -1610,6 +1610,8 @@ export default function MingleHome(props: MingleHomeProps) {
     );
   }
 
+  const shouldShowBottomTabBar = props.headerMode !== "conversation";
+
   return (
     <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -1649,13 +1651,15 @@ export default function MingleHome(props: MingleHomeProps) {
           storageNamespace={props.storageNamespace}
         />
       </div>
-      <BottomTabBar
-        locale={props.locale}
-        dictionary={props.dictionary}
-        activeRoute={props.bottomTabActiveRoute}
-        onConversationsPress={props.onConversationsTabPress}
-        onMypagePress={props.onMypageTabPress}
-      />
+      {shouldShowBottomTabBar ? (
+        <BottomTabBar
+          locale={props.locale}
+          dictionary={props.dictionary}
+          activeRoute={props.bottomTabActiveRoute}
+          onConversationsPress={props.onConversationsTabPress}
+          onMypagePress={props.onMypageTabPress}
+        />
+      ) : null}
     </main>
   );
 }
