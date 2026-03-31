@@ -556,7 +556,10 @@ export default function ConversationList({
       </header>
 
       {/* ── 대화 목록 ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto"
+        style={{ overscrollBehaviorY: "contain" }}
+      >
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-gray-400">
             <span className="mb-3 text-5xl">💬</span>

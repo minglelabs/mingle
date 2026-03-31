@@ -445,6 +445,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   const [selectedLocale, setSelectedLocale] = useState<AppLocale>(() => resolveAppLocale(locale));
 
   const postsRef = useRef<HTMLDivElement>(null);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   const username = customUsername ?? user?.name ?? dictionary.myPage.anonymousUser;
@@ -510,6 +511,19 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
       router.push(newPath);
     }
   }, [locale, pathname, router]);
+
+  const handleScrollToPosts = useCallback(() => {
+    const container = scrollBodyRef.current;
+    const target = postsRef.current;
+    if (!container || !target) return;
+
+    const nextTop =
+      target.getBoundingClientRect().top
+      - container.getBoundingClientRect().top
+      + container.scrollTop;
+
+    container.scrollTo({ top: nextTop, behavior: "smooth" });
+  }, []);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -594,7 +608,11 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
       </header>
 
       {/* ── 스크롤 본문 ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={scrollBodyRef}
+        className="min-h-0 flex-1 overflow-y-auto"
+        style={{ overscrollBehaviorY: "contain" }}
+      >
         <section className="px-4 pb-3 pt-4">
           {/* 프로필 사진 + 통계 (인스타 레이아웃) */}
           <div className="flex items-center">
@@ -607,7 +625,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
               />
             </div>
             <div className="ml-6 grid flex-1 grid-cols-3 gap-1">
-              <button type="button" onClick={() => postsRef.current?.scrollIntoView({ behavior: "smooth" })}
+              <button type="button" onClick={handleScrollToPosts}
                 className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">{DUMMY_POSTS.length}</span>
                 <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.postsLabel}</span>
