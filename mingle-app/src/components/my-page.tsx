@@ -40,9 +40,6 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: 
   { locale: "th", label: "ภาษาไทย", flag: "🇹🇭" },
   { locale: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
 ];
-const MYPAGE_PANEL_HISTORY_KEY = "__MINGLE_MYPAGE_PANEL__";
-
-type MyPageHistoryPanel = "settings" | "language" | "followers" | "following" | "edit";
 type MyPagePanelTransitionMode = "animate" | "instant";
 
 function getLanguageOption(locale: string | null | undefined) {
@@ -51,41 +48,6 @@ function getLanguageOption(locale: string | null | undefined) {
   return LANGUAGE_OPTIONS.find((option) => option.locale === normalizedLocale) ?? null;
 }
 const DUMMY_POSTS: { id: number; color: string }[] = [];
-
-function readMyPageHistoryPanel(): MyPageHistoryPanel | null {
-  if (typeof window === "undefined") return null;
-  const historyState = window.history.state;
-  if (!historyState || typeof historyState !== "object") return null;
-
-  const panel = (historyState as Record<string, unknown>)[MYPAGE_PANEL_HISTORY_KEY];
-  switch (panel) {
-  case "settings":
-  case "language":
-  case "followers":
-  case "following":
-  case "edit":
-    return panel;
-  default:
-    return null;
-  }
-}
-
-function buildMyPageHistoryState(panel: MyPageHistoryPanel | null): Record<string, unknown> | null {
-  if (typeof window === "undefined") return null;
-
-  const historyState = window.history.state;
-  const nextState = historyState && typeof historyState === "object"
-    ? { ...(historyState as Record<string, unknown>) }
-    : {};
-
-  if (panel) {
-    nextState[MYPAGE_PANEL_HISTORY_KEY] = panel;
-  } else {
-    delete nextState[MYPAGE_PANEL_HISTORY_KEY];
-  }
-
-  return Object.keys(nextState).length > 0 ? nextState : null;
-}
 
 // ── 프로필 아바타 + 국기 배지 컴포넌트 (하나로 통합) ─────────────────────
 function DefaultProfileIcon({ size = 40 }: { size?: number }) {
@@ -498,7 +460,6 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
 
   const postsRef = useRef<HTMLDivElement>(null);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
-  const pendingHistoryPanelTransitionModeRef = useRef<MyPagePanelTransitionMode>("instant");
   const panelTransitionResetTimeoutRef = useRef<number | null>(null);
   const router = useRouter();
   const pathname = usePathname();
@@ -506,15 +467,6 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   const selectedNationality =
     resolveNationalityOption(nationalityCode) ?? resolveNationalityOption(locale);
   const selectedLanguage = getLanguageOption(selectedLocale);
-  const activeHistoryPanel: MyPageHistoryPanel | null = showLanguage
-    ? "language"
-    : showEdit
-      ? "edit"
-      : followState.open
-        ? followState.tab
-        : showSettings
-          ? "settings"
-          : null;
   const shouldHideBottomTabBannerSlot = showSettings
     || showLanguage
     || followState.open
@@ -544,15 +496,6 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
     if (typeof window === "undefined") return;
     if (panelTransitionResetTimeoutRef.current === null) return;
     window.clearTimeout(panelTransitionResetTimeoutRef.current);
-  }, []);
-
-  const requestHistoryPanelClose = useCallback((panel: MyPageHistoryPanel) => {
-    if (typeof window === "undefined") return false;
-    if (readMyPageHistoryPanel() !== panel || window.history.length <= 1) return false;
-
-    pendingHistoryPanelTransitionModeRef.current = "animate";
-    window.history.back();
-    return true;
   }, []);
 
   const handleSignOut = useCallback(async () => {
@@ -613,9 +556,8 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   }, []);
 
   const handleCloseSettings = useCallback(() => {
-    if (requestHistoryPanelClose("settings")) return;
     setShowSettings(false);
-  }, [requestHistoryPanelClose]);
+  }, []);
 
   const handleOpenLanguage = useCallback(() => {
     setPanelTransitionMode("animate");
@@ -623,9 +565,8 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   }, []);
 
   const handleCloseLanguage = useCallback(() => {
-    if (requestHistoryPanelClose("language")) return;
     setShowLanguage(false);
-  }, [requestHistoryPanelClose]);
+  }, []);
 
   const handleOpenFollow = useCallback((tab: FollowTab) => {
     setPanelTransitionMode("animate");
@@ -633,9 +574,8 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   }, []);
 
   const handleCloseFollow = useCallback(() => {
-    if (requestHistoryPanelClose(followState.tab)) return;
     setFollowState((current) => ({ ...current, open: false }));
-  }, [followState.tab, requestHistoryPanelClose]);
+  }, []);
 
   const handleOpenEditProfile = useCallback(() => {
     setEditPanelVersion((currentVersion) => currentVersion + 1);
@@ -644,46 +584,21 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
   }, []);
 
   const handleCloseEditProfile = useCallback(() => {
-    if (requestHistoryPanelClose("edit")) return;
     setShowEdit(false);
-  }, [requestHistoryPanelClose]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !activeHistoryPanel) return;
-    if (readMyPageHistoryPanel() === activeHistoryPanel) return;
-
-    window.history.pushState(
-      buildMyPageHistoryState(activeHistoryPanel),
-      "",
-      window.location.href,
-    );
-  }, [activeHistoryPanel]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     const syncPanelsFromHistory = () => {
-      const nextTransitionMode = pendingHistoryPanelTransitionModeRef.current;
-      pendingHistoryPanelTransitionModeRef.current = "instant";
-      setPanelTransitionMode(nextTransitionMode);
-
-      const historyPanel = readMyPageHistoryPanel();
-      setShowSettings(historyPanel === "settings" || historyPanel === "language");
-      setShowLanguage(historyPanel === "language");
-      setShowEdit(historyPanel === "edit");
+      // iOS 네이티브 뒤로가기 제스처가 예외적으로 발생한 경우 모든 패널을 즉시 닫는다.
+      setPanelTransitionMode("instant");
+      setShowSettings(false);
+      setShowLanguage(false);
+      setShowEdit(false);
       setFollowState((current) => {
-        if (historyPanel === "followers" || historyPanel === "following") {
-          return {
-            open: true,
-            tab: historyPanel,
-          };
-        }
-
         if (!current.open) return current;
-        return {
-          ...current,
-          open: false,
-        };
+        return { ...current, open: false };
       });
 
       if (panelTransitionResetTimeoutRef.current !== null) {
