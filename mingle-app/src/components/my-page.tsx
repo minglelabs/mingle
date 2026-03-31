@@ -35,7 +35,6 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: 
   { locale: "th", label: "ภาษาไทย", flag: "🇹🇭" },
   { locale: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
 ];
-function localeToFlag(l: string) { return LOCALE_FLAG[l] ?? "🌐"; }
 function getLanguageOption(locale: string | null | undefined) {
   const normalizedLocale = normalizeAppLocale(locale);
   if (!normalizedLocale) return null;
@@ -44,17 +43,57 @@ function getLanguageOption(locale: string | null | undefined) {
 const DUMMY_POSTS: { id: number; color: string }[] = [];
 
 // ── 프로필 아바타 + 국기 배지 컴포넌트 (하나로 통합) ─────────────────────
+function DefaultProfileIcon({ size = 40 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 26 26" fill="none" aria-hidden>
+      <circle cx="13" cy="13" r="13" fill="#e5e7eb" />
+      <circle cx="13" cy="10" r="4" fill="#9ca3af" />
+      <path d="M5 22c0-4.418 3.582-8 8-8s8 3.582 8 8" fill="#9ca3af" />
+    </svg>
+  );
+}
+
 function ProfileAvatarBadge({
   size = 86,
+  imageUrl,
+  altLabel,
+  flag,
 }: {
   size?: number;
+  imageUrl?: string | null;
+  altLabel: string;
+  flag?: string | null;
 }) {
+  const badgeSize = Math.max(24, Math.round(size * 0.32));
+  const iconSize = Math.round(size * 0.52);
+
   return (
-    <div
-      aria-hidden="true"
-      className="shrink-0 rounded-full border border-gray-200 bg-white"
-      style={{ width: size, height: size }}
-    />
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+        {imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={altLabel}
+            width={size}
+            height={size}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <DefaultProfileIcon size={iconSize} />
+        )}
+      </div>
+      {flag ? (
+        <div
+          className="absolute bottom-0 left-0 flex items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
+          style={{ width: badgeSize, height: badgeSize }}
+        >
+          <span aria-hidden="true" className="text-sm leading-none">
+            {flag}
+          </span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -306,16 +345,29 @@ function FollowPanel({ open, defaultTab, username, onClose, dictionary }: {
 }
 
 // ── 프로필 편집 패널 ─────────────────────────────────────────────────────
-function EditProfilePanel({ open, username, bio, flag, onClose, onSave, dictionary }: {
-  open: boolean; username: string; bio: string; flag: string;
-  onClose: () => void; onSave: (d: { username: string; bio: string; flag: string }) => void;
+function EditProfilePanel({
+  open,
+  username,
+  bio,
+  nationalityCode,
+  profileImageUrl,
+  onClose,
+  onSave,
+  dictionary,
+}: {
+  open: boolean;
+  username: string;
+  bio: string;
+  nationalityCode: string | null;
+  profileImageUrl?: string | null;
+  onClose: () => void;
+  onSave: (d: { username: string; bio: string; nationalityCode: string | null }) => void;
   dictionary: AppDictionary;
 }) {
   const [lu, setLu] = useState(username);
   const [lb, setLb] = useState(bio);
-  const [lf, setLf] = useState(flag);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (open) { setLu(username); setLb(bio); setLf(flag); } }, [open, username, bio, flag]);
+  const [ln, setLn] = useState<string | null>(nationalityCode);
+  const selectedNationality = resolveNationalityOption(ln);
 
   return (
     <FullPanel open={open} onClose={onClose} zIndex={50}>
@@ -324,11 +376,16 @@ function EditProfilePanel({ open, username, bio, flag, onClose, onSave, dictiona
         onBack={onClose}
         backLabel={dictionary.myPage.cancelAction}
         rightLabel={dictionary.myPage.doneAction}
-        onRight={() => { onSave({ username: lu, bio: lb, flag: lf }); onClose(); }}
+        onRight={() => { onSave({ username: lu, bio: lb, nationalityCode: ln }); onClose(); }}
       />
       <div className="flex-1 overflow-y-auto">
         <div className="flex items-center justify-center py-5">
-          <ProfileAvatarBadge size={80} />
+          <ProfileAvatarBadge
+            size={80}
+            imageUrl={profileImageUrl}
+            altLabel={dictionary.navigation.profileImageAlt}
+            flag={selectedNationality?.flag}
+          />
         </div>
         <div className="space-y-4 px-5 pb-10">
           <div>
@@ -345,12 +402,20 @@ function EditProfilePanel({ open, username, bio, flag, onClose, onSave, dictiona
           </div>
           <div>
             <label className="mb-2 block text-[12px] font-semibold text-gray-500">{dictionary.myPage.nationalityLabel}</label>
-            <div className="flex flex-wrap gap-2">
-              {UNIQUE_FLAGS.map((f) => (
-                <button key={f} type="button" onClick={() => setLf(f)}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl border-2 text-2xl transition"
-                  style={{ borderColor: lf === f ? "#f59e0b" : "transparent", background: lf === f ? "#fef3c7" : "#f3f4f6" }}>
-                  {f}
+            <div className="grid grid-cols-2 gap-2">
+              {NATIONALITY_OPTIONS.map((option) => (
+                <button
+                  key={option.code}
+                  type="button"
+                  onClick={() => setLn(option.code)}
+                  className="flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition"
+                  style={{
+                    borderColor: ln === option.code ? "#f59e0b" : "#e5e7eb",
+                    background: ln === option.code ? "#fef3c7" : "#f9fafb",
+                  }}
+                >
+                  <span aria-hidden="true" className="text-xl leading-none">{option.flag}</span>
+                  <span className="min-w-0 text-[13px] font-medium text-slate-800">{option.label}</span>
                 </button>
               ))}
             </div>
@@ -376,16 +441,16 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
 
   const [customUsername, setCustomUsername] = useState<string | null>(null);
   const [bio, setBio] = useState("");
-  // customFlag: 프로필 편집에서 수동 지정한 국기 (언어 설정과 완전 별개)
-  const [customFlag, setCustomFlag] = useState<string | null>(null);
+  // nationalityCode: 프로필 편집에서 수동 지정한 국적 코드 (언어 설정과 완전 별개)
+  const [nationalityCode, setNationalityCode] = useState<string | null>(null);
   const [selectedLocale, setSelectedLocale] = useState<AppLocale>(() => resolveAppLocale(locale));
 
   const postsRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   const username = customUsername ?? user?.name ?? dictionary.myPage.anonymousUser;
-  // flag: customFlag(프로필 편집에서 설정) or 현재 locale 기반 (언어 설정과 무관)
-  const flag = customFlag ?? localeToFlag(locale);
+  const selectedNationality =
+    resolveNationalityOption(nationalityCode) ?? resolveNationalityOption(locale);
   const selectedLanguage = getLanguageOption(selectedLocale);
   const shouldHideBottomTabBannerSlot = showSettings
     || showLanguage
@@ -402,7 +467,7 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         if (!data) return;
         if (data.displayName) setCustomUsername(data.displayName);
         if (data.bio) setBio(data.bio);
-        if (data.nationality) setCustomFlag(localeToFlag(data.nationality));
+        if (data.nationality) setNationalityCode(resolveNationalityCode(data.nationality));
         if (data.appLocale) setSelectedLocale(resolveAppLocale(data.appLocale, locale));
       })
       .catch(() => {});
@@ -488,24 +553,25 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         dictionary={dictionary}
       />
       <EditProfilePanel
-        open={showEdit} username={username} bio={bio} flag={flag}
+        key={`edit-profile:${showEdit ? "open" : "closed"}:${username}:${bio}:${selectedNationality?.code ?? "none"}`}
+        open={showEdit}
+        username={username}
+        bio={bio}
+        nationalityCode={selectedNationality?.code ?? null}
+        profileImageUrl={user?.image}
         onClose={() => setShowEdit(false)}
         onSave={async (d) => {
           // 로컸 상태 먼저 업데이트 (낙관적 UI)
           setCustomUsername(d.username);
           setBio(d.bio);
-          setCustomFlag(d.flag);
-          // DB에 먹는 nationality는 flag → locale지도에서 역습 필요
-          // flag 이모지 → 로케일 법 (LOCALE_FLAG invert)
-          const natEntry = Object.entries(LOCALE_FLAG).find(([, v]) => v === d.flag);
-          const nationality = natEntry ? natEntry[0] : null;
+          setNationalityCode(d.nationalityCode);
           await fetch("/api/profile", {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               displayName: d.username,
               bio: d.bio,
-              nationality,
+              nationality: d.nationalityCode,
             }),
           });
         }}
@@ -533,7 +599,14 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
         <section className="px-4 pb-3 pt-4">
           {/* 프로필 사진 + 통계 (인스타 레이아웃) */}
           <div className="flex items-center">
-            <ProfileAvatarBadge size={86} />
+            <div className="translate-x-3">
+              <ProfileAvatarBadge
+                size={86}
+                imageUrl={user?.image}
+                altLabel={dictionary.navigation.profileImageAlt}
+                flag={selectedNationality?.flag}
+              />
+            </div>
             <div className="ml-8 flex flex-1 items-stretch justify-around">
               <button type="button" onClick={() => postsRef.current?.scrollIntoView({ behavior: "smooth" })}
                 className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 transition active:opacity-60">
@@ -555,8 +628,8 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
 
           {/* bio (id 없이 바로 소개) */}
           {bio
-            ? <p className="mt-3 text-[14px] leading-snug text-slate-800">{bio}</p>
-            : <p className="mt-3 text-[14px] text-gray-400">{dictionary.myPage.addBioPrompt}</p>}
+            ? <p className="ml-3 mt-3 text-[14px] leading-snug text-slate-800">{bio}</p>
+            : <p className="ml-3 mt-3 text-[14px] text-gray-400">{dictionary.myPage.addBioPrompt}</p>}
 
           {/* 프로필 편집 / 공유 버튼 */}
           <div className="mt-3 flex gap-2">
