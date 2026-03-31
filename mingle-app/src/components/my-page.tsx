@@ -606,21 +606,21 @@ export default function MyPage({ locale, dictionary }: { locale: AppLocale; dict
                 flag={selectedNationality?.flag}
               />
             </div>
-            <div className="ml-8 flex flex-1 items-stretch justify-around">
+            <div className="ml-8 grid flex-1 grid-cols-3 gap-1">
               <button type="button" onClick={() => postsRef.current?.scrollIntoView({ behavior: "smooth" })}
-                className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 transition active:opacity-60">
+                className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">{DUMMY_POSTS.length}</span>
-                <span className="text-[12px] text-gray-500">{dictionary.profile.postsLabel}</span>
+                <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.postsLabel}</span>
               </button>
               <button type="button" onClick={() => setFollowState({ open: true, tab: "followers" })}
-                className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 transition active:opacity-60">
+                className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">0</span>
-                <span className="text-[12px] text-gray-500">{dictionary.profile.followersLabel}</span>
+                <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.followersLabel}</span>
               </button>
               <button type="button" onClick={() => setFollowState({ open: true, tab: "following" })}
-                className="flex flex-col items-center justify-center gap-0.5 px-2 py-1 transition active:opacity-60">
+                className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 px-2 py-1 text-center transition active:opacity-60">
                 <span className="text-[18px] font-semibold leading-tight">0</span>
-                <span className="text-[12px] text-gray-500">{dictionary.profile.followingLabel}</span>
+                <span className="whitespace-nowrap text-[12px] text-gray-500">{dictionary.profile.followingLabel}</span>
               </button>
             </div>
           </div>
