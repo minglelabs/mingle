@@ -2,13 +2,42 @@
 
 import type { AppDictionary } from "@/i18n/types";
 import { useSession } from "next-auth/react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MessageCircle } from "lucide-react";
 
 type BottomTabBarProps = {
   locale: string;
   dictionary: AppDictionary;
 };
+
+const PRESERVED_NATIVE_QUERY_KEYS = [
+  "apiNamespace",
+  "nativeAuth",
+  "nativeBannerPosition",
+  "nativeBottomInsetPx",
+  "nativePlatform",
+  "nativeStt",
+  "nativeTopInsetPx",
+  "nativeUi",
+  "sttDebug",
+  "ttsDebug",
+] as const;
+
+function buildNativeAwareTabPath(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "getAll">,
+): string {
+  const nextSearchParams = new URLSearchParams();
+
+  for (const key of PRESERVED_NATIVE_QUERY_KEYS) {
+    for (const value of searchParams.getAll(key)) {
+      nextSearchParams.append(key, value);
+    }
+  }
+
+  const nextSearch = nextSearchParams.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+}
 
 function DefaultProfileIcon({ size = 26 }: { size?: number }) {
   return (
@@ -46,10 +75,13 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const baseTabBarHeightPx = 72;
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
+  const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams);
+  const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams);
 
   const isConversationsActive =
     pathname === conversationsPath || pathname.startsWith(`/${locale}/conversations`);
@@ -72,7 +104,7 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
       {/* 대화목록 탭 */}
       <button
         type="button"
-        onClick={() => router.push(conversationsPath)}
+        onClick={() => router.push(conversationsHref)}
         className="flex flex-1 items-center justify-center transition-opacity active:opacity-60"
         style={{ paddingBottom: 0 }}
         aria-label={dictionary.navigation.conversationsTab}
@@ -89,7 +121,7 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
       {/* 마이페이지 탭 */}
       <button
         type="button"
-        onClick={() => router.push(mypagePath)}
+        onClick={() => router.push(mypageHref)}
         className="flex flex-1 items-center justify-center transition-opacity active:opacity-60"
         style={{ paddingBottom: 0 }}
         aria-label={dictionary.navigation.myPageTab}

@@ -123,6 +123,8 @@ type AndroidI18nManager = {
   localeIdentifier?: string;
 };
 
+const IOS_TEST_ADMOB_BANNER_UNIT_ID = 'ca-app-pub-3940256099942544/2435281174';
+
 function readRuntimeEnvValue(keys: string[]): string {
   const env = (globalThis as { process?: { env?: RuntimeEnvMap } }).process?.env;
   if (!env) return '';
@@ -1196,7 +1198,9 @@ function AppInner(): React.JSX.Element {
       return null;
     }
   }, []);
-  const nativeBannerUnitId = configuredNativeBannerUnitId;
+  const nativeBannerUnitId = Platform.OS === 'ios' && __DEV__
+    ? IOS_TEST_ADMOB_BANNER_UNIT_ID
+    : configuredNativeBannerUnitId;
   const nativeCanvasScale = useMemo(
     () => resolveNativeCanvasScale(windowWidthPx),
     [windowWidthPx],

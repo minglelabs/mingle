@@ -846,6 +846,10 @@ resolve_devbox_ad_banner_height_px() {
 
 resolve_devbox_admob_app_id_ios() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_IOS || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
@@ -856,15 +860,15 @@ resolve_devbox_admob_app_id_ios() {
     printf '%s' "$value"
     return 0
   fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
-    return 0
-  fi
   printf '%s' ""
 }
 
 resolve_devbox_admob_app_id_android() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_ANDROID || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
@@ -873,10 +877,6 @@ resolve_devbox_admob_app_id_android() {
   value="$(read_rn_mobile_ads_app_id android_app_id)"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
     return 0
   fi
   printf '%s' ""
@@ -907,13 +907,13 @@ read_rn_mobile_ads_app_id() {
 
 resolve_devbox_admob_banner_unit_id_ios() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_IOS || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
     return 0
   fi
   printf '%s' ""
@@ -921,13 +921,13 @@ resolve_devbox_admob_banner_unit_id_ios() {
 
 resolve_devbox_admob_banner_unit_id_android() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_ANDROID || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
     return 0
   fi
   printf '%s' ""
