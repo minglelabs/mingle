@@ -20,6 +20,13 @@ type MingleHomeProps = {
   googleOAuthEnabled: boolean;
   initialNativePlatform?: NativeRuntimePlatform | null;
   locale: AppLocale;
+  headerMode?: "default" | "conversation";
+  onBack?: () => void;
+  sessionKeyOverride?: string;
+  storageNamespace?: string;
+  bottomTabActiveRoute?: "conversations" | "mypage" | null;
+  onConversationsTabPress?: () => void;
+  onMypageTabPress?: () => void;
 };
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
@@ -1635,9 +1642,20 @@ export default function MingleHome(props: MingleHomeProps) {
           isAuthActionPending={isDeletingAccount}
           showMenuButton
           showAccountActions={status === "authenticated"}
+          headerMode={props.headerMode}
+          backButtonLabel={props.dictionary.profile.emailBackLabel}
+          onBack={props.onBack}
+          sessionKeyOverride={props.sessionKeyOverride}
+          storageNamespace={props.storageNamespace}
         />
       </div>
-      <BottomTabBar locale={props.locale} dictionary={props.dictionary} />
+      <BottomTabBar
+        locale={props.locale}
+        dictionary={props.dictionary}
+        activeRoute={props.bottomTabActiveRoute}
+        onConversationsPress={props.onConversationsTabPress}
+        onMypagePress={props.onMypageTabPress}
+      />
     </main>
   );
 }

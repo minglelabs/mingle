@@ -8,6 +8,9 @@ import { MessageCircle } from "lucide-react";
 type BottomTabBarProps = {
   locale: string;
   dictionary: AppDictionary;
+  activeRoute?: "conversations" | "mypage" | null;
+  onConversationsPress?: () => void;
+  onMypagePress?: () => void;
 };
 
 const PRESERVED_NATIVE_QUERY_KEYS = [
@@ -71,7 +74,13 @@ function ProfileAvatar({
   return <DefaultProfileIcon size={28} />;
 }
 
-export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) {
+export default function BottomTabBar({
+  locale,
+  dictionary,
+  activeRoute,
+  onConversationsPress,
+  onMypagePress,
+}: BottomTabBarProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
@@ -83,10 +92,12 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams);
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams);
 
-  const isConversationsActive =
-    pathname === conversationsPath || pathname.startsWith(`/${locale}/conversations`);
-  const isMypageActive =
-    pathname === mypagePath || pathname.startsWith(`/${locale}/mypage`);
+  const isConversationsActive = activeRoute === undefined
+    ? (pathname === conversationsPath || pathname.startsWith(`/${locale}/conversations`))
+    : activeRoute === "conversations";
+  const isMypageActive = activeRoute === undefined
+    ? (pathname === mypagePath || pathname.startsWith(`/${locale}/mypage`))
+    : activeRoute === "mypage";
 
   const activeColor = "#f59e0b";
   const inactiveColor = "#9ca3af";
@@ -104,7 +115,13 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
       {/* 대화목록 탭 */}
       <button
         type="button"
-        onClick={() => router.push(conversationsHref)}
+        onClick={() => {
+          if (onConversationsPress) {
+            onConversationsPress();
+            return;
+          }
+          router.push(conversationsHref);
+        }}
         className="flex flex-1 items-center justify-center transition-opacity active:opacity-60"
         style={{ paddingBottom: 0 }}
         aria-label={dictionary.navigation.conversationsTab}
@@ -121,7 +138,13 @@ export default function BottomTabBar({ locale, dictionary }: BottomTabBarProps) 
       {/* 마이페이지 탭 */}
       <button
         type="button"
-        onClick={() => router.push(mypageHref)}
+        onClick={() => {
+          if (onMypagePress) {
+            onMypagePress();
+            return;
+          }
+          router.push(mypageHref);
+        }}
         className="flex flex-1 items-center justify-center transition-opacity active:opacity-60"
         style={{ paddingBottom: 0 }}
         aria-label={dictionary.navigation.myPageTab}

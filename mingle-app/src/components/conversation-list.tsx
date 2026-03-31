@@ -1,6 +1,9 @@
 "use client";
 
+import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
+import type { ConversationChannelSummary } from "@/lib/app-conversations";
+import type { NativeRuntimePlatform } from "@/lib/native-runtime-platform";
 import {
   forwardRef,
   type FormEvent,
@@ -12,8 +15,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Search, MessageCirclePlus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, MessageCirclePlus, Search } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import BottomTabBar from "@/components/bottom-tab-bar";
+import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
 
@@ -21,87 +27,52 @@ const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
+const ACTIVE_STATUS_LABEL = "Live session";
+const PAUSED_STATUS_LABEL = "Paused";
+const PRESERVED_NATIVE_QUERY_KEYS = [
+  "apiNamespace",
+  "nativeAuth",
+  "nativeBannerPosition",
+  "nativeBottomInsetPx",
+  "nativePlatform",
+  "nativeStt",
+  "nativeTopInsetPx",
+  "nativeUi",
+  "sttDebug",
+  "ttsDebug",
+] as const;
+const CONVERSATION_AVATAR_COLORS = [
+  "#fb7185",
+  "#38bdf8",
+  "#34d399",
+  "#f59e0b",
+  "#a78bfa",
+  "#f97316",
+] as const;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
 
-// ── 국기 매핑 ────────────────────────────────────────────────────────────
-const LOCALE_FLAG: Record<string, string> = {
-  ko: "🇰🇷", ja: "🇯🇵", en: "🇺🇸", zh: "🇨🇳", "zh-TW": "🇹🇼",
-  fr: "🇫🇷", de: "🇩🇪", es: "🇪🇸", pt: "🇧🇷", it: "🇮🇹",
-  ru: "🇷🇺", ar: "🇸🇦", hi: "🇮🇳", th: "🇹🇭", vi: "🇻🇳",
+type TranslatorConfig = {
+  appleWebOAuthEnabled: boolean;
+  appleNativeAuthEnabled: boolean;
+  googleOAuthEnabled: boolean;
+  initialNativePlatform?: NativeRuntimePlatform | null;
 };
 
-// ── 더미 대화방 데이터 ────────────────────────────────────────────────────
 interface ConversationItem {
   id: string;
-  name: string;
-  countryLocale: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
+  title: string;
+  preview: string;
+  timeLabel: string;
+  status: "active" | "paused";
+  avatarText: string;
   avatarColor: string;
-}
-
-function buildDummyConversations(
-  dictionary: AppDictionary,
-): ConversationItem[] {
-  return [
-    {
-      id: "1",
-      name: "Yuki",
-      countryLocale: "ja",
-      lastMessage: dictionary.conversations.sampleMessages.yuki,
-      time: "02:07",
-      unread: 0,
-      avatarColor: "#f9a8d4",
-    },
-    {
-      id: "2",
-      name: "Maria",
-      countryLocale: "es",
-      lastMessage: dictionary.conversations.sampleMessages.maria,
-      time: dictionary.conversations.yesterdayLabel,
-      unread: 2,
-      avatarColor: "#a5b4fc",
-    },
-    {
-      id: "3",
-      name: "Wei",
-      countryLocale: "zh",
-      lastMessage: dictionary.conversations.sampleMessages.wei,
-      time: dictionary.conversations.yesterdayLabel,
-      unread: 1,
-      avatarColor: "#6ee7b7",
-    },
-    {
-      id: "4",
-      name: "Emma",
-      countryLocale: "en",
-      lastMessage: dictionary.conversations.sampleMessages.emma,
-      time: dictionary.conversations.yesterdayLabel,
-      unread: 1,
-      avatarColor: "#fcd34d",
-    },
-    {
-      id: "5",
-      name: "Linh",
-      countryLocale: "vi",
-      lastMessage: dictionary.conversations.sampleMessages.linh,
-      time: dictionary.conversations.saturdayLabel,
-      unread: 0,
-      avatarColor: "#f87171",
-    },
-    {
-      id: "6",
-      name: "Paris",
-      countryLocale: "fr",
-      lastMessage: dictionary.conversations.sampleMessages.paris,
-      time: dictionary.conversations.saturdayLabel,
-      unread: 1,
-      avatarColor: "#93c5fd",
-    },
-  ];
+  sequenceNumber: number;
+  sessionKey: string;
+  createdAt: string;
+  updatedAt: string;
+  pausedAt: string | null;
 }
 
 function normalizeSearchTerm(rawValue: string): string {
@@ -161,10 +132,7 @@ function writeStoredRecentSearches(nextRecentSearches: string[]): void {
     const normalized = normalizeRecentSearches(nextRecentSearches);
     const serialized = JSON.stringify(normalized);
     cacheRecentSearchesSnapshot(serialized, normalized);
-    window.localStorage.setItem(
-      RECENT_SEARCHES_STORAGE_KEY,
-      serialized,
-    );
+    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, serialized);
     window.dispatchEvent(new Event(RECENT_SEARCHES_SYNC_EVENT));
   } catch {
     // Ignore storage write failures in restricted environments.
@@ -196,56 +164,139 @@ function subscribeRecentSearches(onStoreChange: () => void): () => void {
   };
 }
 
-// ── 대화방 아이템 ─────────────────────────────────────────────────────────
+function buildNativeAwarePath(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "getAll">,
+): string {
+  const nextSearchParams = new URLSearchParams();
+
+  for (const key of PRESERVED_NATIVE_QUERY_KEYS) {
+    for (const value of searchParams.getAll(key)) {
+      nextSearchParams.append(key, value);
+    }
+  }
+
+  const nextSearch = nextSearchParams.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+}
+
+function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
+  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+}
+
+function upsertConversation(
+  conversations: ConversationChannelSummary[],
+  nextConversation: ConversationChannelSummary,
+): ConversationChannelSummary[] {
+  return [
+    nextConversation,
+    ...conversations.filter((conversation) => conversation.id !== nextConversation.id),
+  ].sort(compareConversationRecency);
+}
+
+function formatConversationTime(isoTimestamp: string, locale: string): string {
+  const timestamp = new Date(isoTimestamp);
+  if (Number.isNaN(timestamp.getTime())) return "";
+
+  const now = new Date();
+  const isSameDay = timestamp.toDateString() === now.toDateString();
+
+  try {
+    if (isSameDay) {
+      return new Intl.DateTimeFormat(locale, {
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(timestamp);
+    }
+
+    return new Intl.DateTimeFormat(locale, {
+      month: "numeric",
+      day: "numeric",
+    }).format(timestamp);
+  } catch {
+    return isSameDay
+      ? timestamp.toLocaleTimeString()
+      : `${timestamp.getMonth() + 1}/${timestamp.getDate()}`;
+  }
+}
+
+function mapConversationSummaryToItem(
+  conversation: ConversationChannelSummary,
+  locale: string,
+): ConversationItem {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    preview: conversation.status === "active" ? ACTIVE_STATUS_LABEL : PAUSED_STATUS_LABEL,
+    timeLabel: formatConversationTime(conversation.updatedAt, locale),
+    status: conversation.status,
+    avatarText: String(conversation.sequenceNumber),
+    avatarColor:
+      CONVERSATION_AVATAR_COLORS[(conversation.sequenceNumber - 1) % CONVERSATION_AVATAR_COLORS.length],
+    sequenceNumber: conversation.sequenceNumber,
+    sessionKey: conversation.sessionKey,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+    pausedAt: conversation.pausedAt,
+  };
+}
+
+async function readConversationResponse(response: Response): Promise<ConversationChannelSummary> {
+  const body = await response.json() as {
+    conversation?: ConversationChannelSummary;
+    error?: string;
+  };
+  if (!response.ok || !body.conversation) {
+    throw new Error(body.error || "conversation_request_failed");
+  }
+  return body.conversation;
+}
+
 function ConversationRow({
   item,
+  disabled = false,
   onSelect,
 }: {
   item: ConversationItem;
+  disabled?: boolean;
   onSelect?: (item: ConversationItem) => void;
 }) {
-  const flag = LOCALE_FLAG[item.countryLocale] ?? "🌐";
-
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
-      className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-gray-50 active:bg-gray-100"
+      disabled={disabled}
+      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {/* 프로필 사진 + 국기 */}
-      <div className="relative shrink-0">
-        <div
-          className="flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold text-white"
-          style={{ background: item.avatarColor }}
-        >
-          {item.name[0]}
-        </div>
-        {/* 국기 배지 */}
-        <span className="absolute bottom-0 left-0 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white bg-white text-[11px]">
-          {flag}
-        </span>
+      <div
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white"
+        style={{ backgroundColor: item.avatarColor }}
+      >
+        {item.avatarText}
       </div>
 
-      {/* 텍스트 영역 */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-baseline justify-between">
-          <span className="text-[15px] font-semibold text-slate-900 truncate">{item.name}</span>
-          <span className="ml-2 shrink-0 text-[12px] text-gray-400">{item.time}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
+          <span className="shrink-0 text-[12px] text-gray-400">{item.timeLabel}</span>
         </div>
-        <div className="flex items-center justify-between mt-0.5">
-          <p className="truncate text-[13px] text-gray-500">{item.lastMessage}</p>
-          {item.unread > 0 && (
-            <span className="ml-2 flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#7c3aed] px-1.5 text-[11px] font-bold text-white">
-              {item.unread}
-            </span>
-          )}
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <p className="truncate text-[13px] text-gray-500">{item.preview}</p>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+              item.status === "active"
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-slate-100 text-slate-500"
+            }`}
+          >
+            {item.status}
+          </span>
         </div>
       </div>
     </button>
   );
 }
 
-// ── 검색 오버레이 ─────────────────────────────────────────────────────────
 type SearchOverlayHandle = {
   focusInput: () => void;
 };
@@ -255,6 +306,8 @@ type SearchOverlayProps = {
   onClose: () => void;
   conversations: ConversationItem[];
   dictionary: AppDictionary;
+  onSelectConversation: (item: ConversationItem) => void;
+  actionDisabled?: boolean;
 };
 
 const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(function SearchOverlay({
@@ -262,6 +315,8 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   onClose,
   conversations,
   dictionary,
+  onSelectConversation,
+  actionDisabled = false,
 }, ref) {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -341,11 +396,11 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
     if (!normalizedQuery) return [];
 
     return conversations.filter(
-      (c) =>
-        c.name.toLocaleLowerCase().includes(normalizedQuery) ||
-        c.lastMessage.toLocaleLowerCase().includes(normalizedQuery),
+      (conversation) =>
+        conversation.title.toLocaleLowerCase().includes(normalizedQuery)
+        || conversation.preview.toLocaleLowerCase().includes(normalizedQuery),
     );
-  }, [query, conversations]);
+  }, [conversations, query]);
 
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -360,8 +415,9 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   }, [focusInput, persistRecentSearch]);
 
   const handleResultSelect = useCallback((item: ConversationItem) => {
-    persistRecentSearch(query || item.name);
-  }, [persistRecentSearch, query]);
+    persistRecentSearch(query || item.title);
+    onSelectConversation(item);
+  }, [onSelectConversation, persistRecentSearch, query]);
 
   const handleClearRecentSearches = useCallback(() => {
     writeStoredRecentSearches([]);
@@ -391,19 +447,18 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
         }
       }}
     >
-      {/* 검색 입력 */}
       <form
         onSubmit={handleSubmit}
         className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
         style={{ paddingTop: "env(safe-area-inset-top, 44px)", marginTop: "12px" }}
       >
         <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
-          <Search size={16} className="text-gray-400 shrink-0" />
+          <Search size={16} className="shrink-0 text-gray-400" />
           <input
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder={dictionary.conversations.searchPlaceholder}
             className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-gray-400"
             enterKeyHint="search"
@@ -428,10 +483,14 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
             </div>
           ) : (
             <div className="pt-2">
-              {filtered.map((item, idx) => (
+              {filtered.map((item, index) => (
                 <div key={item.id}>
-                  <ConversationRow item={item} onSelect={handleResultSelect} />
-                  {idx < filtered.length - 1 && (
+                  <ConversationRow
+                    item={item}
+                    disabled={actionDisabled}
+                    onSelect={handleResultSelect}
+                  />
+                  {index < filtered.length - 1 && (
                     <div className="mx-4 h-px bg-gray-100" />
                   )}
                 </div>
@@ -484,22 +543,56 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
   );
 });
 
-// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 type ConversationListProps = {
-  locale: string;
+  locale: AppLocale;
   dictionary: AppDictionary;
+  initialConversations: ConversationChannelSummary[];
+  translatorConfig: TranslatorConfig;
 };
 
 export default function ConversationList({
   locale,
   dictionary,
+  initialConversations,
+  translatorConfig,
 }: ConversationListProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [showSearch, setShowSearch] = useState(false);
-  const searchOverlayRef = useRef<SearchOverlayHandle>(null);
-  const conversations = useMemo(
-    () => buildDummyConversations(dictionary),
-    [dictionary],
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
+    [...initialConversations].sort(compareConversationRecency),
   );
+  const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+
+  const conversationItems = useMemo(
+    () => conversations.map((conversation) => mapConversationSummaryToItem(conversation, locale)),
+    [conversations, locale],
+  );
+  const actionDisabled = isCreatingConversation || mutatingConversationId !== null;
+
+  const updateConversationStatus = useCallback(async (
+    conversationId: string,
+    status: "active" | "paused",
+  ) => {
+    setMutatingConversationId(conversationId);
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const nextConversation = await readConversationResponse(response);
+      setConversations((current) => upsertConversation(current, nextConversation));
+      return nextConversation;
+    } finally {
+      setMutatingConversationId((current) => (
+        current === conversationId ? null : current
+      ));
+    }
+  }, []);
 
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
@@ -511,18 +604,84 @@ export default function ConversationList({
     }, 180);
   }, []);
 
+  const handleCreateConversation = useCallback(async () => {
+    if (isCreatingConversation || mutatingConversationId) return;
+    setIsCreatingConversation(true);
+    try {
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+      });
+      const nextConversation = await readConversationResponse(response);
+      setConversations((current) => upsertConversation(current, nextConversation));
+      setActiveConversation(nextConversation);
+    } catch {
+      window.alert("Failed to create a conversation.");
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  }, [isCreatingConversation, mutatingConversationId]);
+
+  const handleOpenConversation = useCallback(async (item: ConversationItem) => {
+    if (isCreatingConversation || mutatingConversationId) return;
+
+    const matchedConversation = conversations.find((conversation) => conversation.id === item.id);
+    if (!matchedConversation) return;
+
+    if (matchedConversation.status === "active") {
+      setShowSearch(false);
+      setActiveConversation(matchedConversation);
+      return;
+    }
+
+    try {
+      const nextConversation = await updateConversationStatus(matchedConversation.id, "active");
+      if (!nextConversation) return;
+      setShowSearch(false);
+      setActiveConversation(nextConversation);
+    } catch {
+      window.alert("Failed to open the conversation.");
+    }
+  }, [conversations, isCreatingConversation, mutatingConversationId, updateConversationStatus]);
+
+  const handleCloseActiveConversation = useCallback(async () => {
+    if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
+
+    try {
+      const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
+      if (!pausedConversation) return;
+      setActiveConversation(null);
+    } catch {
+      window.alert("Failed to pause the conversation.");
+    }
+  }, [activeConversation, isCreatingConversation, mutatingConversationId, updateConversationStatus]);
+
+  const handleNavigateToMypage = useCallback(async () => {
+    if (activeConversation) {
+      try {
+        const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
+        if (!pausedConversation) return;
+      } catch {
+        window.alert("Failed to pause the conversation.");
+        return;
+      }
+    }
+
+    const mypageHref = buildNativeAwarePath(`/${locale}/mypage`, searchParams);
+    router.push(mypageHref);
+  }, [activeConversation, locale, router, searchParams, updateConversationStatus]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
-      {/* ── 검색 오버레이 ── */}
       <SearchOverlay
         ref={searchOverlayRef}
         open={showSearch}
         onClose={() => setShowSearch(false)}
-        conversations={conversations}
+        conversations={conversationItems}
         dictionary={dictionary}
+        onSelectConversation={handleOpenConversation}
+        actionDisabled={actionDisabled}
       />
 
-      {/* ── 상단 헤더 ── */}
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -530,12 +689,9 @@ export default function ConversationList({
           height: "calc(56px + env(safe-area-inset-top, 44px))",
         }}
       >
-        {/* Mingle 워드마크 */}
         <MingleWordmark />
 
-        {/* 우측 아이콘 */}
         <div className="flex items-center gap-1">
-          {/* 검색 */}
           <button
             type="button"
             onClick={handleOpenSearch}
@@ -544,23 +700,24 @@ export default function ConversationList({
           >
             <Search size={22} strokeWidth={2} />
           </button>
-          {/* 대화 추가 */}
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+            onClick={handleCreateConversation}
+            disabled={actionDisabled}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
             aria-label={dictionary.conversations.newConversationButtonLabel}
           >
-            <MessageCirclePlus size={22} strokeWidth={2} />
+            {isCreatingConversation ? (
+              <Loader2 size={22} className="animate-spin" strokeWidth={2} />
+            ) : (
+              <MessageCirclePlus size={22} strokeWidth={2} />
+            )}
           </button>
         </div>
       </header>
 
-      {/* ── 대화 목록 ── */}
-      <div
-        className="min-h-0 flex-1 overflow-y-auto"
-        style={{ overscrollBehaviorY: "contain" }}
-      >
-        {conversations.length === 0 ? (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {conversationItems.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-gray-400">
             <span className="mb-3 text-5xl">💬</span>
             <p className="text-[15px] font-semibold text-slate-700">
@@ -572,10 +729,14 @@ export default function ConversationList({
           </div>
         ) : (
           <div>
-            {conversations.map((item, idx) => (
+            {conversationItems.map((item, index) => (
               <div key={item.id}>
-                <ConversationRow item={item} />
-                {idx < conversations.length - 1 && (
+                <ConversationRow
+                  item={item}
+                  disabled={actionDisabled}
+                  onSelect={handleOpenConversation}
+                />
+                {index < conversationItems.length - 1 && (
                   <div className="mx-4 h-px bg-gray-100" />
                 )}
               </div>
@@ -585,8 +746,37 @@ export default function ConversationList({
         <NativeBottomTabBannerSlot hidden={showSearch} />
       </div>
 
-      {/* ── 하단 탭바 ── */}
       <BottomTabBar locale={locale} dictionary={dictionary} />
+
+      <AnimatePresence>
+        {activeConversation ? (
+          <motion.div
+            key={activeConversation.id}
+            initial={{ x: "100%" }}
+            animate={{ x: "0%" }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 z-50 overflow-hidden bg-white"
+          >
+            <MingleHome
+              key={activeConversation.id}
+              dictionary={dictionary}
+              locale={locale}
+              appleWebOAuthEnabled={translatorConfig.appleWebOAuthEnabled}
+              appleNativeAuthEnabled={translatorConfig.appleNativeAuthEnabled}
+              googleOAuthEnabled={translatorConfig.googleOAuthEnabled}
+              initialNativePlatform={translatorConfig.initialNativePlatform}
+              headerMode="conversation"
+              onBack={handleCloseActiveConversation}
+              sessionKeyOverride={activeConversation.sessionKey}
+              storageNamespace={activeConversation.id}
+              bottomTabActiveRoute={null}
+              onConversationsTabPress={handleCloseActiveConversation}
+              onMypageTabPress={handleNavigateToMypage}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </main>
   );
 }

@@ -34,6 +34,12 @@ const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
 
+function buildStorageKey(baseKey: string, namespace?: string): string {
+  const normalizedNamespace = (namespace || '').trim()
+  if (!normalizedNamespace) return baseKey
+  return `${baseKey}__${normalizedNamespace}`
+}
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -531,6 +537,8 @@ interface UseRealtimeSTTOptions {
   enableAec?: boolean
   sonioxManualFinalizeSilenceMs?: number
   usageLimitSec?: number | null
+  sessionKeyOverride?: string
+  storageNamespace?: string
 }
 
 interface LocalFinalizeResult {
@@ -1436,13 +1444,19 @@ function createSpeakerAvatarSeed(): string {
   return `avatar_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
 }
 
-export function getOrCreateSessionKey(): string {
+export function getOrCreateSessionKey(
+  storageNamespace?: string,
+  preferredSessionKey?: string,
+): string {
+  const normalizedPreferredSessionKey = (preferredSessionKey || '').trim()
+  if (normalizedPreferredSessionKey) return normalizedPreferredSessionKey
   if (typeof window === 'undefined') return createSessionKey()
   try {
-    const existing = window.localStorage.getItem(LS_KEY_SESSION)?.trim()
+    const storageKey = buildStorageKey(LS_KEY_SESSION, storageNamespace)
+    const existing = window.localStorage.getItem(storageKey)?.trim()
     if (existing) return existing
     const generated = createSessionKey()
-    window.localStorage.setItem(LS_KEY_SESSION, generated)
+    window.localStorage.setItem(storageKey, generated)
     return generated
   } catch {
     return createSessionKey()
@@ -1537,6 +1551,8 @@ export default function useRealtimeSTT({
   enableAec = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
+  sessionKeyOverride,
+  storageNamespace,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
   const connectionStatusRef = useRef<ConnectionStatus>(connectionStatus)
@@ -1562,7 +1578,7 @@ export default function useRealtimeSTT({
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const stored = localStorage.getItem(LS_KEY_UTTERANCES)
+      const stored = localStorage.getItem(buildStorageKey(LS_KEY_UTTERANCES, storageNamespace))
       if (stored) {
         const parsed: Utterance[] = JSON.parse(stored)
         const seen = new Set<string>()
@@ -1576,6 +1592,11 @@ export default function useRealtimeSTT({
         storageLoadedCountRef.current = initial.length
         setUtteranceStore(createUtteranceStoreState(initial))
         setHasOlderUtterances(all.length > initial.length)
+      } else {
+        storedUtterancesRef.current = []
+        storageLoadedCountRef.current = 0
+        setUtteranceStore(createUtteranceStoreState([]))
+        setHasOlderUtterances(false)
       }
     } catch {
       storedUtterancesRef.current = []
@@ -1585,7 +1606,10 @@ export default function useRealtimeSTT({
     }
 
     try {
-      const parsedUsage = Number.parseInt(localStorage.getItem(LS_KEY_USAGE) || '0', 10)
+      const parsedUsage = Number.parseInt(
+        localStorage.getItem(buildStorageKey(LS_KEY_USAGE, storageNamespace)) || '0',
+        10,
+      )
       setUsageSec(Number.isFinite(parsedUsage) && parsedUsage >= 0 ? parsedUsage : 0)
     } catch {
       setUsageSec(0)
@@ -1593,7 +1617,7 @@ export default function useRealtimeSTT({
 
     storageHydratedRef.current = true
     setIsStorageHydrated(true)
-  }, [])
+  }, [storageNamespace])
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
@@ -1771,13 +1795,16 @@ export default function useRealtimeSTT({
     if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
     utterancePersistTimerRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterances)))
+        localStorage.setItem(
+          buildStorageKey(LS_KEY_UTTERANCES, storageNamespace),
+          JSON.stringify(buildMergedUtterances(utterances)),
+        )
       } catch { /* ignore */ }
     }, 1000)
     return () => {
       if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
     }
-  }, [utterances, buildMergedUtterances])
+  }, [utterances, buildMergedUtterances, storageNamespace])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
@@ -1787,20 +1814,23 @@ export default function useRealtimeSTT({
       clearTimeout(utterancePersistTimerRef.current)
       utterancePersistTimerRef.current = null
       try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterancesRef.current)))
+        localStorage.setItem(
+          buildStorageKey(LS_KEY_UTTERANCES, storageNamespace),
+          JSON.stringify(buildMergedUtterances(utterancesRef.current)),
+        )
       } catch { /* ignore */ }
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances])
+  }, [buildMergedUtterances, storageNamespace])
 
   // Persist usage to localStorage
   useEffect(() => {
     if (!storageHydratedRef.current) return
     try {
-      localStorage.setItem(LS_KEY_USAGE, String(usageSec))
+      localStorage.setItem(buildStorageKey(LS_KEY_USAGE, storageNamespace), String(usageSec))
     } catch { /* ignore */ }
-  }, [usageSec])
+  }, [storageNamespace, usageSec])
 
   useEffect(() => {
     utterancesRef.current = utterances
@@ -1816,10 +1846,10 @@ export default function useRealtimeSTT({
 
   const ensureSessionKey = useCallback(() => {
     if (sessionKeyRef.current) return sessionKeyRef.current
-    const resolved = getOrCreateSessionKey()
+    const resolved = getOrCreateSessionKey(storageNamespace, sessionKeyOverride)
     sessionKeyRef.current = resolved
     return resolved
-  }, [])
+  }, [sessionKeyOverride, storageNamespace])
 
   const ensureSpeakerAvatarSessionSeed = useCallback(() => {
     if (speakerAvatarSessionSeedRef.current) return speakerAvatarSessionSeedRef.current
