@@ -124,6 +124,7 @@ type AndroidI18nManager = {
 };
 
 const IOS_TEST_ADMOB_BANNER_UNIT_ID = 'ca-app-pub-3940256099942544/2435281174';
+const GOOGLE_SAMPLE_ADMOB_BANNER_UNIT_PREFIX = 'ca-app-pub-3940256099942544/';
 
 function readRuntimeEnvValue(keys: string[]): string {
   const env = (globalThis as { process?: { env?: RuntimeEnvMap } }).process?.env;
@@ -995,6 +996,10 @@ function normalizeServerBannerUnitId(rawValue: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function isSampleAdmobBannerUnitId(rawValue: string): boolean {
+  return rawValue.trim().startsWith(GOOGLE_SAMPLE_ADMOB_BANNER_UNIT_PREFIX);
+}
+
 function resolveNativeBannerHeightPx(rawValue: string | number | undefined): number {
   const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? '');
   if (!Number.isFinite(numeric)) return NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX;
@@ -1190,6 +1195,10 @@ function AppInner(): React.JSX.Element {
     return (readRuntimeEnvValue(platformEnvKeys) || runtimeFallback).trim();
   }, []);
   const [serverBannerUnitIdOverride, setServerBannerUnitIdOverride] = useState<string | null>(null);
+  const shouldPreferLocalNativeBannerUnitId = useMemo(
+    () => isSampleAdmobBannerUnitId(defaultNativeBannerUnitId),
+    [defaultNativeBannerUnitId],
+  );
   const configuredNativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
@@ -1470,7 +1479,11 @@ function AppInner(): React.JSX.Element {
       })
       .then((policy) => {
         if (!active || settled) return;
-        setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
+        setServerBannerUnitIdOverride(
+          shouldPreferLocalNativeBannerUnitId
+            ? null
+            : normalizeServerBannerUnitId(policy.adMob?.bannerUnitId),
+        );
         setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {
@@ -1540,7 +1553,13 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
+  }, [
+    presentRecommendPrompt,
+    setNativeAppUpdateSnapshot,
+    shouldPreferLocalNativeBannerUnitId,
+    versionPolicyFallback,
+    versionPolicyLocale,
+  ]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
