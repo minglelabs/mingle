@@ -19,7 +19,6 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Loader2, MessageCirclePlus, Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import BottomTabBar from "@/components/bottom-tab-bar";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
@@ -798,22 +797,6 @@ export default function ConversationList({
     return true;
   }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
 
-  const handleNavigateToMypage = useCallback(async () => {
-    if (activeConversation) {
-      try {
-        const pausedConversation = await updateConversationStatus(activeConversation.id, "paused");
-        if (!pausedConversation) return;
-        replaceConversationOverlayUrl(null);
-        setActiveConversation(null);
-      } catch {
-        window.alert("Failed to pause the conversation.");
-        return;
-      }
-    }
-
-    const mypageHref = buildNativeAwarePath(`/${locale}/mypage`, searchParams);
-    router.push(mypageHref);
-  }, [activeConversation, locale, router, searchParams, updateConversationStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !activeConversation) return;
@@ -926,11 +909,8 @@ export default function ConversationList({
         />
       </div>
 
-      {!isConversationOverlayOpen ? (
-        <BottomTabBar locale={locale} dictionary={dictionary} />
-      ) : null}
 
-      {typeof document !== "undefined"
+{typeof document !== "undefined"
         ? createPortal(
           <AnimatePresence custom={overlayExitMode}>
             {activeConversation ? (
@@ -955,9 +935,6 @@ export default function ConversationList({
                   onBack={handleCloseActiveConversation}
                   sessionKeyOverride={activeConversation.sessionKey}
                   storageNamespace={activeConversation.id}
-                  bottomTabActiveRoute={null}
-                  onConversationsTabPress={handleCloseActiveConversation}
-                  onMypageTabPress={handleNavigateToMypage}
                 />
               </motion.div>
             ) : null}

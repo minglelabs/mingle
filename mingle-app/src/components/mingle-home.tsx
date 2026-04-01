@@ -2,7 +2,6 @@
 
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import BottomTabBar from "@/components/bottom-tab-bar";
 import NativeAdBannerSuppressor from "@/components/native-ad-banner-suppressor";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
@@ -25,9 +24,6 @@ type MingleHomeProps = {
   onBack?: () => void;
   sessionKeyOverride?: string;
   storageNamespace?: string;
-  bottomTabActiveRoute?: "conversations" | "mypage" | null;
-  onConversationsTabPress?: () => void;
-  onMypageTabPress?: () => void;
 };
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
@@ -1612,8 +1608,6 @@ export default function MingleHome(props: MingleHomeProps) {
     );
   }
 
-  const shouldShowBottomTabBar = props.headerMode !== "conversation";
-
   return (
     <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <div className="min-h-0 flex-1 overflow-hidden">
@@ -1653,15 +1647,6 @@ export default function MingleHome(props: MingleHomeProps) {
           storageNamespace={props.storageNamespace}
         />
       </div>
-      {shouldShowBottomTabBar ? (
-        <BottomTabBar
-          locale={props.locale}
-          dictionary={props.dictionary}
-          activeRoute={props.bottomTabActiveRoute}
-          onConversationsPress={props.onConversationsTabPress}
-          onMypagePress={props.onMypageTabPress}
-        />
-      ) : null}
     </main>
   );
 }
