@@ -1,35 +1,72 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
   createConversationChannelForUser,
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
+import {
+  resolveOrCreateUserIdForRequest,
+} from "@/lib/request-user-identity";
+import { ensureTrackingContext } from "@/lib/app-analytics";
 
-function resolveSessionUserId(session: { user?: { id?: unknown } } | null): string {
-  return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
+function applyTrackingCookies(
+  request: NextRequest,
+  response: NextResponse,
+  trackingHints: {
+    externalUserId?: string;
+    sessionKey?: string;
+  },
+) {
+  const externalUserId = (trackingHints.externalUserId || "").trim();
+  const sessionKey = (trackingHints.sessionKey || "").trim();
+  if (!externalUserId && !sessionKey) return;
+  ensureTrackingContext(request, response, {
+    externalUserIdHint: externalUserId || null,
+    sessionKeyHint: sessionKey || null,
+  });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(getAuthOptions());
-  const userId = resolveSessionUserId(session);
-
-  if (!userId) {
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+  if (!resolvedUser.userId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const conversations = await listConversationChannelsForUser(userId);
-  return NextResponse.json({ conversations });
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const conversations = await listConversationChannelsForUser(resolvedUser.userId);
+  const response = NextResponse.json({ conversations });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const session = await getServerSession(getAuthOptions());
-  const userId = resolveSessionUserId(session);
-
-  if (!userId) {
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+  if (!resolvedUser.userId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const conversation = await createConversationChannelForUser(userId);
-  return NextResponse.json({ conversation }, { status: 201 });
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const conversation = await createConversationChannelForUser(resolvedUser.userId);
+  const response = NextResponse.json({ conversation }, { status: 201 });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
 }

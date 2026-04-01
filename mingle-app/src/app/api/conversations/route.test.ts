@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 const {
   mockGetServerSession,
   mockCreateConversationChannelForUser,
   mockListConversationChannelsForUser,
+  mockResolveOrCreateUserIdForRequest,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockCreateConversationChannelForUser: vi.fn(),
   mockListConversationChannelsForUser: vi.fn(),
+  mockResolveOrCreateUserIdForRequest: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -23,6 +26,10 @@ vi.mock("@/lib/app-conversations", () => ({
   listConversationChannelsForUser: mockListConversationChannelsForUser,
 }));
 
+vi.mock("@/lib/request-user-identity", () => ({
+  resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
+}));
+
 import { GET, POST } from "@/app/api/conversations/route";
 
 describe("/api/conversations route", () => {
@@ -30,19 +37,45 @@ describe("/api/conversations route", () => {
     vi.clearAllMocks();
   });
 
-  it("returns 401 for GET when session is missing", async () => {
+  it("returns conversation list for a guest tracking user", async () => {
     mockGetServerSession.mockResolvedValue(null);
+    mockResolveOrCreateUserIdForRequest.mockResolvedValue({
+      userId: "guest_user_1",
+      identity: {
+        id: "",
+        email: "",
+        externalUserId: "anon_local_user",
+        sessionKey: "sess_local_user",
+      },
+      tracking: {
+        externalUserId: "anon_local_user",
+        sessionKey: "sess_local_user",
+      },
+    });
+    mockListConversationChannelsForUser.mockResolvedValue([]);
 
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost/api/conversations"));
     const json = await response.json();
 
-    expect(response.status).toBe(401);
-    expect(json).toEqual({ error: "unauthorized" });
+    expect(response.status).toBe(200);
+    expect(mockResolveOrCreateUserIdForRequest).toHaveBeenCalled();
+    expect(mockListConversationChannelsForUser).toHaveBeenCalledWith("guest_user_1");
+    expect(json).toEqual({ conversations: [] });
   });
 
   it("returns conversation list for the current user", async () => {
     mockGetServerSession.mockResolvedValue({
       user: { id: "user_1" },
+    });
+    mockResolveOrCreateUserIdForRequest.mockResolvedValue({
+      userId: "user_1",
+      identity: {
+        id: "user_1",
+        email: "",
+        externalUserId: "",
+        sessionKey: "",
+      },
+      tracking: null,
     });
     mockListConversationChannelsForUser.mockResolvedValue([
       {
@@ -57,10 +90,11 @@ describe("/api/conversations route", () => {
       },
     ]);
 
-    const response = await GET();
+    const response = await GET(new NextRequest("http://localhost/api/conversations"));
     const json = await response.json();
 
     expect(response.status).toBe(200);
+    expect(mockResolveOrCreateUserIdForRequest).toHaveBeenCalled();
     expect(mockListConversationChannelsForUser).toHaveBeenCalledWith("user_1");
     expect(json).toEqual({
       conversations: [
@@ -82,6 +116,16 @@ describe("/api/conversations route", () => {
     mockGetServerSession.mockResolvedValue({
       user: { id: "user_1" },
     });
+    mockResolveOrCreateUserIdForRequest.mockResolvedValue({
+      userId: "user_1",
+      identity: {
+        id: "user_1",
+        email: "",
+        externalUserId: "",
+        sessionKey: "",
+      },
+      tracking: null,
+    });
     mockCreateConversationChannelForUser.mockResolvedValue({
       id: "conv_2",
       sequenceNumber: 2,
@@ -93,10 +137,13 @@ describe("/api/conversations route", () => {
       pausedAt: null,
     });
 
-    const response = await POST();
+    const response = await POST(new NextRequest("http://localhost/api/conversations", {
+      method: "POST",
+    }));
     const json = await response.json();
 
     expect(response.status).toBe(201);
+    expect(mockResolveOrCreateUserIdForRequest).toHaveBeenCalled();
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("user_1");
     expect(json).toEqual({
       conversation: {

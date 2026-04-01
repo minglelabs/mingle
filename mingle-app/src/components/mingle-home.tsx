@@ -24,6 +24,7 @@ type MingleHomeProps = {
   onBack?: () => void;
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  bypassAuthGate?: boolean;
 };
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
@@ -1002,7 +1003,7 @@ export default function MingleHome(props: MingleHomeProps) {
 
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
-  if (status === "loading" || status !== "authenticated") {
+  if (!props.bypassAuthGate && (status === "loading" || status !== "authenticated")) {
     const isLoading = status === "loading";
     const disabled = isSigningIn || isLoading;
     const emailSheetDisabled = isEmailSubmitting || isLoading;

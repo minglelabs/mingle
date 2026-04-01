@@ -7,6 +7,10 @@ import {
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
 } from "@/lib/app-conversations";
+import {
+  resolveOrCreateUserIdForRequest,
+} from "@/lib/request-user-identity";
+import { ensureTrackingContext } from "@/lib/app-analytics";
 
 type ConversationRouteProps = {
   params: Promise<{
@@ -14,13 +18,30 @@ type ConversationRouteProps = {
   }>;
 };
 
-function resolveSessionUserId(session: { user?: { id?: unknown } } | null): string {
-  return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
+function applyTrackingCookies(
+  request: NextRequest,
+  response: NextResponse,
+  trackingHints: {
+    externalUserId?: string;
+    sessionKey?: string;
+  },
+) {
+  const externalUserId = (trackingHints.externalUserId || "").trim();
+  const sessionKey = (trackingHints.sessionKey || "").trim();
+  if (!externalUserId && !sessionKey) return;
+  ensureTrackingContext(request, response, {
+    externalUserIdHint: externalUserId || null,
+    sessionKeyHint: sessionKey || null,
+  });
 }
 
 export async function PATCH(request: NextRequest, { params }: ConversationRouteProps) {
   const session = await getServerSession(getAuthOptions());
-  const userId = resolveSessionUserId(session);
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+  const userId = resolvedUser.userId;
 
   if (!userId) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -57,5 +78,13 @@ export async function PATCH(request: NextRequest, { params }: ConversationRouteP
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  return NextResponse.json({ conversation });
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json({ conversation });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
 }

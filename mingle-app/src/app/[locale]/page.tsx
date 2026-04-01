@@ -1,7 +1,5 @@
-import MingleHome from "@/components/mingle-home";
-import { getDictionary, isSupportedLocale } from "@/i18n";
-import { getAuthOptions, isAppleWebOAuthConfigured, isGoogleOAuthConfigured, isNativeAppleAuthConfigured } from "@/lib/auth-options";
-import { resolveNativeRuntimePlatformFromSearchParam } from "@/lib/native-runtime-platform";
+import { isSupportedLocale } from "@/i18n";
+import { getAuthOptions } from "@/lib/auth-options";
 import { getUserPreferredLocale } from "@/lib/user-preferred-locale";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
@@ -10,10 +8,28 @@ type LocalePageProps = {
   params: Promise<{
     locale: string;
   }>;
-  searchParams: Promise<{
-    nativePlatform?: string | string[];
-  }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+function buildPathWithSearchParams(
+  pathname: string,
+  searchParams: Record<string, string | string[] | undefined>,
+): string {
+  const nextSearchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        nextSearchParams.append(key, entry);
+      }
+      continue;
+    }
+    if (typeof value === "string") {
+      nextSearchParams.set(key, value);
+    }
+  }
+  const nextSearch = nextSearchParams.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+}
 
 export default async function LocalePage({ params, searchParams }: LocalePageProps) {
   const { locale } = await params;
@@ -24,19 +40,8 @@ export default async function LocalePage({ params, searchParams }: LocalePagePro
   }
 
   const session = await getServerSession(getAuthOptions());
-  if (session?.user) {
-    const preferredLocale = await getUserPreferredLocale(session.user.id);
-    redirect(`/${preferredLocale ?? locale}/conversations`);
-  }
-
-  return (
-    <MingleHome
-      dictionary={getDictionary(locale)}
-      appleWebOAuthEnabled={isAppleWebOAuthConfigured()}
-      appleNativeAuthEnabled={isNativeAppleAuthConfigured()}
-      googleOAuthEnabled={isGoogleOAuthConfigured()}
-      initialNativePlatform={resolveNativeRuntimePlatformFromSearchParam(query.nativePlatform)}
-      locale={locale}
-    />
-  );
+  const preferredLocale = session?.user
+    ? await getUserPreferredLocale(session.user.id)
+    : null;
+  redirect(buildPathWithSearchParams(`/${preferredLocale ?? locale}/conversations`, query));
 }

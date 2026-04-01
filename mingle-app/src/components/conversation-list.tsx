@@ -18,12 +18,13 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Loader2, MessageCirclePlus, Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import NativeBottomTabBannerSlot from "@/components/native-bottom-tab-banner-slot";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
 
+const CONVERSATIONS_API_PATH = "/api/conversations";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const MAX_RECENT_SEARCHES = 6;
@@ -32,18 +33,6 @@ const ACTIVE_STATUS_LABEL = "Live session";
 const PAUSED_STATUS_LABEL = "Paused";
 const CONVERSATION_QUERY_KEY = "conversation";
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = "__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__";
-const PRESERVED_NATIVE_QUERY_KEYS = [
-  "apiNamespace",
-  "nativeAuth",
-  "nativeBannerPosition",
-  "nativeBottomInsetPx",
-  "nativePlatform",
-  "nativeStt",
-  "nativeTopInsetPx",
-  "nativeUi",
-  "sttDebug",
-  "ttsDebug",
-] as const;
 const CONVERSATION_AVATAR_COLORS = [
   "#fb7185",
   "#38bdf8",
@@ -190,22 +179,6 @@ function subscribeRecentSearches(onStoreChange: () => void): () => void {
   };
 }
 
-function buildNativeAwarePath(
-  pathname: string,
-  searchParams: Pick<URLSearchParams, "getAll">,
-): string {
-  const nextSearchParams = new URLSearchParams();
-
-  for (const key of PRESERVED_NATIVE_QUERY_KEYS) {
-    for (const value of searchParams.getAll(key)) {
-      nextSearchParams.append(key, value);
-    }
-  }
-
-  const nextSearch = nextSearchParams.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
-}
-
 function readConversationIdFromLocation(): string | null {
   if (typeof window === "undefined") return null;
 
@@ -325,6 +298,37 @@ async function readConversationResponse(response: Response): Promise<Conversatio
     throw new Error(body.error || "conversation_request_failed");
   }
   return body.conversation;
+}
+
+async function readConversationListResponse(response: Response): Promise<ConversationChannelSummary[]> {
+  const body = await response.json() as {
+    conversations?: ConversationChannelSummary[];
+    error?: string;
+  };
+  if (!response.ok || !Array.isArray(body.conversations)) {
+    throw new Error(body.error || "conversation_request_failed");
+  }
+  return body.conversations;
+}
+
+function buildConversationRequestHeaders(): Record<string, string> {
+  return {
+    "x-mingle-user-id": getOrCreateTrackingUserId(),
+  };
+}
+
+function mergeConversationLists(
+  current: ConversationChannelSummary[],
+  incoming: ConversationChannelSummary[],
+): ConversationChannelSummary[] {
+  const merged = new Map<string, ConversationChannelSummary>();
+  for (const conversation of current) {
+    merged.set(conversation.id, conversation);
+  }
+  for (const conversation of incoming) {
+    merged.set(conversation.id, conversation);
+  }
+  return [...merged.values()].sort(compareConversationRecency);
 }
 
 function ConversationRow({
@@ -631,11 +635,12 @@ export default function ConversationList({
   initialConversations,
   translatorConfig,
 }: ConversationListProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [showSearch, setShowSearch] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
+  const [isHydratingConversations, setIsHydratingConversations] = useState(
+    initialConversations.length === 0,
+  );
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
@@ -663,7 +668,10 @@ export default function ConversationList({
     try {
       const response = await fetch(`/api/conversations/${conversationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...buildConversationRequestHeaders(),
+        },
         body: JSON.stringify({ status }),
       });
       const nextConversation = await readConversationResponse(response);
@@ -689,6 +697,31 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetch(CONVERSATIONS_API_PATH, {
+      cache: "no-store",
+      headers: buildConversationRequestHeaders(),
+    })
+      .then(readConversationListResponse)
+      .then((nextConversations) => {
+        if (cancelled) return;
+        setConversations((current) => mergeConversationLists(current, nextConversations));
+      })
+      .catch(() => {
+        // Keep the server-rendered or in-memory state when hydration fails.
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsHydratingConversations(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setTimeLabelsReady(true);
@@ -736,8 +769,9 @@ export default function ConversationList({
     if (isCreatingConversation || mutatingConversationId) return;
     setIsCreatingConversation(true);
     try {
-      const response = await fetch("/api/conversations", {
+      const response = await fetch(CONVERSATIONS_API_PATH, {
         method: "POST",
+        headers: buildConversationRequestHeaders(),
       });
       const nextConversation = await readConversationResponse(response);
       setConversations((current) => upsertConversation(current, nextConversation));
@@ -876,7 +910,11 @@ export default function ConversationList({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {conversationItems.length === 0 ? (
+        {isHydratingConversations ? (
+          <div className="flex flex-col items-center py-16 text-gray-400">
+            <Loader2 size={28} className="animate-spin" />
+          </div>
+        ) : conversationItems.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-gray-400">
             <span className="mb-3 text-5xl">💬</span>
             <p className="text-[15px] font-semibold text-slate-700">
@@ -935,6 +973,7 @@ export default function ConversationList({
                   onBack={handleCloseActiveConversation}
                   sessionKeyOverride={activeConversation.sessionKey}
                   storageNamespace={activeConversation.id}
+                  bypassAuthGate
                 />
               </motion.div>
             ) : null}
