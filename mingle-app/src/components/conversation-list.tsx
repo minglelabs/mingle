@@ -1000,6 +1000,15 @@ export default function ConversationList({
     }).sort(compareConversationRecency));
   }, []);
 
+  const getDerivedConversationRunningState = useCallback((conversationId: string): boolean => {
+    const storedRunningState = conversationRunningStateRef.current.get(conversationId);
+    if (typeof storedRunningState === "boolean") {
+      return storedRunningState;
+    }
+    const conversation = conversationsRef.current.find((item) => item.id === conversationId);
+    return conversation?.status === "active";
+  }, []);
+
   const handleConversationStartRequested = useCallback(async (conversationId: string) => {
     const currentLiveConversationId = liveConversationIdRef.current;
     if (!currentLiveConversationId || currentLiveConversationId === conversationId) return;
@@ -1009,7 +1018,7 @@ export default function ConversationList({
   }, []);
 
   const handleConversationRunningChange = useCallback((conversationId: string, isRunning: boolean) => {
-    const previousRunning = conversationRunningStateRef.current.get(conversationId) === true;
+    const previousRunning = getDerivedConversationRunningState(conversationId);
     if (previousRunning === isRunning) {
       return;
     }
@@ -1043,7 +1052,7 @@ export default function ConversationList({
         isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
       );
     });
-  }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, updateConversationStatus]);
+  }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
@@ -1065,6 +1074,20 @@ export default function ConversationList({
 
   useEffect(() => {
     conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    const knownConversationIds = new Set(conversations.map((conversation) => conversation.id));
+    for (const conversation of conversations) {
+      if (!conversationRunningStateRef.current.has(conversation.id)) {
+        conversationRunningStateRef.current.set(conversation.id, conversation.status === "active");
+      }
+    }
+    for (const conversationId of [...conversationRunningStateRef.current.keys()]) {
+      if (!knownConversationIds.has(conversationId)) {
+        conversationRunningStateRef.current.delete(conversationId);
+      }
+    }
   }, [conversations]);
 
   useEffect(() => {
