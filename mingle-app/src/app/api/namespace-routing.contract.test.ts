@@ -114,7 +114,9 @@ import {
   getConversationChannelsForAndroidV1_1_0,
   postCreateConversationForAndroidV1_1_0,
 } from '@/server/api/controllers/android/v1.1.0/conversations-controller'
-import { patchConversationForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/conversation-controller'
+import {
+  patchConversationRouteForAndroidV1_1_0,
+} from '@/server/api/controllers/android/v1.1.0/conversation-controller'
 import { postIosClientVersionPolicyForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/client-version-policy-controller'
@@ -151,7 +153,9 @@ import {
   getConversationChannelsForIosV1_1_0,
   postCreateConversationForIosV1_1_0,
 } from '@/server/api/controllers/ios/v1.1.0/conversations-controller'
-import { patchConversationForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
+import {
+  patchConversationRouteForIosV1_1_0,
+} from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
 import { postClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/client-version-policy-controller'
 import { postIosClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/ios-client-version-policy-controller'
 import { postLogClientEventForLegacy } from '@/server/api/controllers/legacy/log-client-event-controller'
@@ -222,7 +226,7 @@ describe('mingle-app namespace route wiring', () => {
     expect(postAndroidV110ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_1_0)
     expect(getAndroidV110Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
     expect(postAndroidV110Conversations).toBe(postCreateConversationForAndroidV1_1_0)
-    expect(patchAndroidV110Conversation).toBe(patchConversationForAndroidV1_1_0)
+    expect(patchAndroidV110Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
   })
 
   it('maps /ios/v1.0.0 routes to iOS v1.0.0 controllers', () => {
@@ -281,7 +285,7 @@ describe('mingle-app namespace route wiring', () => {
     expect(postIosV110ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_1_0)
     expect(getIosV110Conversations).toBe(getConversationChannelsForIosV1_1_0)
     expect(postIosV110Conversations).toBe(postCreateConversationForIosV1_1_0)
-    expect(patchIosV110Conversation).toBe(patchConversationForIosV1_1_0)
+    expect(patchIosV110Conversation).toBe(patchConversationRouteForIosV1_1_0)
   })
 
   it('keeps iOS v1.0.0 controller code identical to legacy controllers', () => {

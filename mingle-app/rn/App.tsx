@@ -173,14 +173,6 @@ function normalizeConfiguredUrl(
   }
 }
 
-function resolveConfiguredUrl(
-  keys: string[],
-  allowedProtocols: string[],
-  options?: { trimTrailingSlash?: boolean },
-): string {
-  return normalizeConfiguredUrl(readRuntimeEnvValue(keys), allowedProtocols, options);
-}
-
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
   return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1';
@@ -2273,6 +2265,7 @@ function AppInner(): React.JSX.Element {
       {startupSplashVisible ? (
         <View style={styles.startupSplashOverlay}>
           <Image
+            alt=""
             source={STARTUP_SPLASH_LOGO}
             resizeMode="contain"
             fadeDuration={0}
