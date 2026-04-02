@@ -24,7 +24,10 @@ import {
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import {
+  NATIVE_HISTORY_BACK_ANIMATE_FLAG,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 
@@ -82,6 +85,10 @@ interface ConversationItem {
   updatedAt: string;
   pausedAt: string | null;
 }
+
+type ConversationListWindow = Window & {
+  [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
+};
 
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
@@ -218,6 +225,15 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
   } catch {
     // Ignore history synchronization failures in restricted environments.
   }
+}
+
+function consumeNativeHistoryCloseAnimationFlag(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const conversationWindow = window as ConversationListWindow;
+  const shouldAnimate = conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] === true;
+  conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] = false;
+  return shouldAnimate;
 }
 
 function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
@@ -764,6 +780,7 @@ export default function ConversationList({
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
+  const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
   const viewportWidthPx = useViewportWidthPx();
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch();
@@ -980,6 +997,7 @@ export default function ConversationList({
       && currentConversationId === activeConversation.id
       && window.history.length > 1
     ) {
+      pendingHistoryCloseAnimationRef.current = "animate";
       window.history.back();
       return;
     }
@@ -1045,7 +1063,11 @@ export default function ConversationList({
       const currentActiveConversation = activeConversationRef.current;
       if (!currentActiveConversation) return;
       if (readConversationIdFromLocation() === currentActiveConversation.id) return;
-      closeConversationOverlay(currentActiveConversation, { animateExit: true });
+
+      const animateExit = pendingHistoryCloseAnimationRef.current === "animate"
+        || consumeNativeHistoryCloseAnimationFlag();
+      pendingHistoryCloseAnimationRef.current = "instant";
+      closeConversationOverlay(currentActiveConversation, { animateExit });
     };
 
     window.addEventListener("popstate", handlePopState);

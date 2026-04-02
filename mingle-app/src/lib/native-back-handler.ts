@@ -1,3 +1,5 @@
+export const NATIVE_HISTORY_BACK_ANIMATE_FLAG = "__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__";
+
 const NATIVE_BACK_HANDLER_KEY = "__MINGLE_NATIVE_BACK_HANDLER_STACK__";
 const NATIVE_BACK_DISPATCHER_KEY = "__MINGLE_HANDLE_NATIVE_BACK__";
 const NATIVE_BACK_ORDER_KEY = "__MINGLE_NATIVE_BACK_HANDLER_ORDER__";
@@ -14,6 +16,7 @@ type NativeBackHandlerWindow = Window & {
   [NATIVE_BACK_HANDLER_KEY]?: NativeBackHandlerEntry[];
   [NATIVE_BACK_DISPATCHER_KEY]?: () => boolean;
   [NATIVE_BACK_ORDER_KEY]?: number;
+  [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
 };
 
 function resolveNativeBackHandlerWindow(): NativeBackHandlerWindow | null {
@@ -82,7 +85,7 @@ export function registerNativeBackHandler(
 }
 
 export function clearNativeHistoryBackAnimateFlag(): void {
-  // Kept for compatibility with components that want to suppress any pending
-  // native-history animation state before closing local UI.
-  if (typeof window === "undefined") return;
+  const bridgeWindow = resolveNativeBackHandlerWindow();
+  if (!bridgeWindow) return;
+  bridgeWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] = false;
 }

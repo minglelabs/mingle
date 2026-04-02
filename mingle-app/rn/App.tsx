@@ -266,6 +266,7 @@ const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
 const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
+const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const WEB_SUPPORTED_LOCALES = new Set([
   'ko',
@@ -1382,6 +1383,7 @@ function AppInner(): React.JSX.Element {
           }
 
           if (window.history.length > 1) {
+            window[${JSON.stringify(NATIVE_HISTORY_BACK_ANIMATE_FLAG)}] = true;
             window.history.back();
           }
           return true;
