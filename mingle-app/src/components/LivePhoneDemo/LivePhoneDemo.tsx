@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, X } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -93,6 +93,7 @@ const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
+const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
@@ -323,6 +324,10 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
+type LivePhoneDemoMenuScreen = 'root' | 'feedback'
+
+type FeedbackPageTab = 'compose' | 'history'
+
 function formatFeedbackTimestamp(createdAt: string, locale: string): string {
   const date = new Date(createdAt)
   if (Number.isNaN(date.getTime())) return ''
@@ -336,6 +341,22 @@ function formatFeedbackTimestamp(createdAt: string, locale: string): string {
     }).format(date)
   } catch {
     return date.toLocaleString()
+  }
+}
+
+function buildMenuHistoryState(depth: number): Record<string, unknown> {
+  if (typeof window === 'undefined') {
+    return { [MENU_HISTORY_STATE_KEY]: depth }
+  }
+
+  const currentState = window.history.state
+  if (!currentState || typeof currentState !== 'object') {
+    return { [MENU_HISTORY_STATE_KEY]: depth }
+  }
+
+  return {
+    ...(currentState as Record<string, unknown>),
+    [MENU_HISTORY_STATE_KEY]: depth,
   }
 }
 
@@ -510,6 +531,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
@@ -517,6 +539,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState(defaultFeedbackEmail)
@@ -554,6 +577,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const menuHistoryDepthRef = useRef(0)
+  const menuHistoryTargetDepthRef = useRef<number | null>(null)
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
@@ -922,6 +947,76 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, nativeAppUpdate, uiLocale])
 
+  const applyMenuNavigationDepth = useCallback((nextDepth: number) => {
+    const boundedDepth = Math.max(0, Math.min(2, nextDepth))
+    menuHistoryDepthRef.current = boundedDepth
+    setTranslationModelMenuOpen(false)
+    setMenuDragOffsetX(0)
+    setIsMenuDragging(false)
+
+    if (boundedDepth === 0) {
+      setDeleteAccountDialogOpen(false)
+      setMenuScreen('root')
+      setMenuOpen(false)
+      return
+    }
+
+    setMenuOpen(true)
+    setMenuScreen(boundedDepth === 1 ? 'root' : 'feedback')
+  }, [])
+
+  const pushMenuHistoryEntry = useCallback((nextDepth: number) => {
+    applyMenuNavigationDepth(nextDepth)
+    if (typeof window === 'undefined') return
+    menuHistoryTargetDepthRef.current = null
+    window.history.pushState(buildMenuHistoryState(nextDepth), '')
+  }, [applyMenuNavigationDepth])
+
+  const closeMenuPanel = useCallback(() => {
+    menuHistoryTargetDepthRef.current = null
+    applyMenuNavigationDepth(0)
+  }, [applyMenuNavigationDepth])
+
+  const requestMenuBackStep = useCallback(() => {
+    const nextDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+    if (typeof window === 'undefined' || menuHistoryDepthRef.current <= 0) {
+      applyMenuNavigationDepth(nextDepth)
+      return
+    }
+    menuHistoryTargetDepthRef.current = nextDepth
+    window.history.back()
+  }, [applyMenuNavigationDepth])
+
+  const requestCloseMenuPanel = useCallback(() => {
+    const currentDepth = menuHistoryDepthRef.current
+    if (typeof window === 'undefined' || currentDepth <= 0) {
+      applyMenuNavigationDepth(0)
+      return
+    }
+    menuHistoryTargetDepthRef.current = 0
+    window.history.go(-currentDepth)
+  }, [applyMenuNavigationDepth])
+
+  const handleMenuButtonPress = useCallback(() => {
+    setLangSelectorOpen(false)
+
+    if (menuOpen) {
+      requestCloseMenuPanel()
+      return
+    }
+
+    clearFeedbackSubmitState()
+    setFeedbackTab('compose')
+    pushMenuHistoryEntry(1)
+  }, [clearFeedbackSubmitState, menuOpen, pushMenuHistoryEntry, requestCloseMenuPanel])
+
+  const handleFeedbackMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'feedback') return
+    clearFeedbackSubmitState()
+    setFeedbackTab('compose')
+    pushMenuHistoryEntry(2)
+  }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
     setTranslationModel(nextTranslationModel)
@@ -941,11 +1036,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       adBannerPosition: nextAdBannerPosition,
     })
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
-
-  const closeMenuPanel = useCallback(() => {
-    setTranslationModelMenuOpen(false)
-    setMenuOpen(false)
-  }, [])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -1026,6 +1116,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
+    const handlePopState = () => {
+      const requestedDepth = menuHistoryTargetDepthRef.current
+      menuHistoryTargetDepthRef.current = null
+
+      if (requestedDepth !== null) {
+        applyMenuNavigationDepth(requestedDepth)
+        return
+      }
+
+      if (menuHistoryDepthRef.current <= 0) return
+      applyMenuNavigationDepth(Math.max(0, menuHistoryDepthRef.current - 1))
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [applyMenuNavigationDepth])
+
+  useEffect(() => {
     if (!menuOpen) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1040,23 +1150,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         return
       }
-      setMenuOpen(false)
+      requestMenuBackStep()
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen, translationModelMenuOpen])
+  }, [menuOpen, requestMenuBackStep, translationModelMenuOpen])
 
   useEffect(() => {
-    if (!menuOpen) return
+    if (!menuOpen || menuScreen !== 'feedback') return
     if (feedbackHistoryLoadedRef.current) {
       void loadFeedbackThreads({ silent: true })
       return
     }
     void loadFeedbackThreads()
-  }, [loadFeedbackThreads, menuOpen])
+  }, [loadFeedbackThreads, menuOpen, menuScreen])
 
   useEffect(() => {
     if (!translationModelMenuOpen) return
@@ -1078,9 +1188,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const closeMenuState = window.setTimeout(() => {
       closeMenuPanel()
-      setMenuDragOffsetX(0)
-      setIsMenuDragging(false)
-      setDeleteAccountDialogOpen(false)
     }, 0)
 
     return () => {
@@ -1108,12 +1215,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       offsetX >= MENU_PANEL_CLOSE_DRAG_DISTANCE_PX
       || velocityPxPerMs >= MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS
     ) {
-      closeMenuPanel()
+      requestMenuBackStep()
       return
     }
 
     setMenuDragOffsetX(0)
-  }, [closeMenuPanel])
+  }, [requestMenuBackStep])
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
@@ -2137,6 +2244,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
+  const isCenteredMenuLayout = viewportWidthPx >= 640
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
   const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
@@ -2242,16 +2350,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <button
                   ref={menuButtonRef}
                   type="button"
-                  onClick={() => {
-                    setLangSelectorOpen(false)
-                    setMenuOpen((open) => {
-                      const nextOpen = !open
-                      if (!nextOpen) {
-                        setTranslationModelMenuOpen(false)
-                      }
-                      return nextOpen
-                    })
-                  }}
+                  onClick={handleMenuButtonPress}
                   disabled={isAuthActionPending}
                   className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
@@ -2285,573 +2384,688 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="absolute inset-0 z-50 overflow-hidden bg-black/42"
-              onClick={closeMenuPanel}
+              onClick={requestCloseMenuPanel}
             >
-              <motion.div
-                ref={menuPanelRef}
-                role="dialog"
-                aria-modal="true"
-                aria-label={menuLabel}
-                tabIndex={-1}
-                initial={{ x: '100%' }}
-                animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
-                exit={{ x: '100%' }}
-                transition={
-                  isMenuDragging
-                    ? { duration: 0 }
-                    : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-                }
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={handleMenuPanelPointerDown}
-                onPointerMove={handleMenuPanelPointerMove}
-                onPointerUp={handleMenuPanelPointerUp}
-                onPointerCancel={handleMenuPanelPointerCancel}
-                className={`absolute inset-y-0 right-0 flex h-full w-[70%] max-w-[24rem] flex-col overflow-hidden border-l border-gray-200 will-change-transform ${navSurfaceClassName}`}
-                style={{
-                  boxShadow: '-18px 0 40px rgba(15, 23, 42, 0.22)',
-                  touchAction: 'pan-y',
-                }}
-              >
-                <div
-                  className="flex-1 overflow-y-auto overscroll-contain"
+              <div className="flex h-full w-full justify-end sm:justify-center">
+                <motion.div
+                  ref={menuPanelRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={menuLabel}
+                  tabIndex={-1}
+                  initial={{ x: '100%' }}
+                  animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
+                  exit={{ x: '100%' }}
+                  transition={
+                    isMenuDragging
+                      ? { duration: 0 }
+                      : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
+                  }
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={handleMenuPanelPointerDown}
+                  onPointerMove={handleMenuPanelPointerMove}
+                  onPointerUp={handleMenuPanelPointerUp}
+                  onPointerCancel={handleMenuPanelPointerCancel}
+                  className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
                   style={{
-                    paddingTop: 'max(calc(env(safe-area-inset-top) + 18px), 24px)',
-                    paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)',
+                    boxShadow: isCenteredMenuLayout
+                      ? '0 22px 64px rgba(15, 23, 42, 0.24)'
+                      : '-18px 0 40px rgba(15, 23, 42, 0.22)',
+                    touchAction: 'pan-y',
                   }}
                 >
-                  <div className="border-b border-gray-200 px-4 py-4">
-                    <div className="space-y-4">
-                      <label className="block">
-                        <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                          <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
-                          <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
+                  <motion.div
+                    initial={false}
+                    animate={{ x: menuScreen === 'feedback' ? '-50%' : '0%' }}
+                    transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex h-full w-[200%]"
+                  >
+                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
+                      <div
+                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
+                        style={{
+                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
+                          paddingBottom: '12px',
+                        }}
+                      >
+                        <div className="w-10" />
+                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
+                          {menuLabel}
                         </div>
-                        <input
-                          type="range"
-                          min={1}
-                          max={5}
-                          step={1}
-                          value={textSizeLevel}
-                          onPointerDown={(event) => {
-                            event.currentTarget.setPointerCapture(event.pointerId)
-                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
-                            setTextSizeLevel(next)
-                          }}
-                          onPointerMove={(event) => {
-                            if (event.buttons !== 1) return
-                            const next = deriveRangeValueFromPointer(event, 1, 5, 1)
-                            setTextSizeLevel(next)
-                          }}
-                          onPointerUp={(event) => {
-                            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                              event.currentTarget.releasePointerCapture(event.pointerId)
-                            }
-                            flushAccountPreferencesSync()
-                          }}
-                          onChange={(event) => {
-                            const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
-                            setTextSizeLevel(next)
-                          }}
-                          className={sliderClassName}
-                          aria-label={`${textSizeLabel} level`}
-                        />
-                      </label>
-
-                      <label className="block">
-                        <div
-                          className={`mb-1 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
-                            isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
-                          }`}
-                        >
-                          <span className="min-w-0 flex-1 whitespace-normal break-words leading-tight text-[0.72rem]">
-                            {silenceFinalizeLabel}
-                          </span>
-                          <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="range"
-                            min={MIN_SONIOX_SILENCE_MS}
-                            max={MAX_SONIOX_SILENCE_MS}
-                            step={100}
-                            value={sonioxManualFinalizeSilenceMs}
-                            disabled={isSilenceFinalizeSliderDisabled}
-                            onPointerDown={(event) => {
-                              if (isSilenceFinalizeSliderDisabled) return
-                              event.currentTarget.setPointerCapture(event.pointerId)
-                              const next = deriveRangeValueFromPointer(
-                                event,
-                                MIN_SONIOX_SILENCE_MS,
-                                MAX_SONIOX_SILENCE_MS,
-                                100,
-                              )
-                              setSonioxManualFinalizeSilenceMs(next)
-                            }}
-                            onPointerMove={(event) => {
-                              if (isSilenceFinalizeSliderDisabled) return
-                              if (event.buttons !== 1) return
-                              const next = deriveRangeValueFromPointer(
-                                event,
-                                MIN_SONIOX_SILENCE_MS,
-                                MAX_SONIOX_SILENCE_MS,
-                                100,
-                              )
-                              setSonioxManualFinalizeSilenceMs(next)
-                            }}
-                            onPointerUp={(event) => {
-                              if (isSilenceFinalizeSliderDisabled) return
-                              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                event.currentTarget.releasePointerCapture(event.pointerId)
-                              }
-                              flushAccountPreferencesSync()
-                            }}
-                            onChange={(event) => {
-                              if (isSilenceFinalizeSliderDisabled) return
-                              const next = Math.max(
-                                MIN_SONIOX_SILENCE_MS,
-                                Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
-                              )
-                              setSonioxManualFinalizeSilenceMs(next)
-                            }}
-                            className={`${sliderClassName} ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
-                            aria-label={`${silenceFinalizeLabel} milliseconds`}
-                          />
-                          {isSilenceFinalizeSliderLocked && (
-                            <>
-                              <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
-                                {silenceFinalizeLockedMessage}
-                              </span>
-                              <button
-                                type="button"
-                                aria-label={silenceFinalizeLockedButtonLabel}
-                                aria-describedby={silenceFinalizeLockedDescriptionId}
-                                onFocus={handleSilenceFinalizeLockedInteraction}
-                                onClick={handleSilenceFinalizeLockedInteraction}
-                                className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                              />
-                            </>
-                          )}
-                        </div>
-                      </label>
-                      <div className="block">
-                        <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                          <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
-                        </div>
-                        <div ref={translationModelDropdownRef} className="relative">
-                          <button
-                            ref={translationModelButtonRef}
-                            type="button"
-                            onClick={() => setTranslationModelMenuOpen((open) => !open)}
-                            aria-label={translationModelLabel}
-                            aria-haspopup="listbox"
-                            aria-expanded={translationModelMenuOpen}
-                            aria-controls={translationModelListboxId}
-                            className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-[0.95rem] font-semibold text-gray-900">
-                                {selectedTranslationModelOption.label}
-                              </div>
-                            </div>
-                            <span
-                              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-                                translationModelMenuOpen
-                                  ? 'bg-transparent text-amber-700'
-                                  : 'bg-transparent text-gray-500 group-hover:text-amber-600'
-                              }`}
-                            >
-                              <ChevronDown
-                                size={16}
-                                strokeWidth={2.3}
-                                className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                  translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
-                                }`}
-                              />
-                            </span>
-                          </button>
-                          <AnimatePresence initial={false}>
-                            {translationModelMenuOpen && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -6, scale: 0.985 }}
-                                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
-                              >
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                                  className="overflow-hidden"
-                                >
-                                  <div
-                                    id={translationModelListboxId}
-                                    role="listbox"
-                                    aria-label={translationModelLabel}
-                                    className="space-y-1.5 p-2.5"
-                                  >
-                                    {TRANSLATION_MODEL_OPTIONS.map((option) => {
-                                      const isSelected = option.value === translationModel
-
-                                      return (
-                                        <button
-                                          key={option.value}
-                                          type="button"
-                                          role="option"
-                                          aria-selected={isSelected}
-                                          onClick={() => handleTranslationModelSelect(option.value)}
-                                          className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                            isSelected
-                                              ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
-                                              : 'bg-white text-gray-800 hover:bg-gray-50'
-                                          }`}
-                                        >
-                                          <div className="min-w-0 flex-1">
-                                            <div className="truncate text-[0.94rem] font-semibold">
-                                              {option.label}
-                                            </div>
-                                          </div>
-                                          <span
-                                            className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
-                                              isSelected
-                                                ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
-                                                : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
-                                            }`}
-                                          >
-                                            <Check size={14} strokeWidth={2.6} />
-                                          </span>
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                </motion.div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      </div>
-                      {isNativeAppRuntime && (
-                        <div className="block">
-                          <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                            <span className="shrink-0 whitespace-nowrap">{adBannerPositionLabel}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {([
-                              { value: 'top', label: adBannerPositionTopLabel },
-                              { value: 'bottom', label: adBannerPositionBottomLabel },
-                            ] satisfies Array<{ value: LivePhoneDemoAdBannerPosition, label: string }>).map((option) => {
-                              const isSelected = displayedAdBannerPosition === option.value
-
-                              return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  aria-pressed={isSelected}
-                                  onClick={() => handleAdBannerPositionSelect(option.value)}
-                                  className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                    isSelected
-                                      ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
-                                      : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
-                                  }`}
-                                >
-                                  {option.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {isNativeAppRuntime && (
-                    <div className="px-4 py-4">
-                      <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
-                              {nativeAppUpdateCopy.sectionLabel}
-                            </div>
-                            <div className="mt-2 text-sm font-semibold text-gray-900">
-                              {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
-                            </div>
-                            {nativeAppLatestVersion ? (
-                              <div className="mt-1 text-xs font-medium text-gray-600">
-                                {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
-                              </div>
-                            ) : null}
-                            <div className="mt-2 text-xs leading-5 text-gray-600">
-                              {nativeAppUpdateStatusMessage}
-                            </div>
-                          </div>
-                          {showNativeAppUpdateAction ? (
-                            <button
-                              type="button"
-                              onClick={handleNativeAppUpdatePress}
-                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                            >
-                              <Download size={13} strokeWidth={2.2} />
-                              <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="px-4 py-4">
-                    <div className="rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-3.5 py-3.5 shadow-[0_14px_32px_rgba(14,116,144,0.08)]">
-                      <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
-                        {feedbackCopy.sectionLabel}
-                      </div>
-                      <div className="mt-2 text-sm font-semibold text-gray-900">
-                        {feedbackCopy.title}
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-gray-600">
-                        {feedbackCopy.description}
-                      </p>
-
-                      <form className="mt-4 space-y-3" onSubmit={handleFeedbackSubmit}>
-                        <div className="space-y-2">
-                          <div className="text-[0.78rem] font-semibold text-gray-700">
-                            {feedbackCopy.categoryLabel}
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            {([
-                              'feedback',
-                              'suggestion',
-                              'inquiry',
-                            ] satisfies LivePhoneDemoFeedbackCategory[]).map((category) => {
-                              const isSelected = feedbackCategory === category
-
-                              return (
-                                <button
-                                  key={category}
-                                  type="button"
-                                  aria-pressed={isSelected}
-                                  disabled={isSubmittingFeedback}
-                                  onClick={() => {
-                                    clearFeedbackSubmitState()
-                                    setFeedbackCategory(category)
-                                  }}
-                                  className={`rounded-2xl border px-2.5 py-2 text-[0.78rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-60 ${
-                                    isSelected
-                                      ? 'border-sky-300 bg-white text-sky-700 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
-                                      : 'border-sky-100 bg-white/80 text-gray-600 hover:border-sky-200 hover:text-gray-900'
-                                  }`}
-                                >
-                                  {feedbackCopy.categoryLabels[category]}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-
-                        <label className="block space-y-2">
-                          <span className="text-[0.78rem] font-semibold text-gray-700">
-                            {feedbackCopy.messageLabel}
-                          </span>
-                          <textarea
-                            value={feedbackMessage}
-                            rows={4}
-                            disabled={isSubmittingFeedback}
-                            onChange={(event) => {
-                              clearFeedbackSubmitState()
-                              setFeedbackMessage(event.target.value)
-                            }}
-                            placeholder={feedbackCopy.messagePlaceholder}
-                            className="min-h-[108px] w-full resize-none rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 py-3 text-sm text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          />
-                        </label>
-
-                        <label className="block space-y-2">
-                          <span className="text-[0.78rem] font-semibold text-gray-700">
-                            {feedbackCopy.emailLabel}
-                          </span>
-                          <input
-                            type="email"
-                            value={feedbackEmail}
-                            disabled={isSubmittingFeedback}
-                            onChange={(event) => {
-                              feedbackEmailEditedRef.current = true
-                              clearFeedbackSubmitState()
-                              setFeedbackEmail(event.target.value)
-                            }}
-                            placeholder={feedbackCopy.emailPlaceholder}
-                            className="h-11 w-full rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          />
-                        </label>
-
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-[0.72rem] text-gray-500">
-                            {feedbackCopy.minimumLengthHint}
-                          </div>
-                          <div className="text-[0.72rem] font-medium text-gray-500">
-                            {trimmedFeedbackMessage.length}/{FEEDBACK_MIN_MESSAGE_LENGTH}
-                          </div>
-                        </div>
-
                         <button
-                          type="submit"
-                          disabled={isFeedbackSubmitDisabled}
-                          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[1.2rem] bg-sky-600 px-3 text-sm font-semibold text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          type="button"
+                          aria-label={feedbackCopy.closeButtonLabel}
+                          onClick={requestCloseMenuPanel}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                         >
-                          {isSubmittingFeedback ? (
-                            <>
-                              <Loader2 size={15} className="animate-spin" />
-                              <span>{feedbackCopy.sendingButtonLabel}</span>
-                            </>
-                          ) : (
-                            <span>{feedbackCopy.sendButtonLabel}</span>
-                          )}
+                          <X size={20} strokeWidth={2.2} />
                         </button>
+                      </div>
 
-                        <div aria-live="polite" className="min-h-[1.25rem] text-[0.76rem]">
-                          {feedbackSubmitError ? (
-                            <p className="font-medium text-rose-600">{feedbackSubmitError}</p>
-                          ) : null}
-                          {!feedbackSubmitError && feedbackSubmitSuccess ? (
-                            <p className="font-medium text-emerald-600">{feedbackCopy.successMessage}</p>
-                          ) : null}
-                        </div>
-                      </form>
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{
+                          paddingBottom: showAccountMenuItems ? '16px' : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                        }}
+                      >
+                        <div className="px-4 py-4">
+                          <div className="space-y-4">
+                            <label className="block">
+                              <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                                <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
+                                <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={1}
+                                max={5}
+                                step={1}
+                                value={textSizeLevel}
+                                onPointerDown={(event) => {
+                                  event.currentTarget.setPointerCapture(event.pointerId)
+                                  const next = deriveRangeValueFromPointer(event, 1, 5, 1)
+                                  setTextSizeLevel(next)
+                                }}
+                                onPointerMove={(event) => {
+                                  if (event.buttons !== 1) return
+                                  const next = deriveRangeValueFromPointer(event, 1, 5, 1)
+                                  setTextSizeLevel(next)
+                                }}
+                                onPointerUp={(event) => {
+                                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                    event.currentTarget.releasePointerCapture(event.pointerId)
+                                  }
+                                  flushAccountPreferencesSync()
+                                }}
+                                onChange={(event) => {
+                                  const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
+                                  setTextSizeLevel(next)
+                                }}
+                                className={sliderClassName}
+                                aria-label={`${textSizeLabel} level`}
+                              />
+                            </label>
 
-                      <div className="mt-5 border-t border-sky-100 pt-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-[0.82rem] font-semibold text-gray-900">
-                              {feedbackCopy.historyTitle}
-                            </div>
-                            <p className="mt-1 text-[0.74rem] leading-5 text-gray-500">
-                              {feedbackCopy.historyDescription}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 space-y-3">
-                          {isFeedbackHistoryLoading ? (
-                            <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-600">
-                              <Loader2 size={14} className="animate-spin text-sky-600" />
-                              <span>{feedbackCopy.historyLoadingLabel}</span>
-                            </div>
-                          ) : null}
-
-                          {!isFeedbackHistoryLoading && feedbackHistoryError ? (
-                            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[0.8rem] font-medium text-rose-600">
-                              {feedbackHistoryError}
-                            </div>
-                          ) : null}
-
-                          {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.length === 0 ? (
-                            <div className="rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-500">
-                              {feedbackCopy.historyEmptyLabel}
-                            </div>
-                          ) : null}
-
-                          {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.map((thread) => {
-                            const hasTeamReply = thread.messages.some((message) => message.authorType === 'team')
-
-                            return (
+                            <label className="block">
                               <div
-                                key={thread.id}
-                                className="rounded-[1.3rem] border border-sky-100 bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)]"
+                                className={`mb-1 flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
+                                  isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
+                                }`}
                               >
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.72rem] font-semibold text-sky-700">
-                                    {feedbackCopy.categoryLabels[thread.category]}
-                                  </span>
-                                  <span className="text-[0.72rem] text-gray-500">
-                                    {formatFeedbackTimestamp(thread.createdAt, uiLocale)}
-                                  </span>
-                                </div>
+                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-tight text-[0.72rem]">
+                                  {silenceFinalizeLabel}
+                                </span>
+                                <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="range"
+                                  min={MIN_SONIOX_SILENCE_MS}
+                                  max={MAX_SONIOX_SILENCE_MS}
+                                  step={100}
+                                  value={sonioxManualFinalizeSilenceMs}
+                                  disabled={isSilenceFinalizeSliderDisabled}
+                                  onPointerDown={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    event.currentTarget.setPointerCapture(event.pointerId)
+                                    const next = deriveRangeValueFromPointer(
+                                      event,
+                                      MIN_SONIOX_SILENCE_MS,
+                                      MAX_SONIOX_SILENCE_MS,
+                                      100,
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  onPointerMove={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    if (event.buttons !== 1) return
+                                    const next = deriveRangeValueFromPointer(
+                                      event,
+                                      MIN_SONIOX_SILENCE_MS,
+                                      MAX_SONIOX_SILENCE_MS,
+                                      100,
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  onPointerUp={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                      event.currentTarget.releasePointerCapture(event.pointerId)
+                                    }
+                                    flushAccountPreferencesSync()
+                                  }}
+                                  onChange={(event) => {
+                                    if (isSilenceFinalizeSliderDisabled) return
+                                    const next = Math.max(
+                                      MIN_SONIOX_SILENCE_MS,
+                                      Math.min(MAX_SONIOX_SILENCE_MS, Number(event.target.value) || DEFAULT_SONIOX_SILENCE_MS),
+                                    )
+                                    setSonioxManualFinalizeSilenceMs(next)
+                                  }}
+                                  className={`${sliderClassName} ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                  aria-label={`${silenceFinalizeLabel} milliseconds`}
+                                />
+                                {isSilenceFinalizeSliderLocked && (
+                                  <>
+                                    <span id={silenceFinalizeLockedDescriptionId} className="sr-only">
+                                      {silenceFinalizeLockedMessage}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label={silenceFinalizeLockedButtonLabel}
+                                      aria-describedby={silenceFinalizeLockedDescriptionId}
+                                      onFocus={handleSilenceFinalizeLockedInteraction}
+                                      onClick={handleSilenceFinalizeLockedInteraction}
+                                      className="absolute inset-0 z-10 cursor-not-allowed rounded-full bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            </label>
 
-                                {!hasTeamReply ? (
-                                  <div className="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[0.72rem] font-medium text-amber-700">
-                                    {feedbackCopy.pendingReplyLabel}
+                            <div className="block">
+                              <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                                <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
+                              </div>
+                              <div ref={translationModelDropdownRef} className="relative">
+                                <button
+                                  ref={translationModelButtonRef}
+                                  type="button"
+                                  onClick={() => setTranslationModelMenuOpen((open) => !open)}
+                                  aria-label={translationModelLabel}
+                                  aria-haspopup="listbox"
+                                  aria-expanded={translationModelMenuOpen}
+                                  aria-controls={translationModelListboxId}
+                                  className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                      {selectedTranslationModelOption.label}
+                                    </div>
                                   </div>
-                                ) : null}
+                                  <span
+                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                      translationModelMenuOpen
+                                        ? 'bg-transparent text-amber-700'
+                                        : 'bg-transparent text-gray-500 group-hover:text-amber-600'
+                                    }`}
+                                  >
+                                    <ChevronDown
+                                      size={16}
+                                      strokeWidth={2.3}
+                                      className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                        translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                      }`}
+                                    />
+                                  </span>
+                                </button>
+                                <AnimatePresence initial={false}>
+                                  {translationModelMenuOpen && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                      className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                    >
+                                      <motion.div
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                        className="overflow-hidden"
+                                      >
+                                        <div
+                                          id={translationModelListboxId}
+                                          role="listbox"
+                                          aria-label={translationModelLabel}
+                                          className="space-y-1.5 p-2.5"
+                                        >
+                                          {TRANSLATION_MODEL_OPTIONS.map((option) => {
+                                            const isSelected = option.value === translationModel
 
-                                <div className="mt-3 space-y-2.5">
-                                  {thread.messages.map((message, index) => {
-                                    const isTeamMessage = message.authorType === 'team'
-                                    const authorLabel = isTeamMessage
-                                      ? feedbackCopy.teamLabel
-                                      : feedbackCopy.meLabel
+                                            return (
+                                              <button
+                                                key={option.value}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={isSelected}
+                                                onClick={() => handleTranslationModelSelect(option.value)}
+                                                className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                  isSelected
+                                                    ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                    : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                }`}
+                                              >
+                                                <div className="min-w-0 flex-1">
+                                                  <div className="truncate text-[0.94rem] font-semibold">
+                                                    {option.label}
+                                                  </div>
+                                                </div>
+                                                <span
+                                                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                    isSelected
+                                                      ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                      : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                  }`}
+                                                >
+                                                  <Check size={14} strokeWidth={2.6} />
+                                                </span>
+                                              </button>
+                                            )
+                                          })}
+                                        </div>
+                                      </motion.div>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+
+                            {isNativeAppRuntime && (
+                              <div className="block">
+                                <div className="mb-2 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                                  <span className="shrink-0 whitespace-nowrap">{adBannerPositionLabel}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {([
+                                    { value: 'top', label: adBannerPositionTopLabel },
+                                    { value: 'bottom', label: adBannerPositionBottomLabel },
+                                  ] satisfies Array<{ value: LivePhoneDemoAdBannerPosition, label: string }>).map((option) => {
+                                    const isSelected = displayedAdBannerPosition === option.value
 
                                     return (
-                                      <div
-                                        key={message.id}
-                                        className={`rounded-[1.1rem] px-3 py-2.5 ${
-                                          isTeamMessage
-                                            ? 'border border-emerald-100 bg-emerald-50/70'
-                                            : 'border border-sky-100 bg-sky-50/70'
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        aria-pressed={isSelected}
+                                        onClick={() => handleAdBannerPositionSelect(option.value)}
+                                        className={`flex h-11 items-center justify-center rounded-2xl border text-[0.92rem] font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                          isSelected
+                                            ? 'border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-amber-900 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.3)]'
+                                            : 'border-[#E5E7EB] bg-white text-gray-700 hover:border-[#D1D5DB] hover:bg-gray-50'
                                         }`}
                                       >
-                                        <div className="flex items-center justify-between gap-3">
-                                          <span
-                                            className={`text-[0.72rem] font-semibold ${
-                                              isTeamMessage ? 'text-emerald-700' : 'text-sky-700'
-                                            }`}
-                                          >
-                                            {authorLabel}
-                                          </span>
-                                          <span className="text-[0.7rem] text-gray-500">
-                                            {formatFeedbackTimestamp(message.createdAt, uiLocale)}
-                                          </span>
-                                        </div>
-                                        <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.84rem] leading-5 text-gray-800">
-                                          {message.message}
-                                        </p>
-                                        {index === 0 && thread.contactEmail ? (
-                                          <p className="mt-2 text-[0.7rem] text-gray-500">
-                                            {thread.contactEmail}
-                                          </p>
-                                        ) : null}
-                                      </div>
+                                        {option.label}
+                                      </button>
                                     )
                                   })}
                                 </div>
                               </div>
-                            )
-                          })}
+                            )}
+                          </div>
+                        </div>
+
+                        {isNativeAppRuntime && (
+                          <div className="px-4 py-4">
+                            <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
+                                    {nativeAppUpdateCopy.sectionLabel}
+                                  </div>
+                                  <div className="mt-2 text-sm font-semibold text-gray-900">
+                                    {nativeAppUpdateCopy.installedLabel} {nativeAppInstalledVersion}
+                                  </div>
+                                  {nativeAppLatestVersion ? (
+                                    <div className="mt-1 text-xs font-medium text-gray-600">
+                                      {nativeAppUpdateCopy.latestLabel} {nativeAppLatestVersion}
+                                    </div>
+                                  ) : null}
+                                  <div className="mt-2 text-xs leading-5 text-gray-600">
+                                    {nativeAppUpdateStatusMessage}
+                                  </div>
+                                </div>
+                                {showNativeAppUpdateAction ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleNativeAppUpdatePress}
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                  >
+                                    <Download size={13} strokeWidth={2.2} />
+                                    <span>{nativeAppUpdateCopy.updateButtonLabel}</span>
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleFeedbackMenuItemPress}
+                            className="flex w-full items-center gap-3 rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-4 py-4 text-left shadow-[0_14px_32px_rgba(14,116,144,0.08)] transition hover:border-sky-300 hover:shadow-[0_18px_36px_rgba(14,116,144,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                                {feedbackCopy.sectionLabel}
+                              </div>
+                              <div className="mt-2 text-[0.98rem] font-semibold text-gray-900">
+                                {feedbackCopy.feedbackMenuItemLabel}
+                              </div>
+                              <p className="mt-1 text-[0.8rem] leading-5 text-gray-600">
+                                {feedbackCopy.feedbackMenuItemDescription}
+                              </p>
+                            </div>
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                              <ArrowRight size={16} strokeWidth={2.4} />
+                            </span>
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {showAccountMenuItems && (
-                  <div className="shrink-0 border-t border-gray-200 px-4 py-4">
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenuPanel()
-                          onLogout()
+                      {showAccountMenuItems && (
+                        <div
+                          className="shrink-0 border-t border-gray-200 px-4 pt-4"
+                          style={{ paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 12px), 16px)' }}
+                        >
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeMenuPanel()
+                                onLogout()
+                              }}
+                              disabled={isAuthActionPending || !showAccountActions}
+                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <LogOut size={16} strokeWidth={2} />
+                              <span>{logoutLabel}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                closeMenuPanel()
+                                setDeleteAccountDialogOpen(true)
+                              }}
+                              disabled={isAuthActionPending || !showAccountActions}
+                              className="inline-flex w-full items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Trash2 size={16} strokeWidth={2} />
+                              <span>{deleteAccountLabel}</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
+                      <div
+                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
+                        style={{
+                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
+                          paddingBottom: '12px',
                         }}
-                        disabled={isAuthActionPending || !showAccountActions}
-                        className="inline-flex w-full items-center gap-2 rounded-2xl border border-gray-200 px-3 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <LogOut size={16} strokeWidth={2} />
-                        <span>{logoutLabel}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenuPanel()
-                          setDeleteAccountDialogOpen(true)
+                        <button
+                          type="button"
+                          aria-label={feedbackCopy.backButtonLabel}
+                          onClick={requestMenuBackStep}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                        >
+                          <ChevronLeft size={22} strokeWidth={2.2} />
+                        </button>
+                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
+                          {feedbackCopy.pageTitle}
+                        </div>
+                        <div className="w-10" />
+                      </div>
+
+                      <div className="flex shrink-0 border-b border-gray-100 px-4">
+                        {([
+                          { value: 'compose', label: feedbackCopy.composeTabLabel },
+                          { value: 'history', label: feedbackCopy.historyTabLabel },
+                        ] satisfies Array<{ value: FeedbackPageTab, label: string }>).map((tab) => {
+                          const isSelected = feedbackTab === tab.value
+
+                          return (
+                            <button
+                              key={tab.value}
+                              type="button"
+                              onClick={() => setFeedbackTab(tab.value)}
+                              className="flex-1 border-b-2 py-3 text-[0.92rem] font-semibold transition"
+                              style={{
+                                borderBottomColor: isSelected ? '#111827' : 'transparent',
+                                color: isSelected ? '#111827' : '#9CA3AF',
+                              }}
+                            >
+                              {tab.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
                         }}
-                        disabled={isAuthActionPending || !showAccountActions}
-                        className="inline-flex w-full items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <Trash2 size={16} strokeWidth={2} />
-                        <span>{deleteAccountLabel}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
+                        {feedbackTab === 'compose' ? (
+                          <div className="px-4 py-4">
+                            <div className="rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-3.5 py-3.5 shadow-[0_14px_32px_rgba(14,116,144,0.08)]">
+                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                                {feedbackCopy.sectionLabel}
+                              </div>
+                              <div className="mt-2 text-sm font-semibold text-gray-900">
+                                {feedbackCopy.title}
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-gray-600">
+                                {feedbackCopy.description}
+                              </p>
+
+                              <form className="mt-4 space-y-3" onSubmit={handleFeedbackSubmit}>
+                                <div className="space-y-2">
+                                  <div className="text-[0.78rem] font-semibold text-gray-700">
+                                    {feedbackCopy.categoryLabel}
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {([
+                                      'feedback',
+                                      'suggestion',
+                                      'inquiry',
+                                    ] satisfies LivePhoneDemoFeedbackCategory[]).map((category) => {
+                                      const isSelected = feedbackCategory === category
+
+                                      return (
+                                        <button
+                                          key={category}
+                                          type="button"
+                                          aria-pressed={isSelected}
+                                          disabled={isSubmittingFeedback}
+                                          onClick={() => {
+                                            clearFeedbackSubmitState()
+                                            setFeedbackCategory(category)
+                                          }}
+                                          className={`rounded-2xl border px-2.5 py-2 text-[0.78rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                            isSelected
+                                              ? 'border-sky-300 bg-white text-sky-700 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
+                                              : 'border-sky-100 bg-white/80 text-gray-600 hover:border-sky-200 hover:text-gray-900'
+                                          }`}
+                                        >
+                                          {feedbackCopy.categoryLabels[category]}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+
+                                <label className="block space-y-2">
+                                  <span className="text-[0.78rem] font-semibold text-gray-700">
+                                    {feedbackCopy.messageLabel}
+                                  </span>
+                                  <textarea
+                                    value={feedbackMessage}
+                                    rows={4}
+                                    disabled={isSubmittingFeedback}
+                                    onChange={(event) => {
+                                      clearFeedbackSubmitState()
+                                      setFeedbackMessage(event.target.value)
+                                    }}
+                                    placeholder={feedbackCopy.messagePlaceholder}
+                                    className="min-h-[108px] w-full resize-none rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 py-3 text-sm text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  />
+                                </label>
+
+                                <label className="block space-y-2">
+                                  <span className="text-[0.78rem] font-semibold text-gray-700">
+                                    {feedbackCopy.emailLabel}
+                                  </span>
+                                  <input
+                                    type="email"
+                                    value={feedbackEmail}
+                                    disabled={isSubmittingFeedback}
+                                    onChange={(event) => {
+                                      feedbackEmailEditedRef.current = true
+                                      clearFeedbackSubmitState()
+                                      setFeedbackEmail(event.target.value)
+                                    }}
+                                    placeholder={feedbackCopy.emailPlaceholder}
+                                    className="h-11 w-full rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  />
+                                </label>
+
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[0.72rem] text-gray-500">
+                                    {feedbackCopy.minimumLengthHint}
+                                  </div>
+                                  <div className="text-[0.72rem] font-medium text-gray-500">
+                                    {trimmedFeedbackMessage.length}/{FEEDBACK_MIN_MESSAGE_LENGTH}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="submit"
+                                  disabled={isFeedbackSubmitDisabled}
+                                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[1.2rem] bg-sky-600 px-3 text-sm font-semibold text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                  {isSubmittingFeedback ? (
+                                    <>
+                                      <Loader2 size={15} className="animate-spin" />
+                                      <span>{feedbackCopy.sendingButtonLabel}</span>
+                                    </>
+                                  ) : (
+                                    <span>{feedbackCopy.sendButtonLabel}</span>
+                                  )}
+                                </button>
+
+                                <div aria-live="polite" className="min-h-[1.25rem] text-[0.76rem]">
+                                  {feedbackSubmitError ? (
+                                    <p className="font-medium text-rose-600">{feedbackSubmitError}</p>
+                                  ) : null}
+                                  {!feedbackSubmitError && feedbackSubmitSuccess ? (
+                                    <p className="font-medium text-emerald-600">{feedbackCopy.successMessage}</p>
+                                  ) : null}
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="px-4 py-4">
+                            <div>
+                              <div className="text-[0.88rem] font-semibold text-gray-900">
+                                {feedbackCopy.historyTitle}
+                              </div>
+                              <p className="mt-1 text-[0.78rem] leading-5 text-gray-500">
+                                {feedbackCopy.historyDescription}
+                              </p>
+                            </div>
+
+                            <div className="mt-3 space-y-3">
+                              {isFeedbackHistoryLoading ? (
+                                <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-600">
+                                  <Loader2 size={14} className="animate-spin text-sky-600" />
+                                  <span>{feedbackCopy.historyLoadingLabel}</span>
+                                </div>
+                              ) : null}
+
+                              {!isFeedbackHistoryLoading && feedbackHistoryError ? (
+                                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[0.8rem] font-medium text-rose-600">
+                                  {feedbackHistoryError}
+                                </div>
+                              ) : null}
+
+                              {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.length === 0 ? (
+                                <div className="rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-500">
+                                  {feedbackCopy.historyEmptyLabel}
+                                </div>
+                              ) : null}
+
+                              {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.map((thread) => {
+                                const hasTeamReply = thread.messages.some((message) => message.authorType === 'team')
+
+                                return (
+                                  <div
+                                    key={thread.id}
+                                    className="rounded-[1.3rem] border border-sky-100 bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)]"
+                                  >
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.72rem] font-semibold text-sky-700">
+                                        {feedbackCopy.categoryLabels[thread.category]}
+                                      </span>
+                                      <span className="text-[0.72rem] text-gray-500">
+                                        {formatFeedbackTimestamp(thread.createdAt, uiLocale)}
+                                      </span>
+                                    </div>
+
+                                    {!hasTeamReply ? (
+                                      <div className="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[0.72rem] font-medium text-amber-700">
+                                        {feedbackCopy.pendingReplyLabel}
+                                      </div>
+                                    ) : null}
+
+                                    <div className="mt-3 space-y-2.5">
+                                      {thread.messages.map((message, index) => {
+                                        const isTeamMessage = message.authorType === 'team'
+                                        const authorLabel = isTeamMessage
+                                          ? feedbackCopy.teamLabel
+                                          : feedbackCopy.meLabel
+
+                                        return (
+                                          <div
+                                            key={message.id}
+                                            className={`rounded-[1.1rem] px-3 py-2.5 ${
+                                              isTeamMessage
+                                                ? 'border border-emerald-100 bg-emerald-50/70'
+                                                : 'border border-sky-100 bg-sky-50/70'
+                                            }`}
+                                          >
+                                            <div className="flex items-center justify-between gap-3">
+                                              <span
+                                                className={`text-[0.72rem] font-semibold ${
+                                                  isTeamMessage ? 'text-emerald-700' : 'text-sky-700'
+                                                }`}
+                                              >
+                                                {authorLabel}
+                                              </span>
+                                              <span className="text-[0.7rem] text-gray-500">
+                                                {formatFeedbackTimestamp(message.createdAt, uiLocale)}
+                                              </span>
+                                            </div>
+                                            <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.84rem] leading-5 text-gray-800">
+                                              {message.message}
+                                            </p>
+                                            {index === 0 && thread.contactEmail ? (
+                                              <p className="mt-2 text-[0.7rem] text-gray-500">
+                                                {thread.contactEmail}
+                                              </p>
+                                            ) : null}
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </motion.div>
+                </motion.div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,6 +1,13 @@
 export type LivePhoneDemoFeedbackCategory = 'feedback' | 'suggestion' | 'inquiry'
 
 export type LivePhoneDemoFeedbackCopy = {
+  pageTitle: string
+  feedbackMenuItemLabel: string
+  feedbackMenuItemDescription: string
+  composeTabLabel: string
+  historyTabLabel: string
+  backButtonLabel: string
+  closeButtonLabel: string
   sectionLabel: string
   title: string
   description: string
@@ -28,6 +35,13 @@ export type LivePhoneDemoFeedbackCopy = {
 }
 
 const KO_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
+  pageTitle: 'Feedback',
+  feedbackMenuItemLabel: 'Feedback',
+  feedbackMenuItemDescription: '문의 남기기와 답변 확인',
+  composeTabLabel: '보내기',
+  historyTabLabel: '내역',
+  backButtonLabel: '뒤로가기',
+  closeButtonLabel: '닫기',
   sectionLabel: 'TEAM',
   title: '운영진에게 보내기',
   description: '불편한 점, 개선 아이디어, 문의사항을 바로 남겨주세요.',
@@ -59,6 +73,13 @@ const KO_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
 }
 
 const EN_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
+  pageTitle: 'Feedback',
+  feedbackMenuItemLabel: 'Feedback',
+  feedbackMenuItemDescription: 'Send a message or check replies',
+  composeTabLabel: 'Write',
+  historyTabLabel: 'History',
+  backButtonLabel: 'Go back',
+  closeButtonLabel: 'Close',
   sectionLabel: 'TEAM',
   title: 'Contact the team',
   description: 'Send feedback, feature ideas, or support questions from here.',
