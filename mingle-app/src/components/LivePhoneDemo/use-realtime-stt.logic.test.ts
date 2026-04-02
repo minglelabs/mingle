@@ -244,6 +244,16 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('open_ios_settings')
 
     expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      permission: 'denied',
+    })).toBe('open_ios_settings')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      permission: 'granted',
+    })).toBe('none')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
       platform: 'android',
       code: 'mic_permission',
       message: 'Microphone permission denied',

@@ -188,15 +188,22 @@ type NativeSttBridgeEvent =
   | { type: 'status', status: string }
   | { type: 'message', raw: string }
   | { type: 'error', message: string, code?: string, platform?: string }
+  | { type: 'permission', permission: string, platform?: string }
   | { type: 'close', reason: string }
 
 export function resolveNativeMicPermissionRecoveryAction(input: {
   message?: string
   code?: string
   platform?: string
+  permission?: string
 }): NativeMicPermissionRecoveryAction {
   const platform = (input.platform || '').trim().toLowerCase()
   if (platform !== 'ios') return 'none'
+
+  const permission = (input.permission || '').trim().toLowerCase()
+  if (permission === 'denied') {
+    return 'open_ios_settings'
+  }
 
   const code = (input.code || '').trim().toLowerCase()
   if (code === 'mic_permission') {
@@ -3290,6 +3297,15 @@ export default function useRealtimeSTT({
         } catch {
           // ignore malformed payload
         }
+        return
+      }
+
+      if (detail.type === 'permission') {
+        logSttDebug('native.permission', {
+          permission: detail.permission,
+          platform: detail.platform,
+        })
+        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
         return
       }
 

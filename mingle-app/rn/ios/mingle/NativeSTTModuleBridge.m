@@ -18,4 +18,7 @@ RCT_EXTERN_METHOD(setAec:(BOOL)enabled
 RCT_EXTERN_METHOD(getRuntimeConfig:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(getMicrophonePermissionStatus:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

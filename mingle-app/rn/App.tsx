@@ -18,6 +18,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import {
   addNativeSttListener,
+  getNativeSttMicrophonePermissionStatus,
   isNativeSttAvailable,
   setNativeSttAec,
   startNativeStt,
@@ -724,6 +725,7 @@ type NativeSttEvent =
   | { type: 'status'; status: string }
   | { type: 'message'; raw: string }
   | { type: 'error'; message: string; code?: string; platform?: string }
+  | { type: 'permission'; permission: string; platform?: string }
   | { type: 'close'; reason: string };
 
 type NativeUiEvent = {
@@ -1509,6 +1511,39 @@ function AppInner(): React.JSX.Element {
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
+  const emitCurrentMicPermissionToWeb = useCallback(async () => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+    try {
+      const payload = await getNativeSttMicrophonePermissionStatus();
+      emitToWeb({
+        type: 'permission',
+        permission: payload.permission,
+        platform: payload.platform || Platform.OS,
+      });
+    } catch (error: unknown) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`[NativeSTT] getMicrophonePermissionStatus failed: ${message}`);
+      }
+    }
+  }, [emitToWeb, nativeAvailable]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (!becameActive) return;
+      void emitCurrentMicPermissionToWeb();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [emitCurrentMicPermissionToWeb, nativeAvailable]);
+
   const emitTtsToWeb = useCallback((payload: Record<string, unknown>) => {
     if (!isPageReadyRef.current) return;
     const serialized = JSON.stringify(payload);
@@ -2083,11 +2118,12 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
