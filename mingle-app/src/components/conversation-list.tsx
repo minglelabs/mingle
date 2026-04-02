@@ -1085,7 +1085,7 @@ export default function ConversationList({
           aria-label={copy.newConversationButtonLabel}
           style={{
             backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
-            boxShadow: "0 18px 36px rgba(249, 115, 22, 0.28)",
+            boxShadow: "0 12px 24px rgba(15, 23, 42, 0.12)",
           }}
         >
           {isCreatingConversation ? (
