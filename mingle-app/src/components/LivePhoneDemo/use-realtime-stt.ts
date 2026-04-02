@@ -19,6 +19,7 @@ export const getWsUrl = (): string => {
   return `${protocol}://${host}:${WS_PORT}`
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
+const CONNECTION_ERROR_RESET_DELAY_MS = 2_000
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -1648,6 +1649,7 @@ export default function useRealtimeSTT({
   const targetLanguagesRef = useRef([...languages])
   const previousLanguageSelectionSignatureRef = useRef(buildLanguageSelectionSignature(languages))
   const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectionErrorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLanguageChangeRestartRef = useRef(false)
   const sonioxLanguageHintsEnabledRef = useRef(false)
 
@@ -1700,6 +1702,12 @@ export default function useRealtimeSTT({
     if (!languageChangeRestartTimerRef.current) return
     clearTimeout(languageChangeRestartTimerRef.current)
     languageChangeRestartTimerRef.current = null
+  }, [])
+
+  const clearConnectionErrorResetTimer = useCallback(() => {
+    if (!connectionErrorResetTimerRef.current) return
+    clearTimeout(connectionErrorResetTimerRef.current)
+    connectionErrorResetTimerRef.current = null
   }, [])
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
@@ -1924,13 +1932,25 @@ export default function useRealtimeSTT({
   }, [stopAudioPipeline])
 
   const resetToIdle = useCallback(() => {
+    clearConnectionErrorResetTimer()
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
+    nativeStopRequestedRef.current = false
     pendingLanguageChangeRestartRef.current = false
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+    turnStartedAtRef.current = null
     clearSpeakerAvatarSession()
     cleanup()
     setConnectionStatus('idle')
-  }, [cleanup, clearSpeakerAvatarSession])
+  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession])
+
+  const scheduleConnectionErrorReset = useCallback(() => {
+    clearConnectionErrorResetTimer()
+    connectionErrorResetTimerRef.current = setTimeout(() => {
+      connectionErrorResetTimerRef.current = null
+      resetToIdle()
+    }, CONNECTION_ERROR_RESET_DELAY_MS)
+  }, [clearConnectionErrorResetTimer, resetToIdle])
 
   const resetVisiblePartialState = useCallback(() => {
     setPartialTranslations({})
@@ -2727,7 +2747,7 @@ export default function useRealtimeSTT({
     cleanup()
     clearSpeakerAvatarSession()
     setConnectionStatus('error')
-    setTimeout(() => setConnectionStatus('idle'), 3000)
+    scheduleConnectionErrorReset()
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     cleanup,
@@ -2737,6 +2757,7 @@ export default function useRealtimeSTT({
     finalizeTurnWithTranslation,
     getPendingTurnsForLocalFinalize,
     logClientEvent,
+    scheduleConnectionErrorReset,
   ])
 
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
@@ -3175,9 +3196,9 @@ export default function useRealtimeSTT({
       })
       cleanup()
       setConnectionStatus('error')
-      setTimeout(() => setConnectionStatus('idle'), 3000)
+      scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3519,9 +3540,10 @@ export default function useRealtimeSTT({
   useEffect(() => {
     return () => {
       clearLanguageChangeRestartTimer()
+      clearConnectionErrorResetTimer()
       cleanup()
     }
-  }, [clearLanguageChangeRestartTimer, cleanup])
+  }, [clearConnectionErrorResetTimer, clearLanguageChangeRestartTimer, cleanup])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
