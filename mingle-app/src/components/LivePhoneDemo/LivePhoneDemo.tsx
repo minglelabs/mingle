@@ -2779,7 +2779,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 )}
 
                 <span
-                  className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                  className={`relative flex h-full w-full items-center justify-center rounded-full ${
                     isLimitReached
                       ? 'bg-gray-300'
                       : isReady
@@ -2809,7 +2809,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           setSpeakingItem(null)
                         }
                       }}
-                      className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
+                      className="rounded-full p-2 transition-colors active:scale-90"
                       aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
                     >
                       {isSoundEnabled ? (
@@ -2821,7 +2821,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   )}
                   <button
                     onClick={() => setAecEnabled(!aecEnabled)}
-                    className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
+                    className="rounded-full p-2 transition-colors active:scale-90"
                     aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
                     title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
                   >
