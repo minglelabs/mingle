@@ -13,6 +13,10 @@ type MingleHomeProps = {
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
   locale: AppLocale;
+  headerMode?: "default" | "conversation";
+  onBack?: () => void;
+  sessionKeyOverride?: string;
+  storageNamespace?: string;
 };
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
@@ -242,7 +246,7 @@ export default function MingleHome(props: MingleHomeProps) {
     null,
   );
   const callbackUrl = useMemo(
-    () => `/${props.locale}/translator`,
+    () => `/${props.locale}/conversations`,
     [props.locale],
   );
   const localeSegment = useMemo(
@@ -1569,37 +1573,44 @@ export default function MingleHome(props: MingleHomeProps) {
   }
 
   return (
-    <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
-      <LivePhoneDemo
-        enableAutoTTS
-        uiLocale={props.locale}
-        tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
-        usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
-        usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
-        connectingLabel={props.dictionary.demo.connecting}
-        connectionFailedLabel={props.dictionary.demo.connectionFailed}
-        muteTtsLabel={props.dictionary.demo.muteTts}
-        unmuteTtsLabel={props.dictionary.demo.unmuteTts}
-        textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
-        silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
-        translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
-        adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
-        adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
-        adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
-        silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
-        silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
-        menuLabel={props.dictionary.profile.menuLabel}
-        logoutLabel={props.dictionary.profile.logout}
-        deleteAccountLabel={props.dictionary.profile.deleteAccount}
-        deleteAccountConfirmMessage={props.dictionary.profile.deleteAccountConfirm}
-        deleteAccountConfirmLabel={props.dictionary.profile.deleteAccountConfirmAction}
-        deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
-        onLogout={handleSignOut}
-        onDeleteAccount={handleDeleteAccount}
-        isAuthActionPending={isDeletingAccount}
-        showMenuButton
-        showAccountActions={status === "authenticated"}
-      />
+    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <LivePhoneDemo
+          enableAutoTTS
+          uiLocale={props.locale}
+          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
+          usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
+          usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
+          connectingLabel={props.dictionary.demo.connecting}
+          connectionFailedLabel={props.dictionary.demo.connectionFailed}
+          muteTtsLabel={props.dictionary.demo.muteTts}
+          unmuteTtsLabel={props.dictionary.demo.unmuteTts}
+          textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
+          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+          translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
+          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
+          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
+          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+          silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
+          silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
+          menuLabel={props.dictionary.profile.menuLabel}
+          logoutLabel={props.dictionary.profile.logout}
+          deleteAccountLabel={props.dictionary.profile.deleteAccount}
+          deleteAccountConfirmMessage={props.dictionary.profile.deleteAccountConfirm}
+          deleteAccountConfirmLabel={props.dictionary.profile.deleteAccountConfirmAction}
+          deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
+          onLogout={handleSignOut}
+          onDeleteAccount={handleDeleteAccount}
+          isAuthActionPending={isDeletingAccount}
+          showMenuButton
+          showAccountActions={status === "authenticated"}
+          headerMode={props.headerMode}
+          backButtonLabel={props.dictionary.profile.emailBackLabel}
+          onBack={props.onBack}
+          sessionKeyOverride={props.sessionKeyOverride}
+          storageNamespace={props.storageNamespace}
+        />
+      </div>
     </main>
   );
 }

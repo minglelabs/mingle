@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, ChevronLeft, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -11,6 +11,7 @@ import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import MingleWordmark from '@/components/mingle-wordmark'
 import { clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -336,6 +337,11 @@ interface LivePhoneDemoProps {
   showMenuButton?: boolean
   showAccountActions?: boolean
   enableAccountPreferencesSync?: boolean
+  headerMode?: 'default' | 'conversation'
+  backButtonLabel?: string
+  onBack?: () => void
+  sessionKeyOverride?: string
+  storageNamespace?: string
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -454,6 +460,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showMenuButton = true,
   showAccountActions = true,
   enableAccountPreferencesSync = true,
+  headerMode = 'default',
+  backButtonLabel = 'Back',
+  onBack,
+  sessionKeyOverride,
+  storageNamespace,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
@@ -522,6 +533,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModel,
     adBannerPosition,
   }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  const resolveConversationSessionKey = useCallback(
+    () => getOrCreateSessionKey(storageNamespace, sessionKeyOverride),
+    [sessionKeyOverride, storageNamespace],
+  )
   const displayedAdBannerPosition = adBannerPosition
     || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
     || nativeBannerPositionFromQuery
@@ -635,7 +650,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
@@ -677,13 +692,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync])
+  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
     const currentPreferences = latestAccountPreferencesRef.current
     const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
@@ -712,13 +727,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync])
+  }, [enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
     if (!enableAccountPreferencesSync) return
     latestAccountPreferencesRef.current = nextPreferences
     const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
     void fetch(ACCOUNT_PREFERENCES_API_PATH, {
@@ -747,7 +762,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync])
+  }, [enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
@@ -1341,6 +1356,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    sessionKeyOverride,
+    storageNamespace,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
@@ -2012,9 +2029,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               style={{ height: "max(env(safe-area-inset-top), 20px)" }}
             />
           )}
-          <span className="relative z-20 text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-            Mingle
-          </span>
+          {headerMode === 'conversation' && onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={backButtonLabel}
+              className={`relative z-20 inline-flex h-11 min-w-[44px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+            >
+              <ChevronLeft size={24} strokeWidth={2.4} />
+            </button>
+          ) : (
+            <MingleWordmark className="relative z-20" />
+          )}
           <div className="relative z-20 flex items-center gap-1">
             <div className="relative mr-1.5">
               <button

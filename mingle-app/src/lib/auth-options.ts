@@ -431,13 +431,17 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
     },
     async session({ session, token }) {
       if (session.user) {
+        const sessionUser = session.user as typeof session.user & {
+          id?: string;
+          externalUserId?: string;
+        };
         if (typeof token.sub === "string" && token.sub.trim()) {
-          session.user.id = token.sub.trim();
+          sessionUser.id = token.sub.trim();
         }
-        session.user.name = session.user.name ?? token.name ?? "Mingle User";
-        session.user.email = session.user.email ?? token.email ?? "";
+        sessionUser.name = sessionUser.name ?? token.name ?? "Mingle User";
+        sessionUser.email = sessionUser.email ?? token.email ?? "";
         if (typeof token.externalUserId === "string" && token.externalUserId.trim()) {
-          session.user.externalUserId = token.externalUserId.trim();
+          sessionUser.externalUserId = token.externalUserId.trim();
         }
       }
       return session;

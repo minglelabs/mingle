@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLanguageSelectionSignature,
+  buildStorageKey,
   buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
@@ -14,6 +15,7 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
+  getOrCreateSessionKey,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   resolveRenderedTtsCandidateFromUtterance,
@@ -114,6 +116,32 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(getOrCreateTrackingUserId()).toBe('anon_existing_user')
     expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe('anon_existing_user')
+  })
+
+  it('namespaces room-scoped storage keys', () => {
+    expect(buildStorageKey('mingle_demo_session_key')).toBe('mingle_demo_session_key')
+    expect(buildStorageKey('mingle_demo_session_key', 'room_1')).toBe('mingle_demo_session_key__room_1')
+  })
+
+  it('persists isolated session keys per room namespace', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_session_key__room_1: 'sess_room_1',
+      mingle_demo_session_key__room_2: 'sess_room_2',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    expect(getOrCreateSessionKey('room_1')).toBe('sess_room_1')
+    expect(getOrCreateSessionKey('room_2')).toBe('sess_room_2')
+  })
+
+  it('prefers the conversation session override over localStorage state', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_session_key__room_1: 'sess_room_1',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    expect(getOrCreateSessionKey('room_1', 'conv_override')).toBe('conv_override')
+    expect(localStorage.getItem('mingle_demo_session_key__room_1')).toBe('sess_room_1')
   })
 
   it('parses transcript message payload and normalizes text', () => {

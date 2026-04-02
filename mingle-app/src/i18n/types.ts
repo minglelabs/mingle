@@ -1,4 +1,21 @@
 export type AppDictionary = {
+  conversations?: {
+    searchPlaceholder: string;
+    cancelAction: string;
+    recentSearchesTitle: string;
+    clearRecentSearchesAction: string;
+    noRecentSearches: string;
+    noSearchResults: string;
+    searchButtonLabel: string;
+    newConversationButtonLabel: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    activeStatusLabel: string;
+    pausedStatusLabel: string;
+    createErrorMessage: string;
+    openErrorMessage: string;
+    pauseErrorMessage: string;
+  };
   demo: {
     tapPlayToStart: string;
     usageLimitReached: string;
