@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, ChevronLeft, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
+import { Play, Square, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, ChevronLeft, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -2884,6 +2884,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <span className="relative z-10 flex h-full w-full items-center justify-center rounded-full">
                     {isConnecting ? (
                       <Loader2 size={28} className="animate-spin text-white" />
+                    ) : isSttSessionRunning ? (
+                      <Square size={16} className="text-white" fill="currentColor" strokeWidth={1.5} />
                     ) : (
                       <Play size={28} className="text-white" />
                     )}
