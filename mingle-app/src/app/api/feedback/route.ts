@@ -126,13 +126,15 @@ function resolveTrackingExternalUserId(request: Request): string {
   );
 }
 
-async function findFeedbackUserId(identity: SessionUserIdentity): Promise<string | null> {
+async function resolveFeedbackUserIds(identity: SessionUserIdentity): Promise<string[]> {
+  const userIds = new Set<string>();
+
   if (identity.id) {
     const user = await prisma.user.findUnique({
       where: { id: identity.id },
       select: { id: true },
     });
-    if (user?.id) return user.id;
+    if (user?.id) userIds.add(user.id);
   }
 
   if (identity.email) {
@@ -140,7 +142,7 @@ async function findFeedbackUserId(identity: SessionUserIdentity): Promise<string
       where: { email: identity.email },
       select: { id: true },
     });
-    if (user?.id) return user.id;
+    if (user?.id) userIds.add(user.id);
   }
 
   if (identity.externalUserId) {
@@ -148,10 +150,10 @@ async function findFeedbackUserId(identity: SessionUserIdentity): Promise<string
       where: { externalUserId: identity.externalUserId },
       select: { id: true },
     });
-    if (user?.id) return user.id;
+    if (user?.id) userIds.add(user.id);
   }
 
-  if (!identity.sessionKey) return null;
+  if (!identity.sessionKey) return [...userIds];
 
   const feedback = await prisma.appFeedback.findFirst({
     where: {
@@ -161,7 +163,8 @@ async function findFeedbackUserId(identity: SessionUserIdentity): Promise<string
     orderBy: { createdAt: "desc" },
     select: { userId: true },
   });
-  return feedback?.userId ?? null;
+  if (feedback?.userId) userIds.add(feedback.userId);
+  return [...userIds];
 }
 
 function serializeFeedbackThread(thread: {
@@ -258,15 +261,17 @@ export async function GET(request: Request) {
     externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
     sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
   };
-  const userId = await findFeedbackUserId(identity);
+  const userIds = await resolveFeedbackUserIds(identity);
 
-  if (!userId) {
+  if (userIds.length === 0) {
     const response = NextResponse.json({ threads: [] satisfies FeedbackThreadResponse[] });
     return withTrackingCookies(nextRequest, response, tracking);
   }
 
   const feedbackThreads = await prisma.appFeedback.findMany({
-    where: { userId },
+    where: {
+      userId: { in: userIds },
+    },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

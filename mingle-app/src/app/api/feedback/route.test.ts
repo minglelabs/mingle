@@ -152,7 +152,7 @@ describe("/api/feedback route", () => {
       ],
     });
     expect(mockAppFeedbackFindMany).toHaveBeenCalledWith({
-      where: { userId: "user_feedback_1" },
+      where: { userId: { in: ["user_feedback_1"] } },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -170,6 +170,96 @@ describe("/api/feedback route", () => {
           },
         },
       },
+    });
+  });
+
+  it("returns feedback for both the authenticated account and the current anon device user", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "auth_user_123",
+        email: "member@example.com",
+      },
+    });
+    mockUserFindUnique.mockImplementation(async ({ where }: { where: Record<string, string> }) => {
+      if (where.id === "auth_user_123") {
+        return { id: "auth_user_123" };
+      }
+      if (where.email === "member@example.com") {
+        return { id: "auth_user_123" };
+      }
+      if (where.externalUserId === "anon_user_123") {
+        return { id: "anon_user_row" };
+      }
+      return null;
+    });
+    mockAppFeedbackFindMany.mockResolvedValue([
+      {
+        id: "feedback_auth",
+        category: "inquiry",
+        message: "I signed in and have another question.",
+        contactEmail: "member@example.com",
+        createdAt: new Date("2026-04-03T09:00:00.000Z"),
+        replies: [],
+      },
+      {
+        id: "feedback_anon",
+        category: "feedback",
+        message: "I sent this before signing in.",
+        contactEmail: null,
+        createdAt: new Date("2026-04-02T09:00:00.000Z"),
+        replies: [],
+      },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/feedback", {
+      headers: {
+        "x-mingle-user-id": "anon_user_123",
+        "x-mingle-session-key": "sess_123",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      threads: [
+        {
+          id: "feedback_auth",
+          category: "inquiry",
+          contactEmail: "member@example.com",
+          createdAt: "2026-04-03T09:00:00.000Z",
+          messages: [
+            {
+              id: "feedback_auth:root",
+              authorType: "user",
+              message: "I signed in and have another question.",
+              createdAt: "2026-04-03T09:00:00.000Z",
+            },
+          ],
+        },
+        {
+          id: "feedback_anon",
+          category: "feedback",
+          contactEmail: null,
+          createdAt: "2026-04-02T09:00:00.000Z",
+          messages: [
+            {
+              id: "feedback_anon:root",
+              authorType: "user",
+              message: "I sent this before signing in.",
+              createdAt: "2026-04-02T09:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    const findManyArgs = mockAppFeedbackFindMany.mock.calls[0]?.[0];
+    expect(findManyArgs).toMatchObject({
+      where: {
+        userId: {
+          in: ["auth_user_123", "anon_user_row"],
+        },
+      },
+      orderBy: { createdAt: "desc" },
     });
   });
 
