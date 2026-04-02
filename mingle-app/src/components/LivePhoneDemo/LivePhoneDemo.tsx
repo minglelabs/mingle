@@ -78,6 +78,7 @@ const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const FEEDBACK_API_PATH = '/api/feedback'
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 10
+const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -98,6 +99,13 @@ const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
+
+type PersistedFeedbackDraft = {
+  category: LivePhoneDemoFeedbackCategory
+  message: string
+  email: string
+  emailEdited: boolean
+}
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -170,6 +178,57 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
     : 1
   const safeCanvasScale = canvasScale > 0 ? canvasScale : 1
   return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
+}
+
+function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
+  return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
+}
+
+function readPersistedFeedbackDraft(): PersistedFeedbackDraft | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_FEEDBACK_DRAFT)
+    if (!rawValue) return null
+
+    const parsed = JSON.parse(rawValue) as Partial<PersistedFeedbackDraft> | null
+    if (!parsed || typeof parsed !== 'object') return null
+
+    const category = isLivePhoneDemoFeedbackCategory(parsed.category)
+      ? parsed.category
+      : 'feedback'
+    const message = typeof parsed.message === 'string' ? parsed.message : ''
+    const email = typeof parsed.email === 'string' ? parsed.email : ''
+    const emailEdited = parsed.emailEdited === true
+
+    if (!message && !email && category === 'feedback' && !emailEdited) {
+      return null
+    }
+
+    return {
+      category,
+      message,
+      email,
+      emailEdited,
+    }
+  } catch {
+    return null
+  }
+}
+
+function persistFeedbackDraft(draft: PersistedFeedbackDraft | null): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (draft) {
+      window.localStorage.setItem(LS_KEY_FEEDBACK_DRAFT, JSON.stringify(draft))
+      return
+    }
+
+    window.localStorage.removeItem(LS_KEY_FEEDBACK_DRAFT)
+  } catch {
+    // Ignore storage failures so feedback remains usable.
+  }
 }
 
 function readNativeInsetPxFromWindow(queryKey: string): number {
@@ -543,6 +602,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
   const [feedbackEmail, setFeedbackEmail] = useState(defaultFeedbackEmail)
+  const [feedbackEmailEdited, setFeedbackEmailEdited] = useState(false)
   const [feedbackSubmitError, setFeedbackSubmitError] = useState<string | null>(null)
   const [feedbackSubmitSuccess, setFeedbackSubmitSuccess] = useState(false)
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
@@ -585,8 +645,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const feedbackEmailEditedRef = useRef(false)
   const feedbackHistoryLoadedRef = useRef(false)
+  const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
@@ -608,14 +668,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModel,
     adBannerPosition,
   }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
-  const trimmedFeedbackMessage = feedbackMessage.trim()
-  const trimmedFeedbackEmail = feedbackEmail.trim()
-  const isFeedbackEmailInvalid = trimmedFeedbackEmail.length > 0
-    && !isValidFeedbackEmailAddress(trimmedFeedbackEmail)
-  const isFeedbackMessageTooShort = trimmedFeedbackMessage.length < FEEDBACK_MIN_MESSAGE_LENGTH
-  const isFeedbackSubmitDisabled = isSubmittingFeedback
-    || isFeedbackMessageTooShort
-    || isFeedbackEmailInvalid
+  const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = adBannerPosition
     || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
     || nativeBannerPositionFromQuery
@@ -629,11 +682,39 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [latestAccountPreferences])
 
   useEffect(() => {
-    const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
     if (!normalizedDefaultFeedbackEmail) return
-    if (feedbackEmailEditedRef.current) return
+    if (feedbackEmailEdited) return
     setFeedbackEmail(normalizedDefaultFeedbackEmail)
-  }, [defaultFeedbackEmail])
+  }, [feedbackEmailEdited, normalizedDefaultFeedbackEmail])
+
+  useLayoutEffect(() => {
+    let cancelled = false
+    const schedule = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (callback: () => void) => { void Promise.resolve().then(callback) }
+
+    schedule(() => {
+      if (cancelled) return
+
+      const persistedDraft = readPersistedFeedbackDraft()
+      if (!persistedDraft) return
+
+      setFeedbackCategory(persistedDraft.category)
+      setFeedbackMessage(persistedDraft.message)
+      setFeedbackEmail(persistedDraft.email)
+      setFeedbackEmailEdited(
+        persistedDraft.emailEdited
+        || (
+          persistedDraft.email.trim().length > 0
+          && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
+        ),
+      )
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -716,6 +797,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
     } catch { /* ignore */ }
   }, [adBannerPosition])
+
+  useEffect(() => {
+    if (!feedbackMessage) {
+      persistFeedbackDraft(null)
+      return
+    }
+
+    persistFeedbackDraft({
+      category: feedbackCategory,
+      message: feedbackMessage,
+      email: feedbackEmail,
+      emailEdited: feedbackEmailEdited,
+    })
+  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage])
 
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return
@@ -937,6 +1032,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       setFeedbackMessage('')
+      persistFeedbackDraft(null)
       setFeedbackSubmitSuccess(true)
       await loadFeedbackThreads({ silent: true })
     } catch {
@@ -2897,7 +2993,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     value={feedbackEmail}
                                     disabled={isSubmittingFeedback}
                                     onChange={(event) => {
-                                      feedbackEmailEditedRef.current = true
+                                      setFeedbackEmailEdited(true)
                                       clearFeedbackSubmitState()
                                       setFeedbackEmail(event.target.value)
                                     }}
@@ -2908,7 +3004,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                                 <button
                                   type="submit"
-                                  disabled={isFeedbackSubmitDisabled}
+                                  disabled={isSubmittingFeedback}
                                   className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-3 text-sm font-semibold text-white transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:bg-slate-300"
                                 >
                                   {isSubmittingFeedback ? (
