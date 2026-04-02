@@ -1125,23 +1125,19 @@ export default function ConversationList({
         )}
       </div>
 
-      <footer
-        className="shrink-0 border-t border-gray-100 bg-white/95 px-4 pt-3 shadow-[0_-18px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur"
-        style={{
-          paddingBottom: effectiveNativeBottomInsetPx > 0
-            ? `calc(env(safe-area-inset-bottom, 0px) + ${effectiveNativeBottomInsetPx + 16}px)`
-            : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-        }}
-      >
+      <footer className="shrink-0">
         <button
           type="button"
           onClick={handleCreateConversation}
           disabled={actionDisabled}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-[1.4rem] px-5 text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
           style={{
+            minHeight: "72px",
+            paddingBottom: effectiveNativeBottomInsetPx > 0
+              ? `calc(env(safe-area-inset-bottom, 0px) + ${effectiveNativeBottomInsetPx + 16}px)`
+              : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
             backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
-            boxShadow: "0 12px 24px rgba(15, 23, 42, 0.12)",
           }}
         >
           {isCreatingConversation ? (
