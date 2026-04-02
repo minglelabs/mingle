@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download } from 'lucide-react'
 import { toast } from 'sonner'
@@ -68,10 +68,16 @@ import {
   resolveNativeAppUpdateCopy,
   type NativeAppUpdateDetail,
 } from './live-phone-demo.app-update.logic'
+import {
+  resolveLivePhoneDemoFeedbackCopy,
+  type LivePhoneDemoFeedbackCategory,
+} from './live-phone-demo.feedback-copy'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
+const FEEDBACK_API_PATH = '/api/feedback'
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
+const FEEDBACK_MIN_MESSAGE_LENGTH = 10
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -292,6 +298,12 @@ function deriveRangeValueFromPointer(
   return Number.isFinite(bounded) ? bounded : min
 }
 
+function isValidFeedbackEmailAddress(value: string): boolean {
+  const normalized = value.trim()
+  if (!normalized) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
+}
+
 function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
   return Boolean(
@@ -332,6 +344,7 @@ interface LivePhoneDemoProps {
   deleteAccountCancelLabel: string
   onLogout: () => void
   onDeleteAccount: () => void
+  defaultFeedbackEmail?: string
   isAuthActionPending?: boolean
   showMenuButton?: boolean
   showAccountActions?: boolean
@@ -450,6 +463,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   deleteAccountCancelLabel,
   onLogout,
   onDeleteAccount,
+  defaultFeedbackEmail = '',
   isAuthActionPending = false,
   showMenuButton = true,
   showAccountActions = true,
@@ -457,6 +471,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
+  const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -467,6 +482,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
+  const [feedbackMessage, setFeedbackMessage] = useState('')
+  const [feedbackEmail, setFeedbackEmail] = useState(defaultFeedbackEmail)
+  const [feedbackSubmitError, setFeedbackSubmitError] = useState<string | null>(null)
+  const [feedbackSubmitSuccess, setFeedbackSubmitSuccess] = useState(false)
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
@@ -501,6 +522,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const feedbackEmailEditedRef = useRef(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
@@ -522,6 +544,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     translationModel,
     adBannerPosition,
   }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  const trimmedFeedbackMessage = feedbackMessage.trim()
+  const trimmedFeedbackEmail = feedbackEmail.trim()
+  const isFeedbackEmailInvalid = trimmedFeedbackEmail.length > 0
+    && !isValidFeedbackEmailAddress(trimmedFeedbackEmail)
+  const isFeedbackMessageTooShort = trimmedFeedbackMessage.length < FEEDBACK_MIN_MESSAGE_LENGTH
+  const isFeedbackSubmitDisabled = isSubmittingFeedback
+    || isFeedbackMessageTooShort
+    || isFeedbackEmailInvalid
   const displayedAdBannerPosition = adBannerPosition
     || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
     || nativeBannerPositionFromQuery
@@ -533,6 +563,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
   }, [latestAccountPreferences])
+
+  useEffect(() => {
+    const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
+    if (!normalizedDefaultFeedbackEmail) return
+    if (feedbackEmailEditedRef.current) return
+    setFeedbackEmail(normalizedDefaultFeedbackEmail)
+  }, [defaultFeedbackEmail])
 
   // Hydrate persisted preferences before paint without tripping the
   // react-hooks/set-state-in-effect rule.
@@ -677,7 +714,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync])
+  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
@@ -712,7 +749,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync])
+  }, [enableAccountPreferencesSync, nativeAppUpdate])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
     if (!enableAccountPreferencesSync) return
@@ -747,7 +784,70 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync])
+  }, [enableAccountPreferencesSync, nativeAppUpdate])
+
+  const clearFeedbackSubmitState = useCallback(() => {
+    setFeedbackSubmitError(null)
+    setFeedbackSubmitSuccess(false)
+  }, [])
+
+  const handleFeedbackSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const nextFeedbackMessage = feedbackMessage.trim()
+    const nextFeedbackEmail = feedbackEmail.trim()
+
+    if (nextFeedbackMessage.length < FEEDBACK_MIN_MESSAGE_LENGTH) {
+      setFeedbackSubmitSuccess(false)
+      setFeedbackSubmitError(feedbackCopy.messageTooShortMessage)
+      return
+    }
+
+    if (nextFeedbackEmail && !isValidFeedbackEmailAddress(nextFeedbackEmail)) {
+      setFeedbackSubmitSuccess(false)
+      setFeedbackSubmitError(feedbackCopy.invalidEmailMessage)
+      return
+    }
+
+    setIsSubmittingFeedback(true)
+    setFeedbackSubmitError(null)
+    setFeedbackSubmitSuccess(false)
+
+    try {
+      const sessionKey = getOrCreateSessionKey()
+      const trackingUserId = getOrCreateTrackingUserId()
+      const response = await fetch(FEEDBACK_API_PATH, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey,
+            trackingUserId,
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({
+          category: feedbackCategory,
+          message: nextFeedbackMessage,
+          contactEmail: nextFeedbackEmail || undefined,
+          locale: uiLocale,
+          pathname: typeof window === 'undefined' ? null : window.location.pathname,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`feedback_submit_failed:${response.status}`)
+      }
+
+      setFeedbackMessage('')
+      setFeedbackSubmitSuccess(true)
+    } catch {
+      setFeedbackSubmitError(feedbackCopy.errorMessage)
+      setFeedbackSubmitSuccess(false)
+    } finally {
+      setIsSubmittingFeedback(false)
+    }
+  }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, nativeAppUpdate, uiLocale])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
@@ -2417,6 +2517,125 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
                     </div>
                   )}
+
+                  <div className="px-4 py-4">
+                    <div className="rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-3.5 py-3.5 shadow-[0_14px_32px_rgba(14,116,144,0.08)]">
+                      <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                        {feedbackCopy.sectionLabel}
+                      </div>
+                      <div className="mt-2 text-sm font-semibold text-gray-900">
+                        {feedbackCopy.title}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-gray-600">
+                        {feedbackCopy.description}
+                      </p>
+
+                      <form className="mt-4 space-y-3" onSubmit={handleFeedbackSubmit}>
+                        <div className="space-y-2">
+                          <div className="text-[0.78rem] font-semibold text-gray-700">
+                            {feedbackCopy.categoryLabel}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([
+                              'feedback',
+                              'suggestion',
+                              'inquiry',
+                            ] satisfies LivePhoneDemoFeedbackCategory[]).map((category) => {
+                              const isSelected = feedbackCategory === category
+
+                              return (
+                                <button
+                                  key={category}
+                                  type="button"
+                                  aria-pressed={isSelected}
+                                  disabled={isSubmittingFeedback}
+                                  onClick={() => {
+                                    clearFeedbackSubmitState()
+                                    setFeedbackCategory(category)
+                                  }}
+                                  className={`rounded-2xl border px-2.5 py-2 text-[0.78rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                    isSelected
+                                      ? 'border-sky-300 bg-white text-sky-700 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
+                                      : 'border-sky-100 bg-white/80 text-gray-600 hover:border-sky-200 hover:text-gray-900'
+                                  }`}
+                                >
+                                  {feedbackCopy.categoryLabels[category]}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="block space-y-2">
+                          <span className="text-[0.78rem] font-semibold text-gray-700">
+                            {feedbackCopy.messageLabel}
+                          </span>
+                          <textarea
+                            value={feedbackMessage}
+                            rows={4}
+                            disabled={isSubmittingFeedback}
+                            onChange={(event) => {
+                              clearFeedbackSubmitState()
+                              setFeedbackMessage(event.target.value)
+                            }}
+                            placeholder={feedbackCopy.messagePlaceholder}
+                            className="min-h-[108px] w-full resize-none rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 py-3 text-sm text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="text-[0.78rem] font-semibold text-gray-700">
+                            {feedbackCopy.emailLabel}
+                          </span>
+                          <input
+                            type="email"
+                            value={feedbackEmail}
+                            disabled={isSubmittingFeedback}
+                            onChange={(event) => {
+                              feedbackEmailEditedRef.current = true
+                              clearFeedbackSubmitState()
+                              setFeedbackEmail(event.target.value)
+                            }}
+                            placeholder={feedbackCopy.emailPlaceholder}
+                            className="h-11 w-full rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        </label>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[0.72rem] text-gray-500">
+                            {feedbackCopy.minimumLengthHint}
+                          </div>
+                          <div className="text-[0.72rem] font-medium text-gray-500">
+                            {trimmedFeedbackMessage.length}/{FEEDBACK_MIN_MESSAGE_LENGTH}
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isFeedbackSubmitDisabled}
+                          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[1.2rem] bg-sky-600 px-3 text-sm font-semibold text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {isSubmittingFeedback ? (
+                            <>
+                              <Loader2 size={15} className="animate-spin" />
+                              <span>{feedbackCopy.sendingButtonLabel}</span>
+                            </>
+                          ) : (
+                            <span>{feedbackCopy.sendButtonLabel}</span>
+                          )}
+                        </button>
+
+                        <div aria-live="polite" className="min-h-[1.25rem] text-[0.76rem]">
+                          {feedbackSubmitError ? (
+                            <p className="font-medium text-rose-600">{feedbackSubmitError}</p>
+                          ) : null}
+                          {!feedbackSubmitError && feedbackSubmitSuccess ? (
+                            <p className="font-medium text-emerald-600">{feedbackCopy.successMessage}</p>
+                          ) : null}
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
 
                 {showAccountMenuItems && (

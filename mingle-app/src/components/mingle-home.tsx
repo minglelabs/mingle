@@ -194,7 +194,7 @@ function GoogleMark() {
 }
 
 export default function MingleHome(props: MingleHomeProps) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const silenceSliderUpgradeCopy = useMemo(
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
@@ -1596,6 +1596,7 @@ export default function MingleHome(props: MingleHomeProps) {
         deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
         onLogout={handleSignOut}
         onDeleteAccount={handleDeleteAccount}
+        defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
         isAuthActionPending={isDeletingAccount}
         showMenuButton
         showAccountActions={status === "authenticated"}
