@@ -285,8 +285,8 @@ describe("/api/feedback route", () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-mingle-app-version": "1.0.8",
-        "x-mingle-api-namespace": "ios/v1.0.8",
+        "x-mingle-app-version": "1.0.9",
+        "x-mingle-api-namespace": "ios/v1.0.9",
         "x-mingle-client-platform": "ios",
       },
       body: JSON.stringify({
@@ -312,8 +312,8 @@ describe("/api/feedback route", () => {
         language: "ko",
         pathname: "/ko",
         clientPlatform: "ios",
-        apiNamespace: "ios/v1.0.8",
-        appVersion: "1.0.8",
+        apiNamespace: "ios/v1.0.9",
+        appVersion: "1.0.9",
       }),
     });
     expect(mockAppFeedbackCreate).toHaveBeenCalledWith({
@@ -325,8 +325,8 @@ describe("/api/feedback route", () => {
         contactEmail: "reply@example.com",
         locale: "ko",
         clientPlatform: "ios",
-        appVersion: "1.0.8",
-        apiNamespace: "ios/v1.0.8",
+        appVersion: "1.0.9",
+        apiNamespace: "ios/v1.0.9",
         pathname: "/ko",
         ipAddress: "127.0.0.1",
         userAgent: "vitest",

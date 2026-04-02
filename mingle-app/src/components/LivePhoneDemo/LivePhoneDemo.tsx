@@ -11,7 +11,7 @@ import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
-import { clientApiNamespace } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -75,7 +75,7 @@ import {
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
-const FEEDBACK_API_PATH = '/api/feedback'
+const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
