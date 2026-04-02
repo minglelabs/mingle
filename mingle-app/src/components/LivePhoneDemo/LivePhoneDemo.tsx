@@ -2803,7 +2803,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div
             className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
             style={{
-              minHeight: "72px",
+              minHeight: "56px",
               paddingTop: "0px",
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
               paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
@@ -2839,7 +2839,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onPointerDown={handleMicPointerDown}
                 onClick={handleMicClick}
                 disabled={isConnecting || isError}
-                className="relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                className="relative flex h-[50px] w-[50px] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
               >
                 {showRipple && (
                   <span
