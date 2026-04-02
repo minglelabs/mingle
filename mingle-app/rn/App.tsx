@@ -265,6 +265,7 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
+const NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX = 56;
 const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
 const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
@@ -1346,6 +1347,10 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
+  const nativeConversationListBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.top],
+  );
   const nativeBannerBottomOffsetPx = useMemo(
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
@@ -2422,7 +2427,7 @@ function AppInner(): React.JSX.Element {
             unitId={nativeBannerUnitId}
             heightPx={nativeBannerHeightPx}
             frameWidthPx={nativeBannerFrameWidthPx}
-            topOffsetPx={nativeBannerTopOffsetPx}
+            topOffsetPx={nativeConversationListBannerTopOffsetPx}
             bottomOffsetPx={nativeBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
