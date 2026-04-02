@@ -2735,20 +2735,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           <button
                             type="button"
                             onClick={handleFeedbackMenuItemPress}
-                            className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                           >
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                                {feedbackCopy.sectionLabel}
-                              </div>
-                              <div className="mt-2 text-[0.98rem] font-semibold text-gray-900">
-                                {feedbackCopy.feedbackMenuItemLabel}
-                              </div>
-                              <p className="mt-1 text-[0.8rem] leading-5 text-gray-600">
-                                {feedbackCopy.feedbackMenuItemDescription}
-                              </p>
-                            </div>
-                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700">
+                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
