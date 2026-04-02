@@ -17,7 +17,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Loader2, MessageCirclePlus, Search } from "lucide-react";
+import { ArrowRight, Loader2, Search } from "lucide-react";
 import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
 import {
   normalizeLivePhoneDemoAdBannerPosition,
@@ -743,6 +743,7 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
@@ -852,6 +853,20 @@ export default function ConversationList({
     setActiveConversation(nextConversation);
   }, [activeConversation, conversations]);
 
+  useEffect(() => {
+    if (!activeConversation || autoStartConversationId !== activeConversation.id) return;
+
+    const timerId = window.setTimeout(() => {
+      setAutoStartConversationId((current) => (
+        current === activeConversation.id ? null : current
+      ));
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [activeConversation, autoStartConversationId]);
+
   const closeConversationOverlay = useCallback((
     conversation: ConversationChannelSummary,
     options?: {
@@ -868,6 +883,7 @@ export default function ConversationList({
     }
 
     setOverlayExitMode(exitMode);
+    setAutoStartConversationId(null);
     setActiveConversation((current) => (
       current?.id === previousConversation.id ? null : current
     ));
@@ -899,8 +915,10 @@ export default function ConversationList({
         headers: buildConversationRequestHeaders(),
       });
       const nextConversation = await readConversationResponse(response);
+      setShowSearch(false);
       setConversations((current) => upsertConversation(current, nextConversation));
       setOverlayExitMode("animate");
+      setAutoStartConversationId(nextConversation.id);
       setActiveConversation(nextConversation);
     } catch {
       window.alert(copy.createErrorMessage);
@@ -918,6 +936,7 @@ export default function ConversationList({
     if (matchedConversation.status === "active") {
       setShowSearch(false);
       setOverlayExitMode("animate");
+      setAutoStartConversationId(null);
       setActiveConversation(matchedConversation);
       return;
     }
@@ -927,6 +946,7 @@ export default function ConversationList({
       if (!nextConversation) return;
       setShowSearch(false);
       setOverlayExitMode("animate");
+      setAutoStartConversationId(null);
       setActiveConversation(nextConversation);
     } catch {
       window.alert(copy.openErrorMessage);
@@ -985,44 +1005,28 @@ export default function ConversationList({
       />
 
       <header
-        className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 pb-3"
+        className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/95 px-4 backdrop-blur"
         style={{
-          paddingTop: `calc(env(safe-area-inset-top, 0px) + ${effectiveNativeTopInsetPx + 18}px)`,
+          paddingTop: `calc(env(safe-area-inset-top, 0px) + ${effectiveNativeTopInsetPx}px)`,
+          height: `calc(56px + env(safe-area-inset-top, 0px) + ${effectiveNativeTopInsetPx}px)`,
         }}
       >
         <MingleWordmark />
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleOpenSearch}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
-            aria-label={copy.searchButtonLabel}
-          >
-            <Search size={22} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateConversation}
-            disabled={actionDisabled}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-            aria-label={copy.newConversationButtonLabel}
-          >
-            {isCreatingConversation ? (
-              <Loader2 size={22} className="animate-spin" strokeWidth={2} />
-            ) : (
-              <MessageCirclePlus size={22} strokeWidth={2} />
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleOpenSearch}
+          className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+          aria-label={copy.searchButtonLabel}
+        >
+          <Search size={22} strokeWidth={2} />
+        </button>
       </header>
 
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
-          paddingBottom: effectiveNativeBottomInsetPx > 0
-            ? `calc(env(safe-area-inset-bottom, 0px) + ${effectiveNativeBottomInsetPx + 16}px)`
-            : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+          paddingBottom: "20px",
         }}
       >
         {isHydratingConversations ? (
@@ -1057,6 +1061,32 @@ export default function ConversationList({
         )}
       </div>
 
+      <footer
+        className="shrink-0 border-t border-gray-100 bg-white/95 px-4 pt-3 shadow-[0_-18px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur"
+        style={{
+          paddingBottom: effectiveNativeBottomInsetPx > 0
+            ? `calc(env(safe-area-inset-bottom, 0px) + ${effectiveNativeBottomInsetPx + 16}px)`
+            : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleCreateConversation}
+          disabled={actionDisabled}
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-[1.4rem] bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-5 text-[1rem] font-semibold text-white shadow-[0_18px_36px_rgba(249,115,22,0.28)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={copy.newConversationButtonLabel}
+        >
+          {isCreatingConversation ? (
+            <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
+          ) : (
+            <>
+              <span>Start Conversation!</span>
+              <ArrowRight size={18} strokeWidth={2.4} />
+            </>
+          )}
+        </button>
+      </footer>
+
       {typeof document !== "undefined"
         ? createPortal(
           <AnimatePresence custom={overlayExitMode}>
@@ -1080,6 +1110,7 @@ export default function ConversationList({
                   onBack={handleCloseActiveConversation}
                   sessionKeyOverride={activeConversation.sessionKey}
                   storageNamespace={activeConversation.id}
+                  autoStartOnMount={autoStartConversationId === activeConversation.id}
                 />
               </motion.div>
             ) : null}

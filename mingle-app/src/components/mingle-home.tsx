@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
+import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
@@ -17,6 +17,7 @@ type MingleHomeProps = {
   onBack?: () => void;
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  autoStartOnMount?: boolean;
 };
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
@@ -199,6 +200,8 @@ function GoogleMark() {
 
 export default function MingleHome(props: MingleHomeProps) {
   const { status } = useSession();
+  const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
+  const autoStartTriggeredRef = useRef(false);
   const silenceSliderUpgradeCopy = useMemo(
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
@@ -937,6 +940,23 @@ export default function MingleHome(props: MingleHomeProps) {
     clearNativeAuthTimeout,
   ]);
 
+  useEffect(() => {
+    if (!props.autoStartOnMount) {
+      autoStartTriggeredRef.current = false;
+      return;
+    }
+    if (autoStartTriggeredRef.current) return;
+    autoStartTriggeredRef.current = true;
+
+    const timerId = window.setTimeout(() => {
+      livePhoneDemoRef.current?.startRecording();
+    }, 320);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [props.autoStartOnMount]);
+
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
     void signOut({ callbackUrl: `/${props.locale}` });
@@ -1576,6 +1596,7 @@ export default function MingleHome(props: MingleHomeProps) {
     <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <div className="min-h-0 flex-1 overflow-hidden">
         <LivePhoneDemo
+          ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
           tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
