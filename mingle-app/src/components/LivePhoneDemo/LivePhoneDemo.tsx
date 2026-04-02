@@ -2729,9 +2729,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div
             className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
             style={{
-              minHeight: "calc(72px + env(safe-area-inset-bottom, 0px))",
-              paddingTop: "4px",
-              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+              minHeight: "72px",
+              paddingTop: "0px",
+              paddingBottom: "env(safe-area-inset-bottom, 0px)",
               paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
               paddingRight: "max(calc(env(safe-area-inset-right) + 8px), 12px)",
             }}
@@ -2765,7 +2765,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 onPointerDown={handleMicPointerDown}
                 onClick={handleMicClick}
                 disabled={isConnecting || isError}
-                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                className="relative flex h-14 w-14 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
               >
                 {showRipple && (
                   <span
@@ -2790,9 +2790,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 >
                   {isConnecting ? (
-                    <Loader2 size={30} className="animate-spin text-white" />
+                    <Loader2 size={28} className="animate-spin text-white" />
                   ) : (
-                    <Play size={30} className="text-white" />
+                    <Play size={28} className="text-white" />
                   )}
                 </span>
               </button>
