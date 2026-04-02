@@ -19,7 +19,7 @@ export const getWsUrl = (): string => {
   return `${protocol}://${host}:${WS_PORT}`
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
-const CONNECTION_ERROR_RESET_DELAY_MS = 2_000
+const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
