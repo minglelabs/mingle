@@ -49,6 +49,7 @@ import {
   clearNativeHistoryBackAnimateFlag,
   registerNativeBackHandler,
 } from '@/lib/native-back-handler'
+import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
@@ -781,6 +782,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const closeMenuPanel = useCallback(() => {
     setTranslationModelMenuOpen(false)
     setMenuOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
+
+    const timerId = window.setTimeout(() => {
+      postNativeBannerZone('conversation')
+    }, 280)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
   }, [])
 
   useEffect(() => {

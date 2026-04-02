@@ -80,6 +80,7 @@ type NativeAdModule = {
   };
 };
 type NativeBannerPosition = 'top' | 'bottom';
+type BannerZone = 'list' | 'conversation';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
   bannerUnitId?: string;
@@ -754,6 +755,13 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeSetBannerZoneCommand = {
+  type: 'native_set_banner_zone';
+  payload?: {
+    zone?: BannerZone;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -764,7 +772,8 @@ type WebViewCommand =
   | NativeNavigationStateCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
-  | NativeSetAdBannerPositionCommand;
+  | NativeSetAdBannerPositionCommand
+  | NativeSetBannerZoneCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -1327,6 +1336,7 @@ function AppInner(): React.JSX.Element {
     () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
     [nativeBannerHeightPx, nativeCanvasScale],
   );
+  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
   const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
   const nativeBannerBottomInsetPx = nativeBannerPosition === 'bottom' ? nativeTranscriptInsetPx : 0;
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
@@ -1626,13 +1636,31 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
+    const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'list'
+      ? 'top'
+      : nativeBannerPosition;
+    const effectiveTopInsetPx = activeBannerZone === 'list'
+      ? nativeTranscriptInsetPx
+      : (isNativeMenuOverlayOpen ? 0 : nativeBannerTopInsetPx);
+    const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
+      ? nativeBannerBottomInsetPx
+      : 0;
     emitUiToWeb({
       type: 'banner_layout',
-      position: nativeBannerPosition,
-      topInsetPx: nativeBannerTopInsetPx,
-      bottomInsetPx: nativeBannerBottomInsetPx,
+      position: effectiveBannerPosition,
+      topInsetPx: effectiveTopInsetPx,
+      bottomInsetPx: effectiveBottomInsetPx,
     });
-  }, [emitUiToWeb, nativeBannerBottomInsetPx, nativeBannerPosition, nativeBannerTopInsetPx, nativeBannerUnitId]);
+  }, [
+    activeBannerZone,
+    emitUiToWeb,
+    isNativeMenuOverlayOpen,
+    nativeBannerBottomInsetPx,
+    nativeBannerPosition,
+    nativeBannerTopInsetPx,
+    nativeBannerUnitId,
+    nativeTranscriptInsetPx,
+  ]);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
     const serialized = JSON.stringify(payload);
@@ -1947,6 +1975,14 @@ function AppInner(): React.JSX.Element {
       }
       const nextPosition = normalizeNativeBannerPosition(rawPosition);
       setNativeBannerPositionOverride(nextPosition);
+      return;
+    }
+
+    if (parsed.type === 'native_set_banner_zone') {
+      const zone = parsed.payload?.zone;
+      if (zone === 'list' || zone === 'conversation') {
+        setActiveBannerZone(zone);
+      }
       return;
     }
 
@@ -2301,18 +2337,32 @@ function AppInner(): React.JSX.Element {
         </View>
       ) : null}
       {canRenderNativeBanner ? (
-        <NativeAdBanner
-          adModule={nativeAdModule}
-          position={nativeBannerPosition}
-          unitId={nativeBannerUnitId}
-          heightPx={nativeBannerHeightPx}
-          frameWidthPx={nativeBannerFrameWidthPx}
-          topOffsetPx={nativeBannerTopOffsetPx}
-          bottomOffsetPx={nativeBannerBottomOffsetPx}
-          ready={nativeAdsReady}
-          reloadToken={nativeBannerReloadToken}
-          hidden={isNativeMenuOverlayOpen}
-        />
+        <>
+          <NativeAdBanner
+            adModule={nativeAdModule}
+            position="top"
+            unitId={nativeBannerUnitId}
+            heightPx={nativeBannerHeightPx}
+            frameWidthPx={nativeBannerFrameWidthPx}
+            topOffsetPx={nativeBannerTopOffsetPx}
+            bottomOffsetPx={nativeBannerBottomOffsetPx}
+            ready={nativeAdsReady}
+            reloadToken={nativeBannerReloadToken}
+            hidden={activeBannerZone !== 'list'}
+          />
+          <NativeAdBanner
+            adModule={nativeAdModule}
+            position={nativeBannerPosition}
+            unitId={nativeBannerUnitId}
+            heightPx={nativeBannerHeightPx}
+            frameWidthPx={nativeBannerFrameWidthPx}
+            topOffsetPx={nativeBannerTopOffsetPx}
+            bottomOffsetPx={nativeBannerBottomOffsetPx}
+            ready={nativeAdsReady}
+            reloadToken={nativeBannerReloadToken}
+            hidden={activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
+          />
+        </>
       ) : null}
     </View>
   );

@@ -25,9 +25,15 @@ import {
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import {
+  NATIVE_UI_EVENT,
+  parseNativeUiBannerLayoutDetail,
+  type NativeUiBannerLayoutEventDetail,
+} from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
+import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
+import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 
@@ -787,6 +793,7 @@ export default function ConversationList({
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
+  const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -800,13 +807,21 @@ export default function ConversationList({
   const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx");
   const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx");
   const routeConversationId = useConversationIdFromSearch();
+  const hasNativeBannerLayout = nativeBannerLayout !== null;
+  const runtimeNativeBannerPosition = nativeBannerLayout?.position ?? nativeBannerPositionFromQuery;
+  const runtimeNativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPx;
+  const runtimeNativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPx;
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
-  const effectiveNativeTopInsetPx = isNativeAppRuntime() && nativeBannerPositionFromQuery === "top"
-    ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
-    : nativeTopInsetPx;
-  const effectiveNativeBottomInsetPx = isNativeAppRuntime() && nativeBannerPositionFromQuery === "bottom"
-    ? resolveEffectiveNativeBannerInsetPx(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
-    : nativeBottomInsetPx;
+  const effectiveNativeTopInsetPx = isNativeAppRuntime() && runtimeNativeBannerPosition === "top"
+    ? (hasNativeBannerLayout
+        ? runtimeNativeTopInsetPx
+        : resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx))
+    : runtimeNativeTopInsetPx;
+  const effectiveNativeBottomInsetPx = isNativeAppRuntime() && runtimeNativeBannerPosition === "bottom"
+    ? (hasNativeBannerLayout
+        ? runtimeNativeBottomInsetPx
+        : resolveEffectiveNativeBannerInsetPx(runtimeNativeBottomInsetPx, estimatedNativeBannerInsetPx))
+    : runtimeNativeBottomInsetPx;
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -853,6 +868,27 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    if (!isNativeAppRuntime()) return;
+    postNativeBannerZone("list");
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleNativeUiEvent = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      const bannerLayout = parseNativeUiBannerLayoutDetail(detail);
+      if (!bannerLayout) return;
+      setNativeBannerLayout(bannerLayout);
+    };
+
+    window.addEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener);
+    return () => {
+      window.removeEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -915,6 +951,8 @@ export default function ConversationList({
     const exitMode: ConversationOverlayExitMode = options?.animateExit ? "animate" : "instant";
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
+
+    postNativeBannerZone("list");
 
     if (shouldReplaceUrl) {
       replaceConversationOverlayUrl(null);
