@@ -476,7 +476,7 @@ is_managed_key_for_target() {
 
 format_env_value_for_dotenv() {
   local value="$1"
-  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=-]*$ ]]; then
+  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=~-]*$ ]]; then
     printf '%s' "$value"
     return 0
   fi

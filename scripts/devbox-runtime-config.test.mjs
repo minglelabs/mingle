@@ -87,3 +87,16 @@ write_rn_mobile_ads_app_json "" "ca-app-pub-7057041881494735~7844963551"
     /resolved empty RN_ADMOB_APP_ID_ANDROID for devbox runtime/,
   );
 });
+
+test("devbox .env formatting keeps AdMob app ids unquoted", () => {
+  const output = runDevboxEval(`
+printf '%s\\n%s' \
+  "$(format_env_value_for_dotenv 'ca-app-pub-7057041881494735~7844963551')" \
+  "$(format_env_value_for_dotenv 'ca-app-pub-7057041881494735~1471126891')"
+`);
+
+  assert.deepEqual(output.split("\n"), [
+    "ca-app-pub-7057041881494735~7844963551",
+    "ca-app-pub-7057041881494735~1471126891",
+  ]);
+});
