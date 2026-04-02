@@ -12,6 +12,10 @@ import { POST as postAndroidV105ClientVersionPolicy } from '@/app/api/android/v1
 import { POST as postAndroidV106ClientVersionPolicy } from '@/app/api/android/v1.0.6/client/version-policy/route'
 import { POST as postAndroidV107ClientVersionPolicy } from '@/app/api/android/v1.0.7/client/version-policy/route'
 import { POST as postAndroidV110ClientVersionPolicy } from '@/app/api/android/v1.1.0/client/version-policy/route'
+import {
+  GET as getAndroidV110AccountPreferences,
+  PATCH as patchAndroidV110AccountPreferences,
+} from '@/app/api/android/v1.1.0/account/preferences/route'
 import { POST as postAndroidV100LogClientEvent } from '@/app/api/android/v1.0.0/log/client-event/route'
 import { POST as postAndroidV102LogClientEvent } from '@/app/api/android/v1.0.2/log/client-event/route'
 import { POST as postAndroidV103LogClientEvent } from '@/app/api/android/v1.0.3/log/client-event/route'
@@ -49,6 +53,10 @@ import { POST as postIosV105ClientVersionPolicy } from '@/app/api/ios/v1.0.5/cli
 import { POST as postIosV106ClientVersionPolicy } from '@/app/api/ios/v1.0.6/client/version-policy/route'
 import { POST as postIosV107ClientVersionPolicy } from '@/app/api/ios/v1.0.7/client/version-policy/route'
 import { POST as postIosV110ClientVersionPolicy } from '@/app/api/ios/v1.1.0/client/version-policy/route'
+import {
+  GET as getIosV110AccountPreferences,
+  PATCH as patchIosV110AccountPreferences,
+} from '@/app/api/ios/v1.1.0/account/preferences/route'
 import { POST as postIosV100LogClientEvent } from '@/app/api/ios/v1.0.0/log/client-event/route'
 import { POST as postIosV102LogClientEvent } from '@/app/api/ios/v1.0.2/log/client-event/route'
 import { POST as postIosV103LogClientEvent } from '@/app/api/ios/v1.0.3/log/client-event/route'
@@ -86,6 +94,10 @@ import { postAndroidClientVersionPolicyForAndroidV1_0_5 } from '@/server/api/con
 import { postAndroidClientVersionPolicyForAndroidV1_0_6 } from '@/server/api/controllers/android/v1.0.6/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/client-version-policy-controller'
+import {
+  getAccountPreferencesForAndroidV1_1_0,
+  patchAccountPreferencesForAndroidV1_1_0,
+} from '@/server/api/controllers/android/v1.1.0/account-preferences-controller'
 import { postLogClientEventForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/log-client-event-controller'
@@ -125,6 +137,10 @@ import { postIosClientVersionPolicyForIosV1_0_5 } from '@/server/api/controllers
 import { postIosClientVersionPolicyForIosV1_0_6 } from '@/server/api/controllers/ios/v1.0.6/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_7 } from '@/server/api/controllers/ios/v1.0.7/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/client-version-policy-controller'
+import {
+  getAccountPreferencesForIosV1_1_0,
+  patchAccountPreferencesForIosV1_1_0,
+} from '@/server/api/controllers/ios/v1.1.0/account-preferences-controller'
 import { postLogClientEventForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/log-client-event-controller'
 import { postLogClientEventForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/log-client-event-controller'
 import { postLogClientEventForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/log-client-event-controller'
@@ -224,6 +240,8 @@ describe('mingle-app namespace route wiring', () => {
     expect(postAndroidV110TtsInworld).toBe(postTtsInworldForAndroidV1_1_0)
     expect(postAndroidV110LogClientEvent).toBe(postLogClientEventForAndroidV1_1_0)
     expect(postAndroidV110ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_1_0)
+    expect(getAndroidV110AccountPreferences).toBe(getAccountPreferencesForAndroidV1_1_0)
+    expect(patchAndroidV110AccountPreferences).toBe(patchAccountPreferencesForAndroidV1_1_0)
     expect(getAndroidV110Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
     expect(postAndroidV110Conversations).toBe(postCreateConversationForAndroidV1_1_0)
     expect(patchAndroidV110Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
@@ -283,6 +301,8 @@ describe('mingle-app namespace route wiring', () => {
     expect(postIosV110TtsInworld).toBe(postTtsInworldForIosV1_1_0)
     expect(postIosV110LogClientEvent).toBe(postLogClientEventForIosV1_1_0)
     expect(postIosV110ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_1_0)
+    expect(getIosV110AccountPreferences).toBe(getAccountPreferencesForIosV1_1_0)
+    expect(patchIosV110AccountPreferences).toBe(patchAccountPreferencesForIosV1_1_0)
     expect(getIosV110Conversations).toBe(getConversationChannelsForIosV1_1_0)
     expect(postIosV110Conversations).toBe(postCreateConversationForIosV1_1_0)
     expect(patchIosV110Conversation).toBe(patchConversationRouteForIosV1_1_0)

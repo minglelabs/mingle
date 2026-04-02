@@ -764,6 +764,7 @@ export default function ConversationList({
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
+  const routeSyncConversationIdRef = useRef<string | null>(null);
   const viewportWidthPx = useViewportWidthPx();
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch();
   const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx");
@@ -852,16 +853,6 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
-    if (activeConversation) return;
-    const conversationId = readConversationIdFromLocation();
-    if (!conversationId) return;
-    const matchedConversation = conversations.find((conversation) => conversation.id === conversationId);
-    if (matchedConversation) {
-      setActiveConversation(matchedConversation);
-    }
-  }, [activeConversation, conversations]);
-
-  useEffect(() => {
     if (!activeConversation) return;
     const nextConversation = conversations.find((conversation) => conversation.id === activeConversation.id);
     if (!nextConversation) return;
@@ -943,27 +934,32 @@ export default function ConversationList({
     }
   }, [copy.createErrorMessage, isCreatingConversation, mutatingConversationId]);
 
+  const openConversationSummary = useCallback(async (
+    conversation: ConversationChannelSummary,
+  ) => {
+    setShowSearch(false);
+    setOverlayExitMode("animate");
+    setAutoStartConversationId(null);
+
+    if (conversation.status === "active") {
+      setActiveConversation(conversation);
+      return conversation;
+    }
+
+    const nextConversation = await updateConversationStatus(conversation.id, "active");
+    if (!nextConversation) return null;
+    setActiveConversation(nextConversation);
+    return nextConversation;
+  }, [updateConversationStatus]);
+
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || mutatingConversationId) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === item.id);
     if (!matchedConversation) return;
 
-    if (matchedConversation.status === "active") {
-      setShowSearch(false);
-      setOverlayExitMode("animate");
-      setAutoStartConversationId(null);
-      setActiveConversation(matchedConversation);
-      return;
-    }
-
     try {
-      const nextConversation = await updateConversationStatus(matchedConversation.id, "active");
-      if (!nextConversation) return;
-      setShowSearch(false);
-      setOverlayExitMode("animate");
-      setAutoStartConversationId(null);
-      setActiveConversation(nextConversation);
+      await openConversationSummary(matchedConversation);
     } catch {
       window.alert(copy.openErrorMessage);
     }
@@ -972,7 +968,7 @@ export default function ConversationList({
     copy.openErrorMessage,
     isCreatingConversation,
     mutatingConversationId,
-    updateConversationStatus,
+    openConversationSummary,
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {
@@ -996,6 +992,40 @@ export default function ConversationList({
     void handleCloseActiveConversation();
     return true;
   }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
+
+  useEffect(() => {
+    if (activeConversation) {
+      routeSyncConversationIdRef.current = null;
+      return;
+    }
+
+    const conversationId = readConversationIdFromLocation();
+    if (!conversationId) {
+      routeSyncConversationIdRef.current = null;
+      return;
+    }
+    if (routeSyncConversationIdRef.current === conversationId) return;
+    if (isCreatingConversation || mutatingConversationId) return;
+
+    const matchedConversation = conversations.find((conversation) => conversation.id === conversationId);
+    if (!matchedConversation) return;
+
+    routeSyncConversationIdRef.current = conversationId;
+    void openConversationSummary(matchedConversation).catch(() => {
+      routeSyncConversationIdRef.current = null;
+      if (readConversationIdFromLocation() === conversationId) {
+        replaceConversationOverlayUrl(null);
+      }
+      window.alert(copy.openErrorMessage);
+    });
+  }, [
+    activeConversation,
+    conversations,
+    copy.openErrorMessage,
+    isCreatingConversation,
+    mutatingConversationId,
+    openConversationSummary,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !activeConversation) return;

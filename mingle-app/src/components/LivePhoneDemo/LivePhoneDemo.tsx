@@ -12,7 +12,7 @@ import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
-import { clientApiNamespace } from '@/lib/api-contract'
+import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -75,7 +75,9 @@ import {
 } from './live-phone-demo.app-update.logic'
 
 const VOLUME_THRESHOLD = 0.05
-const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
+function buildAccountPreferencesApiPath(): string {
+  return buildClientApiPath('/account/preferences')
+}
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
@@ -661,7 +663,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(buildAccountPreferencesApiPath(), {
       method: 'GET',
       cache: 'no-store',
       headers: buildTrackingRequestHeaders({
@@ -709,7 +711,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(buildAccountPreferencesApiPath(), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -744,7 +746,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(buildAccountPreferencesApiPath(), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
