@@ -169,13 +169,57 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
-type NativeSttBridgeCommand = NativeSttStartCommand | NativeSttStopCommand | NativeSttSetAecCommand
+type NativeOpenAppSettingsCommand = {
+  type: 'native_open_app_settings'
+  payload: {
+    reason: string
+  }
+}
+
+type NativeSttBridgeCommand =
+  | NativeSttStartCommand
+  | NativeSttStopCommand
+  | NativeSttSetAecCommand
+  | NativeOpenAppSettingsCommand
+
+export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
 
 type NativeSttBridgeEvent =
   | { type: 'status', status: string }
   | { type: 'message', raw: string }
-  | { type: 'error', message: string }
+  | { type: 'error', message: string, code?: string, platform?: string }
   | { type: 'close', reason: string }
+
+export function resolveNativeMicPermissionRecoveryAction(input: {
+  message?: string
+  code?: string
+  platform?: string
+}): NativeMicPermissionRecoveryAction {
+  const platform = (input.platform || '').trim().toLowerCase()
+  if (platform !== 'ios') return 'none'
+
+  const code = (input.code || '').trim().toLowerCase()
+  if (code === 'mic_permission') {
+    return 'open_ios_settings'
+  }
+
+  const message = (input.message || '').trim().toLowerCase()
+  if (message === 'mic_permission_denied' || message === 'mic_permission_denied_after_prompt') {
+    return 'open_ios_settings'
+  }
+
+  return 'none'
+}
+
+export function shouldOpenNativeMicSettingsOnRetry(input: {
+  useNativeStt: boolean
+  connectionStatus: ConnectionStatus
+  recoveryAction: NativeMicPermissionRecoveryAction
+}): boolean {
+  if (!input.useNativeStt) return false
+  if (input.connectionStatus !== 'idle') return false
+  return input.recoveryAction === 'open_ios_settings'
+}
 
 declare global {
   interface Window {
@@ -1709,6 +1753,7 @@ export default function useRealtimeSTT({
     clearTimeout(connectionErrorResetTimerRef.current)
     connectionErrorResetTimerRef.current = null
   }, [])
+  const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -3064,6 +3109,22 @@ export default function useRealtimeSTT({
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
     useNativeSttRef.current = useNativeStt
+    if (shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt,
+      connectionStatus: connectionStatusRef.current,
+      recoveryAction: nativeMicPermissionRecoveryActionRef.current,
+    })) {
+      const opened = sendNativeSttCommand({
+        type: 'native_open_app_settings',
+        payload: {
+          reason: 'microphone_permission_denied',
+        },
+      })
+      if (opened) {
+        nativeMicPermissionRecoveryActionRef.current = 'none'
+        return
+      }
+    }
     logSttDebug('recording.start.request', {
       useNativeStt,
       wsUrl: getWsUrl(),
@@ -3212,7 +3273,10 @@ export default function useRealtimeSTT({
       if (detail.type === 'status') {
         logSttDebug('native.status', { status: detail.status })
         if (detail.status === 'connecting') {
+          nativeMicPermissionRecoveryActionRef.current = 'none'
           setConnectionStatus('connecting')
+        } else if (detail.status === 'running') {
+          nativeMicPermissionRecoveryActionRef.current = 'none'
         } else if (detail.status === 'stopped') {
           setConnectionStatus('idle')
         }
@@ -3232,6 +3296,7 @@ export default function useRealtimeSTT({
       if (detail.type === 'error') {
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) return
+        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
         handleSttTransportError({ native: true, message: detail.message })
         return
       }

@@ -22,7 +22,7 @@ type NativeSttModuleType = {
 type NativeSttEventMap = {
   status: { status: string };
   message: { raw: string };
-  error: { message: string };
+  error: { message: string; code?: string; platform?: string };
   close: { reason: string };
 };
 

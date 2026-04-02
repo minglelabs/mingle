@@ -658,6 +658,13 @@ type NativeSttAecCommand = {
   payload: { enabled: boolean };
 };
 
+type NativeOpenAppSettingsCommand = {
+  type: 'native_open_app_settings';
+  payload?: {
+    reason?: string;
+  };
+};
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -705,6 +712,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeOpenAppSettingsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -715,7 +723,7 @@ type WebViewCommand =
 type NativeSttEvent =
   | { type: 'status'; status: string }
   | { type: 'message'; raw: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: string; platform?: string }
   | { type: 'close'; reason: string };
 
 type NativeUiEvent = {
@@ -764,6 +772,14 @@ function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
 function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android' {
   if (runtimeOs === 'android') return 'android';
   return 'ios';
+}
+
+function resolveNativeSttErrorCode(message: string): string | undefined {
+  const normalized = message.trim().toLowerCase();
+  if (normalized === 'mic_permission_denied' || normalized === 'mic_permission_denied_after_prompt') {
+    return 'mic_permission';
+  }
+  return undefined;
 }
 
 type RuntimeClientInfo = {
@@ -1664,8 +1680,16 @@ function AppInner(): React.JSX.Element {
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      const code = typeof (error as { code?: unknown })?.code === 'string'
+        ? (error as { code: string }).code.trim()
+        : resolveNativeSttErrorCode(message);
       nativeStatusRef.current = 'failed';
-      emitToWeb({ type: 'error', message });
+      emitToWeb({
+        type: 'error',
+        message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     }
   }, [emitToWeb, nativeAvailable]);
 
@@ -1921,6 +1945,14 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_open_app_settings') {
+      if (__DEV__) {
+        console.log(`[Web→Native] open app settings reason=${parsed.payload?.reason ?? 'unspecified'}`);
+      }
+      void Linking.openSettings();
+      return;
+    }
+
     if (parsed.type === 'native_tts_stop') {
       const reason = typeof parsed.payload?.reason === 'string' && parsed.payload.reason.trim()
         ? parsed.payload.reason.trim()
@@ -1976,7 +2008,15 @@ function AppInner(): React.JSX.Element {
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
       nativeStatusRef.current = 'error';
-      emitToWeb({ type: 'error', message: event.message });
+      const code = typeof event.code === 'string' && event.code.trim()
+        ? event.code.trim()
+        : resolveNativeSttErrorCode(event.message);
+      emitToWeb({
+        type: 'error',
+        message: event.message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     });
 
     const closeSub = addNativeSttListener('close', event => {
