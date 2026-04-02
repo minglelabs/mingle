@@ -690,6 +690,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
+  const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -1167,7 +1168,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const command: NativeUiOverlayStateCommand = {
       type: 'native_ui_overlay_state',
-      payload: { menuOpen },
+      payload: { menuOpen: isNativeMenuOverlayVisible },
     }
 
     try {
@@ -1175,6 +1176,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner state unchanged.
     }
+  }, [isNativeMenuOverlayVisible])
+
+  useEffect(() => {
+    if (!isNativeApp()) return
 
     return () => {
       try {
@@ -1186,7 +1191,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         // Ignore bridge errors during teardown.
       }
     }
-  }, [menuOpen])
+  }, [])
 
   useEffect(() => {
     if (!isNativeApp()) return
