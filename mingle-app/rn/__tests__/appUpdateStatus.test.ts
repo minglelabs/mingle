@@ -6,9 +6,9 @@ import {
 
 describe('appUpdateStatus', () => {
   it('normalizes the installed version for the checking snapshot', () => {
-    expect(createCheckingNativeAppUpdateSnapshot(' v1.0.7 ')).toEqual({
+    expect(createCheckingNativeAppUpdateSnapshot(' v1.1.0 ')).toEqual({
       status: 'checking',
-      clientVersion: '1.0.7',
+      clientVersion: '1.1.0',
       latestVersion: '',
       updateUrl: '',
       updateAvailable: false,
@@ -20,16 +20,16 @@ describe('appUpdateStatus', () => {
       resolveNativeAppUpdateSnapshot(
         {
           action: 'none',
-          clientVersion: '1.0.7',
-          latestVersion: '1.0.7',
+          clientVersion: '1.1.0',
+          latestVersion: '1.1.0',
           updateUrl: 'https://apps.apple.com/app/id123',
         },
-        '1.0.7',
+        '1.1.0',
       ),
     ).toEqual({
       status: 'current',
-      clientVersion: '1.0.7',
-      latestVersion: '1.0.7',
+      clientVersion: '1.1.0',
+      latestVersion: '1.1.0',
       updateUrl: 'https://apps.apple.com/app/id123',
       updateAvailable: false,
     });
@@ -41,7 +41,7 @@ describe('appUpdateStatus', () => {
         {
           action: 'recommend_update',
           clientVersion: '1.0.5',
-          latestVersion: '1.0.7',
+          latestVersion: '1.1.0',
           updateUrl: 'https://apps.apple.com/app/id123',
         },
         '1.0.5',
@@ -49,7 +49,7 @@ describe('appUpdateStatus', () => {
     ).toEqual({
       status: 'available',
       clientVersion: '1.0.5',
-      latestVersion: '1.0.7',
+      latestVersion: '1.1.0',
       updateUrl: 'https://apps.apple.com/app/id123',
       updateAvailable: true,
     });
@@ -61,7 +61,7 @@ describe('appUpdateStatus', () => {
         {
           action: 'none',
           clientVersion: '1.0.5',
-          latestVersion: '1.0.7',
+          latestVersion: '1.1.0',
           updateUrl: 'market://details?id=com.minglelabs.mingle.rn',
         },
         '1.0.5',
@@ -69,16 +69,16 @@ describe('appUpdateStatus', () => {
     ).toEqual({
       status: 'available',
       clientVersion: '1.0.5',
-      latestVersion: '1.0.7',
+      latestVersion: '1.1.0',
       updateUrl: 'market://details?id=com.minglelabs.mingle.rn',
       updateAvailable: true,
     });
   });
 
   it('keeps the installed version when the policy status is unknown', () => {
-    expect(createUnknownNativeAppUpdateSnapshot('1.0.7')).toEqual({
+    expect(createUnknownNativeAppUpdateSnapshot('1.1.0')).toEqual({
       status: 'unknown',
-      clientVersion: '1.0.7',
+      clientVersion: '1.1.0',
       latestVersion: '',
       updateUrl: '',
       updateAvailable: false,
