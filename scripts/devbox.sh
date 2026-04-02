@@ -4528,6 +4528,7 @@ cmd_mobile() {
   local tunnel_provider=""
   tunnel_provider="$(resolve_tunnel_provider "$tunnel_provider_override")"
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
   local profile_already_saved=0
   case "$active_profile" in
     device)
@@ -4658,6 +4659,7 @@ cmd_up() {
   local mobile_site_override=""
   local mobile_ws_override=""
   local tunnel_provider_override=""
+  local previous_active_device_app_env="${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -4687,6 +4689,7 @@ cmd_up() {
   local tunnel_provider=""
   tunnel_provider="$(resolve_tunnel_provider "$tunnel_provider_override")"
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
 
   resolve_vault_paths "$vault_app_override" "$vault_stt_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
@@ -4920,6 +4923,7 @@ $(ngrok_plan_capacity_hint)"
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
     log "device app env is prod; skipping mingle-app/mingle-stt/tunnel runtime startup"
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
     return 0
   fi
