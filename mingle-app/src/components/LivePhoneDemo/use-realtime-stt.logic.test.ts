@@ -323,6 +323,23 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('error')
   })
 
+  it('ignores missing or unknown native bridge statuses for older native shells', () => {
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: undefined,
+      previousConnectionStatus: 'idle',
+    })).toBeNull()
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: '',
+      previousConnectionStatus: 'ready',
+    })).toBeNull()
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'legacy_unknown_state',
+      previousConnectionStatus: 'connecting',
+    })).toBeNull()
+  })
+
   it('filters translations down to currently selected target languages', () => {
     expect(filterTranslationsToTargetLanguages({
       ko: '안녕하세요',
