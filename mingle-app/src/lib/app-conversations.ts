@@ -104,26 +104,17 @@ function normalizeConversationPreview(rawValue: string | null | undefined): stri
   return (rawValue || "").replace(/\s+/g, " ").trim();
 }
 
-export async function listConversationChannelsForUser(
-  userId: string,
-): Promise<ConversationChannelSummary[]> {
-  const records = await prisma.appConversationChannel.findMany({
-    where: { ownerUserId: userId },
-    orderBy: [
-      { updatedAt: "desc" },
-      { createdAt: "desc" },
-    ],
-    select: conversationChannelSelect,
-  });
-
-  if (records.length === 0) {
-    return [];
+async function listLatestMessagePreviewBySessionKey(
+  sessionKeys: string[],
+): Promise<Map<string, string>> {
+  if (sessionKeys.length === 0) {
+    return new Map();
   }
 
   const latestMessages = await prisma.appMessage.findMany({
     where: {
       sessionKey: {
-        in: records.map((record) => record.sessionKey),
+        in: sessionKeys,
       },
     },
     orderBy: [
@@ -156,6 +147,36 @@ export async function listConversationChannelsForUser(
     if (!message.sessionKey || !preview) continue;
     previewBySessionKey.set(message.sessionKey, preview);
   }
+
+  return previewBySessionKey;
+}
+
+async function serializeConversationChannelWithPreview(
+  record: ConversationChannelRecord,
+): Promise<ConversationChannelSummary> {
+  const previewBySessionKey = await listLatestMessagePreviewBySessionKey([record.sessionKey]);
+  return serializeConversationChannel(record, previewBySessionKey.get(record.sessionKey));
+}
+
+export async function listConversationChannelsForUser(
+  userId: string,
+): Promise<ConversationChannelSummary[]> {
+  const records = await prisma.appConversationChannel.findMany({
+    where: { ownerUserId: userId },
+    orderBy: [
+      { updatedAt: "desc" },
+      { createdAt: "desc" },
+    ],
+    select: conversationChannelSelect,
+  });
+
+  if (records.length === 0) {
+    return [];
+  }
+
+  const previewBySessionKey = await listLatestMessagePreviewBySessionKey(
+    records.map((record) => record.sessionKey),
+  );
 
   return records.map((record) => serializeConversationChannel(
     record,
@@ -196,7 +217,7 @@ export async function createConversationChannelForUser(
         });
       });
 
-      return serializeConversationChannel(record);
+      return serializeConversationChannelWithPreview(record);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError
@@ -254,7 +275,7 @@ export async function updateConversationChannelStatus(args: {
     });
   });
 
-  return serializeConversationChannel(record);
+  return serializeConversationChannelWithPreview(record);
 }
 
 export async function updateConversationChannelSelectedLanguages(args: {
@@ -287,7 +308,7 @@ export async function updateConversationChannelSelectedLanguages(args: {
     select: conversationChannelSelect,
   });
 
-  return serializeConversationChannel(record);
+  return serializeConversationChannelWithPreview(record);
 }
 
 export async function getConversationHydrationStateForUser(args: {

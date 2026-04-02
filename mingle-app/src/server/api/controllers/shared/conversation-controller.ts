@@ -61,32 +61,35 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
   }
 
+  const selectedLanguages = hasSelectedLanguages
+    ? sanitizeSttLanguageSelection(body.selectedLanguages)
+    : null;
+  if (hasSelectedLanguages && (!selectedLanguages || selectedLanguages.length === 0)) {
+    return NextResponse.json({ error: "invalid_selected_languages" }, { status: 400 });
+  }
+
+  const requestedStatus = hasStatus && typeof body.status === "string"
+    ? body.status.trim().toLowerCase()
+    : "";
+  if (
+    hasStatus
+    && requestedStatus !== APP_CONVERSATION_STATUS_ACTIVE
+    && requestedStatus !== APP_CONVERSATION_STATUS_PAUSED
+  ) {
+    return NextResponse.json({ error: "invalid_status" }, { status: 400 });
+  }
+
   let conversation = null;
 
   if (hasSelectedLanguages) {
-    const selectedLanguages = sanitizeSttLanguageSelection(body.selectedLanguages);
-    if (selectedLanguages.length === 0) {
-      return NextResponse.json({ error: "invalid_selected_languages" }, { status: 400 });
-    }
-
     conversation = await updateConversationChannelSelectedLanguages({
       conversationId,
       userId: resolvedUser.userId,
-      selectedLanguages,
+      selectedLanguages: selectedLanguages!,
     });
   }
 
   if (hasStatus) {
-    const requestedStatus = typeof body.status === "string"
-      ? body.status.trim().toLowerCase()
-      : "";
-    if (
-      requestedStatus !== APP_CONVERSATION_STATUS_ACTIVE
-      && requestedStatus !== APP_CONVERSATION_STATUS_PAUSED
-    ) {
-      return NextResponse.json({ error: "invalid_status" }, { status: 400 });
-    }
-
     conversation = await updateConversationChannelStatus({
       conversationId,
       userId: resolvedUser.userId,

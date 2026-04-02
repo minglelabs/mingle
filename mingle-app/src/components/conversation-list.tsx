@@ -467,8 +467,18 @@ function upsertConversation(
   conversations: ConversationChannelSummary[],
   nextConversation: ConversationChannelSummary,
 ): ConversationChannelSummary[] {
+  const previousConversation = conversations.find((conversation) => conversation.id === nextConversation.id);
+  const mergedConversation = previousConversation
+    ? {
+        ...previousConversation,
+        ...nextConversation,
+        latestMessagePreview:
+          nextConversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
+      }
+    : nextConversation;
+
   return [
-    nextConversation,
+    mergedConversation,
     ...conversations.filter((conversation) => conversation.id !== nextConversation.id),
   ].sort(compareConversationRecency);
 }

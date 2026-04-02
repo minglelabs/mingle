@@ -273,6 +273,26 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ error: "invalid_selected_languages" });
     expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+  });
+
+  it("validates the whole patch body before mutating the conversation", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["en"]);
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedLanguages: ["en"], status: "archived" }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_status" });
+    expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
   });
 
   it("returns not found when the conversation is missing", async () => {
