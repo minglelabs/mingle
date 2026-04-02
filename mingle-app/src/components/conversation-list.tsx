@@ -1004,11 +1004,19 @@ export default function ConversationList({
         actionDisabled={actionDisabled}
       />
 
+      {effectiveNativeTopInsetPx > 0 ? (
+        <div
+          className="shrink-0"
+          aria-hidden="true"
+          style={{ height: `${effectiveNativeTopInsetPx}px` }}
+        />
+      ) : null}
+
       <header
-        className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white/95 px-4 backdrop-blur"
+        className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
-          paddingTop: `calc(env(safe-area-inset-top, 0px) + ${effectiveNativeTopInsetPx}px)`,
-          height: `calc(56px + env(safe-area-inset-top, 0px) + ${effectiveNativeTopInsetPx}px)`,
+          paddingTop: "env(safe-area-inset-top, 44px)",
+          height: "calc(56px + env(safe-area-inset-top, 44px))",
         }}
       >
         <MingleWordmark />
@@ -1073,8 +1081,12 @@ export default function ConversationList({
           type="button"
           onClick={handleCreateConversation}
           disabled={actionDisabled}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-[1.4rem] bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 px-5 text-[1rem] font-semibold text-white shadow-[0_18px_36px_rgba(249,115,22,0.28)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-[1.4rem] px-5 text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
+          style={{
+            backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
+            boxShadow: "0 18px 36px rgba(249, 115, 22, 0.28)",
+          }}
         >
           {isCreatingConversation ? (
             <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
