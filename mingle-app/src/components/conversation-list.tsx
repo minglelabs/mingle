@@ -39,6 +39,7 @@ import MingleWordmark from "@/components/mingle-wordmark";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
+const LAST_VIEWED_SCREEN_STORAGE_KEY_PREFIX = "mingle:conversation-last-screen";
 const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
@@ -113,6 +114,10 @@ type ConversationListWindow = Window & {
   [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
 };
 
+type StoredConversationScreen =
+  | { kind: "list" }
+  | { kind: "conversation"; conversationId: string };
+
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
@@ -120,6 +125,60 @@ function isNativeAppRuntime(): boolean {
 
 function normalizeSearchTerm(rawValue: string): string {
   return rawValue.trim().replace(/\s+/g, " ");
+}
+
+function buildLastViewedScreenStorageKey(locale: AppLocale): string {
+  return `${LAST_VIEWED_SCREEN_STORAGE_KEY_PREFIX}:${locale}:${getOrCreateTrackingUserId()}`;
+}
+
+function readStoredLastViewedConversationScreen(locale: AppLocale): StoredConversationScreen | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const stored = window.localStorage.getItem(buildLastViewedScreenStorageKey(locale));
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored) as unknown;
+    if (
+      parsed
+      && typeof parsed === "object"
+      && (parsed as { kind?: unknown }).kind === "list"
+    ) {
+      return { kind: "list" };
+    }
+
+    const conversationId = typeof (parsed as { conversationId?: unknown })?.conversationId === "string"
+      ? (parsed as { conversationId: string }).conversationId.trim()
+      : "";
+    if (
+      parsed
+      && typeof parsed === "object"
+      && (parsed as { kind?: unknown }).kind === "conversation"
+      && conversationId
+    ) {
+      return { kind: "conversation", conversationId };
+    }
+  } catch {
+    // Ignore malformed persisted screen state.
+  }
+
+  return null;
+}
+
+function writeStoredLastViewedConversationScreen(
+  locale: AppLocale,
+  screen: StoredConversationScreen,
+): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(
+      buildLastViewedScreenStorageKey(locale),
+      JSON.stringify(screen),
+    );
+  } catch {
+    // Ignore storage write failures in restricted environments.
+  }
 }
 
 function normalizeRecentSearches(values: string[]): string[] {
@@ -827,6 +886,7 @@ export default function ConversationList({
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
+  const [isLastViewedScreenReady, setIsLastViewedScreenReady] = useState(false);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
@@ -840,6 +900,7 @@ export default function ConversationList({
   const mutatingConversationIdRef = useRef<string | null>(mutatingConversationId);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
+  const pendingRestoredConversationIdRef = useRef<string | null>(null);
   const viewportWidthPx = useViewportWidthPx();
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch();
   const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx");
@@ -1015,6 +1076,24 @@ export default function ConversationList({
   }, [mutatingConversationId]);
 
   useEffect(() => {
+    if (isLastViewedScreenReady) return;
+
+    const routeConversationId = readConversationIdFromLocation();
+    if (routeConversationId) {
+      setIsLastViewedScreenReady(true);
+      return;
+    }
+
+    const storedScreen = readStoredLastViewedConversationScreen(locale);
+    if (!storedScreen || storedScreen.kind === "list") {
+      setIsLastViewedScreenReady(true);
+      return;
+    }
+
+    pendingRestoredConversationIdRef.current = storedScreen.conversationId;
+  }, [isLastViewedScreenReady, locale]);
+
+  useEffect(() => {
     if (!isNativeAppRuntime()) return;
     if (activeConversation) return;
     postNativeBannerZone("list");
@@ -1167,6 +1246,52 @@ export default function ConversationList({
     mutatingConversationId,
     openConversationSummary,
   ]);
+
+  useEffect(() => {
+    const pendingConversationId = pendingRestoredConversationIdRef.current;
+    if (!pendingConversationId) return;
+    if (activeConversation || isCreatingConversation || mutatingConversationId) return;
+
+    const matchedConversation = conversations.find(
+      (conversation) => conversation.id === pendingConversationId,
+    );
+    if (!matchedConversation) {
+      if (isHydratingConversations) return;
+      pendingRestoredConversationIdRef.current = null;
+      writeStoredLastViewedConversationScreen(locale, { kind: "list" });
+      setIsLastViewedScreenReady(true);
+      return;
+    }
+
+    pendingRestoredConversationIdRef.current = null;
+    void openConversationSummary(matchedConversation, {
+      enterMode: "instant",
+    }).catch(() => {
+      window.alert(copy.openErrorMessage);
+    }).finally(() => {
+      setIsLastViewedScreenReady(true);
+    });
+  }, [
+    activeConversation,
+    conversations,
+    copy.openErrorMessage,
+    isCreatingConversation,
+    isHydratingConversations,
+    locale,
+    mutatingConversationId,
+    openConversationSummary,
+  ]);
+
+  useEffect(() => {
+    if (!isLastViewedScreenReady) return;
+
+    writeStoredLastViewedConversationScreen(
+      locale,
+      activeConversation
+        ? { kind: "conversation", conversationId: activeConversation.id }
+        : { kind: "list" },
+    );
+  }, [activeConversation, isLastViewedScreenReady, locale]);
 
   const handleCloseActiveConversation = useCallback(async () => {
     if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
