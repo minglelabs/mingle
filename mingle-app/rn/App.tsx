@@ -340,6 +340,11 @@ const AUTH_LOGIN_SAFE_AREA_PALETTE: SafeAreaPalette = {
   bottomEdgeMode: 'transparent',
 };
 
+const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  ...DEFAULT_SAFE_AREA_PALETTE,
+  bottomEdgeMode: 'transparent',
+};
+
 const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
   (function () {
     if (window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__) {
@@ -983,6 +988,23 @@ function isAllowedNativeAuthStartPath(pathname: string): boolean {
   return segments[1] === 'auth' && segments[2] === 'native';
 }
 
+function isConversationsLikePathname(pathname: string): boolean {
+  const normalized = pathname.trim();
+  if (!normalized.startsWith('/')) return false;
+
+  const segments = normalized
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'conversations';
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -991,6 +1013,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     const parsed = new URL(candidate);
     if (isAuthLikePathname(parsed.pathname)) {
       return AUTH_LOGIN_SAFE_AREA_PALETTE;
+    }
+    if (isConversationsLikePathname(parsed.pathname)) {
+      return CONVERSATIONS_SAFE_AREA_PALETTE;
     }
   } catch {
     return DEFAULT_SAFE_AREA_PALETTE;
