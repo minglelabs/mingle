@@ -983,7 +983,6 @@ export default function ConversationList({
     initialConversations.length === 0,
   );
   const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
-  const [conversationRoomRefVersion, setConversationRoomRefVersion] = useState(0);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
@@ -1083,7 +1082,6 @@ export default function ConversationList({
     } else {
       conversationRoomRefs.current.delete(conversationId);
     }
-    setConversationRoomRefVersion((current) => current + 1);
   }, []);
 
   const applyRunningConversationState = useCallback((
@@ -1186,49 +1184,49 @@ export default function ConversationList({
     }
 
     if (activeConversation?.id !== autoStartConversationId) return;
-
-    const room = conversationRoomRefs.current.get(autoStartConversationId);
-    if (!room) return;
     if (autoStartAttemptedConversationIdRef.current === autoStartConversationId) return;
 
-    autoStartAttemptedConversationIdRef.current = autoStartConversationId;
-    if (autoStartTimerRef.current !== null) {
-      window.clearTimeout(autoStartTimerRef.current);
-    }
+    let cancelled = false;
+    let remainingAttempts = 12;
 
-    autoStartTimerRef.current = window.setTimeout(() => {
-      autoStartTimerRef.current = null;
+    const runAutoStart = () => {
+      if (cancelled) return;
       const targetConversationId = autoStartConversationId;
-
       if (activeConversationRef.current?.id !== targetConversationId) {
-        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
-          autoStartAttemptedConversationIdRef.current = null;
-        }
         return;
       }
 
       const targetRoom = conversationRoomRefs.current.get(targetConversationId);
       if (!targetRoom) {
-        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
-          autoStartAttemptedConversationIdRef.current = null;
+        if (remainingAttempts <= 0) {
+          return;
         }
+        remainingAttempts -= 1;
+        autoStartTimerRef.current = window.setTimeout(runAutoStart, 120);
         return;
       }
 
+      autoStartAttemptedConversationIdRef.current = targetConversationId;
       void targetRoom.startRecording().catch(() => {
         if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
           autoStartAttemptedConversationIdRef.current = null;
         }
       });
-    }, 320);
+    };
+
+    if (autoStartTimerRef.current !== null) {
+      window.clearTimeout(autoStartTimerRef.current);
+    }
+    autoStartTimerRef.current = window.setTimeout(runAutoStart, 320);
 
     return () => {
+      cancelled = true;
       if (autoStartTimerRef.current !== null) {
         window.clearTimeout(autoStartTimerRef.current);
         autoStartTimerRef.current = null;
       }
     };
-  }, [activeConversation?.id, autoStartConversationId, conversationRoomRefVersion]);
+  }, [activeConversation?.id, autoStartConversationId]);
 
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
