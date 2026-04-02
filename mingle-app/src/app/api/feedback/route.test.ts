@@ -268,7 +268,7 @@ describe("/api/feedback route", () => {
       method: "POST",
       body: JSON.stringify({
         category: "feedback",
-        message: "short",
+        message: "1234",
       }),
     }));
 

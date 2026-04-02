@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 const FEEDBACK_CATEGORIES = new Set(["feedback", "suggestion", "inquiry"]);
 const FEEDBACK_REPLY_AUTHOR_TYPES = new Set(["user", "team"]);
-const MIN_MESSAGE_LENGTH = 10;
+const MIN_MESSAGE_LENGTH = 5;
 
 type FeedbackBody = {
   category?: unknown;

@@ -77,7 +77,7 @@ const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const FEEDBACK_API_PATH = '/api/feedback'
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
-const FEEDBACK_MIN_MESSAGE_LENGTH = 10
+const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
@@ -106,6 +106,12 @@ type PersistedFeedbackDraft = {
   email: string
   emailEdited: boolean
 }
+
+type FeedbackSubmitErrorCode =
+  | 'message_too_short'
+  | 'invalid_contact_email'
+  | 'invalid_category'
+  | 'invalid_json'
 
 const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   1: 'text-[13px]',
@@ -229,6 +235,14 @@ function persistFeedbackDraft(draft: PersistedFeedbackDraft | null): void {
   } catch {
     // Ignore storage failures so feedback remains usable.
   }
+}
+
+function parseFeedbackSubmitErrorCode(value: unknown): FeedbackSubmitErrorCode | null {
+  if (value === 'message_too_short') return value
+  if (value === 'invalid_contact_email') return value
+  if (value === 'invalid_category') return value
+  if (value === 'invalid_json') return value
+  return null
 }
 
 function readNativeInsetPxFromWindow(queryKey: string): number {
@@ -1028,6 +1042,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
 
       if (!response.ok) {
+        const responseBody = await response.json().catch(() => null) as { error?: unknown } | null
+        const errorCode = parseFeedbackSubmitErrorCode(responseBody?.error)
+
+        if (errorCode === 'message_too_short') {
+          setFeedbackSubmitError(feedbackCopy.messageTooShortMessage)
+          setFeedbackSubmitSuccess(false)
+          return
+        }
+
+        if (errorCode === 'invalid_contact_email') {
+          setFeedbackSubmitError(feedbackCopy.invalidEmailMessage)
+          setFeedbackSubmitSuccess(false)
+          return
+        }
+
         throw new Error(`feedback_submit_failed:${response.status}`)
       }
 
