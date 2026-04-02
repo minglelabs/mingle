@@ -970,18 +970,60 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     if (autoStartTriggeredRef.current) return;
     autoStartTriggeredRef.current = true;
 
-    const timerId = window.setTimeout(() => {
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const clearTimer = () => {
+      if (timerId === null) return;
+      window.clearTimeout(timerId);
+      timerId = null;
+    };
+
+    const pollUntilRunning = (remainingAttempts: number) => {
+      if (cancelled) return;
+      const room = livePhoneDemoRef.current;
+      if (!room) {
+        autoStartTriggeredRef.current = false;
+        return;
+      }
+      if (room.isSttSessionRunning()) {
+        onAutoStartHandled?.();
+        return;
+      }
+      if (remainingAttempts <= 0) {
+        autoStartTriggeredRef.current = false;
+        return;
+      }
+      timerId = window.setTimeout(() => {
+        pollUntilRunning(remainingAttempts - 1);
+      }, 120);
+    };
+
+    const tryAutoStart = () => {
+      if (cancelled) return;
+      const room = livePhoneDemoRef.current;
+      if (!room) {
+        autoStartTriggeredRef.current = false;
+        return;
+      }
+      if (room.isSttSessionRunning()) {
+        onAutoStartHandled?.();
+        return;
+      }
+
       void (async () => {
-        try {
-          await livePhoneDemoRef.current?.startRecording();
-        } finally {
-          onAutoStartHandled?.();
-        }
+        await room.startRecording();
+        pollUntilRunning(24);
       })();
+    };
+
+    timerId = window.setTimeout(() => {
+      tryAutoStart();
     }, 320);
 
     return () => {
-      window.clearTimeout(timerId);
+      cancelled = true;
+      clearTimer();
     };
   }, [autoStartOnMount, onAutoStartHandled]);
 
