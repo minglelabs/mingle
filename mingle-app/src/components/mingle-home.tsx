@@ -27,6 +27,7 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   autoStartOnMount?: boolean;
+  onAutoStartHandled?: () => void;
   isVisible?: boolean;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<void> | void;
@@ -219,6 +220,7 @@ function GoogleMark() {
 
 const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHome(props, ref) {
   const { status } = useSession();
+  const { autoStartOnMount, onAutoStartHandled } = props;
   const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
   const autoStartTriggeredRef = useRef(false);
   const silenceSliderUpgradeCopy = useMemo(
@@ -960,7 +962,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   ]);
 
   useEffect(() => {
-    if (!props.autoStartOnMount) {
+    if (!autoStartOnMount) {
       autoStartTriggeredRef.current = false;
       return;
     }
@@ -968,13 +970,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     autoStartTriggeredRef.current = true;
 
     const timerId = window.setTimeout(() => {
-      livePhoneDemoRef.current?.startRecording();
+      void (async () => {
+        try {
+          await livePhoneDemoRef.current?.startRecording();
+        } finally {
+          onAutoStartHandled?.();
+        }
+      })();
     }, 320);
 
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [props.autoStartOnMount]);
+  }, [autoStartOnMount, onAutoStartHandled]);
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {

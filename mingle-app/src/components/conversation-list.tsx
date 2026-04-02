@@ -1152,20 +1152,6 @@ export default function ConversationList({
     setActiveConversation(nextConversation);
   }, [activeConversation, conversations]);
 
-  useEffect(() => {
-    if (!activeConversation || autoStartConversationId !== activeConversation.id) return;
-
-    const timerId = window.setTimeout(() => {
-      setAutoStartConversationId((current) => (
-        current === activeConversation.id ? null : current
-      ));
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timerId);
-    };
-  }, [activeConversation, autoStartConversationId]);
-
   const closeConversationOverlay = useCallback((
     conversation: ConversationChannelSummary,
     options?: {
@@ -1549,6 +1535,11 @@ export default function ConversationList({
                     sessionKeyOverride={conversation.sessionKey}
                     storageNamespace={conversation.id}
                     autoStartOnMount={autoStartConversationId === conversation.id}
+                    onAutoStartHandled={() => {
+                      setAutoStartConversationId((current) => (
+                        current === conversation.id ? null : current
+                      ));
+                    }}
                     isVisible={isVisible}
                     enableNativeBannerBridge={isVisible}
                     onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
