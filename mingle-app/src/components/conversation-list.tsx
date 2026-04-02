@@ -111,6 +111,7 @@ interface ConversationItem {
   id: string;
   title: string;
   preview: string;
+  previewFullText: string;
   timeLabel: string;
   status: "active" | "paused";
   statusLabel: string;
@@ -123,6 +124,18 @@ interface ConversationItem {
   pausedAt: string | null;
   selectedLanguages: string[];
   languageFlags: string;
+}
+
+function truncateConversationPreview(value: string, maxLength = 20): string {
+  const normalized = value.trim();
+  if (!normalized) return "";
+
+  const characters = [...normalized];
+  if (characters.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${characters.slice(0, maxLength).join("")}...`;
 }
 
 type ConversationListWindow = Window & {
@@ -534,7 +547,8 @@ function mapConversationSummaryToItem(
   return {
     id: conversation.id,
     title: conversation.title,
-    preview: languageFlags || statusLabel,
+    preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
+    previewFullText: conversation.latestMessagePreview || "",
     timeLabel: timeLabelsReady ? formatConversationTime(conversation.updatedAt, locale) : "",
     status: conversation.status,
     statusLabel,
@@ -716,11 +730,23 @@ function ConversationRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-3">
-          <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
+            {item.languageFlags ? (
+              <span className="shrink-0 text-[1rem] leading-none" aria-hidden>
+                {item.languageFlags}
+              </span>
+            ) : null}
+          </div>
           <span className="shrink-0 text-[12px] text-gray-400">{item.timeLabel}</span>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
-          <p className="truncate text-[13px] text-gray-500">{item.preview}</p>
+          <p
+            className="truncate text-[13px] text-gray-500"
+            title={item.previewFullText || undefined}
+          >
+            {item.preview || "\u00A0"}
+          </p>
           <span
             className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] ${
               item.status === "active"

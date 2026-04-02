@@ -16,6 +16,7 @@ export type ConversationChannelSummary = {
   status: AppConversationChannelStatus;
   sessionKey: string;
   selectedLanguages?: string[];
+  latestMessagePreview?: string;
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -83,6 +84,7 @@ export function normalizeConversationChannelStatus(
 
 function serializeConversationChannel(
   record: ConversationChannelRecord,
+  latestMessagePreview?: string,
 ): ConversationChannelSummary {
   return {
     id: record.id,
@@ -91,10 +93,15 @@ function serializeConversationChannel(
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
     selectedLanguages: [...record.selectedLanguages],
+    latestMessagePreview,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: record.pausedAt?.toISOString() ?? null,
   };
+}
+
+function normalizeConversationPreview(rawValue: string | null | undefined): string {
+  return (rawValue || "").replace(/\s+/g, " ").trim();
 }
 
 export async function listConversationChannelsForUser(
@@ -109,7 +116,51 @@ export async function listConversationChannelsForUser(
     select: conversationChannelSelect,
   });
 
-  return records.map(serializeConversationChannel);
+  if (records.length === 0) {
+    return [];
+  }
+
+  const latestMessages = await prisma.appMessage.findMany({
+    where: {
+      sessionKey: {
+        in: records.map((record) => record.sessionKey),
+      },
+    },
+    orderBy: [
+      { sessionKey: "asc" },
+      { createdAt: "desc" },
+    ],
+    distinct: ["sessionKey"],
+    select: {
+      sessionKey: true,
+      sourceLanguage: true,
+      contents: {
+        where: {
+          contentType: "SOURCE",
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          language: true,
+          text: true,
+        },
+      },
+    },
+  });
+
+  const previewBySessionKey = new Map<string, string>();
+  for (const message of latestMessages) {
+    const sourceContent = message.contents.find((content) => content.language === message.sourceLanguage)
+      || message.contents[0]
+      || null;
+    const preview = normalizeConversationPreview(sourceContent?.text);
+    if (!message.sessionKey || !preview) continue;
+    previewBySessionKey.set(message.sessionKey, preview);
+  }
+
+  return records.map((record) => serializeConversationChannel(
+    record,
+    previewBySessionKey.get(record.sessionKey),
+  ));
 }
 
 export async function createConversationChannelForUser(
