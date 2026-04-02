@@ -35,6 +35,21 @@ const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
+let activeNativeSttOwnerKey: string | null = null
+let nativeSttOwnerSequence = 0
+
+function claimNativeSttOwner(ownerKey: string): void {
+  activeNativeSttOwnerKey = ownerKey
+}
+
+function releaseNativeSttOwner(ownerKey: string): void {
+  if (activeNativeSttOwnerKey !== ownerKey) return
+  activeNativeSttOwnerKey = null
+}
+
+function isNativeSttOwner(ownerKey: string): boolean {
+  return activeNativeSttOwnerKey === ownerKey
+}
 
 export function buildStorageKey(baseKey: string, namespace?: string): string {
   const normalizedNamespace = (namespace || '').trim()
@@ -1788,6 +1803,28 @@ export default function useRealtimeSTT({
   const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
   const nativeShellSupportsOpenAppSettingsRef = useRef(false)
   const serverHydrationKeyRef = useRef('')
+  const nativeSttOwnerKeyRef = useRef('')
+  if (!nativeSttOwnerKeyRef.current) {
+    nativeSttOwnerSequence += 1
+    nativeSttOwnerKeyRef.current = [
+      'native-stt-owner',
+      conversationId || 'no-conversation',
+      storageNamespace || sessionKeyOverride || 'default',
+      String(nativeSttOwnerSequence),
+    ].join(':')
+  }
+
+  const claimCurrentNativeSttOwner = useCallback(() => {
+    claimNativeSttOwner(nativeSttOwnerKeyRef.current)
+  }, [])
+
+  const releaseCurrentNativeSttOwner = useCallback(() => {
+    releaseNativeSttOwner(nativeSttOwnerKeyRef.current)
+  }, [])
+
+  const isCurrentNativeSttOwner = useCallback(() => (
+    isNativeSttOwner(nativeSttOwnerKeyRef.current)
+  ), [])
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -2136,8 +2173,9 @@ export default function useRealtimeSTT({
     turnStartedAtRef.current = null
     clearSpeakerAvatarSession()
     cleanup()
+    releaseCurrentNativeSttOwner()
     setConnectionStatus('idle')
-  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession])
+  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession, releaseCurrentNativeSttOwner])
 
   const scheduleConnectionErrorReset = useCallback(() => {
     clearConnectionErrorResetTimer()
@@ -2786,6 +2824,10 @@ export default function useRealtimeSTT({
       } else if (stopReason === 'language_hint_change') {
         waitingForNativeStopAck = true
       }
+      if (!waitingForNativeStopAck) {
+        nativeStopRequestedRef.current = false
+        releaseCurrentNativeSttOwner()
+      }
     } else {
       // Fire-and-forget stop_recording to server (so it can clean up STT provider)
       try {
@@ -2847,6 +2889,7 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
     clearSpeakerAvatarSession,
     clearLanguageChangeRestartTimer,
+    releaseCurrentNativeSttOwner,
     stopAudioPipeline,
   ])
 
@@ -3312,6 +3355,7 @@ export default function useRealtimeSTT({
       bumpPendingTurnRenderVersion()
 
       if (useNativeStt) {
+        claimCurrentNativeSttOwner()
         const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         logSttDebug('native.start.begin')
         const posted = sendNativeSttCommand({
@@ -3325,6 +3369,7 @@ export default function useRealtimeSTT({
           },
         })
         if (!posted) {
+          releaseCurrentNativeSttOwner()
           throw new Error('native_stt_bridge_unavailable')
         }
         return
@@ -3407,10 +3452,11 @@ export default function useRealtimeSTT({
         isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : null,
       })
       cleanup()
+      releaseCurrentNativeSttOwner()
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3420,6 +3466,15 @@ export default function useRealtimeSTT({
     const handleNativeEvent = (event: Event) => {
       const detail = (event as CustomEvent<NativeSttBridgeEvent>).detail
       if (!detail || typeof detail !== 'object') return
+
+      if (detail.type === 'capabilities') {
+        nativeShellSupportsOpenAppSettingsRef.current = detail.openAppSettings === true
+        return
+      }
+
+      if (!isCurrentNativeSttOwner()) {
+        return
+      }
 
       if (detail.type === 'status') {
         logSttDebug('native.status', { status: detail.status })
@@ -3453,11 +3508,6 @@ export default function useRealtimeSTT({
         return
       }
 
-      if (detail.type === 'capabilities') {
-        nativeShellSupportsOpenAppSettingsRef.current = detail.openAppSettings === true
-        return
-      }
-
       if (detail.type === 'error') {
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) return
@@ -3481,7 +3531,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner])
 
   useEffect(() => {
     const currentSignature = buildLanguageSelectionSignature(languages)
@@ -3771,9 +3821,10 @@ export default function useRealtimeSTT({
     return () => {
       clearLanguageChangeRestartTimer()
       clearConnectionErrorResetTimer()
+      releaseCurrentNativeSttOwner()
       cleanup()
     }
-  }, [clearConnectionErrorResetTimer, clearLanguageChangeRestartTimer, cleanup])
+  }, [clearConnectionErrorResetTimer, clearLanguageChangeRestartTimer, cleanup, releaseCurrentNativeSttOwner])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'
