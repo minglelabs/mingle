@@ -1384,7 +1384,7 @@ export default function ConversationList({
             <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
           ) : (
             <>
-              <span>Start Conversation!</span>
+              <span>{copy.newConversationButtonLabel}</span>
               <ArrowRight size={18} strokeWidth={2.4} />
             </>
           )}
