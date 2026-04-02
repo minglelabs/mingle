@@ -2834,18 +2834,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         {feedbackTab === 'compose' ? (
                           <div className="px-4 py-4">
-                            <div className="rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-3.5 py-3.5 shadow-[0_14px_32px_rgba(14,116,144,0.08)]">
-                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
-                                {feedbackCopy.sectionLabel}
-                              </div>
-                              <div className="mt-2 text-sm font-semibold text-gray-900">
-                                {feedbackCopy.title}
-                              </div>
-                              <p className="mt-1 text-xs leading-5 text-gray-600">
-                                {feedbackCopy.description}
-                              </p>
-
-                              <form className="mt-4 space-y-3" onSubmit={handleFeedbackSubmit}>
+                            <div>
+                              <form className="space-y-4" onSubmit={handleFeedbackSubmit}>
                                 <div className="space-y-2">
                                   <div className="text-[0.78rem] font-semibold text-gray-700">
                                     {feedbackCopy.categoryLabel}
@@ -2868,10 +2858,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                             clearFeedbackSubmitState()
                                             setFeedbackCategory(category)
                                           }}
-                                          className={`rounded-2xl border px-2.5 py-2 text-[0.78rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                          className={`rounded-xl border px-2.5 py-2 text-[0.78rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${
                                             isSelected
-                                              ? 'border-sky-300 bg-white text-sky-700 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.22)]'
-                                              : 'border-sky-100 bg-white/80 text-gray-600 hover:border-sky-200 hover:text-gray-900'
+                                              ? 'border-gray-900 bg-gray-900 text-white'
+                                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-gray-900'
                                           }`}
                                         >
                                           {feedbackCopy.categoryLabels[category]}
@@ -2894,7 +2884,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       setFeedbackMessage(event.target.value)
                                     }}
                                     placeholder={feedbackCopy.messagePlaceholder}
-                                    className="min-h-[108px] w-full resize-none rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 py-3 text-sm text-gray-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="min-h-[108px] w-full resize-none rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   />
                                 </label>
 
@@ -2912,23 +2902,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       setFeedbackEmail(event.target.value)
                                     }}
                                     placeholder={feedbackCopy.emailPlaceholder}
-                                    className="h-11 w-full rounded-[1.2rem] border border-sky-100 bg-white/90 px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-sky-300 focus:ring-2 focus:ring-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   />
                                 </label>
-
-                                <div className="flex items-center justify-between gap-3">
-                                  <div className="text-[0.72rem] text-gray-500">
-                                    {feedbackCopy.minimumLengthHint}
-                                  </div>
-                                  <div className="text-[0.72rem] font-medium text-gray-500">
-                                    {trimmedFeedbackMessage.length}/{FEEDBACK_MIN_MESSAGE_LENGTH}
-                                  </div>
-                                </div>
 
                                 <button
                                   type="submit"
                                   disabled={isFeedbackSubmitDisabled}
-                                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[1.2rem] bg-sky-600 px-3 text-sm font-semibold text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-3 text-sm font-semibold text-white transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:bg-slate-300"
                                 >
                                   {isSubmittingFeedback ? (
                                     <>
