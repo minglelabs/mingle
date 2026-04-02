@@ -215,8 +215,8 @@ describe("/api/account/preferences route", () => {
 
     const response = await GET(new NextRequest("https://example.com/api/account/preferences", {
       headers: {
-        "x-mingle-app-version": "1.0.7",
-        "x-mingle-api-namespace": "ios/v1.0.7",
+        "x-mingle-app-version": "1.0.8",
+        "x-mingle-api-namespace": "ios/v1.0.8",
         "x-mingle-client-platform": "ios",
       },
     }));
@@ -232,10 +232,10 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        latestAppVersion: "1.0.7",
-        latestApiNamespace: "ios/v1.0.7",
-        appVersionHistory: ["1.0.5", "1.0.7"],
-        apiNamespaceHistory: ["ios/v1.0.5", "ios/v1.0.7"],
+        latestAppVersion: "1.0.8",
+        latestApiNamespace: "ios/v1.0.8",
+        appVersionHistory: ["1.0.5", "1.0.8"],
+        apiNamespaceHistory: ["ios/v1.0.5", "ios/v1.0.8"],
       },
     });
   });
