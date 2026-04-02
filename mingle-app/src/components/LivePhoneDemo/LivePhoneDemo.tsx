@@ -1700,9 +1700,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleStopRecording = useCallback(async () => {
     if (!isSttSessionRunning) return
+    onSttSessionRunningChange?.(false)
     await stopRecording()
     scheduleTtsResumeAfterStopClick()
-  }, [isSttSessionRunning, scheduleTtsResumeAfterStopClick, stopRecording])
+  }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
   const handleMicClick = useCallback(() => {
     if (isSttSessionRunning) {
