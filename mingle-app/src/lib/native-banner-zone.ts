@@ -1,4 +1,4 @@
-export type NativeBannerZone = 'list' | 'conversation'
+export type NativeBannerZone = 'list' | 'conversation' | 'hidden'
 
 type NativeBannerZoneBridgeWindow = Window & {
   ReactNativeWebView?: {

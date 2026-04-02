@@ -81,7 +81,7 @@ type NativeAdModule = {
   };
 };
 type NativeBannerPosition = 'top' | 'bottom';
-type BannerZone = 'list' | 'conversation';
+type BannerZone = 'list' | 'conversation' | 'hidden';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
   bannerUnitId?: string;
@@ -428,6 +428,23 @@ const VERSION_POLICY_SUPPORTED_LOCALES = new Set<VersionPolicyLocale>([
   'th',
   'vi',
 ]);
+
+function resolveBannerZoneForUrl(rawUrl: string): Exclude<BannerZone, 'hidden'> | null {
+  if (!rawUrl) return null;
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+  if (pathSegments.length < 2) return null;
+  if (pathSegments[1] !== 'conversations') return null;
+
+  return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
+}
 const IOS_VERSION_POLICY_TIMEOUT_MS = 8000;
 const VERSION_POLICY_LOCALE_ALIASES: Record<string, VersionPolicyLocale> = {
   ko: 'ko',
@@ -1367,7 +1384,9 @@ function AppInner(): React.JSX.Element {
     [nativeBannerHeightPx, nativeCanvasScale],
   );
   const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
-  const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
+  const activeBannerZoneRef = useRef<BannerZone>('list');
+  const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
+  const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
   const nativeBannerBottomInsetPx = nativeBannerPosition === 'bottom' ? nativeTranscriptInsetPx : 0;
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     !nativeBannerUnitId
@@ -1375,6 +1394,10 @@ function AppInner(): React.JSX.Element {
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+
+  useEffect(() => {
+    activeBannerZoneRef.current = activeBannerZone;
+  }, [activeBannerZone]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1699,12 +1722,12 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
-    const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'list'
-      ? 'top'
-      : nativeBannerPosition;
+    const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
+      ? nativeBannerPosition
+      : 'top';
     const effectiveTopInsetPx = activeBannerZone === 'list'
       ? nativeTranscriptInsetPx
-      : (isNativeMenuOverlayOpen ? 0 : nativeBannerTopInsetPx);
+      : 0;
     const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
       ? nativeBannerBottomInsetPx
       : 0;
@@ -1720,10 +1743,32 @@ function AppInner(): React.JSX.Element {
     isNativeMenuOverlayOpen,
     nativeBannerBottomInsetPx,
     nativeBannerPosition,
-    nativeBannerTopInsetPx,
     nativeBannerUnitId,
     nativeTranscriptInsetPx,
   ]);
+
+  const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {
+    const inferredZone = resolveBannerZoneForUrl(typeof nextUrl === 'string' ? nextUrl : '');
+    if (!inferredZone) return;
+
+    const stableZone = stableBannerZoneRef.current;
+    if (inferredZone !== stableZone) {
+      pendingNavigationBannerZoneRef.current = inferredZone;
+      if (activeBannerZoneRef.current !== 'hidden') {
+        setActiveBannerZone('hidden');
+      }
+      return;
+    }
+
+    if (
+      activeBannerZoneRef.current === 'hidden'
+      && pendingNavigationBannerZoneRef.current
+      && inferredZone === stableZone
+    ) {
+      pendingNavigationBannerZoneRef.current = null;
+      setActiveBannerZone(stableZone);
+    }
+  }, []);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
     const serialized = JSON.stringify(payload);
@@ -2017,6 +2062,7 @@ function AppInner(): React.JSX.Element {
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
       }
+      prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
       return;
     }
@@ -2051,7 +2097,11 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_set_banner_zone') {
       const zone = parsed.payload?.zone;
-      if (zone === 'list' || zone === 'conversation') {
+      if (zone === 'list' || zone === 'conversation' || zone === 'hidden') {
+        if (zone === 'list' || zone === 'conversation') {
+          stableBannerZoneRef.current = zone;
+          pendingNavigationBannerZoneRef.current = null;
+        }
         setActiveBannerZone(zone);
       }
       return;
@@ -2308,8 +2358,9 @@ function AppInner(): React.JSX.Element {
     url: string;
   }) => {
     setCanWebViewGoBack(Boolean(navigationState.canGoBack));
+    prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
-  }, [updateSafeAreaPalette]);
+  }, [prepareBannerZoneTransition, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {

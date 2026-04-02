@@ -1016,8 +1016,9 @@ export default function ConversationList({
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
+    if (activeConversation) return;
     postNativeBannerZone("list");
-  }, []);
+  }, [activeConversation]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1097,7 +1098,7 @@ export default function ConversationList({
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
-    postNativeBannerZone("list");
+    postNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
       replaceConversationOverlayUrl(null);
@@ -1139,6 +1140,7 @@ export default function ConversationList({
     },
   ) => {
     const enterMode = options?.enterMode ?? "animate";
+    postNativeBannerZone("hidden");
     setShowSearch(false);
     setOverlayEnterMode(enterMode);
     setOverlayExitMode("animate");
@@ -1175,6 +1177,7 @@ export default function ConversationList({
       && currentConversationId === activeConversation.id
       && window.history.length > 1
     ) {
+      postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
       window.history.back();
       return;
