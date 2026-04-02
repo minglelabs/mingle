@@ -5,6 +5,8 @@ const {
   mockGetServerSession,
   mockUserFindUnique,
   mockAppFeedbackCreate,
+  mockAppFeedbackFindFirst,
+  mockAppFeedbackFindMany,
   mockEnsureTrackingContext,
   mockParseClientContext,
   mockUpsertTrackedUser,
@@ -12,6 +14,8 @@ const {
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockAppFeedbackCreate: vi.fn(),
+  mockAppFeedbackFindFirst: vi.fn(),
+  mockAppFeedbackFindMany: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockParseClientContext: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
@@ -32,6 +36,8 @@ vi.mock("@/lib/prisma", () => ({
     },
     appFeedback: {
       create: mockAppFeedbackCreate,
+      findFirst: mockAppFeedbackFindFirst,
+      findMany: mockAppFeedbackFindMany,
     },
   },
 }));
@@ -42,7 +48,7 @@ vi.mock("@/lib/app-analytics", () => ({
   upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
-import { POST } from "@/app/api/feedback/route";
+import { GET, POST } from "@/app/api/feedback/route";
 
 describe("/api/feedback route", () => {
   beforeEach(() => {
@@ -50,6 +56,8 @@ describe("/api/feedback route", () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue(null);
     mockAppFeedbackCreate.mockResolvedValue({ id: "feedback_123" });
+    mockAppFeedbackFindFirst.mockResolvedValue(null);
+    mockAppFeedbackFindMany.mockResolvedValue([]);
     mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
       externalUserId: hints?.externalUserIdHint ?? "anon_user_123",
       sessionKey: hints?.sessionKeyHint ?? "sess_123",
@@ -74,6 +82,95 @@ describe("/api/feedback route", () => {
       usageSec: null,
     }));
     mockUpsertTrackedUser.mockResolvedValue("anon_user_row");
+  });
+
+  it("returns empty threads when the tracking user has no saved feedback", async () => {
+    const response = await GET(new NextRequest("https://example.com/api/feedback", {
+      headers: {
+        "x-mingle-user-id": "anon_user_123",
+        "x-mingle-session-key": "sess_123",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      threads: [],
+    });
+    expect(mockAppFeedbackFindMany).not.toHaveBeenCalled();
+  });
+
+  it("returns feedback threads with team replies for the current user", async () => {
+    mockUserFindUnique.mockResolvedValue({ id: "user_feedback_1" });
+    mockAppFeedbackFindMany.mockResolvedValue([
+      {
+        id: "feedback_123",
+        category: "feedback",
+        message: "The menu is hard to find.",
+        contactEmail: "reply@example.com",
+        createdAt: new Date("2026-04-02T12:00:00.000Z"),
+        replies: [
+          {
+            id: "reply_1",
+            authorType: "team",
+            message: "We updated the menu layout today.",
+            createdAt: new Date("2026-04-02T12:30:00.000Z"),
+          },
+        ],
+      },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/feedback", {
+      headers: {
+        "x-mingle-user-id": "anon_user_123",
+        "x-mingle-session-key": "sess_123",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      threads: [
+        {
+          id: "feedback_123",
+          category: "feedback",
+          contactEmail: "reply@example.com",
+          createdAt: "2026-04-02T12:00:00.000Z",
+          messages: [
+            {
+              id: "feedback_123:root",
+              authorType: "user",
+              message: "The menu is hard to find.",
+              createdAt: "2026-04-02T12:00:00.000Z",
+            },
+            {
+              id: "reply_1",
+              authorType: "team",
+              message: "We updated the menu layout today.",
+              createdAt: "2026-04-02T12:30:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+    expect(mockAppFeedbackFindMany).toHaveBeenCalledWith({
+      where: { userId: "user_feedback_1" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        category: true,
+        message: true,
+        contactEmail: true,
+        createdAt: true,
+        replies: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            authorType: true,
+            message: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
   });
 
   it("rejects messages that are too short", async () => {

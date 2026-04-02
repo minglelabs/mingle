@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 const FEEDBACK_CATEGORIES = new Set(["feedback", "suggestion", "inquiry"]);
+const FEEDBACK_REPLY_AUTHOR_TYPES = new Set(["user", "team"]);
 const MIN_MESSAGE_LENGTH = 10;
 
 type FeedbackBody = {
@@ -19,6 +20,26 @@ type FeedbackBody = {
   contactEmail?: unknown;
   locale?: unknown;
   pathname?: unknown;
+};
+
+type SessionUserIdentity = {
+  id: string;
+  email: string;
+  externalUserId: string;
+  sessionKey: string;
+};
+
+type FeedbackThreadResponse = {
+  id: string;
+  category: "feedback" | "suggestion" | "inquiry";
+  contactEmail: string | null;
+  createdAt: string;
+  messages: Array<{
+    id: string;
+    authorType: "user" | "team";
+    message: string;
+    createdAt: string;
+  }>;
 };
 
 function normalizeFeedbackCategory(
@@ -51,6 +72,139 @@ function normalizeOptionalEmail(value: unknown): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(canonicalEmail)
     ? canonicalEmail
     : null;
+}
+
+function normalizeSessionUserIdentity(session: {
+  user?: { id?: unknown; email?: unknown };
+} | null): SessionUserIdentity {
+  return {
+    id: typeof session?.user?.id === "string" ? session.user.id.trim() : "",
+    email: typeof session?.user?.email === "string"
+      ? session.user.email.trim().toLowerCase()
+      : "",
+    externalUserId: "",
+    sessionKey: "",
+  };
+}
+
+function sanitizeTrackingValue(rawValue: string | null): string {
+  return (rawValue || "").trim().slice(0, 128);
+}
+
+function readCookieValue(request: Request, cookieName: string): string {
+  const cookieHeader = request.headers.get("cookie") || "";
+  for (const segment of cookieHeader.split(";")) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    const name = trimmed.slice(0, separatorIndex).trim();
+    if (name !== cookieName) continue;
+    const value = trimmed.slice(separatorIndex + 1).trim();
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+  return "";
+}
+
+function resolveTrackingSessionKey(request: Request): string {
+  return sanitizeTrackingValue(
+    request.headers.get("x-mingle-session-key")
+    || readCookieValue(request, "mingle_sid")
+    || null,
+  );
+}
+
+function resolveTrackingExternalUserId(request: Request): string {
+  return sanitizeTrackingValue(
+    request.headers.get("x-mingle-user-id")
+    || readCookieValue(request, "mingle_uid")
+    || null,
+  );
+}
+
+async function findFeedbackUserId(identity: SessionUserIdentity): Promise<string | null> {
+  if (identity.id) {
+    const user = await prisma.user.findUnique({
+      where: { id: identity.id },
+      select: { id: true },
+    });
+    if (user?.id) return user.id;
+  }
+
+  if (identity.email) {
+    const user = await prisma.user.findUnique({
+      where: { email: identity.email },
+      select: { id: true },
+    });
+    if (user?.id) return user.id;
+  }
+
+  if (identity.externalUserId) {
+    const user = await prisma.user.findUnique({
+      where: { externalUserId: identity.externalUserId },
+      select: { id: true },
+    });
+    if (user?.id) return user.id;
+  }
+
+  if (!identity.sessionKey) return null;
+
+  const feedback = await prisma.appFeedback.findFirst({
+    where: {
+      sessionKey: identity.sessionKey,
+      userId: { not: null },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { userId: true },
+  });
+  return feedback?.userId ?? null;
+}
+
+function serializeFeedbackThread(thread: {
+  id: string;
+  category: string;
+  message: string;
+  contactEmail: string | null;
+  createdAt: Date;
+  replies: Array<{
+    id: string;
+    authorType: string;
+    message: string;
+    createdAt: Date;
+  }>;
+}): FeedbackThreadResponse | null {
+  if (!FEEDBACK_CATEGORIES.has(thread.category)) return null;
+
+  const messages: FeedbackThreadResponse["messages"] = [
+    {
+      id: `${thread.id}:root`,
+      authorType: "user",
+      message: thread.message,
+      createdAt: thread.createdAt.toISOString(),
+    },
+  ];
+
+  for (const reply of thread.replies) {
+    if (!FEEDBACK_REPLY_AUTHOR_TYPES.has(reply.authorType)) continue;
+    messages.push({
+      id: reply.id,
+      authorType: reply.authorType as "user" | "team",
+      message: reply.message,
+      createdAt: reply.createdAt.toISOString(),
+    });
+  }
+
+  return {
+    id: thread.id,
+    category: thread.category as "feedback" | "suggestion" | "inquiry",
+    contactEmail: thread.contactEmail,
+    createdAt: thread.createdAt.toISOString(),
+    messages,
+  };
 }
 
 async function resolveAuthenticatedUserId(session: {
@@ -91,6 +245,55 @@ function withTrackingCookies(
   return response;
 }
 
+export async function GET(request: Request) {
+  const nextRequest = request as NextRequest;
+  const session = await getServerSession(getAuthOptions());
+  const trackingSeedResponse = new NextResponse();
+  const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
+    externalUserIdHint: resolveTrackingExternalUserId(request) || null,
+    sessionKeyHint: resolveTrackingSessionKey(request) || null,
+  });
+  const identity = {
+    ...normalizeSessionUserIdentity(session),
+    externalUserId: resolveTrackingExternalUserId(request) || tracking.externalUserId,
+    sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
+  };
+  const userId = await findFeedbackUserId(identity);
+
+  if (!userId) {
+    const response = NextResponse.json({ threads: [] satisfies FeedbackThreadResponse[] });
+    return withTrackingCookies(nextRequest, response, tracking);
+  }
+
+  const feedbackThreads = await prisma.appFeedback.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      category: true,
+      message: true,
+      contactEmail: true,
+      createdAt: true,
+      replies: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          authorType: true,
+          message: true,
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  const threads = feedbackThreads
+    .map(serializeFeedbackThread)
+    .filter((thread): thread is FeedbackThreadResponse => Boolean(thread));
+
+  const response = NextResponse.json({ threads });
+  return withTrackingCookies(nextRequest, response, tracking);
+}
+
 export async function POST(request: Request) {
   const nextRequest = request as NextRequest;
 
@@ -120,7 +323,10 @@ export async function POST(request: Request) {
   const locale = normalizeOptionalText(body.locale, 32);
   const pathname = normalizeOptionalText(body.pathname, 1024);
   const trackingSeedResponse = new NextResponse();
-  const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse);
+  const tracking = ensureTrackingContext(nextRequest, trackingSeedResponse, {
+    externalUserIdHint: resolveTrackingExternalUserId(request) || null,
+    sessionKeyHint: resolveTrackingSessionKey(request) || null,
+  });
   const session = await getServerSession(getAuthOptions());
   const sessionEmail = typeof session?.user?.email === "string"
     ? session.user.email.trim().toLowerCase()

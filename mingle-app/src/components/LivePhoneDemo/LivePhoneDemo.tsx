@@ -304,6 +304,41 @@ function isValidFeedbackEmailAddress(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
 }
 
+type FeedbackHistoryMessage = {
+  id: string
+  authorType: 'user' | 'team'
+  message: string
+  createdAt: string
+}
+
+type FeedbackHistoryThread = {
+  id: string
+  category: LivePhoneDemoFeedbackCategory
+  contactEmail: string | null
+  createdAt: string
+  messages: FeedbackHistoryMessage[]
+}
+
+type FeedbackHistoryResponse = {
+  threads: FeedbackHistoryThread[]
+}
+
+function formatFeedbackTimestamp(createdAt: string, locale: string): string {
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) return ''
+
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date)
+  } catch {
+    return date.toLocaleString()
+  }
+}
+
 function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
   return Boolean(
@@ -488,6 +523,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [feedbackSubmitError, setFeedbackSubmitError] = useState<string | null>(null)
   const [feedbackSubmitSuccess, setFeedbackSubmitSuccess] = useState(false)
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
+  const [feedbackThreads, setFeedbackThreads] = useState<FeedbackHistoryThread[]>([])
+  const [isFeedbackHistoryLoading, setIsFeedbackHistoryLoading] = useState(false)
+  const [feedbackHistoryError, setFeedbackHistoryError] = useState<string | null>(null)
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
@@ -523,6 +561,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const feedbackEmailEditedRef = useRef(false)
+  const feedbackHistoryLoadedRef = useRef(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
@@ -791,6 +830,39 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackSubmitSuccess(false)
   }, [])
 
+  const loadFeedbackThreads = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setIsFeedbackHistoryLoading(true)
+    }
+    setFeedbackHistoryError(null)
+
+    try {
+      const sessionKey = getOrCreateSessionKey()
+      const trackingUserId = getOrCreateTrackingUserId()
+      const response = await fetch(FEEDBACK_API_PATH, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: buildTrackingRequestHeaders({
+          sessionKey,
+          trackingUserId,
+          nativeAppUpdate,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`feedback_history_fetch_failed:${response.status}`)
+      }
+
+      const body = await response.json() as FeedbackHistoryResponse
+      setFeedbackThreads(Array.isArray(body.threads) ? body.threads : [])
+      feedbackHistoryLoadedRef.current = true
+    } catch {
+      setFeedbackHistoryError(feedbackCopy.historyErrorMessage)
+    } finally {
+      setIsFeedbackHistoryLoading(false)
+    }
+  }, [feedbackCopy.historyErrorMessage, nativeAppUpdate])
+
   const handleFeedbackSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -841,13 +913,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
       setFeedbackMessage('')
       setFeedbackSubmitSuccess(true)
+      await loadFeedbackThreads({ silent: true })
     } catch {
       setFeedbackSubmitError(feedbackCopy.errorMessage)
       setFeedbackSubmitSuccess(false)
     } finally {
       setIsSubmittingFeedback(false)
     }
-  }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, nativeAppUpdate, uiLocale])
+  }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, nativeAppUpdate, uiLocale])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
@@ -975,6 +1048,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [menuOpen, translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    if (feedbackHistoryLoadedRef.current) {
+      void loadFeedbackThreads({ silent: true })
+      return
+    }
+    void loadFeedbackThreads()
+  }, [loadFeedbackThreads, menuOpen])
 
   useEffect(() => {
     if (!translationModelMenuOpen) return
@@ -2634,6 +2716,107 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           ) : null}
                         </div>
                       </form>
+
+                      <div className="mt-5 border-t border-sky-100 pt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[0.82rem] font-semibold text-gray-900">
+                              {feedbackCopy.historyTitle}
+                            </div>
+                            <p className="mt-1 text-[0.74rem] leading-5 text-gray-500">
+                              {feedbackCopy.historyDescription}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-3">
+                          {isFeedbackHistoryLoading ? (
+                            <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-600">
+                              <Loader2 size={14} className="animate-spin text-sky-600" />
+                              <span>{feedbackCopy.historyLoadingLabel}</span>
+                            </div>
+                          ) : null}
+
+                          {!isFeedbackHistoryLoading && feedbackHistoryError ? (
+                            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[0.8rem] font-medium text-rose-600">
+                              {feedbackHistoryError}
+                            </div>
+                          ) : null}
+
+                          {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.length === 0 ? (
+                            <div className="rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.8rem] text-gray-500">
+                              {feedbackCopy.historyEmptyLabel}
+                            </div>
+                          ) : null}
+
+                          {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.map((thread) => {
+                            const hasTeamReply = thread.messages.some((message) => message.authorType === 'team')
+
+                            return (
+                              <div
+                                key={thread.id}
+                                className="rounded-[1.3rem] border border-sky-100 bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)]"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.72rem] font-semibold text-sky-700">
+                                    {feedbackCopy.categoryLabels[thread.category]}
+                                  </span>
+                                  <span className="text-[0.72rem] text-gray-500">
+                                    {formatFeedbackTimestamp(thread.createdAt, uiLocale)}
+                                  </span>
+                                </div>
+
+                                {!hasTeamReply ? (
+                                  <div className="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[0.72rem] font-medium text-amber-700">
+                                    {feedbackCopy.pendingReplyLabel}
+                                  </div>
+                                ) : null}
+
+                                <div className="mt-3 space-y-2.5">
+                                  {thread.messages.map((message, index) => {
+                                    const isTeamMessage = message.authorType === 'team'
+                                    const authorLabel = isTeamMessage
+                                      ? feedbackCopy.teamLabel
+                                      : feedbackCopy.meLabel
+
+                                    return (
+                                      <div
+                                        key={message.id}
+                                        className={`rounded-[1.1rem] px-3 py-2.5 ${
+                                          isTeamMessage
+                                            ? 'border border-emerald-100 bg-emerald-50/70'
+                                            : 'border border-sky-100 bg-sky-50/70'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between gap-3">
+                                          <span
+                                            className={`text-[0.72rem] font-semibold ${
+                                              isTeamMessage ? 'text-emerald-700' : 'text-sky-700'
+                                            }`}
+                                          >
+                                            {authorLabel}
+                                          </span>
+                                          <span className="text-[0.7rem] text-gray-500">
+                                            {formatFeedbackTimestamp(message.createdAt, uiLocale)}
+                                          </span>
+                                        </div>
+                                        <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.84rem] leading-5 text-gray-800">
+                                          {message.message}
+                                        </p>
+                                        {index === 0 && thread.contactEmail ? (
+                                          <p className="mt-2 text-[0.7rem] text-gray-500">
+                                            {thread.contactEmail}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -150,13 +150,29 @@ model AppFeedback {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user    User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  replies AppFeedbackReply[]
 
   @@index([userId, createdAt], map: "app_feedback_user_created_at_idx")
   @@index([sessionKey, createdAt], map: "app_feedback_session_created_at_idx")
   @@index([category, createdAt], map: "app_feedback_category_created_at_idx")
   @@index([createdAt], map: "app_feedback_created_at_idx")
   @@map("app_feedback")
+}
+
+model AppFeedbackReply {
+  id         String   @id @default(cuid())
+  feedbackId String   @map("feedback_id")
+  authorType String   @map("author_type")
+  message    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  feedback AppFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId, createdAt], map: "app_feedback_replies_feedback_created_at_idx")
+  @@index([authorType, createdAt], map: "app_feedback_replies_author_type_created_at_idx")
+  @@map("app_feedback_replies")
 }
 
 model Account {
