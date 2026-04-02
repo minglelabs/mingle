@@ -195,6 +195,11 @@ function readConversationIdFromLocation(): string | null {
   }
 }
 
+function readConversationIdFromWindow(): string | null {
+  if (typeof window === "undefined") return null;
+  return readConversationIdFromLocation();
+}
+
 function buildConversationOverlayUrl(conversationId: string): string | null {
   if (typeof window === "undefined") return null;
 
@@ -447,6 +452,14 @@ function useNativeBannerPositionFromSearch(): LivePhoneDemoAdBannerPosition | nu
   return useSyncExternalStore(
     subscribeToLocationSearch,
     readNativeBannerPositionFromWindow,
+    () => null,
+  );
+}
+
+function useConversationIdFromSearch(): string | null {
+  return useSyncExternalStore(
+    subscribeToLocationSearch,
+    readConversationIdFromWindow,
     () => null,
   );
 }
@@ -786,6 +799,7 @@ export default function ConversationList({
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch();
   const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx");
   const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx");
+  const routeConversationId = useConversationIdFromSearch();
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
   const effectiveNativeTopInsetPx = isNativeAppRuntime() && nativeBannerPositionFromQuery === "top"
     ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
@@ -1017,21 +1031,20 @@ export default function ConversationList({
       return;
     }
 
-    const conversationId = readConversationIdFromLocation();
-    if (!conversationId) {
+    if (!routeConversationId) {
       routeSyncConversationIdRef.current = null;
       return;
     }
-    if (routeSyncConversationIdRef.current === conversationId) return;
+    if (routeSyncConversationIdRef.current === routeConversationId) return;
     if (isCreatingConversation || mutatingConversationId) return;
 
-    const matchedConversation = conversations.find((conversation) => conversation.id === conversationId);
+    const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
     if (!matchedConversation) return;
 
-    routeSyncConversationIdRef.current = conversationId;
+    routeSyncConversationIdRef.current = routeConversationId;
     void openConversationSummary(matchedConversation).catch(() => {
       routeSyncConversationIdRef.current = null;
-      if (readConversationIdFromLocation() === conversationId) {
+      if (readConversationIdFromLocation() === routeConversationId) {
         replaceConversationOverlayUrl(null);
       }
       window.alert(copy.openErrorMessage);
@@ -1043,6 +1056,7 @@ export default function ConversationList({
     isCreatingConversation,
     mutatingConversationId,
     openConversationSummary,
+    routeConversationId,
   ]);
 
   useEffect(() => {
