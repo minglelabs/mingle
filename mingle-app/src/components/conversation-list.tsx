@@ -19,7 +19,10 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { ArrowRight, Loader2, Search } from "lucide-react";
-import { getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
+import {
+  buildStorageKey,
+  getOrCreateTrackingUserId,
+} from "@/components/LivePhoneDemo/use-realtime-stt";
 import {
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
@@ -40,9 +43,13 @@ import MingleWordmark from "@/components/mingle-wordmark";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const LAST_VIEWED_SCREEN_STORAGE_KEY_PREFIX = "mingle:conversation-last-screen";
+const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
+const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
+const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
+const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
 const CONVERSATION_AVATAR_COLORS = [
   "#fb7185",
   "#38bdf8",
@@ -118,6 +125,12 @@ type StoredConversationScreen =
   | { kind: "list" }
   | { kind: "conversation"; conversationId: string };
 
+type LegacySingleRoomSnapshot = {
+  utterancesRaw: string | null;
+  usageRaw: string | null;
+  sessionKey: string;
+};
+
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
@@ -129,6 +142,96 @@ function normalizeSearchTerm(rawValue: string): string {
 
 function buildLastViewedScreenStorageKey(locale: AppLocale): string {
   return `${LAST_VIEWED_SCREEN_STORAGE_KEY_PREFIX}:${locale}:${getOrCreateTrackingUserId()}`;
+}
+
+function buildLegacySingleRoomMigrationMarkerKey(): string {
+  return `${LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX}:${getOrCreateTrackingUserId()}`;
+}
+
+function hasLegacySingleRoomMigrationCompleted(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(buildLegacySingleRoomMigrationMarkerKey()) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markLegacySingleRoomMigrationCompleted(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(buildLegacySingleRoomMigrationMarkerKey(), "1");
+  } catch {
+    // Ignore restricted storage failures.
+  }
+}
+
+function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const utterancesRaw = window.localStorage.getItem(LEGACY_SINGLE_ROOM_UTTERANCES_KEY);
+    const usageRaw = window.localStorage.getItem(LEGACY_SINGLE_ROOM_USAGE_KEY);
+    const sessionKey = (window.localStorage.getItem(LEGACY_SINGLE_ROOM_SESSION_KEY) || "").trim();
+
+    const hasUtterances = typeof utterancesRaw === "string" && utterancesRaw.trim().length > 0;
+    const hasUsage = typeof usageRaw === "string" && usageRaw.trim().length > 0 && usageRaw.trim() !== "0";
+    const hasSessionKey = sessionKey.length > 0;
+    if (!hasUtterances && !hasUsage && !hasSessionKey) {
+      return null;
+    }
+
+    if (hasUtterances) {
+      try {
+        const parsed = JSON.parse(utterancesRaw) as unknown;
+        if (!Array.isArray(parsed)) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    return {
+      utterancesRaw: hasUtterances ? utterancesRaw : null,
+      usageRaw: hasUsage ? usageRaw : null,
+      sessionKey,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function copyLegacySingleRoomSnapshotToConversation(
+  conversationId: string,
+  sessionKey: string,
+  snapshot: LegacySingleRoomSnapshot,
+): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (snapshot.utterancesRaw) {
+      window.localStorage.setItem(
+        buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
+        snapshot.utterancesRaw,
+      );
+    }
+    if (snapshot.usageRaw) {
+      window.localStorage.setItem(
+        buildStorageKey(LEGACY_SINGLE_ROOM_USAGE_KEY, conversationId),
+        snapshot.usageRaw,
+      );
+    }
+    const resolvedSessionKey = snapshot.sessionKey || sessionKey;
+    if (resolvedSessionKey) {
+      window.localStorage.setItem(
+        buildStorageKey(LEGACY_SINGLE_ROOM_SESSION_KEY, conversationId),
+        resolvedSessionKey,
+      );
+    }
+  } catch {
+    // Ignore restricted storage failures.
+  }
 }
 
 function readStoredLastViewedConversationScreen(locale: AppLocale): StoredConversationScreen | null {
@@ -879,6 +982,7 @@ export default function ConversationList({
   const [isHydratingConversations, setIsHydratingConversations] = useState(
     initialConversations.length === 0,
   );
+  const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
@@ -898,6 +1002,7 @@ export default function ConversationList({
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
   const isCreatingConversationRef = useRef(isCreatingConversation);
   const mutatingConversationIdRef = useRef<string | null>(mutatingConversationId);
+  const isImportingLegacyConversationRef = useRef(false);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
   const pendingRestoredConversationIdRef = useRef<string | null>(null);
@@ -943,7 +1048,7 @@ export default function ConversationList({
       .map((conversationId) => conversations.find((conversation) => conversation.id === conversationId) || null)
       .filter((conversation): conversation is ConversationChannelSummary => conversation !== null)
   ), [conversations, mountedConversationIds]);
-  const actionDisabled = isCreatingConversation || mutatingConversationId !== null;
+  const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
 
   const updateConversationStatus = useCallback(async (
     conversationId: string,
@@ -1099,6 +1204,10 @@ export default function ConversationList({
   }, [mutatingConversationId]);
 
   useEffect(() => {
+    isImportingLegacyConversationRef.current = isImportingLegacyConversation;
+  }, [isImportingLegacyConversation]);
+
+  useEffect(() => {
     if (isLastViewedScreenReady) return;
 
     const routeConversationId = readConversationIdFromLocation();
@@ -1162,6 +1271,64 @@ export default function ConversationList({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isHydratingConversations) return;
+    if (activeConversation) return;
+    if (conversations.length > 0) return;
+    if (isCreatingConversation || mutatingConversationId || isImportingLegacyConversationRef.current) return;
+    if (hasLegacySingleRoomMigrationCompleted()) return;
+
+    const legacySnapshot = readLegacySingleRoomSnapshot();
+    if (!legacySnapshot) return;
+
+    isImportingLegacyConversationRef.current = true;
+    setIsImportingLegacyConversation(true);
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(buildConversationApiPath(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...buildConversationRequestHeaders(),
+          },
+          body: JSON.stringify({
+            legacySessionKey: legacySnapshot.sessionKey || undefined,
+          }),
+        });
+        const importedConversation = await readConversationResponse(response);
+        if (cancelled) return;
+
+        copyLegacySingleRoomSnapshotToConversation(
+          importedConversation.id,
+          importedConversation.sessionKey,
+          legacySnapshot,
+        );
+        markLegacySingleRoomMigrationCompleted();
+        setConversations((current) => upsertConversation(current, importedConversation));
+      } catch {
+        // Keep the list empty and leave legacy storage intact for a later retry.
+      } finally {
+        if (cancelled) return;
+        isImportingLegacyConversationRef.current = false;
+        setIsImportingLegacyConversation(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      isImportingLegacyConversationRef.current = false;
+    };
+  }, [
+    activeConversation,
+    conversations.length,
+    isCreatingConversation,
+    isHydratingConversations,
+    mutatingConversationId,
+  ]);
 
   useEffect(() => {
     setTimeLabelsReady(true);

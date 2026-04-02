@@ -109,7 +109,11 @@ export async function listConversationChannelsForUser(
 
 export async function createConversationChannelForUser(
   userId: string,
+  options?: {
+    preferredSessionKey?: string;
+  },
 ): Promise<ConversationChannelSummary> {
+  const normalizedPreferredSessionKey = (options?.preferredSessionKey || "").trim();
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -126,7 +130,7 @@ export async function createConversationChannelForUser(
             sequenceNumber,
             title: formatConversationChannelTitle(sequenceNumber),
             status: APP_CONVERSATION_STATUS_PAUSED,
-            sessionKey: createConversationSessionKey(),
+            sessionKey: normalizedPreferredSessionKey || createConversationSessionKey(),
             pausedAt: new Date(),
           },
           select: conversationChannelSelect,

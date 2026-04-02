@@ -6,7 +6,10 @@ import {
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
-import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
+import {
+  resolveOrCreateUserIdForRequest,
+  sanitizeRequestIdentityValue,
+} from "@/lib/request-user-identity";
 
 export const runtime = "nodejs";
 
@@ -62,13 +65,26 @@ export async function postConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  let body: { legacySessionKey?: unknown } | null = null;
+  try {
+    body = await request.json();
+  } catch {
+    body = null;
+  }
+
+  const legacySessionKey = typeof body?.legacySessionKey === "string"
+    ? sanitizeRequestIdentityValue(body.legacySessionKey)
+    : "";
+
   const trackingHints = resolvedUser.tracking
     ? {
         externalUserId: resolvedUser.tracking.externalUserId,
         sessionKey: resolvedUser.tracking.sessionKey,
       }
     : resolvedUser.identity;
-  const conversation = await createConversationChannelForUser(resolvedUser.userId);
+  const conversation = await createConversationChannelForUser(resolvedUser.userId, {
+    preferredSessionKey: legacySessionKey || undefined,
+  });
   const response = NextResponse.json({ conversation }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);
   return response;

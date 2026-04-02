@@ -7,12 +7,14 @@ const {
   mockCreateConversationChannelForUser,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
+  mockSanitizeRequestIdentityValue,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockListConversationChannelsForUser: vi.fn(),
   mockCreateConversationChannelForUser: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
+  mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
 }));
 
 vi.mock("next-auth", () => ({
@@ -34,6 +36,7 @@ vi.mock("@/lib/app-analytics", () => ({
 
 vi.mock("@/lib/request-user-identity", () => ({
   resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
+  sanitizeRequestIdentityValue: mockSanitizeRequestIdentityValue,
 }));
 
 import { GET, POST } from "@/app/api/conversations/route";
@@ -145,7 +148,49 @@ describe("/api/conversations route", () => {
         pausedAt: "2026-04-02T00:02:00.000Z",
       },
     });
-    expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123");
+    expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      preferredSessionKey: undefined,
+    });
+  });
+
+  it("creates a new conversation seeded with the legacy single-room session key", async () => {
+    mockCreateConversationChannelForUser.mockResolvedValue({
+      id: "conv_legacy",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "sess_legacy_room",
+      createdAt: "2026-04-02T00:02:00.000Z",
+      updatedAt: "2026-04-02T00:02:00.000Z",
+      pausedAt: "2026-04-02T00:02:00.000Z",
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ legacySessionKey: "sess_legacy_room" }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json).toEqual({
+      conversation: {
+        id: "conv_legacy",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "sess_legacy_room",
+        createdAt: "2026-04-02T00:02:00.000Z",
+        updatedAt: "2026-04-02T00:02:00.000Z",
+        pausedAt: "2026-04-02T00:02:00.000Z",
+      },
+    });
+    expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      preferredSessionKey: "sess_legacy_room",
+    });
   });
 
   it("returns unauthorized when the request identity cannot resolve to a user", async () => {
