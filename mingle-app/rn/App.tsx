@@ -726,6 +726,7 @@ type NativeSttEvent =
   | { type: 'message'; raw: string }
   | { type: 'error'; message: string; code?: string; platform?: string }
   | { type: 'permission'; permission: string; platform?: string }
+  | { type: 'capabilities'; openAppSettings: boolean }
   | { type: 'close'; reason: string };
 
 type NativeUiEvent = {
@@ -2118,6 +2119,7 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
     emitAppUpdateToWeb();

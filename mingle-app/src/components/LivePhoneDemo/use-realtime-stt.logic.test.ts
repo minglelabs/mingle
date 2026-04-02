@@ -22,7 +22,6 @@ import {
   parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
-  supportsNativeOpenAppSettingsCommand,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
@@ -262,26 +261,6 @@ describe('use-realtime-stt pure logic', () => {
   })
 
   it('opens native mic settings only for idle native iOS denial recovery', () => {
-    expect(supportsNativeOpenAppSettingsCommand({
-      clientPlatform: 'ios',
-      appVersion: '1.0.7',
-    })).toBe(false)
-
-    expect(supportsNativeOpenAppSettingsCommand({
-      clientPlatform: 'ios',
-      appVersion: '1.0.8',
-    })).toBe(true)
-
-    expect(supportsNativeOpenAppSettingsCommand({
-      clientPlatform: 'ios',
-      appVersion: '1.0.9',
-    })).toBe(true)
-
-    expect(supportsNativeOpenAppSettingsCommand({
-      clientPlatform: 'android',
-      appVersion: '1.0.8',
-    })).toBe(false)
-
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
