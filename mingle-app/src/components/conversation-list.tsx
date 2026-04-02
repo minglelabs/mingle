@@ -384,6 +384,13 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
   return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale));
 }
 
+function resolveEffectiveNativeBannerInsetPx(
+  explicitInsetPx: number,
+  estimatedInsetPx: number,
+): number {
+  return explicitInsetPx > 0 ? explicitInsetPx : estimatedInsetPx;
+}
+
 function readNativeInsetPxFromWindow(queryKey: string): number {
   if (typeof window === "undefined") return 0;
   return parseNativeInsetPxFromSearch(window.location.search || "", queryKey);
@@ -754,10 +761,10 @@ export default function ConversationList({
   const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx");
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
   const effectiveNativeTopInsetPx = isNativeAppRuntime() && nativeBannerPositionFromQuery === "top"
-    ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
     : nativeTopInsetPx;
   const effectiveNativeBottomInsetPx = isNativeAppRuntime() && nativeBannerPositionFromQuery === "bottom"
-    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx;
 
   const conversationItems = useMemo(
@@ -1004,14 +1011,6 @@ export default function ConversationList({
         actionDisabled={actionDisabled}
       />
 
-      {effectiveNativeTopInsetPx > 0 ? (
-        <div
-          className="shrink-0"
-          aria-hidden="true"
-          style={{ height: `${effectiveNativeTopInsetPx}px` }}
-        />
-      ) : null}
-
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -1034,6 +1033,7 @@ export default function ConversationList({
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
+          paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
           paddingBottom: "20px",
         }}
       >

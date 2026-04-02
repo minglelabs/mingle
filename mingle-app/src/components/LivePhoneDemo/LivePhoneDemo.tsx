@@ -166,6 +166,10 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
   return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
 }
 
+function resolveEffectiveNativeBannerInsetPx(explicitInsetPx: number, estimatedInsetPx: number): number {
+  return explicitInsetPx > 0 ? explicitInsetPx : estimatedInsetPx
+}
+
 function readNativeInsetPxFromWindow(queryKey: string): number {
   if (typeof window === 'undefined') return 0
   return parseNativeInsetPxFromSearch(window.location.search || '', queryKey)
@@ -1978,10 +1982,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
-    ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
     : nativeTopInsetPx
   const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
   const scrollToBottomButtonReservedPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
     ? effectiveNativeBottomContentInsetPx
