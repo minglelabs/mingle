@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
+import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
@@ -14,6 +15,7 @@ export type ConversationChannelSummary = {
   title: string;
   status: AppConversationChannelStatus;
   sessionKey: string;
+  selectedLanguages?: string[];
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -41,6 +43,7 @@ type ConversationChannelRecord = {
   title: string;
   status: string;
   sessionKey: string;
+  selectedLanguages: string[];
   createdAt: Date;
   updatedAt: Date;
   pausedAt: Date | null;
@@ -52,6 +55,7 @@ const conversationChannelSelect = {
   title: true,
   status: true,
   sessionKey: true,
+  selectedLanguages: true,
   createdAt: true,
   updatedAt: true,
   pausedAt: true,
@@ -86,6 +90,7 @@ function serializeConversationChannel(
     title: record.title,
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
+    selectedLanguages: [...record.selectedLanguages],
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: record.pausedAt?.toISOString() ?? null,
@@ -111,9 +116,11 @@ export async function createConversationChannelForUser(
   userId: string,
   options?: {
     preferredSessionKey?: string;
+    selectedLanguages?: string[];
   },
 ): Promise<ConversationChannelSummary> {
   const normalizedPreferredSessionKey = (options?.preferredSessionKey || "").trim();
+  const normalizedSelectedLanguages = sanitizeSttLanguageSelection(options?.selectedLanguages);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -131,6 +138,7 @@ export async function createConversationChannelForUser(
             title: formatConversationChannelTitle(sequenceNumber),
             status: APP_CONVERSATION_STATUS_PAUSED,
             sessionKey: normalizedPreferredSessionKey || createConversationSessionKey(),
+            selectedLanguages: normalizedSelectedLanguages,
             pausedAt: new Date(),
           },
           select: conversationChannelSelect,
@@ -193,6 +201,39 @@ export async function updateConversationChannelStatus(args: {
       },
       select: conversationChannelSelect,
     });
+  });
+
+  return serializeConversationChannel(record);
+}
+
+export async function updateConversationChannelSelectedLanguages(args: {
+  conversationId: string;
+  userId: string;
+  selectedLanguages: string[];
+}): Promise<ConversationChannelSummary | null> {
+  const normalizedSelectedLanguages = sanitizeSttLanguageSelection(args.selectedLanguages);
+  if (normalizedSelectedLanguages.length === 0) {
+    throw new Error("invalid_selected_languages");
+  }
+
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: {
+      selectedLanguages: normalizedSelectedLanguages,
+    },
+    select: conversationChannelSelect,
   });
 
   return serializeConversationChannel(record);

@@ -8,6 +8,7 @@ const {
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
   mockSanitizeRequestIdentityValue,
+  mockSanitizeSttLanguageSelection,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockListConversationChannelsForUser: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
   mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
+  mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
 }));
 
 vi.mock("next-auth", () => ({
@@ -32,6 +34,10 @@ vi.mock("@/lib/app-conversations", () => ({
 
 vi.mock("@/lib/app-analytics", () => ({
   ensureTrackingContext: mockEnsureTrackingContext,
+}));
+
+vi.mock("@/lib/stt-languages", () => ({
+  sanitizeSttLanguageSelection: mockSanitizeSttLanguageSelection,
 }));
 
 vi.mock("@/lib/request-user-identity", () => ({
@@ -72,6 +78,7 @@ describe("/api/conversations route", () => {
         title: "Conversation (1)",
         status: "active",
         sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "ko", "ja"],
         createdAt: "2026-04-02T00:00:00.000Z",
         updatedAt: "2026-04-02T00:01:00.000Z",
         pausedAt: null,
@@ -94,6 +101,7 @@ describe("/api/conversations route", () => {
           title: "Conversation (1)",
           status: "active",
           sessionKey: "conv_session_1",
+          selectedLanguages: ["en", "ko", "ja"],
           createdAt: "2026-04-02T00:00:00.000Z",
           updatedAt: "2026-04-02T00:01:00.000Z",
           pausedAt: null,
@@ -122,6 +130,7 @@ describe("/api/conversations route", () => {
       title: "Conversation (2)",
       status: "paused",
       sessionKey: "conv_session_2",
+      selectedLanguages: ["en", "ko", "ja"],
       createdAt: "2026-04-02T00:02:00.000Z",
       updatedAt: "2026-04-02T00:02:00.000Z",
       pausedAt: "2026-04-02T00:02:00.000Z",
@@ -143,6 +152,7 @@ describe("/api/conversations route", () => {
         title: "Conversation (2)",
         status: "paused",
         sessionKey: "conv_session_2",
+        selectedLanguages: ["en", "ko", "ja"],
         createdAt: "2026-04-02T00:02:00.000Z",
         updatedAt: "2026-04-02T00:02:00.000Z",
         pausedAt: "2026-04-02T00:02:00.000Z",
@@ -150,6 +160,7 @@ describe("/api/conversations route", () => {
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
       preferredSessionKey: undefined,
+      selectedLanguages: [],
     });
   });
 
@@ -160,6 +171,7 @@ describe("/api/conversations route", () => {
       title: "Conversation (1)",
       status: "paused",
       sessionKey: "sess_legacy_room",
+      selectedLanguages: ["en", "fr"],
       createdAt: "2026-04-02T00:02:00.000Z",
       updatedAt: "2026-04-02T00:02:00.000Z",
       pausedAt: "2026-04-02T00:02:00.000Z",
@@ -183,6 +195,7 @@ describe("/api/conversations route", () => {
         title: "Conversation (1)",
         status: "paused",
         sessionKey: "sess_legacy_room",
+        selectedLanguages: ["en", "fr"],
         createdAt: "2026-04-02T00:02:00.000Z",
         updatedAt: "2026-04-02T00:02:00.000Z",
         pausedAt: "2026-04-02T00:02:00.000Z",
@@ -190,6 +203,37 @@ describe("/api/conversations route", () => {
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
       preferredSessionKey: "sess_legacy_room",
+      selectedLanguages: [],
+    });
+  });
+
+  it("creates a new conversation seeded with selected languages", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["en", "fr"]);
+    mockCreateConversationChannelForUser.mockResolvedValue({
+      id: "conv_3",
+      sequenceNumber: 3,
+      title: "Conversation (3)",
+      status: "paused",
+      sessionKey: "conv_session_3",
+      selectedLanguages: ["en", "fr"],
+      createdAt: "2026-04-02T00:02:00.000Z",
+      updatedAt: "2026-04-02T00:02:00.000Z",
+      pausedAt: "2026-04-02T00:02:00.000Z",
+    });
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+      body: JSON.stringify({ selectedLanguages: ["en", "fr"] }),
+    }));
+
+    expect(response.status).toBe(201);
+    expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      preferredSessionKey: undefined,
+      selectedLanguages: ["en", "fr"],
     });
   });
 

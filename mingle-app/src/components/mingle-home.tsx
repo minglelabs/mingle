@@ -27,12 +27,14 @@ type MingleHomeProps = {
   conversationId?: string;
   sessionKeyOverride?: string;
   storageNamespace?: string;
+  initialSelectedLanguages?: string[];
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<void> | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
 };
 
 export type MingleHomeRef = {
@@ -1711,10 +1713,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           conversationId={props.conversationId}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          initialSelectedLanguages={props.initialSelectedLanguages}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
+          onSelectedLanguagesChange={props.onSelectedLanguagesChange}
         />
       </div>
     </main>

@@ -6,6 +6,7 @@ import {
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
+import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import {
   resolveOrCreateUserIdForRequest,
   sanitizeRequestIdentityValue,
@@ -65,7 +66,10 @@ export async function postConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { legacySessionKey?: unknown } | null = null;
+  let body: {
+    legacySessionKey?: unknown;
+    selectedLanguages?: unknown;
+  } | null = null;
   try {
     body = await request.json();
   } catch {
@@ -75,6 +79,7 @@ export async function postConversationResponse(request: NextRequest) {
   const legacySessionKey = typeof body?.legacySessionKey === "string"
     ? sanitizeRequestIdentityValue(body.legacySessionKey)
     : "";
+  const selectedLanguages = sanitizeSttLanguageSelection(body?.selectedLanguages);
 
   const trackingHints = resolvedUser.tracking
     ? {
@@ -84,6 +89,7 @@ export async function postConversationResponse(request: NextRequest) {
     : resolvedUser.identity;
   const conversation = await createConversationChannelForUser(resolvedUser.userId, {
     preferredSessionKey: legacySessionKey || undefined,
+    selectedLanguages,
   });
   const response = NextResponse.json({ conversation }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);

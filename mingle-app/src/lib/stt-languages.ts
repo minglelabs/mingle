@@ -92,6 +92,32 @@ export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode |
   return canonicalizeTranslationLanguageCode(rawValue)
 }
 
+export function sanitizeSttLanguageSelection(
+  rawValue: unknown,
+  fallbackLanguages: readonly string[] = [],
+): SttLanguageCode[] {
+  const fallback = fallbackLanguages
+    .map((language) => canonicalizeSttLanguageCode(language))
+    .filter((language): language is SttLanguageCode => Boolean(language))
+
+  if (!Array.isArray(rawValue)) {
+    return fallback.length > 0 ? [...fallback] : []
+  }
+
+  const deduped: SttLanguageCode[] = []
+  for (const item of rawValue) {
+    if (typeof item !== 'string') continue
+    const normalized = canonicalizeSttLanguageCode(item)
+    if (!normalized || deduped.includes(normalized)) continue
+    deduped.push(normalized)
+    if (deduped.length >= 5) break
+  }
+
+  return deduped.length > 0
+    ? deduped
+    : (fallback.length > 0 ? [...fallback] : [])
+}
+
 export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | undefined): SttLanguageCode[] {
   const localeLanguage = typeof rawLocale === 'string'
     ? canonicalizeSttLanguageCode(rawLocale)

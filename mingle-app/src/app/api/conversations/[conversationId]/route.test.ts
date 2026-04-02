@@ -5,14 +5,18 @@ const {
   mockGetServerSession,
   mockGetConversationHydrationStateForUser,
   mockUpdateConversationChannelStatus,
+  mockUpdateConversationChannelSelectedLanguages,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
+  mockSanitizeSttLanguageSelection,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockGetConversationHydrationStateForUser: vi.fn(),
   mockUpdateConversationChannelStatus: vi.fn(),
+  mockUpdateConversationChannelSelectedLanguages: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
+  mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
 }));
 
 vi.mock("next-auth", () => ({
@@ -31,10 +35,15 @@ vi.mock("@/lib/app-conversations", () => ({
     status === "paused" ? "paused" : "active"
   ),
   updateConversationChannelStatus: mockUpdateConversationChannelStatus,
+  updateConversationChannelSelectedLanguages: mockUpdateConversationChannelSelectedLanguages,
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
   ensureTrackingContext: mockEnsureTrackingContext,
+}));
+
+vi.mock("@/lib/stt-languages", () => ({
+  sanitizeSttLanguageSelection: mockSanitizeSttLanguageSelection,
 }));
 
 vi.mock("@/lib/request-user-identity", () => ({
@@ -73,6 +82,7 @@ describe("/api/conversations/[conversationId] route", () => {
       title: "Conversation (1)",
       status: "paused",
       sessionKey: "conv_session_1",
+      selectedLanguages: ["en", "ko", "ja"],
       createdAt: "2026-04-02T00:00:00.000Z",
       updatedAt: "2026-04-02T00:03:00.000Z",
       pausedAt: "2026-04-02T00:03:00.000Z",
@@ -96,6 +106,7 @@ describe("/api/conversations/[conversationId] route", () => {
         title: "Conversation (1)",
         status: "paused",
         sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "ko", "ja"],
         createdAt: "2026-04-02T00:00:00.000Z",
         updatedAt: "2026-04-02T00:03:00.000Z",
         pausedAt: "2026-04-02T00:03:00.000Z",
@@ -124,6 +135,7 @@ describe("/api/conversations/[conversationId] route", () => {
         title: "Conversation (1)",
         status: "paused",
         sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "ko", "ja"],
         createdAt: "2026-04-02T00:00:00.000Z",
         updatedAt: "2026-04-02T00:03:00.000Z",
         pausedAt: "2026-04-02T00:03:00.000Z",
@@ -160,6 +172,7 @@ describe("/api/conversations/[conversationId] route", () => {
         title: "Conversation (1)",
         status: "paused",
         sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "ko", "ja"],
         createdAt: "2026-04-02T00:00:00.000Z",
         updatedAt: "2026-04-02T00:03:00.000Z",
         pausedAt: "2026-04-02T00:03:00.000Z",
@@ -197,6 +210,69 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ error: "invalid_status" });
     expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+  });
+
+  it("updates selected languages for a guest request", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["en", "fr"]);
+    mockUpdateConversationChannelSelectedLanguages.mockResolvedValue({
+      id: "conv_1",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "conv_session_1",
+      selectedLanguages: ["en", "fr"],
+      createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:03:00.000Z",
+      pausedAt: "2026-04-02T00:03:00.000Z",
+    });
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedLanguages: ["en", "fr"] }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      conversation: {
+        id: "conv_1",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "fr"],
+        createdAt: "2026-04-02T00:00:00.000Z",
+        updatedAt: "2026-04-02T00:03:00.000Z",
+        pausedAt: "2026-04-02T00:03:00.000Z",
+      },
+    });
+    expect(mockUpdateConversationChannelSelectedLanguages).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      selectedLanguages: ["en", "fr"],
+    });
+  });
+
+  it("rejects invalid selected languages", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue([]);
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedLanguages: [] }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_selected_languages" });
+    expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
   });
 
   it("returns not found when the conversation is missing", async () => {

@@ -19,6 +19,7 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
+  sanitizeSttLanguageSelection,
 } from '@/lib/stt-languages'
 import {
   DEFAULT_SONIOX_SILENCE_MS,
@@ -348,10 +349,12 @@ interface LivePhoneDemoProps {
   conversationId?: string
   sessionKeyOverride?: string
   storageNamespace?: string
+  initialSelectedLanguages?: string[]
   isVisible?: boolean
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<void> | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -476,14 +479,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   conversationId,
   sessionKeyOverride,
   storageNamespace,
+  initialSelectedLanguages,
   isVisible = true,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
+  onSelectedLanguagesChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const conversationSelectedLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
+    [fallbackLanguages, initialSelectedLanguages],
+  )
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
+    conversationId ? conversationSelectedLanguages : fallbackLanguages,
+  )
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
@@ -577,7 +588,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
-      setSelectedLanguages(next.selectedLanguages)
+      if (!conversationId) {
+        setSelectedLanguages(next.selectedLanguages)
+      }
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
@@ -587,7 +600,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [fallbackLanguages])
+  }, [conversationId, fallbackLanguages])
+
+  useEffect(() => {
+    if (!conversationId) return
+
+    let cancelled = false
+    const schedule = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (callback: () => void) => { void Promise.resolve().then(callback) }
+
+    schedule(() => {
+      if (cancelled) return
+
+      setSelectedLanguages((current) => {
+        if (
+          current.length === conversationSelectedLanguages.length
+          && current.every((language, index) => language === conversationSelectedLanguages[index])
+        ) {
+          return current
+        }
+
+        return [...conversationSelectedLanguages]
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId, conversationSelectedLanguages])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -618,10 +659,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   // Persist selected languages
   useEffect(() => {
+    if (conversationId) return
     try {
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
-  }, [selectedLanguages])
+  }, [conversationId, selectedLanguages])
 
   useEffect(() => {
     try {
@@ -1660,12 +1702,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
     setSelectedLanguages(prev => {
-      if (prev.includes(normalizedCode)) {
-        return prev.filter(c => c !== normalizedCode)
-      }
-      return [...prev, normalizedCode]
+      const nextSelectedLanguages = prev.includes(normalizedCode)
+        ? prev.filter(c => c !== normalizedCode)
+        : [...prev, normalizedCode]
+
+      onSelectedLanguagesChange?.(nextSelectedLanguages)
+      return nextSelectedLanguages
     })
-  }, [])
+  }, [onSelectedLanguagesChange])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
