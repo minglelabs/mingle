@@ -3,14 +3,10 @@ export type LivePhoneDemoFeedbackCategory = 'feedback' | 'suggestion' | 'inquiry
 export type LivePhoneDemoFeedbackCopy = {
   pageTitle: string
   feedbackMenuItemLabel: string
-  feedbackMenuItemDescription: string
   composeTabLabel: string
   historyTabLabel: string
   backButtonLabel: string
   closeButtonLabel: string
-  sectionLabel: string
-  title: string
-  description: string
   historyTitle: string
   historyDescription: string
   historyLoadingLabel: string
@@ -24,7 +20,6 @@ export type LivePhoneDemoFeedbackCopy = {
   messagePlaceholder: string
   emailLabel: string
   emailPlaceholder: string
-  minimumLengthHint: string
   sendButtonLabel: string
   sendingButtonLabel: string
   successMessage: string
@@ -35,16 +30,12 @@ export type LivePhoneDemoFeedbackCopy = {
 }
 
 const KO_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
-  pageTitle: 'Feedback',
+  pageTitle: '피드백',
   feedbackMenuItemLabel: 'Feedback',
-  feedbackMenuItemDescription: '문의 남기기와 답변 확인',
   composeTabLabel: '보내기',
   historyTabLabel: '내역',
   backButtonLabel: '뒤로가기',
   closeButtonLabel: '닫기',
-  sectionLabel: 'TEAM',
-  title: '운영진에게 보내기',
-  description: '불편한 점, 개선 아이디어, 문의사항을 바로 남겨주세요.',
   historyTitle: '내 문의 내역',
   historyDescription: '보낸 내용과 운영진 답변이 시간순으로 쌓입니다.',
   historyLoadingLabel: '문의 내역 불러오는 중...',
@@ -58,7 +49,6 @@ const KO_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
   messagePlaceholder: '어떤 점이 불편했는지, 어떤 기능이 필요하신지 자세히 적어주세요.',
   emailLabel: '답변받을 이메일',
   emailPlaceholder: '선택사항',
-  minimumLengthHint: '최소 5자 이상 입력해 주세요.',
   sendButtonLabel: '보내기',
   sendingButtonLabel: '보내는 중...',
   successMessage: '운영진에게 전달되었습니다. 감사합니다.',
@@ -75,14 +65,10 @@ const KO_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
 const EN_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
   pageTitle: 'Feedback',
   feedbackMenuItemLabel: 'Feedback',
-  feedbackMenuItemDescription: 'Send a message or check replies',
   composeTabLabel: 'Write',
   historyTabLabel: 'History',
   backButtonLabel: 'Go back',
   closeButtonLabel: 'Close',
-  sectionLabel: 'TEAM',
-  title: 'Contact the team',
-  description: 'Send feedback, feature ideas, or support questions from here.',
   historyTitle: 'My feedback history',
   historyDescription: 'Your messages and team replies appear here in order.',
   historyLoadingLabel: 'Loading your history...',
@@ -96,7 +82,6 @@ const EN_FEEDBACK_COPY: LivePhoneDemoFeedbackCopy = {
   messagePlaceholder: 'Tell us what happened, what you want improved, or what you need help with.',
   emailLabel: 'Reply email',
   emailPlaceholder: 'Optional',
-  minimumLengthHint: 'Please enter at least 5 characters.',
   sendButtonLabel: 'Send',
   sendingButtonLabel: 'Sending...',
   successMessage: 'Your message was sent to the team.',
