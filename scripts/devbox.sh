@@ -13,12 +13,16 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.7"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.7"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.8"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.8"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID="ca-app-pub-3940256099942544/6300978111"
+DEFAULT_ADMOB_APP_ID_IOS="ca-app-pub-7057041881494735~7844963551"
+DEFAULT_ADMOB_APP_ID_ANDROID="ca-app-pub-7057041881494735~1471126891"
+DEFAULT_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-7057041881494735/3768106846"
+DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID="ca-app-pub-7057041881494735/6522262692"
 DEVBOX_BASE_WEB_PORT=3518
 DEVBOX_BASE_STT_PORT=5518
 DEVBOX_BASE_METRO_PORT=8518
@@ -144,6 +148,13 @@ warn() {
 die() {
   printf '[devbox] %s\n' "$*" >&2
   exit 1
+}
+
+require_nonempty_runtime_value() {
+  local key="$1"
+  local value="${2:-}"
+
+  [[ -n "$value" ]] || die "resolved empty $key for devbox runtime"
 }
 
 ensure_prisma_app_schema_url() {
@@ -465,7 +476,7 @@ is_managed_key_for_target() {
 
 format_env_value_for_dotenv() {
   local value="$1"
-  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=-]*$ ]]; then
+  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=~-]*$ ]]; then
     printf '%s' "$value"
     return 0
   fi
@@ -855,7 +866,7 @@ resolve_devbox_admob_app_id_ios() {
     printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
     return 0
   fi
-  printf '%s' ""
+  printf '%s' "$DEFAULT_ADMOB_APP_ID_IOS"
 }
 
 resolve_devbox_admob_app_id_android() {
@@ -869,7 +880,7 @@ resolve_devbox_admob_app_id_android() {
     printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
     return 0
   fi
-  printf '%s' ""
+  printf '%s' "$DEFAULT_ADMOB_APP_ID_ANDROID"
 }
 
 resolve_devbox_admob_banner_unit_id_ios() {
@@ -883,7 +894,7 @@ resolve_devbox_admob_banner_unit_id_ios() {
     printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
     return 0
   fi
-  printf '%s' ""
+  printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_IOS"
 }
 
 resolve_devbox_admob_banner_unit_id_android() {
@@ -897,7 +908,7 @@ resolve_devbox_admob_banner_unit_id_android() {
     printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
     return 0
   fi
-  printf '%s' ""
+  printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID"
 }
 
 derive_worktree_name() {
@@ -1980,6 +1991,8 @@ write_rn_ios_runtime_xcconfig() {
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   admob_banner_unit_id_ios="$(resolve_devbox_admob_banner_unit_id_ios)"
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_IOS" "$admob_app_id_ios"
+  require_nonempty_runtime_value "RN_ADMOB_BANNER_UNIT_ID_IOS" "$admob_banner_unit_id_ios"
   xcconfig_admob_app_id_ios="${admob_app_id_ios//\\/\\\\}"
   xcconfig_admob_app_id_ios="${xcconfig_admob_app_id_ios//\"/\\\"}"
   xcconfig_admob_banner_unit_id_ios="${admob_banner_unit_id_ios//\\/\\\\}"
@@ -2579,6 +2592,8 @@ write_rn_mobile_ads_app_json() {
   local ios_app_id="$2"
   local tmp=""
 
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_ANDROID" "$android_app_id"
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_IOS" "$ios_app_id"
   require_cmd jq
   tmp="$(mktemp)"
 
@@ -5332,4 +5347,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

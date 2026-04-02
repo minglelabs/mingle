@@ -19,6 +19,7 @@ export const getWsUrl = (): string => {
   return `${protocol}://${host}:${WS_PORT}`
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
+const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -168,13 +169,67 @@ type NativeSttSetAecCommand = {
   payload: { enabled: boolean }
 }
 
-type NativeSttBridgeCommand = NativeSttStartCommand | NativeSttStopCommand | NativeSttSetAecCommand
+type NativeOpenAppSettingsCommand = {
+  type: 'native_open_app_settings'
+  payload: {
+    reason: string
+  }
+}
+
+type NativeSttBridgeCommand =
+  | NativeSttStartCommand
+  | NativeSttStopCommand
+  | NativeSttSetAecCommand
+  | NativeOpenAppSettingsCommand
+
+export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
 
 type NativeSttBridgeEvent =
   | { type: 'status', status: string }
   | { type: 'message', raw: string }
-  | { type: 'error', message: string }
+  | { type: 'error', message: string, code?: string, platform?: string }
+  | { type: 'permission', permission: string, platform?: string }
+  | { type: 'capabilities', openAppSettings: boolean }
   | { type: 'close', reason: string }
+
+export function resolveNativeMicPermissionRecoveryAction(input: {
+  message?: string
+  code?: string
+  platform?: string
+  permission?: string
+}): NativeMicPermissionRecoveryAction {
+  const platform = (input.platform || '').trim().toLowerCase()
+  if (platform !== 'ios') return 'none'
+
+  const permission = (input.permission || '').trim().toLowerCase()
+  if (permission === 'denied') {
+    return 'open_ios_settings'
+  }
+
+  const code = (input.code || '').trim().toLowerCase()
+  if (code === 'mic_permission') {
+    return 'open_ios_settings'
+  }
+
+  const message = (input.message || '').trim().toLowerCase()
+  if (message === 'mic_permission_denied' || message === 'mic_permission_denied_after_prompt') {
+    return 'open_ios_settings'
+  }
+
+  return 'none'
+}
+
+export function shouldOpenNativeMicSettingsOnRetry(input: {
+  useNativeStt: boolean
+  connectionStatus: ConnectionStatus
+  recoveryAction: NativeMicPermissionRecoveryAction
+  supportsNativeOpenAppSettingsCommand: boolean
+}): boolean {
+  if (!input.useNativeStt) return false
+  if (input.connectionStatus !== 'idle') return false
+  if (!input.supportsNativeOpenAppSettingsCommand) return false
+  return input.recoveryAction === 'open_ios_settings'
+}
 
 declare global {
   interface Window {
@@ -1648,6 +1703,7 @@ export default function useRealtimeSTT({
   const targetLanguagesRef = useRef([...languages])
   const previousLanguageSelectionSignatureRef = useRef(buildLanguageSelectionSignature(languages))
   const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectionErrorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingLanguageChangeRestartRef = useRef(false)
   const sonioxLanguageHintsEnabledRef = useRef(false)
 
@@ -1701,6 +1757,14 @@ export default function useRealtimeSTT({
     clearTimeout(languageChangeRestartTimerRef.current)
     languageChangeRestartTimerRef.current = null
   }, [])
+
+  const clearConnectionErrorResetTimer = useCallback(() => {
+    if (!connectionErrorResetTimerRef.current) return
+    clearTimeout(connectionErrorResetTimerRef.current)
+    connectionErrorResetTimerRef.current = null
+  }, [])
+  const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
+  const nativeShellSupportsOpenAppSettingsRef = useRef(false)
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -1924,13 +1988,25 @@ export default function useRealtimeSTT({
   }, [stopAudioPipeline])
 
   const resetToIdle = useCallback(() => {
+    clearConnectionErrorResetTimer()
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
+    nativeStopRequestedRef.current = false
     pendingLanguageChangeRestartRef.current = false
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+    turnStartedAtRef.current = null
     clearSpeakerAvatarSession()
     cleanup()
     setConnectionStatus('idle')
-  }, [cleanup, clearSpeakerAvatarSession])
+  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession])
+
+  const scheduleConnectionErrorReset = useCallback(() => {
+    clearConnectionErrorResetTimer()
+    connectionErrorResetTimerRef.current = setTimeout(() => {
+      connectionErrorResetTimerRef.current = null
+      resetToIdle()
+    }, CONNECTION_ERROR_RESET_DELAY_MS)
+  }, [clearConnectionErrorResetTimer, resetToIdle])
 
   const resetVisiblePartialState = useCallback(() => {
     setPartialTranslations({})
@@ -2727,7 +2803,7 @@ export default function useRealtimeSTT({
     cleanup()
     clearSpeakerAvatarSession()
     setConnectionStatus('error')
-    setTimeout(() => setConnectionStatus('idle'), 3000)
+    scheduleConnectionErrorReset()
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     cleanup,
@@ -2737,6 +2813,7 @@ export default function useRealtimeSTT({
     finalizeTurnWithTranslation,
     getPendingTurnsForLocalFinalize,
     logClientEvent,
+    scheduleConnectionErrorReset,
   ])
 
   const handleSttTransportClose = useCallback((details?: Record<string, unknown>) => {
@@ -3043,6 +3120,23 @@ export default function useRealtimeSTT({
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
     useNativeSttRef.current = useNativeStt
+    if (shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt,
+      connectionStatus: connectionStatusRef.current,
+      recoveryAction: nativeMicPermissionRecoveryActionRef.current,
+      supportsNativeOpenAppSettingsCommand: nativeShellSupportsOpenAppSettingsRef.current,
+    })) {
+      const opened = sendNativeSttCommand({
+        type: 'native_open_app_settings',
+        payload: {
+          reason: 'microphone_permission_denied',
+        },
+      })
+      if (opened) {
+        nativeMicPermissionRecoveryActionRef.current = 'none'
+        return
+      }
+    }
     logSttDebug('recording.start.request', {
       useNativeStt,
       wsUrl: getWsUrl(),
@@ -3175,9 +3269,9 @@ export default function useRealtimeSTT({
       })
       cleanup()
       setConnectionStatus('error')
-      setTimeout(() => setConnectionStatus('idle'), 3000)
+      scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3191,7 +3285,10 @@ export default function useRealtimeSTT({
       if (detail.type === 'status') {
         logSttDebug('native.status', { status: detail.status })
         if (detail.status === 'connecting') {
+          nativeMicPermissionRecoveryActionRef.current = 'none'
           setConnectionStatus('connecting')
+        } else if (detail.status === 'running') {
+          nativeMicPermissionRecoveryActionRef.current = 'none'
         } else if (detail.status === 'stopped') {
           setConnectionStatus('idle')
         }
@@ -3208,9 +3305,24 @@ export default function useRealtimeSTT({
         return
       }
 
+      if (detail.type === 'permission') {
+        logSttDebug('native.permission', {
+          permission: detail.permission,
+          platform: detail.platform,
+        })
+        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
+        return
+      }
+
+      if (detail.type === 'capabilities') {
+        nativeShellSupportsOpenAppSettingsRef.current = detail.openAppSettings === true
+        return
+      }
+
       if (detail.type === 'error') {
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) return
+        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
         handleSttTransportError({ native: true, message: detail.message })
         return
       }
@@ -3519,9 +3631,10 @@ export default function useRealtimeSTT({
   useEffect(() => {
     return () => {
       clearLanguageChangeRestartTimer()
+      clearConnectionErrorResetTimer()
       cleanup()
     }
-  }, [clearLanguageChangeRestartTimer, cleanup])
+  }, [clearConnectionErrorResetTimer, clearLanguageChangeRestartTimer, cleanup])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'

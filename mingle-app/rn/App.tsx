@@ -18,6 +18,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import {
   addNativeSttListener,
+  getNativeSttMicrophonePermissionStatus,
   isNativeSttAvailable,
   setNativeSttAec,
   startNativeStt,
@@ -658,6 +659,13 @@ type NativeSttAecCommand = {
   payload: { enabled: boolean };
 };
 
+type NativeOpenAppSettingsCommand = {
+  type: 'native_open_app_settings';
+  payload?: {
+    reason?: string;
+  };
+};
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -705,6 +713,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeOpenAppSettingsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -715,7 +724,9 @@ type WebViewCommand =
 type NativeSttEvent =
   | { type: 'status'; status: string }
   | { type: 'message'; raw: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: string; platform?: string }
+  | { type: 'permission'; permission: string; platform?: string }
+  | { type: 'capabilities'; openAppSettings: boolean }
   | { type: 'close'; reason: string };
 
 type NativeUiEvent = {
@@ -764,6 +775,14 @@ function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
 function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android' {
   if (runtimeOs === 'android') return 'android';
   return 'ios';
+}
+
+function resolveNativeSttErrorCode(message: string): string | undefined {
+  const normalized = message.trim().toLowerCase();
+  if (normalized === 'mic_permission_denied' || normalized === 'mic_permission_denied_after_prompt') {
+    return 'mic_permission';
+  }
+  return undefined;
 }
 
 type RuntimeClientInfo = {
@@ -1493,6 +1512,39 @@ function AppInner(): React.JSX.Element {
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
+  const emitCurrentMicPermissionToWeb = useCallback(async () => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+    try {
+      const payload = await getNativeSttMicrophonePermissionStatus();
+      emitToWeb({
+        type: 'permission',
+        permission: payload.permission,
+        platform: payload.platform || Platform.OS,
+      });
+    } catch (error: unknown) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`[NativeSTT] getMicrophonePermissionStatus failed: ${message}`);
+      }
+    }
+  }, [emitToWeb, nativeAvailable]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (!becameActive) return;
+      void emitCurrentMicPermissionToWeb();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [emitCurrentMicPermissionToWeb, nativeAvailable]);
+
   const emitTtsToWeb = useCallback((payload: Record<string, unknown>) => {
     if (!isPageReadyRef.current) return;
     const serialized = JSON.stringify(payload);
@@ -1664,8 +1716,16 @@ function AppInner(): React.JSX.Element {
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      const code = typeof (error as { code?: unknown })?.code === 'string'
+        ? (error as { code: string }).code.trim()
+        : resolveNativeSttErrorCode(message);
       nativeStatusRef.current = 'failed';
-      emitToWeb({ type: 'error', message });
+      emitToWeb({
+        type: 'error',
+        message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     }
   }, [emitToWeb, nativeAvailable]);
 
@@ -1921,6 +1981,14 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_open_app_settings') {
+      if (__DEV__) {
+        console.log(`[Web→Native] open app settings reason=${parsed.payload?.reason ?? 'unspecified'}`);
+      }
+      void Linking.openSettings();
+      return;
+    }
+
     if (parsed.type === 'native_tts_stop') {
       const reason = typeof parsed.payload?.reason === 'string' && parsed.payload.reason.trim()
         ? parsed.payload.reason.trim()
@@ -1976,7 +2044,15 @@ function AppInner(): React.JSX.Element {
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
       nativeStatusRef.current = 'error';
-      emitToWeb({ type: 'error', message: event.message });
+      const code = typeof event.code === 'string' && event.code.trim()
+        ? event.code.trim()
+        : resolveNativeSttErrorCode(event.message);
+      emitToWeb({
+        type: 'error',
+        message: event.message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     });
 
     const closeSub = addNativeSttListener('close', event => {
@@ -2043,11 +2119,13 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitToWeb({ type: 'capabilities', openAppSettings: true });
+    void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
