@@ -456,6 +456,19 @@ class NativeSTTModule: RCTEventEmitter {
         emit("close", payload: ["reason": reason])
     }
 
+    private func resolveMicrophonePermissionStatus() -> String {
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted:
+            return "granted"
+        case .denied:
+            return "denied"
+        case .undetermined:
+            return "undetermined"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
     private func removeTapIfNeeded() {
         if hasInputTap {
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -931,6 +944,17 @@ class NativeSTTModule: RCTEventEmitter {
             emitError("mic_permission_unknown_state")
             reject("mic_permission", "Unknown microphone permission state", nil)
         }
+    }
+
+    @objc(getMicrophonePermissionStatus:rejecter:)
+    func getMicrophonePermissionStatus(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        resolve([
+            "permission": resolveMicrophonePermissionStatus(),
+            "platform": "ios",
+        ])
     }
 
     @objc(stop:resolver:rejecter:)

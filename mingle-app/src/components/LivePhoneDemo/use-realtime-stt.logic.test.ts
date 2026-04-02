@@ -23,7 +23,9 @@ import {
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
+  resolveNativeMicPermissionRecoveryAction,
   shouldApplyPendingTurnPartialTranslationResponse,
+  shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
   shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
@@ -254,6 +256,65 @@ describe('use-realtime-stt pure logic', () => {
       nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
       connectionStatus: 'ready',
       sonioxLanguageHintsEnabled: true,
+    })).toBe(false)
+  })
+
+  it('maps iOS microphone denial errors to open-settings recovery', () => {
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
+    })).toBe('open_ios_settings')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      message: 'mic_permission_denied_after_prompt',
+    })).toBe('open_ios_settings')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      permission: 'denied',
+    })).toBe('open_ios_settings')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      permission: 'granted',
+    })).toBe('none')
+
+    expect(resolveNativeMicPermissionRecoveryAction({
+      platform: 'android',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
+    })).toBe('none')
+  })
+
+  it('opens native mic settings only for idle native iOS denial recovery', () => {
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'idle',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
+    })).toBe(true)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'connecting',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
+    })).toBe(false)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: false,
+      connectionStatus: 'idle',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
+    })).toBe(false)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'idle',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: false,
     })).toBe(false)
   })
 
