@@ -394,11 +394,11 @@ describe('mingle-app namespace route wiring', () => {
     expect(postIosClientVersionPolicyForIosV1_0_8).toBe(postIosClientVersionPolicyForLegacy)
   })
 
-  it('keeps iOS v1.1.0 controller code identical to legacy controllers for inherited endpoints', () => {
-    expect(postTranslateFinalizeForIosV1_1_0).toBe(postTranslateFinalizeForLegacy)
-    expect(postTtsInworldForIosV1_1_0).toBe(postTtsInworldForLegacy)
-    expect(postLogClientEventForIosV1_1_0).toBe(postLogClientEventForLegacy)
-    expect(postIosClientVersionPolicyForIosV1_1_0).toBe(postIosClientVersionPolicyForLegacy)
+  it('keeps iOS v1.1.0 inherited endpoints aligned with v1.0.8', () => {
+    expect(postTranslateFinalizeForIosV1_1_0).toBe(postTranslateFinalizeForIosV1_0_8)
+    expect(postTtsInworldForIosV1_1_0).toBe(postTtsInworldForIosV1_0_8)
+    expect(postLogClientEventForIosV1_1_0).toBe(postLogClientEventForIosV1_0_8)
+    expect(postIosClientVersionPolicyForIosV1_1_0).toBe(postIosClientVersionPolicyForIosV1_0_8)
   })
 
   it('keeps Android v1.0.0 controller code identical to legacy controllers', () => {
@@ -449,9 +449,10 @@ describe('mingle-app namespace route wiring', () => {
     expect(postLogClientEventForAndroidV1_0_8).toBe(postLogClientEventForLegacy)
   })
 
-  it('keeps Android v1.1.0 controller code identical to legacy controllers for inherited endpoints', () => {
-    expect(postTranslateFinalizeForAndroidV1_1_0).toBe(postTranslateFinalizeForLegacy)
-    expect(postTtsInworldForAndroidV1_1_0).toBe(postTtsInworldForLegacy)
-    expect(postLogClientEventForAndroidV1_1_0).toBe(postLogClientEventForLegacy)
+  it('keeps Android v1.1.0 inherited endpoints aligned with v1.0.8', () => {
+    expect(postTranslateFinalizeForAndroidV1_1_0).toBe(postTranslateFinalizeForAndroidV1_0_8)
+    expect(postTtsInworldForAndroidV1_1_0).toBe(postTtsInworldForAndroidV1_0_8)
+    expect(postLogClientEventForAndroidV1_1_0).toBe(postLogClientEventForAndroidV1_0_8)
+    expect(postAndroidClientVersionPolicyForAndroidV1_1_0).toBe(postAndroidClientVersionPolicyForAndroidV1_0_8)
   })
 })
