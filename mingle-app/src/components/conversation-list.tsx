@@ -983,6 +983,7 @@ export default function ConversationList({
     initialConversations.length === 0,
   );
   const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
+  const [conversationRoomRefVersion, setConversationRoomRefVersion] = useState(0);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
@@ -996,6 +997,8 @@ export default function ConversationList({
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
+  const autoStartAttemptedConversationIdRef = useRef<string | null>(null);
+  const autoStartTimerRef = useRef<number | null>(null);
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
@@ -1077,9 +1080,10 @@ export default function ConversationList({
   const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
     if (nextRef) {
       conversationRoomRefs.current.set(conversationId, nextRef);
-      return;
+    } else {
+      conversationRoomRefs.current.delete(conversationId);
     }
-    conversationRoomRefs.current.delete(conversationId);
+    setConversationRoomRefVersion((current) => current + 1);
   }, []);
 
   const applyRunningConversationState = useCallback((
@@ -1134,6 +1138,16 @@ export default function ConversationList({
       if (isRunning) return conversationId;
       return current === conversationId ? null : current;
     });
+    if (isRunning) {
+      setAutoStartConversationId((current) => (
+        current === conversationId ? null : current
+      ));
+      autoStartAttemptedConversationIdRef.current = null;
+      if (autoStartTimerRef.current !== null) {
+        window.clearTimeout(autoStartTimerRef.current);
+        autoStartTimerRef.current = null;
+      }
+    }
 
     const nextStatus = isRunning ? "active" : "paused";
     void updateConversationStatus(conversationId, nextStatus).catch(() => {
@@ -1158,6 +1172,63 @@ export default function ConversationList({
       );
     });
   }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!autoStartConversationId) {
+      autoStartAttemptedConversationIdRef.current = null;
+      if (autoStartTimerRef.current !== null) {
+        window.clearTimeout(autoStartTimerRef.current);
+        autoStartTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (activeConversation?.id !== autoStartConversationId) return;
+
+    const room = conversationRoomRefs.current.get(autoStartConversationId);
+    if (!room) return;
+    if (autoStartAttemptedConversationIdRef.current === autoStartConversationId) return;
+
+    autoStartAttemptedConversationIdRef.current = autoStartConversationId;
+    if (autoStartTimerRef.current !== null) {
+      window.clearTimeout(autoStartTimerRef.current);
+    }
+
+    autoStartTimerRef.current = window.setTimeout(() => {
+      autoStartTimerRef.current = null;
+      const targetConversationId = autoStartConversationId;
+
+      if (activeConversationRef.current?.id !== targetConversationId) {
+        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
+          autoStartAttemptedConversationIdRef.current = null;
+        }
+        return;
+      }
+
+      const targetRoom = conversationRoomRefs.current.get(targetConversationId);
+      if (!targetRoom) {
+        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
+          autoStartAttemptedConversationIdRef.current = null;
+        }
+        return;
+      }
+
+      void targetRoom.startRecording().catch(() => {
+        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
+          autoStartAttemptedConversationIdRef.current = null;
+        }
+      });
+    }, 320);
+
+    return () => {
+      if (autoStartTimerRef.current !== null) {
+        window.clearTimeout(autoStartTimerRef.current);
+        autoStartTimerRef.current = null;
+      }
+    };
+  }, [activeConversation?.id, autoStartConversationId, conversationRoomRefVersion]);
 
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
@@ -1725,12 +1796,6 @@ export default function ConversationList({
                     conversationId={conversation.id}
                     sessionKeyOverride={conversation.sessionKey}
                     storageNamespace={conversation.id}
-                    autoStartOnMount={autoStartConversationId === conversation.id}
-                    onAutoStartHandled={() => {
-                      setAutoStartConversationId((current) => (
-                        current === conversation.id ? null : current
-                      ));
-                    }}
                     isVisible={isVisible}
                     enableNativeBannerBridge={isVisible}
                     onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
