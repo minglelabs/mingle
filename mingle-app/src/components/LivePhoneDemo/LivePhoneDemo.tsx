@@ -2926,7 +2926,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         >
                           <ChevronLeft size={22} strokeWidth={2.2} />
                         </button>
-                        <div className="flex-1 text-center text-[1.03rem] font-semibold text-gray-950">
+                        <div className="flex-1 text-center text-[1.1rem] font-semibold text-gray-950">
                           {feedbackCopy.pageTitle}
                         </div>
                         <div className="w-10" />
@@ -2944,7 +2944,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               key={tab.value}
                               type="button"
                               onClick={() => setFeedbackTab(tab.value)}
-                              className="flex-1 border-b-2 py-3 text-[0.96rem] font-semibold transition"
+                              className="flex-1 border-b-2 py-3 text-[1.02rem] font-semibold transition"
                               style={{
                                 borderBottomColor: isSelected ? '#111827' : 'transparent',
                                 color: isSelected ? '#111827' : '#9CA3AF',
@@ -2967,7 +2967,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             <div>
                               <form className="space-y-4" onSubmit={handleFeedbackSubmit}>
                                 <div className="space-y-2">
-                                  <div className="text-[0.82rem] font-semibold text-gray-700">
+                                  <div className="text-[0.9rem] font-semibold text-gray-700">
                                     {feedbackCopy.categoryLabel}
                                   </div>
                                   <div className="grid grid-cols-3 gap-2">
@@ -2988,7 +2988,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                             clearFeedbackSubmitState()
                                             setFeedbackCategory(category)
                                           }}
-                                          className={`rounded-xl border px-2.5 py-2 text-[0.82rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+                                          className={`rounded-xl border px-2.5 py-2 text-[0.9rem] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60 ${
                                             isSelected
                                               ? 'border-gray-900 bg-gray-900 text-white'
                                               : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:text-gray-900'
@@ -3002,7 +3002,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 </div>
 
                                 <label className="block space-y-2">
-                                  <span className="text-[0.82rem] font-semibold text-gray-700">
+                                  <span className="text-[0.9rem] font-semibold text-gray-700">
                                     {feedbackCopy.messageLabel}
                                   </span>
                                   <textarea
@@ -3014,12 +3014,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       setFeedbackMessage(event.target.value)
                                     }}
                                     placeholder={feedbackCopy.messagePlaceholder}
-                                    className="min-h-[108px] w-full resize-none rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-[0.96rem] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="min-h-[108px] w-full resize-none rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-[1.02rem] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   />
                                 </label>
 
                                 <label className="block space-y-2">
-                                  <span className="text-[0.82rem] font-semibold text-gray-700">
+                                  <span className="text-[0.9rem] font-semibold text-gray-700">
                                     {feedbackCopy.emailLabel}
                                   </span>
                                   <input
@@ -3032,14 +3032,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       setFeedbackEmail(event.target.value)
                                     }}
                                     placeholder={feedbackCopy.emailPlaceholder}
-                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-[0.96rem] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-[1.02rem] text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
                                   />
                                 </label>
 
                                 <button
                                   type="submit"
                                   disabled={isSubmittingFeedback}
-                                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-3 text-[0.96rem] font-semibold text-white transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-3 text-[1.02rem] font-semibold text-white transition hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:bg-slate-300"
                                 >
                                   {isSubmittingFeedback ? (
                                     <>
@@ -3051,7 +3051,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   )}
                                 </button>
 
-                                <div aria-live="polite" className="min-h-[1.25rem] text-[0.8rem]">
+                                <div aria-live="polite" className="min-h-[1.25rem] text-[0.88rem]">
                                   {feedbackSubmitError ? (
                                     <p className="font-medium text-rose-600">{feedbackSubmitError}</p>
                                   ) : null}
@@ -3065,30 +3065,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         ) : (
                           <div className="px-4 py-4">
                             <div>
-                              <div className="text-[0.94rem] font-semibold text-gray-900">
+                              <div className="text-[1.02rem] font-semibold text-gray-900">
                                 {feedbackCopy.historyTitle}
                               </div>
-                              <p className="mt-1 text-[0.84rem] leading-5 text-gray-500">
+                              <p className="mt-1 text-[0.92rem] leading-5 text-gray-500">
                                 {feedbackCopy.historyDescription}
                               </p>
                             </div>
 
                             <div className="mt-3 space-y-3">
                               {isFeedbackHistoryLoading ? (
-                                <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.86rem] text-gray-600">
+                                <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.94rem] text-gray-600">
                                   <Loader2 size={14} className="animate-spin text-sky-600" />
                                   <span>{feedbackCopy.historyLoadingLabel}</span>
                                 </div>
                               ) : null}
 
                               {!isFeedbackHistoryLoading && feedbackHistoryError ? (
-                                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[0.86rem] font-medium text-rose-600">
+                                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-3 py-3 text-[0.94rem] font-medium text-rose-600">
                                   {feedbackHistoryError}
                                 </div>
                               ) : null}
 
                               {!isFeedbackHistoryLoading && !feedbackHistoryError && feedbackThreads.length === 0 ? (
-                                <div className="rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.86rem] text-gray-500">
+                                <div className="rounded-2xl border border-sky-100 bg-white/80 px-3 py-3 text-[0.94rem] text-gray-500">
                                   {feedbackCopy.historyEmptyLabel}
                                 </div>
                               ) : null}
@@ -3102,16 +3102,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     className="rounded-[1.3rem] border border-sky-100 bg-white/85 px-3 py-3 shadow-[0_8px_20px_rgba(14,116,144,0.05)]"
                                   >
                                     <div className="flex items-center justify-between gap-3">
-                                      <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.76rem] font-semibold text-sky-700">
+                                      <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-1 text-[0.82rem] font-semibold text-sky-700">
                                         {feedbackCopy.categoryLabels[thread.category]}
                                       </span>
-                                      <span className="text-[0.76rem] text-gray-500">
+                                      <span className="text-[0.82rem] text-gray-500">
                                         {formatFeedbackTimestamp(thread.createdAt, uiLocale)}
                                       </span>
                                     </div>
 
                                     {!hasTeamReply ? (
-                                      <div className="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[0.76rem] font-medium text-amber-700">
+                                      <div className="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[0.82rem] font-medium text-amber-700">
                                         {feedbackCopy.pendingReplyLabel}
                                       </div>
                                     ) : null}
@@ -3134,21 +3134,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                           >
                                             <div className="flex items-center justify-between gap-3">
                                               <span
-                                                className={`text-[0.76rem] font-semibold ${
+                                                className={`text-[0.82rem] font-semibold ${
                                                   isTeamMessage ? 'text-emerald-700' : 'text-sky-700'
                                                 }`}
                                               >
                                                 {authorLabel}
                                               </span>
-                                              <span className="text-[0.74rem] text-gray-500">
+                                              <span className="text-[0.8rem] text-gray-500">
                                                 {formatFeedbackTimestamp(message.createdAt, uiLocale)}
                                               </span>
                                             </div>
-                                            <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.9rem] leading-5 text-gray-800">
+                                            <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.98rem] leading-5 text-gray-800">
                                               {message.message}
                                             </p>
                                             {index === 0 && thread.contactEmail ? (
-                                              <p className="mt-2 text-[0.74rem] text-gray-500">
+                                              <p className="mt-2 text-[0.8rem] text-gray-500">
                                                 {thread.contactEmail}
                                               </p>
                                             ) : null}
