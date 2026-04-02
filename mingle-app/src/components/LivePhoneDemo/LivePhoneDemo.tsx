@@ -2803,7 +2803,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div
             className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
             style={{
-              minHeight: "56px",
+              minHeight: "calc(56px + env(safe-area-inset-bottom, 0px))",
               paddingTop: "0px",
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
               paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
