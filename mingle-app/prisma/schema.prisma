@@ -49,6 +49,7 @@ model User {
   accounts  Account[]
   sessions  Session[]
   passwordResetTokens PasswordResetToken[]
+  conversationChannels AppConversationChannel[]
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@map("app_users")
@@ -130,6 +131,25 @@ model AppEventLog {
   @@index([sessionKey], map: "app_event_logs_session_key_idx")
   @@index([messageId], map: "app_event_logs_message_id_idx")
   @@map("app_event_logs")
+}
+
+model AppConversationChannel {
+  id             String    @id @default(cuid())
+  ownerUserId    String    @map("owner_user_id")
+  sequenceNumber Int       @map("sequence_number")
+  title          String
+  status         String    @default("active")
+  sessionKey     String    @unique @map("session_key")
+  pausedAt       DateTime? @map("paused_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
+  @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
+  @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
+  @@map("app_conversation_channels")
 }
 
 model Account {
