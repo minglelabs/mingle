@@ -2792,6 +2792,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         </div>
 
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleFeedbackMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
                         {isNativeAppRuntime && (
                           <div className="px-4 py-4">
                             <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
@@ -2826,19 +2839,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
                           </div>
                         )}
-
-                        <div className="px-4 pb-4">
-                          <button
-                            type="button"
-                            onClick={handleFeedbackMenuItemPress}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                          >
-                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
-                            <span className="shrink-0 text-gray-500">
-                              <ChevronRight size={18} strokeWidth={2.4} />
-                            </span>
-                          </button>
-                        </div>
                       </div>
 
                       {showAccountMenuItems && (
