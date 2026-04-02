@@ -2801,17 +2801,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
           {/* Bottom Bar with Mic Button */}
           <div
-            className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
+            className="shrink-0 border-t border-gray-100 bg-white"
             style={{
-              height: "calc(56px + env(safe-area-inset-bottom, 0px))",
-              minHeight: "calc(56px + env(safe-area-inset-bottom, 0px))",
-              paddingTop: "0px",
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 8px), 12px)",
             }}
           >
-            <div className="justify-self-start pl-2">
+            <div
+              className="grid grid-cols-[1fr_auto_1fr] items-center"
+              style={{
+                height: "56px",
+                minHeight: "56px",
+                paddingTop: "0px",
+                paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
+                paddingRight: "max(calc(env(safe-area-inset-right) + 8px), 12px)",
+              }}
+            >
+              <div className="justify-self-start pl-2">
               {/* Usage progress bar */}
               {usageSec > 0 && (
                 <div className="flex items-center gap-1.5">
@@ -2834,85 +2839,90 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   )}
                 </div>
               )}
-            </div>
-            <div className="flex justify-center">
-              <button
-                onPointerDown={handleMicPointerDown}
-                onClick={handleMicClick}
-                disabled={isConnecting || isError}
-                className="relative flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 appearance-none transition-all duration-200 active:scale-95 disabled:opacity-50"
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  minWidth: "50px",
-                  minHeight: "50px",
-                  maxWidth: "50px",
-                  maxHeight: "50px",
-                  flexBasis: "50px",
-                }}
-              >
-                {showRipple && (
-                  <span
-                    className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                    style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
-                  />
-                )}
-
-                {isReady && (
-                  <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                )}
-
-                <span
-                  className={`relative flex h-full w-full items-center justify-center rounded-full ${
-                    isLimitReached
-                      ? 'bg-gray-300'
-                      : isReady
-                        ? 'bg-red-500'
-                        : isConnecting
-                          ? 'bg-gray-300'
-                          : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                  }`}
+              </div>
+              <div className="flex justify-center">
+                <button
+                  onPointerDown={handleMicPointerDown}
+                  onClick={handleMicClick}
+                  disabled={isConnecting || isError}
+                  className="relative flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent p-0 appearance-none transition-all duration-200 active:scale-95 disabled:opacity-50"
+                  style={{
+                    width: "50px",
+                    height: "50px",
+                    minWidth: "50px",
+                    minHeight: "50px",
+                    maxWidth: "50px",
+                    maxHeight: "50px",
+                    flexBasis: "50px",
+                    lineHeight: 0,
+                    boxSizing: "border-box",
+                  }}
                 >
-                  {isConnecting ? (
-                    <Loader2 size={28} className="animate-spin text-white" />
-                  ) : (
-                    <Play size={28} className="text-white" />
+                  {showRipple && (
+                    <span
+                      className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                      style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
+                    />
                   )}
-                </span>
-              </button>
-            </div>
-            <div className="justify-self-end">
-              {usageSec > 0 && (
-                <div className="flex items-center gap-1">
-                  {enableAutoTTS && (
+
+                  {isReady && (
+                    <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                  )}
+
+                  <span
+                    className={`absolute inset-0 rounded-full ${
+                      isLimitReached
+                        ? 'bg-gray-300'
+                        : isReady
+                          ? 'bg-red-500'
+                          : isConnecting
+                            ? 'bg-gray-300'
+                            : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                    }`}
+                  />
+
+                  <span className="relative z-10 flex h-full w-full items-center justify-center rounded-full">
+                    {isConnecting ? (
+                      <Loader2 size={28} className="animate-spin text-white" />
+                    ) : (
+                      <Play size={28} className="text-white" />
+                    )}
+                  </span>
+                </button>
+              </div>
+              <div className="justify-self-end">
+                {usageSec > 0 && (
+                  <div className="flex items-center gap-1">
+                    {enableAutoTTS && (
+                      <button
+                        onClick={() => {
+                          const next = !isSoundEnabled
+                          setIsSoundEnabled(next)
+                          if (!next) {
+                            setSpeakingItem(null)
+                          }
+                        }}
+                        className="rounded-full p-2 transition-colors active:scale-90"
+                        aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
+                      >
+                        {isSoundEnabled ? (
+                          <Volume2 size={18} className="text-amber-500" />
+                        ) : (
+                          <VolumeX size={18} className="text-gray-400" />
+                        )}
+                      </button>
+                    )}
                     <button
-                      onClick={() => {
-                        const next = !isSoundEnabled
-                        setIsSoundEnabled(next)
-                        if (!next) {
-                          setSpeakingItem(null)
-                        }
-                      }}
+                      onClick={() => setAecEnabled(!aecEnabled)}
                       className="rounded-full p-2 transition-colors active:scale-90"
-                      aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
+                      aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
+                      title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
                     >
-                      {isSoundEnabled ? (
-                        <Volume2 size={18} className="text-amber-500" />
-                      ) : (
-                        <VolumeX size={18} className="text-gray-400" />
-                      )}
+                      <EchoInputRouteIcon echoAllowed={!aecEnabled} />
                     </button>
-                  )}
-                  <button
-                    onClick={() => setAecEnabled(!aecEnabled)}
-                    className="rounded-full p-2 transition-colors active:scale-90"
-                    aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                    title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                  >
-                    <EchoInputRouteIcon echoAllowed={!aecEnabled} />
-                  </button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
