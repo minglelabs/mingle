@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -2428,18 +2428,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           paddingBottom: '12px',
                         }}
                       >
-                        <div className="w-10" />
-                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
-                          {menuLabel}
-                        </div>
                         <button
                           type="button"
                           aria-label={feedbackCopy.closeButtonLabel}
-                          onClick={requestCloseMenuPanel}
+                          onClick={requestMenuBackStep}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                         >
-                          <X size={20} strokeWidth={2.2} />
+                          <ChevronLeft size={22} strokeWidth={2.2} />
                         </button>
+                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
+                          {menuLabel}
+                        </div>
+                        <div className="w-10" />
                       </div>
 
                       <div
