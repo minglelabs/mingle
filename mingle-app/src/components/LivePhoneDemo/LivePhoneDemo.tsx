@@ -2735,10 +2735,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           <button
                             type="button"
                             onClick={handleFeedbackMenuItemPress}
-                            className="flex w-full items-center gap-3 rounded-[1.6rem] border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-cyan-50 px-4 py-4 text-left shadow-[0_14px_32px_rgba(14,116,144,0.08)] transition hover:border-sky-300 hover:shadow-[0_18px_36px_rgba(14,116,144,0.14)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
+                            className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 text-left transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                           >
                             <div className="min-w-0 flex-1">
-                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-sky-700">
+                              <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-gray-500">
                                 {feedbackCopy.sectionLabel}
                               </div>
                               <div className="mt-2 text-[0.98rem] font-semibold text-gray-900">
@@ -2748,7 +2748,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 {feedbackCopy.feedbackMenuItemDescription}
                               </p>
                             </div>
-                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-gray-700">
                               <ArrowRight size={16} strokeWidth={2.4} />
                             </span>
                           </button>
