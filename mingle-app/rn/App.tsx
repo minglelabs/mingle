@@ -267,7 +267,8 @@ const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX = 56;
 const NATIVE_CONVERSATION_HEADER_HEIGHT_PX = 56;
-const NATIVE_CONVERSATION_BOTTOM_BAR_HEIGHT_PX = 72;
+const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
+const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -1352,7 +1353,12 @@ function AppInner(): React.JSX.Element {
     [nativeCanvasScale, safeAreaInsets.top],
   );
   const nativeConversationBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + Math.round(NATIVE_CONVERSATION_BOTTOM_BAR_HEIGHT_PX * nativeCanvasScale),
+    () => {
+      const baseOffsetPx = safeAreaInsets.bottom
+        + Math.round(NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX * nativeCanvasScale);
+      if (Platform.OS !== 'ios') return baseOffsetPx;
+      return Math.max(safeAreaInsets.bottom, baseOffsetPx - IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX);
+    },
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
