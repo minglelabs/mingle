@@ -22,6 +22,7 @@ import {
   parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
+  resolveConnectionStatusFromNativeBridgeStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
@@ -288,6 +289,38 @@ describe('use-realtime-stt pure logic', () => {
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: false,
     })).toBe(false)
+  })
+
+  it('maps native bridge statuses back into UI connection state for restore flows', () => {
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'idle',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'silenced',
+      previousConnectionStatus: 'idle',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'starting',
+      previousConnectionStatus: 'idle',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'recovering',
+      previousConnectionStatus: 'ready',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'stopped',
+      previousConnectionStatus: 'ready',
+    })).toBe('idle')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'failed',
+      previousConnectionStatus: 'connecting',
+    })).toBe('error')
   })
 
   it('filters translations down to currently selected target languages', () => {

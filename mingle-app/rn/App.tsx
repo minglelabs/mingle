@@ -1508,7 +1508,10 @@ function AppInner(): React.JSX.Element {
         : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheStatusScript = payload.type === 'status'
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
+      : '';
+    const script = `${cacheStatusScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
