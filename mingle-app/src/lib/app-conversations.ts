@@ -109,9 +109,9 @@ export async function createConversationChannelForUser(
             ownerUserId: userId,
             sequenceNumber,
             title: formatConversationChannelTitle(sequenceNumber),
-            status: APP_CONVERSATION_STATUS_ACTIVE,
+            status: APP_CONVERSATION_STATUS_PAUSED,
             sessionKey: createConversationSessionKey(),
-            pausedAt: null,
+            pausedAt: new Date(),
           },
           select: conversationChannelSelect,
         });
@@ -149,13 +149,30 @@ export async function updateConversationChannelStatus(args: {
     return null;
   }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      status: args.status,
-      pausedAt: args.status === APP_CONVERSATION_STATUS_PAUSED ? new Date() : null,
-    },
-    select: conversationChannelSelect,
+  const record = await prisma.$transaction(async (tx) => {
+    if (args.status === APP_CONVERSATION_STATUS_ACTIVE) {
+      const pausedAt = new Date();
+      await tx.appConversationChannel.updateMany({
+        where: {
+          ownerUserId: args.userId,
+          id: { not: args.conversationId },
+          status: APP_CONVERSATION_STATUS_ACTIVE,
+        },
+        data: {
+          status: APP_CONVERSATION_STATUS_PAUSED,
+          pausedAt,
+        },
+      });
+    }
+
+    return tx.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
+        status: args.status,
+        pausedAt: args.status === APP_CONVERSATION_STATUS_PAUSED ? new Date() : null,
+      },
+      select: conversationChannelSelect,
+    });
   });
 
   return serializeConversationChannel(record);

@@ -306,7 +306,9 @@ function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
 }
 
 export interface LivePhoneDemoRef {
-  startRecording: () => void
+  startRecording: () => Promise<void>
+  stopRecording: () => Promise<void>
+  isSttSessionRunning: () => boolean
 }
 
 interface LivePhoneDemoProps {
@@ -345,6 +347,10 @@ interface LivePhoneDemoProps {
   onBack?: () => void
   sessionKeyOverride?: string
   storageNamespace?: string
+  isVisible?: boolean
+  enableNativeBannerBridge?: boolean
+  onStartRecordingRequested?: () => Promise<void> | void
+  onSttSessionRunningChange?: (isRunning: boolean) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -468,6 +474,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onBack,
   sessionKeyOverride,
   storageNamespace,
+  isVisible = true,
+  enableNativeBannerBridge = true,
+  onStartRecordingRequested,
+  onSttSessionRunningChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
@@ -786,6 +796,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   useEffect(() => {
+    if (isVisible) return
+
+    const timerId = window.setTimeout(() => {
+      closeMenuPanel()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [closeMenuPanel, isVisible])
+
+  useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
     const timerId = window.setTimeout(() => {
@@ -795,9 +818,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [])
+  }, [enableNativeBannerBridge, isVisible])
 
   useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
     const command: NativeUiOverlayStateCommand = {
@@ -821,9 +845,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         // Ignore bridge errors during teardown.
       }
     }
-  }, [menuOpen])
+  }, [enableNativeBannerBridge, isVisible, menuOpen])
 
   useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
     const nextBannerPosition = adBannerPosition
@@ -839,7 +864,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner position unchanged.
     }
-  }, [adBannerPosition, nativeBannerPositionFromQuery])
+  }, [adBannerPosition, enableNativeBannerBridge, isVisible, nativeBannerPositionFromQuery])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -1356,7 +1381,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     liveUtterances,
     partialTranscript,
     volume,
-    toggleRecording,
+    startRecording,
+    stopRecording,
     isActive,
     isReady,
     isConnecting,
@@ -1386,6 +1412,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+
+  useEffect(() => {
+    onSttSessionRunningChange?.(isSttSessionRunning)
+  }, [isSttSessionRunning, onSttSessionRunningChange])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const sliderClassName = [
@@ -1639,29 +1669,55 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void primeAudioPlayback()
   }, [enableAutoTTS, isActive, primeAudioPlayback])
 
-  const handleMicClick = useCallback(async () => {
+  const handleStartRecording = useCallback(async () => {
     if (isLimitReached) {
       onLimitReached?.()
       return
     }
-    const wasActive = isActive
-    // Mic button controls STT only.
-    // Prime audio player only when starting STT from idle, not when stopping.
-    if (enableAutoTTS && !wasActive) {
+    if (isSttSessionRunning) return
+
+    await onStartRecordingRequested?.()
+
+    if (enableAutoTTS) {
       const ok = await primeAudioPlayback()
       if (!ok) {
         ttsNeedsUnlockRef.current = true
       }
     }
-    toggleRecording()
-    if (wasActive) {
-      scheduleTtsResumeAfterStopClick()
+    await startRecording()
+  }, [
+    enableAutoTTS,
+    isLimitReached,
+    isSttSessionRunning,
+    onLimitReached,
+    onStartRecordingRequested,
+    primeAudioPlayback,
+    startRecording,
+  ])
+
+  const handleStopRecording = useCallback(async () => {
+    if (!isSttSessionRunning) return
+    await stopRecording()
+    scheduleTtsResumeAfterStopClick()
+  }, [isSttSessionRunning, scheduleTtsResumeAfterStopClick, stopRecording])
+
+  const handleMicClick = useCallback(() => {
+    if (isSttSessionRunning) {
+      void handleStopRecording()
+      return
     }
-  }, [enableAutoTTS, isActive, isLimitReached, onLimitReached, primeAudioPlayback, scheduleTtsResumeAfterStopClick, toggleRecording])
+    void handleStartRecording()
+  }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
 
   useImperativeHandle(ref, () => ({
-    startRecording: handleMicClick,
-  }), [handleMicClick])
+    startRecording: async () => {
+      await handleStartRecording()
+    },
+    stopRecording: async () => {
+      await handleStopRecording()
+    },
+    isSttSessionRunning: () => isSttSessionRunning,
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)

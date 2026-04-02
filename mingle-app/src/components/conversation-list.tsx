@@ -34,7 +34,7 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
-import MingleHome from "@/components/mingle-home";
+import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
@@ -77,6 +77,12 @@ const conversationOverlayVariants: Variants = {
   active: (transitionState: ConversationOverlayTransitionState) => ({
     x: "0%",
     transition: transitionState.enterMode === "animate"
+      ? CONVERSATION_OVERLAY_TRANSITION
+      : { duration: 0 },
+  }),
+  retained: (transitionState: ConversationOverlayTransitionState) => ({
+    x: "100%",
+    transition: transitionState.exitMode === "animate"
       ? CONVERSATION_OVERLAY_TRANSITION
       : { duration: 0 },
   }),
@@ -272,14 +278,16 @@ function upsertConversation(
   ].sort(compareConversationRecency);
 }
 
-function markConversationAsActive(
+function updateConversationSummaryStatus(
   conversation: ConversationChannelSummary,
+  status: "active" | "paused",
+  nowIso = new Date().toISOString(),
 ): ConversationChannelSummary {
   return {
     ...conversation,
-    status: "active",
-    pausedAt: null,
-    updatedAt: new Date().toISOString(),
+    status,
+    pausedAt: status === "active" ? null : (conversation.pausedAt ?? nowIso),
+    updatedAt: nowIso,
   };
 }
 
@@ -817,11 +825,15 @@ export default function ConversationList({
   );
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
+  const liveConversationIdRef = useRef<string | null>(null);
+  const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
   const isCreatingConversationRef = useRef(isCreatingConversation);
@@ -855,6 +867,21 @@ export default function ConversationList({
     )),
     [conversations, copy, locale, timeLabelsReady],
   );
+  const mountedConversationIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeConversation?.id) {
+      ids.add(activeConversation.id);
+    }
+    if (liveConversationId) {
+      ids.add(liveConversationId);
+    }
+    return [...ids];
+  }, [activeConversation?.id, liveConversationId]);
+  const mountedConversations = useMemo(() => (
+    mountedConversationIds
+      .map((conversationId) => conversations.find((conversation) => conversation.id === conversationId) || null)
+      .filter((conversation): conversation is ConversationChannelSummary => conversation !== null)
+  ), [conversations, mountedConversationIds]);
   const actionDisabled = isCreatingConversation || mutatingConversationId !== null;
 
   const updateConversationStatus = useCallback(async (
@@ -881,6 +908,82 @@ export default function ConversationList({
     }
   }, []);
 
+  const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
+    if (nextRef) {
+      conversationRoomRefs.current.set(conversationId, nextRef);
+      return;
+    }
+    conversationRoomRefs.current.delete(conversationId);
+  }, []);
+
+  const applyRunningConversationState = useCallback((
+    conversationId: string,
+    isRunning: boolean,
+  ) => {
+    const nowIso = new Date().toISOString();
+    setConversations((current) => current.map((conversation) => {
+      if (conversation.id === conversationId) {
+        return updateConversationSummaryStatus(
+          conversation,
+          isRunning ? "active" : "paused",
+          nowIso,
+        );
+      }
+      if (!isRunning) {
+        return conversation;
+      }
+      if (conversation.status !== "active") {
+        return conversation;
+      }
+      return updateConversationSummaryStatus(conversation, "paused", nowIso);
+    }).sort(compareConversationRecency));
+  }, []);
+
+  const handleConversationStartRequested = useCallback(async (conversationId: string) => {
+    const currentLiveConversationId = liveConversationIdRef.current;
+    if (!currentLiveConversationId || currentLiveConversationId === conversationId) return;
+
+    const currentLiveRoom = conversationRoomRefs.current.get(currentLiveConversationId);
+    await currentLiveRoom?.stopRecording();
+  }, []);
+
+  const handleConversationRunningChange = useCallback((conversationId: string, isRunning: boolean) => {
+    const previousRunning = conversationRunningStateRef.current.get(conversationId) === true;
+    if (previousRunning === isRunning) {
+      return;
+    }
+    conversationRunningStateRef.current.set(conversationId, isRunning);
+
+    applyRunningConversationState(conversationId, isRunning);
+    setLiveConversationId((current) => {
+      if (isRunning) return conversationId;
+      return current === conversationId ? null : current;
+    });
+
+    const nextStatus = isRunning ? "active" : "paused";
+    void updateConversationStatus(conversationId, nextStatus).catch(() => {
+      setConversations((current) => {
+        const conversation = current.find((item) => item.id === conversationId);
+        if (!conversation) return current;
+        return upsertConversation(
+          current,
+          updateConversationSummaryStatus(
+            conversation,
+            isRunning ? "paused" : "active",
+          ),
+        );
+      });
+      if (isRunning) {
+        setLiveConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+      }
+      window.alert(
+        isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
+      );
+    });
+  }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, updateConversationStatus]);
+
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
     window.requestAnimationFrame(() => {
@@ -894,6 +997,10 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    liveConversationIdRef.current = liveConversationId;
+  }, [liveConversationId]);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -1001,24 +1108,7 @@ export default function ConversationList({
     setActiveConversation((current) => (
       current?.id === previousConversation.id ? null : current
     ));
-    setConversations((current) => current.map((item) => {
-      if (item.id !== previousConversation.id) return item;
-      return {
-        ...item,
-        status: "paused",
-        pausedAt: item.pausedAt ?? new Date().toISOString(),
-      };
-    }));
-
-    void (async () => {
-      try {
-        await updateConversationStatus(previousConversation.id, "paused");
-      } catch {
-        setConversations((current) => upsertConversation(current, previousConversation));
-        window.alert(copy.pauseErrorMessage);
-      }
-    })();
-  }, [copy.pauseErrorMessage, updateConversationStatus]);
+  }, []);
 
   const handleCreateConversation = useCallback(async () => {
     if (isCreatingConversation || mutatingConversationId) return;
@@ -1046,42 +1136,16 @@ export default function ConversationList({
     conversation: ConversationChannelSummary,
     options?: {
       enterMode?: ConversationOverlayEnterMode;
-      optimistic?: boolean;
     },
   ) => {
     const enterMode = options?.enterMode ?? "animate";
-    const optimistic = options?.optimistic ?? false;
     setShowSearch(false);
     setOverlayEnterMode(enterMode);
     setOverlayExitMode("animate");
     setAutoStartConversationId(null);
-
-    if (conversation.status === "active") {
-      setActiveConversation(conversation);
-      return conversation;
-    }
-
-    const optimisticConversation = markConversationAsActive(conversation);
-    if (optimistic) {
-      setConversations((current) => upsertConversation(current, optimisticConversation));
-      setActiveConversation(optimisticConversation);
-    }
-
-    try {
-      const nextConversation = await updateConversationStatus(conversation.id, "active");
-      if (!nextConversation) return null;
-      setActiveConversation(nextConversation);
-      return nextConversation;
-    } catch (error) {
-      if (optimistic) {
-        setConversations((current) => upsertConversation(current, conversation));
-        setActiveConversation((current) => (
-          current?.id === conversation.id ? null : current
-        ));
-      }
-      throw error;
-    }
-  }, [updateConversationStatus]);
+    setActiveConversation(conversation);
+    return conversation;
+  }, []);
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || mutatingConversationId) return;
@@ -1144,7 +1208,6 @@ export default function ConversationList({
     routeSyncConversationIdRef.current = routeConversationId;
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
-      optimistic: true,
     }).catch(() => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
@@ -1213,7 +1276,6 @@ export default function ConversationList({
       routeSyncConversationIdRef.current = currentRouteConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
-        optimistic: true,
       }).catch(() => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === currentRouteConversationId) {
@@ -1329,30 +1391,46 @@ export default function ConversationList({
       {typeof document !== "undefined"
         ? createPortal(
           <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
-            {activeConversation ? (
-              <motion.div
-                key={activeConversation.id}
-                custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                variants={conversationOverlayVariants}
-                initial="initial"
-                animate="active"
-                exit="exit"
-                className="fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white"
-              >
-                <MingleHome
-                  key={activeConversation.id}
-                  dictionary={dictionary}
-                  appleOAuthEnabled={appleOAuthEnabled}
-                  googleOAuthEnabled={googleOAuthEnabled}
-                  locale={locale}
-                  headerMode="conversation"
-                  onBack={handleCloseActiveConversation}
-                  sessionKeyOverride={activeConversation.sessionKey}
-                  storageNamespace={activeConversation.id}
-                  autoStartOnMount={autoStartConversationId === activeConversation.id}
-                />
-              </motion.div>
-            ) : null}
+            {mountedConversations.map((conversation) => {
+              const isVisible = activeConversation?.id === conversation.id;
+
+              return (
+                <motion.div
+                  key={conversation.id}
+                  custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
+                  variants={conversationOverlayVariants}
+                  initial="initial"
+                  animate={isVisible ? "active" : "retained"}
+                  exit="exit"
+                  className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
+                    isVisible ? "" : "pointer-events-none"
+                  }`}
+                  aria-hidden={!isVisible}
+                >
+                  <MingleHome
+                    ref={(nextRef) => {
+                      setConversationRoomRef(conversation.id, nextRef);
+                    }}
+                    key={conversation.id}
+                    dictionary={dictionary}
+                    appleOAuthEnabled={appleOAuthEnabled}
+                    googleOAuthEnabled={googleOAuthEnabled}
+                    locale={locale}
+                    headerMode="conversation"
+                    onBack={handleCloseActiveConversation}
+                    sessionKeyOverride={conversation.sessionKey}
+                    storageNamespace={conversation.id}
+                    autoStartOnMount={autoStartConversationId === conversation.id}
+                    isVisible={isVisible}
+                    enableNativeBannerBridge={isVisible}
+                    onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
+                    onSttSessionRunningChange={(isRunning) => {
+                      handleConversationRunningChange(conversation.id, isRunning);
+                    }}
+                  />
+                </motion.div>
+              );
+            })}
           </AnimatePresence>,
           document.body,
         )

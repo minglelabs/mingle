@@ -1,7 +1,16 @@
 "use client";
 
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
@@ -18,6 +27,16 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   autoStartOnMount?: boolean;
+  isVisible?: boolean;
+  enableNativeBannerBridge?: boolean;
+  onStartRecordingRequested?: () => Promise<void> | void;
+  onSttSessionRunningChange?: (isRunning: boolean) => void;
+};
+
+export type MingleHomeRef = {
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<void>;
+  isSttSessionRunning: () => boolean;
 };
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
@@ -198,7 +217,7 @@ function GoogleMark() {
   );
 }
 
-export default function MingleHome(props: MingleHomeProps) {
+const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHome(props, ref) {
   const { status } = useSession();
   const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
   const autoStartTriggeredRef = useRef(false);
@@ -957,6 +976,16 @@ export default function MingleHome(props: MingleHomeProps) {
     };
   }, [props.autoStartOnMount]);
 
+  useImperativeHandle(ref, () => ({
+    startRecording: async () => {
+      await livePhoneDemoRef.current?.startRecording();
+    },
+    stopRecording: async () => {
+      await livePhoneDemoRef.current?.stopRecording();
+    },
+    isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+  }), []);
+
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
     void signOut({ callbackUrl: `/${props.locale}` });
@@ -1630,8 +1659,14 @@ export default function MingleHome(props: MingleHomeProps) {
           onBack={props.onBack}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
+          isVisible={props.isVisible}
+          enableNativeBannerBridge={props.enableNativeBannerBridge}
+          onStartRecordingRequested={props.onStartRecordingRequested}
+          onSttSessionRunningChange={props.onSttSessionRunningChange}
         />
       </div>
     </main>
   );
-}
+});
+
+export default MingleHome;

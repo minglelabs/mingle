@@ -117,11 +117,11 @@ describe("/api/conversations route", () => {
       id: "conv_2",
       sequenceNumber: 2,
       title: "Conversation (2)",
-      status: "active",
+      status: "paused",
       sessionKey: "conv_session_2",
       createdAt: "2026-04-02T00:02:00.000Z",
       updatedAt: "2026-04-02T00:02:00.000Z",
-      pausedAt: null,
+      pausedAt: "2026-04-02T00:02:00.000Z",
     });
 
     const response = await POST(new NextRequest("https://example.com/api/conversations", {
@@ -138,11 +138,11 @@ describe("/api/conversations route", () => {
         id: "conv_2",
         sequenceNumber: 2,
         title: "Conversation (2)",
-        status: "active",
+        status: "paused",
         sessionKey: "conv_session_2",
         createdAt: "2026-04-02T00:02:00.000Z",
         updatedAt: "2026-04-02T00:02:00.000Z",
-        pausedAt: null,
+        pausedAt: "2026-04-02T00:02:00.000Z",
       },
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123");

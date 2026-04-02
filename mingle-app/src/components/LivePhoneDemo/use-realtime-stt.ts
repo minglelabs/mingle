@@ -3755,5 +3755,7 @@ export default function useRealtimeSTT({
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
+    startRecording,
+    stopRecording: stopRecordingGracefully,
   }
 }
