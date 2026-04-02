@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": true,
-      "releaseName": "1.0.8 (33)",
+      "releaseName": "1.0.8 (34)",
       "releaseNotes": {
         "en-US": "Version 1.0.8 brings Mingle's new name and smoother microphone permission recovery, making it easier to start live translation again after denying mic access.",
         "ar": "يقدّم الإصدار 1.0.8 اسم Mingle الجديد ويحسّن استعادة إذن الميكروفون، لتسهيل بدء الترجمة المباشرة من جديد بعد رفض الوصول إلى الميكروفون.",
