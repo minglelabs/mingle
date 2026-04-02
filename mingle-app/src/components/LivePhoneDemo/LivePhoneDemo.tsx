@@ -46,6 +46,10 @@ import {
 } from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
 import {
+  clearNativeHistoryBackAnimateFlag,
+  registerNativeBackHandler,
+} from '@/lib/native-back-handler'
+import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
   deriveScrollAutoFollowState,
@@ -929,6 +933,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isAuthActionPending) return
     setDeleteAccountDialogOpen(false)
   }, [isAuthActionPending])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (isAuthActionPending) return false
+    if (deleteAccountDialogOpen) {
+      clearNativeHistoryBackAnimateFlag()
+      setDeleteAccountDialogOpen(false)
+      return true
+    }
+    if (translationModelMenuOpen) {
+      clearNativeHistoryBackAnimateFlag()
+      setTranslationModelMenuOpen(false)
+      return true
+    }
+    if (!menuOpen) return false
+    closeMenuPanel()
+    return true
+  }, 20), [closeMenuPanel, deleteAccountDialogOpen, isAuthActionPending, menuOpen, translationModelMenuOpen])
 
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current

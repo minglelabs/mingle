@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppState,
+  BackHandler,
   Image,
   Linking,
   NativeModules,
@@ -345,6 +346,52 @@ const AUTH_LOGIN_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topEdgeMode: 'transparent',
   bottomEdgeMode: 'transparent',
 };
+
+const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
+  (function () {
+    if (window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__) {
+      return true;
+    }
+    window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__ = true;
+
+    var postCurrentUrl = function () {
+      var bridge = window.ReactNativeWebView;
+      if (!bridge || typeof bridge.postMessage !== 'function') {
+        return;
+      }
+      try {
+        bridge.postMessage(JSON.stringify({
+          type: 'native_navigation_state',
+          payload: {
+            url: window.location.href,
+            canGoBack: window.history.length > 1,
+          }
+        }));
+      } catch (error) {
+        // Ignore bridge serialization failures.
+      }
+    };
+
+    var wrapHistoryMethod = function (methodName) {
+      var original = window.history[methodName];
+      if (typeof original !== 'function') {
+        return;
+      }
+      window.history[methodName] = function () {
+        var result = original.apply(window.history, arguments);
+        postCurrentUrl();
+        return result;
+      };
+    };
+
+    wrapHistoryMethod('pushState');
+    wrapHistoryMethod('replaceState');
+    window.addEventListener('popstate', postCurrentUrl);
+    window.addEventListener('hashchange', postCurrentUrl);
+    postCurrentUrl();
+    return true;
+  })();
+`;
 type VersionPolicyLocale =
   | 'ko'
   | 'en'
@@ -680,6 +727,14 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeNavigationStateCommand = {
+  type: 'native_navigation_state';
+  payload?: {
+    canGoBack?: boolean;
+    url?: string;
+  };
+};
+
 type NativeOpenUpdateStoreCommand = {
   type: 'native_open_update_store';
   payload?: {
@@ -708,6 +763,7 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
+  | NativeNavigationStateCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand;
@@ -1040,11 +1096,14 @@ function NativeAdBanner(props: {
     : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
+  /* eslint-disable react-hooks/set-state-in-effect */
+  // Reset banner state when a new slot/unit configuration is mounted.
   useEffect(() => {
     setRenderHeightPx(heightPx);
     setAdLoadState('loading');
     setLastErrorMessage('');
   }, [heightPx, position, reloadToken, unitId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
     if (prefersFixedHeightBanner) return;
@@ -1255,6 +1314,7 @@ function AppInner(): React.JSX.Element {
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     !nativeBannerUnitId
   ));
+  const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
 
@@ -1311,6 +1371,38 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
+        return false;
+      }
+      webViewRef.current?.injectJavaScript(`
+        (function () {
+          try {
+            if (typeof window.__MINGLE_HANDLE_NATIVE_BACK__ === 'function' && window.__MINGLE_HANDLE_NATIVE_BACK__()) {
+              return true;
+            }
+          } catch (error) {
+            // Fall through to the browser history path.
+          }
+
+          if (window.history.length > 1) {
+            window.history.back();
+          }
+          return true;
+        })();
+        true;
+      `);
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [canWebViewGoBack, isNativeMenuOverlayOpen]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1802,6 +1894,15 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    if (parsed.type === 'native_navigation_state') {
+      const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
+      if (typeof parsed.payload?.canGoBack === 'boolean') {
+        setCanWebViewGoBack(parsed.payload.canGoBack);
+      }
+      updateSafeAreaPalette(url);
+      return;
+    }
+
     if (parsed.type === 'native_open_update_store') {
       const requestedUrl = typeof parsed.payload?.updateUrl === 'string'
         ? parsed.payload.updateUrl.trim()
@@ -1939,7 +2040,7 @@ function AppInner(): React.JSX.Element {
       }
       void handleNativeAuthStart(parsed.payload);
     }
-  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop]);
+  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -2058,7 +2159,11 @@ function AppInner(): React.JSX.Element {
     setLoadError(formatWebViewLoadError(description, webUrl));
   }, [webUrl]);
 
-  const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
+  const handleNavigationStateChange = useCallback((navigationState: {
+    canGoBack?: boolean;
+    url: string;
+  }) => {
+    setCanWebViewGoBack(Boolean(navigationState.canGoBack));
     updateSafeAreaPalette(navigationState.url);
   }, [updateSafeAreaPalette]);
 
@@ -2100,7 +2205,8 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures={false}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && !isNativeMenuOverlayOpen}
+            injectedJavaScriptBeforeContentLoaded={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}

@@ -4,6 +4,7 @@ import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import {
   forwardRef,
   type FormEvent,
@@ -23,10 +24,10 @@ import {
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import MingleHome from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 
-const CONVERSATIONS_API_PATH = "/api/conversations";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const MAX_RECENT_SEARCHES = 6;
@@ -199,6 +200,10 @@ function buildConversationOverlayUrl(conversationId: string): string | null {
   }
 }
 
+function buildConversationApiPath(suffix = ""): string {
+  return buildClientApiPath(`/conversations${suffix}` as `/${string}`);
+}
+
 function replaceConversationOverlayUrl(conversationId: string | null): void {
   if (typeof window === "undefined") return;
 
@@ -323,9 +328,13 @@ async function readConversationListResponse(response: Response): Promise<Convers
 }
 
 function buildConversationRequestHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "x-mingle-user-id": getOrCreateTrackingUserId(),
   };
+  if (clientApiNamespace) {
+    headers["x-mingle-api-namespace"] = clientApiNamespace;
+  }
+  return headers;
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -781,7 +790,7 @@ export default function ConversationList({
   ) => {
     setMutatingConversationId(conversationId);
     try {
-      const response = await fetch(`/api/conversations/${conversationId}`, {
+      const response = await fetch(buildConversationApiPath(`/${conversationId}`), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -816,7 +825,7 @@ export default function ConversationList({
   useEffect(() => {
     let cancelled = false;
 
-    void fetch(CONVERSATIONS_API_PATH, {
+    void fetch(buildConversationApiPath(), {
       cache: "no-store",
       headers: buildConversationRequestHeaders(),
     })
@@ -917,7 +926,7 @@ export default function ConversationList({
     if (isCreatingConversation || mutatingConversationId) return;
     setIsCreatingConversation(true);
     try {
-      const response = await fetch(CONVERSATIONS_API_PATH, {
+      const response = await fetch(buildConversationApiPath(), {
         method: "POST",
         headers: buildConversationRequestHeaders(),
       });
@@ -968,8 +977,25 @@ export default function ConversationList({
 
   const handleCloseActiveConversation = useCallback(async () => {
     if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
+
+    const currentConversationId = readConversationIdFromLocation();
+    if (
+      typeof window !== "undefined"
+      && currentConversationId === activeConversation.id
+      && window.history.length > 1
+    ) {
+      window.history.back();
+      return;
+    }
+
     closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
   }, [activeConversation, closeConversationOverlay, isCreatingConversation, mutatingConversationId]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!activeConversation || isCreatingConversation || mutatingConversationId) return false;
+    void handleCloseActiveConversation();
+    return true;
+  }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !activeConversation) return;
@@ -989,7 +1015,7 @@ export default function ConversationList({
       const currentActiveConversation = activeConversationRef.current;
       if (!currentActiveConversation) return;
       if (readConversationIdFromLocation() === currentActiveConversation.id) return;
-      closeConversationOverlay(currentActiveConversation);
+      closeConversationOverlay(currentActiveConversation, { animateExit: true });
     };
 
     window.addEventListener("popstate", handlePopState);
