@@ -24,6 +24,7 @@ type MingleHomeProps = {
   locale: AppLocale;
   headerMode?: "default" | "conversation";
   onBack?: () => void;
+  conversationId?: string;
   sessionKeyOverride?: string;
   storageNamespace?: string;
   autoStartOnMount?: boolean;
@@ -1665,6 +1666,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
+          conversationId={props.conversationId}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           isVisible={props.isVisible}

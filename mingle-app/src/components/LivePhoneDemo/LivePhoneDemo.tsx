@@ -345,6 +345,7 @@ interface LivePhoneDemoProps {
   headerMode?: 'default' | 'conversation'
   backButtonLabel?: string
   onBack?: () => void
+  conversationId?: string
   sessionKeyOverride?: string
   storageNamespace?: string
   isVisible?: boolean
@@ -472,6 +473,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   headerMode = 'default',
   backButtonLabel = 'Back',
   onBack,
+  conversationId,
   sessionKeyOverride,
   storageNamespace,
   isVisible = true,
@@ -1407,6 +1409,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    conversationId,
     sessionKeyOverride,
     storageNamespace,
   })

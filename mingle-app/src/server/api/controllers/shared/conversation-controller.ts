@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/lib/auth-options";
 import {
   APP_CONVERSATION_STATUS_ACTIVE,
   APP_CONVERSATION_STATUS_PAUSED,
+  getConversationHydrationStateForUser,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
 } from "@/lib/app-conversations";
@@ -80,6 +81,40 @@ export async function patchConversationResponse(
       }
     : resolvedUser.identity;
   const response = NextResponse.json({ conversation });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+export async function getConversationResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const conversationState = await getConversationHydrationStateForUser({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!conversationState) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+  const response = NextResponse.json(conversationState);
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }

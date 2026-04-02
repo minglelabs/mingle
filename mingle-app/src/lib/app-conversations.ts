@@ -19,6 +19,22 @@ export type ConversationChannelSummary = {
   pausedAt: string | null;
 };
 
+export type ConversationHydrationUtterance = {
+  id: string;
+  originalText: string;
+  originalLang: string;
+  targetLanguages: string[];
+  translations: Record<string, string>;
+  translationFinalized: Record<string, boolean>;
+  createdAtMs: number;
+};
+
+export type ConversationHydrationState = {
+  conversation: ConversationChannelSummary;
+  usageSec: number;
+  utterances: ConversationHydrationUtterance[];
+};
+
 type ConversationChannelRecord = {
   id: string;
   sequenceNumber: number;
@@ -176,4 +192,87 @@ export async function updateConversationChannelStatus(args: {
   });
 
   return serializeConversationChannel(record);
+}
+
+export async function getConversationHydrationStateForUser(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationHydrationState | null> {
+  const conversationRecord = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+    },
+    select: conversationChannelSelect,
+  });
+
+  if (!conversationRecord) {
+    return null;
+  }
+
+  const [latestUsageEvent, messages] = await prisma.$transaction([
+    prisma.appEventLog.findFirst({
+      where: {
+        sessionKey: conversationRecord.sessionKey,
+        usageSec: { not: null },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { usageSec: true },
+    }),
+    prisma.appMessage.findMany({
+      where: {
+        sessionKey: conversationRecord.sessionKey,
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        clientMessageId: true,
+        sourceLanguage: true,
+        createdAt: true,
+        contents: {
+          select: {
+            contentType: true,
+            language: true,
+            text: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const utterances: ConversationHydrationUtterance[] = messages.map((message) => {
+    const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
+    const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
+      || sourceContents[0]
+      || null;
+    const translations: Record<string, string> = {};
+    const translationFinalized: Record<string, boolean> = {};
+
+    for (const content of message.contents) {
+      if (content.contentType !== "TRANSLATION_FINAL") continue;
+      const language = content.language.trim();
+      const text = content.text.trim();
+      if (!language || !text) continue;
+      translations[language] = text;
+      translationFinalized[language] = true;
+    }
+
+    const targetLanguages = Object.keys(translations);
+
+    return {
+      id: (message.clientMessageId || "").trim() || `db-${message.id}`,
+      originalText: sourceContent?.text?.trim() || "",
+      originalLang: (message.sourceLanguage || "").trim() || "unknown",
+      targetLanguages,
+      translations,
+      translationFinalized,
+      createdAtMs: message.createdAt.getTime(),
+    };
+  }).filter((utterance) => utterance.originalText.length > 0);
+
+  return {
+    conversation: serializeConversationChannel(conversationRecord),
+    usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
+    utterances,
+  };
 }

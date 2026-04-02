@@ -1532,6 +1532,7 @@ export default function ConversationList({
                     locale={locale}
                     headerMode="conversation"
                     onBack={handleCloseActiveConversation}
+                    conversationId={conversation.id}
                     sessionKeyOverride={conversation.sessionKey}
                     storageNamespace={conversation.id}
                     autoStartOnMount={autoStartConversationId === conversation.id}
