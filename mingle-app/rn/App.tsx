@@ -266,8 +266,8 @@ const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX = 56;
-const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
-const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
+const NATIVE_CONVERSATION_HEADER_HEIGHT_PX = 56;
+const NATIVE_CONVERSATION_BOTTOM_BAR_HEIGHT_PX = 72;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -1343,16 +1343,16 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
-  const nativeBannerTopOffsetPx = useMemo(
-    () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
+  const nativeConversationBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_HEADER_HEIGHT_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
   const nativeConversationListBannerTopOffsetPx = useMemo(
     () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
-  const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
+  const nativeConversationBannerBottomOffsetPx = useMemo(
+    () => safeAreaInsets.bottom + Math.round(NATIVE_CONVERSATION_BOTTOM_BAR_HEIGHT_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
@@ -2428,7 +2428,7 @@ function AppInner(): React.JSX.Element {
             heightPx={nativeBannerHeightPx}
             frameWidthPx={nativeBannerFrameWidthPx}
             topOffsetPx={nativeConversationListBannerTopOffsetPx}
-            bottomOffsetPx={nativeBannerBottomOffsetPx}
+            bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
             hidden={activeBannerZone !== 'list'}
@@ -2439,8 +2439,8 @@ function AppInner(): React.JSX.Element {
             unitId={nativeBannerUnitId}
             heightPx={nativeBannerHeightPx}
             frameWidthPx={nativeBannerFrameWidthPx}
-            topOffsetPx={nativeBannerTopOffsetPx}
-            bottomOffsetPx={nativeBannerBottomOffsetPx}
+            topOffsetPx={nativeConversationBannerTopOffsetPx}
+            bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
             hidden={activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}

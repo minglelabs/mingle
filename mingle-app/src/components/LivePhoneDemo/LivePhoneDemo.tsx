@@ -84,6 +84,7 @@ const NATIVE_TTS_EVENT = 'mingle:native-tts'
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 400
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
+const NATIVE_BANNER_CHAT_CLEARANCE_PX = 4
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 1400
@@ -1995,8 +1996,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? effectiveNativeBottomContentInsetPx
     : 0
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
-  const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const chatPaddingTop = effectiveNativeTopInsetPx > 0
+    ? `calc(${NATIVE_BANNER_CHAT_CLEARANCE_PX}px + ${effectiveNativeTopInsetPx}px)`
+    : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0
+    ? `calc(${NATIVE_BANNER_CHAT_CLEARANCE_PX}px + ${effectiveNativeBottomContentInsetPx}px)`
+    : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
