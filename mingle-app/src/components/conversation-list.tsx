@@ -666,17 +666,19 @@ function ConversationRow({
   item,
   disabled = false,
   onSelect,
+  className = "",
 }: {
   item: ConversationItem;
   disabled?: boolean;
   onSelect?: (item: ConversationItem) => void;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={() => onSelect?.(item)}
       disabled={disabled}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       <div
         className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white"
@@ -1718,17 +1720,15 @@ export default function ConversationList({
             </p>
           </div>
         ) : (
-          <div>
-            {conversationItems.map((item, index) => (
+          <div className="border-t border-gray-100">
+            {conversationItems.map((item) => (
               <div key={item.id}>
                 <ConversationRow
                   item={item}
                   disabled={actionDisabled}
                   onSelect={handleOpenConversation}
+                  className="border-b border-gray-100"
                 />
-                {index < conversationItems.length - 1 && (
-                  <div className="mx-4 h-px bg-gray-100" />
-                )}
               </div>
             ))}
           </div>
