@@ -597,14 +597,14 @@
         "fr": "Traducteur vocal en direct · Global Hangout · Amis du monde entier",
         "hi": "लाइव वॉइस ट्रांसलेटर · Global Hangout · दुनिया भर के दोस्त",
         "it": "Traduttore vocale live · Global Hangout · Amici nel mondo",
-        "ja": "ライブ音声翻訳機 · Global Hangout · 世界中の友達づくり",
-        "ko": "라이브 음성 번역기 · Global Hangout · 글로벌 친구 만들기",
+        "ja": "ライブ音声翻訳機 · Global Hangout · 世界中の友達づくり · Mingle The Easieast Translator",
+        "ko": "라이브 음성 번역기 · Global Hangout · 글로벌 친구 만들기 · Mingle The Easieast Translator",
         "pt": "Tradutor de voz ao vivo · Global Hangout · Amigos no mundo todo",
         "ru": "Живой голосовой переводчик · Global Hangout · Друзья по всему миру",
         "th": "นักแปลเสียงสด · Global Hangout · หาเพื่อนทั่วโลก",
         "vi": "Dịch giọng nói trực tiếp · Global Hangout · Kết bạn toàn cầu",
-        "zh-cn": "实时语音翻译器 · Global Hangout · 全球交友",
-        "zh-tw": "即時語音翻譯器 · Global Hangout · 全球交友"
+        "zh-cn": "实时语音翻译器 · Global Hangout · 全球交友 · Mingle The Easieast Translator",
+        "zh-tw": "即時語音翻譯器 · Global Hangout · 全球交友 · Mingle The Easieast Translator"
       },
       "fullDescription": {
         "en": "• Mingle supports all-direction interpreting and translation across 3+ languages. Even when multiple languages are mixed in the same conversation, everything is translated in real time, so you do not need to manually choose or switch languages whenever speakers change.\n• Get uninterrupted translation with live transcripts. Instead of stopping after each sentence, Mingle continuously translates along the full flow of your conversation or meeting, helping you follow context naturally.\n• See real-time captions and translations even for audio from other apps. If you run voice apps such as phone calls, radio, or Discord in the background on speakerphone while Mingle is in the foreground, that audio is captured as Mingle input and shown instantly as transcripts and translations.\n• Listen to translation as real-time voice interpreting. Turn on voice output to hear translated content like having an interpreter beside you, so you can understand without looking at the screen, even while running.\n• Keeps translating even when you switch apps or lock the screen. Mingle runs a microphone foreground service during the active translation session and displays a persistent notification so you always know capture is running. Switch to your phone app, messenger, or any other app and translation continues uninterrupted in the background. Tap Stop in the app or dismiss the notification and the microphone service ends immediately.",
