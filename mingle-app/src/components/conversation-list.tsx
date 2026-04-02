@@ -62,15 +62,26 @@ let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
 
 type ConversationOverlayExitMode = "animate" | "instant";
+type ConversationOverlayEnterMode = "animate" | "instant";
+type ConversationOverlayTransitionState = {
+  enterMode: ConversationOverlayEnterMode;
+  exitMode: ConversationOverlayExitMode;
+};
 
 const conversationOverlayVariants: Variants = {
-  initial: { x: "100%" },
-  active: {
+  initial: (transitionState: ConversationOverlayTransitionState) => (
+    transitionState.enterMode === "animate"
+      ? { x: "100%" }
+      : { x: "0%" }
+  ),
+  active: (transitionState: ConversationOverlayTransitionState) => ({
     x: "0%",
-    transition: CONVERSATION_OVERLAY_TRANSITION,
-  },
-  exit: (exitMode: ConversationOverlayExitMode) => (
-    exitMode === "animate"
+    transition: transitionState.enterMode === "animate"
+      ? CONVERSATION_OVERLAY_TRANSITION
+      : { duration: 0 },
+  }),
+  exit: (transitionState: ConversationOverlayTransitionState) => (
+    transitionState.exitMode === "animate"
       ? { x: "100%", transition: CONVERSATION_OVERLAY_TRANSITION }
       : { x: "0%", transition: { duration: 0 } }
   ),
@@ -259,6 +270,17 @@ function upsertConversation(
     nextConversation,
     ...conversations.filter((conversation) => conversation.id !== nextConversation.id),
   ].sort(compareConversationRecency);
+}
+
+function markConversationAsActive(
+  conversation: ConversationChannelSummary,
+): ConversationChannelSummary {
+  return {
+    ...conversation,
+    status: "active",
+    pausedAt: null,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function mergeConversationLists(
@@ -796,10 +818,14 @@ export default function ConversationList({
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
+  const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
+  const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
+  const isCreatingConversationRef = useRef(isCreatingConversation);
+  const mutatingConversationIdRef = useRef<string | null>(mutatingConversationId);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
   const viewportWidthPx = useViewportWidthPx();
@@ -868,6 +894,18 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    isCreatingConversationRef.current = isCreatingConversation;
+  }, [isCreatingConversation]);
+
+  useEffect(() => {
+    mutatingConversationIdRef.current = mutatingConversationId;
+  }, [mutatingConversationId]);
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
@@ -993,6 +1031,7 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       setShowSearch(false);
       setConversations((current) => upsertConversation(current, nextConversation));
+      setOverlayEnterMode("animate");
       setOverlayExitMode("animate");
       setAutoStartConversationId(nextConversation.id);
       setActiveConversation(nextConversation);
@@ -1005,8 +1044,15 @@ export default function ConversationList({
 
   const openConversationSummary = useCallback(async (
     conversation: ConversationChannelSummary,
+    options?: {
+      enterMode?: ConversationOverlayEnterMode;
+      optimistic?: boolean;
+    },
   ) => {
+    const enterMode = options?.enterMode ?? "animate";
+    const optimistic = options?.optimistic ?? false;
     setShowSearch(false);
+    setOverlayEnterMode(enterMode);
     setOverlayExitMode("animate");
     setAutoStartConversationId(null);
 
@@ -1015,10 +1061,26 @@ export default function ConversationList({
       return conversation;
     }
 
-    const nextConversation = await updateConversationStatus(conversation.id, "active");
-    if (!nextConversation) return null;
-    setActiveConversation(nextConversation);
-    return nextConversation;
+    const optimisticConversation = markConversationAsActive(conversation);
+    if (optimistic) {
+      setConversations((current) => upsertConversation(current, optimisticConversation));
+      setActiveConversation(optimisticConversation);
+    }
+
+    try {
+      const nextConversation = await updateConversationStatus(conversation.id, "active");
+      if (!nextConversation) return null;
+      setActiveConversation(nextConversation);
+      return nextConversation;
+    } catch (error) {
+      if (optimistic) {
+        setConversations((current) => upsertConversation(current, conversation));
+        setActiveConversation((current) => (
+          current?.id === conversation.id ? null : current
+        ));
+      }
+      throw error;
+    }
   }, [updateConversationStatus]);
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
@@ -1080,7 +1142,10 @@ export default function ConversationList({
     if (!matchedConversation) return;
 
     routeSyncConversationIdRef.current = routeConversationId;
-    void openConversationSummary(matchedConversation).catch(() => {
+    void openConversationSummary(matchedConversation, {
+      enterMode: "instant",
+      optimistic: true,
+    }).catch(() => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
         replaceConversationOverlayUrl(null);
@@ -1113,8 +1178,10 @@ export default function ConversationList({
 
     const handlePopState = () => {
       const currentActiveConversation = activeConversationRef.current;
+      const currentRouteConversationId = readConversationIdFromLocation();
+
       if (!currentActiveConversation) return;
-      if (readConversationIdFromLocation() === currentActiveConversation.id) return;
+      if (currentRouteConversationId === currentActiveConversation.id) return;
 
       const animateExit = pendingHistoryCloseAnimationRef.current === "animate"
         || consumeNativeHistoryCloseAnimationFlag();
@@ -1127,6 +1194,40 @@ export default function ConversationList({
       window.removeEventListener("popstate", handlePopState);
     };
   }, [closeConversationOverlay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      if (activeConversationRef.current) return;
+
+      const currentRouteConversationId = readConversationIdFromLocation();
+      if (!currentRouteConversationId) return;
+      if (isCreatingConversationRef.current || mutatingConversationIdRef.current) return;
+
+      const matchedConversation = conversationsRef.current.find(
+        (conversation) => conversation.id === currentRouteConversationId,
+      );
+      if (!matchedConversation) return;
+
+      routeSyncConversationIdRef.current = currentRouteConversationId;
+      void openConversationSummary(matchedConversation, {
+        enterMode: "instant",
+        optimistic: true,
+      }).catch(() => {
+        routeSyncConversationIdRef.current = null;
+        if (readConversationIdFromLocation() === currentRouteConversationId) {
+          replaceConversationOverlayUrl(null);
+        }
+        window.alert(copy.openErrorMessage);
+      });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [copy.openErrorMessage, openConversationSummary]);
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
@@ -1227,11 +1328,11 @@ export default function ConversationList({
 
       {typeof document !== "undefined"
         ? createPortal(
-          <AnimatePresence custom={overlayExitMode}>
+          <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
             {activeConversation ? (
               <motion.div
                 key={activeConversation.id}
-                custom={overlayExitMode}
+                custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
                 variants={conversationOverlayVariants}
                 initial="initial"
                 animate="active"
