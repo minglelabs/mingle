@@ -54,14 +54,10 @@ import {
   createAutoScrollScheduler,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
-  isLikelyIOSNavigator,
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
-  isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
-  parseNativeUiScrollToTopDetail,
-  shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
 import {
@@ -109,11 +105,6 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
-}
-
-function isLikelyIOSPlatform(): boolean {
-  if (typeof window === 'undefined') return false
-  return isLikelyIOSNavigator(window.navigator)
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -522,7 +513,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
-  const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
   const accountPreferencesHydrationGenerationRef = useRef(0)
@@ -578,12 +568,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
 
-      const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
-      setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
-        isLikelyIosPlatform: isLikelyIOSPlatform(),
-        isNativeApp: isNativeApp(),
-        isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
-      }))
     })
 
     return () => {
@@ -1808,16 +1792,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     updateScrollDerivedState({ fromUserScroll: true })
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
-  const handleTopSafeAreaTap = useCallback(() => {
-    if (!chatRef.current) return
-    markUserScrollIntent()
-    clearPendingAutoScrollTimer()
-    suppressAutoScrollRef.current = true
-    shouldAutoScroll.current = false
-    chatRef.current.scrollTo({ top: 0, behavior: 'smooth' })
-    updateScrollDerivedState({ fromUserScroll: true })
-  }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
-
   const handleNativeAppUpdatePress = useCallback(() => {
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
     if (!updateUrl) return
@@ -1847,21 +1821,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleNativeUiEvent = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail
       const bannerLayout = parseNativeUiBannerLayoutDetail(detail)
-      if (bannerLayout) {
-        setNativeBannerLayout(bannerLayout)
-        return
-      }
-
-      const scrollToTop = parseNativeUiScrollToTopDetail(detail)
-      if (!scrollToTop) return
-      handleTopSafeAreaTap()
+      if (!bannerLayout) return
+      setNativeBannerLayout(bannerLayout)
     }
 
     window.addEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener)
     return () => {
       window.removeEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener)
     }
-  }, [handleTopSafeAreaTap])
+  }, [])
 
   const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
   const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
@@ -2039,29 +2007,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
         {/* Header */}
         <div
-          className={`relative z-40 shrink-0 flex items-center justify-between ${navSurfaceClassName}`}
+          className={`relative z-40 shrink-0 flex items-center justify-between border-b border-gray-100 px-4 ${navSurfaceClassName}`}
           style={{
-            paddingTop: "max(calc(env(safe-area-inset-top) + 20px), 24px)",
-            paddingBottom: "10px",
-            paddingLeft: "max(calc(env(safe-area-inset-left) + 14px), 18px)",
-            paddingRight: "max(calc(env(safe-area-inset-right) + 14px), 18px)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
           }}
         >
-          {isIosTopTapEnabled && (
-            <button
-              type="button"
-              aria-label="Scroll to top"
-              onClick={handleTopSafeAreaTap}
-              className="absolute inset-x-0 top-0 z-10 bg-transparent"
-              style={{ height: "max(env(safe-area-inset-top), 20px)" }}
-            />
-          )}
           {headerMode === 'conversation' && onBack ? (
             <button
               type="button"
               onClick={onBack}
               aria-label={backButtonLabel}
-              className={`relative z-20 inline-flex h-11 min-w-[44px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              className={`relative z-20 inline-flex h-10 min-w-[40px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
             >
               <ChevronLeft size={24} strokeWidth={2.4} />
             </button>
@@ -2079,7 +2036,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 }}
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
@@ -2124,7 +2081,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     })
                   }}
                   disabled={isAuthActionPending}
-                  className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
+                  className={`inline-flex h-10 min-w-[40px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
@@ -2772,10 +2729,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div
             className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
             style={{
-              paddingTop: "10px",
-              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
+              minHeight: "calc(72px + env(safe-area-inset-bottom, 0px))",
+              paddingTop: "4px",
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
+              paddingLeft: "max(calc(env(safe-area-inset-left) + 8px), 12px)",
+              paddingRight: "max(calc(env(safe-area-inset-right) + 8px), 12px)",
             }}
           >
             <div className="justify-self-start pl-2">
