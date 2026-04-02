@@ -2451,7 +2451,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 py-4">
                           <div className="space-y-4">
                             <label className="block">
-                              <div className="mb-[3px] flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
+                              <div className="mb-px flex items-center justify-between gap-3 text-[0.8125rem] font-semibold leading-[1.1] text-gray-700">
                                 <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
                                 <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
                               </div>
@@ -2481,14 +2481,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
                                   setTextSizeLevel(next)
                                 }}
-                                className={sliderClassName}
+                                className={`${sliderClassName} -mt-0.5`}
                                 aria-label={`${textSizeLabel} level`}
                               />
                             </label>
 
                             <label className="block">
                               <div
-                                className={`mb-[3px] flex items-start gap-3 text-[0.8125rem] font-semibold transition-colors ${
+                                className={`mb-px flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.1] transition-colors ${
                                   isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                                 }`}
                               >
@@ -2542,7 +2542,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     )
                                     setSonioxManualFinalizeSilenceMs(next)
                                   }}
-                                  className={`${sliderClassName} ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
+                                  className={`${sliderClassName} -mt-0.5 ${isSilenceFinalizeSliderDisabled ? 'pointer-events-none cursor-not-allowed opacity-40' : ''}`}
                                   aria-label={`${silenceFinalizeLabel} milliseconds`}
                                 />
                                 {isSilenceFinalizeSliderLocked && (
