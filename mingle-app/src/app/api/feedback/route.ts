@@ -153,17 +153,6 @@ async function resolveFeedbackUserIds(identity: SessionUserIdentity): Promise<st
     if (user?.id) userIds.add(user.id);
   }
 
-  if (!identity.sessionKey) return [...userIds];
-
-  const feedback = await prisma.appFeedback.findFirst({
-    where: {
-      sessionKey: identity.sessionKey,
-      userId: { not: null },
-    },
-    orderBy: { createdAt: "desc" },
-    select: { userId: true },
-  });
-  if (feedback?.userId) userIds.add(feedback.userId);
   return [...userIds];
 }
 

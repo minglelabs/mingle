@@ -5,7 +5,6 @@ const {
   mockGetServerSession,
   mockUserFindUnique,
   mockAppFeedbackCreate,
-  mockAppFeedbackFindFirst,
   mockAppFeedbackFindMany,
   mockEnsureTrackingContext,
   mockParseClientContext,
@@ -14,7 +13,6 @@ const {
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockAppFeedbackCreate: vi.fn(),
-  mockAppFeedbackFindFirst: vi.fn(),
   mockAppFeedbackFindMany: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockParseClientContext: vi.fn(),
@@ -36,7 +34,6 @@ vi.mock("@/lib/prisma", () => ({
     },
     appFeedback: {
       create: mockAppFeedbackCreate,
-      findFirst: mockAppFeedbackFindFirst,
       findMany: mockAppFeedbackFindMany,
     },
   },
@@ -56,7 +53,6 @@ describe("/api/feedback route", () => {
     mockGetServerSession.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue(null);
     mockAppFeedbackCreate.mockResolvedValue({ id: "feedback_123" });
-    mockAppFeedbackFindFirst.mockResolvedValue(null);
     mockAppFeedbackFindMany.mockResolvedValue([]);
     mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
       externalUserId: hints?.externalUserIdHint ?? "anon_user_123",
@@ -260,6 +256,52 @@ describe("/api/feedback route", () => {
         },
       },
       orderBy: { createdAt: "desc" },
+    });
+  });
+
+  it("does not merge another authenticated account via the shared session key", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "auth_user_b",
+        email: "member-b@example.com",
+      },
+    });
+    mockUserFindUnique.mockImplementation(async ({ where }: { where: Record<string, string> }) => {
+      if (where.id === "auth_user_b") {
+        return { id: "auth_user_b" };
+      }
+      if (where.email === "member-b@example.com") {
+        return { id: "auth_user_b" };
+      }
+      return null;
+    });
+
+    const response = await GET(new NextRequest("https://example.com/api/feedback", {
+      headers: {
+        "x-mingle-session-key": "shared_sess_123",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockAppFeedbackFindMany).toHaveBeenCalledWith({
+      where: { userId: { in: ["auth_user_b"] } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        category: true,
+        message: true,
+        contactEmail: true,
+        createdAt: true,
+        replies: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            authorType: true,
+            message: true,
+            createdAt: true,
+          },
+        },
+      },
     });
   });
 
