@@ -218,13 +218,45 @@ export function resolveNativeMicPermissionRecoveryAction(input: {
   return 'none'
 }
 
+function normalizeSemverParts(rawVersion: string): [number, number, number] | null {
+  const normalized = rawVersion.trim().replace(/^v/i, '')
+  const match = normalized.match(/^(\d+)\.(\d+)\.(\d+)$/)
+  if (!match) return null
+
+  return [
+    Number.parseInt(match[1], 10),
+    Number.parseInt(match[2], 10),
+    Number.parseInt(match[3], 10),
+  ]
+}
+
+export function supportsNativeOpenAppSettingsCommand(input: {
+  clientPlatform?: string | null
+  appVersion?: string | null
+}): boolean {
+  if ((input.clientPlatform || '').trim().toLowerCase() !== 'ios') return false
+
+  const version = normalizeSemverParts(input.appVersion || '')
+  if (!version) return false
+
+  const minimumSupportedVersion: [number, number, number] = [1, 0, 8]
+  for (let index = 0; index < minimumSupportedVersion.length; index += 1) {
+    if (version[index] > minimumSupportedVersion[index]) return true
+    if (version[index] < minimumSupportedVersion[index]) return false
+  }
+
+  return true
+}
+
 export function shouldOpenNativeMicSettingsOnRetry(input: {
   useNativeStt: boolean
   connectionStatus: ConnectionStatus
   recoveryAction: NativeMicPermissionRecoveryAction
+  supportsNativeOpenAppSettingsCommand: boolean
 }): boolean {
   if (!input.useNativeStt) return false
   if (input.connectionStatus !== 'idle') return false
+  if (!input.supportsNativeOpenAppSettingsCommand) return false
   return input.recoveryAction === 'open_ios_settings'
 }
 
@@ -1610,6 +1642,25 @@ export default function useRealtimeSTT({
   const [partialTranslateTick, setPartialTranslateTick] = useState(0)
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(0)
+  const nativeTrackingContext = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return {
+        appVersion: null,
+        apiNamespace: null,
+        clientPlatform: null,
+      }
+    }
+
+    return resolveNativeAppTrackingContext({
+      detail: (window as NativeAppUpdateWindow).__MINGLE_NATIVE_APP_UPDATE_STATUS,
+      apiNamespace: readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace,
+      isNativeAppRuntime: isNativeAppRuntime(),
+    })
+  }, [])
+  const nativeShellSupportsOpenAppSettings = useMemo(
+    () => supportsNativeOpenAppSettingsCommand(nativeTrackingContext),
+    [nativeTrackingContext],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3120,6 +3171,7 @@ export default function useRealtimeSTT({
       useNativeStt,
       connectionStatus: connectionStatusRef.current,
       recoveryAction: nativeMicPermissionRecoveryActionRef.current,
+      supportsNativeOpenAppSettingsCommand: nativeShellSupportsOpenAppSettings,
     })) {
       const opened = sendNativeSttCommand({
         type: 'native_open_app_settings',
@@ -3266,7 +3318,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, cleanup, clearAllPendingTurnTranslationRuntime, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, nativeShellSupportsOpenAppSettings, normalizedUsageLimitSec, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
