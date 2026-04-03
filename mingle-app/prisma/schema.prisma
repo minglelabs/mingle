@@ -45,6 +45,7 @@ model User {
 
   messages  AppMessage[]
   eventLogs AppEventLog[]
+  feedbackEntries AppFeedback[]
   versionPoliciesCreated AppClientVersionPolicy[]
   accounts  Account[]
   sessions  Session[]
@@ -130,6 +131,48 @@ model AppEventLog {
   @@index([sessionKey], map: "app_event_logs_session_key_idx")
   @@index([messageId], map: "app_event_logs_message_id_idx")
   @@map("app_event_logs")
+}
+
+model AppFeedback {
+  id             String   @id @default(cuid())
+  userId         String?  @map("user_id")
+  sessionKey     String?  @map("session_key")
+  category       String
+  message        String   @db.Text
+  contactEmail   String?  @map("contact_email")
+  locale         String?
+  clientPlatform String?  @map("client_platform")
+  appVersion     String?  @map("app_version")
+  apiNamespace   String?  @map("api_namespace")
+  pathname       String?
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user    User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  replies AppFeedbackReply[]
+
+  @@index([userId, createdAt], map: "app_feedback_user_created_at_idx")
+  @@index([sessionKey, createdAt], map: "app_feedback_session_created_at_idx")
+  @@index([category, createdAt], map: "app_feedback_category_created_at_idx")
+  @@index([createdAt], map: "app_feedback_created_at_idx")
+  @@map("app_feedback")
+}
+
+model AppFeedbackReply {
+  id         String   @id @default(cuid())
+  feedbackId String   @map("feedback_id")
+  authorType String   @map("author_type")
+  message    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  feedback AppFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@index([feedbackId, createdAt], map: "app_feedback_replies_feedback_created_at_idx")
+  @@index([authorType, createdAt], map: "app_feedback_replies_author_type_created_at_idx")
+  @@map("app_feedback_replies")
 }
 
 model Account {
