@@ -1457,6 +1457,9 @@ function AppInner(): React.JSX.Element {
     if (Platform.OS !== 'android') return;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (versionGate.status === 'force_update') {
+        return false;
+      }
       if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
         return false;
       }
@@ -1484,7 +1487,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, isNativeMenuOverlayOpen]);
+  }, [canWebViewGoBack, isNativeMenuOverlayOpen, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -2321,7 +2324,6 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
-    setIsNativeMenuOverlayOpen(false);
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -2400,7 +2402,7 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && !isNativeMenuOverlayOpen}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios'}
             injectedJavaScriptBeforeContentLoaded={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}

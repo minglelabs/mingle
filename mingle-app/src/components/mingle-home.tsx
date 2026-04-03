@@ -222,7 +222,7 @@ function GoogleMark() {
 }
 
 const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHome(props, ref) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const { autoStartOnMount, onAutoStartHandled } = props;
   const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
   const autoStartTriggeredRef = useRef(false);
@@ -1704,6 +1704,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
           onLogout={handleSignOut}
           onDeleteAccount={handleDeleteAccount}
+          defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
           isAuthActionPending={isDeletingAccount}
           showMenuButton
           showAccountActions={status === "authenticated"}
