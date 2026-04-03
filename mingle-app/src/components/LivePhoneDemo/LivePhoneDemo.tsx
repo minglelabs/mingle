@@ -33,6 +33,8 @@ import {
 } from './live-phone-demo.preferences'
 import {
   buildHydratedAccountPreferences,
+  DEFAULT_ECHO_ALLOWED,
+  DEFAULT_SPEAKER_ENABLED,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
   type AccountPreferencesResponse,
@@ -675,13 +677,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
+    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: DEFAULT_ECHO_ALLOWED,
   })
   const latestAccountPreferences = useMemo(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
     adBannerPosition,
-  }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    speakerEnabled: isSoundEnabled,
+    echoAllowed: !aecEnabled,
+  }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = adBannerPosition
     || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
@@ -874,6 +880,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
+        setIsSoundEnabled(hydratedPreferences.speakerEnabled)
+        setAecEnabled(!hydratedPreferences.echoAllowed)
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -888,7 +896,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate])
+  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate, setAecEnabled, setIsSoundEnabled])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
@@ -912,6 +920,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: currentPreferences.translationModel,
         adBannerPosition: currentPreferences.adBannerPosition,
+        speakerEnabled: currentPreferences.speakerEnabled,
+        echoAllowed: currentPreferences.echoAllowed,
       }),
     })
       .then((response) => {
@@ -947,6 +957,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: nextPreferences.translationModel,
         adBannerPosition: nextPreferences.adBannerPosition,
+        speakerEnabled: nextPreferences.speakerEnabled,
+        echoAllowed: nextPreferences.echoAllowed,
       }),
     })
       .then((response) => {
@@ -1162,6 +1174,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       adBannerPosition: nextAdBannerPosition,
     })
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
+
+  const handleSpeakerToggle = useCallback(() => {
+    const nextSpeakerEnabled = !isSoundEnabled
+    setIsSoundEnabled(nextSpeakerEnabled)
+    if (!nextSpeakerEnabled) {
+      setSpeakingItem(null)
+    }
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      speakerEnabled: nextSpeakerEnabled,
+    })
+  }, [clearAccountPreferencesSyncTimer, isSoundEnabled, setIsSoundEnabled, syncAccountPreferencesOverride])
+
+  const handleEchoToggle = useCallback(() => {
+    const nextAecEnabled = !aecEnabled
+    setAecEnabled(nextAecEnabled)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      echoAllowed: !nextAecEnabled,
+    })
+  }, [aecEnabled, clearAccountPreferencesSyncTimer, setAecEnabled, syncAccountPreferencesOverride])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -3508,13 +3543,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <div className="flex items-center gap-1">
                   {enableAutoTTS && (
                     <button
-                      onClick={() => {
-                        const next = !isSoundEnabled
-                        setIsSoundEnabled(next)
-                        if (!next) {
-                          setSpeakingItem(null)
-                        }
-                      }}
+                      onClick={handleSpeakerToggle}
                       className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
                       aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
                     >
@@ -3526,7 +3555,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </button>
                   )}
                   <button
-                    onClick={() => setAecEnabled(!aecEnabled)}
+                    onClick={handleEchoToggle}
                     className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
                     aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
                     title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}

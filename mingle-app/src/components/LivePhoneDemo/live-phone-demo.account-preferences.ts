@@ -14,12 +14,16 @@ import {
 
 const MIN_TEXT_SIZE_LEVEL = 1
 const MAX_TEXT_SIZE_LEVEL = 5
+export const DEFAULT_SPEAKER_ENABLED = false
+export const DEFAULT_ECHO_ALLOWED = true
 
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
   sonioxManualFinalizeSilenceMs?: unknown
   translationModel?: unknown
   adBannerPosition?: unknown
+  speakerEnabled?: unknown
+  echoAllowed?: unknown
 }
 
 export interface LivePhoneDemoAccountPreferences {
@@ -27,6 +31,8 @@ export interface LivePhoneDemoAccountPreferences {
   sonioxManualFinalizeSilenceMs: number
   translationModel: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
+  speakerEnabled: boolean
+  echoAllowed: boolean
 }
 
 function normalizeIntegerPreference(
@@ -51,6 +57,10 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
   return normalizeIntegerPreference(value, DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
 }
 
+function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
 export function buildHydratedAccountPreferences(
   body: AccountPreferencesResponse | null | undefined,
   isLegacySonioxSilenceSliderNamespace: boolean,
@@ -62,13 +72,22 @@ export function buildHydratedAccountPreferences(
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition),
+    speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
+    echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
   }
 }
 
 export function serializeAccountPreferencesSyncState(
   preferences: LivePhoneDemoAccountPreferences,
 ): string {
-  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}:${preferences.translationModel}:${preferences.adBannerPosition ?? ''}`
+  return [
+    preferences.textSizeLevel,
+    preferences.sonioxManualFinalizeSilenceMs,
+    preferences.translationModel,
+    preferences.adBannerPosition ?? '',
+    preferences.speakerEnabled ? '1' : '0',
+    preferences.echoAllowed ? '1' : '0',
+  ].join(':')
 }
 
 export function shouldScheduleAccountPreferencesSync(args: {
