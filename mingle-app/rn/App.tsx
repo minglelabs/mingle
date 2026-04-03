@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppState,
+  BackHandler,
   Image,
   Linking,
   NativeModules,
@@ -1275,6 +1276,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
@@ -2104,7 +2106,6 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
-    setIsNativeMenuOverlayOpen(false);
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -2136,9 +2137,38 @@ function AppInner(): React.JSX.Element {
     setLoadError(formatWebViewLoadError(description, webUrl));
   }, [webUrl]);
 
-  const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
+  const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     updateSafeAreaPalette(navigationState.url);
+    setWebViewCanGoBack(Boolean(navigationState.canGoBack));
   }, [updateSafeAreaPalette]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (versionGate.status === 'force_update') {
+        return false;
+      }
+
+      if (isNativeMenuOverlayOpen && webViewRef.current) {
+        webViewRef.current.injectJavaScript(
+          '(function(){window.history.back();})(); true;',
+        );
+        return true;
+      }
+
+      if (webViewCanGoBack && webViewRef.current) {
+        webViewRef.current.goBack();
+        return true;
+      }
+
+      return false;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isNativeMenuOverlayOpen, versionGate.status, webViewCanGoBack]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -2178,7 +2208,7 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures={false}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}

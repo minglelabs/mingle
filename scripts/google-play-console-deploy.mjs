@@ -368,7 +368,7 @@ function buildReleasePlan(config, workspaceRoot, options) {
     releaseStatus,
     releaseName,
     releaseVersion,
-    runtimeApiNamespace: releaseVersion ? `android/v${releaseVersion}` : "android/v1.0.8",
+    runtimeApiNamespace: releaseVersion ? `android/v${releaseVersion}` : "android/v1.0.9",
     changesNotSentForReview,
     releaseNotes,
     userFraction: options.userFraction,
