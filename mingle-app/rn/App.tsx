@@ -196,8 +196,19 @@ function isLoopbackUrl(raw: string): boolean {
   }
 }
 
+function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    return hostname.toLowerCase() === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /mingle-app-devbox\.photo-for-passport\.com/i.test(raw);
+  }
+}
+
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
-  return __DEV__ || isLoopbackUrl(rawUrl);
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
 }
 
 function formatWebViewLoadError(description: string, currentWebUrl: string): string {
