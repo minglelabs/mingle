@@ -82,8 +82,8 @@ export default function MessageCopyButton({
       data-message-copy-button
       onClick={handleCopy}
       className={cn(
-        'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white/85 text-gray-500 shadow-sm transition hover:bg-white hover:text-gray-700 active:scale-[0.98]',
-        copied && 'border-emerald-200 bg-emerald-50 text-emerald-600',
+        'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-[0.98]',
+        copied && 'text-emerald-600',
         className,
       )}
     >
