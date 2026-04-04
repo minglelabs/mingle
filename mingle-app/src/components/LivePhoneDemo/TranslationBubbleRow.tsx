@@ -23,7 +23,7 @@ export default function TranslationBubbleRow({
   metaClassName,
   accessory,
   inlineMeta = true,
-  maxWidth = '85%',
+  maxWidth = '90%',
   contentClassName,
   contentStyle,
   copyLabel,

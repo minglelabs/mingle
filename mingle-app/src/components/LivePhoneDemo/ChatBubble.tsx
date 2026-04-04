@@ -13,7 +13,8 @@ import TranslationBubbleRow from './TranslationBubbleRow'
 import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
-const CHAT_BUBBLE_MAX_WIDTH = '85%'
+const ORIGINAL_BUBBLE_MAX_WIDTH = '85%'
+const TRANSLATION_BUBBLE_MAX_WIDTH = '90%'
 
 export interface Utterance {
   id: string
@@ -154,7 +155,7 @@ function ChatBubble({
         <div data-original-bubble-row className="flex w-full items-start">
           <div
             data-original-bubble-body
-            style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH }}
+            style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
             <div data-original-bubble-content className="min-w-0">
@@ -188,7 +189,7 @@ function ChatBubble({
           <TranslationBubbleRow
             key={lang}
             lang={lang}
-            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
             bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
@@ -209,7 +210,7 @@ function ChatBubble({
           <TranslationBubbleRow
             key={`pending-${lang}`}
             lang={lang}
-            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
             bubbleClassName="bg-amber-50/60 border border-amber-100"
             metaClassName="text-amber-400"
             inlineMeta={false}

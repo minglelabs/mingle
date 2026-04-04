@@ -30,7 +30,7 @@ describe('TranslationBubbleRow', () => {
     expect(html.indexOf('data-translation-bubble-meta')).toBeLessThan(
       html.indexOf('짧은 번역'),
     )
-    expect(html).toContain('max-width:85%')
+    expect(html).toContain('max-width:90%')
     expect(html).toContain('border-top-left-radius:1px')
     expect(html).toContain('line-height:1.25')
     expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
