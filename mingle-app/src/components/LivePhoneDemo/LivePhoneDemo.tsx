@@ -2819,8 +2819,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-3 font-semibold">{translationModelLabel}</span>
-                                <div ref={translationModelDropdownRef} className="relative flex h-14 min-w-[220px] max-w-[68%] shrink-0 items-center">
+                                <span className="min-w-0 flex-1 pt-2 font-semibold">{translationModelLabel}</span>
+                                <div ref={translationModelDropdownRef} className="relative flex h-12 min-w-[220px] max-w-[68%] shrink-0 items-center">
                                 <button
                                   ref={translationModelButtonRef}
                                   type="button"
