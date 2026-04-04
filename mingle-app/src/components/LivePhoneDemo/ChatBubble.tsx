@@ -206,7 +206,7 @@ function ChatBubble({
             <MessageCopyButton
               label="Copy all message bubbles"
               text={combinedUtteranceCopyText}
-              className="ml-0 self-end"
+              className="self-end h-5 items-start pb-1"
             />
           ) : null}
         </div>
