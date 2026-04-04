@@ -1,7 +1,4 @@
-'use client'
-
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const COPY_FEEDBACK_RESET_MS = 1800
@@ -82,13 +79,13 @@ export default function MessageCopyButton({
       data-message-copy-button
       onClick={handleCopy}
       className={cn(
-        'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-[0.98]',
+        'ml-1.5 inline-flex h-5 shrink-0 items-center justify-center whitespace-nowrap rounded-sm align-middle text-[11px] font-medium text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-[0.98]',
         copied && 'text-emerald-600',
         className,
       )}
     >
       <span className="sr-only">{label}</span>
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? 'Copied' : 'Copy'}
     </button>
   )
 }

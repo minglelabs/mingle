@@ -151,7 +151,7 @@ function ChatBubble({
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* Original bubble */}
-        <div data-original-bubble-row className="flex w-full items-start gap-1.5">
+        <div data-original-bubble-row className="flex w-full items-start">
           <div
             data-original-bubble-body
             style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH }}
@@ -173,14 +173,14 @@ function ChatBubble({
                   {isDraft && (
                     <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
                   )}
+                  <MessageCopyButton
+                    label="Copy original message"
+                    text={utterance.originalText}
+                  />
                 </span>
               </p>
             </div>
           </div>
-          <MessageCopyButton
-            label="Copy original message"
-            text={utterance.originalText}
-          />
         </div>
 
         {/* Translation bubbles */}

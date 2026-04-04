@@ -37,9 +37,10 @@ describe('TranslationBubbleRow', () => {
     expect(html).toContain('data-translation-bubble-meta')
     expect(html).toContain('data-translation-bubble-text')
     expect(html).toContain('aria-label="Copy ko translation"')
-    expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
+    expect(html.indexOf('짧은 번역')).toBeLessThan(
       html.indexOf('aria-label="Copy ko translation"'),
     )
+    expect(html).toContain('>Copy<')
     expect(html).toContain('class="align-middle"')
     expect(html).not.toContain('ml-2.5')
   })
