@@ -57,10 +57,6 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
   return normalizeIntegerPreference(value, DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
 }
 
-function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback
-}
-
 export function buildHydratedAccountPreferences(
   body: AccountPreferencesResponse | null | undefined,
   isLegacySonioxSilenceSliderNamespace: boolean,
@@ -72,8 +68,8 @@ export function buildHydratedAccountPreferences(
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition),
-    speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
-    echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
+    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: DEFAULT_ECHO_ALLOWED,
   }
 }
 

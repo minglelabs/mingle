@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Play, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -549,24 +549,6 @@ function buildTrackingRequestHeaders(args: {
   return headers
 }
 
-function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative inline-flex items-center ${
-        echoAllowed ? 'text-amber-500' : 'text-gray-400'
-      }`}
-    >
-      <Volume2 size={12} strokeWidth={2} />
-      <ArrowRight size={12} strokeWidth={2} />
-      <Mic size={12} strokeWidth={2} />
-      {!echoAllowed && (
-        <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rotate-[-24deg] rounded bg-current" />
-      )}
-    </span>
-  )
-}
-
 const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function LivePhoneDemo({
   onLimitReached,
   enableAutoTTS = false,
@@ -576,8 +558,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   usageLimitRetryHintLabel,
   connectingLabel,
   connectionFailedLabel,
-  muteTtsLabel,
-  unmuteTtsLabel,
   textSizeLabel,
   silenceFinalizeLabel,
   translationModelLabel,
@@ -629,7 +609,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
-  const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
+  const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -880,8 +860,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
-        setIsSoundEnabled(hydratedPreferences.speakerEnabled)
-        setAecEnabled(!hydratedPreferences.echoAllowed)
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -896,7 +874,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate, setAecEnabled, setIsSoundEnabled])
+  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
@@ -920,8 +898,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: currentPreferences.translationModel,
         adBannerPosition: currentPreferences.adBannerPosition,
-        speakerEnabled: currentPreferences.speakerEnabled,
-        echoAllowed: currentPreferences.echoAllowed,
       }),
     })
       .then((response) => {
@@ -957,8 +933,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: nextPreferences.translationModel,
         adBannerPosition: nextPreferences.adBannerPosition,
-        speakerEnabled: nextPreferences.speakerEnabled,
-        echoAllowed: nextPreferences.echoAllowed,
       }),
     })
       .then((response) => {
@@ -1174,29 +1148,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       adBannerPosition: nextAdBannerPosition,
     })
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
-
-  const handleSpeakerToggle = useCallback(() => {
-    const nextSpeakerEnabled = !isSoundEnabled
-    setIsSoundEnabled(nextSpeakerEnabled)
-    if (!nextSpeakerEnabled) {
-      setSpeakingItem(null)
-    }
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
-      ...latestAccountPreferencesRef.current,
-      speakerEnabled: nextSpeakerEnabled,
-    })
-  }, [clearAccountPreferencesSyncTimer, isSoundEnabled, setIsSoundEnabled, syncAccountPreferencesOverride])
-
-  const handleEchoToggle = useCallback(() => {
-    const nextAecEnabled = !aecEnabled
-    setAecEnabled(nextAecEnabled)
-    clearAccountPreferencesSyncTimer()
-    syncAccountPreferencesOverride({
-      ...latestAccountPreferencesRef.current,
-      echoAllowed: !nextAecEnabled,
-    })
-  }, [aecEnabled, clearAccountPreferencesSyncTimer, setAecEnabled, syncAccountPreferencesOverride])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -3538,33 +3489,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </span>
               </button>
             </div>
-            <div className="justify-self-end">
-              {usageSec > 0 && (
-                <div className="flex items-center gap-1">
-                  {enableAutoTTS && (
-                    <button
-                      onClick={handleSpeakerToggle}
-                      className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
-                      aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
-                    >
-                      {isSoundEnabled ? (
-                        <Volume2 size={18} className="text-amber-500" />
-                      ) : (
-                        <VolumeX size={18} className="text-gray-400" />
-                      )}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleEchoToggle}
-                    className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
-                    aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                    title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                  >
-                    <EchoInputRouteIcon echoAllowed={!aecEnabled} />
-                  </button>
-                </div>
-              )}
-            </div>
+            <div className="justify-self-end" />
           </div>
         </div>
       </div>

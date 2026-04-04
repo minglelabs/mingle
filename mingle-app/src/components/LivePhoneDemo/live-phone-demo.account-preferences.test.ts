@@ -21,8 +21,8 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
-      speakerEnabled: true,
-      echoAllowed: false,
+      speakerEnabled: false,
+      echoAllowed: true,
     })
   })
 
