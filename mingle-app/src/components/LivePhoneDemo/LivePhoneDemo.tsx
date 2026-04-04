@@ -2818,10 +2818,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </label>
 
                             <div className="block">
-                              <div className="mb-1 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold text-gray-700">
-                                <span className="shrink-0 whitespace-nowrap">{translationModelLabel}</span>
-                              </div>
-                              <div ref={translationModelDropdownRef} className="relative">
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-3 font-semibold">{translationModelLabel}</span>
+                                <div ref={translationModelDropdownRef} className="relative flex h-14 min-w-[220px] max-w-[68%] shrink-0 items-center">
                                 <button
                                   ref={translationModelButtonRef}
                                   type="button"
@@ -2833,15 +2832,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   aria-haspopup="listbox"
                                   aria-expanded={translationModelMenuOpen}
                                   aria-controls={translationModelListboxId}
-                                  className="group relative flex h-14 w-full items-center gap-3 overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                  className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                                 >
-                                  <div className="min-w-0 flex-1">
+                                  <div className="min-w-0 flex-1 px-8 text-center">
                                     <div className="truncate text-[0.95rem] font-semibold text-gray-900">
                                       {selectedTranslationModelOption.label}
                                     </div>
                                   </div>
                                   <span
-                                    className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                    className={`absolute right-3 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
                                       translationModelMenuOpen
                                         ? 'bg-transparent text-amber-700'
                                         : 'bg-transparent text-gray-500 group-hover:text-amber-600'
@@ -2863,7 +2862,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
                                       exit={{ opacity: 0, y: -6, scale: 0.985 }}
                                       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                      className="absolute left-0 right-0 top-[calc(100%+0.6rem)] z-30 overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[240px] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                     >
                                       <motion.div
                                         initial={{ opacity: 0, height: 0 }}
@@ -2894,7 +2893,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                                     : 'bg-white text-gray-800 hover:bg-gray-50'
                                                 }`}
                                               >
-                                                <div className="min-w-0 flex-1">
+                                                <div className="min-w-0 flex-1 text-center">
                                                   <div className="truncate text-[0.94rem] font-semibold">
                                                     {option.label}
                                                   </div>
@@ -2916,6 +2915,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     </motion.div>
                                   )}
                                 </AnimatePresence>
+                                </div>
                               </div>
                             </div>
 
