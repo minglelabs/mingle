@@ -51,10 +51,10 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
     expect(html).toContain('aria-label="Copy original message"')
+    expect(html).toContain('data-message-copy-button')
     expect(html.indexOf('Original message')).toBeLessThan(
       html.indexOf('aria-label="Copy original message"'),
     )
-    expect(html).toContain('>Copy<')
     expect(html).toContain('class="align-middle"')
   })
 
@@ -78,10 +78,10 @@ describe('ChatBubble', () => {
     expect(html).toContain('부분 번역')
     expect(html).toContain('bg-amber-50 border border-amber-100')
     expect(html).toContain('aria-label="Copy ko translation"')
+    expect(html).toContain('data-message-copy-button')
     expect(html.indexOf('부분 번역')).toBeLessThan(
       html.indexOf('aria-label="Copy ko translation"'),
     )
-    expect(html).toContain('>Copy<')
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
