@@ -8,6 +8,8 @@ import {
   hasRenderableChatBubbleTimestamp,
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
+import MessageCopyButton from './MessageCopyButton'
+import MessageTtsButton from './MessageTtsButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import { getSpeakerAvatar } from './speaker-avatar'
 
@@ -34,7 +36,12 @@ interface ChatBubbleProps {
   uiLocale: string
   isDraft?: boolean
   isSpeaking?: boolean
+  isOriginalSpeaking?: boolean
+  isOriginalTtsLoading?: boolean
   speakingLanguage?: string | null
+  loadingTranslationLanguage?: string | null
+  onPlayOriginal?: (utterance: Utterance) => void
+  onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName?: string
 }
 
@@ -93,7 +100,12 @@ function ChatBubble({
   uiLocale,
   isDraft = false,
   isSpeaking = false,
+  isOriginalSpeaking = false,
+  isOriginalTtsLoading = false,
   speakingLanguage = null,
+  loadingTranslationLanguage = null,
+  onPlayOriginal,
+  onPlayTranslation,
   bubbleTextClassName = 'text-sm',
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
@@ -119,6 +131,23 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
+  const originalActions = !isDraft ? (
+    <span
+      data-message-bubble-actions
+      className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
+    >
+      <MessageCopyButton
+        label="Copy original message"
+        text={utterance.originalText}
+      />
+      <MessageTtsButton
+        label="Play original message"
+        onClick={() => onPlayOriginal?.(utterance)}
+        isLoading={isOriginalTtsLoading}
+        isActive={isOriginalSpeaking}
+      />
+    </span>
+  ) : null
 
   return (
     <motion.div
@@ -172,6 +201,7 @@ function ChatBubble({
                     {isDraft && (
                       <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
                     )}
+                    {originalActions}
                   </span>
                 </p>
               </div>
@@ -188,6 +218,23 @@ function ChatBubble({
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
             contentClassName={`${bubbleTextClassName} text-gray-700`}
+            actions={(
+              <span
+                data-message-bubble-actions
+                className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
+              >
+                <MessageCopyButton
+                  label={`Copy ${lang} translation`}
+                  text={text}
+                />
+                <MessageTtsButton
+                  label={`Play ${lang} translation`}
+                  onClick={() => onPlayTranslation?.(utterance, lang, text)}
+                  isLoading={loadingTranslationLanguage === lang}
+                  isActive={isSpeaking && speakingLanguage === lang}
+                />
+              </span>
+            )}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />
@@ -223,7 +270,10 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.isSpeaking !== next.isSpeaking) return false
+  if (prev.isOriginalSpeaking !== next.isOriginalSpeaking) return false
+  if (prev.isOriginalTtsLoading !== next.isOriginalTtsLoading) return false
   if (prev.speakingLanguage !== next.speakingLanguage) return false
+  if (prev.loadingTranslationLanguage !== next.loadingTranslationLanguage) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
 
   if (prev.utterance !== next.utterance) {

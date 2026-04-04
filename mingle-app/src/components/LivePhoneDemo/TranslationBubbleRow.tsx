@@ -7,6 +7,7 @@ interface TranslationBubbleRowProps {
   bubbleClassName: string
   metaClassName: string
   accessory?: ReactNode
+  actions?: ReactNode
   inlineMeta?: boolean
   maxWidth?: string
   contentClassName?: string
@@ -19,6 +20,7 @@ export default function TranslationBubbleRow({
   bubbleClassName,
   metaClassName,
   accessory,
+  actions,
   inlineMeta = true,
   maxWidth = '93%',
   contentClassName,
@@ -58,6 +60,7 @@ export default function TranslationBubbleRow({
             {meta}
             <span data-translation-bubble-text className="align-middle">
               {children}
+              {actions}
             </span>
           </p>
         </div>
@@ -83,6 +86,7 @@ export default function TranslationBubbleRow({
           </div>
           <div data-translation-bubble-content className="min-w-0">
             {children}
+            {actions}
           </div>
         </div>
       )}

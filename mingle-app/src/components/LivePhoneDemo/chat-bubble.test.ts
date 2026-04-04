@@ -72,6 +72,8 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('data-message-copy-button')
+    expect(html).toContain('data-message-tts-button')
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
@@ -100,6 +102,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('bg-amber-400 align-middle animate-pulse')
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
+    expect(html).not.toContain('data-message-copy-button')
+    expect(html).not.toContain('data-message-tts-button')
   })
 
   it('renders a warning icon instead of the unknown language label', () => {
@@ -119,5 +123,28 @@ describe('ChatBubble', () => {
     expect(html).toContain('❓')
     expect(html).not.toContain('>unknown<')
     expect(html).not.toContain('>UNKNOWN<')
+  })
+
+  it('renders copy and tts actions for the original and translated bubbles', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-actions',
+          originalText: 'Hello there',
+          originalLang: 'en',
+          translations: {
+            ko: '안녕하세요',
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(2)
+    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
+    expect(html).toContain('Copy original message')
+    expect(html).toContain('Play original message')
+    expect(html).toContain('Copy ko translation')
+    expect(html).toContain('Play ko translation')
   })
 })

@@ -78,6 +78,7 @@ import {
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
+const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
@@ -485,9 +486,19 @@ interface LivePhoneDemoProps {
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
 
 type TtsQueueItem = {
+  playbackKey: string
   utteranceId: string
   audioBlob: Blob | null
   language: string
+  kind: 'original' | 'translation'
+  mode: 'auto' | 'manual'
+}
+
+type BubbleTtsTarget = {
+  playbackKey: string
+  utteranceId: string
+  language: string
+  kind: 'original' | 'translation'
 }
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
@@ -515,6 +526,14 @@ type NativeSetAdBannerPositionCommand = {
 
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
+}
+
+function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): string {
+  return `original:${utteranceId}:${language.trim().toLowerCase()}`
+}
+
+function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
+  return `translation:${utteranceId}:${language.trim().toLowerCase()}`
 }
 
 function buildTrackingRequestHeaders(args: {
@@ -610,7 +629,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
-  const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
+  const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
+  const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
@@ -627,6 +647,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsNeedsUnlockRef = useRef(false)
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
+  const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -1463,27 +1484,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }))
   }, [])
 
-  const allocateNativeTtsPlaybackId = useCallback((utteranceId: string) => {
+  const allocateNativeTtsPlaybackId = useCallback((playbackKey: string) => {
     nativeTtsPlaybackSeqRef.current += 1
-    return `${utteranceId}::${nativeTtsPlaybackSeqRef.current}`
+    return `${playbackKey}::${nativeTtsPlaybackSeqRef.current}`
   }, [])
 
-  const armNativeTtsEventTimeout = useCallback((playbackId: string, utteranceId: string) => {
+  const armNativeTtsEventTimeout = useCallback((playbackId: string, playbackKey: string) => {
     if (!isNativeApp()) return
     clearNativeTtsEventTimer()
     activeNativeTtsPlaybackIdRef.current = playbackId
-    activeNativeTtsUtteranceIdRef.current = utteranceId
+    activeNativeTtsUtteranceIdRef.current = playbackKey
     nativeTtsEventTimerRef.current = window.setTimeout(() => {
       if (
         activeNativeTtsPlaybackIdRef.current !== playbackId
-        && activeNativeTtsUtteranceIdRef.current !== utteranceId
+        && activeNativeTtsUtteranceIdRef.current !== playbackKey
       ) {
         return
       }
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
       nativeTtsEventTimerRef.current = null
-      setSpeakingItem(prev => (prev?.utteranceId === utteranceId ? null : prev))
+      setSpeakingItem(prev => (prev?.playbackKey === playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }, NATIVE_TTS_EVENT_TIMEOUT_MS)
@@ -1492,8 +1513,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const processTtsQueue = useCallback(() => {
     if (isTtsProcessingRef.current) return
     if (!enableAutoTTS || !isSoundEnabled) {
-      clearTtsWaitTimer()
-      return
+      ttsQueueRef.current = ttsQueueRef.current.filter(item => item.mode === 'manual')
     }
 
     const queue = ttsQueueRef.current
@@ -1529,31 +1549,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const audioBlob = next.audioBlob!
     isTtsProcessingRef.current = true
     cleanupCurrentAudio()
-    setSpeakingItem({ utteranceId: next.utteranceId, language: next.language })
+    setSpeakingItem({
+      playbackKey: next.playbackKey,
+      utteranceId: next.utteranceId,
+      language: next.language,
+      kind: next.kind,
+    })
 
     const onPlaybackDone = () => {
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
-      setSpeakingItem(prev => (prev?.utteranceId === next.utteranceId ? null : prev))
+      setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }
 
     const playViaNativeBridge = async () => {
       try {
-        const playbackId = allocateNativeTtsPlaybackId(next.utteranceId)
+        const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBase64 = await blobToBase64(audioBlob)
         window.ReactNativeWebView!.postMessage(JSON.stringify({
           type: 'native_tts_play',
           payload: {
             playbackId,
-            utteranceId: next.utteranceId,
+            utteranceId: next.playbackKey,
             audioBase64,
             contentType: audioBlob.type || 'audio/mpeg',
           },
         }))
-        armNativeTtsEventTimeout(playbackId, next.utteranceId)
+        armNativeTtsEventTimeout(playbackId, next.playbackKey)
       } catch {
         onPlaybackDone()
       }
@@ -1595,7 +1620,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
         }
-        setSpeakingItem(prev => (prev?.utteranceId === next.utteranceId ? null : prev))
+        setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
         ttsNeedsUnlockRef.current = true
         // Re-insert at front of queue so it can be retried after audio unlock
         ttsQueueRef.current.unshift(next)
@@ -1651,7 +1676,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         activeNativeTtsUtteranceIdRef.current = null
         clearNativeTtsEventTimer()
         setSpeakingItem(prev => {
-          if (utteranceId && prev?.utteranceId === utteranceId) return null
+          if (utteranceId && prev?.playbackKey === utteranceId) return null
           return prev
         })
         isTtsProcessingRef.current = false
@@ -1667,7 +1692,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         isTtsProcessingRef.current = false
         setSpeakingItem(prev => {
           if (!utteranceId) return null
-          if (prev?.utteranceId === utteranceId) return null
+          if (prev?.playbackKey === utteranceId) return null
           return prev
         })
         processTtsQueueRef.current()
@@ -1685,36 +1710,93 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleTtsRequested = useCallback((utteranceId: string, language: string) => {
     if (!enableAutoTTS || !isSoundEnabled) return
     const queue = ttsQueueRef.current
-    if (queue.some(item => item.utteranceId === utteranceId)) {
+    const playbackKey = buildTranslationBubblePlaybackKey(utteranceId, language)
+    if (queue.some(item => item.playbackKey === playbackKey)) {
       return
     }
-    queue.push({ utteranceId, audioBlob: null, language })
+    queue.push({
+      playbackKey,
+      utteranceId,
+      audioBlob: null,
+      language,
+      kind: 'translation',
+      mode: 'auto',
+    })
   }, [enableAutoTTS, isSoundEnabled])
 
   // Handle TTS audio received inline with translation response.
   const handleTtsAudio = useCallback((utteranceId: string, audioBlob: Blob, language: string) => {
     if (!enableAutoTTS || !isSoundEnabled) return
     const queue = ttsQueueRef.current
+    const playbackKey = buildTranslationBubblePlaybackKey(utteranceId, language)
     // Fill in existing placeholder
-    const existing = queue.find(item => item.utteranceId === utteranceId)
+    const existing = queue.find(item => item.playbackKey === playbackKey)
     if (existing) {
       existing.audioBlob = audioBlob
       existing.language = language
     } else {
       // No placeholder (edge case) — append to end
-      queue.push({ utteranceId, audioBlob, language })
+      queue.push({
+        playbackKey,
+        utteranceId,
+        audioBlob,
+        language,
+        kind: 'translation',
+        mode: 'auto',
+      })
     }
     processTtsQueue()
   }, [enableAutoTTS, isSoundEnabled, processTtsQueue])
 
   const handleTtsCanceled = useCallback((utteranceId: string) => {
     const queue = ttsQueueRef.current
-    const nextQueue = queue.filter((item) => item.utteranceId !== utteranceId)
+    const nextQueue = queue.filter((item) => item.utteranceId !== utteranceId || item.mode === 'manual')
     if (nextQueue.length === queue.length) return
     ttsQueueRef.current = nextQueue
     clearTtsWaitTimer()
     processTtsQueue()
   }, [clearTtsWaitTimer, processTtsQueue])
+
+  const synthesizeBubbleTtsViaApi = useCallback(async (input: {
+    playbackKey: string
+    text: string
+    language: string
+  }): Promise<Blob | null> => {
+    const text = input.text.trim()
+    const language = input.language.trim()
+    if (!text || !language) return null
+
+    const sessionKey = getOrCreateSessionKey()
+    const trackingUserId = getOrCreateTrackingUserId()
+
+    try {
+      const response = await fetch(TTS_API_PATH, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey,
+            trackingUserId,
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({
+          text,
+          language,
+          sessionKey,
+          clientMessageId: input.playbackKey,
+        }),
+      })
+      if (!response.ok) return null
+      const arrayBuffer = await response.arrayBuffer()
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
+      return new Blob([arrayBuffer], {
+        type: response.headers.get('content-type') || 'audio/mpeg',
+      })
+    } catch {
+      return null
+    }
+  }, [nativeAppUpdate])
 
   const {
     utterances,
@@ -1835,7 +1917,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [ensureAudioPlayer])
 
   const resumeTtsPlayback = useCallback((withPriming = false) => {
-    if (!enableAutoTTS || !isSoundEnabled) return
+    const hasManualQueueItem = ttsQueueRef.current.some(item => item.mode === 'manual')
+    if ((!enableAutoTTS || !isSoundEnabled) && !hasManualQueueItem) return
     const current = playerAudioRef.current
     if (current && !current.ended && current.paused) {
       void current.play().then(() => {
@@ -1926,6 +2009,75 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => window.clearTimeout(timerId)
   }, [enableAutoTTS, forceStopTtsPlayback])
 
+  const handlePlayBubbleTts = useCallback(async (
+    target: BubbleTtsTarget,
+    text: string,
+  ) => {
+    const normalizedText = text.trim()
+    if (!normalizedText) return
+
+    const isSameTargetPending = pendingManualTtsTarget?.playbackKey === target.playbackKey
+    const isSameTargetSpeaking = speakingItem?.playbackKey === target.playbackKey
+    if (isSameTargetPending || isSameTargetSpeaking) {
+      manualTtsRequestSeqRef.current += 1
+      setPendingManualTtsTarget(null)
+      forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      return
+    }
+
+    manualTtsRequestSeqRef.current += 1
+    const requestSeq = manualTtsRequestSeqRef.current
+    setPendingManualTtsTarget(target)
+    forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+
+    const audioBlob = await synthesizeBubbleTtsViaApi({
+      playbackKey: target.playbackKey,
+      text: normalizedText,
+      language: target.language,
+    })
+    if (manualTtsRequestSeqRef.current !== requestSeq) return
+
+    setPendingManualTtsTarget(null)
+    if (!audioBlob) {
+      toast.error('Failed to play audio for this message.')
+      return
+    }
+
+    ttsQueueRef.current = [{
+      playbackKey: target.playbackKey,
+      utteranceId: target.utteranceId,
+      audioBlob,
+      language: target.language,
+      kind: target.kind,
+      mode: 'manual',
+    }]
+    processTtsQueue()
+  }, [forceStopTtsPlayback, pendingManualTtsTarget, processTtsQueue, speakingItem, synthesizeBubbleTtsViaApi])
+
+  const handlePlayOriginalBubbleTts = useCallback((utterance: Utterance) => {
+    void handlePlayBubbleTts({
+      playbackKey: buildOriginalBubblePlaybackKey(utterance.id, utterance.originalLang),
+      utteranceId: utterance.id,
+      language: utterance.originalLang,
+      kind: 'original',
+    }, utterance.originalText)
+  }, [handlePlayBubbleTts])
+
+  const handlePlayTranslationBubbleTts = useCallback((utterance: Utterance, language: string, text: string) => {
+    void handlePlayBubbleTts({
+      playbackKey: buildTranslationBubblePlaybackKey(utterance.id, language),
+      utteranceId: utterance.id,
+      language,
+      kind: 'translation',
+    }, text)
+  }, [handlePlayBubbleTts])
+
+  useEffect(() => {
+    return () => {
+      manualTtsRequestSeqRef.current += 1
+    }
+  }, [])
+
   useEffect(() => {
     if (!enableAutoTTS) return
     const handleVisibilityChange = () => {
@@ -1950,7 +2102,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [enableAutoTTS, resumeTtsPlayback])
 
   useEffect(() => {
-    if (!enableAutoTTS) return
     const handleUserGesture = () => {
       if (!ttsNeedsUnlockRef.current) return
       resumeTtsPlayback(true)
@@ -1962,7 +2113,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handleUserGesture)
       window.removeEventListener('touchstart', handleUserGesture)
     }
-  }, [enableAutoTTS, resumeTtsPlayback])
+  }, [resumeTtsPlayback])
 
   // Keep TTS moving even if a trigger was missed (e.g. race between state commit and inline audio arrival).
   useEffect(() => {
@@ -3196,8 +3347,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       utterance={u}
                       uiLocale={uiLocale}
                       isDraft={draftUtteranceIds.has(u.id)}
-                      isSpeaking={speakingItem?.utteranceId === u.id}
-                      speakingLanguage={speakingItem?.language ?? null}
+                      isSpeaking={speakingItem?.utteranceId === u.id && speakingItem.kind === 'translation'}
+                      isOriginalSpeaking={speakingItem?.utteranceId === u.id && speakingItem.kind === 'original'}
+                      isOriginalTtsLoading={pendingManualTtsTarget?.utteranceId === u.id && pendingManualTtsTarget.kind === 'original'}
+                      speakingLanguage={speakingItem?.kind === 'translation' ? (speakingItem.language ?? null) : null}
+                      loadingTranslationLanguage={
+                        pendingManualTtsTarget?.utteranceId === u.id && pendingManualTtsTarget.kind === 'translation'
+                          ? pendingManualTtsTarget.language
+                          : null
+                      }
+                      onPlayOriginal={handlePlayOriginalBubbleTts}
+                      onPlayTranslation={handlePlayTranslationBubbleTts}
                       bubbleTextClassName={chatBubbleTextClassName}
                     />
                   </div>
