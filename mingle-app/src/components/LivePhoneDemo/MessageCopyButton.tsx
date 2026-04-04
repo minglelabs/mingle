@@ -1,75 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const COPY_FEEDBACK_RESET_MS = 1800
-
-async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
-    await navigator.clipboard.writeText(text)
-    return true
-  }
-
-  if (typeof document === 'undefined') return false
-
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', 'true')
-  textarea.style.position = 'fixed'
-  textarea.style.top = '0'
-  textarea.style.left = '0'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  textarea.setSelectionRange(0, textarea.value.length)
-
-  try {
-    return document.execCommand('copy')
-  } finally {
-    document.body.removeChild(textarea)
-  }
-}
+import { copyTextWithFeedback } from './live-phone-demo.copy'
 
 interface MessageCopyButtonProps {
   label: string
   text: string
+  copiedToastLabel: string
   className?: string
 }
 
 export default function MessageCopyButton({
   label,
   text,
+  copiedToastLabel,
   className,
 }: MessageCopyButtonProps) {
-  const [copied, setCopied] = useState(false)
-  const resetTimerRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (resetTimerRef.current !== null) {
-        window.clearTimeout(resetTimerRef.current)
-      }
-    }
-  }, [])
-
   const handleCopy = async () => {
-    if (!text.trim()) return
-
-    try {
-      const didCopy = await copyTextToClipboard(text)
-      if (!didCopy) return
-
-      setCopied(true)
-      if (resetTimerRef.current !== null) {
-        window.clearTimeout(resetTimerRef.current)
-      }
-      resetTimerRef.current = window.setTimeout(() => {
-        setCopied(false)
-      }, COPY_FEEDBACK_RESET_MS)
-    } catch {
-      setCopied(false)
-    }
+    await copyTextWithFeedback(text, copiedToastLabel)
   }
 
   return (
@@ -81,12 +28,11 @@ export default function MessageCopyButton({
       onClick={handleCopy}
       className={cn(
         'inline-flex h-4 min-w-7 shrink-0 touch-manipulation items-center justify-center whitespace-nowrap rounded-sm px-1.5 align-middle text-gray-400 transition hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 active:scale-[0.98]',
-        copied && 'text-emerald-600',
         className,
       )}
     >
       <span className="sr-only">{label}</span>
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+      <Copy className="h-3 w-3" />
     </button>
   )
 }

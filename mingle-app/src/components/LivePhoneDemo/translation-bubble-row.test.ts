@@ -5,18 +5,19 @@ import TranslationBubbleRow from './TranslationBubbleRow'
 
 describe('TranslationBubbleRow', () => {
   it('renders the meta cluster before the message body inside the bubble', () => {
+    const props = {
+      lang: 'ko',
+      bubbleClassName: 'bg-amber-50',
+      metaClassName: 'text-amber-500',
+      contentClassName: 'text-sm text-gray-500',
+      contentStyle: { lineHeight: 1.25 },
+      copyText: '짧은 번역',
+      copiedToastLabel: 'Copied',
+    }
     const html = renderToStaticMarkup(
       createElement(
         TranslationBubbleRow,
-        {
-          lang: 'ko',
-          bubbleClassName: 'bg-amber-50',
-          metaClassName: 'text-amber-500',
-          contentClassName: 'text-sm text-gray-500',
-          contentStyle: { lineHeight: 1.25 },
-          copyLabel: 'Copy ko translation',
-          copyText: '짧은 번역',
-        },
+        props as Omit<Parameters<typeof TranslationBubbleRow>[0], 'children'>,
         createElement('span', null, '짧은 번역'),
       ),
     )
@@ -36,11 +37,8 @@ describe('TranslationBubbleRow', () => {
     expect(html).not.toContain('data-translation-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-translation-bubble-meta')
     expect(html).toContain('data-translation-bubble-text')
-    expect(html).toContain('aria-label="Copy ko translation"')
-    expect(html).toContain('data-message-copy-button')
-    expect(html.indexOf('짧은 번역')).toBeLessThan(
-      html.indexOf('aria-label="Copy ko translation"'),
-    )
+    expect(html).toContain('data-copyable-bubble')
+    expect(html).not.toContain('data-message-copy-button')
     expect(html).toContain('class="align-middle"')
     expect(html).not.toContain('ml-2.5')
   })
