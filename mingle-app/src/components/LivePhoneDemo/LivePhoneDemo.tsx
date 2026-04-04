@@ -2637,7 +2637,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   isSilenceFinalizeSliderDisabled ? 'text-gray-400' : 'text-gray-700'
                                 }`}
                               >
-                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1] text-[0.72rem]">
+                                <span className="min-w-0 flex-1 whitespace-normal break-words leading-[1.1]">
                                   {silenceFinalizeLabel}
                                 </span>
                                 <span className="shrink-0 whitespace-nowrap">{sonioxManualFinalizeSilenceMs}ms</span>
