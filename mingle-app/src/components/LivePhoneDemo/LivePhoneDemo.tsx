@@ -120,6 +120,8 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   4: 'text-base',
   5: 'text-[18px]',
 }
+const TEXT_SIZE_LEVEL_OPTIONS = [1, 2, 3, 4, 5] as const
+
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -605,6 +607,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
+  const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
@@ -649,6 +652,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
+  const textSizeDropdownRef = useRef<HTMLDivElement | null>(null)
+  const textSizeButtonRef = useRef<HTMLButtonElement | null>(null)
   const translationModelDropdownRef = useRef<HTMLDivElement | null>(null)
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(0)
@@ -668,6 +673,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
+  const textSizeListboxId = useId()
   const translationModelListboxId = useId()
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
@@ -1076,6 +1082,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const applyMenuNavigationDepth = useCallback((nextDepth: number) => {
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
     menuHistoryDepthRef.current = boundedDepth
+    setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
     setMenuDragOffsetX(0)
     setIsMenuDragging(false)
@@ -1142,6 +1149,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackTab('compose')
     pushMenuHistoryEntry(2)
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleTextSizeLevelSelect = useCallback((nextTextSizeLevel: number) => {
+    setTextSizeMenuOpen(false)
+    if (latestAccountPreferencesRef.current.textSizeLevel === nextTextSizeLevel) return
+    setTextSizeLevel(nextTextSizeLevel)
+    clearAccountPreferencesSyncTimer()
+    syncAccountPreferencesOverride({
+      ...latestAccountPreferencesRef.current,
+      textSizeLevel: nextTextSizeLevel,
+    })
+  }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
@@ -1271,6 +1289,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      if (textSizeMenuOpen) {
+        setTextSizeMenuOpen(false)
+        try {
+          textSizeButtonRef.current?.focus({ preventScroll: true })
+        } catch {
+          textSizeButtonRef.current?.focus()
+        }
+        return
+      }
       if (translationModelMenuOpen) {
         setTranslationModelMenuOpen(false)
         try {
@@ -1287,7 +1314,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen, requestMenuBackStep, translationModelMenuOpen])
+  }, [menuOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+
+  useEffect(() => {
+    if (!textSizeMenuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return
+      if (textSizeDropdownRef.current?.contains(event.target)) return
+      setTextSizeMenuOpen(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [textSizeMenuOpen])
 
   useEffect(() => {
     if (!menuOpen || menuScreen !== 'feedback') return
@@ -1767,6 +1809,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
   const textSizePreviewBadgeLabel = textSizePreviewLanguage.trim().replace('_', '-').split('-')[0]?.toUpperCase() || 'EN'
+  const textSizePreviewLabel = `Level ${textSizeLevel}`
   const sliderClassName = [
     // iOS-like visual style with larger touch area for drag stability on all platforms.
     'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
@@ -2582,56 +2625,120 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <div className="px-4 py-4">
                           <div className="space-y-4">
-                            <label className="block">
+                            <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-2 font-semibold">{textSizeLabel}</span>
-                                <div className="flex h-12 max-w-[68%] shrink-0 items-center">
-                                  <div className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm">
-                                    <p
-                                      style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                                      className={`${chatBubbleTextClassName} font-normal text-gray-900`}
-                                    >
-                                      <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                        <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
-                                        <span className="text-[11px] font-semibold uppercase leading-none">
-                                          {textSizePreviewBadgeLabel}
+                                <div ref={textSizeDropdownRef} className="relative flex h-12 max-w-[68%] shrink-0 items-center">
+                                  <button
+                                    ref={textSizeButtonRef}
+                                    type="button"
+                                    onClick={() => {
+                                      setTranslationModelMenuOpen(false)
+                                      setTextSizeMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={textSizeLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={textSizeMenuOpen}
+                                    aria-controls={textSizeListboxId}
+                                    className="group flex h-full min-w-[180px] items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                                  >
+                                    <div className="flex h-full w-full items-center rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm transition duration-200 group-hover:border-gray-300 group-hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                                      <p
+                                        style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                                        className={`${chatBubbleTextClassName} min-w-0 flex-1 truncate font-normal text-gray-900`}
+                                      >
+                                        <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
+                                          <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                          <span className="text-[11px] font-semibold uppercase leading-none">
+                                            {textSizePreviewBadgeLabel}
+                                          </span>
                                         </span>
+                                        <span className="align-middle">{textSizePreviewLabel}</span>
+                                      </p>
+                                      <span className="ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors duration-200 group-hover:text-amber-600">
+                                        <ChevronDown
+                                          size={14}
+                                          strokeWidth={2.3}
+                                          className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                            textSizeMenuOpen ? 'rotate-180' : 'rotate-0'
+                                          }`}
+                                        />
                                       </span>
-                                      <span className="align-middle">{`Level ${textSizeLevel}`}</span>
-                                    </p>
-                                  </div>
+                                    </div>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {textSizeMenuOpen && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[220px] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      >
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
+                                        >
+                                          <div
+                                            id={textSizeListboxId}
+                                            role="listbox"
+                                            aria-label={textSizeLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {TEXT_SIZE_LEVEL_OPTIONS.map((option) => {
+                                              const isSelected = option === textSizeLevel
+                                              const optionTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[option] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
+
+                                              return (
+                                                <button
+                                                  key={option}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleTextSizeLevelSelect(option)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                                    isSelected
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
+                                                  }`}
+                                                >
+                                                  <div className="min-w-0 flex-1">
+                                                    <p
+                                                      style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                                                      className={`${optionTextClassName} truncate font-normal text-gray-900`}
+                                                    >
+                                                      <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
+                                                        <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                                        <span className="text-[11px] font-semibold uppercase leading-none">
+                                                          {textSizePreviewBadgeLabel}
+                                                        </span>
+                                                      </span>
+                                                      <span className="align-middle">{`Level ${option}`}</span>
+                                                    </p>
+                                                  </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
                                 </div>
                               </div>
-                              <input
-                                type="range"
-                                min={1}
-                                max={5}
-                                step={1}
-                                value={textSizeLevel}
-                                onPointerDown={(event) => {
-                                  event.currentTarget.setPointerCapture(event.pointerId)
-                                  const next = deriveRangeValueFromPointer(event, 1, 5, 1)
-                                  setTextSizeLevel(next)
-                                }}
-                                onPointerMove={(event) => {
-                                  if (event.buttons !== 1) return
-                                  const next = deriveRangeValueFromPointer(event, 1, 5, 1)
-                                  setTextSizeLevel(next)
-                                }}
-                                onPointerUp={(event) => {
-                                  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                                    event.currentTarget.releasePointerCapture(event.pointerId)
-                                  }
-                                  flushAccountPreferencesSync()
-                                }}
-                                onChange={(event) => {
-                                  const next = Math.max(1, Math.min(5, Number(event.target.value) || DEFAULT_TEXT_SIZE_LEVEL))
-                                  setTextSizeLevel(next)
-                                }}
-                                className={`${sliderClassName} -mt-1`}
-                                aria-label={`${textSizeLabel} level`}
-                              />
-                            </label>
+                            </div>
 
                             <label className="block">
                               <div
@@ -2718,7 +2825,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 <button
                                   ref={translationModelButtonRef}
                                   type="button"
-                                  onClick={() => setTranslationModelMenuOpen((open) => !open)}
+                                  onClick={() => {
+                                    setTextSizeMenuOpen(false)
+                                    setTranslationModelMenuOpen((open) => !open)
+                                  }}
                                   aria-label={translationModelLabel}
                                   aria-haspopup="listbox"
                                   aria-expanded={translationModelMenuOpen}
