@@ -1765,6 +1765,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
+  const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
+  const textSizePreviewBadgeLabel = textSizePreviewLanguage.trim().replace('_', '-').split('-')[0]?.toUpperCase() || 'EN'
   const sliderClassName = [
     // iOS-like visual style with larger touch area for drag stability on all platforms.
     'h-12 w-full cursor-pointer touch-none appearance-none bg-transparent py-1.5',
@@ -2581,9 +2583,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 py-4">
                           <div className="space-y-4">
                             <label className="block">
-                              <div className="mb-0 flex items-center justify-between gap-3 text-[0.8125rem] font-semibold leading-[1.05] text-gray-700">
-                                <span className="shrink-0 whitespace-nowrap">{textSizeLabel}</span>
-                                <span className="shrink-0 whitespace-nowrap">Level {textSizeLevel}</span>
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] font-semibold leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-2">{textSizeLabel}</span>
+                                <div className="w-fit max-w-[68%] shrink-0 rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm">
+                                  <p
+                                    style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                                    className={`${chatBubbleTextClassName} text-gray-900`}
+                                  >
+                                    <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
+                                      <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                      <span className="text-[11px] font-semibold uppercase leading-none">
+                                        {textSizePreviewBadgeLabel}
+                                      </span>
+                                    </span>
+                                    <span className="align-middle">{`Level ${textSizeLevel}`}</span>
+                                  </p>
+                                </div>
                               </div>
                               <input
                                 type="range"
