@@ -90,6 +90,20 @@ function SpeakingIndicator() {
   )
 }
 
+function buildCombinedUtteranceCopyText(
+  originalFlag: string,
+  originalText: string,
+  translationEntries: Array<{ lang: string, text: string }>,
+): string {
+  const lines = [`${originalFlag} ${originalText}`]
+
+  for (const entry of translationEntries) {
+    lines.push(`${getSttLanguageFlag(entry.lang)} ${entry.text}`)
+  }
+
+  return lines.join('\n')
+}
+
 function ChatBubble({
   utterance,
   uiLocale,
@@ -121,6 +135,9 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
+  const combinedUtteranceCopyText = translationEntries.length > 0
+    ? buildCombinedUtteranceCopyText(flag, utterance.originalText, translationEntries)
+    : ''
 
   return (
     <motion.div
@@ -152,7 +169,10 @@ function ChatBubble({
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* Original bubble */}
-        <div data-original-bubble-row className="flex w-full items-start">
+        <div
+          data-original-bubble-row
+          className={`flex w-full items-start ${translationEntries.length > 0 ? 'gap-1.5' : ''}`}
+        >
           <div
             data-original-bubble-body
             style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
@@ -182,6 +202,13 @@ function ChatBubble({
               </p>
             </div>
           </div>
+          {translationEntries.length > 0 ? (
+            <MessageCopyButton
+              label="Copy all message bubbles"
+              text={combinedUtteranceCopyText}
+              className="ml-0 mt-1"
+            />
+          ) : null}
         </div>
 
         {/* Translation bubbles */}
