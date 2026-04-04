@@ -8,11 +8,13 @@ import {
   hasRenderableChatBubbleTimestamp,
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
+import MessageCopyButton from './MessageCopyButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
-const CHAT_BUBBLE_MAX_WIDTH = '93%'
+const ORIGINAL_BUBBLE_MAX_WIDTH = '85%'
+const TRANSLATION_BUBBLE_MAX_WIDTH = '90%'
 
 export interface Utterance {
   id: string
@@ -88,6 +90,20 @@ function SpeakingIndicator() {
   )
 }
 
+function buildCombinedUtteranceCopyText(
+  originalFlag: string,
+  originalText: string,
+  translationEntries: Array<{ lang: string, text: string }>,
+): string {
+  const lines = [`${originalFlag} ${originalText}`]
+
+  for (const entry of translationEntries) {
+    lines.push(`${getSttLanguageFlag(entry.lang)} ${entry.text}`)
+  }
+
+  return lines.join('\n')
+}
+
 function ChatBubble({
   utterance,
   uiLocale,
@@ -119,6 +135,9 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
+  const combinedUtteranceCopyText = translationEntries.length > 0
+    ? buildCombinedUtteranceCopyText(flag, utterance.originalText, translationEntries)
+    : ''
 
   return (
     <motion.div
@@ -150,44 +169,60 @@ function ChatBubble({
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {/* Original bubble */}
-        <div data-original-bubble-row className="flex w-full items-start">
+        <div
+          data-original-bubble-row
+          className={`flex w-full items-start ${translationEntries.length > 0 ? 'gap-1.5' : ''}`}
+        >
           <div
             data-original-bubble-body
-            style={{ maxWidth: CHAT_BUBBLE_MAX_WIDTH }}
+            style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
-              <div data-original-bubble-content className="min-w-0">
-                <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
-                  <span
-                    data-original-bubble-meta
-                    className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
-                  >
-                    <span className="text-base leading-none">{flag}</span>
-                    <span className="text-[11px] font-semibold uppercase leading-none">
-                      {originalLanguageBadgeLabel}
-                    </span>
+            <div data-original-bubble-content className="min-w-0">
+              <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
+                <span
+                  data-original-bubble-meta
+                  className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400"
+                >
+                  <span className="text-base leading-none">{flag}</span>
+                  <span className="text-[11px] font-semibold uppercase leading-none">
+                    {originalLanguageBadgeLabel}
                   </span>
-                  <span data-original-bubble-text className="align-middle">
-                    {utterance.originalText}
-                    {isDraft && (
-                      <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
-                    )}
-                  </span>
-                </p>
-              </div>
+                </span>
+                <span data-original-bubble-text className="align-middle">
+                  {utterance.originalText}
+                  {isDraft && (
+                    <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+                  )}
+                  <MessageCopyButton
+                    label="Copy original message"
+                    text={utterance.originalText}
+                  />
+                </span>
+              </p>
             </div>
           </div>
+          {translationEntries.length > 0 ? (
+            <MessageCopyButton
+              label="Copy all message bubbles"
+              text={combinedUtteranceCopyText}
+              className="self-end h-5 items-start pb-1"
+            />
+          ) : null}
+        </div>
 
         {/* Translation bubbles */}
         {translationEntries.map(({ lang, text }) => (
           <TranslationBubbleRow
             key={lang}
             lang={lang}
-            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
             bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
             contentClassName={`${bubbleTextClassName} text-gray-700`}
+            copyLabel={`Copy ${lang} translation`}
+            copyText={text}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />
@@ -202,7 +237,7 @@ function ChatBubble({
           <TranslationBubbleRow
             key={`pending-${lang}`}
             lang={lang}
-            maxWidth={CHAT_BUBBLE_MAX_WIDTH}
+            maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
             bubbleClassName="bg-amber-50/60 border border-amber-100"
             metaClassName="text-amber-400"
             inlineMeta={false}

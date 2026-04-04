@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import { cn } from '@/lib/utils'
+import MessageCopyButton from './MessageCopyButton'
 
 interface TranslationBubbleRowProps {
   lang: string
@@ -11,6 +12,8 @@ interface TranslationBubbleRowProps {
   maxWidth?: string
   contentClassName?: string
   contentStyle?: CSSProperties
+  copyLabel?: string
+  copyText?: string
   children: ReactNode
 }
 
@@ -20,9 +23,11 @@ export default function TranslationBubbleRow({
   metaClassName,
   accessory,
   inlineMeta = true,
-  maxWidth = '93%',
+  maxWidth = '90%',
   contentClassName,
   contentStyle,
+  copyLabel,
+  copyText,
   children,
 }: TranslationBubbleRowProps) {
   const meta = (
@@ -58,6 +63,12 @@ export default function TranslationBubbleRow({
             {meta}
             <span data-translation-bubble-text className="align-middle">
               {children}
+              {copyLabel && copyText ? (
+                <MessageCopyButton
+                  label={copyLabel}
+                  text={copyText}
+                />
+              ) : null}
             </span>
           </p>
         </div>
