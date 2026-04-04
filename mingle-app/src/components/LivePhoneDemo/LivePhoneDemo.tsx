@@ -2583,21 +2583,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 py-4">
                           <div className="space-y-4">
                             <label className="block">
-                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] font-semibold leading-[1.05] text-gray-700">
-                                <span className="min-w-0 flex-1 pt-2">{textSizeLabel}</span>
-                                <div className="w-fit max-w-[68%] shrink-0 rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm">
-                                  <p
-                                    style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                                    className={`${chatBubbleTextClassName} text-gray-900`}
-                                  >
-                                    <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                      <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
-                                      <span className="text-[11px] font-semibold uppercase leading-none">
-                                        {textSizePreviewBadgeLabel}
+                              <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
+                                <span className="min-w-0 flex-1 pt-2 font-semibold">{textSizeLabel}</span>
+                                <div className="flex h-12 max-w-[68%] shrink-0 items-center">
+                                  <div className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm">
+                                    <p
+                                      style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+                                      className={`${chatBubbleTextClassName} font-normal text-gray-900`}
+                                    >
+                                      <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
+                                        <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                        <span className="text-[11px] font-semibold uppercase leading-none">
+                                          {textSizePreviewBadgeLabel}
+                                        </span>
                                       </span>
-                                    </span>
-                                    <span className="align-middle">{`Level ${textSizeLevel}`}</span>
-                                  </p>
+                                      <span className="align-middle">{`Level ${textSizeLevel}`}</span>
+                                    </p>
+                                  </div>
                                 </div>
                               </div>
                               <input
