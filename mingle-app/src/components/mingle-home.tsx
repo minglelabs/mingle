@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
@@ -17,6 +17,17 @@ type MingleHomeProps = {
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
 const REQUIRE_AUTH_FOR_TRANSLATOR = false;
+const LivePhoneDemo = dynamic(
+  () => import("@/components/LivePhoneDemo/LivePhoneDemo"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+        <Loader2 size={24} className="animate-spin" aria-hidden />
+      </div>
+    ),
+  },
+);
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
 const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
