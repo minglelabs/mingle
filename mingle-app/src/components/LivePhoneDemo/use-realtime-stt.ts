@@ -258,6 +258,12 @@ export function resolveConnectionStatusFromNativeBridgeStatus(input: {
   return null
 }
 
+export function shouldPromoteConnectionStatusFromNativeActivity(input: {
+  previousConnectionStatus: ConnectionStatus
+}): boolean {
+  return input.previousConnectionStatus !== 'ready'
+}
+
 declare global {
   interface Window {
     ReactNativeWebView?: {
@@ -3350,6 +3356,16 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
+        if (shouldPromoteConnectionStatusFromNativeActivity({
+          previousConnectionStatus: connectionStatusRef.current,
+        })) {
+          logSttDebug('native.message.promote_ready', {
+            previousConnectionStatus: connectionStatusRef.current,
+          })
+          nativeMicPermissionRecoveryActionRef.current = 'none'
+          hasActiveSessionRef.current = true
+          setConnectionStatus('ready')
+        }
         try {
           const message = JSON.parse(detail.raw) as Record<string, unknown>
           handleSttServerMessage(message)

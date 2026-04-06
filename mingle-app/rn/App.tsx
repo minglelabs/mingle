@@ -2060,6 +2060,9 @@ function AppInner(): React.JSX.Element {
     });
 
     const messageSub = addNativeSttListener('message', event => {
+      if (nativeStatusRef.current) {
+        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      }
       emitToWeb({ type: 'message', raw: event.raw });
     });
 

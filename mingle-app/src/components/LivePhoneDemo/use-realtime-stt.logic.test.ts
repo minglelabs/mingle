@@ -23,6 +23,7 @@ import {
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldPromoteConnectionStatusFromNativeActivity,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
@@ -338,6 +339,24 @@ describe('use-realtime-stt pure logic', () => {
       nativeStatus: 'legacy_unknown_state',
       previousConnectionStatus: 'connecting',
     })).toBeNull()
+  })
+
+  it('promotes native transcript activity back into ready state after unexpected web reloads', () => {
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'idle',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'connecting',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'error',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'ready',
+    })).toBe(false)
   })
 
   it('filters translations down to currently selected target languages', () => {
