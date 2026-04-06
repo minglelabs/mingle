@@ -159,4 +159,24 @@ describe('ChatBubble', () => {
     expect(html).toContain('Play original message')
     expect(html).toContain('Play ko translation')
   })
+
+  it('localizes tts action labels with the ui locale', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-actions-ko',
+          originalText: '안녕하세요',
+          originalLang: 'ko',
+          translations: {
+            en: 'Hello',
+          },
+        },
+        uiLocale: 'ko',
+      }),
+    )
+
+    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
+    expect(html).toContain('원문 재생')
+    expect(html).toContain('en 번역 재생')
+  })
 })

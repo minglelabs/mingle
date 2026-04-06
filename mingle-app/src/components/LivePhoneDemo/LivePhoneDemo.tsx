@@ -76,6 +76,7 @@ import {
 } from './live-phone-demo.feedback-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
@@ -607,6 +608,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
+  const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2087,7 +2089,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     setPendingManualTtsTarget(null)
     if (!audioBlob) {
-      toast.error('Failed to play audio for this message.')
+      toast.error(ttsActionCopy.playbackFailedLabel)
       return
     }
 
@@ -2100,7 +2102,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       mode: 'manual',
     }]
     processTtsQueue()
-  }, [forceStopTtsPlayback, pendingManualTtsTarget, processTtsQueue, speakingItem, synthesizeBubbleTtsViaApi])
+  }, [
+    forceStopTtsPlayback,
+    pendingManualTtsTarget,
+    processTtsQueue,
+    speakingItem,
+    synthesizeBubbleTtsViaApi,
+    ttsActionCopy.playbackFailedLabel,
+  ])
 
   const handlePlayOriginalBubbleTts = useCallback((utterance: Utterance) => {
     void handlePlayBubbleTts({

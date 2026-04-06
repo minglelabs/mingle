@@ -13,6 +13,7 @@ import MessageCopyButton from './MessageCopyButton'
 import MessageTtsButton from './MessageTtsButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
@@ -134,6 +135,7 @@ function ChatBubble({
   )
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
+  const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance)
@@ -160,7 +162,7 @@ function ChatBubble({
       className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
     >
       <MessageTtsButton
-        label="Play original message"
+        label={ttsActionCopy.playOriginalLabel}
         onClick={() => onPlayOriginal?.(utterance)}
         isLoading={isOriginalTtsLoading}
         isActive={isOriginalSpeaking}
@@ -259,7 +261,7 @@ function ChatBubble({
                 className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
               >
                 <MessageTtsButton
-                  label={`Play ${lang} translation`}
+                  label={ttsActionCopy.formatPlayTranslationLabel(lang)}
                   onClick={() => onPlayTranslation?.(utterance, lang, text)}
                   isLoading={loadingTranslationLanguage === lang}
                   isActive={isSpeaking && speakingLanguage === lang}
