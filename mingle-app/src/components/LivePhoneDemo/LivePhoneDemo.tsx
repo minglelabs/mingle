@@ -72,6 +72,8 @@ import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
+import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
+import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
@@ -603,6 +605,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
+  const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -2098,6 +2101,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
+  const [copyToastVisible, setCopyToastVisible] = useState(false)
+  const copyToastTimerRef = useRef<number | null>(null)
   const [scrollMetrics, setScrollMetrics] = useState({
     thumbTop: 0,
     thumbHeight: 0,
@@ -2379,6 +2384,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [updateScrollDerivedState])
 
   useEffect(() => {
+    const handleCopySuccess = () => {
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+      setCopyToastVisible(true)
+      copyToastTimerRef.current = window.setTimeout(() => {
+        setCopyToastVisible(false)
+      }, 1500)
+    }
+    window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+    return () => {
+      window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
+      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
     return () => {
       clearPendingAutoScrollTimer()
       clearScrollUiHideTimer()
@@ -2435,6 +2455,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? effectiveNativeBottomContentInsetPx
     : 0
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
+  const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
@@ -2458,6 +2479,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   return (
     <PhoneFrame>
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+
         {/* Header */}
         <div
           className={`relative z-40 shrink-0 flex items-center justify-between ${navSurfaceClassName}`}
@@ -3470,6 +3492,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   >
                     <ChevronDown size={28} strokeWidth={1.85} />
                   </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {copyToastVisible && (
+                <motion.div
+                  key="copy-toast"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-x-0 z-30 flex justify-center"
+                  style={{ bottom: copyToastBottomOffsetPx }}
+                >
+                  <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)]">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                      <Check className="h-3 w-3" strokeWidth={3} />
+                    </span>
+                    <span className="text-[14px] font-medium text-gray-800">
+                      {copyActionCopy.copiedToastLabel}
+                    </span>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

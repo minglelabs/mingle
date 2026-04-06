@@ -1,7 +1,7 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import { cn } from '@/lib/utils'
-import MessageCopyButton from './MessageCopyButton'
+import CopyableBubbleSurface from './CopyableBubbleSurface'
 
 interface TranslationBubbleRowProps {
   lang: string
@@ -12,9 +12,11 @@ interface TranslationBubbleRowProps {
   maxWidth?: string
   contentClassName?: string
   contentStyle?: CSSProperties
-  copyLabel?: string
   copyText?: string
-  children: ReactNode
+  copyBubbleLabel?: string
+  allText?: string
+  copyAllBubblesLabel?: string
+  children?: ReactNode
 }
 
 export default function TranslationBubbleRow({
@@ -26,8 +28,10 @@ export default function TranslationBubbleRow({
   maxWidth = '90%',
   contentClassName,
   contentStyle,
-  copyLabel,
   copyText,
+  copyBubbleLabel,
+  allText,
+  copyAllBubblesLabel,
   children,
 }: TranslationBubbleRowProps) {
   const meta = (
@@ -44,9 +48,37 @@ export default function TranslationBubbleRow({
     </span>
   )
 
+  const inlineBubbleBody = (
+    <p
+      data-translation-bubble-content
+      style={contentStyle}
+      className={cn('min-w-0', contentClassName)}
+    >
+      {meta}
+      <span data-translation-bubble-text className="align-middle">
+        {children}
+      </span>
+    </p>
+  )
+
   return (
     <div data-translation-bubble-row className="flex w-full items-start">
-      {inlineMeta ? (
+      {inlineMeta && copyText ? (
+        <CopyableBubbleSurface
+          data-translation-bubble-body
+          text={copyText}
+          allText={allText}
+          copyBubbleLabel={copyBubbleLabel ?? 'Copy'}
+          copyAllBubblesLabel={copyAllBubblesLabel}
+          style={{ maxWidth, borderTopLeftRadius: '1px' }}
+          className={cn(
+            'w-fit rounded-2xl rounded-tl-sm px-3.5 py-2',
+            bubbleClassName,
+          )}
+        >
+          {inlineBubbleBody}
+        </CopyableBubbleSurface>
+      ) : inlineMeta ? (
         <div
           data-translation-bubble-body
           style={{ maxWidth, borderTopLeftRadius: '1px' }}
@@ -55,22 +87,7 @@ export default function TranslationBubbleRow({
             bubbleClassName,
           )}
         >
-          <p
-            data-translation-bubble-content
-            style={contentStyle}
-            className={cn('min-w-0', contentClassName)}
-          >
-            {meta}
-            <span data-translation-bubble-text className="align-middle">
-              {children}
-              {copyLabel && copyText ? (
-                <MessageCopyButton
-                  label={copyLabel}
-                  text={copyText}
-                />
-              ) : null}
-            </span>
-          </p>
+          {inlineBubbleBody}
         </div>
       ) : (
         <div

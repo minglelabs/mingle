@@ -8,8 +8,10 @@ import {
   hasRenderableChatBubbleTimestamp,
 } from './chat-bubble.timestamp'
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
+import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageCopyButton from './MessageCopyButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
+import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
@@ -120,6 +122,7 @@ function ChatBubble({
     utterance.speakerAvatarIndex,
   )
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
+  const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance)
@@ -135,9 +138,11 @@ function ChatBubble({
     ? `${bubbleTextClassName} text-gray-400`
     : `${bubbleTextClassName} text-gray-900`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
-  const combinedUtteranceCopyText = translationEntries.length > 0
-    ? buildCombinedUtteranceCopyText(flag, utterance.originalText, translationEntries)
-    : ''
+  const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
+    flag,
+    utterance.originalText,
+    translationEntries,
+  )
 
   return (
     <motion.div
@@ -171,10 +176,14 @@ function ChatBubble({
         {/* Original bubble */}
         <div
           data-original-bubble-row
-          className={`flex w-full items-start ${translationEntries.length > 0 ? 'gap-1.5' : ''}`}
+          className="flex w-full items-start gap-1.5"
         >
-          <div
+          <CopyableBubbleSurface
             data-original-bubble-body
+            text={utterance.originalText}
+            allText={combinedUtteranceCopyText}
+            copyBubbleLabel={copyActionCopy.copyBubbleLabel}
+            copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
             style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
@@ -194,21 +203,15 @@ function ChatBubble({
                   {isDraft && (
                     <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
                   )}
-                  <MessageCopyButton
-                    label="Copy original message"
-                    text={utterance.originalText}
-                  />
                 </span>
               </p>
             </div>
-          </div>
-          {translationEntries.length > 0 ? (
-            <MessageCopyButton
-              label="Copy all message bubbles"
-              text={combinedUtteranceCopyText}
-              className="self-end h-5 items-start pb-1"
-            />
-          ) : null}
+          </CopyableBubbleSurface>
+          <MessageCopyButton
+            label={copyActionCopy.copyAllBubblesLabel}
+            text={combinedUtteranceCopyText}
+            className="self-end h-5 items-start pb-1"
+          />
         </div>
 
         {/* Translation bubbles */}
@@ -221,8 +224,10 @@ function ChatBubble({
             metaClassName="text-amber-500"
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
             contentClassName={`${bubbleTextClassName} text-gray-700`}
-            copyLabel={`Copy ${lang} translation`}
             copyText={text}
+            copyBubbleLabel={copyActionCopy.copyBubbleLabel}
+            allText={combinedUtteranceCopyText}
+            copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />

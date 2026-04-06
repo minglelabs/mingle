@@ -50,12 +50,14 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
-    expect(html).toContain('aria-label="Copy original message"')
+    expect(html).toContain('aria-label="Copy full message"')
     expect(html).toContain('data-message-copy-button')
-    expect(html.indexOf('Original message')).toBeLessThan(
-      html.indexOf('aria-label="Copy original message"'),
+    expect(html).toContain('data-copyable-bubble')
+    expect(html.match(/data-message-copy-button/g)?.length ?? 0).toBe(1)
+    expect(html.match(/data-copyable-bubble/g)?.length ?? 0).toBe(1)
+    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+      html.indexOf('aria-label="Copy full message"'),
     )
-    expect(html).not.toContain('aria-label="Copy all message bubbles"')
     expect(html).toContain('class="align-middle"')
   })
 
@@ -78,14 +80,12 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('bg-amber-50 border border-amber-100')
-    expect(html).toContain('aria-label="Copy ko translation"')
-    expect(html).toContain('aria-label="Copy all message bubbles"')
+    expect(html).toContain('aria-label="Copy full message"')
     expect(html).toContain('data-message-copy-button')
-    expect(html.indexOf('부분 번역')).toBeLessThan(
-      html.indexOf('aria-label="Copy ko translation"'),
-    )
+    expect(html.match(/data-message-copy-button/g)?.length ?? 0).toBe(1)
+    expect(html.match(/data-copyable-bubble/g)?.length ?? 0).toBe(2)
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
-      html.indexOf('aria-label="Copy all message bubbles"'),
+      html.indexOf('aria-label="Copy full message"'),
     )
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
