@@ -207,8 +207,26 @@ function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
   }
 }
 
+function isDevelopmentTunnelUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app')
+      || normalized === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+  }
+}
+
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
   return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
+}
+
+function shouldBypassWebViewCache(rawUrl: string): boolean {
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDevelopmentTunnelUrl(rawUrl);
 }
 
 function formatWebViewLoadError(description: string, currentWebUrl: string): string {
@@ -1220,22 +1238,15 @@ function AppInner(): React.JSX.Element {
   }, [windowWidthPx]);
   const webUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
-    const transcriptInsetPx = nativeBannerUnitId
-      ? resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale)
-      : 0;
-    const transcriptTopInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'top' ? transcriptInsetPx : 0;
-    const transcriptBottomInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'bottom' ? transcriptInsetPx : 0;
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    const nativeBannerQuery = nativeBannerUnitId
-      ? `&nativeBannerPosition=${encodeURIComponent(defaultNativeBannerPosition)}&nativeTopInsetPx=${transcriptTopInsetPx}&nativeBottomInsetPx=${transcriptBottomInsetPx}`
-      : '';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
-  }, [defaultNativeBannerPosition, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
+  }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
+  const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(webUrl), [webUrl]);
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
@@ -2207,6 +2218,14 @@ function AppInner(): React.JSX.Element {
     }
   }, [versionGate.status]);
 
+  useEffect(() => {
+    if (!shouldDisableWebViewCache || !webViewRef.current) {
+      return;
+    }
+
+    webViewRef.current.clearCache(true);
+  }, [shouldDisableWebViewCache, webViewMountToken]);
+
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
       {shouldRenderTopSafeAreaFill ? (
@@ -2236,6 +2255,9 @@ function AppInner(): React.JSX.Element {
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
+            cacheEnabled={!shouldDisableWebViewCache}
+            incognito={shouldDisableWebViewCache}
+            cacheMode={Platform.OS === 'android' && shouldDisableWebViewCache ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
