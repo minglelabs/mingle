@@ -2,6 +2,8 @@ import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 
 const COPY_TOAST_DURATION_MS = 1000
+export const COPY_FEEDBACK_TOASTER_ID = 'live-phone-demo-copy-feedback'
+const COPY_FEEDBACK_TOAST_ID = 'live-phone-demo-copy-feedback-toast'
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
@@ -40,15 +42,21 @@ export async function copyTextWithFeedback(
     const didCopy = await copyTextToClipboard(text)
     if (!didCopy) return false
 
-    toast(copiedToastLabel, {
+    toast.custom(() => (
+      <div className="pointer-events-none inline-flex max-w-[calc(100vw-4rem)] items-center gap-1.5 rounded-full border border-emerald-200/70 bg-white/96 px-2.5 py-1 shadow-[0_10px_26px_rgba(15,23,42,0.14)] ring-1 ring-white/80 backdrop-blur-md">
+        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
+          <Check className="h-2.5 w-2.5 stroke-[3]" />
+        </span>
+        <span className="truncate text-[11px] font-medium tracking-[-0.01em] text-slate-700">
+          {copiedToastLabel}
+        </span>
+      </div>
+    ), {
+      id: COPY_FEEDBACK_TOAST_ID,
+      toasterId: COPY_FEEDBACK_TOASTER_ID,
       duration: COPY_TOAST_DURATION_MS,
-      icon: <Check className="h-3 w-3" />,
-      style: {
-        minHeight: '0',
-        padding: '0.35rem 0.5rem',
-        fontSize: '11px',
-        lineHeight: '1.1',
-      },
+      position: 'bottom-center',
+      unstyled: true,
     })
     return true
   } catch {

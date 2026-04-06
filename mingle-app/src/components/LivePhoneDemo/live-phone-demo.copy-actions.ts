@@ -21,7 +21,7 @@ const COPY_ACTION_COPY_BY_LOCALE = {
   },
   ja: {
     copyAllBubblesLabel: '発話全体をコピー',
-    copiedToastLabel: 'コピーしました',
+    copiedToastLabel: 'コピー済み',
   },
   'zh-CN': {
     copyAllBubblesLabel: '复制整条发言',
@@ -33,7 +33,7 @@ const COPY_ACTION_COPY_BY_LOCALE = {
   },
   fr: {
     copyAllBubblesLabel: 'Copier tout le message',
-    copiedToastLabel: 'Copie effectuée',
+    copiedToastLabel: 'Copié',
   },
   de: {
     copyAllBubblesLabel: 'Gesamte Nachricht kopieren',
@@ -61,7 +61,7 @@ const COPY_ACTION_COPY_BY_LOCALE = {
   },
   hi: {
     copyAllBubblesLabel: 'पूरा संदेश कॉपी करें',
-    copiedToastLabel: 'कॉपी हो गया',
+    copiedToastLabel: 'कॉपी हुआ',
   },
   th: {
     copyAllBubblesLabel: 'คัดลอกข้อความทั้งหมด',
