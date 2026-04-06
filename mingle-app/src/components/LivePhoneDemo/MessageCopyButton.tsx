@@ -5,18 +5,16 @@ import { copyTextWithFeedback } from './live-phone-demo.copy'
 interface MessageCopyButtonProps {
   label: string
   text: string
-  copiedToastLabel: string
   className?: string
 }
 
 export default function MessageCopyButton({
   label,
   text,
-  copiedToastLabel,
   className,
 }: MessageCopyButtonProps) {
   const handleCopy = async () => {
-    await copyTextWithFeedback(text, copiedToastLabel)
+    await copyTextWithFeedback(text)
   }
 
   return (

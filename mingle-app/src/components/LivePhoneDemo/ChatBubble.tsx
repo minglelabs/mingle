@@ -181,8 +181,9 @@ function ChatBubble({
           <CopyableBubbleSurface
             data-original-bubble-body
             text={utterance.originalText}
+            allText={combinedUtteranceCopyText}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
-            copiedToastLabel={copyActionCopy.copiedToastLabel}
+            copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
             style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
@@ -209,7 +210,6 @@ function ChatBubble({
           <MessageCopyButton
             label={copyActionCopy.copyAllBubblesLabel}
             text={combinedUtteranceCopyText}
-            copiedToastLabel={copyActionCopy.copiedToastLabel}
             className="self-end h-5 items-start pb-1"
           />
         </div>
@@ -226,7 +226,8 @@ function ChatBubble({
             contentClassName={`${bubbleTextClassName} text-gray-700`}
             copyText={text}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
-            copiedToastLabel={copyActionCopy.copiedToastLabel}
+            allText={combinedUtteranceCopyText}
+            copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
             accessory={
               isSpeaking && speakingLanguage === lang
                 ? <SpeakingIndicator />

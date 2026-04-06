@@ -14,8 +14,9 @@ interface TranslationBubbleRowProps {
   contentStyle?: CSSProperties
   copyText?: string
   copyBubbleLabel?: string
-  copiedToastLabel?: string
-  children: ReactNode
+  allText?: string
+  copyAllBubblesLabel?: string
+  children?: ReactNode
 }
 
 export default function TranslationBubbleRow({
@@ -29,7 +30,8 @@ export default function TranslationBubbleRow({
   contentStyle,
   copyText,
   copyBubbleLabel,
-  copiedToastLabel,
+  allText,
+  copyAllBubblesLabel,
   children,
 }: TranslationBubbleRowProps) {
   const meta = (
@@ -61,12 +63,13 @@ export default function TranslationBubbleRow({
 
   return (
     <div data-translation-bubble-row className="flex w-full items-start">
-      {inlineMeta && copyText && copiedToastLabel ? (
+      {inlineMeta && copyText ? (
         <CopyableBubbleSurface
           data-translation-bubble-body
           text={copyText}
+          allText={allText}
           copyBubbleLabel={copyBubbleLabel ?? 'Copy'}
-          copiedToastLabel={copiedToastLabel}
+          copyAllBubblesLabel={copyAllBubblesLabel}
           style={{ maxWidth, borderTopLeftRadius: '1px' }}
           className={cn(
             'w-fit rounded-2xl rounded-tl-sm px-3.5 py-2',

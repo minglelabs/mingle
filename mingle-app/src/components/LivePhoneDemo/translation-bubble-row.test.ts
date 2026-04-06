@@ -13,12 +13,11 @@ describe('TranslationBubbleRow', () => {
       contentStyle: { lineHeight: 1.25 },
       copyText: '짧은 번역',
       copyBubbleLabel: 'Copy',
-      copiedToastLabel: 'Copied',
     }
     const html = renderToStaticMarkup(
       createElement(
         TranslationBubbleRow,
-        props as Omit<Parameters<typeof TranslationBubbleRow>[0], 'children'>,
+        props,
         createElement('span', null, '짧은 번역'),
       ),
     )

@@ -11,7 +11,6 @@ describe('CopyableBubbleSurface', () => {
         {
           text: 'Hello world',
           copyBubbleLabel: 'Copy',
-          copiedToastLabel: 'Copied',
           className: 'rounded-2xl border',
           style: { maxWidth: '85%' },
         },

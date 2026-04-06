@@ -13,12 +13,13 @@ import { cn } from '@/lib/utils'
 import { copyTextWithFeedback } from './live-phone-demo.copy'
 
 const LONG_PRESS_COPY_DELAY_MS = 450
-const LONG_PRESS_CANCEL_DISTANCE_PX = 8
+const LONG_PRESS_CANCEL_DISTANCE_PX = 10
 
 interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   text: string
+  allText?: string
   copyBubbleLabel: string
-  copiedToastLabel: string
+  copyAllBubblesLabel?: string
 }
 
 export function didLongPressQualify(
@@ -30,8 +31,9 @@ export function didLongPressQualify(
 
 export default function CopyableBubbleSurface({
   text,
+  allText,
   copyBubbleLabel,
-  copiedToastLabel,
+  copyAllBubblesLabel,
   children,
   className,
   style,
@@ -44,16 +46,19 @@ export default function CopyableBubbleSurface({
   ...props
 }: CopyableBubbleSurfaceProps) {
   const surfaceRef = useRef<HTMLDivElement | null>(null)
-  const touchStartedAtRef = useRef<number | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchOriginRef = useRef<{ x: number, y: number } | null>(null)
   const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false)
 
-  const clearPendingLongPress = useCallback(() => {
-    touchStartedAtRef.current = null
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
     touchOriginRef.current = null
   }, [])
 
-  useEffect(() => clearPendingLongPress, [clearPendingLongPress])
+  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
 
   useEffect(() => {
     if (!isCopyMenuOpen) return
@@ -84,14 +89,16 @@ export default function CopyableBubbleSurface({
     }
   }, [isCopyMenuOpen])
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = useCallback((targetText: string) => {
     setIsCopyMenuOpen(false)
-    void copyTextWithFeedback(text, copiedToastLabel)
-  }, [copiedToastLabel, text])
+    void copyTextWithFeedback(targetText)
+  }, [])
 
   const getPrimaryTouchPoint = useCallback((event: TouchEvent<HTMLDivElement>) => {
     return event.touches[0] ?? event.changedTouches[0] ?? null
   }, [])
+
+  const showAllCopyButton = Boolean(allText && copyAllBubblesLabel)
 
   return (
     <div
@@ -103,11 +110,12 @@ export default function CopyableBubbleSurface({
         if (event.defaultPrevented) return
 
         event.preventDefault()
+        setIsCopyMenuOpen(true)
       }}
       onDoubleClick={(event) => {
         onDoubleClick?.(event)
         if (event.defaultPrevented) return
-        handleCopy()
+        handleCopy(text)
       }}
       onTouchStart={(event) => {
         onTouchStart?.(event)
@@ -115,40 +123,38 @@ export default function CopyableBubbleSurface({
         const touchPoint = getPrimaryTouchPoint(event)
         if (!touchPoint) return
 
+        clearLongPressTimer()
         setIsCopyMenuOpen(false)
-        touchStartedAtRef.current = Date.now()
         touchOriginRef.current = { x: touchPoint.clientX, y: touchPoint.clientY }
+        longPressTimerRef.current = setTimeout(() => {
+          longPressTimerRef.current = null
+          touchOriginRef.current = null
+          setIsCopyMenuOpen(true)
+        }, LONG_PRESS_COPY_DELAY_MS)
       }}
       onTouchMove={(event) => {
         onTouchMove?.(event)
         if (event.defaultPrevented) return
-        if (touchStartedAtRef.current === null || touchOriginRef.current === null) return
+        if (longPressTimerRef.current === null || touchOriginRef.current === null) return
         const touchPoint = getPrimaryTouchPoint(event)
         if (!touchPoint) {
-          clearPendingLongPress()
+          clearLongPressTimer()
           return
         }
 
         const movedX = Math.abs(touchPoint.clientX - touchOriginRef.current.x)
         const movedY = Math.abs(touchPoint.clientY - touchOriginRef.current.y)
         if (movedX > LONG_PRESS_CANCEL_DISTANCE_PX || movedY > LONG_PRESS_CANCEL_DISTANCE_PX) {
-          clearPendingLongPress()
+          clearLongPressTimer()
         }
       }}
       onTouchEnd={(event) => {
         onTouchEnd?.(event)
-        if (event.defaultPrevented) return
-
-        const startedAtMs = touchStartedAtRef.current
-        clearPendingLongPress()
-        if (!didLongPressQualify(startedAtMs, Date.now())) return
-
-        event.preventDefault()
-        setIsCopyMenuOpen(true)
+        clearLongPressTimer()
       }}
       onTouchCancel={(event) => {
         onTouchCancel?.(event)
-        clearPendingLongPress()
+        clearLongPressTimer()
       }}
       className={cn('relative select-none touch-manipulation overflow-visible', className)}
       draggable={false}
@@ -165,7 +171,7 @@ export default function CopyableBubbleSurface({
           data-copyable-bubble-menu
           className="absolute bottom-[calc(100%+0.5rem)] left-1/2 z-30 -translate-x-1/2"
         >
-          <div className="rounded-2xl bg-white px-1.5 py-1 shadow-[0_14px_36px_rgba(15,23,42,0.16),0_4px_10px_rgba(15,23,42,0.08)] ring-1 ring-black/5">
+          <div className="w-36 overflow-hidden rounded-xl bg-white shadow-[0_8px_28px_rgba(15,23,42,0.16),0_2px_8px_rgba(15,23,42,0.08)]">
             <button
               type="button"
               data-copyable-bubble-menu-button
@@ -173,13 +179,31 @@ export default function CopyableBubbleSurface({
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
-                handleCopy()
+                handleCopy(text)
               }}
-              className="inline-flex min-w-20 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]"
+              className="flex w-full items-center justify-between px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100"
             >
-              <Copy className="h-3.5 w-3.5 text-slate-500" />
               <span>{copyBubbleLabel}</span>
+              <Copy className="h-4 w-4 shrink-0 text-slate-500" />
             </button>
+            {showAllCopyButton && (
+              <>
+                <div className="mx-3 h-[1px] bg-slate-100" />
+                <button
+                  type="button"
+                  aria-label={copyAllBubblesLabel}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    handleCopy(allText!)
+                  }}
+                  className="flex w-full items-center justify-between px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100"
+                >
+                  <span>{copyAllBubblesLabel}</span>
+                  <Copy className="h-4 w-4 shrink-0 text-slate-500" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
