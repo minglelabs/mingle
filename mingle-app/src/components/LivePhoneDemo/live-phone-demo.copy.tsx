@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 const COPY_TOAST_DURATION_MS = 1000
 export const COPY_FEEDBACK_TOASTER_ID = 'live-phone-demo-copy-feedback'
-export const COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME = 'pointer-events-none mx-auto flex w-fit max-w-[calc(100vw-4rem)] items-center gap-1.5 rounded-full bg-white/97 px-2.5 py-1 shadow-[0_12px_28px_rgba(15,23,42,0.12),0_2px_6px_rgba(15,23,42,0.08)] backdrop-blur-md'
+export const COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME = 'pointer-events-none mx-auto flex w-fit max-w-[calc(100vw-4rem)] items-center gap-1.5 rounded-full bg-amber-50/95 px-2.5 py-1 shadow-[0_12px_28px_rgba(245,158,11,0.14),0_2px_6px_rgba(15,23,42,0.08)] backdrop-blur-md'
 const COPY_FEEDBACK_TOAST_ID = 'live-phone-demo-copy-feedback-toast'
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -45,10 +45,10 @@ export async function copyTextWithFeedback(
 
     toast.custom(() => (
       <div className={COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME}>
-        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600">
+        <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-500/16 text-amber-600">
           <Check className="h-2.5 w-2.5 stroke-[3]" />
         </span>
-        <span className="truncate text-[11px] font-medium tracking-[-0.01em] text-slate-700">
+        <span className="truncate text-[11px] font-semibold tracking-[-0.01em] text-amber-950/85">
           {copiedToastLabel}
         </span>
       </div>

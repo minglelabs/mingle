@@ -5,6 +5,7 @@ describe('live-phone-demo.copy', () => {
   it('keeps the copied toast centered without using border styling', () => {
     expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).toContain('mx-auto')
     expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).toContain('w-fit')
+    expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).toContain('bg-amber-50/95')
     expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).not.toContain('border')
     expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).not.toContain('ring-')
     expect(COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME).toContain('shadow-[')
