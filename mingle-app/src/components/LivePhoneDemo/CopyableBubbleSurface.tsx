@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  type TouchEvent,
   type ComponentPropsWithoutRef,
 } from 'react'
 import { cn } from '@/lib/utils'
@@ -17,6 +18,13 @@ interface CopyableBubbleSurfaceProps extends ComponentPropsWithoutRef<'div'> {
   copiedToastLabel: string
 }
 
+export function didLongPressQualify(
+  startedAtMs: number | null,
+  endedAtMs: number,
+): boolean {
+  return startedAtMs !== null && (endedAtMs - startedAtMs) >= LONG_PRESS_COPY_DELAY_MS
+}
+
 export default function CopyableBubbleSurface({
   text,
   copiedToastLabel,
@@ -24,23 +32,18 @@ export default function CopyableBubbleSurface({
   style,
   onContextMenu,
   onDoubleClick,
-  onPointerCancel,
-  onPointerDown,
-  onPointerLeave,
-  onPointerMove,
-  onPointerUp,
+  onTouchCancel,
+  onTouchEnd,
+  onTouchMove,
+  onTouchStart,
   ...props
 }: CopyableBubbleSurfaceProps) {
-  const longPressTimerRef = useRef<number | null>(null)
-  const pointerOriginRef = useRef<{ x: number, y: number } | null>(null)
-  const suppressContextMenuRef = useRef(false)
+  const touchStartedAtRef = useRef<number | null>(null)
+  const touchOriginRef = useRef<{ x: number, y: number } | null>(null)
 
   const clearPendingLongPress = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      window.clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
-    pointerOriginRef.current = null
+    touchStartedAtRef.current = null
+    touchOriginRef.current = null
   }, [])
 
   useEffect(() => clearPendingLongPress, [clearPendingLongPress])
@@ -48,6 +51,10 @@ export default function CopyableBubbleSurface({
   const handleCopy = useCallback(() => {
     void copyTextWithFeedback(text, copiedToastLabel)
   }, [copiedToastLabel, text])
+
+  const getPrimaryTouchPoint = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    return event.touches[0] ?? event.changedTouches[0] ?? null
+  }, [])
 
   return (
     <div
@@ -58,50 +65,50 @@ export default function CopyableBubbleSurface({
         if (event.defaultPrevented) return
 
         event.preventDefault()
-        if (suppressContextMenuRef.current) {
-          suppressContextMenuRef.current = false
-        }
       }}
       onDoubleClick={(event) => {
         onDoubleClick?.(event)
         if (event.defaultPrevented) return
         handleCopy()
       }}
-      onPointerDown={(event) => {
-        onPointerDown?.(event)
+      onTouchStart={(event) => {
+        onTouchStart?.(event)
         if (event.defaultPrevented) return
-        if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return
+        const touchPoint = getPrimaryTouchPoint(event)
+        if (!touchPoint) return
 
-        clearPendingLongPress()
-        suppressContextMenuRef.current = false
-        pointerOriginRef.current = { x: event.clientX, y: event.clientY }
-        longPressTimerRef.current = window.setTimeout(() => {
-          longPressTimerRef.current = null
-          suppressContextMenuRef.current = true
-          handleCopy()
-        }, LONG_PRESS_COPY_DELAY_MS)
+        touchStartedAtRef.current = Date.now()
+        touchOriginRef.current = { x: touchPoint.clientX, y: touchPoint.clientY }
       }}
-      onPointerMove={(event) => {
-        onPointerMove?.(event)
+      onTouchMove={(event) => {
+        onTouchMove?.(event)
         if (event.defaultPrevented) return
-        if (longPressTimerRef.current === null || pointerOriginRef.current === null) return
+        if (touchStartedAtRef.current === null || touchOriginRef.current === null) return
+        const touchPoint = getPrimaryTouchPoint(event)
+        if (!touchPoint) {
+          clearPendingLongPress()
+          return
+        }
 
-        const movedX = Math.abs(event.clientX - pointerOriginRef.current.x)
-        const movedY = Math.abs(event.clientY - pointerOriginRef.current.y)
+        const movedX = Math.abs(touchPoint.clientX - touchOriginRef.current.x)
+        const movedY = Math.abs(touchPoint.clientY - touchOriginRef.current.y)
         if (movedX > LONG_PRESS_CANCEL_DISTANCE_PX || movedY > LONG_PRESS_CANCEL_DISTANCE_PX) {
           clearPendingLongPress()
         }
       }}
-      onPointerUp={(event) => {
-        onPointerUp?.(event)
+      onTouchEnd={(event) => {
+        onTouchEnd?.(event)
+        if (event.defaultPrevented) return
+
+        const startedAtMs = touchStartedAtRef.current
         clearPendingLongPress()
+        if (!didLongPressQualify(startedAtMs, Date.now())) return
+
+        event.preventDefault()
+        handleCopy()
       }}
-      onPointerLeave={(event) => {
-        onPointerLeave?.(event)
-        clearPendingLongPress()
-      }}
-      onPointerCancel={(event) => {
-        onPointerCancel?.(event)
+      onTouchCancel={(event) => {
+        onTouchCancel?.(event)
         clearPendingLongPress()
       }}
       className={cn('select-none touch-manipulation', className)}
