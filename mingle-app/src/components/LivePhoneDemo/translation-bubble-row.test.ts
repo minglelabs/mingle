@@ -12,6 +12,7 @@ describe('TranslationBubbleRow', () => {
       contentClassName: 'text-sm text-gray-500',
       contentStyle: { lineHeight: 1.25 },
       copyText: '짧은 번역',
+      copyBubbleLabel: 'Copy',
       copiedToastLabel: 'Copied',
     }
     const html = renderToStaticMarkup(

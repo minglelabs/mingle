@@ -13,6 +13,7 @@ interface TranslationBubbleRowProps {
   contentClassName?: string
   contentStyle?: CSSProperties
   copyText?: string
+  copyBubbleLabel?: string
   copiedToastLabel?: string
   children: ReactNode
 }
@@ -27,6 +28,7 @@ export default function TranslationBubbleRow({
   contentClassName,
   contentStyle,
   copyText,
+  copyBubbleLabel,
   copiedToastLabel,
   children,
 }: TranslationBubbleRowProps) {
@@ -63,6 +65,7 @@ export default function TranslationBubbleRow({
         <CopyableBubbleSurface
           data-translation-bubble-body
           text={copyText}
+          copyBubbleLabel={copyBubbleLabel ?? 'Copy'}
           copiedToastLabel={copiedToastLabel}
           style={{ maxWidth, borderTopLeftRadius: '1px' }}
           className={cn(
