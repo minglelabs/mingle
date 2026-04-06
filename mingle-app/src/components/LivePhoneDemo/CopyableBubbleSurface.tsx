@@ -171,7 +171,7 @@ export default function CopyableBubbleSurface({
           data-copyable-bubble-menu
           className="absolute bottom-[calc(100%+0.5rem)] left-1/2 z-30 -translate-x-1/2"
         >
-          <div className="w-36 overflow-hidden rounded-xl bg-white shadow-[0_8px_28px_rgba(15,23,42,0.16),0_2px_8px_rgba(15,23,42,0.08)]">
+          <div className="w-36 rounded-xl bg-white shadow-[0_8px_28px_rgba(15,23,42,0.16),0_2px_8px_rgba(15,23,42,0.08)]">
             <button
               type="button"
               data-copyable-bubble-menu-button
@@ -181,7 +181,7 @@ export default function CopyableBubbleSurface({
                 event.stopPropagation()
                 handleCopy(text)
               }}
-              className="flex w-full items-center justify-between px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100"
+              className={`flex w-full items-center justify-between px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100 ${showAllCopyButton ? 'rounded-t-xl' : 'rounded-xl'}`}
             >
               <span>{copyBubbleLabel}</span>
               <Copy className="h-4 w-4 shrink-0 text-slate-500" />
@@ -197,7 +197,7 @@ export default function CopyableBubbleSurface({
                     event.stopPropagation()
                     handleCopy(allText!)
                   }}
-                  className="flex w-full items-center justify-between px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100"
+                  className="flex w-full items-center justify-between rounded-b-xl px-3.5 py-3 text-[14px] font-medium text-slate-800 transition hover:bg-slate-50 active:bg-slate-100"
                 >
                   <span>{copyAllBubblesLabel}</span>
                   <Copy className="h-4 w-4 shrink-0 text-slate-500" />
