@@ -17,12 +17,13 @@ describe('live-phone-demo.copy-actions', () => {
     expect(copy.copiedToastLabel).toBe('Copied')
   })
 
-  it('defines a copied toast label for all 15 legal-document locales', () => {
+  it('defines copy menu and copied toast labels for all 15 legal-document locales', () => {
     expect(LEGAL_DOCUMENT_LOCALES).toHaveLength(15)
 
     for (const locale of LEGAL_DOCUMENT_LOCALES) {
       const copy = resolveLivePhoneDemoCopyActionCopy(locale)
       expect(copy.copyBubbleLabel.trim().length).toBeGreaterThan(0)
+      expect(copy.copyAllBubblesLabel.trim().length).toBeGreaterThan(0)
       expect(copy.copiedToastLabel.trim().length).toBeGreaterThan(0)
     }
   })
