@@ -105,6 +105,8 @@ const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
+const EMPTY_STATE_ARROW_END_Y = 78
+const EMPTY_STATE_ARROW_HEAD_Y = 72
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -3695,7 +3697,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     aria-hidden="true"
                   >
                     <path
-                      d="M12 4V96M12 96L4 90M12 96L20 90"
+                      d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.4"
