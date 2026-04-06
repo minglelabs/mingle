@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
+import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
@@ -17,17 +17,6 @@ type MingleHomeProps = {
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
 const REQUIRE_AUTH_FOR_TRANSLATOR = false;
-const LivePhoneDemo = dynamic(
-  () => import("@/components/LivePhoneDemo/LivePhoneDemo"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
-        <Loader2 size={24} className="animate-spin" aria-hidden />
-      </div>
-    ),
-  },
-);
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
 const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
@@ -210,6 +199,7 @@ export default function MingleHome(props: MingleHomeProps) {
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
   );
+  const [isLiveDemoMounted, setIsLiveDemoMounted] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
@@ -229,6 +219,10 @@ export default function MingleHome(props: MingleHomeProps) {
     useState<EmailAuthErrorCode | null>(null);
   const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
+
+  useEffect(() => {
+    setIsLiveDemoMounted(true);
+  }, []);
   const [loginPassword, setLoginPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupName, setSignupName] = useState("");
@@ -1581,37 +1575,43 @@ export default function MingleHome(props: MingleHomeProps) {
 
   return (
     <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
-      <LivePhoneDemo
-        enableAutoTTS
-        uiLocale={props.locale}
-        tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
-        usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
-        usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
-        connectingLabel={props.dictionary.demo.connecting}
-        connectionFailedLabel={props.dictionary.demo.connectionFailed}
-        muteTtsLabel={props.dictionary.demo.muteTts}
-        unmuteTtsLabel={props.dictionary.demo.unmuteTts}
-        textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
-        silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
-        translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
-        adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
-        adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
-        adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
-        silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
-        silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
-        menuLabel={props.dictionary.profile.menuLabel}
-        logoutLabel={props.dictionary.profile.logout}
-        deleteAccountLabel={props.dictionary.profile.deleteAccount}
-        deleteAccountConfirmMessage={props.dictionary.profile.deleteAccountConfirm}
-        deleteAccountConfirmLabel={props.dictionary.profile.deleteAccountConfirmAction}
-        deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
-        onLogout={handleSignOut}
-        onDeleteAccount={handleDeleteAccount}
-        defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
-        isAuthActionPending={isDeletingAccount}
-        showMenuButton
-        showAccountActions={status === "authenticated"}
-      />
+      {isLiveDemoMounted ? (
+        <LivePhoneDemo
+          enableAutoTTS
+          uiLocale={props.locale}
+          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
+          usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
+          usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
+          connectingLabel={props.dictionary.demo.connecting}
+          connectionFailedLabel={props.dictionary.demo.connectionFailed}
+          muteTtsLabel={props.dictionary.demo.muteTts}
+          unmuteTtsLabel={props.dictionary.demo.unmuteTts}
+          textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
+          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+          translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
+          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
+          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
+          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+          silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
+          silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
+          menuLabel={props.dictionary.profile.menuLabel}
+          logoutLabel={props.dictionary.profile.logout}
+          deleteAccountLabel={props.dictionary.profile.deleteAccount}
+          deleteAccountConfirmMessage={props.dictionary.profile.deleteAccountConfirm}
+          deleteAccountConfirmLabel={props.dictionary.profile.deleteAccountConfirmAction}
+          deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
+          onLogout={handleSignOut}
+          onDeleteAccount={handleDeleteAccount}
+          defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
+          isAuthActionPending={isDeletingAccount}
+          showMenuButton
+          showAccountActions={status === "authenticated"}
+        />
+      ) : (
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+          <Loader2 size={24} className="animate-spin" aria-hidden />
+        </div>
+      )}
     </main>
   );
 }
