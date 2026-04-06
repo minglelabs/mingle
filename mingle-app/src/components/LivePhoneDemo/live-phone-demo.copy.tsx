@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 
 const COPY_TOAST_DURATION_MS = 1000
 export const COPY_FEEDBACK_TOASTER_ID = 'live-phone-demo-copy-feedback'
-export const COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME = 'pointer-events-none mx-auto flex w-fit max-w-[calc(100vw-4rem)] items-center gap-1.5 rounded-full border border-emerald-200/70 bg-white/96 px-2.5 py-1 shadow-[0_10px_26px_rgba(15,23,42,0.14)] ring-1 ring-white/80 backdrop-blur-md'
+export const COPY_FEEDBACK_TOAST_SURFACE_CLASSNAME = 'pointer-events-none mx-auto flex w-fit max-w-[calc(100vw-4rem)] items-center gap-1.5 rounded-full bg-white/97 px-2.5 py-1 shadow-[0_12px_28px_rgba(15,23,42,0.12),0_2px_6px_rgba(15,23,42,0.08)] backdrop-blur-md'
 const COPY_FEEDBACK_TOAST_ID = 'live-phone-demo-copy-feedback-toast'
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
