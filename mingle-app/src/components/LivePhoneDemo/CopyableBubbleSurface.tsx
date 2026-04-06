@@ -21,6 +21,7 @@ export default function CopyableBubbleSurface({
   text,
   copiedToastLabel,
   className,
+  style,
   onContextMenu,
   onDoubleClick,
   onPointerCancel,
@@ -55,8 +56,9 @@ export default function CopyableBubbleSurface({
       onContextMenu={(event) => {
         onContextMenu?.(event)
         if (event.defaultPrevented) return
+
+        event.preventDefault()
         if (suppressContextMenuRef.current) {
-          event.preventDefault()
           suppressContextMenuRef.current = false
         }
       }}
@@ -102,7 +104,14 @@ export default function CopyableBubbleSurface({
         onPointerCancel?.(event)
         clearPendingLongPress()
       }}
-      className={cn('select-text touch-manipulation', className)}
+      className={cn('select-none touch-manipulation', className)}
+      draggable={false}
+      style={{
+        ...style,
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
     />
   )
 }
