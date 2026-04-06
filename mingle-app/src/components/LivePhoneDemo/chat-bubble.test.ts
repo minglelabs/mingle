@@ -45,11 +45,19 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
-    expect(html).toContain('max-width:93%')
+    expect(html).toContain('max-width:85%')
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
+    expect(html).toContain('aria-label="Copy full message"')
+    expect(html).toContain('data-message-copy-button')
+    expect(html).toContain('data-copyable-bubble')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble/g) || []).length).toBe(1)
+    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+      html.indexOf('aria-label="Copy full message"'),
+    )
     expect(html).toContain('class="align-middle"')
   })
 
@@ -72,8 +80,15 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('aria-label="Copy full message"')
     expect(html).toContain('data-message-copy-button')
     expect(html).toContain('data-message-tts-button')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
+    expect((html.match(/data-copyable-bubble/g) || []).length).toBe(2)
+    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+      html.indexOf('aria-label="Copy full message"'),
+    )
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
@@ -102,7 +117,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('bg-amber-400 align-middle animate-pulse')
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
-    expect(html).not.toContain('data-message-copy-button')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
     expect(html).not.toContain('data-message-tts-button')
   })
 
@@ -125,7 +140,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('>UNKNOWN<')
   })
 
-  it('renders copy and tts actions for the original and translated bubbles', () => {
+  it('renders tts actions for the original and translated bubbles', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -140,11 +155,8 @@ describe('ChatBubble', () => {
       }),
     )
 
-    expect((html.match(/data-message-copy-button/g) || []).length).toBe(2)
     expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
-    expect(html).toContain('Copy original message')
     expect(html).toContain('Play original message')
-    expect(html).toContain('Copy ko translation')
     expect(html).toContain('Play ko translation')
   })
 })

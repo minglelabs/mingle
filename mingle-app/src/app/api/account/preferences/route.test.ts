@@ -93,7 +93,7 @@ describe("/api/account/preferences route", () => {
 
     expect(response.status).toBe(200);
     expect(json).toEqual({
-      textSizeLevel: 2,
+      textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: null,
@@ -120,7 +120,7 @@ describe("/api/account/preferences route", () => {
 
     expect(response.status).toBe(200);
     expect(json).toEqual({
-      textSizeLevel: 2,
+      textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: null,
@@ -273,7 +273,7 @@ describe("/api/account/preferences route", () => {
 
     expect(response.status).toBe(200);
     expect(json).toEqual({
-      textSizeLevel: 2,
+      textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: null,
