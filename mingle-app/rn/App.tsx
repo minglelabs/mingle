@@ -1020,7 +1020,7 @@ function resolveNativeBannerPosition(rawValue: string): NativeBannerPosition {
   const normalized = rawValue.trim().toLowerCase();
   if (normalized === 'top') return 'top';
   if (normalized === 'bottom') return 'bottom';
-  return 'top';
+  return 'bottom';
 }
 
 function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition | null {

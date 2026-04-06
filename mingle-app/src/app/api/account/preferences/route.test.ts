@@ -96,7 +96,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
-      adBannerPosition: null,
+      adBannerPosition: "bottom",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -123,7 +123,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
-      adBannerPosition: null,
+      adBannerPosition: "bottom",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -237,7 +237,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
-      adBannerPosition: null,
+      adBannerPosition: "bottom",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -276,7 +276,7 @@ describe("/api/account/preferences route", () => {
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
-      adBannerPosition: null,
+      adBannerPosition: "bottom",
       speakerEnabled: false,
       echoAllowed: true,
     });

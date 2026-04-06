@@ -38,7 +38,7 @@ describe('buildHydratedAccountPreferences', () => {
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
       translationModel: 'gemini-2.5-flash-lite',
-      adBannerPosition: null,
+      adBannerPosition: 'bottom',
       speakerEnabled: false,
       echoAllowed: true,
     })

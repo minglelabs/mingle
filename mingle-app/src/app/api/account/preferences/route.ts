@@ -20,6 +20,7 @@ const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
 const DEFAULT_SPEAKER_ENABLED = false;
 const DEFAULT_ECHO_ALLOWED = true;
+const DEFAULT_AD_BANNER_POSITION = "bottom";
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
@@ -323,7 +324,7 @@ export async function GET(request: Request) {
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
-    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
+    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
     speakerEnabled: preferences?.demoSpeakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
     echoAllowed: preferences?.demoEchoAllowed ?? DEFAULT_ECHO_ALLOWED,
   });
