@@ -837,10 +837,10 @@ resolve_devbox_ad_banner_position() {
       printf '%s' "$value"
       ;;
     "")
-      printf '%s' "top"
+      printf '%s' "bottom"
       ;;
     *)
-      printf '%s' "top"
+      printf '%s' "bottom"
       ;;
   esac
 }

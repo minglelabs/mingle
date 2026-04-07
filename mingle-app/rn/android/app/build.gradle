@@ -93,7 +93,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 36
+def appVersionCode = 37
 def appVersionName = "1.0.10"
 
 def normalizeRuntimeConfigValue = { String value ->
@@ -209,7 +209,7 @@ def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoDevboxEn
 def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.0.10")
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
-def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoDevboxEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "top")
+def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoDevboxEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "bottom")
 def runtimeAdBannerHeightPx = readEnvOrPropertyOrDefault("RN_AD_BANNER_HEIGHT_PX", repoDevboxEnvProperties, ["RN_AD_BANNER_HEIGHT_PX", "NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX"], "50")
 def runtimeAdmobAppIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_APP_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_APP_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_APP_ID_ANDROID"], "ca-app-pub-7057041881494735~1471126891")
 def runtimeAdmobBannerUnitIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_BANNER_UNIT_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_BANNER_UNIT_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID"], "ca-app-pub-7057041881494735/6522262692")
