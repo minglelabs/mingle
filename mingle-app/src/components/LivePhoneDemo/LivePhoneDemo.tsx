@@ -2819,18 +2819,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
   const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
-  const visibleNativeBottomBannerReservePx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? (
-      !isLikelyIOSPlatform() || activeKeyboardInsetPx <= 0
-        ? effectiveNativeBottomContentInsetPx
-        : 0
-    )
-    : 0
   const scrollToBottomButtonReservedPx = 0
   const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -2841,7 +2834,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isError
     && !isLimitReached
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
-  const bottomBarMarginBottom = `${visibleNativeBottomBannerReservePx}px`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -3989,7 +3981,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             style={{
               paddingTop: '10px',
               paddingBottom: bottomBarPaddingBottom,
-              marginBottom: bottomBarMarginBottom,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
