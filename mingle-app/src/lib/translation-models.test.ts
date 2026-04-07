@@ -10,7 +10,7 @@ describe('translation model catalog', () => {
     expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
       {
         value: 'gemma-4-31b-it',
-        label: 'gemma-4-31b-it',
+        label: 'gemma-4-31b-it (slow)',
       },
     ]))
   })

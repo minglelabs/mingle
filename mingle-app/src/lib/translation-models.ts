@@ -29,7 +29,7 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   },
   {
     value: 'gemma-4-31b-it',
-    label: 'gemma-4-31b-it',
+    label: 'gemma-4-31b-it (slow)',
   },
   {
     value: 'qwen/qwen3.5-9b',
