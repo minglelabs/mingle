@@ -12,63 +12,63 @@ export type LivePhoneDemoTtsActionCopy = {
 
 const TTS_ACTION_COPY_BY_LOCALE = {
   ko: {
-    playPronunciationLabel: '발음 듣기',
+    playPronunciationLabel: '듣기',
     playbackFailedLabel: '이 발화의 오디오를 재생하지 못했습니다.',
   },
   en: {
-    playPronunciationLabel: 'Listen to pronunciation',
+    playPronunciationLabel: 'Listen',
     playbackFailedLabel: 'Failed to play audio for this message.',
   },
   ja: {
-    playPronunciationLabel: '発音を聞く',
+    playPronunciationLabel: '聴く',
     playbackFailedLabel: 'この発話の音声を再生できませんでした。',
   },
   'zh-CN': {
-    playPronunciationLabel: '收听发音',
+    playPronunciationLabel: '播放',
     playbackFailedLabel: '无法播放这条发言的音频。',
   },
   'zh-TW': {
-    playPronunciationLabel: '聽發音',
+    playPronunciationLabel: '播放',
     playbackFailedLabel: '無法播放這則發言的音訊。',
   },
   fr: {
-    playPronunciationLabel: 'Écouter la prononciation',
+    playPronunciationLabel: 'Écouter',
     playbackFailedLabel: 'Impossible de lire l’audio de ce message.',
   },
   de: {
-    playPronunciationLabel: 'Aussprache anhören',
+    playPronunciationLabel: 'Anhören',
     playbackFailedLabel: 'Audio fur diese Nachricht konnte nicht abgespielt werden.',
   },
   es: {
-    playPronunciationLabel: 'Escuchar pronunciación',
+    playPronunciationLabel: 'Escuchar',
     playbackFailedLabel: 'No se pudo reproducir el audio de este mensaje.',
   },
   pt: {
-    playPronunciationLabel: 'Ouvir pronúncia',
+    playPronunciationLabel: 'Ouvir',
     playbackFailedLabel: 'Nao foi possivel reproduzir o audio desta mensagem.',
   },
   it: {
-    playPronunciationLabel: 'Ascolta pronuncia',
+    playPronunciationLabel: 'Ascolta',
     playbackFailedLabel: 'Impossibile riprodurre l’audio di questo messaggio.',
   },
   ru: {
-    playPronunciationLabel: 'Слушать произношение',
+    playPronunciationLabel: 'Слушать',
     playbackFailedLabel: 'Не удалось воспроизвести аудио для этого сообщения.',
   },
   ar: {
-    playPronunciationLabel: 'الاستماع إلى النطق',
+    playPronunciationLabel: 'استماع',
     playbackFailedLabel: 'تعذر تشغيل الصوت لهذه الرسالة.',
   },
   hi: {
-    playPronunciationLabel: 'उच्चारण सुनें',
+    playPronunciationLabel: 'सुनें',
     playbackFailedLabel: 'इस संदेश का ऑडियो नहीं चलाया जा सका।',
   },
   th: {
-    playPronunciationLabel: 'ฟังการออกเสียง',
+    playPronunciationLabel: 'ฟัง',
     playbackFailedLabel: 'ไม่สามารถเล่นเสียงของข้อความนี้ได้',
   },
   vi: {
-    playPronunciationLabel: 'Nghe phát âm',
+    playPronunciationLabel: 'Nghe',
     playbackFailedLabel: 'Khong the phat am thanh cho tin nhan nay.',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoTtsActionCopy>

@@ -1681,7 +1681,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
     }
 
-    if (isNativeApp()) {
+    // NativeTTSModule은 iOS 전용 — Android에서는 HTML audio로 재생
+    if (isNativeApp() && isLikelyIOSPlatform()) {
       void playViaNativeBridge()
     } else {
       void playViaHtmlAudio()
@@ -2086,6 +2087,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setPendingManualTtsTarget(target)
     forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
 
+    // Android WebView autoplay 제한: API 호출(async) 전, 유저 제스처 컨텍스트 안에서 audio를 프라이밍
+    if (!isLikelyIOSPlatform()) {
+      void primeAudioPlayback()
+    }
+
     const audioBlob = await synthesizeBubbleTtsViaApi({
       playbackKey: target.playbackKey,
       text: normalizedText,
@@ -2111,6 +2117,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     forceStopTtsPlayback,
     pendingManualTtsTarget,
+    primeAudioPlayback,
     processTtsQueue,
     speakingItem,
     synthesizeBubbleTtsViaApi,
