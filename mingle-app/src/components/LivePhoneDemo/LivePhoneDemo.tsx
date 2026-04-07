@@ -3160,25 +3160,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             )}
 
-                            {shouldShowDebugWebViewRemountMenuItem && (
-                              <button
-                                type="button"
-                                onClick={handleDebugWebViewRemountMenuItemPress}
-                                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[0.94rem] font-semibold text-gray-900">
-                                    {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
-                                  </div>
-                                  <div className="mt-0.5 text-[0.78rem] text-amber-700">
-                                    Local and dev only
-                                  </div>
-                                </div>
-                                <span className="shrink-0 text-amber-600">
-                                  <ChevronRight size={18} strokeWidth={2.4} />
-                                </span>
-                              </button>
-                            )}
                           </div>
                         </div>
 
@@ -3227,6 +3208,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 ) : null}
                               </div>
                             </div>
+                          </div>
+                        )}
+
+                        {shouldShowDebugWebViewRemountMenuItem && (
+                          <div className="px-4 pt-0 pb-4">
+                            <button
+                              type="button"
+                              onClick={handleDebugWebViewRemountMenuItemPress}
+                              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[0.94rem] font-semibold text-gray-900">
+                                  {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
+                                </div>
+                                <div className="mt-0.5 text-[0.78rem] text-amber-700">
+                                  Local and dev only
+                                </div>
+                              </div>
+                              <span className="shrink-0 text-amber-600">
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
                           </div>
                         )}
                       </div>
