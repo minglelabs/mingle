@@ -4188,7 +4188,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 active:scale-95"
+                      className="inline-flex h-11 w-11 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
                     >
                       <Keyboard size={19} strokeWidth={2.15} />
                     </motion.button>
