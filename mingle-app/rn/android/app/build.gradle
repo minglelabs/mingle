@@ -93,33 +93,47 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 28
-def appVersionName = "1.0.6"
+def appVersionCode = 39
+def appVersionName = "1.0.10"
+
+def normalizeRuntimeConfigValue = { String value ->
+    if (value == null) {
+        return null
+    }
+
+    def trimmed = value.trim()
+    if (trimmed.length() >= 2) {
+        def hasMatchingSingleQuotes = trimmed.startsWith("'") && trimmed.endsWith("'")
+        def hasMatchingDoubleQuotes = trimmed.startsWith("\"") && trimmed.endsWith("\"")
+        if (hasMatchingSingleQuotes || hasMatchingDoubleQuotes) {
+            return trimmed.substring(1, trimmed.length() - 1).trim()
+        }
+    }
+
+    return trimmed
+}
 
 def readEnvOrDefault = { String key, String fallback ->
-    def value = System.getenv(key)
+    def value = normalizeRuntimeConfigValue(System.getenv(key))
     if (value == null) {
         return fallback
     }
-    def trimmed = value.trim()
-    return trimmed.isEmpty() ? fallback : trimmed
+    return value.isEmpty() ? fallback : value
 }
 
 def readEnvOrPropertyOrDefault = { String envKey, Properties properties, List<String> propertyKeys, String fallback ->
-    def envValue = System.getenv(envKey)
+    def envValue = normalizeRuntimeConfigValue(System.getenv(envKey))
     if (envValue != null) {
-        def trimmedEnvValue = envValue.trim()
-        if (!trimmedEnvValue.isEmpty()) {
-            return trimmedEnvValue
+        if (!envValue.isEmpty()) {
+            return envValue
         }
     }
 
     for (propertyKey in propertyKeys) {
-        def propertyValue = properties.getProperty(propertyKey)
+        def propertyValue = normalizeRuntimeConfigValue(properties.getProperty(propertyKey))
         if (propertyValue != null) {
-            def trimmedPropertyValue = propertyValue.trim()
-            if (!trimmedPropertyValue.isEmpty()) {
-                return trimmedPropertyValue
+            if (!propertyValue.isEmpty()) {
+                return propertyValue
             }
         }
     }
@@ -142,20 +156,18 @@ def loadOptionalProperties = { File propertiesFile ->
 def repoDevboxEnvProperties = loadOptionalProperties(new File(rootProject.projectDir, "../../../.devbox.env"))
 
 def readSigningValue = { List<Properties> propertySources, String envKey, String propertyKey ->
-    def value = System.getenv(envKey)
+    def value = normalizeRuntimeConfigValue(System.getenv(envKey))
     if (value != null) {
-        def trimmed = value.trim()
-        if (!trimmed.isEmpty()) {
-            return trimmed
+        if (!value.isEmpty()) {
+            return value
         }
     }
 
     for (properties in propertySources) {
-        def propertyValue = properties.getProperty(propertyKey)
+        def propertyValue = normalizeRuntimeConfigValue(properties.getProperty(propertyKey))
         if (propertyValue != null) {
-            def trimmedPropertyValue = propertyValue.trim()
-            if (!trimmedPropertyValue.isEmpty()) {
-                return trimmedPropertyValue
+            if (!propertyValue.isEmpty()) {
+                return propertyValue
             }
         }
     }
@@ -194,9 +206,19 @@ def quoteBuildConfigString = { String value ->
 
 def runtimeSiteUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_SITE_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_SITE_URL", "DEVBOX_SITE_URL"], "https://mingle-app-xi.vercel.app")
 def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_WS_URL", "DEVBOX_RN_WS_URL"], "wss://mingle.up.railway.app")
-def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.0.6")
+def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.0.10")
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
+def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoDevboxEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "bottom")
+def runtimeAdBannerHeightPx = readEnvOrPropertyOrDefault("RN_AD_BANNER_HEIGHT_PX", repoDevboxEnvProperties, ["RN_AD_BANNER_HEIGHT_PX", "NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX"], "50")
+def runtimeAdmobAppIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_APP_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_APP_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_APP_ID_ANDROID"], "ca-app-pub-7057041881494735~1471126891")
+def runtimeAdmobBannerUnitIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_BANNER_UNIT_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_BANNER_UNIT_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID"], "ca-app-pub-7057041881494735/6522262692")
+if (!(runtimeAdmobAppIdAndroid ==~ /^ca-app-pub-\d+~\d+$/)) {
+    throw new GradleException("Invalid RN_ADMOB_APP_ID_ANDROID resolved for Android runtime: ${runtimeAdmobAppIdAndroid}")
+}
+if (!(runtimeAdmobBannerUnitIdAndroid ==~ /^ca-app-pub-\d+\/\d+$/)) {
+    throw new GradleException("Invalid RN_ADMOB_BANNER_UNIT_ID_ANDROID resolved for Android runtime: ${runtimeAdmobBannerUnitIdAndroid}")
+}
 def allowCleartextTraffic = runtimeSiteUrl.toLowerCase().startsWith("http://")
 def repoCredentialsDir = new File(rootProject.projectDir, "../../../.credentials/android")
 def repoAndroidSigningProperties = loadOptionalProperties(new File(repoCredentialsDir, "keystore.properties"))
@@ -260,12 +282,16 @@ android {
         versionName appVersionName
         manifestPlaceholders = [
             usesCleartextTraffic: allowCleartextTraffic.toString(),
+            adMobApplicationId: runtimeAdmobAppIdAndroid,
         ]
         buildConfigField "String", "MINGLE_WEB_APP_BASE_URL", quoteBuildConfigString(runtimeSiteUrl)
         buildConfigField "String", "MINGLE_DEFAULT_WS_URL", quoteBuildConfigString(runtimeWsUrl)
         buildConfigField "String", "MINGLE_API_NAMESPACE", quoteBuildConfigString(runtimeApiNamespace)
         buildConfigField "String", "MINGLE_CLIENT_VERSION", quoteBuildConfigString(runtimeClientVersion)
         buildConfigField "String", "MINGLE_CLIENT_BUILD", quoteBuildConfigString(runtimeClientBuild)
+        buildConfigField "String", "MINGLE_AD_BANNER_POSITION", quoteBuildConfigString(runtimeAdBannerPosition)
+        buildConfigField "String", "MINGLE_AD_BANNER_HEIGHT_PX", quoteBuildConfigString(runtimeAdBannerHeightPx)
+        buildConfigField "String", "MINGLE_AD_BANNER_UNIT_ID_ANDROID", quoteBuildConfigString(runtimeAdmobBannerUnitIdAndroid)
     }
     signingConfigs {
         debug {

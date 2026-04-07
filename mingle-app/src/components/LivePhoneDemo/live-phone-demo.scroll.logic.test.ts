@@ -3,7 +3,7 @@ import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   AUTO_SCROLL_MIN_INTERVAL_MS,
   createAutoScrollScheduler,
-  deriveAutoScrollThrottleDelayMs,
+  deriveAutoScrollClockDelayMs,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
@@ -20,12 +20,12 @@ describe('live-phone-demo scroll/platform logic', () => {
       vi.useRealTimers()
     })
 
-    it('rechecks the latest condition before a throttled scroll runs', () => {
+    it('rechecks the latest condition before a scheduled clock tick runs', () => {
       let shouldAutoScroll = true
       let runCount = 0
 
+      vi.setSystemTime(new Date('2026-03-23T00:00:00.500Z'))
       const scheduler = createAutoScrollScheduler()
-      scheduler.markPerformed()
       scheduler.update({
         shouldAutoScroll: () => shouldAutoScroll,
         runAutoScroll: () => {
@@ -35,37 +35,35 @@ describe('live-phone-demo scroll/platform logic', () => {
       })
 
       shouldAutoScroll = false
-      vi.advanceTimersByTime(AUTO_SCROLL_MIN_INTERVAL_MS)
+      vi.advanceTimersByTime(500)
 
       expect(runCount).toBe(0)
     })
 
-    it('cancels a pending throttled scroll when auto-follow turns off', () => {
-      let shouldAutoScroll = true
+    it('cancels a pending scheduled tick when auto-follow turns off', () => {
       let runCount = 0
 
+      vi.setSystemTime(new Date('2026-03-23T00:00:00.500Z'))
       const scheduler = createAutoScrollScheduler()
-      scheduler.markPerformed()
       scheduler.update({
-        shouldAutoScroll: () => shouldAutoScroll,
+        shouldAutoScroll: () => true,
         runAutoScroll: () => {
           runCount += 1
           return true
         },
       })
 
-      shouldAutoScroll = false
       scheduler.cancel()
-      vi.advanceTimersByTime(AUTO_SCROLL_MIN_INTERVAL_MS)
+      vi.advanceTimersByTime(500)
 
       expect(runCount).toBe(0)
     })
 
-    it('reschedules using the remaining throttle window instead of stacking timers', () => {
+    it('coalesces multiple updates into one run on the next clock tick', () => {
       let runCount = 0
 
+      vi.setSystemTime(new Date('2026-03-23T00:00:00.400Z'))
       const scheduler = createAutoScrollScheduler()
-      scheduler.markPerformed()
       scheduler.update({
         shouldAutoScroll: () => true,
         runAutoScroll: () => {
@@ -74,7 +72,7 @@ describe('live-phone-demo scroll/platform logic', () => {
         },
       })
 
-      vi.advanceTimersByTime(400)
+      vi.advanceTimersByTime(200)
       scheduler.update({
         shouldAutoScroll: () => true,
         runAutoScroll: () => {
@@ -83,10 +81,25 @@ describe('live-phone-demo scroll/platform logic', () => {
         },
       })
 
-      vi.advanceTimersByTime(599)
+      vi.advanceTimersByTime(399)
       expect(runCount).toBe(0)
 
       vi.advanceTimersByTime(1)
+      expect(runCount).toBe(1)
+    })
+
+    it('runs immediately when an update arrives exactly on a clock boundary', () => {
+      let runCount = 0
+
+      const scheduler = createAutoScrollScheduler()
+      scheduler.update({
+        shouldAutoScroll: () => true,
+        runAutoScroll: () => {
+          runCount += 1
+          return true
+        },
+      })
+
       expect(runCount).toBe(1)
     })
   })
@@ -237,26 +250,23 @@ describe('live-phone-demo scroll/platform logic', () => {
     })
   })
 
-  describe('deriveAutoScrollThrottleDelayMs', () => {
-    it('returns zero when auto-scroll has not run yet', () => {
-      expect(deriveAutoScrollThrottleDelayMs({
+  describe('deriveAutoScrollClockDelayMs', () => {
+    it('returns zero on an exact clock boundary', () => {
+      expect(deriveAutoScrollClockDelayMs({
         nowMs: 10_000,
-        lastAutoScrollAtMs: 0,
       })).toBe(0)
     })
 
-    it('returns the remaining throttle window', () => {
-      expect(deriveAutoScrollThrottleDelayMs({
+    it('returns the remaining time until the next clock tick', () => {
+      expect(deriveAutoScrollClockDelayMs({
         nowMs: 10_250,
-        lastAutoScrollAtMs: 10_000,
       })).toBe(AUTO_SCROLL_MIN_INTERVAL_MS - 250)
     })
 
-    it('returns zero after the minimum interval elapses', () => {
-      expect(deriveAutoScrollThrottleDelayMs({
+    it('wraps to the next global boundary instead of using last-run time', () => {
+      expect(deriveAutoScrollClockDelayMs({
         nowMs: 11_250,
-        lastAutoScrollAtMs: 10_000,
-      })).toBe(0)
+      })).toBe(AUTO_SCROLL_MIN_INTERVAL_MS - 250)
     })
   })
 })

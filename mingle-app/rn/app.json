@@ -1,4 +1,8 @@
 {
   "name": "mingle",
-  "displayName": "mingle"
+  "displayName": "mingle",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-7057041881494735~1471126891",
+    "ios_app_id": "ca-app-pub-7057041881494735~7844963551"
+  }
 }

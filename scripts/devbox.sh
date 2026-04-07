@@ -10,10 +10,19 @@ APP_ENV_FILE="$ROOT_DIR/mingle-app/.env.local"
 STT_ENV_FILE="$ROOT_DIR/mingle-stt/.env.local"
 NGROK_LOCAL_CONFIG="$ROOT_DIR/ngrok.mobile.local.yml"
 RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
+RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.6"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.6"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.10"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.10"
+DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
+DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
+DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
+DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID="ca-app-pub-3940256099942544/6300978111"
+DEFAULT_ADMOB_APP_ID_IOS="ca-app-pub-7057041881494735~7844963551"
+DEFAULT_ADMOB_APP_ID_ANDROID="ca-app-pub-7057041881494735~1471126891"
+DEFAULT_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-7057041881494735/3768106846"
+DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID="ca-app-pub-7057041881494735/6522262692"
 DEVBOX_BASE_WEB_PORT=3518
 DEVBOX_BASE_STT_PORT=5518
 DEVBOX_BASE_METRO_PORT=8518
@@ -126,6 +135,7 @@ DEVBOX_CLOUDFLARE_STT_HOSTNAME="${DEVBOX_CLOUDFLARE_STT_HOSTNAME:-}"
 DEVBOX_LOG_FILE=""
 DEVBOX_OPENCLAW_ROOT=""
 DEVBOX_IOS_TEAM_ID="${DEVBOX_IOS_TEAM_ID:-}"
+DEVBOX_ACTIVE_DEVICE_APP_ENV=""
 
 log() {
   printf '[devbox] %s\n' "$*"
@@ -138,6 +148,46 @@ warn() {
 die() {
   printf '[devbox] %s\n' "$*" >&2
   exit 1
+}
+
+require_nonempty_runtime_value() {
+  local key="$1"
+  local value="${2:-}"
+
+  [[ -n "$value" ]] || die "resolved empty $key for devbox runtime"
+}
+
+ensure_prisma_app_schema_url() {
+  local raw_value="${1:-}"
+
+  if [[ -z "$raw_value" || "$raw_value" == *"schema="* ]]; then
+    printf '%s' "$raw_value"
+    return 0
+  fi
+
+  if [[ "$raw_value" == *\?* ]]; then
+    printf '%s&schema=app' "$raw_value"
+    return 0
+  fi
+
+  printf '%s?schema=app' "$raw_value"
+}
+
+normalize_prisma_database_env() {
+  if [[ -n "${DATABASE_URL:-}" ]]; then
+    DATABASE_URL="$(ensure_prisma_app_schema_url "$DATABASE_URL")"
+    export DATABASE_URL
+  fi
+
+  if [[ -n "${DIRECT_DATABASE_URL:-}" ]]; then
+    DIRECT_DATABASE_URL="$(ensure_prisma_app_schema_url "$DIRECT_DATABASE_URL")"
+    export DIRECT_DATABASE_URL
+  fi
+
+  if [[ -n "${POSTGRES_PRISMA_URL:-}" ]]; then
+    POSTGRES_PRISMA_URL="$(ensure_prisma_app_schema_url "$POSTGRES_PRISMA_URL")"
+    export POSTGRES_PRISMA_URL
+  fi
 }
 
 best_effort_raise_nofile_limit() {
@@ -426,7 +476,7 @@ is_managed_key_for_target() {
 
 format_env_value_for_dotenv() {
   local value="$1"
-  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=-]*$ ]]; then
+  if [[ "$value" =~ ^[A-Za-z0-9_./:@,+=~-]*$ ]]; then
     printf '%s' "$value"
     return 0
   fi
@@ -755,6 +805,110 @@ read_app_setting_value() {
   done
 
   return 1
+}
+
+is_nonprod_mobile_build() {
+  [[ -n "${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}" && "${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}" != "prod" ]]
+}
+
+resolve_devbox_ad_banner_position() {
+  local platform="${1:-${DEVBOX_ACTIVE_MOBILE_PLATFORM:-}}"
+  local platform_key=""
+  local value=""
+  case "$platform" in
+    ios)
+      platform_key="RN_AD_BANNER_POSITION_IOS"
+      ;;
+    android)
+      platform_key="RN_AD_BANNER_POSITION_ANDROID"
+      ;;
+  esac
+
+  if [[ -n "$platform_key" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value "$platform_key" || true)")"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(trim_whitespace "$(read_app_setting_value RN_AD_BANNER_POSITION || true)")"
+  fi
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+
+  case "$value" in
+    top|bottom)
+      printf '%s' "$value"
+      ;;
+    "")
+      printf '%s' "bottom"
+      ;;
+    *)
+      printf '%s' "bottom"
+      ;;
+  esac
+}
+
+resolve_devbox_ad_banner_height_px() {
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value RN_AD_BANNER_HEIGHT_PX || true)")"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  printf '%s' "50"
+}
+
+resolve_devbox_admob_app_id_ios() {
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_IOS || true)")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
+    return 0
+  fi
+  printf '%s' "$DEFAULT_ADMOB_APP_ID_IOS"
+}
+
+resolve_devbox_admob_app_id_android() {
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_ANDROID || true)")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
+    return 0
+  fi
+  printf '%s' "$DEFAULT_ADMOB_APP_ID_ANDROID"
+}
+
+resolve_devbox_admob_banner_unit_id_ios() {
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_IOS || true)")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
+    return 0
+  fi
+  printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_IOS"
+}
+
+resolve_devbox_admob_banner_unit_id_android() {
+  local value=""
+  value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_ANDROID || true)")"
+  if [[ -n "$value" ]]; then
+    printf '%s' "$value"
+    return 0
+  fi
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
+    return 0
+  fi
+  printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID"
 }
 
 derive_worktree_name() {
@@ -1669,6 +1823,12 @@ EOF
     MINGLE_TEST_WS_URL \
     RN_IOS_API_NAMESPACE \
     RN_ANDROID_API_NAMESPACE \
+    RN_AD_BANNER_POSITION \
+    RN_AD_BANNER_HEIGHT_PX \
+    RN_ADMOB_APP_ID_IOS \
+    RN_ADMOB_APP_ID_ANDROID \
+    RN_ADMOB_BANNER_UNIT_ID_IOS \
+    RN_ADMOB_BANNER_UNIT_ID_ANDROID \
     DEVBOX_TUNNEL_PROVIDER \
     DEVBOX_VAULT_APP_PATH \
     DEVBOX_VAULT_STT_PATH \
@@ -1683,6 +1843,12 @@ EOF
       MINGLE_TEST_WS_URL) value="${DEVBOX_TEST_WS_URL:-}" ;;
       RN_IOS_API_NAMESPACE) value="${IOS_RN_REQUIRED_API_NAMESPACE:-}" ;;
       RN_ANDROID_API_NAMESPACE) value="${ANDROID_RN_REQUIRED_API_NAMESPACE:-}" ;;
+      RN_AD_BANNER_POSITION) value="$(resolve_devbox_ad_banner_position)" ;;
+      RN_AD_BANNER_HEIGHT_PX) value="$(resolve_devbox_ad_banner_height_px)" ;;
+      RN_ADMOB_APP_ID_IOS) value="$(resolve_devbox_admob_app_id_ios)" ;;
+      RN_ADMOB_APP_ID_ANDROID) value="$(resolve_devbox_admob_app_id_android)" ;;
+      RN_ADMOB_BANNER_UNIT_ID_IOS) value="$(resolve_devbox_admob_banner_unit_id_ios)" ;;
+      RN_ADMOB_BANNER_UNIT_ID_ANDROID) value="$(resolve_devbox_admob_banner_unit_id_android)" ;;
       *) value="${!key:-}" ;;
     esac
     printf '%s=%s\n' "$key" "$(format_env_value_for_dotenv "$value")" >> "$DEVBOX_ENV_FILE"
@@ -1807,14 +1973,30 @@ write_rn_ios_runtime_xcconfig() {
   local site_host="${DEVBOX_SITE_URL#*://}"
   local ws_scheme="${DEVBOX_RN_WS_URL%%://*}"
   local ws_host="${DEVBOX_RN_WS_URL#*://}"
+  local ad_banner_position=""
+  local ad_banner_height_px=""
+  local admob_app_id_ios=""
+  local admob_banner_unit_id_ios=""
   local escaped_site_url="$DEVBOX_SITE_URL"
   local escaped_ws_url="$DEVBOX_RN_WS_URL"
+  local xcconfig_admob_app_id_ios=""
+  local xcconfig_admob_banner_unit_id_ios=""
   escaped_site_url="${escaped_site_url//\\/\\\\}"
   escaped_site_url="${escaped_site_url//\"/\\\"}"
   escaped_site_url="${escaped_site_url//\//\\/}"
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
   escaped_ws_url="${escaped_ws_url//\//\\/}"
+  ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
+  ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
+  admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
+  admob_banner_unit_id_ios="$(resolve_devbox_admob_banner_unit_id_ios)"
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_IOS" "$admob_app_id_ios"
+  require_nonempty_runtime_value "RN_ADMOB_BANNER_UNIT_ID_IOS" "$admob_banner_unit_id_ios"
+  xcconfig_admob_app_id_ios="${admob_app_id_ios//\\/\\\\}"
+  xcconfig_admob_app_id_ios="${xcconfig_admob_app_id_ios//\"/\\\"}"
+  xcconfig_admob_banner_unit_id_ios="${admob_banner_unit_id_ios//\\/\\\\}"
+  xcconfig_admob_banner_unit_id_ios="${xcconfig_admob_banner_unit_id_ios//\"/\\\"}"
 
   cat > "$RN_IOS_RUNTIME_XCCONFIG" <<EOF
 // Auto-generated by scripts/devbox.
@@ -1826,6 +2008,10 @@ NEXT_PUBLIC_SITE_HOST = $site_host
 NEXT_PUBLIC_WS_SCHEME = $ws_scheme
 NEXT_PUBLIC_WS_HOST = $ws_host
 NEXT_PUBLIC_API_NAMESPACE = $IOS_RN_REQUIRED_API_NAMESPACE
+RN_ADMOB_APP_ID_IOS = $xcconfig_admob_app_id_ios
+NEXT_PUBLIC_RN_AD_BANNER_POSITION = $ad_banner_position
+NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = $ad_banner_height_px
+NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = $xcconfig_admob_banner_unit_id_ios
 EOF
 }
 
@@ -2401,6 +2587,58 @@ resolve_android_application_id() {
   printf '%s' "com.minglelabs.mingle.rn"
 }
 
+write_rn_mobile_ads_app_json() {
+  local android_app_id="$1"
+  local ios_app_id="$2"
+  local tmp=""
+
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_ANDROID" "$android_app_id"
+  require_nonempty_runtime_value "RN_ADMOB_APP_ID_IOS" "$ios_app_id"
+  require_cmd jq
+  tmp="$(mktemp)"
+
+  if [[ -f "$RN_APP_JSON_FILE" ]]; then
+    jq \
+      --arg androidAppId "$android_app_id" \
+      --arg iosAppId "$ios_app_id" \
+      '
+        .name = (.name // "mingle")
+        | .displayName = (.displayName // "mingle")
+        | ."react-native-google-mobile-ads" = (
+            ."react-native-google-mobile-ads" // {}
+            | .android_app_id = $androidAppId
+            | .ios_app_id = $iosAppId
+          )
+      ' \
+      "$RN_APP_JSON_FILE" > "$tmp"
+  else
+    jq -n \
+      --arg androidAppId "$android_app_id" \
+      --arg iosAppId "$ios_app_id" \
+      '{
+        name: "mingle",
+        displayName: "mingle",
+        "react-native-google-mobile-ads": {
+          android_app_id: $androidAppId,
+          ios_app_id: $iosAppId
+        }
+      }' > "$tmp"
+  fi
+
+  mv "$tmp" "$RN_APP_JSON_FILE"
+}
+
+restore_rn_mobile_ads_app_json() {
+  local backup_file="$1"
+  local had_original="${2:-0}"
+
+  if [[ "$had_original" == "1" ]]; then
+    mv "$backup_file" "$RN_APP_JSON_FILE"
+  else
+    rm -f "$RN_APP_JSON_FILE" "$backup_file"
+  fi
+}
+
 resolve_ios_simulator_udid_for_uninstall() {
   local requested_name="${1:-iPhone 16}"
   local requested_udid="${2:-}"
@@ -2470,6 +2708,8 @@ run_ios_mobile_install() {
   local with_clean_install="${3:-0}"
   local destination_udid="$requested_udid"
   local coredevice_id=""
+  local runtime_admob_app_id_ios=""
+  local runtime_admob_app_id_android=""
 
   if [[ -z "$destination_udid" ]]; then
     destination_udid="$(detect_ios_xcode_destination_udid || true)"
@@ -2495,6 +2735,8 @@ run_ios_mobile_install() {
   local workspace_path="$ROOT_DIR/mingle-app/rn/ios/mingle.xcworkspace"
   local bundle_id
   bundle_id="$(resolve_ios_bundle_id)"
+  runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
+  runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
 
   if [[ "$with_clean_install" -eq 1 && -n "$bundle_id" ]]; then
     log "uninstalling existing iOS app before reinstall: $bundle_id (device=$coredevice_id)"
@@ -2514,6 +2756,15 @@ run_ios_mobile_install() {
 
   log "building iOS app ($configuration) for destination: $destination_udid"
   (
+    local rn_app_json_backup=""
+    local had_original_rn_app_json=0
+    rn_app_json_backup="$(mktemp)"
+    if [[ -f "$RN_APP_JSON_FILE" ]]; then
+      cp "$RN_APP_JSON_FILE" "$rn_app_json_backup"
+      had_original_rn_app_json=1
+    fi
+    trap 'restore_rn_mobile_ads_app_json "$rn_app_json_backup" "$had_original_rn_app_json"' EXIT
+    write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
     xcodebuild \
       -workspace "$workspace_path" \
@@ -2541,6 +2792,11 @@ run_android_mobile_install() {
   local requested_serial="${1:-}"
   local variant="$2"
   local serial="$requested_serial"
+  local runtime_ad_banner_position=""
+  local runtime_ad_banner_height_px=""
+  local runtime_admob_app_id_android=""
+  local runtime_admob_app_id_ios=""
+  local runtime_admob_banner_unit_id_android=""
 
   if [[ -z "$serial" ]]; then
     serial="$(detect_android_device_serial || true)"
@@ -2560,14 +2816,32 @@ run_android_mobile_install() {
   fi
   local app_id
   app_id="$(resolve_android_application_id)"
+  runtime_ad_banner_position="$(resolve_devbox_ad_banner_position android)"
+  runtime_ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
+  runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
+  runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
+  runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
 
   log "building Android app ($variant) for device: $serial"
   (
+    local rn_app_json_backup=""
+    local had_original_rn_app_json=0
+    rn_app_json_backup="$(mktemp)"
+    if [[ -f "$RN_APP_JSON_FILE" ]]; then
+      cp "$RN_APP_JSON_FILE" "$rn_app_json_backup"
+      had_original_rn_app_json=1
+    fi
+    trap 'restore_rn_mobile_ads_app_json "$rn_app_json_backup" "$had_original_rn_app_json"' EXIT
+    write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
     cd "$ROOT_DIR/mingle-app/rn/android"
     ANDROID_SERIAL="$serial" \
     NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
     NEXT_PUBLIC_WS_URL="$DEVBOX_RN_WS_URL" \
     NEXT_PUBLIC_API_NAMESPACE="$ANDROID_RN_REQUIRED_API_NAMESPACE" \
+    RN_AD_BANNER_POSITION="$runtime_ad_banner_position" \
+    RN_AD_BANNER_HEIGHT_PX="$runtime_ad_banner_height_px" \
+    RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
+    RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
       ./gradlew "$gradle_task"
   )
 
@@ -2588,8 +2862,10 @@ run_mobile_install_targets() {
   local with_ios_clean_install="${7:-0}"
   local app_site_override="${8:-}"
   local app_ws_override="${9:-}"
+  local device_app_env="${10:-}"
 
   (
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
     if [[ -n "$app_site_override" ]]; then
       DEVBOX_SITE_URL="$app_site_override"
     fi
@@ -3515,6 +3791,9 @@ cmd_ios_rn_ipa() {
   local device_app_env_payload=""
   local device_app_env_path=""
   local temp_export_options_plist=""
+  local previous_active_device_app_env="${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}"
+  local runtime_admob_app_id_ios=""
+  local runtime_admob_app_id_android=""
 
   require_devbox_env
 
@@ -3552,6 +3831,7 @@ cmd_ios_rn_ipa() {
   esac
 
   if [[ -n "$device_app_env" ]]; then
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
     device_app_env_payload="$(resolve_device_app_env_override "$device_app_env")"
     device_app_env_path="$(printf '%s\n' "$device_app_env_payload" | sed -n '1p')"
     archive_site_url="$(printf '%s\n' "$device_app_env_payload" | sed -n '2p')"
@@ -3667,6 +3947,8 @@ EOF
   DEVBOX_SITE_URL="$archive_site_url"
   DEVBOX_RN_WS_URL="$archive_ws_url"
   write_rn_ios_runtime_xcconfig
+  runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
+  runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
 
   local -a xcode_provisioning_args=()
   if [[ "$allow_provisioning_updates" -eq 1 ]]; then
@@ -3690,6 +3972,7 @@ EOF
       DEVBOX_RN_WS_URL="$previous_ws_url"
       write_rn_ios_runtime_xcconfig
     fi
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     return 0
   fi
 
@@ -3697,6 +3980,15 @@ EOF
   ensure_ios_pods_if_needed
 
   (
+    local rn_app_json_backup=""
+    local had_original_rn_app_json=0
+    rn_app_json_backup="$(mktemp)"
+    if [[ -f "$RN_APP_JSON_FILE" ]]; then
+      cp "$RN_APP_JSON_FILE" "$rn_app_json_backup"
+      had_original_rn_app_json=1
+    fi
+    trap 'restore_rn_mobile_ads_app_json "$rn_app_json_backup" "$had_original_rn_app_json"' EXIT
+    write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
     cd "$ROOT_DIR/mingle-app/rn/ios"
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
       xcodebuild \
@@ -3718,6 +4010,7 @@ EOF
       DEVBOX_RN_WS_URL="$previous_ws_url"
       write_rn_ios_runtime_xcconfig
     fi
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     log "archive complete (export skipped): $archive_path"
     return 0
   fi
@@ -3738,6 +4031,7 @@ EOF
     DEVBOX_RN_WS_URL="$previous_ws_url"
     write_rn_ios_runtime_xcconfig
   fi
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
 
   log "archive complete: $archive_path"
   log "ipa exported: $ipa_file"
@@ -4202,6 +4496,7 @@ cmd_mobile() {
   local mobile_ws_override=""
   local site_override=""
   local ws_override=""
+  local previous_active_device_app_env="${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -4306,6 +4601,7 @@ cmd_mobile() {
     mobile_ws_override="$(printf '%s\n' "$device_app_env_payload" | sed -n '3p')"
     log "device app env override: $device_app_env (${device_app_env_path:-})"
   fi
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
   ios_configuration="$(normalize_ios_configuration "$ios_configuration")"
   android_variant="$(normalize_android_variant "$android_variant")"
 
@@ -4349,8 +4645,10 @@ cmd_mobile() {
     "$android_variant" \
     "$with_ios_clean_install" \
     "$mobile_site_override" \
-    "$mobile_ws_override"
+    "$mobile_ws_override" \
+    "$device_app_env"
 
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
   log "mobile build/install complete"
 }
 
@@ -4631,7 +4929,8 @@ $(ngrok_plan_capacity_hint)"
       "$android_variant" \
       "$with_ios_clean_install" \
       "$mobile_site_override" \
-      "$mobile_ws_override"
+      "$mobile_ws_override" \
+      "$device_app_env"
   fi
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
@@ -4681,6 +4980,7 @@ $(ngrok_plan_capacity_hint)"
       . "$runtime_app_env_file"
       set +a
     fi
+    normalize_prisma_database_env
     # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
     # Use webpack for device testing, but avoid forcing polling watchers because they can
     # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
@@ -4715,6 +5015,7 @@ $(ngrok_plan_capacity_hint)"
         . "$runtime_app_env_file"
         set +a
       fi
+      normalize_prisma_database_env
       DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
       DEVBOX_PROFILE="$DEVBOX_PROFILE" \
       DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
@@ -5046,4 +5347,6 @@ main() {
   esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

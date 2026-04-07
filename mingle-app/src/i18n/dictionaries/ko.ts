@@ -12,6 +12,9 @@ export const koDictionary: AppDictionary = {
     textSizeLabel: "텍스트 크기",
     silenceFinalizeLabel: "발화 분리 기준 무음 시간",
     translationModelLabel: "번역 모델",
+    adBannerPositionLabel: "광고 위치",
+    adBannerPositionTopLabel: "상단",
+    adBannerPositionBottomLabel: "하단",
   },
   tabs: {
     chats: "채팅",

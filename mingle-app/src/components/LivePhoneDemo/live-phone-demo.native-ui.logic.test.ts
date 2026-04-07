@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   NATIVE_UI_EVENT,
+  NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY,
   NATIVE_UI_QUERY_KEY,
   isNativeUiBridgeEnabledFromSearch,
+  parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
+  readCachedNativeUiBannerLayout,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
 
@@ -50,6 +53,49 @@ describe('live-phone-demo native ui bridge logic', () => {
     expect(parseNativeUiScrollToTopDetail({
       type: 'unknown_event',
       source: 'ios_status_bar_overlay',
+    })).toBeNull()
+  })
+
+  it('parses valid banner_layout payload', () => {
+    const parsed = parseNativeUiBannerLayoutDetail({
+      type: 'banner_layout',
+      position: 'bottom',
+      topInsetPx: 0,
+      bottomInsetPx: 50,
+    })
+
+    expect(parsed).toEqual({
+      type: 'banner_layout',
+      position: 'bottom',
+      topInsetPx: 0,
+      bottomInsetPx: 50,
+    })
+  })
+
+  it('reads cached banner_layout payload from window-like object', () => {
+    const parsed = readCachedNativeUiBannerLayout({
+      [NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY]: {
+        type: 'banner_layout',
+        position: 'bottom',
+        topInsetPx: 0,
+        bottomInsetPx: 50,
+      },
+    })
+
+    expect(parsed).toEqual({
+      type: 'banner_layout',
+      position: 'bottom',
+      topInsetPx: 0,
+      bottomInsetPx: 50,
+    })
+  })
+
+  it('returns null for invalid banner_layout payload', () => {
+    expect(parseNativeUiBannerLayoutDetail({
+      type: 'banner_layout',
+      position: 'left',
+      topInsetPx: 10,
+      bottomInsetPx: 0,
     })).toBeNull()
   })
 

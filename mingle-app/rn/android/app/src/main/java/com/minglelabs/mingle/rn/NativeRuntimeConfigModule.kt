@@ -16,6 +16,9 @@ class NativeRuntimeConfigModule(
       "apiNamespace" to BuildConfig.MINGLE_API_NAMESPACE,
       "clientVersion" to BuildConfig.MINGLE_CLIENT_VERSION,
       "clientBuild" to BuildConfig.MINGLE_CLIENT_BUILD,
+      "adBannerPosition" to BuildConfig.MINGLE_AD_BANNER_POSITION,
+      "adBannerHeightPx" to BuildConfig.MINGLE_AD_BANNER_HEIGHT_PX,
+      "adBannerUnitIdAndroid" to BuildConfig.MINGLE_AD_BANNER_UNIT_ID_ANDROID,
     ),
   )
 }

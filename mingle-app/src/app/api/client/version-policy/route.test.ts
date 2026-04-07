@@ -5,10 +5,12 @@ const VERSION_POLICY_ENV_NAMES = [
   'IOS_CLIENT_RECOMMENDED_BELOW_VERSION',
   'IOS_CLIENT_LATEST_VERSION',
   'IOS_APPSTORE_URL',
+  'RN_ADMOB_BANNER_UNIT_ID_IOS',
   'ANDROID_CLIENT_MIN_SUPPORTED_VERSION',
   'ANDROID_CLIENT_RECOMMENDED_BELOW_VERSION',
   'ANDROID_CLIENT_LATEST_VERSION',
   'ANDROID_PLAYSTORE_URL',
+  'RN_ADMOB_BANNER_UNIT_ID_ANDROID',
 ] as const
 
 const ORIGINAL_VERSION_POLICY_ENV = Object.fromEntries(
@@ -31,6 +33,7 @@ function seedDefaultIosPolicyEnv() {
   process.env.IOS_CLIENT_RECOMMENDED_BELOW_VERSION = '1.2.0'
   process.env.IOS_CLIENT_LATEST_VERSION = '1.3.0'
   process.env.IOS_APPSTORE_URL = 'https://apps.apple.com/app/id6759795134'
+  process.env.RN_ADMOB_BANNER_UNIT_ID_IOS = 'ca-app-pub-7057041881494735/3768106846'
 }
 
 function makeRequest(version: string, locale?: string, platform?: string): Request {
@@ -97,6 +100,9 @@ describe('/api/client/version-policy route', () => {
     expect(json.message).toContain('최신 버전으로 업데이트')
     expect(json.updateButtonLabel).toBe('업데이트')
     expect(json.laterButtonLabel).toBe('나중에')
+    expect(json.adMob).toEqual({
+      bannerUnitId: 'ca-app-pub-7057041881494735/3768106846',
+    })
   })
 
   it('returns recommend_update when client version is supported but below recommended threshold', async () => {
@@ -115,6 +121,7 @@ describe('/api/client/version-policy route', () => {
     process.env.ANDROID_CLIENT_LATEST_VERSION = '2.2.0'
     process.env.ANDROID_PLAYSTORE_URL =
       'https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn'
+    process.env.RN_ADMOB_BANNER_UNIT_ID_ANDROID = 'ca-app-pub-7057041881494735/6522262692'
 
     const POST = await loadLegacyRoutePost()
     const response = await POST(makeRequest('2.0.5', 'en', 'android') as never)
@@ -129,6 +136,9 @@ describe('/api/client/version-policy route', () => {
     expect(json.updateUrl).toBe(
       'https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn',
     )
+    expect(json.adMob).toEqual({
+      bannerUnitId: 'ca-app-pub-7057041881494735/6522262692',
+    })
   })
 
   it('falls back to ios policy env when android env is missing', async () => {
@@ -140,6 +150,9 @@ describe('/api/client/version-policy route', () => {
     expect(json.action).toBe('recommend_update')
     expect(json.platform).toBe('android')
     expect(json.policyPlatform).toBe('ios')
+    expect(json.adMob).toEqual({
+      bannerUnitId: '',
+    })
   })
 
   it('returns none when client version is already up to date enough', async () => {
@@ -237,6 +250,9 @@ describe('/api/client/version-policy route', () => {
     expect(json.latestVersion).toBe('')
     expect(json.updateUrl).toBe('')
     expect(json.title).toBe('Update Required')
+    expect(json.adMob).toEqual({
+      bannerUnitId: '',
+    })
   })
 
   it('fails closed when required min version env is invalid', async () => {

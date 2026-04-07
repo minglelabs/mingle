@@ -339,6 +339,9 @@ class NativeSTTModule: RCTEventEmitter {
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
+                "adBannerPosition": Self.readRuntimeConfigValue("MingleAdBannerPosition"),
+                "adBannerHeightPx": Self.readRuntimeConfigValue("MingleAdBannerHeightPx"),
+                "adBannerUnitIdIos": Self.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
                 "deviceLocaleTag": Self.readDeviceLocaleTag(),
                 "devicePreferredLanguages": Self.readDevicePreferredLanguages(),
             ],
@@ -364,6 +367,9 @@ class NativeSTTModule: RCTEventEmitter {
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
+            "adBannerPosition": Self.readRuntimeConfigValue("MingleAdBannerPosition"),
+            "adBannerHeightPx": Self.readRuntimeConfigValue("MingleAdBannerHeightPx"),
+            "adBannerUnitIdIos": Self.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
             "deviceLocaleTag": Self.readDeviceLocaleTag(),
             "devicePreferredLanguages": Self.readDevicePreferredLanguages(),
         ])
@@ -448,6 +454,19 @@ class NativeSTTModule: RCTEventEmitter {
 
     private func emitClose(_ reason: String) {
         emit("close", payload: ["reason": reason])
+    }
+
+    private func resolveMicrophonePermissionStatus() -> String {
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted:
+            return "granted"
+        case .denied:
+            return "denied"
+        case .undetermined:
+            return "undetermined"
+        @unknown default:
+            return "unknown"
+        }
     }
 
     private func removeTapIfNeeded() {
@@ -925,6 +944,17 @@ class NativeSTTModule: RCTEventEmitter {
             emitError("mic_permission_unknown_state")
             reject("mic_permission", "Unknown microphone permission state", nil)
         }
+    }
+
+    @objc(getMicrophonePermissionStatus:rejecter:)
+    func getMicrophonePermissionStatus(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        resolve([
+            "permission": resolveMicrophonePermissionStatus(),
+            "platform": "ios",
+        ])
     }
 
     @objc(stop:resolver:rejecter:)
