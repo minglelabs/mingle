@@ -336,7 +336,7 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("persists the supported gemma 4 translation models through PATCH", async () => {
+  it("persists the supported gemma 4 translation model through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -356,20 +356,6 @@ describe("/api/account/preferences route", () => {
       where: { id: "user_123" },
       data: {
         translationModel: "gemma-4-31b-it",
-      },
-    });
-
-    const openRouterGemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
-      method: "PATCH",
-      body: JSON.stringify({
-        translationModel: "google/gemma-4-31b-it",
-      }),
-    }));
-    expect(openRouterGemmaResponse.status).toBe(200);
-    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
-      where: { id: "user_123" },
-      data: {
-        translationModel: "google/gemma-4-31b-it",
       },
     });
   });

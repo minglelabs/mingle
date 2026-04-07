@@ -6,15 +6,11 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('includes the supported Qwen and Gemma 4 options', () => {
+  it('includes the supported Qwen and Google Gemma 4 options', () => {
     expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
       {
         value: 'gemma-4-31b-it',
         label: 'gemma-4-31b-it',
-      },
-      {
-        value: 'google/gemma-4-31b-it',
-        label: 'gemma-4-31b-it (OpenRouter)',
       },
     ]))
   })
@@ -29,8 +25,8 @@ describe('translation model catalog', () => {
     expect(normalizeSelectableTranslationModel('gemma-4-31b-it')).toBe('gemma-4-31b-it')
     expect(normalizeSelectableTranslationModel('models/gemma-4-31b-it')).toBe('gemma-4-31b-it')
     expect(normalizeSelectableTranslationModel('gemma 4 31b')).toBe('gemma-4-31b-it')
-    expect(normalizeSelectableTranslationModel('google/gemma-4-31b-it')).toBe('google/gemma-4-31b-it')
-    expect(normalizeSelectableTranslationModel('gemma-4-31b-it (openrouter)')).toBe('google/gemma-4-31b-it')
+    expect(normalizeSelectableTranslationModel('google/gemma-4-31b-it')).toBeNull()
+    expect(normalizeSelectableTranslationModel('gemma-4-31b-it (openrouter)')).toBeNull()
   })
 
   it('resolves runtime selections for the new models', () => {
@@ -38,13 +34,6 @@ describe('translation model catalog', () => {
       engineProvider: 'gemma',
       infrastructureProvider: 'google',
       runtimeModel: 'gemma-4-31b-it',
-    })
-
-    expect(resolveTranslationRuntimeSelection('google/gemma-4-31b-it')).toMatchObject({
-      engineProvider: 'gemma',
-      infrastructureProvider: 'openrouter',
-      runtimeModel: 'google/gemma-4-31b-it',
-      baseUrl: 'https://openrouter.ai/api/v1',
     })
   })
 })

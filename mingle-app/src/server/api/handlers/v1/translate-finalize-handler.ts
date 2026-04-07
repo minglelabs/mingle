@@ -47,8 +47,6 @@ const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 2_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
-const OPENROUTER_GEMMA_INTERIM_TIMEOUT_MS = 4_000
-const OPENROUTER_GEMMA_FINAL_TIMEOUT_MS = 8_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
@@ -83,7 +81,7 @@ type GeminiTranslationProviderConfig = {
 }
 
 type OpenAICompatibleTranslationProviderConfig = {
-  provider: 'gemma' | 'qwen' | 'openai-compatible'
+  provider: 'qwen' | 'openai-compatible'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -445,7 +443,7 @@ function parseJsonObjectEnv(name: string): {
   }
 }
 
-function buildDefaultOpenAICompatibleExtraBody(provider: 'gemma' | 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
+function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
   if (provider !== 'qwen') return null
   if (isDashScopeBaseUrl(baseUrl)) return { enable_thinking: false }
   if (isOpenRouterBaseUrl(baseUrl)) return null
@@ -517,7 +515,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
     return {
       ok: true,
       config: {
-        provider: requestedModelSelection.engineProvider,
+        provider: 'qwen',
         infrastructureProvider: requestedModelSelection.infrastructureProvider,
         model: requestedModelSelection.runtimeModel,
         apiKey,
@@ -770,16 +768,8 @@ function isRetryableOpenAICompatibleError(error: unknown): boolean {
   )
 }
 
-function resolveOpenAICompatibleRequestTimeoutMs(
-  ctx: Pick<TranslateContext, 'isFinal'>,
-  config: Pick<OpenAICompatibleTranslationProviderConfig, 'provider' | 'baseUrl'>,
-): number {
-  const isOpenRouterGemma = config.provider === 'gemma' && isOpenRouterBaseUrl(config.baseUrl)
-  if (isOpenRouterGemma) {
-    return ctx.isFinal ? OPENROUTER_GEMMA_FINAL_TIMEOUT_MS : OPENROUTER_GEMMA_INTERIM_TIMEOUT_MS
-  }
-
-  return ctx.isFinal ? OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS : OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS
+function resolveOpenAICompatibleRequestTimeoutMs(isFinal: boolean): number {
+  return isFinal ? OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS : OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS
 }
 
 function formatSingleTurnForPromptWithOptions(
@@ -1252,7 +1242,7 @@ async function createOpenAICompatibleCompletion(
   }
 
   const executeRequest = async () => {
-    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx, config)
+    const timeoutMs = resolveOpenAICompatibleRequestTimeoutMs(ctx.isFinal)
     const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
       ? AbortSignal.timeout(timeoutMs)
       : undefined
