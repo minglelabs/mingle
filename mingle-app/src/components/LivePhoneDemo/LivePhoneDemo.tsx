@@ -79,6 +79,7 @@ import {
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
+import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
@@ -3791,12 +3792,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         />
                       </div>
                       <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                        {remainingSec}s
+                        {formatLivePhoneDemoUsageDuration(remainingSec)}
                       </span>
                     </>
                   ) : (
                     <span className="text-sm tabular-nums text-gray-400">
-                      {usageSec}s
+                      {formatLivePhoneDemoUsageDuration(usageSec)}
                     </span>
                   )}
                 </div>
