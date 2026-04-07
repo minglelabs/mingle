@@ -1236,7 +1236,9 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
   }, [windowWidthPx]);
-  const webUrl = useMemo(() => {
+  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
+  const [webViewMountToken, setWebViewMountToken] = useState(0);
+  const baseWebUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
@@ -1246,7 +1248,21 @@ function AppInner(): React.JSX.Element {
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
   }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
-  const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(webUrl), [webUrl]);
+  const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
+  const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
+  const webUrl = useMemo(() => {
+    if (!baseWebUrl) return '';
+    if (!shouldDisableWebViewCache) return baseWebUrl;
+    try {
+      const url = new URL(baseWebUrl);
+      url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
+      return url.toString();
+    } catch {
+      const separator = baseWebUrl.includes('?') ? '&' : '?';
+      return `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`;
+    }
+  }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
@@ -1291,8 +1307,6 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
-  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
-  const [webViewMountToken, setWebViewMountToken] = useState(0);
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
     [nativeBannerHeightPx, nativeCanvasScale],
@@ -2222,12 +2236,12 @@ function AppInner(): React.JSX.Element {
   }, [versionGate.status]);
 
   useEffect(() => {
-    if (!shouldDisableWebViewCache || !webViewRef.current) {
+    if (!shouldUseAggressiveWebViewCacheBypass || !webViewRef.current) {
       return;
     }
 
     webViewRef.current.clearCache(true);
-  }, [shouldDisableWebViewCache, webViewMountToken]);
+  }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
@@ -2258,9 +2272,9 @@ function AppInner(): React.JSX.Element {
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
-            cacheEnabled={!shouldDisableWebViewCache}
-            incognito={shouldDisableWebViewCache}
-            cacheMode={Platform.OS === 'android' && shouldDisableWebViewCache ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
+            cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}
+            incognito={shouldUseAggressiveWebViewCacheBypass}
+            cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
