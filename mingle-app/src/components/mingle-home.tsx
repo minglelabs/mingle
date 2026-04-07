@@ -230,6 +230,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
   );
+  const [isLiveDemoMounted, setIsLiveDemoMounted] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [signingInProvider, setSigningInProvider] =
     useState<NativeAuthProvider | null>(null);
@@ -249,6 +250,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     useState<EmailAuthErrorCode | null>(null);
   const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
+
+  useEffect(() => {
+    setIsLiveDemoMounted(true);
+  }, []);
   const [loginPassword, setLoginPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupName, setSignupName] = useState("");
@@ -1675,8 +1680,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   }
 
   return (
-    <main className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
-      <div className="min-h-0 flex-1 overflow-hidden">
+    <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
+      {isLiveDemoMounted ? (
         <LivePhoneDemo
           ref={livePhoneDemoRef}
           enableAutoTTS
@@ -1721,7 +1726,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onSttSessionRunningChange={props.onSttSessionRunningChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
         />
-      </div>
+      ) : (
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+          <Loader2 size={24} className="animate-spin" aria-hidden />
+        </div>
+      )}
     </main>
   );
 });

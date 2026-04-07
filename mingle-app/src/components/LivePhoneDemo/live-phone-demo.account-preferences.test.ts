@@ -14,11 +14,15 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
+      speakerEnabled: true,
+      echoAllowed: false,
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
+      speakerEnabled: false,
+      echoAllowed: true,
     })
   })
 
@@ -28,11 +32,15 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 2500,
       translationModel: 'unsupported-model',
       adBannerPosition: 'invalid',
+      speakerEnabled: 'invalid',
+      echoAllowed: 'invalid',
     }, true)).toEqual({
       textSizeLevel: 5,
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
       translationModel: 'gemini-2.5-flash-lite',
-      adBannerPosition: null,
+      adBannerPosition: 'bottom',
+      speakerEnabled: false,
+      echoAllowed: true,
     })
   })
 })
@@ -48,6 +56,8 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: null,
+        speakerEnabled: false,
+        echoAllowed: true,
       },
       lastSyncedStateKey: null,
     })).toBe(false)
@@ -59,6 +69,8 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: 'gemini-2.5-flash-lite',
       adBannerPosition: 'top',
+      speakerEnabled: true,
+      echoAllowed: false,
     }
 
     expect(shouldScheduleAccountPreferencesSync({
@@ -80,12 +92,16 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
+        speakerEnabled: true,
+        echoAllowed: false,
       },
       lastSyncedStateKey: serializeAccountPreferencesSyncState({
         textSizeLevel: 2,
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: 'top',
+        speakerEnabled: false,
+        echoAllowed: true,
       }),
     })).toBe(true)
   })
@@ -100,6 +116,8 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
+        speakerEnabled: true,
+        echoAllowed: false,
       },
       lastSyncedStateKey: null,
     })).toBe(false)

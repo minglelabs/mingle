@@ -3,7 +3,7 @@ import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
-export const DEFAULT_TEXT_SIZE_LEVEL = 2
+export const DEFAULT_TEXT_SIZE_LEVEL = 3
 export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
@@ -39,6 +39,17 @@ export function normalizeLivePhoneDemoAdBannerPosition(value: unknown): LivePhon
   return normalized === 'top' || normalized === 'bottom'
     ? normalized
     : null
+}
+
+export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
+  preferredPosition: LivePhoneDemoAdBannerPosition | null
+  nativeLayoutPosition: LivePhoneDemoAdBannerPosition | null
+  queryPosition: LivePhoneDemoAdBannerPosition | null
+}): LivePhoneDemoAdBannerPosition | null {
+  return input.preferredPosition
+    ?? input.nativeLayoutPosition
+    ?? input.queryPosition
+    ?? null
 }
 
 export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[]): LivePhoneDemoPersistedPreferences {

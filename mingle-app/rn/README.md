@@ -16,7 +16,7 @@ The RN app requires the following environment variables.
 - `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.1.0`, Android: `android/v1.1.0`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
-- `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `top`)
+- `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
 - `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
 - `RN_ADMOB_APP_ID_IOS` (optional override, defaults to the production app ID)
 - `RN_ADMOB_APP_ID_ANDROID` (optional override, defaults to the production app ID)

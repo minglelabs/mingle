@@ -66,7 +66,7 @@ The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without run
 - Default (legacy): empty value (`''`) -> `/api/{existing-path}`
 - iOS versioned: `ios/v1.1.0` -> `/api/ios/v1.1.0/{existing-path}`
 - Android versioned: `android/v1.1.0` -> `/api/android/v1.1.0/{existing-path}`
-- Previous mobile namespaces (`v1.0.0`, `v1.0.2`, `v1.0.3`, `v1.0.4`, `v1.0.5`, `v1.0.6`, `v1.0.7`, `v1.0.8`, `v1.0.9`) remain allow-listed for backward compatibility.
+- Previous mobile namespaces remain allow-listed for backward compatibility.
 
 Release build commands:
 
@@ -79,9 +79,7 @@ pnpm build:release:android
 URL override (optional):
 
 - The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
-- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.6`, `android/v1.0.6`, `ios/v1.0.7`, `android/v1.0.7`, `ios/v1.0.8`, `android/v1.0.8`, `ios/v1.1.0`, `android/v1.1.0`
-- Example: `https://your-app/ko?apiNamespace=android/v1.1.0`
-- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.6`, `android/v1.0.6`, `ios/v1.0.7`, `android/v1.0.7`, `ios/v1.0.8`, `android/v1.0.8`, `ios/v1.0.9`, `android/v1.0.9`, `ios/v1.1.0`, `android/v1.1.0`
+- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.7`, `android/v1.0.7`, `ios/v1.0.8`, `android/v1.0.8`, `ios/v1.0.9`, `android/v1.0.9`, `ios/v1.1.0`, `android/v1.1.0`
 - Example: `https://your-app/ko?apiNamespace=android/v1.1.0`
 - Unsupported values are ignored, and the env/default value is used instead.
 

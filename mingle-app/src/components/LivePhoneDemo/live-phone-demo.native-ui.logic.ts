@@ -1,5 +1,6 @@
 export const NATIVE_UI_EVENT = 'mingle:native-ui'
 export const NATIVE_UI_QUERY_KEY = 'nativeUi'
+export const NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY = '__MINGLE_LAST_NATIVE_BANNER_LAYOUT'
 
 export interface NativeUiScrollToTopEventDetail {
   type: 'scroll_to_top'
@@ -54,6 +55,14 @@ export function parseNativeUiBannerLayoutDetail(
     topInsetPx: Number.isFinite(topInsetPx) && topInsetPx > 0 ? Math.round(topInsetPx) : 0,
     bottomInsetPx: Number.isFinite(bottomInsetPx) && bottomInsetPx > 0 ? Math.round(bottomInsetPx) : 0,
   }
+}
+
+export function readCachedNativeUiBannerLayout(
+  value: unknown,
+): NativeUiBannerLayoutEventDetail | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = (value as Record<string, unknown>)[NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY]
+  return parseNativeUiBannerLayoutDetail(candidate)
 }
 
 export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {

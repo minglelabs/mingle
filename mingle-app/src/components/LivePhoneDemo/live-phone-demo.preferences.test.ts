@@ -10,6 +10,7 @@ import {
   normalizeLivePhoneDemoAdBannerPosition,
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
+  resolveDisplayedLivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 
 describe('readPersistedIntegerPreference', () => {
@@ -47,6 +48,32 @@ describe('normalizeLivePhoneDemoAdBannerPosition', () => {
     expect(normalizeLivePhoneDemoAdBannerPosition('off')).toBeNull()
     expect(normalizeLivePhoneDemoAdBannerPosition('')).toBeNull()
     expect(normalizeLivePhoneDemoAdBannerPosition(null)).toBeNull()
+  })
+})
+
+describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
+  it('prefers hydrated user preference over native layout and query fallback', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'bottom',
+      nativeLayoutPosition: 'top',
+      queryPosition: 'top',
+    })).toBe('bottom')
+  })
+
+  it('falls back to native layout when no user preference is available', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: null,
+      nativeLayoutPosition: 'bottom',
+      queryPosition: 'top',
+    })).toBe('bottom')
+  })
+
+  it('falls back to query position last', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: null,
+      nativeLayoutPosition: null,
+      queryPosition: 'top',
+    })).toBe('top')
   })
 })
 

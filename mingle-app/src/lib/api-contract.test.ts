@@ -62,6 +62,13 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.0.9/translate/finalize')
   })
 
+  it('keeps v1.0.10 namespaces allow-listed for current production shells', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.10'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v1.0.10')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/ios/v1.0.10/translate/finalize')
+  })
+
   it.each([
     '/api/android/v1.0.4/translate/finalize',
     '/api/android/v1.0.5/translate/finalize',
@@ -69,6 +76,7 @@ describe('api-contract namespace guard', () => {
     '/api/android/v1.0.7/translate/finalize',
     '/api/android/v1.0.8/translate/finalize',
     '/api/android/v1.0.9/translate/finalize',
+    '/api/android/v1.0.10/translate/finalize',
     '/api/android/v1.1.0/translate/finalize',
     '/api/ios/v1.0.4/translate/finalize',
     '/api/ios/v1.0.5/translate/finalize',
@@ -76,6 +84,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.0.7/translate/finalize',
     '/api/ios/v1.0.8/translate/finalize',
     '/api/ios/v1.0.9/translate/finalize',
+    '/api/ios/v1.0.10/translate/finalize',
     '/api/ios/v1.1.0/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
