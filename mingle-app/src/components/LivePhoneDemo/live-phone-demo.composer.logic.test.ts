@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  buildManualComposerUtterance,
   resolveKeyboardViewportInsetPx,
   resolveLivePhoneDemoComposerCopy,
 } from './LivePhoneDemo'
@@ -39,23 +38,5 @@ describe('live phone demo composer logic', () => {
       height: 620,
       offsetTop: 12,
     } as VisualViewport)).toBe(268)
-  })
-
-  it('builds a manual composer utterance with trimmed text', () => {
-    expect(buildManualComposerUtterance({
-      text: '  hello there  ',
-      language: 'ko',
-      speaker: '나',
-      createdAtMs: 1234,
-      sequence: 2,
-    })).toEqual({
-      id: 'manual:1234:2',
-      speaker: '나',
-      originalText: 'hello there',
-      originalLang: 'ko',
-      targetLanguages: [],
-      translations: {},
-      createdAtMs: 1234,
-    })
   })
 })

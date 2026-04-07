@@ -264,24 +264,6 @@ function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): void {
   textarea.style.height = `${nextHeight}px`
 }
 
-export function buildManualComposerUtterance(input: {
-  text: string
-  language: string
-  speaker: string
-  createdAtMs: number
-  sequence: number
-}): Utterance {
-  return {
-    id: `manual:${input.createdAtMs}:${input.sequence}`,
-    speaker: input.speaker,
-    originalText: input.text.trim(),
-    originalLang: input.language.trim() || 'en',
-    targetLanguages: [],
-    translations: {},
-    createdAtMs: input.createdAtMs,
-  }
-}
-
 function readPersistedFeedbackDraft(): PersistedFeedbackDraft | null {
   if (typeof window === 'undefined') return null
 
@@ -721,7 +703,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [composerDraft, setComposerDraft] = useState('')
-  const [manualComposerUtterances, setManualComposerUtterances] = useState<Utterance[]>([])
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
@@ -1985,6 +1966,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     partialTranscript,
     volume,
     toggleRecording,
+    submitExternalUtterance,
     isActive,
     isReady,
     isConnecting,
@@ -2393,21 +2375,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
 
-    const messageLanguage = selectedLanguages[0] || fallbackLanguages[0] || 'en'
-    const createdAtMs = Date.now()
-
-    setManualComposerUtterances((previous) => [
-      ...previous,
-      buildManualComposerUtterance({
-        text: nextText,
-        language: messageLanguage,
-        speaker: composerCopy.manualSpeakerLabel,
-        createdAtMs,
-        sequence: previous.length,
-      }),
-    ])
+    const submittedUtteranceId = submitExternalUtterance({
+      text: nextText,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+    if (!submittedUtteranceId) return
     setComposerDraft('')
-  }, [composerCopy.manualSpeakerLabel, composerDraft, fallbackLanguages, selectedLanguages])
+  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance])
 
   useImperativeHandle(ref, () => ({
     startRecording: handleMicClick,
@@ -2751,10 +2726,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
-  const displayChatUtterances = useMemo(
-    () => [...displayUtterances, ...manualComposerUtterances],
-    [displayUtterances, manualComposerUtterances],
-  )
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -2795,7 +2766,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
-    && manualComposerUtterances.length === 0
     && !partialTranscript
     && !demoTypingText
     && !demoTypingLang
@@ -3684,7 +3654,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </button>
               )}
               <AnimatePresence mode="popLayout">
-                {displayChatUtterances.map((u) => (
+                {displayUtterances.map((u) => (
                   <div
                     key={u.id}
                     data-utterance-created-at={
