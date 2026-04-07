@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, ArrowUp } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -110,6 +110,16 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
 const EMPTY_STATE_ARROW_HEAD_Y = 72
+const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 28
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 112
+
+type LivePhoneDemoComposerCopy = {
+  manualSpeakerLabel: string
+  openKeyboardLabel: string
+  closeKeyboardLabel: string
+  composerPlaceholder: string
+  sendMessageLabel: string
+}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -201,6 +211,75 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
 
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
+}
+
+export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDemoComposerCopy {
+  const locale = (uiLocale || '').trim().toLowerCase()
+
+  if (locale.startsWith('ko')) {
+    return {
+      manualSpeakerLabel: '나',
+      openKeyboardLabel: '텍스트 입력 열기',
+      closeKeyboardLabel: '텍스트 입력 닫기',
+      composerPlaceholder: '메시지를 입력하세요',
+      sendMessageLabel: '메시지 보내기',
+    }
+  }
+
+  if (locale.startsWith('ja')) {
+    return {
+      manualSpeakerLabel: '自分',
+      openKeyboardLabel: 'テキスト入力を開く',
+      closeKeyboardLabel: 'テキスト入力を閉じる',
+      composerPlaceholder: 'メッセージを入力',
+      sendMessageLabel: 'メッセージを送信',
+    }
+  }
+
+  return {
+    manualSpeakerLabel: 'You',
+    openKeyboardLabel: 'Open text input',
+    closeKeyboardLabel: 'Close text input',
+    composerPlaceholder: 'Type a message',
+    sendMessageLabel: 'Send message',
+  }
+}
+
+export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
+  if (typeof window === 'undefined' || !viewport) return 0
+
+  const inset = window.innerHeight - viewport.height - viewport.offsetTop
+  if (!Number.isFinite(inset) || inset <= 0) return 0
+  return Math.round(inset)
+}
+
+function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): void {
+  if (!textarea) return
+
+  textarea.style.height = `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px`
+  const nextHeight = Math.max(
+    COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
+    Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT_PX, textarea.scrollHeight),
+  )
+  textarea.style.height = `${nextHeight}px`
+}
+
+export function buildManualComposerUtterance(input: {
+  text: string
+  language: string
+  speaker: string
+  createdAtMs: number
+  sequence: number
+}): Utterance {
+  return {
+    id: `manual:${input.createdAtMs}:${input.sequence}`,
+    speaker: input.speaker,
+    originalText: input.text.trim(),
+    originalLang: input.language.trim() || 'en',
+    targetLanguages: [],
+    translations: {},
+    createdAtMs: input.createdAtMs,
+  }
 }
 
 function readPersistedFeedbackDraft(): PersistedFeedbackDraft | null {
@@ -640,6 +719,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
+  const [composerDraft, setComposerDraft] = useState('')
+  const [manualComposerUtterances, setManualComposerUtterances] = useState<Utterance[]>([])
+  const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
@@ -677,6 +760,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
@@ -689,6 +773,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
+  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
@@ -814,6 +899,47 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const syncKeyboardInset = () => {
+      setKeyboardViewportInsetPx(resolveKeyboardViewportInsetPx(viewport))
+    }
+
+    syncKeyboardInset()
+    viewport.addEventListener('resize', syncKeyboardInset)
+    viewport.addEventListener('scroll', syncKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardInset)
+      viewport.removeEventListener('scroll', syncKeyboardInset)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isComposerOpen) return
+
+    const timerId = window.setTimeout(() => {
+      const textarea = composerTextareaRef.current
+      if (!textarea) return
+      resizeComposerTextarea(textarea)
+      textarea.focus({ preventScroll: true })
+      const cursor = textarea.value.length
+      textarea.setSelectionRange(cursor, cursor)
+    }, 40)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [isComposerOpen])
+
+  useLayoutEffect(() => {
+    resizeComposerTextarea(composerTextareaRef.current)
+  }, [composerDraft, isComposerOpen])
 
   // Persist selected languages
   useEffect(() => {
@@ -2244,6 +2370,45 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [enableAutoTTS, isActive, isLimitReached, onLimitReached, primeAudioPlayback, scheduleTtsResumeAfterStopClick, toggleRecording])
 
+  const handleToggleComposer = useCallback(() => {
+    setIsComposerOpen((previous) => {
+      const next = !previous
+      if (previous) {
+        composerTextareaRef.current?.blur()
+      }
+      return next
+    })
+  }, [])
+
+  const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    setComposerDraft(event.target.value)
+  }, [])
+
+  const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const nextText = composerDraft.trim()
+    if (!nextText) {
+      composerTextareaRef.current?.focus({ preventScroll: true })
+      return
+    }
+
+    const messageLanguage = selectedLanguages[0] || fallbackLanguages[0] || 'en'
+    const createdAtMs = Date.now()
+
+    setManualComposerUtterances((previous) => [
+      ...previous,
+      buildManualComposerUtterance({
+        text: nextText,
+        language: messageLanguage,
+        speaker: composerCopy.manualSpeakerLabel,
+        createdAtMs,
+        sequence: previous.length,
+      }),
+    ])
+    setComposerDraft('')
+  }, [composerCopy.manualSpeakerLabel, composerDraft, fallbackLanguages, selectedLanguages])
+
   useImperativeHandle(ref, () => ({
     startRecording: handleMicClick,
   }), [handleMicClick])
@@ -2586,6 +2751,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+  const displayChatUtterances = useMemo(
+    () => [...displayUtterances, ...manualComposerUtterances],
+    [displayUtterances, manualComposerUtterances],
+  )
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -2623,8 +2792,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
+    && manualComposerUtterances.length === 0
     && !partialTranscript
     && !demoTypingText
     && !demoTypingLang
@@ -2632,6 +2803,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
+  const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
@@ -3511,7 +3684,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </button>
               )}
               <AnimatePresence mode="popLayout">
-                {displayUtterances.map((u) => (
+                {displayChatUtterances.map((u) => (
                   <div
                     key={u.id}
                     data-utterance-created-at={
@@ -3770,82 +3943,217 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
-          {/* Bottom Bar with Mic Button */}
-          <div
-            className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
+          {/* Bottom Bar with STT / Text Composer Toggle */}
+          <motion.div
+            layout
+            className="shrink-0 border-t border-gray-100 bg-white"
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              paddingTop: "10px",
-              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
+              paddingTop: '10px',
+              paddingBottom: bottomBarPaddingBottom,
+              paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
+              paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
-            <div className="justify-self-start pl-2">
-              {/* Usage progress bar */}
-              <div className="flex items-center gap-1.5">
-                {isUsageLimited ? (
-                  <>
-                    <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                      {formatLivePhoneDemoUsageDuration(remainingSec)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-sm tabular-nums text-gray-400">
-                    {formatLivePhoneDemoUsageDuration(usageSec)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onPointerDown={handleMicPointerDown}
-                onClick={handleMicClick}
-                disabled={isConnecting || isError}
-                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-              >
-                {showRipple && (
-                  <span
-                    className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                    style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
-                  />
-                )}
-
-                {isReady && (
-                  <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                )}
-
-                <span
-                  className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                    isLimitReached
-                      ? 'bg-gray-300'
-                      : isReady
-                        ? 'bg-red-500'
-                        : isConnecting
-                          ? 'bg-gray-300'
-                          : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                  }`}
+            <AnimatePresence initial={false} mode="wait">
+              {isComposerOpen ? (
+                <motion.div
+                  key="composer-bottom-bar"
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  className="flex items-end gap-3"
                 >
-                  {isConnecting ? (
-                    <Loader2 size={30} className="animate-spin text-white" />
-                  ) : isReady ? (
-                    <span
-                      aria-hidden
-                      className="h-5 w-5 rounded-[4px] bg-white"
-                    />
-                  ) : (
-                    <Mic size={28} className="text-white" />
-                  )}
-                </span>
-              </button>
-            </div>
-            <div className="justify-self-end" />
-          </div>
+                  <motion.div
+                    layoutId="live-phone-demo-mic-shell"
+                    className="flex shrink-0 items-center justify-center"
+                  >
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={isConnecting || isError}
+                      className="relative flex h-[2.15rem] w-[2.15rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : isConnecting
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                      >
+                        {isConnecting ? (
+                          <Loader2 size={15} className="animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="h-2.5 w-2.5 rounded-[2px] bg-white"
+                          />
+                        ) : (
+                          <Mic size={15} className="text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <motion.form
+                    layout
+                    onSubmit={handleComposerSubmit}
+                    className="min-w-0 flex-1"
+                  >
+                    <div className="flex items-end gap-2 rounded-[1.7rem] border border-amber-200/80 bg-[#FFF7ED] px-3 py-2 shadow-[0_10px_24px_rgba(249,115,22,0.12)]">
+                      <textarea
+                        ref={composerTextareaRef}
+                        value={composerDraft}
+                        onChange={handleComposerDraftChange}
+                        rows={1}
+                        placeholder={composerCopy.composerPlaceholder}
+                        className="min-h-[28px] flex-1 resize-none self-center bg-transparent px-0 py-[0.45rem] text-[15px] leading-6 text-gray-900 outline-none placeholder:text-[#C7A27A]"
+                        style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
+                      />
+
+                      <div className="flex shrink-0 items-center gap-1 self-end pb-0.5">
+                        <motion.button
+                          layoutId="live-phone-demo-keyboard-toggle"
+                          type="button"
+                          onClick={handleToggleComposer}
+                          aria-label={composerCopy.closeKeyboardLabel}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#C57B2D] transition-colors hover:bg-amber-100/80 active:scale-95"
+                        >
+                          <Keyboard size={18} strokeWidth={2.2} />
+                        </motion.button>
+                        <button
+                          type="submit"
+                          disabled={!composerCanSend}
+                          aria-label={composerCopy.sendMessageLabel}
+                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full shadow-sm transition-all duration-200 active:scale-95 ${
+                            composerCanSend
+                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
+                              : 'bg-gray-200 text-gray-400'
+                          }`}
+                        >
+                          <ArrowUp size={18} strokeWidth={2.6} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.form>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="default-bottom-bar"
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="grid items-center"
+                  style={{ gridTemplateColumns: '1fr auto 1fr' }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -12 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="justify-self-start pl-2"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isUsageLimited ? (
+                        <>
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
+                          <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    layoutId="live-phone-demo-mic-shell"
+                    className="flex justify-center"
+                  >
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={isConnecting || isError}
+                      className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : isConnecting
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                      >
+                        {isConnecting ? (
+                          <Loader2 size={30} className="animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="h-5 w-5 rounded-[4px] bg-white"
+                          />
+                        ) : (
+                          <Mic size={28} className="text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <div className="justify-self-end">
+                    <motion.button
+                      layoutId="live-phone-demo-keyboard-toggle"
+                      type="button"
+                      onClick={handleToggleComposer}
+                      aria-label={composerCopy.openKeyboardLabel}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-amber-200/80 bg-[#FFF7ED] text-[#C57B2D] shadow-[0_6px_16px_rgba(249,115,22,0.12)] transition-all duration-200 hover:border-amber-300 hover:bg-amber-50 active:scale-95"
+                    >
+                      <Keyboard size={19} strokeWidth={2.15} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
     </PhoneFrame>
