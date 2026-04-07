@@ -10,7 +10,6 @@ import {
 import ChatBubbleTimestamp from './ChatBubbleTimestamp'
 import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageCopyButton from './MessageCopyButton'
-import MessageTtsButton from './MessageTtsButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
@@ -39,11 +38,6 @@ interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
   isDraft?: boolean
-  isSpeaking?: boolean
-  isOriginalSpeaking?: boolean
-  isOriginalTtsLoading?: boolean
-  speakingLanguage?: string | null
-  loadingTranslationLanguage?: string | null
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName?: string
@@ -88,17 +82,6 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   return targetLanguages
 }
 
-function SpeakingIndicator() {
-  return (
-    <span className="inline-flex items-end gap-0.5 align-middle" aria-label="tts-speaking">
-      <span className="w-0.5 h-2 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-      <span className="w-0.5 h-3 bg-amber-500 rounded-full animate-pulse" style={{ animationDelay: '120ms' }} />
-      <span className="w-0.5 h-2.5 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '240ms' }} />
-      <span className="w-0.5 h-1.5 bg-amber-300/90 rounded-full animate-pulse" style={{ animationDelay: '360ms' }} />
-    </span>
-  )
-}
-
 function buildCombinedUtteranceCopyText(
   originalFlag: string,
   originalText: string,
@@ -117,11 +100,6 @@ function ChatBubble({
   utterance,
   uiLocale,
   isDraft = false,
-  isSpeaking = false,
-  isOriginalSpeaking = false,
-  isOriginalTtsLoading = false,
-  speakingLanguage = null,
-  loadingTranslationLanguage = null,
   onPlayOriginal,
   onPlayTranslation,
   bubbleTextClassName = 'text-sm',
@@ -156,19 +134,6 @@ function ChatBubble({
     utterance.originalText,
     translationEntries,
   )
-  const originalActions = !isDraft ? (
-    <span
-      data-message-bubble-actions
-      className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
-    >
-      <MessageTtsButton
-        label={ttsActionCopy.playOriginalLabel}
-        onClick={() => onPlayOriginal?.(utterance)}
-        isLoading={isOriginalTtsLoading}
-        isActive={isOriginalSpeaking}
-      />
-    </span>
-  ) : null
 
   return (
     <motion.div
@@ -210,6 +175,8 @@ function ChatBubble({
             allText={combinedUtteranceCopyText}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
+            playPronunciationLabel={!isDraft ? ttsActionCopy.playPronunciationLabel : undefined}
+            onPlayPronunciation={!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined}
             style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
@@ -229,7 +196,6 @@ function ChatBubble({
                   {isDraft && (
                     <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
                   )}
-                  {originalActions}
                 </span>
               </p>
             </div>
@@ -255,24 +221,8 @@ function ChatBubble({
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             allText={combinedUtteranceCopyText}
             copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
-            actions={(
-              <span
-                data-message-bubble-actions
-                className="ml-1.5 inline-flex items-center gap-0.5 align-middle"
-              >
-                <MessageTtsButton
-                  label={ttsActionCopy.formatPlayTranslationLabel(lang)}
-                  onClick={() => onPlayTranslation?.(utterance, lang, text)}
-                  isLoading={loadingTranslationLanguage === lang}
-                  isActive={isSpeaking && speakingLanguage === lang}
-                />
-              </span>
-            )}
-            accessory={
-              isSpeaking && speakingLanguage === lang
-                ? <SpeakingIndicator />
-                : undefined
-            }
+            playPronunciationLabel={ttsActionCopy.playPronunciationLabel}
+            onPlayPronunciation={() => onPlayTranslation?.(utterance, lang, text)}
           >
             {text}
           </TranslationBubbleRow>
@@ -302,11 +252,6 @@ function ChatBubble({
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.isDraft !== next.isDraft) return false
-  if (prev.isSpeaking !== next.isSpeaking) return false
-  if (prev.isOriginalSpeaking !== next.isOriginalSpeaking) return false
-  if (prev.isOriginalTtsLoading !== next.isOriginalTtsLoading) return false
-  if (prev.speakingLanguage !== next.speakingLanguage) return false
-  if (prev.loadingTranslationLanguage !== next.loadingTranslationLanguage) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
 
   if (prev.utterance !== next.utterance) {

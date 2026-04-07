@@ -25,6 +25,24 @@ describe('CopyableBubbleSurface', () => {
     expect(html).toContain('-webkit-touch-callout:none')
     expect(html).toContain('-webkit-user-select:none')
     expect(html).toContain('user-select:none')
+    expect(html).toContain('data-copyable-bubble-double-tap-action="copy"')
     expect(html).toContain('draggable="false"')
+  })
+
+  it('marks double tap as pronunciation playback when a pronunciation action is provided', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        CopyableBubbleSurface,
+        {
+          text: 'Hello world',
+          copyBubbleLabel: 'Copy',
+          playPronunciationLabel: 'Listen to pronunciation',
+          onPlayPronunciation: () => {},
+        },
+        createElement('span', null, 'Hello world'),
+      ),
+    )
+
+    expect(html).toContain('data-copyable-bubble-double-tap-action="play-pronunciation"')
   })
 })

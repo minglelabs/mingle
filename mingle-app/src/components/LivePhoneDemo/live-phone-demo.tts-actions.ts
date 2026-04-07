@@ -6,128 +6,77 @@ import {
 } from '@/i18n'
 
 export type LivePhoneDemoTtsActionCopy = {
-  playOriginalLabel: string
-  playTranslationLabelPrefix: string
-  playTranslationLabelSuffix: string
+  playPronunciationLabel: string
   playbackFailedLabel: string
-  formatPlayTranslationLabel: (language: string) => string
 }
 
-type LivePhoneDemoTtsActionCopyInput = Omit<
-  LivePhoneDemoTtsActionCopy,
-  'formatPlayTranslationLabel'
->
-
-const TTS_ACTION_COPY_INPUT_BY_LOCALE = {
+const TTS_ACTION_COPY_BY_LOCALE = {
   ko: {
-    playOriginalLabel: '원문 재생',
-    playTranslationLabelPrefix: '',
-    playTranslationLabelSuffix: ' 번역 재생',
+    playPronunciationLabel: '발음 듣기',
     playbackFailedLabel: '이 발화의 오디오를 재생하지 못했습니다.',
   },
   en: {
-    playOriginalLabel: 'Play original message',
-    playTranslationLabelPrefix: 'Play ',
-    playTranslationLabelSuffix: ' translation',
+    playPronunciationLabel: 'Listen to pronunciation',
     playbackFailedLabel: 'Failed to play audio for this message.',
   },
   ja: {
-    playOriginalLabel: '原文を再生',
-    playTranslationLabelPrefix: '',
-    playTranslationLabelSuffix: ' 翻訳を再生',
+    playPronunciationLabel: '発音を聞く',
     playbackFailedLabel: 'この発話の音声を再生できませんでした。',
   },
   'zh-CN': {
-    playOriginalLabel: '播放原文',
-    playTranslationLabelPrefix: '播放 ',
-    playTranslationLabelSuffix: ' 翻译',
+    playPronunciationLabel: '收听发音',
     playbackFailedLabel: '无法播放这条发言的音频。',
   },
   'zh-TW': {
-    playOriginalLabel: '播放原文',
-    playTranslationLabelPrefix: '播放 ',
-    playTranslationLabelSuffix: ' 翻譯',
+    playPronunciationLabel: '聽發音',
     playbackFailedLabel: '無法播放這則發言的音訊。',
   },
   fr: {
-    playOriginalLabel: 'Lire le message original',
-    playTranslationLabelPrefix: 'Lire la traduction ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Écouter la prononciation',
     playbackFailedLabel: 'Impossible de lire l’audio de ce message.',
   },
   de: {
-    playOriginalLabel: 'Originalnachricht abspielen',
-    playTranslationLabelPrefix: '',
-    playTranslationLabelSuffix: '-Ubersetzung abspielen',
+    playPronunciationLabel: 'Aussprache anhören',
     playbackFailedLabel: 'Audio fur diese Nachricht konnte nicht abgespielt werden.',
   },
   es: {
-    playOriginalLabel: 'Reproducir mensaje original',
-    playTranslationLabelPrefix: 'Reproducir traduccion en ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Escuchar pronunciación',
     playbackFailedLabel: 'No se pudo reproducir el audio de este mensaje.',
   },
   pt: {
-    playOriginalLabel: 'Reproduzir mensagem original',
-    playTranslationLabelPrefix: 'Reproduzir traducao em ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Ouvir pronúncia',
     playbackFailedLabel: 'Nao foi possivel reproduzir o audio desta mensagem.',
   },
   it: {
-    playOriginalLabel: 'Riproduci messaggio originale',
-    playTranslationLabelPrefix: 'Riproduci traduzione in ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Ascolta pronuncia',
     playbackFailedLabel: 'Impossibile riprodurre l’audio di questo messaggio.',
   },
   ru: {
-    playOriginalLabel: 'Воспроизвести оригинал',
-    playTranslationLabelPrefix: 'Воспроизвести перевод ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Слушать произношение',
     playbackFailedLabel: 'Не удалось воспроизвести аудио для этого сообщения.',
   },
   ar: {
-    playOriginalLabel: 'تشغيل الرسالة الأصلية',
-    playTranslationLabelPrefix: 'تشغيل ترجمة ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'الاستماع إلى النطق',
     playbackFailedLabel: 'تعذر تشغيل الصوت لهذه الرسالة.',
   },
   hi: {
-    playOriginalLabel: 'मूल संदेश चलाएं',
-    playTranslationLabelPrefix: '',
-    playTranslationLabelSuffix: ' अनुवाद चलाएं',
+    playPronunciationLabel: 'उच्चारण सुनें',
     playbackFailedLabel: 'इस संदेश का ऑडियो नहीं चलाया जा सका।',
   },
   th: {
-    playOriginalLabel: 'เล่นข้อความต้นฉบับ',
-    playTranslationLabelPrefix: 'เล่นคำแปล ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'ฟังการออกเสียง',
     playbackFailedLabel: 'ไม่สามารถเล่นเสียงของข้อความนี้ได้',
   },
   vi: {
-    playOriginalLabel: 'Phat tin nhan goc',
-    playTranslationLabelPrefix: 'Phat ban dich ',
-    playTranslationLabelSuffix: '',
+    playPronunciationLabel: 'Nghe phát âm',
     playbackFailedLabel: 'Khong the phat am thanh cho tin nhan nay.',
   },
-} satisfies Record<LegalDocumentLocale, LivePhoneDemoTtsActionCopyInput>
-
-function buildLivePhoneDemoTtsActionCopy(
-  input: LivePhoneDemoTtsActionCopyInput,
-): LivePhoneDemoTtsActionCopy {
-  return {
-    ...input,
-    formatPlayTranslationLabel: (language: string) => (
-      `${input.playTranslationLabelPrefix}${language}${input.playTranslationLabelSuffix}`
-    ),
-  }
-}
+} satisfies Record<LegalDocumentLocale, LivePhoneDemoTtsActionCopy>
 
 export function resolveLivePhoneDemoTtsActionCopy(
   uiLocale: string,
 ): LivePhoneDemoTtsActionCopy {
   const supportedLocale = resolveSupportedLocaleTag(uiLocale) ?? DEFAULT_LOCALE
   const resolvedLocale = resolveLegalDocumentLocale(supportedLocale)
-  const input = TTS_ACTION_COPY_INPUT_BY_LOCALE[resolvedLocale] ?? TTS_ACTION_COPY_INPUT_BY_LOCALE.en
-
-  return buildLivePhoneDemoTtsActionCopy(input)
+  return TTS_ACTION_COPY_BY_LOCALE[resolvedLocale] ?? TTS_ACTION_COPY_BY_LOCALE.en
 }

@@ -3516,15 +3516,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       utterance={u}
                       uiLocale={uiLocale}
                       isDraft={draftUtteranceIds.has(u.id)}
-                      isSpeaking={speakingItem?.utteranceId === u.id && speakingItem.kind === 'translation'}
-                      isOriginalSpeaking={speakingItem?.utteranceId === u.id && speakingItem.kind === 'original'}
-                      isOriginalTtsLoading={pendingManualTtsTarget?.utteranceId === u.id && pendingManualTtsTarget.kind === 'original'}
-                      speakingLanguage={speakingItem?.kind === 'translation' ? (speakingItem.language ?? null) : null}
-                      loadingTranslationLanguage={
-                        pendingManualTtsTarget?.utteranceId === u.id && pendingManualTtsTarget.kind === 'translation'
-                          ? pendingManualTtsTarget.language
-                          : null
-                      }
                       onPlayOriginal={handlePlayOriginalBubbleTts}
                       onPlayTranslation={handlePlayTranslationBubbleTts}
                       bubbleTextClassName={chatBubbleTextClassName}

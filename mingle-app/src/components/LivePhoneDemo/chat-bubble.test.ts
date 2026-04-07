@@ -54,7 +54,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
-    expect((html.match(/data-copyable-bubble/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('aria-label="Copy full message"'),
     )
@@ -82,10 +82,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('bg-amber-50 border border-amber-100')
     expect(html).toContain('aria-label="Copy full message"')
     expect(html).toContain('data-message-copy-button')
-    expect(html).toContain('data-message-tts-button')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
-    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
-    expect((html.match(/data-copyable-bubble/g) || []).length).toBe(2)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('aria-label="Copy full message"'),
     )
@@ -118,7 +116,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
-    expect(html).not.toContain('data-message-tts-button')
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(0)
+    expect((html.match(/data-copyable-bubble-double-tap-action="copy"/g) || []).length).toBe(1)
   })
 
   it('renders a warning icon instead of the unknown language label', () => {
@@ -140,7 +139,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('>UNKNOWN<')
   })
 
-  it('renders tts actions for the original and translated bubbles', () => {
+  it('routes original and translated bubbles to pronunciation playback on double tap', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -155,12 +154,11 @@ describe('ChatBubble', () => {
       }),
     )
 
-    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
-    expect(html).toContain('Play original message')
-    expect(html).toContain('Play ko translation')
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
+    expect(html).not.toContain('data-message-tts-button')
   })
 
-  it('localizes tts action labels with the ui locale', () => {
+  it('does not render visible tts icon buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -175,8 +173,6 @@ describe('ChatBubble', () => {
       }),
     )
 
-    expect((html.match(/data-message-tts-button/g) || []).length).toBe(2)
-    expect(html).toContain('원문 재생')
-    expect(html).toContain('en 번역 재생')
+    expect(html).not.toContain('data-message-tts-button')
   })
 })
