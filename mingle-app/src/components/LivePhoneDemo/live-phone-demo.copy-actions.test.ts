@@ -6,14 +6,14 @@ describe('live-phone-demo.copy-actions', () => {
   it('resolves Korean copy from a regional locale tag', () => {
     const copy = resolveLivePhoneDemoCopyActionCopy('ko-KR')
     expect(copy.copyBubbleLabel).toBe('복사')
-    expect(copy.copyAllBubblesLabel).toBe('전체 발화 복사')
+    expect(copy.copyAllBubblesLabel).toBe('전체 복사')
     expect(copy.copiedToastLabel).toBe('복사됨')
   })
 
   it('falls back to English for unsupported translated locales', () => {
     const copy = resolveLivePhoneDemoCopyActionCopy('sv-SE')
     expect(copy.copyBubbleLabel).toBe('Copy')
-    expect(copy.copyAllBubblesLabel).toBe('Copy full message')
+    expect(copy.copyAllBubblesLabel).toBe('Copy All')
     expect(copy.copiedToastLabel).toBe('Copied')
   })
 

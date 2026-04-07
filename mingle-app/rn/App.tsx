@@ -196,6 +196,39 @@ function isLoopbackUrl(raw: string): boolean {
   }
 }
 
+function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    return hostname.toLowerCase() === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /mingle-app-devbox\.photo-for-passport\.com/i.test(raw);
+  }
+}
+
+function isDevelopmentTunnelUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app')
+      || normalized === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+  }
+}
+
+function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
+}
+
+function shouldBypassWebViewCache(rawUrl: string): boolean {
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDevelopmentTunnelUrl(rawUrl);
+}
+
 function formatWebViewLoadError(description: string, currentWebUrl: string): string {
   const normalizedDescription = description.trim() || 'webview_load_failed';
   if (!currentWebUrl || !isLoopbackUrl(currentWebUrl)) {
@@ -987,7 +1020,7 @@ function resolveNativeBannerPosition(rawValue: string): NativeBannerPosition {
   const normalized = rawValue.trim().toLowerCase();
   if (normalized === 'top') return 'top';
   if (normalized === 'bottom') return 'bottom';
-  return 'top';
+  return 'bottom';
 }
 
 function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition | null {
@@ -1203,24 +1236,33 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
   }, [windowWidthPx]);
-  const webUrl = useMemo(() => {
+  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
+  const [webViewMountToken, setWebViewMountToken] = useState(0);
+  const baseWebUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
-    const transcriptInsetPx = nativeBannerUnitId
-      ? resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale)
-      : 0;
-    const transcriptTopInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'top' ? transcriptInsetPx : 0;
-    const transcriptBottomInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'bottom' ? transcriptInsetPx : 0;
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    const nativeBannerQuery = nativeBannerUnitId
-      ? `&nativeBannerPosition=${encodeURIComponent(defaultNativeBannerPosition)}&nativeTopInsetPx=${transcriptTopInsetPx}&nativeBottomInsetPx=${transcriptBottomInsetPx}`
-      : '';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}`;
-  }, [defaultNativeBannerPosition, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
+  }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
+  const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
+  const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
+  const webUrl = useMemo(() => {
+    if (!baseWebUrl) return '';
+    if (!shouldDisableWebViewCache) return baseWebUrl;
+    try {
+      const url = new URL(baseWebUrl);
+      url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
+      return url.toString();
+    } catch {
+      const separator = baseWebUrl.includes('?') ? '&' : '?';
+      return `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`;
+    }
+  }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
@@ -1265,7 +1307,6 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
-  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
     [nativeBannerHeightPx, nativeCanvasScale],
@@ -1278,6 +1319,7 @@ function AppInner(): React.JSX.Element {
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldShowDebugWebViewRemountButton = shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1510,7 +1552,10 @@ function AppInner(): React.JSX.Element {
         : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheStatusScript = payload.type === 'status'
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
+      : '';
+    const script = `${cacheStatusScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -1563,7 +1608,10 @@ function AppInner(): React.JSX.Element {
     if (__DEV__) {
       console.log(`[NativeUI→Web] ${JSON.stringify(payload).slice(0, 120)}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheBannerLayoutScript = payload.type === 'banner_layout'
+      ? `window.__MINGLE_LAST_NATIVE_BANNER_LAYOUT = ${serialized}; `
+      : '';
+    const script = `${cacheBannerLayoutScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -2040,6 +2088,9 @@ function AppInner(): React.JSX.Element {
     });
 
     const messageSub = addNativeSttListener('message', event => {
+      if (nativeStatusRef.current) {
+        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      }
       emitToWeb({ type: 'message', raw: event.raw });
     });
 
@@ -2128,6 +2179,13 @@ function AppInner(): React.JSX.Element {
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
+
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -2177,6 +2235,14 @@ function AppInner(): React.JSX.Element {
     }
   }, [versionGate.status]);
 
+  useEffect(() => {
+    if (!shouldUseAggressiveWebViewCacheBypass || !webViewRef.current) {
+      return;
+    }
+
+    webViewRef.current.clearCache(true);
+  }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
+
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
       {shouldRenderTopSafeAreaFill ? (
@@ -2197,6 +2263,7 @@ function AppInner(): React.JSX.Element {
       <View style={[styles.webViewContainer, { backgroundColor: safeAreaPalette.webViewColor }]}>
         {versionGate.status !== 'force_update' ? (
           <WebView
+            key={`webview:${webViewMountToken}`}
             ref={webViewRef}
             source={webUrl
               ? { uri: webUrl }
@@ -2205,6 +2272,9 @@ function AppInner(): React.JSX.Element {
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
+            cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}
+            incognito={shouldUseAggressiveWebViewCacheBypass}
+            cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
@@ -2246,6 +2316,20 @@ function AppInner(): React.JSX.Element {
             <Text style={styles.errorTitle}>{versionPolicyFallback.webViewLoadFailedTitle}</Text>
             <Text style={styles.errorDescription}>{loadError}</Text>
           </View>
+        ) : null}
+        {versionGate.status !== 'force_update' && shouldShowDebugWebViewRemountButton ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remount WebView"
+            onPress={handleDebugWebViewRemount}
+            style={({ pressed }) => [
+              styles.debugWebViewRemountButton,
+              { top: Math.max(16, safeAreaInsets.top + 8) },
+              pressed ? styles.debugWebViewRemountButtonPressed : null,
+            ]}
+          >
+            <Text style={styles.debugWebViewRemountButtonText}>Remount WebView</Text>
+          </Pressable>
         ) : null}
       </View>
       {shouldRenderTopSafeAreaOverlay ? (
@@ -2372,6 +2456,24 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 12,
     lineHeight: 16,
+  },
+  debugWebViewRemountButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 24,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17, 24, 39, 0.82)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  debugWebViewRemountButtonPressed: {
+    opacity: 0.85,
+  },
+  debugWebViewRemountButtonText: {
+    color: '#f9fafb',
+    fontSize: 12,
+    fontWeight: '700',
   },
   versionOverlay: {
     position: 'absolute',

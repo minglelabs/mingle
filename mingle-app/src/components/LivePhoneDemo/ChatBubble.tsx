@@ -12,11 +12,46 @@ import CopyableBubbleSurface from './CopyableBubbleSurface'
 import MessageCopyButton from './MessageCopyButton'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { getSpeakerAvatar } from './speaker-avatar'
 
 const CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const ORIGINAL_BUBBLE_MAX_WIDTH = '85%'
 const TRANSLATION_BUBBLE_MAX_WIDTH = '90%'
+
+// 재생키 빌더 (LivePhoneDemo의 것과 동일 규칙)
+function buildOriginalPlaybackKey(utteranceId: string, lang: string): string {
+  return `original:${utteranceId}:${lang.trim().toLowerCase()}`
+}
+function buildTranslationPlaybackKey(utteranceId: string, lang: string): string {
+  return `translation:${utteranceId}:${lang.trim().toLowerCase()}`
+}
+
+/** 버블 텍스트 끝에 표시되는 음파 재생 중 표시 */
+function SpeakingIndicator() {
+  return (
+    <span
+      className="ml-1.5 inline-flex items-end gap-[2px] align-middle"
+      style={{ height: '13px' }}
+      aria-label="playing"
+    >
+      {[0, 0.15, 0.3].map((delay, i) => (
+        <motion.span
+          key={i}
+          className="block w-[2.5px] rounded-full bg-sky-400"
+          animate={{ height: ['30%', '100%', '30%'] }}
+          transition={{
+            duration: 0.6,
+            repeat: Infinity,
+            delay,
+            ease: 'easeInOut',
+          }}
+          style={{ height: '30%' }}
+        />
+      ))}
+    </span>
+  )
+}
 
 export interface Utterance {
   id: string
@@ -37,9 +72,10 @@ interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
   isDraft?: boolean
-  isSpeaking?: boolean
-  speakingLanguage?: string | null
+  onPlayOriginal?: (utterance: Utterance) => void
+  onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName?: string
+  speakingPlaybackKey?: string
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -81,17 +117,6 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   return targetLanguages
 }
 
-function SpeakingIndicator() {
-  return (
-    <span className="inline-flex items-end gap-0.5 align-middle" aria-label="tts-speaking">
-      <span className="w-0.5 h-2 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
-      <span className="w-0.5 h-3 bg-amber-500 rounded-full animate-pulse" style={{ animationDelay: '120ms' }} />
-      <span className="w-0.5 h-2.5 bg-amber-400/90 rounded-full animate-pulse" style={{ animationDelay: '240ms' }} />
-      <span className="w-0.5 h-1.5 bg-amber-300/90 rounded-full animate-pulse" style={{ animationDelay: '360ms' }} />
-    </span>
-  )
-}
-
 function buildCombinedUtteranceCopyText(
   originalFlag: string,
   originalText: string,
@@ -110,9 +135,10 @@ function ChatBubble({
   utterance,
   uiLocale,
   isDraft = false,
-  isSpeaking = false,
-  speakingLanguage = null,
+  onPlayOriginal,
+  onPlayTranslation,
   bubbleTextClassName = 'text-sm',
+  speakingPlaybackKey,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
@@ -123,6 +149,9 @@ function ChatBubble({
   )
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
+  const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
+  const isOriginalSpeaking = !!speakingPlaybackKey
+    && speakingPlaybackKey === buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
   const targetLangs = buildTargetLanguagesForUtterance(utterance)
@@ -184,6 +213,8 @@ function ChatBubble({
             allText={combinedUtteranceCopyText}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
+            playPronunciationLabel={!isDraft ? ttsActionCopy.playPronunciationLabel : undefined}
+            onPlayPronunciation={!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined}
             style={{ maxWidth: ORIGINAL_BUBBLE_MAX_WIDTH }}
             className="w-fit rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
@@ -199,11 +230,12 @@ function ChatBubble({
                   </span>
                 </span>
                 <span data-original-bubble-text className="align-middle">
-                  {utterance.originalText}
-                  {isDraft && (
-                    <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
-                  )}
-                </span>
+                    {utterance.originalText}
+                    {isOriginalSpeaking && <SpeakingIndicator />}
+                    {isDraft && (
+                      <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+                    )}
+                  </span>
               </p>
             </div>
           </CopyableBubbleSurface>
@@ -228,10 +260,11 @@ function ChatBubble({
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             allText={combinedUtteranceCopyText}
             copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
-            accessory={
-              isSpeaking && speakingLanguage === lang
-                ? <SpeakingIndicator />
-                : undefined
+            playPronunciationLabel={ttsActionCopy.playPronunciationLabel}
+            onPlayPronunciation={() => onPlayTranslation?.(utterance, lang, text)}
+            actions={speakingPlaybackKey === buildTranslationPlaybackKey(utterance.id, lang)
+              ? <SpeakingIndicator />
+              : undefined
             }
           >
             {text}
@@ -262,9 +295,8 @@ function ChatBubble({
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.isDraft !== next.isDraft) return false
-  if (prev.isSpeaking !== next.isSpeaking) return false
-  if (prev.speakingLanguage !== next.speakingLanguage) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
+  if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance

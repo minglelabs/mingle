@@ -56,6 +56,17 @@ export function normalizeLivePhoneDemoAdBannerPosition(value: unknown): LivePhon
     : null
 }
 
+export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
+  preferredPosition: LivePhoneDemoAdBannerPosition | null
+  nativeLayoutPosition: LivePhoneDemoAdBannerPosition | null
+  queryPosition: LivePhoneDemoAdBannerPosition | null
+}): LivePhoneDemoAdBannerPosition | null {
+  return input.preferredPosition
+    ?? input.nativeLayoutPosition
+    ?? input.queryPosition
+    ?? null
+}
+
 export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[]): LivePhoneDemoPersistedPreferences {
   const next: LivePhoneDemoPersistedPreferences = {
     selectedLanguages: [...fallbackLanguages],

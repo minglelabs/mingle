@@ -22,6 +22,10 @@ import {
   parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
+  resolveConnectionStatusFromNativeBridgeStatus,
+  shouldResetConnectionToIdleForNativeMicRecovery,
+  shouldPromoteConnectionStatusFromNativeActivity,
+  shouldTrackUsageForConnectionStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
@@ -270,6 +274,13 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
+      connectionStatus: 'idle',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: false,
+    })).toBe(true)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
       connectionStatus: 'connecting',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: true,
@@ -285,9 +296,102 @@ describe('use-realtime-stt pure logic', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
-      recoveryAction: 'open_ios_settings',
+      recoveryAction: 'none',
       supportsNativeOpenAppSettingsCommand: false,
     })).toBe(false)
+  })
+
+  it('returns denied iOS native mic recovery to idle instead of sticky error', () => {
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'ios',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
+    })).toBe(true)
+
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'ios',
+      message: 'mic_permission_denied_after_prompt',
+    })).toBe(true)
+
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'android',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
+    })).toBe(false)
+  })
+
+  it('maps native bridge statuses back into UI connection state for restore flows', () => {
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'idle',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'silenced',
+      previousConnectionStatus: 'idle',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'starting',
+      previousConnectionStatus: 'idle',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'recovering',
+      previousConnectionStatus: 'ready',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'stopped',
+      previousConnectionStatus: 'ready',
+    })).toBe('idle')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'failed',
+      previousConnectionStatus: 'connecting',
+    })).toBe('error')
+  })
+
+  it('ignores missing or unknown native bridge statuses for older native shells', () => {
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: undefined,
+      previousConnectionStatus: 'idle',
+    })).toBeNull()
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: '',
+      previousConnectionStatus: 'ready',
+    })).toBeNull()
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'legacy_unknown_state',
+      previousConnectionStatus: 'connecting',
+    })).toBeNull()
+  })
+
+  it('promotes native transcript activity back into ready state after unexpected web reloads', () => {
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'idle',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'connecting',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'error',
+    })).toBe(true)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'ready',
+    })).toBe(false)
+  })
+
+  it('tracks usage for any STT session state that resolves to ready', () => {
+    expect(shouldTrackUsageForConnectionStatus('ready')).toBe(true)
+    expect(shouldTrackUsageForConnectionStatus('connecting')).toBe(false)
+    expect(shouldTrackUsageForConnectionStatus('idle')).toBe(false)
+    expect(shouldTrackUsageForConnectionStatus('error')).toBe(false)
   })
 
   it('filters translations down to currently selected target languages', () => {

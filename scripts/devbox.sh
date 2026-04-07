@@ -13,8 +13,8 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.9"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.9"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.10"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.10"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -837,10 +837,10 @@ resolve_devbox_ad_banner_position() {
       printf '%s' "$value"
       ;;
     "")
-      printf '%s' "top"
+      printf '%s' "bottom"
       ;;
     *)
-      printf '%s' "top"
+      printf '%s' "bottom"
       ;;
   esac
 }

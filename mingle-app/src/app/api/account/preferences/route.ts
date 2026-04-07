@@ -18,6 +18,9 @@ const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const DEFAULT_SPEAKER_ENABLED = false;
+const DEFAULT_ECHO_ALLOWED = true;
+const DEFAULT_AD_BANNER_POSITION = "bottom";
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
@@ -26,6 +29,8 @@ type PreferencesBody = {
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
+  speakerEnabled?: unknown;
+  echoAllowed?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -41,6 +46,8 @@ type UserPreferencesRecord = {
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
+  demoSpeakerEnabled: boolean | null;
+  demoEchoAllowed: boolean | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -77,6 +84,10 @@ function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
   return AD_BANNER_POSITIONS.has(normalized)
     ? (normalized as "top" | "bottom")
     : null;
+}
+
+function normalizeBooleanPreference(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
@@ -214,6 +225,8 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoSilenceFinalizeMs: true,
     translationModel: true,
     adBannerPosition: true,
+    demoSpeakerEnabled: true,
+    demoEchoAllowed: true,
   } as const;
 
   if (identity.id) {
@@ -311,7 +324,9 @@ export async function GET(request: Request) {
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
-    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition),
+    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
+    speakerEnabled: preferences?.demoSpeakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: preferences?.demoEchoAllowed ?? DEFAULT_ECHO_ALLOWED,
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -356,11 +371,15 @@ export async function PATCH(request: Request) {
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextSpeakerEnabled = normalizeBooleanPreference(body.speakerEnabled);
+  const nextEchoAllowed = normalizeBooleanPreference(body.echoAllowed);
   if (
     nextTextSizeLevel === null
     && nextSilenceMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
+    && nextSpeakerEnabled === null
+    && nextEchoAllowed === null
   ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
@@ -370,6 +389,8 @@ export async function PATCH(request: Request) {
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextSpeakerEnabled !== null ? { demoSpeakerEnabled: nextSpeakerEnabled } : {}),
+    ...(nextEchoAllowed !== null ? { demoEchoAllowed: nextEchoAllowed } : {}),
   };
 
   if (identity.id) {

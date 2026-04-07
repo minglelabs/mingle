@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, Volume2, VolumeX, Mic, ArrowRight, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -29,10 +29,13 @@ import {
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   readPersistedLivePhoneDemoPreferences,
+  resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
   buildHydratedAccountPreferences,
+  DEFAULT_ECHO_ALLOWED,
+  DEFAULT_SPEAKER_ENABLED,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
   type AccountPreferencesResponse,
@@ -56,6 +59,7 @@ import {
   isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
+  readCachedNativeUiBannerLayout,
   shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
@@ -74,10 +78,13 @@ import {
 } from './live-phone-demo.feedback-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
+import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
+const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
@@ -86,7 +93,7 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 // iOS .playAndRecord reduces speaker output; this compensates in software.
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
-const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 300
+const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
@@ -101,6 +108,8 @@ const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
+const EMPTY_STATE_ARROW_END_Y = 78
+const EMPTY_STATE_ARROW_HEAD_Y = 72
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -487,9 +496,19 @@ interface LivePhoneDemoProps {
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
 
 type TtsQueueItem = {
+  playbackKey: string
   utteranceId: string
   audioBlob: Blob | null
   language: string
+  kind: 'original' | 'translation'
+  mode: 'auto' | 'manual'
+}
+
+type BubbleTtsTarget = {
+  playbackKey: string
+  utteranceId: string
+  language: string
+  kind: 'original' | 'translation'
 }
 
 type NativeTtsStopReason = 'mute_or_sound_disabled' | 'component_unmount' | 'force_reset'
@@ -517,6 +536,14 @@ type NativeSetAdBannerPositionCommand = {
 
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
+}
+
+function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): string {
+  return `original:${utteranceId}:${language.trim().toLowerCase()}`
+}
+
+function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
+  return `translation:${utteranceId}:${language.trim().toLowerCase()}`
 }
 
 function buildTrackingRequestHeaders(args: {
@@ -551,24 +578,6 @@ function buildTrackingRequestHeaders(args: {
   return headers
 }
 
-function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative inline-flex items-center ${
-        echoAllowed ? 'text-amber-500' : 'text-gray-400'
-      }`}
-    >
-      <Volume2 size={12} strokeWidth={2} />
-      <ArrowRight size={12} strokeWidth={2} />
-      <Mic size={12} strokeWidth={2} />
-      {!echoAllowed && (
-        <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rotate-[-24deg] rounded bg-current" />
-      )}
-    </span>
-  )
-}
-
 const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function LivePhoneDemo({
   onLimitReached,
   enableAutoTTS = false,
@@ -578,8 +587,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   usageLimitRetryHintLabel,
   connectingLabel,
   connectionFailedLabel,
-  muteTtsLabel,
-  unmuteTtsLabel,
   textSizeLabel,
   silenceFinalizeLabel,
   translationModelLabel,
@@ -606,6 +613,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
+  const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -633,8 +641,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
-  const { ttsEnabled: isSoundEnabled, setTtsEnabled: setIsSoundEnabled, aecEnabled, setAecEnabled } = useTtsSettings()
-  const [speakingItem, setSpeakingItem] = useState<{ utteranceId: string, language: string } | null>(null)
+  const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
+  const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
+  const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
   const playerAudioRef = useRef<HTMLAudioElement | null>(null)
   const currentAudioUrlRef = useRef<string | null>(null)
@@ -651,6 +660,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const ttsNeedsUnlockRef = useRef(false)
   const processTtsQueueRef = useRef<() => void>(() => {})
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
+  const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -684,17 +694,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
+    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: DEFAULT_ECHO_ALLOWED,
   })
   const latestAccountPreferences = useMemo(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
     adBannerPosition,
-  }), [adBannerPosition, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+    speakerEnabled: isSoundEnabled,
+    echoAllowed: !aecEnabled,
+  }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
-  const displayedAdBannerPosition = adBannerPosition
-    || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
-    || nativeBannerPositionFromQuery
+  const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
+    preferredPosition: adBannerPosition,
+    nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
+    queryPosition: nativeBannerPositionFromQuery,
+  })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
@@ -1522,27 +1538,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }))
   }, [])
 
-  const allocateNativeTtsPlaybackId = useCallback((utteranceId: string) => {
+  const allocateNativeTtsPlaybackId = useCallback((playbackKey: string) => {
     nativeTtsPlaybackSeqRef.current += 1
-    return `${utteranceId}::${nativeTtsPlaybackSeqRef.current}`
+    return `${playbackKey}::${nativeTtsPlaybackSeqRef.current}`
   }, [])
 
-  const armNativeTtsEventTimeout = useCallback((playbackId: string, utteranceId: string) => {
+  const armNativeTtsEventTimeout = useCallback((playbackId: string, playbackKey: string) => {
     if (!isNativeApp()) return
     clearNativeTtsEventTimer()
     activeNativeTtsPlaybackIdRef.current = playbackId
-    activeNativeTtsUtteranceIdRef.current = utteranceId
+    activeNativeTtsUtteranceIdRef.current = playbackKey
     nativeTtsEventTimerRef.current = window.setTimeout(() => {
       if (
         activeNativeTtsPlaybackIdRef.current !== playbackId
-        && activeNativeTtsUtteranceIdRef.current !== utteranceId
+        && activeNativeTtsUtteranceIdRef.current !== playbackKey
       ) {
         return
       }
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
       nativeTtsEventTimerRef.current = null
-      setSpeakingItem(prev => (prev?.utteranceId === utteranceId ? null : prev))
+      setSpeakingItem(prev => (prev?.playbackKey === playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }, NATIVE_TTS_EVENT_TIMEOUT_MS)
@@ -1551,8 +1567,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const processTtsQueue = useCallback(() => {
     if (isTtsProcessingRef.current) return
     if (!enableAutoTTS || !isSoundEnabled) {
-      clearTtsWaitTimer()
-      return
+      ttsQueueRef.current = ttsQueueRef.current.filter(item => item.mode === 'manual')
     }
 
     const queue = ttsQueueRef.current
@@ -1588,31 +1603,36 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const audioBlob = next.audioBlob!
     isTtsProcessingRef.current = true
     cleanupCurrentAudio()
-    setSpeakingItem({ utteranceId: next.utteranceId, language: next.language })
+    setSpeakingItem({
+      playbackKey: next.playbackKey,
+      utteranceId: next.utteranceId,
+      language: next.language,
+      kind: next.kind,
+    })
 
     const onPlaybackDone = () => {
       clearNativeTtsEventTimer()
       activeNativeTtsPlaybackIdRef.current = null
       activeNativeTtsUtteranceIdRef.current = null
-      setSpeakingItem(prev => (prev?.utteranceId === next.utteranceId ? null : prev))
+      setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
       isTtsProcessingRef.current = false
       processTtsQueueRef.current()
     }
 
     const playViaNativeBridge = async () => {
       try {
-        const playbackId = allocateNativeTtsPlaybackId(next.utteranceId)
+        const playbackId = allocateNativeTtsPlaybackId(next.playbackKey)
         const audioBase64 = await blobToBase64(audioBlob)
         window.ReactNativeWebView!.postMessage(JSON.stringify({
           type: 'native_tts_play',
           payload: {
             playbackId,
-            utteranceId: next.utteranceId,
+            utteranceId: next.playbackKey,
             audioBase64,
             contentType: audioBlob.type || 'audio/mpeg',
           },
         }))
-        armNativeTtsEventTimeout(playbackId, next.utteranceId)
+        armNativeTtsEventTimeout(playbackId, next.playbackKey)
       } catch {
         onPlaybackDone()
       }
@@ -1654,7 +1674,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           URL.revokeObjectURL(objectUrl)
           currentAudioUrlRef.current = null
         }
-        setSpeakingItem(prev => (prev?.utteranceId === next.utteranceId ? null : prev))
+        setSpeakingItem(prev => (prev?.playbackKey === next.playbackKey ? null : prev))
         ttsNeedsUnlockRef.current = true
         // Re-insert at front of queue so it can be retried after audio unlock
         ttsQueueRef.current.unshift(next)
@@ -1662,7 +1682,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       })
     }
 
-    if (isNativeApp()) {
+    // NativeTTSModule은 iOS 전용 — Android에서는 HTML audio로 재생
+    if (isNativeApp() && isLikelyIOSPlatform()) {
       void playViaNativeBridge()
     } else {
       void playViaHtmlAudio()
@@ -1710,7 +1731,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         activeNativeTtsUtteranceIdRef.current = null
         clearNativeTtsEventTimer()
         setSpeakingItem(prev => {
-          if (utteranceId && prev?.utteranceId === utteranceId) return null
+          if (utteranceId && prev?.playbackKey === utteranceId) return null
           return prev
         })
         isTtsProcessingRef.current = false
@@ -1726,7 +1747,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         isTtsProcessingRef.current = false
         setSpeakingItem(prev => {
           if (!utteranceId) return null
-          if (prev?.utteranceId === utteranceId) return null
+          if (prev?.playbackKey === utteranceId) return null
           return prev
         })
         processTtsQueueRef.current()
@@ -1744,36 +1765,93 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleTtsRequested = useCallback((utteranceId: string, language: string) => {
     if (!enableAutoTTS || !isSoundEnabled) return
     const queue = ttsQueueRef.current
-    if (queue.some(item => item.utteranceId === utteranceId)) {
+    const playbackKey = buildTranslationBubblePlaybackKey(utteranceId, language)
+    if (queue.some(item => item.playbackKey === playbackKey)) {
       return
     }
-    queue.push({ utteranceId, audioBlob: null, language })
+    queue.push({
+      playbackKey,
+      utteranceId,
+      audioBlob: null,
+      language,
+      kind: 'translation',
+      mode: 'auto',
+    })
   }, [enableAutoTTS, isSoundEnabled])
 
   // Handle TTS audio received inline with translation response.
   const handleTtsAudio = useCallback((utteranceId: string, audioBlob: Blob, language: string) => {
     if (!enableAutoTTS || !isSoundEnabled) return
     const queue = ttsQueueRef.current
+    const playbackKey = buildTranslationBubblePlaybackKey(utteranceId, language)
     // Fill in existing placeholder
-    const existing = queue.find(item => item.utteranceId === utteranceId)
+    const existing = queue.find(item => item.playbackKey === playbackKey)
     if (existing) {
       existing.audioBlob = audioBlob
       existing.language = language
     } else {
       // No placeholder (edge case) — append to end
-      queue.push({ utteranceId, audioBlob, language })
+      queue.push({
+        playbackKey,
+        utteranceId,
+        audioBlob,
+        language,
+        kind: 'translation',
+        mode: 'auto',
+      })
     }
     processTtsQueue()
   }, [enableAutoTTS, isSoundEnabled, processTtsQueue])
 
   const handleTtsCanceled = useCallback((utteranceId: string) => {
     const queue = ttsQueueRef.current
-    const nextQueue = queue.filter((item) => item.utteranceId !== utteranceId)
+    const nextQueue = queue.filter((item) => item.utteranceId !== utteranceId || item.mode === 'manual')
     if (nextQueue.length === queue.length) return
     ttsQueueRef.current = nextQueue
     clearTtsWaitTimer()
     processTtsQueue()
   }, [clearTtsWaitTimer, processTtsQueue])
+
+  const synthesizeBubbleTtsViaApi = useCallback(async (input: {
+    playbackKey: string
+    text: string
+    language: string
+  }): Promise<Blob | null> => {
+    const text = input.text.trim()
+    const language = input.language.trim()
+    if (!text || !language) return null
+
+    const sessionKey = getOrCreateSessionKey()
+    const trackingUserId = getOrCreateTrackingUserId()
+
+    try {
+      const response = await fetch(TTS_API_PATH, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey,
+            trackingUserId,
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({
+          text,
+          language,
+          sessionKey,
+          clientMessageId: input.playbackKey,
+        }),
+      })
+      if (!response.ok) return null
+      const arrayBuffer = await response.arrayBuffer()
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) return null
+      return new Blob([arrayBuffer], {
+        type: response.headers.get('content-type') || 'audio/mpeg',
+      })
+    } catch {
+      return null
+    }
+  }, [nativeAppUpdate])
 
   const {
     utterances,
@@ -1897,7 +1975,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [ensureAudioPlayer])
 
   const resumeTtsPlayback = useCallback((withPriming = false) => {
-    if (!enableAutoTTS || !isSoundEnabled) return
+    const hasManualQueueItem = ttsQueueRef.current.some(item => item.mode === 'manual')
+    if ((!enableAutoTTS || !isSoundEnabled) && !hasManualQueueItem) return
     const current = playerAudioRef.current
     if (current && !current.ended && current.paused) {
       void current.play().then(() => {
@@ -1988,6 +2067,88 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => window.clearTimeout(timerId)
   }, [enableAutoTTS, forceStopTtsPlayback])
 
+  const handlePlayBubbleTts = useCallback(async (
+    target: BubbleTtsTarget,
+    text: string,
+  ) => {
+    const normalizedText = text.trim()
+    if (!normalizedText) return
+
+    const isSameTargetPending = pendingManualTtsTarget?.playbackKey === target.playbackKey
+    const isSameTargetSpeaking = speakingItem?.playbackKey === target.playbackKey
+    if (isSameTargetPending || isSameTargetSpeaking) {
+      manualTtsRequestSeqRef.current += 1
+      setPendingManualTtsTarget(null)
+      forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      return
+    }
+
+    manualTtsRequestSeqRef.current += 1
+    const requestSeq = manualTtsRequestSeqRef.current
+    setPendingManualTtsTarget(target)
+    forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+
+    // Android WebView autoplay 제한: API 호출(async) 전, 유저 제스처 컨텍스트 안에서 audio를 프라이밍
+    if (!isLikelyIOSPlatform()) {
+      void primeAudioPlayback()
+    }
+
+    const audioBlob = await synthesizeBubbleTtsViaApi({
+      playbackKey: target.playbackKey,
+      text: normalizedText,
+      language: target.language,
+    })
+    if (manualTtsRequestSeqRef.current !== requestSeq) return
+
+    setPendingManualTtsTarget(null)
+    if (!audioBlob) {
+      toast.error(ttsActionCopy.playbackFailedLabel)
+      return
+    }
+
+    ttsQueueRef.current = [{
+      playbackKey: target.playbackKey,
+      utteranceId: target.utteranceId,
+      audioBlob,
+      language: target.language,
+      kind: target.kind,
+      mode: 'manual',
+    }]
+    processTtsQueue()
+  }, [
+    forceStopTtsPlayback,
+    pendingManualTtsTarget,
+    primeAudioPlayback,
+    processTtsQueue,
+    speakingItem,
+    synthesizeBubbleTtsViaApi,
+    ttsActionCopy.playbackFailedLabel,
+  ])
+
+  const handlePlayOriginalBubbleTts = useCallback((utterance: Utterance) => {
+    void handlePlayBubbleTts({
+      playbackKey: buildOriginalBubblePlaybackKey(utterance.id, utterance.originalLang),
+      utteranceId: utterance.id,
+      language: utterance.originalLang,
+      kind: 'original',
+    }, utterance.originalText)
+  }, [handlePlayBubbleTts])
+
+  const handlePlayTranslationBubbleTts = useCallback((utterance: Utterance, language: string, text: string) => {
+    void handlePlayBubbleTts({
+      playbackKey: buildTranslationBubblePlaybackKey(utterance.id, language),
+      utteranceId: utterance.id,
+      language,
+      kind: 'translation',
+    }, text)
+  }, [handlePlayBubbleTts])
+
+  useEffect(() => {
+    return () => {
+      manualTtsRequestSeqRef.current += 1
+    }
+  }, [])
+
   useEffect(() => {
     if (!enableAutoTTS) return
     const handleVisibilityChange = () => {
@@ -2012,7 +2173,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [enableAutoTTS, resumeTtsPlayback])
 
   useEffect(() => {
-    if (!enableAutoTTS) return
     const handleUserGesture = () => {
       if (!ttsNeedsUnlockRef.current) return
       resumeTtsPlayback(true)
@@ -2024,7 +2184,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handleUserGesture)
       window.removeEventListener('touchstart', handleUserGesture)
     }
-  }, [enableAutoTTS, resumeTtsPlayback])
+  }, [resumeTtsPlayback])
 
   // Keep TTS moving even if a trigger was missed (e.g. race between state commit and inline audio arrival).
   useEffect(() => {
@@ -2268,6 +2428,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     if (!isNativeApp()) return
+
+    const cachedBannerLayout = readCachedNativeUiBannerLayout(window)
+    if (cachedBannerLayout) {
+      setNativeBannerLayout(cachedBannerLayout)
+    }
 
     const handleNativeUiEvent = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail
@@ -3359,9 +3524,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       utterance={u}
                       uiLocale={uiLocale}
                       isDraft={draftUtteranceIds.has(u.id)}
-                      isSpeaking={speakingItem?.utteranceId === u.id}
-                      speakingLanguage={speakingItem?.language ?? null}
+                      onPlayOriginal={handlePlayOriginalBubbleTts}
+                      onPlayTranslation={handlePlayTranslationBubbleTts}
                       bubbleTextClassName={chatBubbleTextClassName}
+                      speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
                     />
                   </div>
                 ))}
@@ -3540,7 +3706,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     aria-hidden="true"
                   >
                     <path
-                      d="M12 4V96M12 96L4 90M12 96L20 90"
+                      d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.4"
@@ -3616,27 +3782,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           >
             <div className="justify-self-start pl-2">
               {/* Usage progress bar */}
-              {usageSec > 0 && (
-                <div className="flex items-center gap-1.5">
-                  {isUsageLimited ? (
-                    <>
-                      <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                          style={{ width: `${usagePercent}%` }}
-                        />
-                      </div>
-                      <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                        {remainingSec}s
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-sm tabular-nums text-gray-400">
-                      {usageSec}s
+              <div className="flex items-center gap-1.5">
+                {isUsageLimited ? (
+                  <>
+                    <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                        style={{ width: `${usagePercent}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                      {formatLivePhoneDemoUsageDuration(remainingSec)}
                     </span>
-                  )}
-                </div>
-              )}
+                  </>
+                ) : (
+                  <span className="text-sm tabular-nums text-gray-400">
+                    {formatLivePhoneDemoUsageDuration(usageSec)}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex justify-center">
               <button
@@ -3669,45 +3833,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 >
                   {isConnecting ? (
                     <Loader2 size={30} className="animate-spin text-white" />
+                  ) : isReady ? (
+                    <span
+                      aria-hidden
+                      className="h-5 w-5 rounded-[4px] bg-white"
+                    />
                   ) : (
-                    <Play size={30} className="text-white" />
+                    <Mic size={28} className="text-white" />
                   )}
                 </span>
               </button>
             </div>
-            <div className="justify-self-end">
-              {usageSec > 0 && (
-                <div className="flex items-center gap-1">
-                  {enableAutoTTS && (
-                    <button
-                      onClick={() => {
-                        const next = !isSoundEnabled
-                        setIsSoundEnabled(next)
-                        if (!next) {
-                          setSpeakingItem(null)
-                        }
-                      }}
-                      className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
-                      aria-label={isSoundEnabled ? muteTtsLabel : unmuteTtsLabel}
-                    >
-                      {isSoundEnabled ? (
-                        <Volume2 size={18} className="text-amber-500" />
-                      ) : (
-                        <VolumeX size={18} className="text-gray-400" />
-                      )}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setAecEnabled(!aecEnabled)}
-                    className="rounded-full p-2 transition-colors hover:bg-gray-100 active:scale-90"
-                    aria-label={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                    title={aecEnabled ? 'Echo off (AEC on)' : 'Echo on (AEC off)'}
-                  >
-                    <EchoInputRouteIcon echoAllowed={!aecEnabled} />
-                  </button>
-                </div>
-              )}
-            </div>
+            <div className="justify-self-end" />
           </div>
         </div>
       </div>

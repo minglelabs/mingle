@@ -14,12 +14,17 @@ import {
 
 const MIN_TEXT_SIZE_LEVEL = 1
 const MAX_TEXT_SIZE_LEVEL = 5
+export const DEFAULT_SPEAKER_ENABLED = false
+export const DEFAULT_ECHO_ALLOWED = true
+export const DEFAULT_AD_BANNER_POSITION: LivePhoneDemoAdBannerPosition = 'bottom'
 
 export type AccountPreferencesResponse = {
   textSizeLevel?: unknown
   sonioxManualFinalizeSilenceMs?: unknown
   translationModel?: unknown
   adBannerPosition?: unknown
+  speakerEnabled?: unknown
+  echoAllowed?: unknown
 }
 
 export interface LivePhoneDemoAccountPreferences {
@@ -27,6 +32,8 @@ export interface LivePhoneDemoAccountPreferences {
   sonioxManualFinalizeSilenceMs: number
   translationModel: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
+  speakerEnabled: boolean
+  echoAllowed: boolean
 }
 
 function normalizeIntegerPreference(
@@ -61,14 +68,23 @@ export function buildHydratedAccountPreferences(
       ? DEFAULT_SONIOX_SILENCE_MS
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
-    adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition),
+    adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
+    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: DEFAULT_ECHO_ALLOWED,
   }
 }
 
 export function serializeAccountPreferencesSyncState(
   preferences: LivePhoneDemoAccountPreferences,
 ): string {
-  return `${preferences.textSizeLevel}:${preferences.sonioxManualFinalizeSilenceMs}:${preferences.translationModel}:${preferences.adBannerPosition ?? ''}`
+  return [
+    preferences.textSizeLevel,
+    preferences.sonioxManualFinalizeSilenceMs,
+    preferences.translationModel,
+    preferences.adBannerPosition ?? '',
+    preferences.speakerEnabled ? '1' : '0',
+    preferences.echoAllowed ? '1' : '0',
+  ].join(':')
 }
 
 export function shouldScheduleAccountPreferencesSync(args: {

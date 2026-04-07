@@ -1,4 +1,4 @@
-export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 300
+export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 400
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 
 export interface NavigatorLikeForIosCheck {

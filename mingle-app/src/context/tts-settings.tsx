@@ -1,10 +1,11 @@
 'use client'
 
-import { createContext, useContext, useCallback, useMemo, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
 
 const LS_KEY_TTS_ENABLED = 'mingle_tts_enabled'
 const LS_KEY_AEC_ENABLED = 'mingle_aec_enabled'
-const SETTINGS_EVENT = 'mingle:tts-settings-changed'
+const FIXED_TTS_ENABLED = false
+const FIXED_AEC_ENABLED = false
 
 interface TtsSettingsContextValue {
   ttsEnabled: boolean
@@ -15,64 +16,29 @@ interface TtsSettingsContextValue {
 
 const TtsSettingsContext = createContext<TtsSettingsContextValue | null>(null)
 
-function readStoredBoolean(key: string): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(key) === 'true'
-  } catch {
-    return false
-  }
-}
-
-function subscribeToStoredBoolean(onStoreChange: () => void): () => void {
-  if (typeof window === 'undefined') return () => {}
-
-  const handleStorage = () => {
-    onStoreChange()
-  }
-
-  window.addEventListener('storage', handleStorage)
-  window.addEventListener(SETTINGS_EVENT, handleStorage)
-  return () => {
-    window.removeEventListener('storage', handleStorage)
-    window.removeEventListener(SETTINGS_EVENT, handleStorage)
-  }
-}
-
-function useStoredBoolean(key: string): boolean {
-  return useSyncExternalStore(
-    subscribeToStoredBoolean,
-    () => readStoredBoolean(key),
-    () => false,
-  )
-}
-
-function notifyStoredBooleanChanged(): void {
+function clearDeprecatedStoredAudioPreferences(): void {
   if (typeof window === 'undefined') return
-  window.dispatchEvent(new Event(SETTINGS_EVENT))
+  try {
+    window.localStorage.removeItem(LS_KEY_TTS_ENABLED)
+    window.localStorage.removeItem(LS_KEY_AEC_ENABLED)
+  } catch {
+    // Ignore storage failures so the fixed defaults remain available.
+  }
 }
 
 export function TtsSettingsProvider({ children }: { children: ReactNode }) {
-  const ttsEnabled = useStoredBoolean(LS_KEY_TTS_ENABLED)
-  const aecEnabled = useStoredBoolean(LS_KEY_AEC_ENABLED)
-
-  const setTtsEnabled = useCallback((value: boolean) => {
-    try {
-      window.localStorage.setItem(LS_KEY_TTS_ENABLED, String(value))
-    } catch { /* ignore */ }
-    notifyStoredBooleanChanged()
-  }, [])
-
-  const setAecEnabled = useCallback((value: boolean) => {
-    try {
-      window.localStorage.setItem(LS_KEY_AEC_ENABLED, String(value))
-    } catch { /* ignore */ }
-    notifyStoredBooleanChanged()
+  useEffect(() => {
+    clearDeprecatedStoredAudioPreferences()
   }, [])
 
   const value = useMemo(
-    () => ({ ttsEnabled, setTtsEnabled, aecEnabled, setAecEnabled }),
-    [ttsEnabled, setTtsEnabled, aecEnabled, setAecEnabled],
+    () => ({
+      ttsEnabled: FIXED_TTS_ENABLED,
+      setTtsEnabled: () => {},
+      aecEnabled: FIXED_AEC_ENABLED,
+      setAecEnabled: () => {},
+    }),
+    [],
   )
 
   return (

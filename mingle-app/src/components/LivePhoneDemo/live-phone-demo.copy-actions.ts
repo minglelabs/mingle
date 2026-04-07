@@ -14,77 +14,77 @@ export type LivePhoneDemoCopyActionCopy = {
 const COPY_ACTION_COPY_BY_LOCALE = {
   ko: {
     copyBubbleLabel: '복사',
-    copyAllBubblesLabel: '전체 발화 복사',
+    copyAllBubblesLabel: '전체 복사',
     copiedToastLabel: '복사됨',
   },
   en: {
     copyBubbleLabel: 'Copy',
-    copyAllBubblesLabel: 'Copy full message',
+    copyAllBubblesLabel: 'Copy All',
     copiedToastLabel: 'Copied',
   },
   ja: {
     copyBubbleLabel: 'コピー',
-    copyAllBubblesLabel: '発話全体をコピー',
+    copyAllBubblesLabel: 'すべてコピー',
     copiedToastLabel: 'コピー済み',
   },
   'zh-CN': {
     copyBubbleLabel: '复制',
-    copyAllBubblesLabel: '复制整条发言',
+    copyAllBubblesLabel: '全部复制',
     copiedToastLabel: '已复制',
   },
   'zh-TW': {
     copyBubbleLabel: '複製',
-    copyAllBubblesLabel: '複製整段發言',
+    copyAllBubblesLabel: '全部複製',
     copiedToastLabel: '已複製',
   },
   fr: {
     copyBubbleLabel: 'Copier',
-    copyAllBubblesLabel: 'Copier tout le message',
+    copyAllBubblesLabel: 'Tout copier',
     copiedToastLabel: 'Copié',
   },
   de: {
     copyBubbleLabel: 'Kopieren',
-    copyAllBubblesLabel: 'Gesamte Nachricht kopieren',
+    copyAllBubblesLabel: 'Alles kopieren',
     copiedToastLabel: 'Kopiert',
   },
   es: {
     copyBubbleLabel: 'Copiar',
-    copyAllBubblesLabel: 'Copiar mensaje completo',
+    copyAllBubblesLabel: 'Copiar todo',
     copiedToastLabel: 'Copiado',
   },
   pt: {
     copyBubbleLabel: 'Copiar',
-    copyAllBubblesLabel: 'Copiar mensagem completa',
+    copyAllBubblesLabel: 'Copiar tudo',
     copiedToastLabel: 'Copiado',
   },
   it: {
     copyBubbleLabel: 'Copia',
-    copyAllBubblesLabel: 'Copia tutto il messaggio',
+    copyAllBubblesLabel: 'Copia tutto',
     copiedToastLabel: 'Copiato',
   },
   ru: {
     copyBubbleLabel: 'Копировать',
-    copyAllBubblesLabel: 'Скопировать всё сообщение',
+    copyAllBubblesLabel: 'Копировать всё',
     copiedToastLabel: 'Скопировано',
   },
   ar: {
     copyBubbleLabel: 'نسخ',
-    copyAllBubblesLabel: 'نسخ الرسالة كاملة',
+    copyAllBubblesLabel: 'نسخ الكل',
     copiedToastLabel: 'تم النسخ',
   },
   hi: {
     copyBubbleLabel: 'कॉपी',
-    copyAllBubblesLabel: 'पूरा संदेश कॉपी करें',
+    copyAllBubblesLabel: 'सब कॉपी करें',
     copiedToastLabel: 'कॉपी हुआ',
   },
   th: {
     copyBubbleLabel: 'คัดลอก',
-    copyAllBubblesLabel: 'คัดลอกข้อความทั้งหมด',
+    copyAllBubblesLabel: 'คัดลอกทั้งหมด',
     copiedToastLabel: 'คัดลอกแล้ว',
   },
   vi: {
     copyBubbleLabel: 'Sao chép',
-    copyAllBubblesLabel: 'Sao chép toàn bộ câu',
+    copyAllBubblesLabel: 'Sao chép tất cả',
     copiedToastLabel: 'Đã sao chép',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoCopyActionCopy>
