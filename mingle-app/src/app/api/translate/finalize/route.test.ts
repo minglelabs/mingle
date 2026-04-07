@@ -327,6 +327,30 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('does not immediately retry gemini rate-limit errors when the provider asks for a long retry delay', async () => {
+    mockGenerateContent.mockRejectedValueOnce(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 23.05747353s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"23s"}]',
+    ))
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+      translationModel: 'gemma-4-31b-it',
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(json).toEqual({ error: 'empty_translation_response' })
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns provider translations as-is even when they match the source text', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {

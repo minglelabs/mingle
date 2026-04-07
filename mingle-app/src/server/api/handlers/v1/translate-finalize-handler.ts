@@ -44,6 +44,7 @@ const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
+const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
 const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 2_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
@@ -702,6 +703,35 @@ function sleep(ms: number) {
   })
 }
 
+function extractRetryDelayMsFromError(error: unknown): number | null {
+  if (!(error instanceof Error)) return null
+
+  const quotedRetryDelayMatch = error.message.match(/retryDelay":"(\d+)s"/i)
+  if (quotedRetryDelayMatch) {
+    const seconds = Number.parseInt(quotedRetryDelayMatch[1] || '', 10)
+    if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000
+  }
+
+  const naturalLanguageRetryDelayMatch = error.message.match(/please retry in\s+([0-9.]+)s/i)
+  if (naturalLanguageRetryDelayMatch) {
+    const seconds = Number.parseFloat(naturalLanguageRetryDelayMatch[1] || '')
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1_000)
+  }
+
+  return null
+}
+
+function resolveProviderRetryDelayMs(error: unknown): number {
+  const parsedRetryDelayMs = extractRetryDelayMsFromError(error)
+  if (parsedRetryDelayMs !== null) return parsedRetryDelayMs
+  return TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS
+}
+
+function shouldRetryProviderError(error: unknown): boolean {
+  const retryDelayMs = resolveProviderRetryDelayMs(error)
+  return retryDelayMs <= MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS
+}
+
 function isRetryableGeminiError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const normalizedMessage = error.message.toLowerCase()
@@ -952,16 +982,27 @@ async function translateWithGemini(
       return await model.generateContent(userPrompt)
     } catch (error) {
       if (!isRetryableGeminiError(error)) throw error
+      const retryInMs = resolveProviderRetryDelayMs(error)
+      if (!shouldRetryProviderError(error)) {
+        console.warn('[translate/finalize] provider_retry_skipped', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          provider: config.provider,
+          model: config.model,
+          retryInMs,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      }
 
       console.warn('[translate/finalize] provider_retry_scheduled', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: config.provider,
         model: config.model,
-        retryInMs: TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS,
+        retryInMs,
         error: error instanceof Error ? error.message : String(error),
       })
 
-      await sleep(TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS)
+      await sleep(retryInMs)
       return await model.generateContent(userPrompt)
     }
   }
@@ -1250,16 +1291,27 @@ async function createOpenAICompatibleCompletion(
     return await executeRequest()
   } catch (error) {
     if (!ctx.isFinal || !isRetryableOpenAICompatibleError(error)) throw error
+    const retryInMs = resolveProviderRetryDelayMs(error)
+    if (!shouldRetryProviderError(error)) {
+      console.warn('[translate/finalize] provider_retry_skipped', {
+        ...buildTranslateFinalizeLogContext(ctx),
+        provider: config.provider,
+        model: config.model,
+        retryInMs,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
 
     console.warn('[translate/finalize] provider_retry_scheduled', {
       ...buildTranslateFinalizeLogContext(ctx),
       provider: config.provider,
       model: config.model,
-      retryInMs: TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS,
+      retryInMs,
       error: error instanceof Error ? error.message : String(error),
     })
 
-    await sleep(TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS)
+    await sleep(retryInMs)
     return await executeRequest()
   }
 }
