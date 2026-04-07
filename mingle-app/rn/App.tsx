@@ -2273,7 +2273,6 @@ function AppInner(): React.JSX.Element {
             javaScriptEnabled
             domStorageEnabled
             cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}
-            incognito={shouldUseAggressiveWebViewCacheBypass}
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
