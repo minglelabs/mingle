@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   NATIVE_UI_EVENT,
+  NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY,
   NATIVE_UI_QUERY_KEY,
   isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
+  readCachedNativeUiBannerLayout,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
 
@@ -60,6 +62,24 @@ describe('live-phone-demo native ui bridge logic', () => {
       position: 'bottom',
       topInsetPx: 0,
       bottomInsetPx: 50,
+    })
+
+    expect(parsed).toEqual({
+      type: 'banner_layout',
+      position: 'bottom',
+      topInsetPx: 0,
+      bottomInsetPx: 50,
+    })
+  })
+
+  it('reads cached banner_layout payload from window-like object', () => {
+    const parsed = readCachedNativeUiBannerLayout({
+      [NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY]: {
+        type: 'banner_layout',
+        position: 'bottom',
+        topInsetPx: 0,
+        bottomInsetPx: 50,
+      },
     })
 
     expect(parsed).toEqual({

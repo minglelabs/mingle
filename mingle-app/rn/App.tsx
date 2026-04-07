@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppState,
+  BackHandler,
   Image,
   Linking,
   NativeModules,
@@ -18,6 +19,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import {
   addNativeSttListener,
+  getNativeSttMicrophonePermissionStatus,
   isNativeSttAvailable,
   setNativeSttAec,
   startNativeStt,
@@ -207,6 +209,39 @@ function isLoopbackUrl(raw: string): boolean {
   } catch {
     return /(127\.0\.0\.1|localhost|::1)/i.test(raw);
   }
+}
+
+function isDebugWebViewRemountAllowedUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    return hostname.toLowerCase() === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /mingle-app-devbox\.photo-for-passport\.com/i.test(raw);
+  }
+}
+
+function isDevelopmentTunnelUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app')
+      || normalized === 'mingle-app-devbox.photo-for-passport.com';
+  } catch {
+    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+  }
+}
+
+function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
+}
+
+function shouldBypassWebViewCache(rawUrl: string): boolean {
+  return __DEV__ || isLoopbackUrl(rawUrl) || isDevelopmentTunnelUrl(rawUrl);
 }
 
 function formatWebViewLoadError(description: string, currentWebUrl: string): string {
@@ -674,6 +709,13 @@ type NativeSttAecCommand = {
   payload: { enabled: boolean };
 };
 
+type NativeOpenAppSettingsCommand = {
+  type: 'native_open_app_settings';
+  payload?: {
+    reason?: string;
+  };
+};
+
 type NativeAuthStartCommand = {
   type: 'native_auth_start';
   payload: {
@@ -729,6 +771,7 @@ type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
   | NativeSttAecCommand
+  | NativeOpenAppSettingsCommand
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
@@ -741,7 +784,9 @@ type WebViewCommand =
 type NativeSttEvent =
   | { type: 'status'; status: string }
   | { type: 'message'; raw: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: string; platform?: string }
+  | { type: 'permission'; permission: string; platform?: string }
+  | { type: 'capabilities'; openAppSettings: boolean }
   | { type: 'close'; reason: string };
 
 type NativeUiEvent = {
@@ -790,6 +835,14 @@ function buildVersionPolicyUrl(baseUrl: string, apiNamespace: string): string {
 function resolveVersionPolicyClientPlatform(runtimeOs: string): 'ios' | 'android' {
   if (runtimeOs === 'android') return 'android';
   return 'ios';
+}
+
+function resolveNativeSttErrorCode(message: string): string | undefined {
+  const normalized = message.trim().toLowerCase();
+  if (normalized === 'mic_permission_denied' || normalized === 'mic_permission_denied_after_prompt') {
+    return 'mic_permission';
+  }
+  return undefined;
 }
 
 type RuntimeClientInfo = {
@@ -993,7 +1046,7 @@ function resolveNativeBannerPosition(rawValue: string): NativeBannerPosition {
   const normalized = rawValue.trim().toLowerCase();
   if (normalized === 'top') return 'top';
   if (normalized === 'bottom') return 'bottom';
-  return 'top';
+  return 'bottom';
 }
 
 function normalizeNativeBannerPosition(rawValue: string): NativeBannerPosition | null {
@@ -1209,13 +1262,19 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
   }, [windowWidthPx]);
-  const webUrl = useMemo(() => {
+  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
+  const [webViewMountToken, setWebViewMountToken] = useState(0);
+  const baseWebUrl = useMemo(() => {
     if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const transcriptInsetPx = nativeBannerUnitId
       ? resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale)
       : 0;
-    const transcriptTopInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'top' ? transcriptInsetPx : 0;
-    const transcriptBottomInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'bottom' ? transcriptInsetPx : 0;
+    const transcriptTopInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'top'
+      ? transcriptInsetPx
+      : 0;
+    const transcriptBottomInsetPx = nativeBannerUnitId && defaultNativeBannerPosition === 'bottom'
+      ? transcriptInsetPx
+      : 0;
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
@@ -1228,6 +1287,21 @@ function AppInner(): React.JSX.Element {
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${nativeBannerQuery}${debugParams}${nativeAdDebugQuery}`;
   }, [defaultNativeBannerPosition, nativeAdDebugEnabled, nativeAvailable, nativeBannerHeightPx, nativeBannerUnitId, nativeCanvasScale, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
+  const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
+  const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
+  const webUrl = useMemo(() => {
+    if (!baseWebUrl) return '';
+    if (!shouldDisableWebViewCache) return baseWebUrl;
+    try {
+      const url = new URL(baseWebUrl);
+      url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
+      return url.toString();
+    } catch {
+      const separator = baseWebUrl.includes('?') ? '&' : '?';
+      return `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`;
+    }
+  }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
@@ -1272,7 +1346,6 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.bottom],
   );
-  const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
     [nativeBannerHeightPx, nativeCanvasScale],
@@ -1284,7 +1357,9 @@ function AppInner(): React.JSX.Element {
   ));
   const mobileAdsStartedRef = useRef(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldShowDebugWebViewRemountButton = shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1560,9 +1635,45 @@ function AppInner(): React.JSX.Element {
         : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheStatusScript = payload.type === 'status'
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
+      : '';
+    const script = `${cacheStatusScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
+
+  const emitCurrentMicPermissionToWeb = useCallback(async () => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+    try {
+      const payload = await getNativeSttMicrophonePermissionStatus();
+      emitToWeb({
+        type: 'permission',
+        permission: payload.permission,
+        platform: payload.platform || Platform.OS,
+      });
+    } catch (error: unknown) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log(`[NativeSTT] getMicrophonePermissionStatus failed: ${message}`);
+      }
+    }
+  }, [emitToWeb, nativeAvailable]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !nativeAvailable) return;
+
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (!becameActive) return;
+      void emitCurrentMicPermissionToWeb();
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [emitCurrentMicPermissionToWeb, nativeAvailable]);
 
   const emitTtsToWeb = useCallback((payload: Record<string, unknown>) => {
     if (!isPageReadyRef.current) return;
@@ -1580,7 +1691,10 @@ function AppInner(): React.JSX.Element {
     if (__DEV__) {
       console.log(`[NativeUI→Web] ${JSON.stringify(payload).slice(0, 120)}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheBannerLayoutScript = payload.type === 'banner_layout'
+      ? `window.__MINGLE_LAST_NATIVE_BANNER_LAYOUT = ${serialized}; `
+      : '';
+    const script = `${cacheBannerLayoutScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -1735,8 +1849,16 @@ function AppInner(): React.JSX.Element {
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      const code = typeof (error as { code?: unknown })?.code === 'string'
+        ? (error as { code: string }).code.trim()
+        : resolveNativeSttErrorCode(message);
       nativeStatusRef.current = 'failed';
-      emitToWeb({ type: 'error', message });
+      emitToWeb({
+        type: 'error',
+        message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     }
   }, [emitToWeb, nativeAvailable]);
 
@@ -2054,6 +2176,14 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_open_app_settings') {
+      if (__DEV__) {
+        console.log(`[Web→Native] open app settings reason=${parsed.payload?.reason ?? 'unspecified'}`);
+      }
+      void Linking.openSettings();
+      return;
+    }
+
     if (parsed.type === 'native_tts_stop') {
       const reason = typeof parsed.payload?.reason === 'string' && parsed.payload.reason.trim()
         ? parsed.payload.reason.trim()
@@ -2103,13 +2233,24 @@ function AppInner(): React.JSX.Element {
     });
 
     const messageSub = addNativeSttListener('message', event => {
+      if (nativeStatusRef.current) {
+        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      }
       emitToWeb({ type: 'message', raw: event.raw });
     });
 
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
       nativeStatusRef.current = 'error';
-      emitToWeb({ type: 'error', message: event.message });
+      const code = typeof event.code === 'string' && event.code.trim()
+        ? event.code.trim()
+        : resolveNativeSttErrorCode(event.message);
+      emitToWeb({
+        type: 'error',
+        message: event.message,
+        ...(code ? { code } : {}),
+        platform: Platform.OS,
+      });
     });
 
     const closeSub = addNativeSttListener('close', event => {
@@ -2161,7 +2302,6 @@ function AppInner(): React.JSX.Element {
 
   const handleLoadStart = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = false;
-    setIsNativeMenuOverlayOpen(false);
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
@@ -2176,11 +2316,20 @@ function AppInner(): React.JSX.Element {
     }
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    emitToWeb({ type: 'capabilities', openAppSettings: true });
+    void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
@@ -2191,9 +2340,38 @@ function AppInner(): React.JSX.Element {
     setLoadError(formatWebViewLoadError(description, webUrl));
   }, [webUrl]);
 
-  const handleNavigationStateChange = useCallback((navigationState: { url: string }) => {
+  const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     updateSafeAreaPalette(navigationState.url);
+    setWebViewCanGoBack(Boolean(navigationState.canGoBack));
   }, [updateSafeAreaPalette]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (versionGate.status === 'force_update') {
+        return false;
+      }
+
+      if (isNativeMenuOverlayOpen && webViewRef.current) {
+        webViewRef.current.injectJavaScript(
+          '(function(){window.history.back();})(); true;',
+        );
+        return true;
+      }
+
+      if (webViewCanGoBack && webViewRef.current) {
+        webViewRef.current.goBack();
+        return true;
+      }
+
+      return false;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isNativeMenuOverlayOpen, versionGate.status, webViewCanGoBack]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -2201,6 +2379,14 @@ function AppInner(): React.JSX.Element {
       setStartupSplashVisible(false);
     }
   }, [versionGate.status]);
+
+  useEffect(() => {
+    if (!shouldUseAggressiveWebViewCacheBypass || !webViewRef.current) {
+      return;
+    }
+
+    webViewRef.current.clearCache(true);
+  }, [shouldUseAggressiveWebViewCacheBypass, webViewMountToken]);
 
   return (
     <View style={[styles.root, { backgroundColor: safeAreaPalette.webViewColor }]}>
@@ -2222,6 +2408,7 @@ function AppInner(): React.JSX.Element {
       <View style={[styles.webViewContainer, { backgroundColor: safeAreaPalette.webViewColor }]}>
         {versionGate.status !== 'force_update' ? (
           <WebView
+            key={`webview:${webViewMountToken}`}
             ref={webViewRef}
             source={webUrl
               ? { uri: webUrl }
@@ -2230,10 +2417,13 @@ function AppInner(): React.JSX.Element {
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
+            cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}
+            incognito={shouldUseAggressiveWebViewCacheBypass}
+            cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            allowsBackForwardNavigationGestures={false}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}
@@ -2271,6 +2461,20 @@ function AppInner(): React.JSX.Element {
             <Text style={styles.errorTitle}>{versionPolicyFallback.webViewLoadFailedTitle}</Text>
             <Text style={styles.errorDescription}>{loadError}</Text>
           </View>
+        ) : null}
+        {versionGate.status !== 'force_update' && shouldShowDebugWebViewRemountButton ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Remount WebView"
+            onPress={handleDebugWebViewRemount}
+            style={({ pressed }) => [
+              styles.debugWebViewRemountButton,
+              { top: Math.max(16, safeAreaInsets.top + 8) },
+              pressed ? styles.debugWebViewRemountButtonPressed : null,
+            ]}
+          >
+            <Text style={styles.debugWebViewRemountButtonText}>Remount WebView</Text>
+          </Pressable>
         ) : null}
       </View>
       {shouldRenderTopSafeAreaOverlay ? (
@@ -2397,6 +2601,24 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 12,
     lineHeight: 16,
+  },
+  debugWebViewRemountButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 24,
+    borderRadius: 999,
+    backgroundColor: 'rgba(17, 24, 39, 0.82)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  debugWebViewRemountButtonPressed: {
+    opacity: 0.85,
+  },
+  debugWebViewRemountButtonText: {
+    color: '#f9fafb',
+    fontSize: 12,
+    fontWeight: '700',
   },
   versionOverlay: {
     position: 'absolute',

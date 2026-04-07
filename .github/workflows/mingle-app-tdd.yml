@@ -7,6 +7,7 @@ on:
     paths:
       - "mingle-app/**"
       - "mingle-stt/**"
+      - "scripts/**"
       - "data/**"
       - ".github/workflows/mingle-app-tdd.yml"
   pull_request:
@@ -15,6 +16,7 @@ on:
     paths:
       - "mingle-app/**"
       - "mingle-stt/**"
+      - "scripts/**"
       - "data/**"
       - ".github/workflows/mingle-app-tdd.yml"
   workflow_dispatch:
@@ -136,6 +138,10 @@ jobs:
         env:
           RN_API_NAMESPACE: ios/v1.0.4
         run: pnpm run rn:ios:env-check
+
+      - name: Run devbox script contract tests
+        working-directory: .
+        run: node --test scripts/devbox-ngrok-parse.test.mjs scripts/devbox-runtime-config.test.mjs
 
       - name: Run TDD suite (unit)
         run: pnpm test:unit

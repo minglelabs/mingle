@@ -45,6 +45,7 @@ function ChatBubbleTimestamp({
   return (
     <div
       data-original-bubble-timestamp
+      suppressHydrationWarning
       style={{ lineHeight: CHAT_BUBBLE_TIMESTAMP_LINE_HEIGHT, minWidth }}
       className={cn(
         'flex shrink-0 flex-col text-[10px] text-black/[0.34] tabular-nums',
@@ -55,7 +56,11 @@ function ChatBubbleTimestamp({
       )}
     >
       {timestampLines.map((line, index) => (
-        <span key={`${createdAtMs || 'timestamp'}-${index}`} className="whitespace-nowrap">
+        <span
+          key={`${createdAtMs || 'timestamp'}-${index}`}
+          suppressHydrationWarning
+          className="whitespace-nowrap"
+        >
           {line}
         </span>
       ))}
