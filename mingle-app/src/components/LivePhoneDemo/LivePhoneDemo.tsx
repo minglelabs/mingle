@@ -110,8 +110,8 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
 const EMPTY_STATE_ARROW_HEAD_Y = 72
-const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 28
-const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 112
+const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 24
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 96
 
 type LivePhoneDemoComposerCopy = {
   manualSpeakerLabel: string
@@ -3944,7 +3944,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={isConnecting || isError}
-                      className="relative flex h-[2.15rem] w-[2.15rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex h-[2.7rem] w-[2.7rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (
                         <span
@@ -3969,14 +3969,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }`}
                       >
                         {isConnecting ? (
-                          <Loader2 size={15} className="animate-spin text-white" />
+                          <Loader2 size={18} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
                             aria-hidden
-                            className="h-2.5 w-2.5 rounded-[2px] bg-white"
+                            className="h-3 w-3 rounded-[2px] bg-white"
                           />
                         ) : (
-                          <Mic size={15} className="text-white" />
+                          <Mic size={18} className="text-white" />
                         )}
                       </span>
                     </button>
@@ -3987,14 +3987,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     onSubmit={handleComposerSubmit}
                     className="min-w-0 flex-1"
                   >
-                    <div className="flex items-end gap-2 rounded-[1.7rem] border border-amber-200/80 bg-[#FFF7ED] px-3 py-2 shadow-[0_10px_24px_rgba(249,115,22,0.12)]">
+                    <div className="flex items-end gap-2 rounded-[1.45rem] border border-gray-200 bg-white px-3 py-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
                       <textarea
                         ref={composerTextareaRef}
                         value={composerDraft}
                         onChange={handleComposerDraftChange}
                         rows={1}
                         placeholder={composerCopy.composerPlaceholder}
-                        className="min-h-[28px] flex-1 resize-none self-center bg-transparent px-0 py-[0.45rem] text-[15px] leading-6 text-gray-900 outline-none placeholder:text-[#C7A27A]"
+                        className="min-h-[24px] flex-1 resize-none self-center bg-transparent px-0 py-1 text-[15px] leading-5 text-gray-900 outline-none placeholder:text-gray-400"
                         style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
                       />
 
@@ -4004,7 +4004,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           type="button"
                           onClick={handleToggleComposer}
                           aria-label={composerCopy.closeKeyboardLabel}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#C57B2D] transition-colors hover:bg-amber-100/80 active:scale-95"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 active:scale-95"
                         >
                           <Keyboard size={18} strokeWidth={2.2} />
                         </motion.button>
@@ -4012,9 +4012,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           type="submit"
                           disabled={!composerCanSend}
                           aria-label={composerCopy.sendMessageLabel}
-                          className={`inline-flex h-10 w-10 items-center justify-center rounded-full shadow-sm transition-all duration-200 active:scale-95 ${
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-all duration-200 active:scale-95 ${
                             composerCanSend
-                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
+                              ? 'bg-gray-900 text-white'
                               : 'bg-gray-200 text-gray-400'
                           }`}
                         >
@@ -4115,7 +4115,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}
-                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-amber-200/80 bg-[#FFF7ED] text-[#C57B2D] shadow-[0_6px_16px_rgba(249,115,22,0.12)] transition-all duration-200 hover:border-amber-300 hover:bg-amber-50 active:scale-95"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 active:scale-95"
                     >
                       <Keyboard size={19} strokeWidth={2.15} />
                     </motion.button>
