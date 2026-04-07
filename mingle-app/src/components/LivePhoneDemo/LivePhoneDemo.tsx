@@ -29,6 +29,7 @@ import {
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   readPersistedLivePhoneDemoPreferences,
+  resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -704,9 +705,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     echoAllowed: !aecEnabled,
   }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
-  const displayedAdBannerPosition = normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
-    || adBannerPosition
-    || nativeBannerPositionFromQuery
+  const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
+    preferredPosition: adBannerPosition,
+    nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
+    queryPosition: nativeBannerPositionFromQuery,
+  })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
