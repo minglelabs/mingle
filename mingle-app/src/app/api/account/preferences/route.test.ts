@@ -336,7 +336,7 @@ describe("/api/account/preferences route", () => {
     });
   });
 
-  it("persists qwen 3.6 plus and gemma 4 translation models through PATCH", async () => {
+  it("persists the supported gemma 4 translation models through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
         id: "user_123",
@@ -345,20 +345,6 @@ describe("/api/account/preferences route", () => {
     });
     mockUserUpdateMany.mockResolvedValue({ count: 1 });
 
-    const qwenResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
-      method: "PATCH",
-      body: JSON.stringify({
-        translationModel: "qwen/qwen3.6-plus",
-      }),
-    }));
-    expect(qwenResponse.status).toBe(200);
-    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
-      where: { id: "user_123" },
-      data: {
-        translationModel: "qwen/qwen3.6-plus",
-      },
-    });
-
     const gemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
@@ -366,7 +352,7 @@ describe("/api/account/preferences route", () => {
       }),
     }));
     expect(gemmaResponse.status).toBe(200);
-    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { id: "user_123" },
       data: {
         translationModel: "gemma-4-31b-it",
@@ -380,7 +366,7 @@ describe("/api/account/preferences route", () => {
       }),
     }));
     expect(openRouterGemmaResponse.status).toBe(200);
-    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(3, {
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
       where: { id: "user_123" },
       data: {
         translationModel: "google/gemma-4-31b-it",

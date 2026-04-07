@@ -6,12 +6,8 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('includes the new Qwen 3.6 Plus and both Gemma 4 options', () => {
+  it('includes the supported Qwen and Gemma 4 options', () => {
     expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
-      {
-        value: 'qwen/qwen3.6-plus',
-        label: 'qwen3.6-plus',
-      },
       {
         value: 'gemma-4-31b-it',
         label: 'gemma-4-31b-it',
@@ -23,10 +19,10 @@ describe('translation model catalog', () => {
     ]))
   })
 
-  it('normalizes OpenRouter Qwen 3.6 Plus aliases', () => {
-    expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus')).toBe('qwen/qwen3.6-plus')
-    expect(normalizeSelectableTranslationModel('qwen3.6-plus')).toBe('qwen/qwen3.6-plus')
-    expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus:free')).toBe('qwen/qwen3.6-plus')
+  it('rejects the removed Qwen 3.6 Plus aliases', () => {
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus')).toBeNull()
+    expect(normalizeSelectableTranslationModel('qwen3.6-plus')).toBeNull()
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.6-plus:free')).toBeNull()
   })
 
   it('normalizes Gemma 4 aliases', () => {
@@ -38,13 +34,6 @@ describe('translation model catalog', () => {
   })
 
   it('resolves runtime selections for the new models', () => {
-    expect(resolveTranslationRuntimeSelection('qwen/qwen3.6-plus')).toMatchObject({
-      engineProvider: 'qwen',
-      infrastructureProvider: 'openrouter',
-      runtimeModel: 'qwen/qwen3.6-plus:free',
-      baseUrl: 'https://openrouter.ai/api/v1',
-    })
-
     expect(resolveTranslationRuntimeSelection('gemma-4-31b-it')).toMatchObject({
       engineProvider: 'gemma',
       infrastructureProvider: 'google',
