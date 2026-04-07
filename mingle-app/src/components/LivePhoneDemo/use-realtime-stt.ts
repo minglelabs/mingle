@@ -232,6 +232,15 @@ export function shouldOpenNativeMicSettingsOnRetry(input: {
   return input.recoveryAction === 'open_ios_settings'
 }
 
+export function shouldResetConnectionToIdleForNativeMicRecovery(input: {
+  platform?: string
+  code?: string
+  message?: string
+  permission?: string
+}): boolean {
+  return resolveNativeMicPermissionRecoveryAction(input) === 'open_ios_settings'
+}
+
 export function resolveConnectionStatusFromNativeBridgeStatus(input: {
   nativeStatus?: string | null
   previousConnectionStatus: ConnectionStatus
@@ -3392,7 +3401,17 @@ export default function useRealtimeSTT({
       if (detail.type === 'error') {
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) return
-        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
+        const recoveryAction = resolveNativeMicPermissionRecoveryAction(detail)
+        nativeMicPermissionRecoveryActionRef.current = recoveryAction
+        if (shouldResetConnectionToIdleForNativeMicRecovery(detail)) {
+          logSttDebug('native.error.permission_recovery_idle', {
+            message: detail.message,
+            code: detail.code,
+            platform: detail.platform,
+          })
+          resetToIdle()
+          return
+        }
         handleSttTransportError({ native: true, message: detail.message })
         return
       }
@@ -3412,7 +3431,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, resetToIdle])
 
   useEffect(() => {
     const currentSignature = buildLanguageSelectionSignature(languages)

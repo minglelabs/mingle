@@ -23,6 +23,7 @@ import {
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
@@ -289,6 +290,25 @@ describe('use-realtime-stt pure logic', () => {
       connectionStatus: 'idle',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: false,
+    })).toBe(false)
+  })
+
+  it('returns denied iOS native mic recovery to idle instead of sticky error', () => {
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'ios',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
+    })).toBe(true)
+
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'ios',
+      message: 'mic_permission_denied_after_prompt',
+    })).toBe(true)
+
+    expect(shouldResetConnectionToIdleForNativeMicRecovery({
+      platform: 'android',
+      code: 'mic_permission',
+      message: 'Microphone permission denied',
     })).toBe(false)
   })
 
