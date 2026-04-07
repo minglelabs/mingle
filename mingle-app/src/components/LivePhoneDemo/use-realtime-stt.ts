@@ -228,7 +228,6 @@ export function shouldOpenNativeMicSettingsOnRetry(input: {
 }): boolean {
   if (!input.useNativeStt) return false
   if (input.connectionStatus !== 'idle') return false
-  if (!input.supportsNativeOpenAppSettingsCommand) return false
   return input.recoveryAction === 'open_ios_settings'
 }
 

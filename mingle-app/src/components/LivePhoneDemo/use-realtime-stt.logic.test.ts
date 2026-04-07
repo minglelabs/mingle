@@ -273,6 +273,13 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
+      connectionStatus: 'idle',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: false,
+    })).toBe(true)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
       connectionStatus: 'connecting',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: true,
@@ -288,7 +295,7 @@ describe('use-realtime-stt pure logic', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
-      recoveryAction: 'open_ios_settings',
+      recoveryAction: 'none',
       supportsNativeOpenAppSettingsCommand: false,
     })).toBe(false)
   })
