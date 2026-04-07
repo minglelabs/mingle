@@ -19,5 +19,6 @@ describe('formatLivePhoneDemoUsageDuration', () => {
     expect(formatLivePhoneDemoUsageDuration(3.9)).toBe('3s')
     expect(formatLivePhoneDemoUsageDuration(-5)).toBe('0s')
     expect(formatLivePhoneDemoUsageDuration(Number.NaN)).toBe('0s')
+    expect(formatLivePhoneDemoUsageDuration(null)).toBe('0s')
   })
 })

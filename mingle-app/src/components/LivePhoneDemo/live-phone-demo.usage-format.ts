@@ -1,6 +1,7 @@
-export function formatLivePhoneDemoUsageDuration(totalSeconds: number): string {
-  const normalizedTotalSeconds = Number.isFinite(totalSeconds)
-    ? Math.max(0, Math.floor(totalSeconds))
+export function formatLivePhoneDemoUsageDuration(totalSeconds: number | null): string {
+  const safeTotalSeconds = typeof totalSeconds === 'number' ? totalSeconds : Number.NaN
+  const normalizedTotalSeconds = Number.isFinite(safeTotalSeconds)
+    ? Math.max(0, Math.floor(safeTotalSeconds))
     : 0
   const hours = Math.floor(normalizedTotalSeconds / 3600)
   const minutes = Math.floor((normalizedTotalSeconds % 3600) / 60)
