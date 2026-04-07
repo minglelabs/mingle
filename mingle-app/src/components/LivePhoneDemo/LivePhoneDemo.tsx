@@ -3781,27 +3781,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           >
             <div className="justify-self-start pl-2">
               {/* Usage progress bar */}
-              {usageSec > 0 && (
-                <div className="flex items-center gap-1.5">
-                  {isUsageLimited ? (
-                    <>
-                      <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                          style={{ width: `${usagePercent}%` }}
-                        />
-                      </div>
-                      <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                        {formatLivePhoneDemoUsageDuration(remainingSec)}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-sm tabular-nums text-gray-400">
-                      {formatLivePhoneDemoUsageDuration(usageSec)}
+              <div className="flex items-center gap-1.5">
+                {isUsageLimited ? (
+                  <>
+                    <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                        style={{ width: `${usagePercent}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                      {formatLivePhoneDemoUsageDuration(remainingSec)}
                     </span>
-                  )}
-                </div>
-              )}
+                  </>
+                ) : (
+                  <span className="text-sm tabular-nums text-gray-400">
+                    {formatLivePhoneDemoUsageDuration(usageSec)}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex justify-center">
               <button
