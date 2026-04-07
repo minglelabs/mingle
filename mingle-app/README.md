@@ -152,7 +152,7 @@ Qwen 3.6 Plus via OpenRouter:
 
 ```bash
 TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=qwen/qwen3.6-plus
+TRANSLATE_MODEL=qwen/qwen3.6-plus:free
 TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
 TRANSLATE_API_KEY=your_openrouter_key
 ```

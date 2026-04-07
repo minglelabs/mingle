@@ -486,13 +486,13 @@ describe('/api/translate/finalize route', () => {
     expect(res.status).toBe(200)
     expect(json.provider).toBe('qwen')
     expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.6-plus')
+    expect(json.model).toBe('qwen/qwen3.6-plus:free')
 
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
     const body = JSON.parse(String(requestInit.body)) as {
       model?: string
     }
-    expect(body.model).toBe('qwen/qwen3.6-plus')
+    expect(body.model).toBe('qwen/qwen3.6-plus:free')
   })
 
   it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {

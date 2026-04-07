@@ -35,7 +35,7 @@ describe('translation model catalog', () => {
     expect(resolveTranslationRuntimeSelection('qwen/qwen3.6-plus')).toMatchObject({
       engineProvider: 'qwen',
       infrastructureProvider: 'openrouter',
-      runtimeModel: 'qwen/qwen3.6-plus',
+      runtimeModel: 'qwen/qwen3.6-plus:free',
       baseUrl: 'https://openrouter.ai/api/v1',
     })
 

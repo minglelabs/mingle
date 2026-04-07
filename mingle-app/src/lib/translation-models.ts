@@ -66,7 +66,7 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     value: 'qwen/qwen3.6-plus',
     engineProvider: 'qwen',
     infrastructureProvider: 'openrouter',
-    runtimeModel: 'qwen/qwen3.6-plus',
+    runtimeModel: 'qwen/qwen3.6-plus:free',
     baseUrl: 'https://openrouter.ai/api/v1',
   },
 }
