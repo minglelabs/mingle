@@ -51,6 +51,7 @@ const workspaceRoot = path.dirname(configJsonPath);
 const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
   googlePlay?: {
     release?: {
+      version?: unknown;
       defaultTrack?: unknown;
       defaultReleaseStatus?: unknown;
       changesNotSentForReview?: unknown;
@@ -84,6 +85,17 @@ const payload = JSON.parse(fs.readFileSync(configJsonPath, "utf8")) as {
   };
 };
 
+const androidBuildGradlePath = path.resolve(process.cwd(), "rn/android/app/build.gradle");
+const androidBuildGradle = fs.readFileSync(androidBuildGradlePath, "utf8");
+
+function readAndroidReleaseValue(pattern: RegExp): string {
+  const match = androidBuildGradle.match(pattern);
+  if (!match?.[1]) {
+    throw new Error(`Missing Android release value for pattern: ${pattern}`);
+  }
+  return match[1];
+}
+
 describe("google-play-console-info contract", () => {
   it("tracks a default Play release configuration in the same JSON", () => {
     const release = payload.googlePlay?.release;
@@ -93,6 +105,15 @@ describe("google-play-console-info contract", () => {
     expect(release?.changesNotSentForReview).toBe(true);
     expect(isNonEmptyString(release?.releaseName)).toBe(true);
     expect(isNonEmptyString(release?.releaseNotes?.["en-US"])).toBe(true);
+  });
+
+  it("keeps Play release metadata aligned with the Android app version code", () => {
+    const release = payload.googlePlay?.release;
+    const appVersionName = readAndroidReleaseValue(/def appVersionName = "([^"]+)"/);
+    const appVersionCode = readAndroidReleaseValue(/def appVersionCode = (\d+)/);
+
+    expect(release?.version).toBe(appVersionName);
+    expect(release?.releaseName).toBe(`${appVersionName} (${appVersionCode})`);
   });
 
   it("includes Play app details and screenshot workspace paths", () => {

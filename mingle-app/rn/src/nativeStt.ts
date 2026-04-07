@@ -13,16 +13,22 @@ type NativeSttStopOptions = {
   pendingLanguage?: string;
 };
 
+type NativeSttMicrophonePermissionStatus = {
+  permission: string;
+  platform?: string;
+};
+
 type NativeSttModuleType = {
   start(options: NativeSttStartOptions): Promise<{ sampleRate: number }>;
   stop(options?: NativeSttStopOptions): Promise<void>;
   setAec(enabled: boolean): Promise<{ ok: boolean }>;
+  getMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus>;
 };
 
 type NativeSttEventMap = {
   status: { status: string };
   message: { raw: string };
-  error: { message: string };
+  error: { message: string; code?: string; platform?: string };
   close: { reason: string };
 };
 
@@ -52,6 +58,13 @@ export async function setNativeSttAec(enabled: boolean): Promise<void> {
     return;
   }
   await nativeModule.setAec(enabled);
+}
+
+export async function getNativeSttMicrophonePermissionStatus(): Promise<NativeSttMicrophonePermissionStatus> {
+  if (!nativeModule) {
+    return { permission: 'unknown', platform: Platform.OS };
+  }
+  return nativeModule.getMicrophonePermissionStatus();
 }
 
 export function addNativeSttListener<T extends keyof NativeSttEventMap>(

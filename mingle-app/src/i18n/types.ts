@@ -10,6 +10,9 @@ export type AppDictionary = {
     textSizeLabel?: string;
     silenceFinalizeLabel?: string;
     translationModelLabel?: string;
+    adBannerPositionLabel?: string;
+    adBannerPositionTopLabel?: string;
+    adBannerPositionBottomLabel?: string;
   };
   tabs: {
     chats: string;

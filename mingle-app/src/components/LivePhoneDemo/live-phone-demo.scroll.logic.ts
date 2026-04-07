@@ -60,25 +60,19 @@ export function deriveScrollAutoFollowState(
   }
 }
 
-export interface DeriveAutoScrollThrottleDelayMsInput {
+export interface DeriveAutoScrollClockDelayMsInput {
   nowMs: number
-  lastAutoScrollAtMs: number
-  minIntervalMs?: number
+  intervalMs?: number
 }
 
-export function deriveAutoScrollThrottleDelayMs(
-  input: DeriveAutoScrollThrottleDelayMsInput,
+export function deriveAutoScrollClockDelayMs(
+  input: DeriveAutoScrollClockDelayMsInput,
 ): number {
-  const minIntervalMs = input.minIntervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
+  const intervalMs = input.intervalMs ?? AUTO_SCROLL_MIN_INTERVAL_MS
   const safeNowMs = Number.isFinite(input.nowMs) ? input.nowMs : 0
-  const safeLastAutoScrollAtMs = Number.isFinite(input.lastAutoScrollAtMs)
-    ? input.lastAutoScrollAtMs
-    : 0
-
-  if (safeLastAutoScrollAtMs <= 0) return 0
-
-  const elapsedMs = Math.max(0, safeNowMs - safeLastAutoScrollAtMs)
-  return Math.max(0, minIntervalMs - elapsedMs)
+  if (intervalMs <= 0) return 0
+  const remainderMs = ((safeNowMs % intervalMs) + intervalMs) % intervalMs
+  return remainderMs === 0 ? 0 : intervalMs - remainderMs
 }
 
 export interface AutoScrollSchedulerUpdateInput {
@@ -108,8 +102,8 @@ export function createAutoScrollScheduler(
   const clearTimer = options.clearTimer ?? ((timer: ReturnType<typeof setTimeout>) => clearTimeout(timer))
 
   let pendingTimer: ReturnType<typeof setTimeout> | null = null
-  let lastAutoScrollAtMs = 0
   let currentInput: AutoScrollSchedulerUpdateInput | null = null
+  let hasPendingUpdate = false
 
   const cancel = () => {
     if (!pendingTimer) return
@@ -118,25 +112,17 @@ export function createAutoScrollScheduler(
   }
 
   const execute = () => {
+    hasPendingUpdate = false
     if (!currentInput?.shouldAutoScroll()) return
-    const didAutoScroll = currentInput.runAutoScroll()
-    if (didAutoScroll) {
-      lastAutoScrollAtMs = getNowMs()
-    }
+    currentInput.runAutoScroll()
   }
 
   return {
     update(input) {
       currentInput = input
+      hasPendingUpdate = true
       cancel()
-
-      if (!input.shouldAutoScroll()) return
-
-      const delayMs = deriveAutoScrollThrottleDelayMs({
-        nowMs: getNowMs(),
-        lastAutoScrollAtMs,
-        minIntervalMs,
-      })
+      const delayMs = deriveAutoScrollClockDelayMs({ nowMs: getNowMs(), intervalMs: minIntervalMs })
 
       if (delayMs === 0) {
         execute()
@@ -145,12 +131,14 @@ export function createAutoScrollScheduler(
 
       pendingTimer = setTimer(() => {
         pendingTimer = null
+        if (!hasPendingUpdate) return
         execute()
       }, delayMs)
     },
     cancel,
-    markPerformed(nowMs) {
-      lastAutoScrollAtMs = nowMs ?? getNowMs()
+    markPerformed() {
+      hasPendingUpdate = false
+      cancel()
     },
   }
 }
