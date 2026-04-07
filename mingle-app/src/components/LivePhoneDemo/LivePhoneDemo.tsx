@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -3833,8 +3833,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 >
                   {isConnecting ? (
                     <Loader2 size={30} className="animate-spin text-white" />
+                  ) : isReady ? (
+                    <span
+                      aria-hidden
+                      className="h-5 w-5 rounded-[4px] bg-white"
+                    />
                   ) : (
-                    <Play size={30} className="text-white" />
+                    <Mic size={28} className="text-white" />
                   )}
                 </span>
               </button>
