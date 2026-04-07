@@ -60,6 +60,7 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
@@ -88,6 +89,7 @@ const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
 const LS_KEY_FEEDBACK_DRAFT = 'mingle_live_phone_demo_feedback_draft_v1'
+const DEBUG_WEBVIEW_REMOUNT_MENU_LABEL = 'Remount WebView'
 const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
 // Boost factor applied to TTS playback while STT is active.
 // iOS .playAndRecord reduces speaker output; this compensates in software.
@@ -534,6 +536,10 @@ type NativeSetAdBannerPositionCommand = {
   }
 }
 
+type NativeRemountWebViewCommand = {
+  type: 'native_remount_webview'
+}
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -716,6 +722,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [translationModel],
   )
   const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
+  const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
+    rawUrl: typeof window === 'undefined' ? '' : window.location.href,
+    isDevelopmentMode: process.env.NODE_ENV !== 'production',
+  })
 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
@@ -1148,6 +1158,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryTargetDepthRef.current = 0
     window.history.go(-currentDepth)
   }, [applyMenuNavigationDepth])
+
+  const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
+    if (!isNativeApp()) return
+
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify({
+        type: 'native_remount_webview',
+      } satisfies NativeRemountWebViewCommand))
+    } catch {
+      // Ignore bridge errors for the native-only debug action.
+    }
+  }, [])
 
   const handleMenuButtonPress = useCallback(() => {
     setLangSelectorOpen(false)
@@ -3136,6 +3158,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                   })}
                                 </div>
                               </div>
+                            )}
+
+                            {shouldShowDebugWebViewRemountMenuItem && (
+                              <button
+                                type="button"
+                                onClick={handleDebugWebViewRemountMenuItemPress}
+                                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-3.5 py-3 text-left transition duration-200 hover:border-amber-300 hover:shadow-[0_10px_24px_rgba(245,158,11,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[0.94rem] font-semibold text-gray-900">
+                                    {DEBUG_WEBVIEW_REMOUNT_MENU_LABEL}
+                                  </div>
+                                  <div className="mt-0.5 text-[0.78rem] text-amber-700">
+                                    Local and dev only
+                                  </div>
+                                </div>
+                                <span className="shrink-0 text-amber-600">
+                                  <ChevronRight size={18} strokeWidth={2.4} />
+                                </span>
+                              </button>
                             )}
                           </div>
                         </div>
