@@ -2278,6 +2278,10 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
+            scrollEnabled={Platform.OS !== 'ios'}
+            bounces={Platform.OS !== 'ios'}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
             allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
