@@ -727,7 +727,21 @@ function resolveProviderRetryDelayMs(error: unknown): number {
   return TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS
 }
 
+function isRateLimitProviderError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const normalizedMessage = error.message.toLowerCase()
+
+  return (
+    /\[429\b/.test(error.message)
+    || normalizedMessage.includes('too many requests')
+    || normalizedMessage.includes('rate limit')
+    || normalizedMessage.includes('quota exceeded')
+  )
+}
+
 function shouldRetryProviderError(error: unknown): boolean {
+  const parsedRetryDelayMs = extractRetryDelayMsFromError(error)
+  if (parsedRetryDelayMs === null && isRateLimitProviderError(error)) return false
   const retryDelayMs = resolveProviderRetryDelayMs(error)
   return retryDelayMs <= MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS
 }

@@ -351,6 +351,38 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          error: {
+            message: 'Provider returned error',
+          },
+        }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'qwen/qwen3.5-9b',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(502)
+    expect(json).toEqual({ error: 'empty_translation_response' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+  })
+
   it('returns provider translations as-is even when they match the source text', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
