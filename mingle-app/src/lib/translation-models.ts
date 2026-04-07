@@ -1,10 +1,12 @@
-export type TranslationEngineProvider = 'gemini' | 'qwen'
+export type TranslationEngineProvider = 'gemini' | 'gemma' | 'qwen'
 
 export type TranslationInfrastructureProvider = 'google' | 'openrouter'
 
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
+  | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
+  | 'qwen/qwen3.6-plus'
 
 export type TranslationModelOption = {
   value: UserSelectableTranslationModel
@@ -27,8 +29,16 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gemini-2.5-flash-lite',
   },
   {
+    value: 'gemma-4-31b-it',
+    label: 'gemma-4-31b-it',
+  },
+  {
     value: 'qwen/qwen3.5-9b',
     label: 'qwen3.5-9b',
+  },
+  {
+    value: 'qwen/qwen3.6-plus',
+    label: 'qwen3.6-plus',
   },
 ]
 
@@ -39,11 +49,24 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     infrastructureProvider: 'google',
     runtimeModel: 'gemini-2.5-flash-lite',
   },
+  'gemma-4-31b-it': {
+    value: 'gemma-4-31b-it',
+    engineProvider: 'gemma',
+    infrastructureProvider: 'google',
+    runtimeModel: 'gemma-4-31b-it',
+  },
   'qwen/qwen3.5-9b': {
     value: 'qwen/qwen3.5-9b',
     engineProvider: 'qwen',
     infrastructureProvider: 'openrouter',
     runtimeModel: 'qwen/qwen3.5-9b',
+    baseUrl: 'https://openrouter.ai/api/v1',
+  },
+  'qwen/qwen3.6-plus': {
+    value: 'qwen/qwen3.6-plus',
+    engineProvider: 'qwen',
+    infrastructureProvider: 'openrouter',
+    runtimeModel: 'qwen/qwen3.6-plus',
     baseUrl: 'https://openrouter.ai/api/v1',
   },
 }
@@ -53,6 +76,16 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   if (!normalized) return null
 
   if (normalized === 'gemini-2.5-flash-lite') return 'gemini-2.5-flash-lite'
+
+  if (
+    normalized === 'gemma-4-31b-it'
+    || normalized === 'gemma-4-31b'
+    || normalized === 'gemma 4 31b'
+    || normalized === 'gemma 4 31b it'
+    || normalized === 'models/gemma-4-31b-it'
+  ) {
+    return 'gemma-4-31b-it'
+  }
 
   if (
     normalized === 'qwen/qwen3.5-9b'
@@ -70,6 +103,16 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
   }
 
   if (normalized === 'qwen/qwen3.5-9b') return 'qwen/qwen3.5-9b'
+
+  if (
+    normalized === 'qwen/qwen3.6-plus'
+    || normalized === 'qwen3.6-plus'
+    || normalized === 'qwen/qwen3.6-plus:free'
+    || normalized === 'qwen/qwen3.6-plus-free'
+    || normalized === 'qwen/qwen3.6-plus (openrouter)'
+  ) {
+    return 'qwen/qwen3.6-plus'
+  }
 
   return null
 }

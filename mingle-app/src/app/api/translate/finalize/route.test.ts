@@ -448,6 +448,89 @@ describe('/api/translate/finalize route', () => {
     expect(body.messages?.[1]?.role).toBe('user')
   })
 
+  it('supports qwen 3.6 plus via OpenRouter when selected in account preferences', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.6-plus')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 14,
+            completion_tokens: 9,
+            total_tokens: 23,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('qwen/qwen3.6-plus')
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      model?: string
+    }
+    expect(body.model).toBe('qwen/qwen3.6-plus')
+  })
+
+  it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
+    setAuthenticatedTranslationModel('gemma-4-31b-it')
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {
+          promptTokenCount: 11,
+          candidatesTokenCount: 22,
+          totalTokenCount: 33,
+        },
+      },
+    })
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemma')
+    expect(json.infrastructureProvider).toBe('google')
+    expect(json.model).toBe('gemma-4-31b-it')
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as { model?: string }
+    expect(modelConfig.model).toBe('gemma-4-31b-it')
+  })
+
   it('uses the authenticated user translation model from DB even when the request body says otherwise', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()

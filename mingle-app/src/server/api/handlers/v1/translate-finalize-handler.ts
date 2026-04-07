@@ -37,6 +37,7 @@ import {
 export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
+const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
 const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
 const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
@@ -51,7 +52,7 @@ const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 
-type TranslationProvider = 'gemini' | 'qwen' | 'openai-compatible'
+type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai-compatible'
 
 type TranslationUsage = {
   promptTokens?: number
@@ -72,7 +73,7 @@ type TranslationEngineResult = {
 }
 
 type GeminiTranslationProviderConfig = {
-  provider: 'gemini'
+  provider: 'gemini' | 'gemma'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -170,10 +171,15 @@ function normalizeTranslationProvider(value: string): TranslationProvider | null
   const normalized = value.trim().toLowerCase()
   if (!normalized) return null
   if (normalized === 'gemini') return normalized
+  if (normalized === 'gemma') return normalized
   if (normalized === 'qwen') return normalized
   if (normalized === 'openai-compatible') return normalized
   if (normalized === 'openai_compatible') return 'openai-compatible'
   return null
+}
+
+function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 'gemini' | 'gemma' {
+  return provider === 'gemini' || provider === 'gemma'
 }
 
 function readTranslateEnv(name: string): string {
@@ -407,6 +413,7 @@ function resolveTranslationModel(config: {
   const explicitModel = readTranslateEnv('TRANSLATE_MODEL').trim()
   if (explicitModel) return explicitModel
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
+  if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
     return DEFAULT_DASHSCOPE_QWEN_MODEL
   }
@@ -453,7 +460,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
   }
 
   if (requestedModelSelection) {
-    if (requestedModelSelection.engineProvider === 'gemini') {
+    if (requestedModelSelection.engineProvider === 'gemini' || requestedModelSelection.engineProvider === 'gemma') {
       const apiKey = (process.env.GEMINI_API_KEY || '').trim()
       if (!apiKey) {
         return {
@@ -466,7 +473,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
       return {
         ok: true,
         config: {
-          provider: 'gemini',
+          provider: requestedModelSelection.engineProvider,
           infrastructureProvider: requestedModelSelection.infrastructureProvider,
           model: requestedModelSelection.runtimeModel,
           apiKey,
@@ -516,7 +523,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
 
   const provider = resolveTranslationProvider()
 
-  if (provider === 'gemini') {
+  if (isGoogleGenerativeProvider(provider)) {
     const apiKey = (process.env.GEMINI_API_KEY || '').trim()
     if (!apiKey) {
       return {
@@ -945,7 +952,7 @@ async function translateWithGemini(
 
       console.warn('[translate/finalize] provider_retry_scheduled', {
         ...buildTranslateFinalizeLogContext(ctx),
-        provider: 'gemini',
+        provider: config.provider,
         model: config.model,
         retryInMs: TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS,
         error: error instanceof Error ? error.message : String(error),
@@ -977,7 +984,7 @@ async function translateWithGemini(
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
     isFinal: ctx.isFinal,
     text: ctx.text,
-    provider: 'gemini',
+    provider: config.provider,
     model: config.model,
     rawResponseLength: rawContent.length,
     rawResponse: rawContent,
@@ -1076,7 +1083,7 @@ async function translateWithGemini(
     ...(detectedSourceLanguage ? { sourceLanguage: detectedSourceLanguage } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceLanguagesMixed } : {}),
     ...(ctx.shouldRedetectSourceLanguage ? { sourceTextHasForeignScript } : {}),
-    provider: 'gemini',
+    provider: config.provider,
     infrastructureProvider: config.infrastructureProvider,
     model: config.model,
     usage: normalizeUsage({
@@ -1620,7 +1627,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       } else if (testFaultMode === 'provider_error') {
         throw new Error('forced_provider_error_for_e2e')
       } else {
-        selectedResult = providerConfig.provider === 'gemini'
+        selectedResult = isGoogleGenerativeProvider(providerConfig.provider)
           ? await translateWithGemini(ctx, providerConfig)
           : await translateWithOpenAICompatible(ctx, providerConfig)
       }

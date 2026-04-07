@@ -336,6 +336,44 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists qwen 3.6 plus and gemma 4 translation models through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const qwenResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.6-plus",
+      }),
+    }));
+    expect(qwenResponse.status).toBe(200);
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: "user_123" },
+      data: {
+        translationModel: "qwen/qwen3.6-plus",
+      },
+    });
+
+    const gemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "gemma-4-31b-it",
+      }),
+    }));
+    expect(gemmaResponse.status).toBe(200);
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: "user_123" },
+      data: {
+        translationModel: "gemma-4-31b-it",
+      },
+    });
+  });
+
   it("persists a supported ad banner position through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
