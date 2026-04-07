@@ -113,8 +113,8 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
 const EMPTY_STATE_ARROW_HEAD_Y = 72
-const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 24
-const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 96
+const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 26
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 
 type LivePhoneDemoComposerCopy = {
   manualSpeakerLabel: string
@@ -3954,7 +3954,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex items-end gap-3"
+                  className="flex items-center gap-3"
                 >
                   <motion.div
                     layoutId="live-phone-demo-mic-shell"
@@ -3964,7 +3964,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={isConnecting || isError}
-                      className="relative flex h-[2.7rem] w-[2.7rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex h-[3.2rem] w-[3.2rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (
                         <span
@@ -3989,14 +3989,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }`}
                       >
                         {isConnecting ? (
-                          <Loader2 size={18} className="animate-spin text-white" />
+                          <Loader2 size={22} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
                             aria-hidden
-                            className="h-3 w-3 rounded-[2px] bg-white"
+                            className="h-3.5 w-3.5 rounded-[3px] bg-white"
                           />
                         ) : (
-                          <Mic size={18} className="text-white" />
+                          <Mic size={22} className="text-white" />
                         )}
                       </span>
                     </button>
@@ -4005,40 +4005,42 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <motion.form
                     layout
                     onSubmit={handleComposerSubmit}
-                    className="min-w-0 flex-1"
+                    className="min-w-0 flex-1 self-center"
                   >
-                    <div className="flex items-end gap-2 rounded-[1.45rem] border border-gray-200 bg-white px-3 py-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
-                      <textarea
-                        ref={composerTextareaRef}
-                        value={composerDraft}
-                        onChange={handleComposerDraftChange}
-                        rows={1}
-                        placeholder={composerCopy.composerPlaceholder}
-                        className="min-h-[24px] flex-1 resize-none self-center bg-transparent px-0 py-1 text-[15px] leading-5 text-gray-900 outline-none placeholder:text-gray-400"
-                        style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
-                      />
+                    <div className="flex items-center gap-3 rounded-[1.5rem] border border-gray-200 bg-white px-2.5 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+                      <div className="flex min-w-0 flex-1 items-center rounded-[1.1rem] border border-gray-200 bg-[#F8FAFC] px-3">
+                        <textarea
+                          ref={composerTextareaRef}
+                          value={composerDraft}
+                          onChange={handleComposerDraftChange}
+                          rows={1}
+                          placeholder={composerCopy.composerPlaceholder}
+                          className="min-h-[26px] flex-1 resize-none self-center bg-transparent px-0 py-1.5 text-[16px] leading-6 text-gray-900 outline-none placeholder:text-gray-400"
+                          style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
+                        />
+                      </div>
 
-                      <div className="flex shrink-0 items-center gap-1 self-end pb-0.5">
+                      <div className="flex shrink-0 items-center gap-2">
                         <motion.button
                           layoutId="live-phone-demo-keyboard-toggle"
                           type="button"
                           onClick={handleToggleComposer}
                           aria-label={composerCopy.closeKeyboardLabel}
-                          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 active:scale-95"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:bg-gray-50 active:scale-95"
                         >
-                          <Keyboard size={18} strokeWidth={2.2} />
+                          <Keyboard size={20} strokeWidth={2.2} />
                         </motion.button>
                         <button
                           type="submit"
                           disabled={!composerCanSend}
                           aria-label={composerCopy.sendMessageLabel}
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-all duration-200 active:scale-95 ${
+                          className={`inline-flex h-11 w-11 items-center justify-center rounded-full shadow-sm transition-all duration-200 active:scale-95 ${
                             composerCanSend
-                              ? 'bg-gray-900 text-white'
+                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
                               : 'bg-gray-200 text-gray-400'
                           }`}
                         >
-                          <ArrowUp size={18} strokeWidth={2.6} />
+                          <ArrowUp size={20} strokeWidth={2.6} />
                         </button>
                       </div>
                     </div>
