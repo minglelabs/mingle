@@ -20,14 +20,17 @@ import {
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
+  DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
+  LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
+  type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
@@ -742,6 +745,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
@@ -760,17 +764,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
+    inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
   })
-  const latestAccountPreferences = useMemo(() => ({
+  const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
     adBannerPosition,
+    inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -834,12 +840,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
+      persistedInputModeRef.current = next.inputMode
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
+      setIsComposerOpen(next.inputMode === 'text')
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -946,6 +954,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [adBannerPosition])
 
   useEffect(() => {
+    try {
+      localStorage.setItem(LS_KEY_INPUT_MODE, isComposerOpen ? 'text' : 'voice')
+    } catch { /* ignore */ }
+  }, [isComposerOpen])
+
+  useEffect(() => {
     if (!feedbackMessage) {
       persistFeedbackDraft(null)
       return
@@ -1006,6 +1020,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
+        if (persistedInputModeRef.current === null) {
+          setIsComposerOpen(hydratedPreferences.inputMode === 'text')
+        }
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -1044,6 +1061,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: currentPreferences.translationModel,
         adBannerPosition: currentPreferences.adBannerPosition,
+        inputMode: currentPreferences.inputMode,
       }),
     })
       .then((response) => {
@@ -1079,6 +1097,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
         translationModel: nextPreferences.translationModel,
         adBannerPosition: nextPreferences.adBannerPosition,
+        inputMode: nextPreferences.inputMode,
       }),
     })
       .then((response) => {
@@ -2355,6 +2374,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
       const next = !previous
+      persistedInputModeRef.current = next ? 'text' : 'voice'
       if (previous) {
         composerTextareaRef.current?.blur()
       }

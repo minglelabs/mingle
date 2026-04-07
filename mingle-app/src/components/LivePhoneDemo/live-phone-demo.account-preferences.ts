@@ -1,10 +1,13 @@
 import {
+  DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
+  normalizeLivePhoneDemoInputMode,
   type LivePhoneDemoAdBannerPosition,
+  type LivePhoneDemoInputMode,
 } from './live-phone-demo.preferences'
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
@@ -23,6 +26,7 @@ export type AccountPreferencesResponse = {
   sonioxManualFinalizeSilenceMs?: unknown
   translationModel?: unknown
   adBannerPosition?: unknown
+  inputMode?: unknown
   speakerEnabled?: unknown
   echoAllowed?: unknown
 }
@@ -32,6 +36,7 @@ export interface LivePhoneDemoAccountPreferences {
   sonioxManualFinalizeSilenceMs: number
   translationModel: UserSelectableTranslationModel
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
+  inputMode: LivePhoneDemoInputMode
   speakerEnabled: boolean
   echoAllowed: boolean
 }
@@ -69,6 +74,7 @@ export function buildHydratedAccountPreferences(
       : normalizeSonioxManualFinalizeSilencePreference(body?.sonioxManualFinalizeSilenceMs),
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
+    inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
   }
@@ -82,6 +88,7 @@ export function serializeAccountPreferencesSyncState(
     preferences.sonioxManualFinalizeSilenceMs,
     preferences.translationModel,
     preferences.adBannerPosition ?? '',
+    preferences.inputMode,
     preferences.speakerEnabled ? '1' : '0',
     preferences.echoAllowed ? '1' : '0',
   ].join(':')

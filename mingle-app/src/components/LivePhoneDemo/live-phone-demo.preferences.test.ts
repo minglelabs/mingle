@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LS_KEY_AD_BANNER_POSITION,
+  LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   DEFAULT_SONIOX_SILENCE_MS,
@@ -8,6 +9,7 @@ import {
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
+  normalizeLivePhoneDemoInputMode,
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
@@ -51,6 +53,19 @@ describe('normalizeLivePhoneDemoAdBannerPosition', () => {
   })
 })
 
+describe('normalizeLivePhoneDemoInputMode', () => {
+  it('normalizes supported input mode values', () => {
+    expect(normalizeLivePhoneDemoInputMode('voice')).toBe('voice')
+    expect(normalizeLivePhoneDemoInputMode(' TEXT ')).toBe('text')
+  })
+
+  it('returns null for unsupported input mode values', () => {
+    expect(normalizeLivePhoneDemoInputMode('keyboard')).toBeNull()
+    expect(normalizeLivePhoneDemoInputMode('')).toBeNull()
+    expect(normalizeLivePhoneDemoInputMode(null)).toBeNull()
+  })
+})
+
 describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
   it('prefers hydrated user preference over native layout and query fallback', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
@@ -91,6 +106,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       selectedLanguages: ['en', 'ko', 'ja'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
       adBannerPosition: null,
+      inputMode: null,
     })
   })
 
@@ -100,6 +116,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
         if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US', 'en', 'bad'])
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '5'
         if (key === LS_KEY_AD_BANNER_POSITION) return 'bottom'
+        if (key === LS_KEY_INPUT_MODE) return 'text'
         return null
       }),
     } as unknown as Storage)
@@ -108,6 +125,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       selectedLanguages: ['ja', 'en'],
       textSizeLevel: 5,
       adBannerPosition: 'bottom',
+      inputMode: 'text',
     })
   })
 
@@ -117,6 +135,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
         if (key === LS_KEY_LANGUAGES) return '{not-json}'
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '0'
         if (key === LS_KEY_AD_BANNER_POSITION) return 'off'
+        if (key === LS_KEY_INPUT_MODE) return 'unsupported'
         return null
       }),
     } as unknown as Storage)
@@ -125,6 +144,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
       selectedLanguages: ['en', 'ko'],
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
       adBannerPosition: null,
+      inputMode: null,
     })
   })
 })

@@ -14,6 +14,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
+      inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
     }, false)).toEqual({
@@ -21,6 +22,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 1200,
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
+      inputMode: 'text',
       speakerEnabled: false,
       echoAllowed: true,
     })
@@ -32,6 +34,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 2500,
       translationModel: 'unsupported-model',
       adBannerPosition: 'invalid',
+      inputMode: 'unsupported',
       speakerEnabled: 'invalid',
       echoAllowed: 'invalid',
     }, true)).toEqual({
@@ -39,6 +42,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
       translationModel: 'gemini-2.5-flash-lite',
       adBannerPosition: 'bottom',
+      inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
     })
@@ -56,6 +60,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: null,
+        inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
       },
@@ -69,6 +74,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: 'gemini-2.5-flash-lite',
       adBannerPosition: 'top',
+      inputMode: 'text',
       speakerEnabled: true,
       echoAllowed: false,
     }
@@ -92,6 +98,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
+        inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
       },
@@ -100,6 +107,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 500,
         translationModel: 'gemini-2.5-flash-lite',
         adBannerPosition: 'top',
+        inputMode: 'voice',
         speakerEnabled: false,
         echoAllowed: true,
       }),
@@ -116,6 +124,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
         sonioxManualFinalizeSilenceMs: 700,
         translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
+        inputMode: 'text',
         speakerEnabled: true,
         echoAllowed: false,
       },

@@ -97,6 +97,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
+      inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -124,6 +125,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
+      inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -170,6 +172,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
+      demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
     });
@@ -183,6 +186,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
+      inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
     });
@@ -194,6 +198,7 @@ describe("/api/account/preferences route", () => {
         demoSilenceFinalizeMs: true,
         translationModel: true,
         adBannerPosition: true,
+        demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
       },
@@ -213,6 +218,7 @@ describe("/api/account/preferences route", () => {
         demoTextSizeLevel: 4,
         demoSilenceFinalizeMs: 1000,
         translationModel: "qwen/qwen3.5-9b",
+        demoInputMode: null,
       })
       .mockResolvedValueOnce({
         id: "user_123",
@@ -238,6 +244,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1000,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
+      inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -264,6 +271,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: null,
       translationModel: null,
       adBannerPosition: null,
+      demoInputMode: null,
       demoSpeakerEnabled: null,
       demoEchoAllowed: null,
     });
@@ -277,6 +285,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 500,
       translationModel: "gemini-2.5-flash-lite",
       adBannerPosition: "bottom",
+      inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -363,6 +372,33 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists a supported input mode through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        inputMode: "text",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        demoInputMode: "text",
+      },
+    });
+  });
+
   it("persists speaker and echo preferences through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
@@ -399,6 +435,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 1500,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "top",
+      demoInputMode: "text",
       demoSpeakerEnabled: true,
       demoEchoAllowed: false,
     });
@@ -416,6 +453,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 1500,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "top",
+      inputMode: "text",
       speakerEnabled: true,
       echoAllowed: false,
     });
@@ -427,6 +465,7 @@ describe("/api/account/preferences route", () => {
         demoSilenceFinalizeMs: true,
         translationModel: true,
         adBannerPosition: true,
+        demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
       },
@@ -470,6 +509,7 @@ describe("/api/account/preferences route", () => {
       demoSilenceFinalizeMs: 900,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
+      demoInputMode: "voice",
       demoSpeakerEnabled: false,
       demoEchoAllowed: true,
     });
@@ -487,6 +527,7 @@ describe("/api/account/preferences route", () => {
       sonioxManualFinalizeSilenceMs: 900,
       translationModel: "qwen/qwen3.5-9b",
       adBannerPosition: "bottom",
+      inputMode: "voice",
       speakerEnabled: false,
       echoAllowed: true,
     });
@@ -506,6 +547,7 @@ describe("/api/account/preferences route", () => {
         demoSilenceFinalizeMs: true,
         translationModel: true,
         adBannerPosition: true,
+        demoInputMode: true,
         demoSpeakerEnabled: true,
         demoEchoAllowed: true,
       },
