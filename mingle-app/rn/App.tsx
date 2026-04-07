@@ -1594,7 +1594,10 @@ function AppInner(): React.JSX.Element {
     if (__DEV__) {
       console.log(`[NativeUI→Web] ${JSON.stringify(payload).slice(0, 120)}`);
     }
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheBannerLayoutScript = payload.type === 'banner_layout'
+      ? `window.__MINGLE_LAST_NATIVE_BANNER_LAYOUT = ${serialized}; `
+      : '';
+    const script = `${cacheBannerLayoutScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_UI_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 

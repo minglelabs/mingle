@@ -58,6 +58,7 @@ import {
   isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
+  readCachedNativeUiBannerLayout,
   shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
@@ -703,8 +704,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     echoAllowed: !aecEnabled,
   }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
-  const displayedAdBannerPosition = adBannerPosition
-    || normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
+  const displayedAdBannerPosition = normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position)
+    || adBannerPosition
     || nativeBannerPositionFromQuery
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
@@ -2416,6 +2417,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     if (!isNativeApp()) return
+
+    const cachedBannerLayout = readCachedNativeUiBannerLayout(window)
+    if (cachedBannerLayout) {
+      setNativeBannerLayout(cachedBannerLayout)
+    }
 
     const handleNativeUiEvent = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail
