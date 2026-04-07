@@ -2,14 +2,17 @@ import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
-export const DEFAULT_TEXT_SIZE_LEVEL = 2
+export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
+export const DEFAULT_TEXT_SIZE_LEVEL = 3
 export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
+export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
 
 export interface LivePhoneDemoPersistedPreferences {
   selectedLanguages: string[]
   textSizeLevel: number
+  adBannerPosition: LivePhoneDemoAdBannerPosition | null
 }
 
 export function readPersistedIntegerPreference(
@@ -44,10 +47,31 @@ function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[
   return deduped.length > 0 ? deduped : [...fallbackLanguages]
 }
 
+export function normalizeLivePhoneDemoAdBannerPosition(value: unknown): LivePhoneDemoAdBannerPosition | null {
+  if (typeof value !== 'string') return null
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'top' || normalized === 'bottom'
+    ? normalized
+    : null
+}
+
+export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
+  preferredPosition: LivePhoneDemoAdBannerPosition | null
+  nativeLayoutPosition: LivePhoneDemoAdBannerPosition | null
+  queryPosition: LivePhoneDemoAdBannerPosition | null
+}): LivePhoneDemoAdBannerPosition | null {
+  return input.preferredPosition
+    ?? input.nativeLayoutPosition
+    ?? input.queryPosition
+    ?? null
+}
+
 export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[]): LivePhoneDemoPersistedPreferences {
   const next: LivePhoneDemoPersistedPreferences = {
     selectedLanguages: [...fallbackLanguages],
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+    adBannerPosition: null,
   }
 
   const storage = typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage
@@ -69,6 +93,10 @@ export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[
       1,
       5,
     )
+  } catch { /* ignore */ }
+
+  try {
+    next.adBannerPosition = normalizeLivePhoneDemoAdBannerPosition(storage.getItem(LS_KEY_AD_BANNER_POSITION))
   } catch { /* ignore */ }
 
   return next

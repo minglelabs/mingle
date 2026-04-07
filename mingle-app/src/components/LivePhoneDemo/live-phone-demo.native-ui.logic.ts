@@ -1,9 +1,17 @@
 export const NATIVE_UI_EVENT = 'mingle:native-ui'
 export const NATIVE_UI_QUERY_KEY = 'nativeUi'
+export const NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY = '__MINGLE_LAST_NATIVE_BANNER_LAYOUT'
 
 export interface NativeUiScrollToTopEventDetail {
   type: 'scroll_to_top'
   source: string
+}
+
+export interface NativeUiBannerLayoutEventDetail {
+  type: 'banner_layout'
+  position: 'top' | 'bottom'
+  topInsetPx: number
+  bottomInsetPx: number
 }
 
 export function parseNativeUiScrollToTopDetail(
@@ -23,6 +31,38 @@ export function parseNativeUiScrollToTopDetail(
     type: 'scroll_to_top',
     source,
   }
+}
+
+export function parseNativeUiBannerLayoutDetail(
+  detail: unknown,
+): NativeUiBannerLayoutEventDetail | null {
+  if (!detail || typeof detail !== 'object') return null
+
+  const payload = detail as Record<string, unknown>
+  if (payload.type !== 'banner_layout') return null
+
+  const position = payload.position === 'top' || payload.position === 'bottom'
+    ? payload.position
+    : null
+  if (!position) return null
+
+  const topInsetPx = Number(payload.topInsetPx)
+  const bottomInsetPx = Number(payload.bottomInsetPx)
+
+  return {
+    type: 'banner_layout',
+    position,
+    topInsetPx: Number.isFinite(topInsetPx) && topInsetPx > 0 ? Math.round(topInsetPx) : 0,
+    bottomInsetPx: Number.isFinite(bottomInsetPx) && bottomInsetPx > 0 ? Math.round(bottomInsetPx) : 0,
+  }
+}
+
+export function readCachedNativeUiBannerLayout(
+  value: unknown,
+): NativeUiBannerLayoutEventDetail | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = (value as Record<string, unknown>)[NATIVE_UI_LAST_BANNER_LAYOUT_WINDOW_KEY]
+  return parseNativeUiBannerLayoutDetail(candidate)
 }
 
 export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {

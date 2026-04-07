@@ -14,16 +14,23 @@ import {
 
 const MIN_TEXT_SIZE_LEVEL = 1;
 const MAX_TEXT_SIZE_LEVEL = 5;
-const DEFAULT_TEXT_SIZE_LEVEL = 2;
+const DEFAULT_TEXT_SIZE_LEVEL = 3;
 const MIN_SILENCE_MS = 500;
 const MAX_SILENCE_MS = 3000;
 const DEFAULT_SILENCE_MS = 500;
+const DEFAULT_SPEAKER_ENABLED = false;
+const DEFAULT_ECHO_ALLOWED = true;
+const DEFAULT_AD_BANNER_POSITION = "bottom";
+const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
   textSizeLevel?: unknown;
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
+  adBannerPosition?: unknown;
+  speakerEnabled?: unknown;
+  echoAllowed?: unknown;
 };
 
 type SessionUserIdentity = {
@@ -38,6 +45,9 @@ type UserPreferencesRecord = {
   demoTextSizeLevel: number | null;
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
+  adBannerPosition: string | null;
+  demoSpeakerEnabled: boolean | null;
+  demoEchoAllowed: boolean | null;
 };
 
 const EMPTY_CLIENT_CONTEXT = {
@@ -66,6 +76,18 @@ function asClampedInteger(value: unknown, min: number, max: number): number | nu
   const asNumber = Number(value);
   if (!Number.isFinite(asNumber)) return null;
   return Math.max(min, Math.min(max, Math.round(asNumber)));
+}
+
+function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return AD_BANNER_POSITIONS.has(normalized)
+    ? (normalized as "top" | "bottom")
+    : null;
+}
+
+function normalizeBooleanPreference(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
 }
 
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
@@ -202,6 +224,9 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoTextSizeLevel: true,
     demoSilenceFinalizeMs: true,
     translationModel: true,
+    adBannerPosition: true,
+    demoSpeakerEnabled: true,
+    demoEchoAllowed: true,
   } as const;
 
   if (identity.id) {
@@ -299,6 +324,9 @@ export async function GET(request: Request) {
     sonioxManualFinalizeSilenceMs: preferences?.demoSilenceFinalizeMs ?? DEFAULT_SILENCE_MS,
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
+    adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
+    speakerEnabled: preferences?.demoSpeakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
+    echoAllowed: preferences?.demoEchoAllowed ?? DEFAULT_ECHO_ALLOWED,
   });
   ensureTrackingContext(nextRequest, response, {
     externalUserIdHint: tracking.externalUserId,
@@ -342,7 +370,17 @@ export async function PATCH(request: Request) {
   const nextTextSizeLevel = asClampedInteger(body.textSizeLevel, MIN_TEXT_SIZE_LEVEL, MAX_TEXT_SIZE_LEVEL);
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
-  if (nextTextSizeLevel === null && nextSilenceMs === null && nextTranslationModel === null) {
+  const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextSpeakerEnabled = normalizeBooleanPreference(body.speakerEnabled);
+  const nextEchoAllowed = normalizeBooleanPreference(body.echoAllowed);
+  if (
+    nextTextSizeLevel === null
+    && nextSilenceMs === null
+    && nextTranslationModel === null
+    && nextAdBannerPosition === null
+    && nextSpeakerEnabled === null
+    && nextEchoAllowed === null
+  ) {
     return NextResponse.json({ error: "no_valid_fields" }, { status: 400 });
   }
 
@@ -350,6 +388,9 @@ export async function PATCH(request: Request) {
     ...(nextTextSizeLevel !== null ? { demoTextSizeLevel: nextTextSizeLevel } : {}),
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
+    ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextSpeakerEnabled !== null ? { demoSpeakerEnabled: nextSpeakerEnabled } : {}),
+    ...(nextEchoAllowed !== null ? { demoEchoAllowed: nextEchoAllowed } : {}),
   };
 
   if (identity.id) {
@@ -363,6 +404,7 @@ export async function PATCH(request: Request) {
         targetUserId: identity.id,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -379,6 +421,7 @@ export async function PATCH(request: Request) {
         targetUserEmail: identity.email,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -395,6 +438,7 @@ export async function PATCH(request: Request) {
         targetExternalUserId: identity.externalUserId,
         headerExternalUserId: resolveTrackingExternalUserId(request) || null,
         translationModel: nextTranslationModel,
+        adBannerPosition: nextAdBannerPosition,
       });
       return NextResponse.json({ ok: true });
     }
@@ -418,6 +462,7 @@ export async function PATCH(request: Request) {
           headerExternalUserId: resolveTrackingExternalUserId(request) || null,
           resolvedSessionKey: identity.sessionKey,
           translationModel: nextTranslationModel,
+          adBannerPosition: nextAdBannerPosition,
         });
         return NextResponse.json({ ok: true });
       }
@@ -443,6 +488,7 @@ export async function PATCH(request: Request) {
       headerExternalUserId: resolveTrackingExternalUserId(request) || null,
       resolvedSessionKey: tracking.sessionKey,
       translationModel: nextTranslationModel,
+      adBannerPosition: nextAdBannerPosition,
     });
     const response = NextResponse.json({ ok: true });
     ensureTrackingContext(nextRequest, response, {

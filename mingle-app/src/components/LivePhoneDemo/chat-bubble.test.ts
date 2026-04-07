@@ -45,11 +45,19 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
-    expect(html).toContain('max-width:93%')
+    expect(html).toContain('max-width:85%')
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-original-bubble-text')
+    expect(html).toContain('aria-label="Copy All"')
+    expect(html).toContain('data-message-copy-button')
+    expect(html).toContain('data-copyable-bubble')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
+    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+      html.indexOf('aria-label="Copy All"'),
+    )
     expect(html).toContain('class="align-middle"')
   })
 
@@ -72,6 +80,13 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('aria-label="Copy All"')
+    expect(html).toContain('data-message-copy-button')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
+    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+      html.indexOf('aria-label="Copy All"'),
+    )
     expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
   })
@@ -100,6 +115,9 @@ describe('ChatBubble', () => {
     expect(html).toContain('bg-amber-400 align-middle animate-pulse')
     expect(html).toContain('10s ago')
     expect(html).toContain('data-original-bubble-row')
+    expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(0)
+    expect((html.match(/data-copyable-bubble-double-tap-action="copy"/g) || []).length).toBe(1)
   })
 
   it('renders a warning icon instead of the unknown language label', () => {
@@ -119,5 +137,42 @@ describe('ChatBubble', () => {
     expect(html).toContain('❓')
     expect(html).not.toContain('>unknown<')
     expect(html).not.toContain('>UNKNOWN<')
+  })
+
+  it('routes original and translated bubbles to pronunciation playback on double tap', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-actions',
+          originalText: 'Hello there',
+          originalLang: 'en',
+          translations: {
+            ko: '안녕하세요',
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
+    expect(html).not.toContain('data-message-tts-button')
+  })
+
+  it('does not render visible tts icon buttons', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-actions-ko',
+          originalText: '안녕하세요',
+          originalLang: 'ko',
+          translations: {
+            en: 'Hello',
+          },
+        },
+        uiLocale: 'ko',
+      }),
+    )
+
+    expect(html).not.toContain('data-message-tts-button')
   })
 })

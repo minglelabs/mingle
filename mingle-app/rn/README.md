@@ -13,20 +13,27 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.6`, Android: `android/v1.0.6`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.10`, Android: `android/v1.0.10`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
+- `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
+- `RN_AD_BANNER_HEIGHT_PX` (optional, default: `50`)
+- `RN_ADMOB_APP_ID_IOS` (optional override, defaults to the production app ID)
+- `RN_ADMOB_APP_ID_ANDROID` (optional override, defaults to the production app ID)
+- `RN_ADMOB_BANNER_UNIT_ID_IOS` (optional override, defaults to the production banner ad unit ID)
+- `RN_ADMOB_BANNER_UNIT_ID_ANDROID` (optional override, defaults to the production banner ad unit ID)
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
-`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.6` before launch.
-`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.6` before launch.
+`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.10` before launch.
+`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.10` before launch.
 
 On startup, the RN app calls the version-policy API and applies `force_update | recommend_update | none`.
 
-- iOS: `/api/ios/v1.0.6/client/version-policy`
-- Android: `/api/android/v1.0.6/client/version-policy`
+- iOS: `/api/ios/v1.0.10/client/version-policy`
+- Android: `/api/android/v1.0.10/client/version-policy`
 - The request body includes `platform` (`ios` | `android`).
+- The response can optionally override the banner ad unit ID via server env, while the built-in production IDs remain the fallback.
 
 The iOS runtime URL prefers the following keys from `Info.plist`.
 
@@ -37,7 +44,23 @@ When building for an iOS device, `scripts/devbox` generates and injects `rn/ios/
 to override those values with the current worktree / ngrok URLs.
 Regular builds that do not use devbox keep the default Xcode project values (production URLs).
 
-Android runtime URLs and the namespace are injected through Gradle `BuildConfig` and `NativeRuntimeConfigModule`.
+Android runtime URLs, AdMob values, and the namespace are injected through Gradle `BuildConfig`, the app manifest, and `NativeRuntimeConfigModule`.
+
+## Native Ad Banner Placement
+
+RN can render a native ad banner overlay with a build-time/env option.
+
+- `RN_AD_BANNER_POSITION=top`: render banner below the native top area.
+- `RN_AD_BANNER_POSITION=bottom`: render banner above the native bottom area.
+
+When banner is enabled, RN forwards these query params to web:
+
+- `nativeTopInsetPx`
+- `nativeBottomInsetPx`
+
+`LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
+
+For `scripts/devbox mobile --device-app-env dev`, devbox falls back to Google's official sample AdMob app IDs and banner unit IDs when the AdMob env vars are unset, so local release verification can proceed without production credentials.
 
 The native STT bridge forwards the selected languages and lets `mingle-stt`
 choose the default provider through `STT_DEFAULT_MODEL`, unless a specific

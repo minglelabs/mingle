@@ -12,6 +12,9 @@ export const enDictionary: AppDictionary = {
     textSizeLabel: "Text Size",
     silenceFinalizeLabel: "Silence Duration for Speech Split",
     translationModelLabel: "Translation Model",
+    adBannerPositionLabel: "Ad Position",
+    adBannerPositionTopLabel: "Top",
+    adBannerPositionBottomLabel: "Bottom",
   },
   tabs: {
     chats: "Chats",
