@@ -4001,7 +4001,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex min-h-[4rem] items-end gap-1.5"
+                  className="flex items-end gap-1.5"
                 >
                   <motion.div
                     layoutId="live-phone-demo-mic-shell"
@@ -4052,7 +4052,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <motion.form
                     layout
                     onSubmit={handleComposerSubmit}
-                    className="flex min-h-[4rem] min-w-0 flex-1 items-end gap-1.5 self-end"
+                    className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
                     <div className="flex min-h-[2.3rem] min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none">
                       <div className="flex min-w-0 flex-1 items-end px-1">
@@ -4112,7 +4112,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                  className="grid min-h-[4rem] items-end"
+                  className="grid items-end"
                   style={{ gridTemplateColumns: '1fr auto 1fr' }}
                 >
                   <motion.div

@@ -1266,6 +1266,7 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
+  const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1292,6 +1293,28 @@ function AppInner(): React.JSX.Element {
       return nextPalette;
     });
   }, [webUrl]);
+
+  useEffect(() => {
+    if (initialLoadSettledRef.current || !startupSplashVisible) {
+      if (startupSplashTimeoutRef.current) {
+        clearTimeout(startupSplashTimeoutRef.current);
+        startupSplashTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    startupSplashTimeoutRef.current = setTimeout(() => {
+      setStartupSplashVisible(false);
+      startupSplashTimeoutRef.current = null;
+    }, 4000);
+
+    return () => {
+      if (startupSplashTimeoutRef.current) {
+        clearTimeout(startupSplashTimeoutRef.current);
+        startupSplashTimeoutRef.current = null;
+      }
+    };
+  }, [startupSplashVisible]);
 
   const iosTopSafeAreaHeight = Platform.OS === 'ios'
     ? (safeAreaInsets.top > 0 ? safeAreaInsets.top : iosTopTapOverlayHeight)
