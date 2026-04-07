@@ -560,6 +560,44 @@ describe('/api/translate/finalize route', () => {
     expect(body.reasoning).toBeUndefined()
   })
 
+  it('uses a longer interim timeout for gemma via OpenRouter', async () => {
+    setAuthenticatedTranslationModel('google/gemma-4-31b-it')
+    const abortTimeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: false,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemma')
+    expect(abortTimeoutSpy).toHaveBeenCalledWith(4000)
+    abortTimeoutSpy.mockRestore()
+  })
+
   it('uses the authenticated user translation model from DB even when the request body says otherwise', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
