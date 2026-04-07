@@ -2840,7 +2840,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
-  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx + visibleNativeBottomBannerReservePx}px), ${20 + activeKeyboardInsetPx + visibleNativeBottomBannerReservePx}px)`
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
+  const bottomBarMarginBottom = `${visibleNativeBottomBannerReservePx}px`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -3988,6 +3989,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             style={{
               paddingTop: '10px',
               paddingBottom: bottomBarPaddingBottom,
+              marginBottom: bottomBarMarginBottom,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
