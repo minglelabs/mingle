@@ -25,6 +25,7 @@ import {
   resolveConnectionStatusFromNativeBridgeStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
+  shouldTrackUsageForConnectionStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
   shouldRestartSttForLanguageHintChange,
@@ -384,6 +385,13 @@ describe('use-realtime-stt pure logic', () => {
     expect(shouldPromoteConnectionStatusFromNativeActivity({
       previousConnectionStatus: 'ready',
     })).toBe(false)
+  })
+
+  it('tracks usage for any STT session state that resolves to ready', () => {
+    expect(shouldTrackUsageForConnectionStatus('ready')).toBe(true)
+    expect(shouldTrackUsageForConnectionStatus('connecting')).toBe(false)
+    expect(shouldTrackUsageForConnectionStatus('idle')).toBe(false)
+    expect(shouldTrackUsageForConnectionStatus('error')).toBe(false)
   })
 
   it('filters translations down to currently selected target languages', () => {

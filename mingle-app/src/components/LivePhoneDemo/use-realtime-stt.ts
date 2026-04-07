@@ -272,6 +272,10 @@ export function shouldPromoteConnectionStatusFromNativeActivity(input: {
   return input.previousConnectionStatus !== 'ready'
 }
 
+export function shouldTrackUsageForConnectionStatus(connectionStatus: ConnectionStatus): boolean {
+  return connectionStatus === 'ready'
+}
+
 declare global {
   interface Window {
     ReactNativeWebView?: {
@@ -2951,20 +2955,6 @@ export default function useRealtimeSTT({
         setVolume(0)
       }
 
-      if (usageIntervalRef.current) {
-        clearInterval(usageIntervalRef.current)
-      }
-      usageIntervalRef.current = setInterval(() => {
-        setUsageSec(prev => {
-          const next = prev + 1
-          if (normalizedUsageLimitSec !== null && next >= normalizedUsageLimitSec) {
-            setTimeout(() => {
-              void stopRecordingGracefully(true)
-            }, 0)
-          }
-          return next
-        })
-      }, 1000)
       return
     }
 
@@ -3431,6 +3421,37 @@ export default function useRealtimeSTT({
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
   }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, resetToIdle])
+
+  useEffect(() => {
+    if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {
+      if (usageIntervalRef.current) {
+        clearInterval(usageIntervalRef.current)
+        usageIntervalRef.current = null
+      }
+      return
+    }
+
+    if (usageIntervalRef.current) return
+
+    usageIntervalRef.current = setInterval(() => {
+      setUsageSec(prev => {
+        const next = prev + 1
+        if (normalizedUsageLimitSec !== null && next >= normalizedUsageLimitSec) {
+          setTimeout(() => {
+            void stopRecordingGracefully(true)
+          }, 0)
+        }
+        return next
+      })
+    }, 1000)
+
+    return () => {
+      if (usageIntervalRef.current) {
+        clearInterval(usageIntervalRef.current)
+        usageIntervalRef.current = null
+      }
+    }
+  }, [connectionStatus, normalizedUsageLimitSec, stopRecordingGracefully])
 
   useEffect(() => {
     const currentSignature = buildLanguageSelectionSignature(languages)
