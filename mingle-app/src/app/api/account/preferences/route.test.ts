@@ -372,6 +372,20 @@ describe("/api/account/preferences route", () => {
         translationModel: "gemma-4-31b-it",
       },
     });
+
+    const openRouterGemmaResponse = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "google/gemma-4-31b-it",
+      }),
+    }));
+    expect(openRouterGemmaResponse.status).toBe(200);
+    expect(mockUserUpdateMany).toHaveBeenNthCalledWith(3, {
+      where: { id: "user_123" },
+      data: {
+        translationModel: "google/gemma-4-31b-it",
+      },
+    });
   });
 
   it("persists a supported ad banner position through PATCH", async () => {

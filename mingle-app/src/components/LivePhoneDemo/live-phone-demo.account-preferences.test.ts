@@ -58,6 +58,20 @@ describe('buildHydratedAccountPreferences', () => {
       speakerEnabled: false,
       echoAllowed: true,
     })
+
+    expect(buildHydratedAccountPreferences({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'google/gemma-4-31b-it',
+      adBannerPosition: 'top',
+    }, false)).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'google/gemma-4-31b-it',
+      adBannerPosition: 'top',
+      speakerEnabled: false,
+      echoAllowed: true,
+    })
   })
 })
 

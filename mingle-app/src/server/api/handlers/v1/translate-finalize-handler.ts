@@ -80,7 +80,7 @@ type GeminiTranslationProviderConfig = {
 }
 
 type OpenAICompatibleTranslationProviderConfig = {
-  provider: 'qwen' | 'openai-compatible'
+  provider: 'gemma' | 'qwen' | 'openai-compatible'
   infrastructureProvider: TranslationInfrastructureProvider | string
   model: string
   apiKey: string
@@ -442,7 +442,7 @@ function parseJsonObjectEnv(name: string): {
   }
 }
 
-function buildDefaultOpenAICompatibleExtraBody(provider: 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
+function buildDefaultOpenAICompatibleExtraBody(provider: 'gemma' | 'qwen' | 'openai-compatible', baseUrl: string): Record<string, unknown> | null {
   if (provider !== 'qwen') return null
   if (isDashScopeBaseUrl(baseUrl)) return { enable_thinking: false }
   if (isOpenRouterBaseUrl(baseUrl)) return null
@@ -460,7 +460,10 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
   }
 
   if (requestedModelSelection) {
-    if (requestedModelSelection.engineProvider === 'gemini' || requestedModelSelection.engineProvider === 'gemma') {
+    if (
+      requestedModelSelection.infrastructureProvider === 'google'
+      && (requestedModelSelection.engineProvider === 'gemini' || requestedModelSelection.engineProvider === 'gemma')
+    ) {
       const apiKey = (process.env.GEMINI_API_KEY || '').trim()
       if (!apiKey) {
         return {
@@ -511,7 +514,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
     return {
       ok: true,
       config: {
-        provider: 'qwen',
+        provider: requestedModelSelection.engineProvider,
         infrastructureProvider: requestedModelSelection.infrastructureProvider,
         model: requestedModelSelection.runtimeModel,
         apiKey,
@@ -1627,7 +1630,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       } else if (testFaultMode === 'provider_error') {
         throw new Error('forced_provider_error_for_e2e')
       } else {
-        selectedResult = isGoogleGenerativeProvider(providerConfig.provider)
+        selectedResult = providerConfig.infrastructureProvider === 'google' && isGoogleGenerativeProvider(providerConfig.provider)
           ? await translateWithGemini(ctx, providerConfig)
           : await translateWithOpenAICompatible(ctx, providerConfig)
       }

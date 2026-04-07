@@ -5,6 +5,7 @@ export type TranslationInfrastructureProvider = 'google' | 'openrouter'
 export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
+  | 'google/gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
   | 'qwen/qwen3.6-plus'
 
@@ -33,6 +34,10 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'gemma-4-31b-it',
   },
   {
+    value: 'google/gemma-4-31b-it',
+    label: 'gemma-4-31b-it (OpenRouter)',
+  },
+  {
     value: 'qwen/qwen3.5-9b',
     label: 'qwen3.5-9b',
   },
@@ -54,6 +59,13 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     engineProvider: 'gemma',
     infrastructureProvider: 'google',
     runtimeModel: 'gemma-4-31b-it',
+  },
+  'google/gemma-4-31b-it': {
+    value: 'google/gemma-4-31b-it',
+    engineProvider: 'gemma',
+    infrastructureProvider: 'openrouter',
+    runtimeModel: 'google/gemma-4-31b-it',
+    baseUrl: 'https://openrouter.ai/api/v1',
   },
   'qwen/qwen3.5-9b': {
     value: 'qwen/qwen3.5-9b',
@@ -85,6 +97,15 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
     || normalized === 'models/gemma-4-31b-it'
   ) {
     return 'gemma-4-31b-it'
+  }
+
+  if (
+    normalized === 'google/gemma-4-31b-it'
+    || normalized === 'gemma-4-31b-it (openrouter)'
+    || normalized === 'gemma 4 31b openrouter'
+    || normalized === 'google gemma 4 31b'
+  ) {
+    return 'google/gemma-4-31b-it'
   }
 
   if (

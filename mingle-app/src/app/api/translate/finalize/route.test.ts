@@ -531,6 +531,58 @@ describe('/api/translate/finalize route', () => {
     expect(modelConfig.model).toBe('gemma-4-31b-it')
   })
 
+  it('supports gemma 4 via OpenRouter when selected in account preferences', async () => {
+    setAuthenticatedTranslationModel('google/gemma-4-31b-it')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 12,
+            completion_tokens: 8,
+            total_tokens: 20,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithQwenEnv({
+      baseUrl: 'https://openrouter.ai/api/v1',
+    })
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }) as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('gemma')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('google/gemma-4-31b-it')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as {
+      model?: string
+      response_format?: unknown
+      reasoning?: unknown
+    }
+    expect(body.model).toBe('google/gemma-4-31b-it')
+    expect(body.response_format).toBeUndefined()
+    expect(body.reasoning).toBeUndefined()
+  })
+
   it('uses the authenticated user translation model from DB even when the request body says otherwise', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
