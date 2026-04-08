@@ -33,7 +33,7 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   },
   {
     value: 'qwen/qwen3.5-9b',
-    label: 'qwen3.5-9b',
+    label: 'qwen3.5-9b (slow)',
   },
 ]
 
