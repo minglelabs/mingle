@@ -14,6 +14,11 @@ import { POST as postAndroidV107ClientVersionPolicy } from '@/app/api/android/v1
 import { POST as postAndroidV108ClientVersionPolicy } from '@/app/api/android/v1.0.8/client/version-policy/route'
 import { POST as postAndroidV109ClientVersionPolicy } from '@/app/api/android/v1.0.9/client/version-policy/route'
 import { POST as postAndroidV111ClientVersionPolicy } from '@/app/api/android/v1.0.11/client/version-policy/route'
+import { POST as postAndroidV1_1_0ClientVersionPolicy } from '@/app/api/android/v1.1.0/client/version-policy/route'
+import {
+  GET as getAndroidV1_1_0AccountPreferences,
+  PATCH as patchAndroidV1_1_0AccountPreferences,
+} from '@/app/api/android/v1.1.0/account/preferences/route'
 import { POST as postAndroidV100LogClientEvent } from '@/app/api/android/v1.0.0/log/client-event/route'
 import { POST as postAndroidV102LogClientEvent } from '@/app/api/android/v1.0.2/log/client-event/route'
 import { POST as postAndroidV103LogClientEvent } from '@/app/api/android/v1.0.3/log/client-event/route'
@@ -24,6 +29,7 @@ import { POST as postAndroidV107LogClientEvent } from '@/app/api/android/v1.0.7/
 import { POST as postAndroidV108LogClientEvent } from '@/app/api/android/v1.0.8/log/client-event/route'
 import { POST as postAndroidV109LogClientEvent } from '@/app/api/android/v1.0.9/log/client-event/route'
 import { POST as postAndroidV111LogClientEvent } from '@/app/api/android/v1.0.11/log/client-event/route'
+import { POST as postAndroidV1_1_0LogClientEvent } from '@/app/api/android/v1.1.0/log/client-event/route'
 import { POST as postAndroidV100TranslateFinalize } from '@/app/api/android/v1.0.0/translate/finalize/route'
 import { POST as postAndroidV102TranslateFinalize } from '@/app/api/android/v1.0.2/translate/finalize/route'
 import { POST as postAndroidV103TranslateFinalize } from '@/app/api/android/v1.0.3/translate/finalize/route'
@@ -34,6 +40,7 @@ import { POST as postAndroidV107TranslateFinalize } from '@/app/api/android/v1.0
 import { POST as postAndroidV108TranslateFinalize } from '@/app/api/android/v1.0.8/translate/finalize/route'
 import { POST as postAndroidV109TranslateFinalize } from '@/app/api/android/v1.0.9/translate/finalize/route'
 import { POST as postAndroidV111TranslateFinalize } from '@/app/api/android/v1.0.11/translate/finalize/route'
+import { POST as postAndroidV1_1_0TranslateFinalize } from '@/app/api/android/v1.1.0/translate/finalize/route'
 import { POST as postAndroidV100TtsInworld } from '@/app/api/android/v1.0.0/tts/inworld/route'
 import { POST as postAndroidV102TtsInworld } from '@/app/api/android/v1.0.2/tts/inworld/route'
 import { POST as postAndroidV103TtsInworld } from '@/app/api/android/v1.0.3/tts/inworld/route'
@@ -44,6 +51,12 @@ import { POST as postAndroidV107TtsInworld } from '@/app/api/android/v1.0.7/tts/
 import { POST as postAndroidV108TtsInworld } from '@/app/api/android/v1.0.8/tts/inworld/route'
 import { POST as postAndroidV109TtsInworld } from '@/app/api/android/v1.0.9/tts/inworld/route'
 import { POST as postAndroidV111TtsInworld } from '@/app/api/android/v1.0.11/tts/inworld/route'
+import { POST as postAndroidV1_1_0TtsInworld } from '@/app/api/android/v1.1.0/tts/inworld/route'
+import {
+  GET as getAndroidV1_1_0Conversations,
+  POST as postAndroidV1_1_0Conversations,
+} from '@/app/api/android/v1.1.0/conversations/route'
+import { PATCH as patchAndroidV1_1_0Conversation } from '@/app/api/android/v1.1.0/conversations/[conversationId]/route'
 import { POST as postIosV100ClientVersionPolicy } from '@/app/api/ios/v1.0.0/client/version-policy/route'
 import { POST as postIosV102ClientVersionPolicy } from '@/app/api/ios/v1.0.2/client/version-policy/route'
 import { POST as postIosV103ClientVersionPolicy } from '@/app/api/ios/v1.0.3/client/version-policy/route'
@@ -54,6 +67,11 @@ import { POST as postIosV107ClientVersionPolicy } from '@/app/api/ios/v1.0.7/cli
 import { POST as postIosV108ClientVersionPolicy } from '@/app/api/ios/v1.0.8/client/version-policy/route'
 import { POST as postIosV109ClientVersionPolicy } from '@/app/api/ios/v1.0.9/client/version-policy/route'
 import { POST as postIosV111ClientVersionPolicy } from '@/app/api/ios/v1.0.11/client/version-policy/route'
+import { POST as postIosV1_1_0ClientVersionPolicy } from '@/app/api/ios/v1.1.0/client/version-policy/route'
+import {
+  GET as getIosV1_1_0AccountPreferences,
+  PATCH as patchIosV1_1_0AccountPreferences,
+} from '@/app/api/ios/v1.1.0/account/preferences/route'
 import { POST as postIosV100LogClientEvent } from '@/app/api/ios/v1.0.0/log/client-event/route'
 import { POST as postIosV102LogClientEvent } from '@/app/api/ios/v1.0.2/log/client-event/route'
 import { POST as postIosV103LogClientEvent } from '@/app/api/ios/v1.0.3/log/client-event/route'
@@ -64,6 +82,7 @@ import { POST as postIosV107LogClientEvent } from '@/app/api/ios/v1.0.7/log/clie
 import { POST as postIosV108LogClientEvent } from '@/app/api/ios/v1.0.8/log/client-event/route'
 import { POST as postIosV109LogClientEvent } from '@/app/api/ios/v1.0.9/log/client-event/route'
 import { POST as postIosV111LogClientEvent } from '@/app/api/ios/v1.0.11/log/client-event/route'
+import { POST as postIosV1_1_0LogClientEvent } from '@/app/api/ios/v1.1.0/log/client-event/route'
 import { POST as postIosV100TranslateFinalize } from '@/app/api/ios/v1.0.0/translate/finalize/route'
 import { POST as postIosV102TranslateFinalize } from '@/app/api/ios/v1.0.2/translate/finalize/route'
 import { POST as postIosV103TranslateFinalize } from '@/app/api/ios/v1.0.3/translate/finalize/route'
@@ -74,6 +93,7 @@ import { POST as postIosV107TranslateFinalize } from '@/app/api/ios/v1.0.7/trans
 import { POST as postIosV108TranslateFinalize } from '@/app/api/ios/v1.0.8/translate/finalize/route'
 import { POST as postIosV109TranslateFinalize } from '@/app/api/ios/v1.0.9/translate/finalize/route'
 import { POST as postIosV111TranslateFinalize } from '@/app/api/ios/v1.0.11/translate/finalize/route'
+import { POST as postIosV1_1_0TranslateFinalize } from '@/app/api/ios/v1.1.0/translate/finalize/route'
 import { POST as postIosV100TtsInworld } from '@/app/api/ios/v1.0.0/tts/inworld/route'
 import { POST as postIosV102TtsInworld } from '@/app/api/ios/v1.0.2/tts/inworld/route'
 import { POST as postIosV103TtsInworld } from '@/app/api/ios/v1.0.3/tts/inworld/route'
@@ -84,6 +104,12 @@ import { POST as postIosV107TtsInworld } from '@/app/api/ios/v1.0.7/tts/inworld/
 import { POST as postIosV108TtsInworld } from '@/app/api/ios/v1.0.8/tts/inworld/route'
 import { POST as postIosV109TtsInworld } from '@/app/api/ios/v1.0.9/tts/inworld/route'
 import { POST as postIosV111TtsInworld } from '@/app/api/ios/v1.0.11/tts/inworld/route'
+import { POST as postIosV1_1_0TtsInworld } from '@/app/api/ios/v1.1.0/tts/inworld/route'
+import {
+  GET as getIosV1_1_0Conversations,
+  POST as postIosV1_1_0Conversations,
+} from '@/app/api/ios/v1.1.0/conversations/route'
+import { PATCH as patchIosV1_1_0Conversation } from '@/app/api/ios/v1.1.0/conversations/[conversationId]/route'
 import { postAndroidClientVersionPolicyForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/client-version-policy-controller'
@@ -93,7 +119,9 @@ import { postAndroidClientVersionPolicyForAndroidV1_0_6 } from '@/server/api/con
 import { postAndroidClientVersionPolicyForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_8 } from '@/server/api/controllers/android/v1.0.8/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_9 } from '@/server/api/controllers/android/v1.0.9/client-version-policy-controller'
+import { postAndroidClientVersionPolicyForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/client-version-policy-controller'
+import { postAndroidClientVersionPolicyForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/client-version-policy-controller'
 import { postLogClientEventForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/log-client-event-controller'
@@ -103,7 +131,9 @@ import { postLogClientEventForAndroidV1_0_6 } from '@/server/api/controllers/and
 import { postLogClientEventForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_8 } from '@/server/api/controllers/android/v1.0.8/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_9 } from '@/server/api/controllers/android/v1.0.9/log-client-event-controller'
+import { postLogClientEventForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/log-client-event-controller'
 import { postLogClientEventForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/log-client-event-controller'
+import { postLogClientEventForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/log-client-event-controller'
 import { postTranslateFinalizeForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/translate-finalize-controller'
 import { postTranslateFinalizeForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/translate-finalize-controller'
 import { postTranslateFinalizeForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/translate-finalize-controller'
@@ -113,7 +143,9 @@ import { postTranslateFinalizeForAndroidV1_0_6 } from '@/server/api/controllers/
 import { postTranslateFinalizeForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/translate-finalize-controller'
 import { postTranslateFinalizeForAndroidV1_0_8 } from '@/server/api/controllers/android/v1.0.8/translate-finalize-controller'
 import { postTranslateFinalizeForAndroidV1_0_9 } from '@/server/api/controllers/android/v1.0.9/translate-finalize-controller'
+import { postTranslateFinalizeForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/translate-finalize-controller'
 import { postTranslateFinalizeForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/translate-finalize-controller'
+import { postTranslateFinalizeForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/translate-finalize-controller'
 import { postTtsInworldForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/tts-inworld-controller'
@@ -123,7 +155,18 @@ import { postTtsInworldForAndroidV1_0_6 } from '@/server/api/controllers/android
 import { postTtsInworldForAndroidV1_0_7 } from '@/server/api/controllers/android/v1.0.7/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_8 } from '@/server/api/controllers/android/v1.0.8/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_9 } from '@/server/api/controllers/android/v1.0.9/tts-inworld-controller'
+import { postTtsInworldForAndroidV1_0_10 } from '@/server/api/controllers/android/v1.0.10/tts-inworld-controller'
 import { postTtsInworldForAndroidV1_0_11 } from '@/server/api/controllers/android/v1.0.11/tts-inworld-controller'
+import { postTtsInworldForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/tts-inworld-controller'
+import {
+  getAccountPreferencesForAndroidV1_1_0,
+  patchAccountPreferencesForAndroidV1_1_0,
+} from '@/server/api/controllers/android/v1.1.0/account-preferences-controller'
+import {
+  getConversationChannelsForAndroidV1_1_0,
+  postCreateConversationForAndroidV1_1_0,
+} from '@/server/api/controllers/android/v1.1.0/conversations-controller'
+import { patchConversationRouteForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/conversation-controller'
 import { postIosClientVersionPolicyForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/client-version-policy-controller'
@@ -133,7 +176,9 @@ import { postIosClientVersionPolicyForIosV1_0_6 } from '@/server/api/controllers
 import { postIosClientVersionPolicyForIosV1_0_7 } from '@/server/api/controllers/ios/v1.0.7/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_8 } from '@/server/api/controllers/ios/v1.0.8/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_9 } from '@/server/api/controllers/ios/v1.0.9/client-version-policy-controller'
+import { postIosClientVersionPolicyForIosV1_0_10 } from '@/server/api/controllers/ios/v1.0.10/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_11 } from '@/server/api/controllers/ios/v1.0.11/client-version-policy-controller'
+import { postIosClientVersionPolicyForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/client-version-policy-controller'
 import { postLogClientEventForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/log-client-event-controller'
 import { postLogClientEventForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/log-client-event-controller'
 import { postLogClientEventForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/log-client-event-controller'
@@ -143,7 +188,9 @@ import { postLogClientEventForIosV1_0_6 } from '@/server/api/controllers/ios/v1.
 import { postLogClientEventForIosV1_0_7 } from '@/server/api/controllers/ios/v1.0.7/log-client-event-controller'
 import { postLogClientEventForIosV1_0_8 } from '@/server/api/controllers/ios/v1.0.8/log-client-event-controller'
 import { postLogClientEventForIosV1_0_9 } from '@/server/api/controllers/ios/v1.0.9/log-client-event-controller'
+import { postLogClientEventForIosV1_0_10 } from '@/server/api/controllers/ios/v1.0.10/log-client-event-controller'
 import { postLogClientEventForIosV1_0_11 } from '@/server/api/controllers/ios/v1.0.11/log-client-event-controller'
+import { postLogClientEventForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/log-client-event-controller'
 import { postTranslateFinalizeForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/translate-finalize-controller'
 import { postTranslateFinalizeForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/translate-finalize-controller'
 import { postTranslateFinalizeForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/translate-finalize-controller'
@@ -153,7 +200,9 @@ import { postTranslateFinalizeForIosV1_0_6 } from '@/server/api/controllers/ios/
 import { postTranslateFinalizeForIosV1_0_7 } from '@/server/api/controllers/ios/v1.0.7/translate-finalize-controller'
 import { postTranslateFinalizeForIosV1_0_8 } from '@/server/api/controllers/ios/v1.0.8/translate-finalize-controller'
 import { postTranslateFinalizeForIosV1_0_9 } from '@/server/api/controllers/ios/v1.0.9/translate-finalize-controller'
+import { postTranslateFinalizeForIosV1_0_10 } from '@/server/api/controllers/ios/v1.0.10/translate-finalize-controller'
 import { postTranslateFinalizeForIosV1_0_11 } from '@/server/api/controllers/ios/v1.0.11/translate-finalize-controller'
+import { postTranslateFinalizeForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/translate-finalize-controller'
 import { postTtsInworldForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/tts-inworld-controller'
@@ -163,7 +212,18 @@ import { postTtsInworldForIosV1_0_6 } from '@/server/api/controllers/ios/v1.0.6/
 import { postTtsInworldForIosV1_0_7 } from '@/server/api/controllers/ios/v1.0.7/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_8 } from '@/server/api/controllers/ios/v1.0.8/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_9 } from '@/server/api/controllers/ios/v1.0.9/tts-inworld-controller'
+import { postTtsInworldForIosV1_0_10 } from '@/server/api/controllers/ios/v1.0.10/tts-inworld-controller'
 import { postTtsInworldForIosV1_0_11 } from '@/server/api/controllers/ios/v1.0.11/tts-inworld-controller'
+import { postTtsInworldForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/tts-inworld-controller'
+import {
+  getAccountPreferencesForIosV1_1_0,
+  patchAccountPreferencesForIosV1_1_0,
+} from '@/server/api/controllers/ios/v1.1.0/account-preferences-controller'
+import {
+  getConversationChannelsForIosV1_1_0,
+  postCreateConversationForIosV1_1_0,
+} from '@/server/api/controllers/ios/v1.1.0/conversations-controller'
+import { patchConversationRouteForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
 import { postClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/client-version-policy-controller'
 import { postIosClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/ios-client-version-policy-controller'
 import { postLogClientEventForLegacy } from '@/server/api/controllers/legacy/log-client-event-controller'
@@ -249,15 +309,15 @@ describe('mingle-app namespace route wiring', () => {
   })
 
   it('maps /android/v1.1.0 routes to Android v1.1.0 controllers', () => {
-    expect(postAndroidV111TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_1_0)
-    expect(postAndroidV111TtsInworld).toBe(postTtsInworldForAndroidV1_1_0)
-    expect(postAndroidV111LogClientEvent).toBe(postLogClientEventForAndroidV1_1_0)
-    expect(postAndroidV111ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_1_0)
-    expect(getAndroidV111AccountPreferences).toBe(getAccountPreferencesForAndroidV1_1_0)
-    expect(patchAndroidV111AccountPreferences).toBe(patchAccountPreferencesForAndroidV1_1_0)
-    expect(getAndroidV111Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
-    expect(postAndroidV111Conversations).toBe(postCreateConversationForAndroidV1_1_0)
-    expect(patchAndroidV111Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
+    expect(postAndroidV1_1_0TranslateFinalize).toBe(postTranslateFinalizeForAndroidV1_1_0)
+    expect(postAndroidV1_1_0TtsInworld).toBe(postTtsInworldForAndroidV1_1_0)
+    expect(postAndroidV1_1_0LogClientEvent).toBe(postLogClientEventForAndroidV1_1_0)
+    expect(postAndroidV1_1_0ClientVersionPolicy).toBe(postAndroidClientVersionPolicyForAndroidV1_1_0)
+    expect(getAndroidV1_1_0AccountPreferences).toBe(getAccountPreferencesForAndroidV1_1_0)
+    expect(patchAndroidV1_1_0AccountPreferences).toBe(patchAccountPreferencesForAndroidV1_1_0)
+    expect(getAndroidV1_1_0Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
+    expect(postAndroidV1_1_0Conversations).toBe(postCreateConversationForAndroidV1_1_0)
+    expect(patchAndroidV1_1_0Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
   })
 
   it('maps /ios/v1.0.0 routes to iOS v1.0.0 controllers', () => {
@@ -331,15 +391,15 @@ describe('mingle-app namespace route wiring', () => {
   })
 
   it('maps /ios/v1.1.0 routes to iOS v1.1.0 controllers', () => {
-    expect(postIosV111TranslateFinalize).toBe(postTranslateFinalizeForIosV1_1_0)
-    expect(postIosV111TtsInworld).toBe(postTtsInworldForIosV1_1_0)
-    expect(postIosV111LogClientEvent).toBe(postLogClientEventForIosV1_1_0)
-    expect(postIosV111ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_1_0)
-    expect(getIosV111AccountPreferences).toBe(getAccountPreferencesForIosV1_1_0)
-    expect(patchIosV111AccountPreferences).toBe(patchAccountPreferencesForIosV1_1_0)
-    expect(getIosV111Conversations).toBe(getConversationChannelsForIosV1_1_0)
-    expect(postIosV111Conversations).toBe(postCreateConversationForIosV1_1_0)
-    expect(patchIosV111Conversation).toBe(patchConversationRouteForIosV1_1_0)
+    expect(postIosV1_1_0TranslateFinalize).toBe(postTranslateFinalizeForIosV1_1_0)
+    expect(postIosV1_1_0TtsInworld).toBe(postTtsInworldForIosV1_1_0)
+    expect(postIosV1_1_0LogClientEvent).toBe(postLogClientEventForIosV1_1_0)
+    expect(postIosV1_1_0ClientVersionPolicy).toBe(postIosClientVersionPolicyForIosV1_1_0)
+    expect(getIosV1_1_0AccountPreferences).toBe(getAccountPreferencesForIosV1_1_0)
+    expect(patchIosV1_1_0AccountPreferences).toBe(patchAccountPreferencesForIosV1_1_0)
+    expect(getIosV1_1_0Conversations).toBe(getConversationChannelsForIosV1_1_0)
+    expect(postIosV1_1_0Conversations).toBe(postCreateConversationForIosV1_1_0)
+    expect(patchIosV1_1_0Conversation).toBe(patchConversationRouteForIosV1_1_0)
   })
 
   it('keeps iOS v1.0.0 controller code identical to legacy controllers', () => {

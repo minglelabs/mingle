@@ -823,6 +823,13 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeSetBannerZoneCommand = {
+  type: 'native_set_banner_zone';
+  payload?: {
+    zone?: BannerZone;
+  };
+};
+
 type NativeSetBottomBarClearanceCommand = {
   type: 'native_set_bottom_bar_clearance';
   payload?: {
@@ -846,6 +853,7 @@ type WebViewCommand =
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
+  | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand;
 
@@ -1436,6 +1444,10 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
+  const nativeConversationListBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.top],
+  );
   const nativeConversationBannerTopOffsetPx = useMemo(
     () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_HEADER_HEIGHT_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
@@ -1444,7 +1456,11 @@ function AppInner(): React.JSX.Element {
     if (nativeBottomBarClearancePx !== null) {
       return normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx);
     }
-    return Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale);
+    const baseOffsetPx = Math.round(NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX * nativeCanvasScale);
+    if (Platform.OS !== 'ios') {
+      return baseOffsetPx;
+    }
+    return Math.max(0, baseOffsetPx - IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX);
   }, [nativeBottomBarClearancePx, nativeCanvasScale]);
   const nativeBannerBottomOffsetPx = useMemo(
     () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
@@ -1457,6 +1473,11 @@ function AppInner(): React.JSX.Element {
     }),
     [nativeBannerHeightPx, nativeCanvasScale],
   );
+  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
+  const activeBannerZoneRef = useRef<BannerZone>('list');
+  const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
+  const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
+  const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
   const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
@@ -2216,6 +2237,18 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_set_bottom_bar_clearance') {
       setNativeBottomBarClearancePx(normalizeNativeBottomBarClearancePx(parsed.payload?.clearancePx));
+      return;
+    }
+
+    if (parsed.type === 'native_set_banner_zone') {
+      const zone = parsed.payload?.zone;
+      if (zone === 'list' || zone === 'conversation' || zone === 'hidden') {
+        if (zone === 'list' || zone === 'conversation') {
+          stableBannerZoneRef.current = zone;
+          pendingNavigationBannerZoneRef.current = null;
+        }
+        setActiveBannerZone(zone);
+      }
       return;
     }
 
