@@ -274,6 +274,19 @@ export function resolveHydratedComposerOpenState(input: {
   return input.persistedInputMode === 'text'
 }
 
+export function resolveScrollToBottomButtonBottomPx(input: {
+  baseBottomPx: number
+  isNativeAppRuntime: boolean
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  bottomBannerInsetPx: number
+}): number {
+  const reservedPx = input.isNativeAppRuntime && input.displayedAdBannerPosition === 'bottom'
+    ? Math.max(0, Math.round(input.bottomBannerInsetPx))
+    : 0
+
+  return input.baseBottomPx + reservedPx
+}
+
 function readSafeAreaInsetBottomPx(): number {
   if (typeof window === 'undefined' || typeof document === 'undefined') return 0
 
@@ -2999,8 +3012,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
   const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
-  const scrollToBottomButtonReservedPx = 0
-  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
+  const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
+    baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
+    isNativeAppRuntime,
+    displayedAdBannerPosition,
+    bottomBannerInsetPx: effectiveNativeBottomContentInsetPx,
+  })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'

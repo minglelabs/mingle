@@ -3,6 +3,7 @@ import {
   resolveKeyboardViewportInsetPx,
   resolveHydratedComposerOpenState,
   resolveLivePhoneDemoComposerCopy,
+  resolveScrollToBottomButtonBottomPx,
 } from './LivePhoneDemo'
 
 describe('live phone demo composer logic', () => {
@@ -63,5 +64,30 @@ describe('live phone demo composer logic', () => {
       currentIsComposerOpen: true,
       persistedInputMode: 'voice',
     })).toBe(false)
+  })
+
+  it('raises the scroll-to-bottom button above a bottom banner in native runtime', () => {
+    expect(resolveScrollToBottomButtonBottomPx({
+      baseBottomPx: 24,
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'bottom',
+      bottomBannerInsetPx: 50,
+    })).toBe(74)
+  })
+
+  it('keeps the scroll-to-bottom button at the base offset without a bottom banner', () => {
+    expect(resolveScrollToBottomButtonBottomPx({
+      baseBottomPx: 24,
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'top',
+      bottomBannerInsetPx: 50,
+    })).toBe(24)
+
+    expect(resolveScrollToBottomButtonBottomPx({
+      baseBottomPx: 24,
+      isNativeAppRuntime: false,
+      displayedAdBannerPosition: 'bottom',
+      bottomBannerInsetPx: 50,
+    })).toBe(24)
   })
 })
