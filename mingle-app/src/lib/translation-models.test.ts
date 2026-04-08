@@ -6,15 +6,22 @@ import {
 } from './translation-models'
 
 describe('translation model catalog', () => {
-  it('includes the supported Qwen and Google Gemma 4 options', () => {
+  it('keeps closed-state labels compact while exposing open-menu badges as metadata', () => {
     expect(TRANSLATION_MODEL_OPTIONS).toEqual(expect.arrayContaining([
       {
+        value: 'gemini-2.5-flash-lite',
+        label: 'gemini-2.5-flash-lite',
+        badge: 'Best',
+      },
+      {
         value: 'gemma-4-31b-it',
-        label: 'gemma-4-31b-it (slow)',
+        label: 'gemma-4-31b-it',
+        badge: 'Slow',
       },
       {
         value: 'qwen/qwen3.5-9b',
-        label: 'qwen3.5-9b (slow)',
+        label: 'qwen3.5-9b',
+        badge: 'Slow',
       },
     ]))
   })

@@ -48,6 +48,7 @@ import {
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
+  type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
@@ -153,6 +154,20 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
   5: 'text-[18px]',
 }
 const TEXT_SIZE_LEVEL_OPTIONS = [1, 2, 3, 4, 5] as const
+
+function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) {
+  const badgeClassName = badge === 'Best'
+    ? 'border border-amber-200/80 bg-gradient-to-r from-amber-100 via-amber-50 to-orange-50 text-amber-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'
+    : 'border border-gray-200/90 bg-gray-100/95 text-gray-600'
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[0.66rem] font-semibold leading-none tracking-[0.01em] ${badgeClassName}`}
+    >
+      {badge}
+    </span>
+  )
+}
 
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
@@ -3396,7 +3411,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-1.5 font-semibold">{translationModelLabel}</span>
-                                <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[220px] max-w-[68%] shrink-0 items-center">
+                                <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
                                 <button
                                   ref={translationModelButtonRef}
                                   type="button"
@@ -3438,7 +3453,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                       animate={{ opacity: 1, y: 0, scale: 1 }}
                                       exit={{ opacity: 0, y: -6, scale: 0.985 }}
                                       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                      className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[240px] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
+                                      className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                     >
                                       <motion.div
                                         initial={{ opacity: 0, height: 0 }}
@@ -3469,10 +3484,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                                     : 'bg-white text-gray-800 hover:bg-gray-50'
                                                 }`}
                                               >
-                                                <div className="min-w-0 flex-1 text-center">
-                                                  <div className="truncate text-[0.94rem] font-semibold">
+                                                <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                  <span className="truncate text-[0.94rem] font-semibold">
                                                     {option.label}
-                                                  </div>
+                                                  </span>
+                                                  {option.badge ? (
+                                                    <TranslationModelBadgeChip badge={option.badge} />
+                                                  ) : null}
                                                 </div>
                                                 <span
                                                   className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
