@@ -351,6 +351,63 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('skips repeated gemma requests while a long provider retry delay is still active', async () => {
+    setAuthenticatedTranslationModel('gemma-4-31b-it')
+    let nowMs = 1_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
+
+    mockGenerateContent.mockRejectedValueOnce(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 59.616803365s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]',
+    ))
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    try {
+      const firstResponse = await POST(makeJsonRequest({
+        text: 'Like that.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko', 'ja'],
+        isFinal: false,
+      }) as never)
+      const firstJson = await firstResponse.json()
+
+      expect(firstResponse.status).toBe(502)
+      expect(firstJson).toEqual({ error: 'empty_translation_response' })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+
+      nowMs += 1_000
+
+      const secondResponse = await POST(makeJsonRequest({
+        text: 'Like that.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko', 'ja'],
+        isFinal: false,
+        currentTurnPreviousState: {
+          sourceLanguage: 'en',
+          sourceText: 'Like that.',
+          translations: {
+            ko: '그렇게.',
+            ja: 'そんなふうに。',
+          },
+        },
+      }) as never)
+      const secondJson = await secondResponse.json()
+
+      expect(secondResponse.status).toBe(200)
+      expect(secondJson.usedFallbackFromPreviousState).toBe(true)
+      expect(secondJson.translations).toEqual({
+        ko: '그렇게.',
+        ja: 'そんなふうに。',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
