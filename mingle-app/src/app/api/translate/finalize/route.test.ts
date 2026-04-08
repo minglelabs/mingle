@@ -504,6 +504,55 @@ describe('/api/translate/finalize route', () => {
     expect(body.messages?.[1]?.role).toBe('user')
   })
 
+  it('uses a longer timeout for non-final qwen openrouter requests', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"en":"no","ja":"いいえ"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+      const controller = new AbortController()
+      ;(controller.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs = ms
+      return controller.signal
+    })
+
+    try {
+      const POST = await importRouteWithQwenEnv({
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'qwen/qwen3.5-9b',
+      })
+
+      const res = await POST(makeJsonRequest({
+        text: '아니',
+        sourceLanguage: 'ko',
+        targetLanguages: ['en', 'ja'],
+        isFinal: false,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.translations).toEqual({ en: 'no', ja: 'いいえ' })
+      const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+      expect(timeoutSpy).toHaveBeenCalledWith(4_000)
+      expect((requestInit.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs).toBe(4_000)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
+  })
+
   it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
     setAuthenticatedTranslationModel('gemma-4-31b-it')
     mockGenerateContent.mockResolvedValue({
