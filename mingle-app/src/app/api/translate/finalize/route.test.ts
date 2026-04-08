@@ -351,7 +351,7 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('skips repeated gemma requests while a long provider retry delay is still active', async () => {
+  it('returns an error for repeated gemma requests while a long provider retry delay is still active', async () => {
     setAuthenticatedTranslationModel('gemma-4-31b-it')
     let nowMs = 1_000_000
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
@@ -395,12 +395,8 @@ describe('/api/translate/finalize route', () => {
       }) as never)
       const secondJson = await secondResponse.json()
 
-      expect(secondResponse.status).toBe(200)
-      expect(secondJson.usedFallbackFromPreviousState).toBe(true)
-      expect(secondJson.translations).toEqual({
-        ko: '그렇게.',
-        ja: 'そんなふうに。',
-      })
+      expect(secondResponse.status).toBe(502)
+      expect(secondJson).toEqual({ error: 'empty_translation_response' })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {

@@ -194,6 +194,10 @@ function isGoogleGenerativeProviderConfig(
   return config.infrastructureProvider === 'google' && isGoogleGenerativeProvider(config.provider)
 }
 
+function shouldUsePreviousStateFallback(provider: TranslationProvider): boolean {
+  return provider !== 'gemma'
+}
+
 function readTranslateEnv(name: string): string {
   const direct = process.env[name]
   if (typeof direct === 'string') return direct
@@ -1783,7 +1787,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
         responseStatus: 502,
       })
-      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
+      if (
+        !ctx.isFinal
+        && shouldUsePreviousStateFallback(providerConfig.provider)
+        && Object.keys(fallbackTranslations).length > 0
+      ) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
@@ -1840,7 +1848,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         rawTranslations: selectedResult.translations,
         responseStatus: 502,
       })
-      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
+      if (
+        !ctx.isFinal
+        && shouldUsePreviousStateFallback(selectedResult.provider)
+        && Object.keys(fallbackTranslations).length > 0
+      ) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
