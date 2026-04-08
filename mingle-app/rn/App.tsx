@@ -37,6 +37,13 @@ import {
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
 import {
+  normalizeNativeBottomBarClearancePx,
+  parseWebPathname,
+  resolveNativeBannerContentHeightPx,
+  resolveNativeBottomBannerContentInsetPx,
+  shouldDisableIosWebViewScrolling,
+} from './src/webViewLayout';
+import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
   normalizeClientVersion,
@@ -1058,20 +1065,9 @@ function resolveNativeBannerHeightPx(rawValue: string | number | undefined): num
   );
 }
 
-function normalizeNativeBottomBarClearancePx(value: unknown): number {
-  const numeric = Number(value ?? '');
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
-  return Math.round(numeric);
-}
-
 function resolveNativeCanvasScale(windowWidthPx: number): number {
   if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) return 1;
   return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
-}
-
-function resolveNativeTranscriptInsetPx(bannerHeightPx: number, canvasScale: number): number {
-  const safeScale = canvasScale > 0 ? canvasScale : 1;
-  return Math.max(0, Math.round(bannerHeightPx / safeScale));
 }
 
 function NativeAdBanner(props: {
@@ -1287,6 +1283,7 @@ function AppInner(): React.JSX.Element {
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
+  const [currentWebPathname, setCurrentWebPathname] = useState(() => parseWebPathname(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1357,21 +1354,42 @@ function AppInner(): React.JSX.Element {
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
   const nativeTranscriptInsetPx = useMemo(
-    () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
+    () => resolveNativeBannerContentHeightPx({
+      bannerHeightPx: nativeBannerHeightPx,
+      canvasScale: nativeCanvasScale,
+    }),
     [nativeBannerHeightPx, nativeCanvasScale],
   );
   const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
-  const nativeBannerBottomInsetPx = nativeBannerPosition === 'bottom' ? nativeTranscriptInsetPx : 0;
+  const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
+    position: nativeBannerPosition,
+    bannerHeightPx: nativeBannerHeightPx,
+    canvasScale: nativeCanvasScale,
+    bottomBannerClearancePx: nativeBottomBannerClearancePx,
+  }), [nativeBannerHeightPx, nativeBannerPosition, nativeBottomBannerClearancePx, nativeCanvasScale]);
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
+    isIosPlatform: Platform.OS === 'ios',
+    pathname: currentWebPathname,
+  }), [currentWebPathname]);
 
   useEffect(() => {
     setNativeBottomBarClearancePx(null);
   }, [webViewMountToken]);
+
+  useEffect(() => {
+    setCurrentWebPathname(parseWebPathname(webUrl));
+  }, [webUrl]);
+
+  useEffect(() => {
+    if (shouldDisableIosScroll) return;
+    setNativeBottomBarClearancePx(null);
+  }, [shouldDisableIosScroll]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -2223,8 +2241,9 @@ function AppInner(): React.JSX.Element {
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
+    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
     updateSafeAreaPalette(event?.nativeEvent?.url);
-  }, [updateSafeAreaPalette]);
+  }, [updateSafeAreaPalette, webUrl]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = true;
@@ -2232,6 +2251,7 @@ function AppInner(): React.JSX.Element {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
+    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     emitToWeb({ type: 'capabilities', openAppSettings: true });
@@ -2240,7 +2260,7 @@ function AppInner(): React.JSX.Element {
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
 
   const handleDebugWebViewRemount = useCallback(() => {
     isPageReadyRef.current = false;
@@ -2259,6 +2279,7 @@ function AppInner(): React.JSX.Element {
   }, [webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
+    setCurrentWebPathname(parseWebPathname(navigationState.url));
     updateSafeAreaPalette(navigationState.url);
     setWebViewCanGoBack(Boolean(navigationState.canGoBack));
   }, [updateSafeAreaPalette]);
@@ -2340,8 +2361,8 @@ function AppInner(): React.JSX.Element {
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
-            scrollEnabled={Platform.OS !== 'ios'}
-            bounces={Platform.OS !== 'ios'}
+            scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
+            bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
