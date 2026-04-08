@@ -11,6 +11,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TurboModuleRegistry,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -1230,7 +1231,18 @@ function AppInner(): React.JSX.Element {
     return (readRuntimeEnvValue(platformEnvKeys) || runtimeFallback).trim();
   }, []);
   const [serverBannerUnitIdOverride, setServerBannerUnitIdOverride] = useState<string | null>(null);
-  const nativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
+  const configuredNativeBannerUnitId = serverBannerUnitIdOverride ?? defaultNativeBannerUnitId;
+  const hasNativeGoogleMobileAdsModule = useMemo(() => {
+    const nativeModules = NativeModules as { RNGoogleMobileAdsModule?: unknown };
+    try {
+      return Boolean(
+        TurboModuleRegistry.get?.('RNGoogleMobileAdsModule')
+        || nativeModules.RNGoogleMobileAdsModule,
+      );
+    } catch {
+      return Boolean(nativeModules.RNGoogleMobileAdsModule);
+    }
+  }, []);
   const nativeCanvasScale = useMemo(
     () => resolveNativeCanvasScale(windowWidthPx),
     [windowWidthPx],
@@ -1272,13 +1284,22 @@ function AppInner(): React.JSX.Element {
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
+    if (!hasNativeGoogleMobileAdsModule) return null;
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       return require('react-native-google-mobile-ads') as NativeAdModule;
     } catch {
       return null;
     }
-  }, []);
+  }, [hasNativeGoogleMobileAdsModule]);
+  const nativeBannerUnitId = nativeAdModule ? configuredNativeBannerUnitId : '';
+
+  useEffect(() => {
+    if (!configuredNativeBannerUnitId || nativeAdModule) return;
+    console.warn('[NativeAds] react-native-google-mobile-ads native module unavailable; disabling native banners', {
+      platform: Platform.OS,
+    });
+  }, [configuredNativeBannerUnitId, nativeAdModule]);
 
   const updateSafeAreaPalette = useCallback((candidateUrl?: string) => {
     const nextPalette = resolveSafeAreaPaletteForUrl(candidateUrl || webUrl);
