@@ -3412,103 +3412,103 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-1.5 font-semibold">{translationModelLabel}</span>
                                 <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
-                                <button
-                                  ref={translationModelButtonRef}
-                                  type="button"
-                                  onClick={() => {
-                                    setTextSizeMenuOpen(false)
-                                    setTranslationModelMenuOpen((open) => !open)
-                                  }}
-                                  aria-label={translationModelLabel}
-                                  aria-haspopup="listbox"
-                                  aria-expanded={translationModelMenuOpen}
-                                  aria-controls={translationModelListboxId}
-                                  className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                                >
-                                  <div className="min-w-0 flex-1 text-center">
-                                    <div className="truncate text-[0.95rem] font-semibold text-gray-900">
-                                      {selectedTranslationModelOption.label}
-                                    </div>
-                                  </div>
-                                  <span
-                                    className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-                                      translationModelMenuOpen
-                                        ? 'bg-transparent text-amber-700'
-                                        : 'bg-transparent text-gray-500 group-hover:text-amber-600'
-                                    }`}
+                                  <button
+                                    ref={translationModelButtonRef}
+                                    type="button"
+                                    onClick={() => {
+                                      setTextSizeMenuOpen(false)
+                                      setTranslationModelMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={translationModelLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={translationModelMenuOpen}
+                                    aria-controls={translationModelListboxId}
+                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                                   >
-                                    <ChevronDown
-                                      size={16}
-                                      strokeWidth={2.3}
-                                      className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                        translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                    <div className="min-w-0 flex-1 text-center">
+                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                        {selectedTranslationModelOption.label}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                        translationModelMenuOpen
+                                          ? 'bg-transparent text-amber-700'
+                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
                                       }`}
-                                    />
-                                  </span>
-                                </button>
-                                <AnimatePresence initial={false}>
-                                  {translationModelMenuOpen && (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: -6, scale: 0.985 }}
-                                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                      className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                     >
+                                      <ChevronDown
+                                        size={16}
+                                        strokeWidth={2.3}
+                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {translationModelMenuOpen && (
                                       <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                                        className="overflow-hidden"
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                       >
-                                        <div
-                                          id={translationModelListboxId}
-                                          role="listbox"
-                                          aria-label={translationModelLabel}
-                                          className="space-y-1.5 p-2.5"
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
                                         >
-                                          {TRANSLATION_MODEL_OPTIONS.map((option) => {
-                                            const isSelected = option.value === translationModel
+                                          <div
+                                            id={translationModelListboxId}
+                                            role="listbox"
+                                            aria-label={translationModelLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {TRANSLATION_MODEL_OPTIONS.map((option) => {
+                                              const isSelected = option.value === translationModel
 
-                                            return (
-                                              <button
-                                                key={option.value}
-                                                type="button"
-                                                role="option"
-                                                aria-selected={isSelected}
-                                                onClick={() => handleTranslationModelSelect(option.value)}
-                                                className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                                  isSelected
-                                                    ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
-                                                    : 'bg-white text-gray-800 hover:bg-gray-50'
-                                                }`}
-                                              >
-                                                <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
-                                                  <span className="truncate text-[0.94rem] font-semibold">
-                                                    {option.label}
-                                                  </span>
-                                                  {option.badge ? (
-                                                    <TranslationModelBadgeChip badge={option.badge} />
-                                                  ) : null}
-                                                </div>
-                                                <span
-                                                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                              return (
+                                                <button
+                                                  key={option.value}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleTranslationModelSelect(option.value)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
                                                     isSelected
-                                                      ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
-                                                      : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
                                                   }`}
                                                 >
-                                                  <Check size={14} strokeWidth={2.6} />
-                                                </span>
-                                              </button>
-                                            )
-                                          })}
-                                        </div>
+                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                    <span className="truncate text-[0.94rem] font-semibold">
+                                                      {option.label}
+                                                    </span>
+                                                    {option.badge ? (
+                                                      <TranslationModelBadgeChip badge={option.badge} />
+                                                    ) : null}
+                                                  </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
                                       </motion.div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                    )}
+                                  </AnimatePresence>
                                 </div>
                               </div>
                             </div>
