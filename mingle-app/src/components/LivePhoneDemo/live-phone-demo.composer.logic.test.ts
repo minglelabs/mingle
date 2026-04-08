@@ -4,6 +4,7 @@ import {
   resolveHydratedComposerOpenState,
   resolveLivePhoneDemoComposerCopy,
   resolveScrollToBottomButtonBottomPx,
+  resizeComposerTextarea,
 } from './LivePhoneDemo'
 
 describe('live phone demo composer logic', () => {
@@ -89,5 +90,43 @@ describe('live phone demo composer logic', () => {
       displayedAdBannerPosition: 'bottom',
       bottomBannerInsetPx: 50,
     })).toBe(24)
+  })
+
+  it('shrinks the composer textarea height when content becomes shorter again', () => {
+    const style = {
+      height: '104px',
+      lineHeight: '',
+      overflowY: 'auto',
+    } as unknown as CSSStyleDeclaration
+    const textarea = {
+      style,
+      scrollHeight: 84,
+    } as unknown as HTMLTextAreaElement
+
+    expect(resizeComposerTextarea(textarea)).toBe(84)
+    expect(style.height).toBe('84px')
+    expect(style.overflowY).toBe('hidden')
+
+    ;(textarea as { scrollHeight: number }).scrollHeight = 18
+
+    expect(resizeComposerTextarea(textarea)).toBe(36)
+    expect(style.height).toBe('36px')
+    expect(style.overflowY).toBe('hidden')
+  })
+
+  it('caps composer textarea height and enables internal scrolling at the max height', () => {
+    const style = {
+      height: '',
+      lineHeight: '',
+      overflowY: 'hidden',
+    } as unknown as CSSStyleDeclaration
+    const textarea = {
+      style,
+      scrollHeight: 180,
+    } as unknown as HTMLTextAreaElement
+
+    expect(resizeComposerTextarea(textarea)).toBe(104)
+    expect(style.height).toBe('104px')
+    expect(style.overflowY).toBe('auto')
   })
 })

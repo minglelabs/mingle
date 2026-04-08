@@ -313,11 +313,12 @@ function readSafeAreaInsetBottomPx(): number {
     : 0
 }
 
-function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): number {
+export function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): number {
   if (!textarea) return COMPOSER_TEXTAREA_MIN_HEIGHT_PX
 
-  textarea.style.height = '0px'
+  textarea.style.height = 'auto'
   textarea.style.lineHeight = `${COMPOSER_TEXTAREA_LINE_HEIGHT_PX}px`
+  textarea.style.overflowY = 'hidden'
   const nextHeight = Math.max(
     COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
     Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT_PX, textarea.scrollHeight),
@@ -899,6 +900,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     latestAccountPreferencesRef.current = latestAccountPreferences
   }, [latestAccountPreferences])
 
+  const syncComposerTextareaHeight = useCallback((textarea: HTMLTextAreaElement | null) => {
+    const nextHeight = resizeComposerTextarea(textarea)
+    setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
+    return nextHeight
+  }, [])
+
   useEffect(() => {
     if (!normalizedDefaultFeedbackEmail) return
     if (feedbackEmailEdited) return
@@ -1114,8 +1121,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const timerId = window.setTimeout(() => {
       const textarea = composerTextareaRef.current
       if (!textarea) return
-      const nextHeight = resizeComposerTextarea(textarea)
-      setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
+      syncComposerTextareaHeight(textarea)
       textarea.focus({ preventScroll: true })
       const cursor = textarea.value.length
       textarea.setSelectionRange(cursor, cursor)
@@ -1124,12 +1130,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.clearTimeout(timerId)
     }
-  }, [isComposerOpen])
+  }, [isComposerOpen, syncComposerTextareaHeight])
 
   useLayoutEffect(() => {
-    const nextHeight = resizeComposerTextarea(composerTextareaRef.current)
-    setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
-  }, [composerDraft, isComposerOpen])
+    syncComposerTextareaHeight(composerTextareaRef.current)
+  }, [composerDraft, isComposerOpen, syncComposerTextareaHeight])
 
   useEffect(() => {
     if (isComposerOpen) return
@@ -2604,10 +2609,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
-    const nextDraft = event.target.value
+    const nextDraft = event.currentTarget.value
     setComposerDraft(nextDraft)
     persistComposerDraft(nextDraft)
-  }, [])
+    syncComposerTextareaHeight(event.currentTarget)
+  }, [syncComposerTextareaHeight])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -2626,7 +2632,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!submittedUtteranceId) return
     setComposerDraft('')
     persistComposerDraft('')
-  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance])
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        syncComposerTextareaHeight(composerTextareaRef.current)
+      })
+    } else {
+      syncComposerTextareaHeight(composerTextareaRef.current)
+    }
+  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance, syncComposerTextareaHeight])
 
   useImperativeHandle(ref, () => ({
     startRecording: handleMicClick,
@@ -4271,7 +4284,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
                           className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
-                          style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
+                          style={{ height: `${composerTextareaHeightPx}px` }}
                         />
                       </div>
 
