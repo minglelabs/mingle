@@ -263,6 +263,17 @@ export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null |
   return Math.round(inset)
 }
 
+export function resolveHydratedComposerOpenState(input: {
+  currentIsComposerOpen: boolean
+  persistedInputMode: LivePhoneDemoInputMode | null
+}): boolean {
+  if (input.persistedInputMode === null) {
+    return input.currentIsComposerOpen
+  }
+
+  return input.persistedInputMode === 'text'
+}
+
 function readSafeAreaInsetBottomPx(): number {
   if (typeof window === 'undefined' || typeof document === 'undefined') return 0
 
@@ -822,6 +833,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
+  const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
+  const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
+  const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
@@ -887,18 +901,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const persistedDraft = readPersistedFeedbackDraft()
-      if (!persistedDraft) return
-
-      setFeedbackCategory(persistedDraft.category)
-      setFeedbackMessage(persistedDraft.message)
-      setFeedbackEmail(persistedDraft.email)
-      setFeedbackEmailEdited(
-        persistedDraft.emailEdited
-        || (
-          persistedDraft.email.trim().length > 0
-          && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
-        ),
-      )
+      if (persistedDraft) {
+        setFeedbackCategory(persistedDraft.category)
+        setFeedbackMessage(persistedDraft.message)
+        setFeedbackEmail(persistedDraft.email)
+        setFeedbackEmailEdited(
+          persistedDraft.emailEdited
+          || (
+            persistedDraft.email.trim().length > 0
+            && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
+          ),
+        )
+      }
+      setHasHydratedFeedbackDraft(true)
     })
 
     return () => {
@@ -925,8 +940,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
-      setIsComposerOpen(next.inputMode === 'text')
+      setIsComposerOpen((current) => resolveHydratedComposerOpenState({
+        currentIsComposerOpen: current,
+        persistedInputMode: next.inputMode,
+      }))
       setComposerDraft(readPersistedComposerDraft())
+      setHasHydratedLocalUiPreferences(true)
+      setHasHydratedComposerDraft(true)
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -1104,18 +1124,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   // Persist selected languages
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
-  }, [selectedLanguages])
+  }, [hasHydratedLocalUiPreferences, selectedLanguages])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_TEXT_SIZE_LEVEL, String(textSizeLevel))
     } catch { /* ignore */ }
-  }, [textSizeLevel])
+  }, [hasHydratedLocalUiPreferences, textSizeLevel])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       if (adBannerPosition) {
         localStorage.setItem(LS_KEY_AD_BANNER_POSITION, adBannerPosition)
@@ -1123,19 +1146,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
       }
     } catch { /* ignore */ }
-  }, [adBannerPosition])
+  }, [adBannerPosition, hasHydratedLocalUiPreferences])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_INPUT_MODE, isComposerOpen ? 'text' : 'voice')
     } catch { /* ignore */ }
-  }, [isComposerOpen])
+  }, [hasHydratedLocalUiPreferences, isComposerOpen])
 
   useEffect(() => {
+    if (!hasHydratedComposerDraft) return
     persistComposerDraft(composerDraft)
-  }, [composerDraft])
+  }, [composerDraft, hasHydratedComposerDraft])
 
   useEffect(() => {
+    if (!hasHydratedFeedbackDraft) return
     if (!feedbackMessage) {
       persistFeedbackDraft(null)
       return
@@ -1147,7 +1173,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       email: feedbackEmail,
       emailEdited: feedbackEmailEdited,
     })
-  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage])
+  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage, hasHydratedFeedbackDraft])
 
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return

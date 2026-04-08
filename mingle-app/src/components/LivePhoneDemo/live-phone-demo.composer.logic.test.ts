@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveKeyboardViewportInsetPx,
+  resolveHydratedComposerOpenState,
   resolveLivePhoneDemoComposerCopy,
 } from './LivePhoneDemo'
 
@@ -38,5 +39,29 @@ describe('live phone demo composer logic', () => {
       height: 620,
       offsetTop: 12,
     } as VisualViewport)).toBe(268)
+  })
+
+  it('keeps the current composer state when no persisted input mode exists', () => {
+    expect(resolveHydratedComposerOpenState({
+      currentIsComposerOpen: true,
+      persistedInputMode: null,
+    })).toBe(true)
+
+    expect(resolveHydratedComposerOpenState({
+      currentIsComposerOpen: false,
+      persistedInputMode: null,
+    })).toBe(false)
+  })
+
+  it('restores the persisted input mode when one exists', () => {
+    expect(resolveHydratedComposerOpenState({
+      currentIsComposerOpen: false,
+      persistedInputMode: 'text',
+    })).toBe(true)
+
+    expect(resolveHydratedComposerOpenState({
+      currentIsComposerOpen: true,
+      persistedInputMode: 'voice',
+    })).toBe(false)
   })
 })

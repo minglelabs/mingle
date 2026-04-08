@@ -48,6 +48,13 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.0.11/translate/finalize')
   })
 
+  it('keeps v1.0.10 namespaces allow-listed for older installed apps', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.10'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v1.0.10')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/ios/v1.0.10/translate/finalize')
+  })
+
   it.each([
     '/api/android/v1.0.4/translate/finalize',
     '/api/android/v1.0.5/translate/finalize',
@@ -97,6 +104,14 @@ describe('api-contract namespace guard', () => {
     stubWindowSearch('?apiNs=android%2Fv1.0.6')
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('android/v1.0.6')
+  })
+
+  it('allows query override for older allow-listed namespaces', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    stubWindowSearch('?apiNamespace=android%2Fv1.0.10')
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('android/v1.0.10')
+    expect(contract.buildClientApiPath('/tts/inworld')).toBe('/api/android/v1.0.10/tts/inworld')
   })
 
   it('ignores invalid query override values', async () => {
