@@ -3,6 +3,7 @@ import {
   resolveKeyboardViewportInsetPx,
   resolveHydratedComposerOpenState,
   resolveLivePhoneDemoComposerCopy,
+  resolveNativeBottomBannerOverlayInsetPx,
   resolveScrollToBottomButtonBottomPx,
   resizeComposerTextarea,
 } from './LivePhoneDemo'
@@ -90,6 +91,36 @@ describe('live phone demo composer logic', () => {
       displayedAdBannerPosition: 'bottom',
       bottomBannerInsetPx: 50,
     })).toBe(24)
+  })
+
+  it('strips bottom bar clearance from the reported native bottom inset', () => {
+    expect(resolveNativeBottomBannerOverlayInsetPx({
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'bottom',
+      reportedBottomInsetPx: 154,
+      bottomBarClearancePx: 104,
+      estimatedBottomBannerInsetPx: 50,
+    })).toBe(50)
+  })
+
+  it('falls back to the estimated banner height before clearance sync arrives', () => {
+    expect(resolveNativeBottomBannerOverlayInsetPx({
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'bottom',
+      reportedBottomInsetPx: 154,
+      bottomBarClearancePx: null,
+      estimatedBottomBannerInsetPx: 50,
+    })).toBe(50)
+  })
+
+  it('keeps the reported inset when the native payload already excludes clearance', () => {
+    expect(resolveNativeBottomBannerOverlayInsetPx({
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'bottom',
+      reportedBottomInsetPx: 50,
+      bottomBarClearancePx: 104,
+      estimatedBottomBannerInsetPx: 50,
+    })).toBe(50)
   })
 
   it('shrinks the composer textarea height when content becomes shorter again', () => {

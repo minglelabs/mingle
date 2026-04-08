@@ -303,6 +303,40 @@ export function resolveScrollToBottomButtonBottomPx(input: {
   return input.baseBottomPx + reservedPx
 }
 
+export function resolveNativeBottomBannerOverlayInsetPx(input: {
+  isNativeAppRuntime: boolean
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  reportedBottomInsetPx: number
+  bottomBarClearancePx: number | null
+  estimatedBottomBannerInsetPx: number
+}): number {
+  if (!input.isNativeAppRuntime || input.displayedAdBannerPosition !== 'bottom') return 0
+
+  const reportedBottomInsetPx = Number(input.reportedBottomInsetPx)
+  const safeReportedBottomInsetPx = Number.isFinite(reportedBottomInsetPx) && reportedBottomInsetPx > 0
+    ? Math.round(reportedBottomInsetPx)
+    : 0
+  const estimatedBottomBannerInsetPx = Number(input.estimatedBottomBannerInsetPx)
+  const safeEstimatedBottomBannerInsetPx = Number.isFinite(estimatedBottomBannerInsetPx) && estimatedBottomBannerInsetPx > 0
+    ? Math.round(estimatedBottomBannerInsetPx)
+    : 0
+  const bottomBarClearancePx = Number(input.bottomBarClearancePx)
+  const safeBottomBarClearancePx = Number.isFinite(bottomBarClearancePx) && bottomBarClearancePx > 0
+    ? Math.round(bottomBarClearancePx)
+    : 0
+
+  const fallbackInsetPx = safeReportedBottomInsetPx > 0 && safeEstimatedBottomBannerInsetPx > 0
+    ? Math.min(safeReportedBottomInsetPx, safeEstimatedBottomBannerInsetPx)
+    : Math.max(safeReportedBottomInsetPx, safeEstimatedBottomBannerInsetPx)
+
+  if (safeReportedBottomInsetPx <= 0 || safeBottomBarClearancePx <= 0) {
+    return fallbackInsetPx
+  }
+
+  const derivedOverlayInsetPx = safeReportedBottomInsetPx - safeBottomBarClearancePx
+  return derivedOverlayInsetPx > 0 ? derivedOverlayInsetPx : fallbackInsetPx
+}
+
 function readSafeAreaInsetBottomPx(): number {
   if (typeof window === 'undefined' || typeof document === 'undefined') return 0
 
@@ -816,6 +850,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
+  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [composerDraft, setComposerDraft] = useState('')
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
@@ -1060,6 +1095,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
     lastNativeBottomBarClearancePxRef.current = nextClearancePx
+    setNativeBottomBarClearancePx((current) => current === nextClearancePx ? current : nextClearancePx)
 
     const command: NativeSetBottomBarClearanceCommand = {
       type: 'native_set_bottom_bar_clearance',
@@ -3028,16 +3064,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
     ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
+  const effectiveNativeBottomBannerInsetPx = resolveNativeBottomBannerOverlayInsetPx({
+    isNativeAppRuntime,
+    displayedAdBannerPosition,
+    reportedBottomInsetPx: effectiveNativeBottomContentInsetPx,
+    bottomBarClearancePx: nativeBottomBarClearancePx,
+    estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
+  })
   const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
   const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
     baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
     isNativeAppRuntime,
     displayedAdBannerPosition,
-    bottomBannerInsetPx: effectiveNativeBottomContentInsetPx,
+    bottomBannerInsetPx: effectiveNativeBottomBannerInsetPx,
   })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript

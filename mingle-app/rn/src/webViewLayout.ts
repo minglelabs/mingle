@@ -83,11 +83,17 @@ export function resolveNativeBottomBannerContentInsetPx(params: {
 }): number {
   if (params.position !== 'bottom') return 0;
 
-  const clearancePx = normalizeNativeBottomBarClearancePx(params.bottomBannerClearancePx);
   const bannerContentHeightPx = resolveNativeBannerContentHeightPx({
     bannerHeightPx: params.bannerHeightPx,
     canvasScale: params.canvasScale,
   });
 
-  return clearancePx + bannerContentHeightPx;
+  const clearancePx = normalizeNativeBottomBarClearancePx(params.bottomBannerClearancePx);
+  if (clearancePx > 0) {
+    // The bottom bar already reserves the clearance space inside the WebView.
+    // Only report the banner's own overlay height back to web content.
+    return bannerContentHeightPx;
+  }
+
+  return bannerContentHeightPx;
 }
