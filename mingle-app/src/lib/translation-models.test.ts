@@ -12,6 +12,10 @@ describe('translation model catalog', () => {
         value: 'gemma-4-31b-it',
         label: 'gemma-4-31b-it (slow)',
       },
+      {
+        value: 'qwen/qwen3.5-9b',
+        label: 'qwen3.5-9b (slow)',
+      },
     ]))
   })
 
