@@ -119,6 +119,7 @@ const EMPTY_STATE_ARROW_HEAD_Y = 72
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
+const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
@@ -287,10 +288,10 @@ function readSafeAreaInsetBottomPx(): number {
     : 0
 }
 
-function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): void {
-  if (!textarea) return
+function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): number {
+  if (!textarea) return COMPOSER_TEXTAREA_MIN_HEIGHT_PX
 
-  textarea.style.height = `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px`
+  textarea.style.height = '0px'
   textarea.style.lineHeight = `${COMPOSER_TEXTAREA_LINE_HEIGHT_PX}px`
   const nextHeight = Math.max(
     COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
@@ -298,6 +299,7 @@ function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): void {
   )
   textarea.style.height = `${nextHeight}px`
   textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
+  return nextHeight
 }
 
 function readPersistedComposerDraft(): string {
@@ -775,6 +777,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
   const [composerDraft, setComposerDraft] = useState('')
+  const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
@@ -1057,9 +1060,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const frameId = window.requestAnimationFrame(() => {
       syncNativeBottomBarClearance()
     })
+    const timeout180Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 180)
+    const timeout360Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 360)
 
     return () => {
       window.cancelAnimationFrame(frameId)
+      window.clearTimeout(timeout180Id)
+      window.clearTimeout(timeout360Id)
     }
   }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
@@ -1069,7 +1080,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const timerId = window.setTimeout(() => {
       const textarea = composerTextareaRef.current
       if (!textarea) return
-      resizeComposerTextarea(textarea)
+      const nextHeight = resizeComposerTextarea(textarea)
+      setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
       textarea.focus({ preventScroll: true })
       const cursor = textarea.value.length
       textarea.setSelectionRange(cursor, cursor)
@@ -1081,8 +1093,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [isComposerOpen])
 
   useLayoutEffect(() => {
-    resizeComposerTextarea(composerTextareaRef.current)
+    const nextHeight = resizeComposerTextarea(composerTextareaRef.current)
+    setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
   }, [composerDraft, isComposerOpen])
+
+  useEffect(() => {
+    if (isComposerOpen) return
+    setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
+  }, [isComposerOpen])
 
   // Persist selected languages
   useEffect(() => {
@@ -4136,6 +4154,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <motion.div
             layout
             layoutDependency={isComposerOpen}
+            onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -4208,7 +4227,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     onSubmit={handleComposerSubmit}
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
-                    <div className="flex min-h-[2.3rem] min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none">
+                    <div
+                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none transition-[height] duration-150 ease-out motion-reduce:transition-none"
+                      style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
+                    >
                       <div className="flex min-w-0 flex-1 items-end px-1">
                         <textarea
                           ref={composerTextareaRef}
