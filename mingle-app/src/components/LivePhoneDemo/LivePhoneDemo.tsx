@@ -63,6 +63,7 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  resolveNativeBottomBarBannerClearancePx,
   shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
@@ -119,6 +120,7 @@ const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
+const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
 type LivePhoneDemoComposerCopy = {
   manualSpeakerLabel: string
@@ -258,6 +260,31 @@ export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null |
   const inset = window.innerHeight - viewport.height - viewport.offsetTop
   if (!Number.isFinite(inset) || inset <= 0) return 0
   return Math.round(inset)
+}
+
+function readSafeAreaInsetBottomPx(): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 0
+
+  let probe = document.getElementById(SAFE_AREA_BOTTOM_ENV_MEASURER_ID) as HTMLDivElement | null
+  if (!probe) {
+    probe = document.createElement('div')
+    probe.id = SAFE_AREA_BOTTOM_ENV_MEASURER_ID
+    probe.setAttribute('aria-hidden', 'true')
+    probe.style.position = 'fixed'
+    probe.style.left = '0'
+    probe.style.bottom = '0'
+    probe.style.width = '0'
+    probe.style.height = '0'
+    probe.style.visibility = 'hidden'
+    probe.style.pointerEvents = 'none'
+    probe.style.paddingBottom = 'env(safe-area-inset-bottom)'
+    document.body.appendChild(probe)
+  }
+
+  const paddingBottomPx = Number.parseFloat(window.getComputedStyle(probe).paddingBottom || '')
+  return Number.isFinite(paddingBottomPx) && paddingBottomPx > 0
+    ? Math.round(paddingBottomPx)
+    : 0
 }
 
 function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): void {
@@ -629,6 +656,13 @@ type NativeSetAdBannerPositionCommand = {
   }
 }
 
+type NativeSetBottomBarClearanceCommand = {
+  type: 'native_set_bottom_bar_clearance'
+  payload?: {
+    clearancePx?: number
+  }
+}
+
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
 }
@@ -780,7 +814,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
+  const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
@@ -948,6 +984,72 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       viewport.removeEventListener('scroll', syncKeyboardInset)
     }
   }, [])
+
+  const syncNativeBottomBarClearance = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!window.ReactNativeWebView?.postMessage) return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    const bottomBarHeightPx = bottomBarNode.getBoundingClientRect().height
+    const nextClearancePx = resolveNativeBottomBarBannerClearancePx({
+      bottomBarHeightPx,
+      keyboardInsetPx: keyboardViewportInsetPx,
+      safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
+    })
+
+    if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
+    lastNativeBottomBarClearancePxRef.current = nextClearancePx
+
+    const command: NativeSetBottomBarClearanceCommand = {
+      type: 'native_set_bottom_bar_clearance',
+      payload: { clearancePx: nextClearancePx },
+    }
+    window.ReactNativeWebView.postMessage(JSON.stringify(command))
+  }, [keyboardViewportInsetPx])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    let frameId = 0
+    const requestSync = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        syncNativeBottomBarClearance()
+      })
+    }
+
+    requestSync()
+
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          requestSync()
+        })
+    resizeObserver?.observe(bottomBarNode)
+
+    window.addEventListener('resize', requestSync)
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', requestSync)
+    viewport?.addEventListener('scroll', requestSync)
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('scroll', requestSync)
+    }
+  }, [syncNativeBottomBarClearance])
 
   useEffect(() => {
     if (!isComposerOpen) return
@@ -4021,6 +4123,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
             layout
+            ref={bottomBarRef}
             className="shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{

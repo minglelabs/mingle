@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const EXPECTED_NAMESPACE = 'android/v1.0.11';
+const EXPECTED_NAMESPACE = 'android/v1.0.12';
 
 function normalizeNamespace(raw) {
   if (typeof raw !== 'string') return '';

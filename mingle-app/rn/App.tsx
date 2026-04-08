@@ -743,6 +743,13 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeSetBottomBarClearanceCommand = {
+  type: 'native_set_bottom_bar_clearance';
+  payload?: {
+    clearancePx?: number;
+  };
+};
+
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview';
 };
@@ -758,6 +765,7 @@ type WebViewCommand =
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
+  | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand;
 
 type NativeSttEvent =
@@ -1050,6 +1058,12 @@ function resolveNativeBannerHeightPx(rawValue: string | number | undefined): num
   );
 }
 
+function normalizeNativeBottomBarClearancePx(value: unknown): number {
+  const numeric = Number(value ?? '');
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.round(numeric);
+}
+
 function resolveNativeCanvasScale(windowWidthPx: number): number {
   if (!Number.isFinite(windowWidthPx) || windowWidthPx <= 0) return 1;
   return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
@@ -1272,6 +1286,7 @@ function AppInner(): React.JSX.Element {
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState(0);
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1331,9 +1346,16 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
+  const nativeBottomBannerClearancePx = useMemo(
+    () => Math.max(
+      Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
+      normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx),
+    ),
+    [nativeBottomBarClearancePx, nativeCanvasScale],
+  );
   const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
-    [nativeCanvasScale, safeAreaInsets.bottom],
+    () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
+    [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
@@ -1347,6 +1369,10 @@ function AppInner(): React.JSX.Element {
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+
+  useEffect(() => {
+    setNativeBottomBarClearancePx(0);
+  }, [webViewMountToken]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1970,6 +1996,11 @@ function AppInner(): React.JSX.Element {
       }
       const nextPosition = normalizeNativeBannerPosition(rawPosition);
       setNativeBannerPositionOverride(nextPosition);
+      return;
+    }
+
+    if (parsed.type === 'native_set_bottom_bar_clearance') {
+      setNativeBottomBarClearancePx(normalizeNativeBottomBarClearancePx(parsed.payload?.clearancePx));
       return;
     }
 

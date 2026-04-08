@@ -80,7 +80,7 @@ describe("live-phone-demo.app-update.logic", () => {
   it("does not derive native tracking context outside the native runtime", () => {
     expect(
       resolveNativeAppTrackingContext({
-        apiNamespace: "android/v1.0.11",
+        apiNamespace: "android/v1.0.12",
         detail: {
           status: "current",
           clientVersion: "1.0.6",
