@@ -639,6 +639,649 @@
       "accountDeletionUrl": null,
       "foregroundServiceDisclosure": "Mingle uses a microphone foreground service to maintain live speech-to-text translation while the user switches to other apps or locks the screen. When the user taps Start Translation, the service begins capturing audio through the device microphone, displays a persistent notification ('Mingle microphone active'), and continues transcribing and translating speech even when the app moves to the background. This enables key scenarios such as keeping translation active during a phone call or Discord voice chat running in another app. The user can stop the service at any time by tapping Stop in the app or dismissing the notification. The service runs only for the duration of the active translation session and is never started without explicit user action.",
       "foregroundServiceDisclosureVideoUrl": "https://www.youtube.com/shorts/GCg3FG4PdaA"
+    },
+    "mediaSnapshots": {
+      "icon": {
+        "path": "assets/icon-512.png",
+        "sha256": "ecfdb052ea83a984434f565d0dfa99c15e710579faa581b3c03fb0a403e0794e",
+        "sizeBytes": 16296
+      },
+      "featureGraphic": {
+        "path": "assets/feature-graphic.png",
+        "sha256": "37f37bf8be1848d3df66ea00450d9f2337820a6e678051b800bca52fd742fc4a",
+        "sizeBytes": 174513
+      },
+      "phoneScreenshots": {
+        "ar-SA": [
+          {
+            "path": "upload/ar-SA/02-3+-لغات.png",
+            "sha256": "f98c89d535c2400c28bbc94ca07bb245e6e89259e0cca137e492a640760a6b29",
+            "sizeBytes": 568215
+          },
+          {
+            "path": "upload/ar-SA/03-بدون-انقطاع.png",
+            "sha256": "cf479711883ee9a80fb3fb90e2439607fefb67c0be857234e36ac20f0f34a825",
+            "sizeBytes": 576332
+          },
+          {
+            "path": "upload/ar-SA/04-صوت-من-أي-تطبيق.png",
+            "sha256": "308df7323996217373cecbf9dc399eae8c47bba6198ec64f6ee8959095fd2691",
+            "sizeBytes": 593307
+          },
+          {
+            "path": "upload/ar-SA/05-مكالمات-دولية.png",
+            "sha256": "8072b926d09f277a0fd41bbfaa55b226d6948fb78da8d93a915b957e8b16b3fc",
+            "sizeBytes": 584335
+          },
+          {
+            "path": "upload/ar-SA/06-ترجمة-صوتية.png",
+            "sha256": "316fb5882644a29c65f2456c9a0e3fd0ac3ef288a455ce5b94f40563a91e9ff0",
+            "sizeBytes": 584089
+          },
+          {
+            "path": "upload/ar-SA/07-يعمل-في-الخلفية.png",
+            "sha256": "fbcee48de2d94f74d422a16ee1b7641eeab51d6478be56eac1f8dd23353cc97d",
+            "sizeBytes": 586965
+          },
+          {
+            "path": "upload/ar-SA/08-اكتشاف-اللغة.png",
+            "sha256": "01adaec8e5b155ef018196999b50087f1648cf1b2730244af9ce610857282d62",
+            "sizeBytes": 572560
+          }
+        ],
+        "de-DE": [
+          {
+            "path": "upload/de-DE/02-3+-Sprachen.png",
+            "sha256": "d6decfe6792db37804ed4bd92ffe63a8a6f2e46c95b69690c96e0ab139b5f28a",
+            "sizeBytes": 579207
+          },
+          {
+            "path": "upload/de-DE/03-Unterbrechungsfrei.png",
+            "sha256": "9ed9b0ba0932cdb9a0060f75a94394dc764d6083bc279e8fbe4f1996208628af",
+            "sizeBytes": 585781
+          },
+          {
+            "path": "upload/de-DE/04-Audio-aus-jeder-App.png",
+            "sha256": "b438c5afea20fd78356aa18a018d5fc908a741bcffa70f3116fb8db08a31c047",
+            "sizeBytes": 583853
+          },
+          {
+            "path": "upload/de-DE/05-Internationale-Anrufe.png",
+            "sha256": "5bf2dd06d5a65d52e9a8a9e6c9a3bf91104b36497122fd45882947794436cec6",
+            "sizeBytes": 591615
+          },
+          {
+            "path": "upload/de-DE/06-Sprachübersetzung.png",
+            "sha256": "4dd66a7cfb7b309309eec4dc27d284d2b37bc7757557914b90b0efda4c4cb1c7",
+            "sizeBytes": 590643
+          },
+          {
+            "path": "upload/de-DE/07-Läuft-im-Hintergrund.png",
+            "sha256": "b61e0b4e28a82c7becdc22c436d5a302787296f06599102bdbcad399ff594a50",
+            "sizeBytes": 587563
+          },
+          {
+            "path": "upload/de-DE/08-Spracherkennung.png",
+            "sha256": "18bd90fa4e72a89cb2c0171a09fef3e847a0439b57bf8674df14cd55af1aa247",
+            "sizeBytes": 586926
+          }
+        ],
+        "en-US": [
+          {
+            "path": "upload/en-US/02-3+-Languages.png",
+            "sha256": "11e031c3292922a105434e945bb188f5f6580d55807928f5f21464519fe66675",
+            "sizeBytes": 690552
+          },
+          {
+            "path": "upload/en-US/03-Uninterrupted.png",
+            "sha256": "ec4c12c8a7645bbb2933db70bf9d08704c621032f515f6d0ad7ed1b8ed9b2178",
+            "sizeBytes": 690932
+          },
+          {
+            "path": "upload/en-US/04-Audio-from-Any-App.png",
+            "sha256": "0ed3a1e9c0cf671944c2d9174cf74a2749ac612e760b2e4d0dbe01302ddd680d",
+            "sizeBytes": 695307
+          },
+          {
+            "path": "upload/en-US/05-International-Calls.png",
+            "sha256": "62809a8a107e3ffd13db3ff5574f08a3e050b82089d724fbc3e60f0dd39a317a",
+            "sizeBytes": 699321
+          },
+          {
+            "path": "upload/en-US/06-Voice-Translation.png",
+            "sha256": "e4d21ed061b0951243f15f5fe249853701a41d5dbc14b76798cc9fd68b6fb03e",
+            "sizeBytes": 694763
+          },
+          {
+            "path": "upload/en-US/07-Runs-in-the-Background.png",
+            "sha256": "babcfbd59e686ea97312a30d82ebb10bb101fb9a4c112c12ab31b8a5b5552562",
+            "sizeBytes": 704692
+          },
+          {
+            "path": "upload/en-US/08-Language-Detect.png",
+            "sha256": "831ccdfdf91f3c67dbad33e87b61c4bde2f5d349bc50526424094c0c0030604d",
+            "sizeBytes": 692322
+          }
+        ],
+        "es-ES": [
+          {
+            "path": "upload/es-ES/02-3+-idiomas.png",
+            "sha256": "504f31128ee438a8a4c9bed04c7a3b8ff9d6d25ce1967e29e723755901219265",
+            "sizeBytes": 583601
+          },
+          {
+            "path": "upload/es-ES/03-Sin-interrupciones.png",
+            "sha256": "5230e33da802b362b46715242a8d5ff31c8caf585e66405dd74404842b5f1ba4",
+            "sizeBytes": 590679
+          },
+          {
+            "path": "upload/es-ES/04-Audio-de-cualquier-app.png",
+            "sha256": "f49c419f22402f3a82952be35951b4781c234dce9fa4b03d80113f6ef4b005d6",
+            "sizeBytes": 591098
+          },
+          {
+            "path": "upload/es-ES/05-Llamadas-al-exterior.png",
+            "sha256": "3f7fc4185a8f9aadf742de8e07278201b05220fab18bd91fac2cbc8c3bd269eb",
+            "sizeBytes": 589297
+          },
+          {
+            "path": "upload/es-ES/06-Traducción-por-voz.png",
+            "sha256": "085dc29193994a9af0d192e74e078964f49c48526b495bc36caef93406b15e36",
+            "sizeBytes": 590240
+          },
+          {
+            "path": "upload/es-ES/07-En-segundo-plano.png",
+            "sha256": "d15033a1c42db53979e6c444e34c3270be3ce98e6b16314f20521af375b38b60",
+            "sizeBytes": 590339
+          },
+          {
+            "path": "upload/es-ES/08-Detección-de-idioma.png",
+            "sha256": "4bcdb76c9f818a009b4bdc1ea4c20619ff276550c3fbb23d2f09172c8338d8ff",
+            "sizeBytes": 590540
+          }
+        ],
+        "fr-CA": [
+          {
+            "path": "upload/fr-CA/02-3+-langues.png",
+            "sha256": "d411ebd4ad32f2238c473679072c6339443ad2dc6ad0b2b23b5a89c51f00e29b",
+            "sizeBytes": 577532
+          },
+          {
+            "path": "upload/fr-CA/03-Sans-interruption.png",
+            "sha256": "f9ed75c280addcd91601f2686836b3aa080721d645566b557e51364d037d1a33",
+            "sizeBytes": 589378
+          },
+          {
+            "path": "upload/fr-CA/04-Audio-de-toute-app.png",
+            "sha256": "986ac8da9cda0410d371f5612dd544172d4c8213cc69f34c203d95a6c10421bb",
+            "sizeBytes": 584978
+          },
+          {
+            "path": "upload/fr-CA/05-Appels-internationaux.png",
+            "sha256": "c71567a885fc08e8d699ec5c4ea9f4620bdd13628a13c8423a3a04c1b03543e4",
+            "sizeBytes": 593385
+          },
+          {
+            "path": "upload/fr-CA/06-Traduction-vocale.png",
+            "sha256": "8749d6f47e54dadcbd1414d63de0a2271c562eeadfbd13a7bdc219c62f992b9b",
+            "sizeBytes": 588451
+          },
+          {
+            "path": "upload/fr-CA/07-En-arrière-plan.png",
+            "sha256": "49c0e211e84590ba72a46b9a4ff0f4af8062c836fe4668d65cf55ab1ca626ea1",
+            "sizeBytes": 584306
+          },
+          {
+            "path": "upload/fr-CA/08-Détection-de-langue.png",
+            "sha256": "78b89c7aebcc8e5ec075a5c07deb88a0b784ebb204fb453652420d79ca407b80",
+            "sizeBytes": 581993
+          }
+        ],
+        "fr-FR": [
+          {
+            "path": "upload/fr-FR/02-3+-langues.png",
+            "sha256": "e915dd32a7f354978cf089410af30610c639f1be40e39ab2df4d202a4883ef7a",
+            "sizeBytes": 577532
+          },
+          {
+            "path": "upload/fr-FR/03-Sans-interruption.png",
+            "sha256": "18223e4e2347ef6279ef1f4b67af7f9b8427f8531c36fa6a56d5465873777167",
+            "sizeBytes": 589378
+          },
+          {
+            "path": "upload/fr-FR/04-Audio-de-toute-app.png",
+            "sha256": "5e40a41ffc0fe0e7a93cea7a4f657d97652f1e9844da23c9be9ad0bff8a2650b",
+            "sizeBytes": 584978
+          },
+          {
+            "path": "upload/fr-FR/05-Appels-internationaux.png",
+            "sha256": "a854d7818b729f0ec30c6b2f1cb1a3b622e8864ea716263d3f640a5b70a313e0",
+            "sizeBytes": 593385
+          },
+          {
+            "path": "upload/fr-FR/06-Traduction-vocale.png",
+            "sha256": "f48732599a5d3157ef00690d461b0949164d0a82af21dc214e673ec81889d617",
+            "sizeBytes": 588451
+          },
+          {
+            "path": "upload/fr-FR/07-En-arrière-plan.png",
+            "sha256": "1e4b63612e0f28c00b97a746ff3d87a9a9a04a565218a53191db09907e2e24ec",
+            "sizeBytes": 584306
+          },
+          {
+            "path": "upload/fr-FR/08-Détection-de-langue.png",
+            "sha256": "245149f42dbd54901d2512b52733bfaf2f0dbe5a33cffb9d60a81fcbd0f22413",
+            "sizeBytes": 581993
+          }
+        ],
+        "hi": [
+          {
+            "path": "upload/hi/02-3+-भाषाएँ.png",
+            "sha256": "5e71fde8536112bbe706f4df0fe1fcb3f9681032deb191b9e068d931eee6d2ba",
+            "sizeBytes": 566005
+          },
+          {
+            "path": "upload/hi/03-बिना-रुकावट.png",
+            "sha256": "9bfd3661b749a932312f57d139dbc06e130ed3c37ff58462d714c64a69f480b8",
+            "sizeBytes": 573353
+          },
+          {
+            "path": "upload/hi/04-किसी-भी-ऐप-का-ऑडियो.png",
+            "sha256": "4a29b4c63c853068a28d5cd1389a90b410f9148e974f385cbb0904c3f71ff4eb",
+            "sizeBytes": 583856
+          },
+          {
+            "path": "upload/hi/05-अंतरराष्ट्रीय-कॉल.png",
+            "sha256": "a54e8139652224a9cd3a5464130a624244a4ceb9e48b92f28a0f5ce8ff3bde4d",
+            "sizeBytes": 585511
+          },
+          {
+            "path": "upload/hi/06-वॉइस-अनुवाद.png",
+            "sha256": "b82ed7e27d7476021b7da06143351c17b09b2d7390395f757b7dba086c2ef160",
+            "sizeBytes": 576675
+          },
+          {
+            "path": "upload/hi/07-बैकग्राउंड-में-चलता-है.png",
+            "sha256": "72d28a6aa516dcb7c613e13d37d8ed6128114e3a8f8c23d4aa802ccde2f7cb39",
+            "sizeBytes": 586891
+          },
+          {
+            "path": "upload/hi/08-भाषा-पहचान.png",
+            "sha256": "3dd73a8e63f392488d0a57583291dcf0151952b234d17fcc5d8733fc1c976fee",
+            "sizeBytes": 565624
+          }
+        ],
+        "it": [
+          {
+            "path": "upload/it/02-3+-lingue.png",
+            "sha256": "b3e997b0a92569850f22a560f3e7ca96694fb1c49006b219afc5663208d311a8",
+            "sizeBytes": 573688
+          },
+          {
+            "path": "upload/it/03-Senza-interruzioni.png",
+            "sha256": "891dee88a4f512d2f63566b720a0b206e512fd0693df76152a21c5577f7cd489",
+            "sizeBytes": 582939
+          },
+          {
+            "path": "upload/it/04-Audio-da-qualsiasi-app.png",
+            "sha256": "e1fa806694d0a62d294aa2dbf6af3a1240d1a39223f1627392288169bf9f07cc",
+            "sizeBytes": 588343
+          },
+          {
+            "path": "upload/it/05-Chiamate-internazionali.png",
+            "sha256": "f992daac9df3ca507efa538bc7815e7b72285985c9658e253487186b818075da",
+            "sizeBytes": 591196
+          },
+          {
+            "path": "upload/it/06-Traduzione-vocale.png",
+            "sha256": "0aabd7b2562853674741a86b68cfe3f601160e4d8298718a83314584a117e528",
+            "sizeBytes": 587309
+          },
+          {
+            "path": "upload/it/07-Funziona-in-background.png",
+            "sha256": "9f5aeae815fc69763963f063fb2698f6b08184ce0f12973b232b51acf2ca9173",
+            "sizeBytes": 591309
+          },
+          {
+            "path": "upload/it/08-Rilevamento-lingua.png",
+            "sha256": "db5fea4d0f9eb8354128857a70847aa14fe30574d3750ef62b577de821985410",
+            "sizeBytes": 587377
+          }
+        ],
+        "ja": [
+          {
+            "path": "upload/ja/02-3言語以上でも.png",
+            "sha256": "77a24d8ffb5367235c218f06db0874a3b7057885fb08418feff061c51525dd33",
+            "sizeBytes": 591200
+          },
+          {
+            "path": "upload/ja/03-途切れない翻訳と.png",
+            "sha256": "1954b14a1a908b00a8b823921428ea3d9c427b8e75b1f5eedd796812e9ba92ce",
+            "sizeBytes": 595528
+          },
+          {
+            "path": "upload/ja/04-他アプリの音声まで.png",
+            "sha256": "acdc32fa21dc227d7ab43e35f77fe2760efd6efcc716268fb52b1b52acf8853c",
+            "sizeBytes": 589535
+          },
+          {
+            "path": "upload/ja/05-外国人との通話も.png",
+            "sha256": "bb4700c5c13c010de28b45f30eae9c4487a7e338636e87ac4a83ec6b45f403f8",
+            "sizeBytes": 590308
+          },
+          {
+            "path": "upload/ja/06-翻訳を音声で.png",
+            "sha256": "1cf529a67fc3926eb8a9d1daef1817df24ead59f2338e44963b30899d0506cd1",
+            "sizeBytes": 591529
+          },
+          {
+            "path": "upload/ja/07-バックグラウンド実行.png",
+            "sha256": "dc1fda1e2e80b28d20de7eb350d607ac86004540a40bacca3c851eadf99f7281",
+            "sizeBytes": 592487
+          },
+          {
+            "path": "upload/ja/08-自動言語検出.png",
+            "sha256": "0b6f36487aada465055bf273394876483833b7bf67b3b15a8f8b7bb3c0df5446",
+            "sizeBytes": 584167
+          }
+        ],
+        "ko": [
+          {
+            "path": "upload/ko/02-세-개-이상-언어도.png",
+            "sha256": "6979280cd2225f3b974a60a0bfc7390f265cad2362933e45ca3bbcb766379f86",
+            "sizeBytes": 687150
+          },
+          {
+            "path": "upload/ko/03-끊김-없는-번역과.png",
+            "sha256": "193e4bb14011184a5c80571fa5c2f038294ac7b2e77f7a53659751ac60bc916a",
+            "sizeBytes": 681879
+          },
+          {
+            "path": "upload/ko/04-다른-앱-음성까지.png",
+            "sha256": "e42a960657e046be263cdf04118aeeebf54f9a7ba3794d22ffc4375ec5862ce9",
+            "sizeBytes": 684040
+          },
+          {
+            "path": "upload/ko/05-외국인과-통화도.png",
+            "sha256": "7546e629d490674a29725b5e498971659a10dcc89c9c628f633d513c649de946",
+            "sizeBytes": 678939
+          },
+          {
+            "path": "upload/ko/06-번역을-음성으로.png",
+            "sha256": "a4a023eb9cedab8bbac6fda6b8d50ffaaa015122783e601a9575e57a1097e049",
+            "sizeBytes": 686308
+          },
+          {
+            "path": "upload/ko/07-백그라운드-실행.png",
+            "sha256": "2b02f3b6d55d6cf7eeab9f02fb6a65169fae3aaf038581dcadcb2e4a6c8cdcca",
+            "sizeBytes": 683635
+          },
+          {
+            "path": "upload/ko/08-자동-언어-감지.png",
+            "sha256": "5687f3a601f7fd56e85d707ae2a0a44255d08c2fed815660befbffacf864270a",
+            "sizeBytes": 687555
+          }
+        ],
+        "pt-BR": [
+          {
+            "path": "upload/pt-BR/02-3+-idiomas.png",
+            "sha256": "077ae088883273a0a0a93f4292a09972a5367503e1a932027524c4383bba79f6",
+            "sizeBytes": 583957
+          },
+          {
+            "path": "upload/pt-BR/03-Sem-interrupções.png",
+            "sha256": "bd538ea9a05b5382803df521ba4aa49b75b3259b418a268ba22ff59befe59d32",
+            "sizeBytes": 589970
+          },
+          {
+            "path": "upload/pt-BR/04-Áudio-de-qualquer-app.png",
+            "sha256": "00bf6971690407115123fdb5de7d22c0a399a1e40a322a3afa17c4caba1b91aa",
+            "sizeBytes": 591508
+          },
+          {
+            "path": "upload/pt-BR/05-Chamadas-globais.png",
+            "sha256": "de37bd49e75b9ec35084a78caf5dd0c1e6d24987604fc8b6fd4e43ec0e421d03",
+            "sizeBytes": 587183
+          },
+          {
+            "path": "upload/pt-BR/06-Tradução-por-voz.png",
+            "sha256": "ec99d4bdda470315aca120a551994a878665c19b528181351bf0678fd46a982a",
+            "sizeBytes": 589401
+          },
+          {
+            "path": "upload/pt-BR/07-Em-segundo-plano.png",
+            "sha256": "cedc805bbf8a8df8b9dfc6199091da70279fbfdf232ef864ee6ddb6042793162",
+            "sizeBytes": 588602
+          },
+          {
+            "path": "upload/pt-BR/08-Detecção-de-idioma.png",
+            "sha256": "d5db6a19d0d75a50987bb50500bba1dffe47bbf74446976e72ae3e5f466679d3",
+            "sizeBytes": 588326
+          }
+        ],
+        "pt-PT": [
+          {
+            "path": "upload/pt-PT/02-3+-idiomas.png",
+            "sha256": "f756021e0e1eb09b93fcf92ea8787fee3c72faa8b2553cb0039dd0acf38d136d",
+            "sizeBytes": 583957
+          },
+          {
+            "path": "upload/pt-PT/03-Sem-interrupções.png",
+            "sha256": "fa4e811bfbbf679cb0844cebec3d3d50c5f4b0aed0a766c4390fb3b7802de796",
+            "sizeBytes": 589970
+          },
+          {
+            "path": "upload/pt-PT/04-Áudio-de-qualquer-app.png",
+            "sha256": "be73a669b207005e516f86ce1a39779fec63a8b40c64385389315c283850909c",
+            "sizeBytes": 591508
+          },
+          {
+            "path": "upload/pt-PT/05-Chamadas-globais.png",
+            "sha256": "b507c4318bf44257929a9be102ed81eecf156e5d2ba3ae34e4191f3b174caf7e",
+            "sizeBytes": 587183
+          },
+          {
+            "path": "upload/pt-PT/06-Tradução-por-voz.png",
+            "sha256": "38b4dcb270311b3389cb24f05a7ea125a446f5fa103cdf7595835b18824f79d0",
+            "sizeBytes": 589401
+          },
+          {
+            "path": "upload/pt-PT/07-Em-segundo-plano.png",
+            "sha256": "4cecba4d97b06a94bea86a32c450dd5e5aad99698dd26ced3f9a5da081360431",
+            "sizeBytes": 588602
+          },
+          {
+            "path": "upload/pt-PT/08-Detecção-de-idioma.png",
+            "sha256": "bde7bf44c524d589b565bb8809261e795fcce6b9e008290ec498ca554e44030a",
+            "sizeBytes": 588326
+          }
+        ],
+        "ru": [
+          {
+            "path": "upload/ru/02-3+-языка.png",
+            "sha256": "44eb12cc629e28edda0af9ad8de3ebfce369d6f67e8c6b12ad5a643b79bc9b47",
+            "sizeBytes": 577599
+          },
+          {
+            "path": "upload/ru/03-Без-прерываний.png",
+            "sha256": "8f5bb722b7ad4563879e2f07159fdd0bcc2847038a89b9310017dce916524603",
+            "sizeBytes": 581946
+          },
+          {
+            "path": "upload/ru/04-Звук-из-приложений.png",
+            "sha256": "665774355feba313d7c12335d4bee358fd065e84cd1af7abb7c4b6c85a3e118a",
+            "sizeBytes": 587371
+          },
+          {
+            "path": "upload/ru/05-Звонки-за-границу.png",
+            "sha256": "6b1c5782143d7b6a33b2f8a0b2a255b34101fddfaa4e86817081358b2aa356e8",
+            "sizeBytes": 587688
+          },
+          {
+            "path": "upload/ru/06-Голосовой-перевод.png",
+            "sha256": "2d92c2d5fefd532cc083b77dca393e709d599ffb80ee413b51a4cd912313a3e1",
+            "sizeBytes": 589290
+          },
+          {
+            "path": "upload/ru/07-Работает-в-фоне.png",
+            "sha256": "e6e618e2723323dc5c9d210219d16a654e7d65bc3e00ca2f35ef089ac90f0c3f",
+            "sizeBytes": 585344
+          },
+          {
+            "path": "upload/ru/08-Определение-языка.png",
+            "sha256": "437dad232944727c317a3a69d2196a8b321173ccbe40c5327312129ec1551848",
+            "sizeBytes": 587622
+          }
+        ],
+        "th": [
+          {
+            "path": "upload/th/02-3言語以上でも.png",
+            "sha256": "1000368df520f2db057b0d2bc7dfa39d8d9f7926ad7ed8502e588241b488c966",
+            "sizeBytes": 603619
+          },
+          {
+            "path": "upload/th/03-途切れない翻訳と.png",
+            "sha256": "1ba3d95cbdaa11177582a0fdbf070c44910ceb63b295211647e0a91a7ad46774",
+            "sizeBytes": 610515
+          },
+          {
+            "path": "upload/th/04-他アプリの音声まで.png",
+            "sha256": "9f4e40ae647b5489875d189455128bb27441ce1c61339cd7db1e8852f3642865",
+            "sizeBytes": 605277
+          },
+          {
+            "path": "upload/th/05-外国人との通話も.png",
+            "sha256": "005336ef2a00630d6240652049d2615fd0383bbe157b08758af0070326e24e94",
+            "sizeBytes": 605257
+          },
+          {
+            "path": "upload/th/06-翻訳を音声で.png",
+            "sha256": "49c5305bba39b50d59acb78616773656a9ee02fd6edef20a4e58033b75dc2966",
+            "sizeBytes": 603148
+          },
+          {
+            "path": "upload/th/07-バックグラウンド実行.png",
+            "sha256": "4257a3bb4032c2e0d0ab236cd0f118e0fedeb79314fc64f59754940026c6c42a",
+            "sizeBytes": 594461
+          },
+          {
+            "path": "upload/th/08-自動言語検出.png",
+            "sha256": "8ab80256cfbd50f32790cb9779339864a650eb14c8bab04aca2709ba0ad2e9f8",
+            "sizeBytes": 606518
+          }
+        ],
+        "vi": [
+          {
+            "path": "upload/vi/02-Hơn-3-ngôn-ngữ.png",
+            "sha256": "05d5c550c335058fab98ef308341f1b7569b2eaf38cd263335bfa1be10be9af9",
+            "sizeBytes": 585922
+          },
+          {
+            "path": "upload/vi/03-Dịch-liền-mạch.png",
+            "sha256": "9b810fa18ab637c63cdb860d02b4fc801df9875e9ea605e1c8550c97e8702c67",
+            "sizeBytes": 588894
+          },
+          {
+            "path": "upload/vi/04-Âm-thanh-từ-app-khác.png",
+            "sha256": "4ce838ba7855e66c6a6406348159d8bddcb5f67229beeb7f0838eaaa06ce3e68",
+            "sizeBytes": 593522
+          },
+          {
+            "path": "upload/vi/05-Gọi-với-người-nước-ngoài.png",
+            "sha256": "9b3de03071abb5e289bcf7dd95548e22ff44bcc0100bb22c12a647ae4dd2cef2",
+            "sizeBytes": 595981
+          },
+          {
+            "path": "upload/vi/06-Bản-dịch-thành-giọng-nói.png",
+            "sha256": "d28edd5f8a6f914e0f7387887d1fa4be6ca737441bff97f15ac4f2b3fe121153",
+            "sizeBytes": 595281
+          },
+          {
+            "path": "upload/vi/07-Chạy-nền.png",
+            "sha256": "6c361466d3506de910d06f210cd1e554c1dc72055aca9dab0151b8d82f1aba95",
+            "sizeBytes": 578858
+          },
+          {
+            "path": "upload/vi/08-Tự-động-nhận-diện.png",
+            "sha256": "83ccd9cba40b952771fed109660f7e6d140064a9eaf97ca6a0016fa8f168ddbc",
+            "sizeBytes": 591378
+          }
+        ],
+        "zh-Hans": [
+          {
+            "path": "upload/zh-Hans/02-三种以上语言也可.png",
+            "sha256": "e6308b785e526075bb6ec7958c1339f06f8c343a6a64c9c6fc2ddac8f04fa73f",
+            "sizeBytes": 588397
+          },
+          {
+            "path": "upload/zh-Hans/03-无缝翻译不断线.png",
+            "sha256": "537665057fdb5dac0aafb1936663221d4200f352cbab01c111a3dc4f5b552316",
+            "sizeBytes": 588746
+          },
+          {
+            "path": "upload/zh-Hans/04-其他应用的语音也能.png",
+            "sha256": "509c093ce15fbddfb1ec034e2c70298bb6e42e10f45d453212e387f629b7160c",
+            "sizeBytes": 591644
+          },
+          {
+            "path": "upload/zh-Hans/05-与外国人通话也可.png",
+            "sha256": "b3dbfd10982202e62ec0135d265ec0687a3f34d7619584023ff3e4c8c63479e9",
+            "sizeBytes": 589678
+          },
+          {
+            "path": "upload/zh-Hans/06-翻译可转为语音.png",
+            "sha256": "2d837eefe6189ea96c93a0805e8e5d4df97dba724e74d9207f13e1f5fab00b2e",
+            "sizeBytes": 588312
+          },
+          {
+            "path": "upload/zh-Hans/07-后台也能运行.png",
+            "sha256": "5572502966f1f0c7a63e99776651e498883459b180cd7997d927d0e9c3c6912c",
+            "sizeBytes": 584745
+          },
+          {
+            "path": "upload/zh-Hans/08-自动语言检测.png",
+            "sha256": "e968466e95b9fb7c92e25607e68fa1985e076ad0aada2b395d952eaebcefa42d",
+            "sizeBytes": 584828
+          }
+        ],
+        "zh-Hant": [
+          {
+            "path": "upload/zh-Hant/02-三種以上語言也可.png",
+            "sha256": "cf3e8c7eb34cf2f80ab7a883ac2eb255a1a5ea402c352ee5a81e8e4ca9b85000",
+            "sizeBytes": 587207
+          },
+          {
+            "path": "upload/zh-Hant/03-不間斷翻譯.png",
+            "sha256": "d5b1309da23618560d4e898dafcbb86edcd7ebee779bb5c190d650e302184f1c",
+            "sizeBytes": 574479
+          },
+          {
+            "path": "upload/zh-Hant/04-其他App語音也能.png",
+            "sha256": "62f88823ffcca3ed2d2d0a8cd633700f17422a5aada9c086e3947e5854285993",
+            "sizeBytes": 589557
+          },
+          {
+            "path": "upload/zh-Hant/05-與外國人通話也可.png",
+            "sha256": "0b63b2d31c0f058f4b127c6333073fb3b2cc4eecc2a46160257c0ece1d854ebb",
+            "sizeBytes": 590829
+          },
+          {
+            "path": "upload/zh-Hant/06-翻譯可轉成語音.png",
+            "sha256": "05f2ebb300692ed42e4077d1c9f4e75fff9e1931ee38e34276b8f4c8c7ef79e8",
+            "sizeBytes": 583410
+          },
+          {
+            "path": "upload/zh-Hant/07-背景也能執行.png",
+            "sha256": "50e2e658ab6cb1fbf7e62e2c5861bdce97e29ac84e0ce38089699915a25354f9",
+            "sizeBytes": 585821
+          },
+          {
+            "path": "upload/zh-Hant/08-自動語言偵測.png",
+            "sha256": "5ad8dc69759e13bdf860e5b4b63d3041846fa29d337b1ddfcedf72534d768db0",
+            "sizeBytes": 580277
+          }
+        ]
+      }
     }
   }
 }
