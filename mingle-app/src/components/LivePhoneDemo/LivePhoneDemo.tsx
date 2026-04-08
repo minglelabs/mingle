@@ -85,6 +85,7 @@ import {
 } from './live-phone-demo.feedback-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 
@@ -132,17 +133,6 @@ type LivePhoneDemoComposerCopy = {
   closeKeyboardLabel: string
   composerPlaceholder: string
   sendMessageLabel: string
-}
-
-type LivePhoneDemoConversationDeleteCopy = {
-  menuItemLabel: string
-  dialogTitle: string
-  dialogMessage: string
-  cancelLabel: string
-  confirmLabel: string
-  deletingLabel: string
-  successToastLabel: string
-  errorToastLabel: string
 }
 
 type PersistedFeedbackDraft = {
@@ -280,47 +270,6 @@ export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDem
     closeKeyboardLabel: 'Close text input',
     composerPlaceholder: 'Type a message',
     sendMessageLabel: 'Send message',
-  }
-}
-
-function resolveLivePhoneDemoConversationDeleteCopy(uiLocale: string): LivePhoneDemoConversationDeleteCopy {
-  const locale = (uiLocale || '').trim().toLowerCase()
-
-  if (locale.startsWith('ko')) {
-    return {
-      menuItemLabel: '대화 전체 삭제',
-      dialogTitle: '대화 전체 삭제',
-      dialogMessage: '삭제하시겠습니까?',
-      cancelLabel: '취소',
-      confirmLabel: '삭제',
-      deletingLabel: '삭제 중...',
-      successToastLabel: '대화가 전체 삭제되었습니다.',
-      errorToastLabel: '대화 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-    }
-  }
-
-  if (locale.startsWith('ja')) {
-    return {
-      menuItemLabel: '会話をすべて削除',
-      dialogTitle: '会話をすべて削除',
-      dialogMessage: '削除しますか？',
-      cancelLabel: 'キャンセル',
-      confirmLabel: '削除',
-      deletingLabel: '削除中...',
-      successToastLabel: '会話をすべて削除しました。',
-      errorToastLabel: '会話を削除できませんでした。しばらくしてからもう一度お試しください。',
-    }
-  }
-
-  return {
-    menuItemLabel: 'Delete all conversation messages',
-    dialogTitle: 'Delete all conversation messages',
-    dialogMessage: 'Delete all conversation messages?',
-    cancelLabel: 'Cancel',
-    confirmLabel: 'Delete',
-    deletingLabel: 'Deleting...',
-    successToastLabel: 'All conversation messages were deleted.',
-    errorToastLabel: 'Failed to delete the conversation. Please try again.',
   }
 }
 
