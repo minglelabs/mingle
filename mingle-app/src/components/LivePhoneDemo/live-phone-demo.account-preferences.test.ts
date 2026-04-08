@@ -59,6 +59,7 @@ describe('buildHydratedAccountPreferences', () => {
       sonioxManualFinalizeSilenceMs: 800,
       translationModel: 'gemma-4-31b-it',
       adBannerPosition: 'top',
+      inputMode: 'voice',
       speakerEnabled: false,
       echoAllowed: true,
     })
