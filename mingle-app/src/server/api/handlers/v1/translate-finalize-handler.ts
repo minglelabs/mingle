@@ -183,6 +183,12 @@ function isGoogleGenerativeProvider(provider: TranslationProvider): provider is 
   return provider === 'gemini' || provider === 'gemma'
 }
 
+function isGoogleGenerativeProviderConfig(
+  config: TranslationProviderConfig,
+): config is GeminiTranslationProviderConfig {
+  return config.infrastructureProvider === 'google' && isGoogleGenerativeProvider(config.provider)
+}
+
 function readTranslateEnv(name: string): string {
   const direct = process.env[name]
   if (typeof direct === 'string') return direct
@@ -1696,9 +1702,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       } else if (testFaultMode === 'provider_error') {
         throw new Error('forced_provider_error_for_e2e')
       } else {
-        selectedResult = providerConfig.infrastructureProvider === 'google' && isGoogleGenerativeProvider(providerConfig.provider)
-          ? await translateWithGemini(ctx, providerConfig)
-          : await translateWithOpenAICompatible(ctx, providerConfig)
+        if (isGoogleGenerativeProviderConfig(providerConfig)) {
+          selectedResult = await translateWithGemini(ctx, providerConfig)
+        } else {
+          selectedResult = await translateWithOpenAICompatible(ctx, providerConfig)
+        }
       }
     } catch (error) {
       providerRequestFailed = true
