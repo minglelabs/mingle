@@ -75,6 +75,44 @@ export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {
   }
 }
 
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase()
+  return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1'
+}
+
+function isLoopbackUrl(rawUrl: string): boolean {
+  if (!rawUrl) return false
+
+  try {
+    return isLoopbackHost(new URL(rawUrl).hostname)
+  } catch {
+    return /(127\.0\.0\.1|localhost|::1)/i.test(rawUrl)
+  }
+}
+
+function isDebugWebViewRemountAllowedUrl(rawUrl: string): boolean {
+  if (!rawUrl) return false
+
+  try {
+    return new URL(rawUrl).hostname.toLowerCase() === 'mingle-app-devbox.photo-for-passport.com'
+  } catch {
+    return /mingle-app-devbox\.photo-for-passport\.com/i.test(rawUrl)
+  }
+}
+
+export interface NativeDebugWebViewRemountVisibilityInput {
+  rawUrl: string
+  isDevelopmentMode: boolean
+}
+
+export function shouldEnableNativeDebugWebViewRemount(
+  input: NativeDebugWebViewRemountVisibilityInput,
+): boolean {
+  return input.isDevelopmentMode
+    || isLoopbackUrl(input.rawUrl)
+    || isDebugWebViewRemountAllowedUrl(input.rawUrl)
+}
+
 export interface IosTopTapFallbackInput {
   isLikelyIosPlatform: boolean
   isNativeApp: boolean

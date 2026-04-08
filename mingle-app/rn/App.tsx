@@ -822,6 +822,10 @@ type NativeSetBannerZoneCommand = {
   };
 };
 
+type NativeRemountWebViewCommand = {
+  type: 'native_remount_webview';
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -834,7 +838,8 @@ type WebViewCommand =
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
-  | NativeSetBannerZoneCommand;
+  | NativeSetBannerZoneCommand
+  | NativeRemountWebViewCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -1435,7 +1440,6 @@ function AppInner(): React.JSX.Element {
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
-  const shouldShowDebugWebViewRemountButton = shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL);
 
   useEffect(() => {
     activeBannerZoneRef.current = activeBannerZone;
@@ -2099,6 +2103,13 @@ function AppInner(): React.JSX.Element {
     }
   }, [clearAuthDispatchRetryTimer, emitAuthToWeb, trustedNativeAuthOrigin]);
 
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
+
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     let parsed: WebViewCommand | null = null;
     try {
@@ -2125,6 +2136,12 @@ function AppInner(): React.JSX.Element {
       const updateUrl = requestedUrl || nativeAppUpdateRef.current.updateUrl.trim();
       if (!updateUrl) return;
       void Linking.openURL(updateUrl);
+      return;
+    }
+
+    if (parsed.type === 'native_remount_webview') {
+      if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
+      handleDebugWebViewRemount();
       return;
     }
 
@@ -2275,7 +2292,15 @@ function AppInner(): React.JSX.Element {
       }
       void handleNativeAuthStart(parsed.payload);
     }
-  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop, updateSafeAreaPalette]);
+  }, [
+    clearAuthDispatchRetryTimer,
+    emitTtsToWeb,
+    handleDebugWebViewRemount,
+    handleNativeAuthStart,
+    handleNativeStart,
+    handleNativeStop,
+    updateSafeAreaPalette,
+  ]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -2397,13 +2422,6 @@ function AppInner(): React.JSX.Element {
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
 
-  const handleDebugWebViewRemount = useCallback(() => {
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setIsNativeMenuOverlayOpen(false);
-    setWebViewMountToken((current) => current + 1);
-  }, []);
-
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -2511,20 +2529,6 @@ function AppInner(): React.JSX.Element {
             <Text style={styles.errorTitle}>{versionPolicyFallback.webViewLoadFailedTitle}</Text>
             <Text style={styles.errorDescription}>{loadError}</Text>
           </View>
-        ) : null}
-        {versionGate.status !== 'force_update' && shouldShowDebugWebViewRemountButton ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Remount WebView"
-            onPress={handleDebugWebViewRemount}
-            style={({ pressed }) => [
-              styles.debugWebViewRemountButton,
-              { top: Math.max(16, safeAreaInsets.top + 8) },
-              pressed ? styles.debugWebViewRemountButtonPressed : null,
-            ]}
-          >
-            <Text style={styles.debugWebViewRemountButtonText}>Remount WebView</Text>
-          </Pressable>
         ) : null}
       </View>
       {shouldRenderTopSafeAreaOverlay ? (
@@ -2666,24 +2670,6 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 12,
     lineHeight: 16,
-  },
-  debugWebViewRemountButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 24,
-    borderRadius: 999,
-    backgroundColor: 'rgba(17, 24, 39, 0.82)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  debugWebViewRemountButtonPressed: {
-    opacity: 0.85,
-  },
-  debugWebViewRemountButtonText: {
-    color: '#f9fafb',
-    fontSize: 12,
-    fontWeight: '700',
   },
   versionOverlay: {
     position: 'absolute',
