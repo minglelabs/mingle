@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const EXPECTED_NAMESPACE = 'ios/v1.0.10';
+const EXPECTED_NAMESPACE = 'ios/v1.0.11';
 
 function normalizeNamespace(raw) {
   if (typeof raw !== 'string') return '';

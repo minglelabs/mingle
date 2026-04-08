@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -20,19 +20,23 @@ import {
   getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
+  DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
+  LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
+  type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
+  buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
@@ -60,6 +64,7 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  resolveNativeBottomBarBannerClearancePx,
   shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
@@ -112,6 +117,20 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
 const EMPTY_STATE_ARROW_HEAD_Y = 72
+const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
+const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
+const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
+const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
+const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
+
+type LivePhoneDemoComposerCopy = {
+  manualSpeakerLabel: string
+  openKeyboardLabel: string
+  closeKeyboardLabel: string
+  composerPlaceholder: string
+  sendMessageLabel: string
+}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -203,6 +222,134 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
 
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
+}
+
+export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDemoComposerCopy {
+  const locale = (uiLocale || '').trim().toLowerCase()
+
+  if (locale.startsWith('ko')) {
+    return {
+      manualSpeakerLabel: '나',
+      openKeyboardLabel: '텍스트 입력 열기',
+      closeKeyboardLabel: '텍스트 입력 닫기',
+      composerPlaceholder: '메시지를 입력하세요',
+      sendMessageLabel: '메시지 보내기',
+    }
+  }
+
+  if (locale.startsWith('ja')) {
+    return {
+      manualSpeakerLabel: '自分',
+      openKeyboardLabel: 'テキスト入力を開く',
+      closeKeyboardLabel: 'テキスト入力を閉じる',
+      composerPlaceholder: 'メッセージを入力',
+      sendMessageLabel: 'メッセージを送信',
+    }
+  }
+
+  return {
+    manualSpeakerLabel: 'You',
+    openKeyboardLabel: 'Open text input',
+    closeKeyboardLabel: 'Close text input',
+    composerPlaceholder: 'Type a message',
+    sendMessageLabel: 'Send message',
+  }
+}
+
+export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
+  if (typeof window === 'undefined' || !viewport) return 0
+
+  const inset = window.innerHeight - viewport.height - viewport.offsetTop
+  if (!Number.isFinite(inset) || inset <= 0) return 0
+  return Math.round(inset)
+}
+
+export function resolveHydratedComposerOpenState(input: {
+  currentIsComposerOpen: boolean
+  persistedInputMode: LivePhoneDemoInputMode | null
+}): boolean {
+  if (input.persistedInputMode === null) {
+    return input.currentIsComposerOpen
+  }
+
+  return input.persistedInputMode === 'text'
+}
+
+export function resolveScrollToBottomButtonBottomPx(input: {
+  baseBottomPx: number
+  isNativeAppRuntime: boolean
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  bottomBannerInsetPx: number
+}): number {
+  const reservedPx = input.isNativeAppRuntime && input.displayedAdBannerPosition === 'bottom'
+    ? Math.max(0, Math.round(input.bottomBannerInsetPx))
+    : 0
+
+  return input.baseBottomPx + reservedPx
+}
+
+function readSafeAreaInsetBottomPx(): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 0
+
+  let probe = document.getElementById(SAFE_AREA_BOTTOM_ENV_MEASURER_ID) as HTMLDivElement | null
+  if (!probe) {
+    probe = document.createElement('div')
+    probe.id = SAFE_AREA_BOTTOM_ENV_MEASURER_ID
+    probe.setAttribute('aria-hidden', 'true')
+    probe.style.position = 'fixed'
+    probe.style.left = '0'
+    probe.style.bottom = '0'
+    probe.style.width = '0'
+    probe.style.height = '0'
+    probe.style.visibility = 'hidden'
+    probe.style.pointerEvents = 'none'
+    probe.style.paddingBottom = 'env(safe-area-inset-bottom)'
+    document.body.appendChild(probe)
+  }
+
+  const paddingBottomPx = Number.parseFloat(window.getComputedStyle(probe).paddingBottom || '')
+  return Number.isFinite(paddingBottomPx) && paddingBottomPx > 0
+    ? Math.round(paddingBottomPx)
+    : 0
+}
+
+function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): number {
+  if (!textarea) return COMPOSER_TEXTAREA_MIN_HEIGHT_PX
+
+  textarea.style.height = '0px'
+  textarea.style.lineHeight = `${COMPOSER_TEXTAREA_LINE_HEIGHT_PX}px`
+  const nextHeight = Math.max(
+    COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
+    Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT_PX, textarea.scrollHeight),
+  )
+  textarea.style.height = `${nextHeight}px`
+  textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
+  return nextHeight
+}
+
+function readPersistedComposerDraft(): string {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_COMPOSER_DRAFT)
+    return typeof rawValue === 'string' ? rawValue : ''
+  } catch {
+    return ''
+  }
+}
+
+function persistComposerDraft(nextDraft: string): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (nextDraft) {
+      window.localStorage.setItem(LS_KEY_COMPOSER_DRAFT, nextDraft)
+      return
+    }
+    window.localStorage.removeItem(LS_KEY_COMPOSER_DRAFT)
+  } catch {
+    // Ignore local persistence failures.
+  }
 }
 
 function readPersistedFeedbackDraft(): PersistedFeedbackDraft | null {
@@ -536,6 +683,13 @@ type NativeSetAdBannerPositionCommand = {
   }
 }
 
+type NativeSetBottomBarClearanceCommand = {
+  type: 'native_set_bottom_bar_clearance'
+  payload?: {
+    clearancePx?: number
+  }
+}
+
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
 }
@@ -646,6 +800,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
+  const [composerDraft, setComposerDraft] = useState('')
+  const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
+  const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
@@ -683,8 +841,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const bottomBarRef = useRef<HTMLDivElement | null>(null)
+  const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
+  const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
+  const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
+  const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
+  const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
@@ -695,22 +860,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
+  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
+    inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
   })
-  const latestAccountPreferences = useMemo(() => ({
+  const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
     adBannerPosition,
+    inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -747,18 +915,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const persistedDraft = readPersistedFeedbackDraft()
-      if (!persistedDraft) return
-
-      setFeedbackCategory(persistedDraft.category)
-      setFeedbackMessage(persistedDraft.message)
-      setFeedbackEmail(persistedDraft.email)
-      setFeedbackEmailEdited(
-        persistedDraft.emailEdited
-        || (
-          persistedDraft.email.trim().length > 0
-          && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
-        ),
-      )
+      if (persistedDraft) {
+        setFeedbackCategory(persistedDraft.category)
+        setFeedbackMessage(persistedDraft.message)
+        setFeedbackEmail(persistedDraft.email)
+        setFeedbackEmailEdited(
+          persistedDraft.emailEdited
+          || (
+            persistedDraft.email.trim().length > 0
+            && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
+          ),
+        )
+      }
+      setHasHydratedFeedbackDraft(true)
     })
 
     return () => {
@@ -778,12 +947,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
+      persistedInputModeRef.current = next.inputMode
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       setSelectedLanguages(next.selectedLanguages)
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
+      setIsComposerOpen((current) => resolveHydratedComposerOpenState({
+        currentIsComposerOpen: current,
+        persistedInputMode: next.inputMode,
+      }))
+      setComposerDraft(readPersistedComposerDraft())
+      setHasHydratedLocalUiPreferences(true)
+      setHasHydratedComposerDraft(true)
 
       const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
       setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
@@ -825,20 +1002,157 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const syncKeyboardInset = () => {
+      setKeyboardViewportInsetPx(resolveKeyboardViewportInsetPx(viewport))
+    }
+
+    syncKeyboardInset()
+    viewport.addEventListener('resize', syncKeyboardInset)
+    viewport.addEventListener('scroll', syncKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardInset)
+      viewport.removeEventListener('scroll', syncKeyboardInset)
+    }
+  }, [])
+
+  const syncNativeBottomBarClearance = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!window.ReactNativeWebView?.postMessage) return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    const bottomBarRect = bottomBarNode.getBoundingClientRect()
+    const nextClearancePx = resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: bottomBarRect.top,
+      viewportHeightPx: window.innerHeight,
+      safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
+    })
+
+    if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
+    lastNativeBottomBarClearancePxRef.current = nextClearancePx
+
+    const command: NativeSetBottomBarClearanceCommand = {
+      type: 'native_set_bottom_bar_clearance',
+      payload: { clearancePx: nextClearancePx },
+    }
+    window.ReactNativeWebView.postMessage(JSON.stringify(command))
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    let frameId = 0
+    const requestSync = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        syncNativeBottomBarClearance()
+      })
+    }
+
+    requestSync()
+
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          requestSync()
+        })
+    resizeObserver?.observe(bottomBarNode)
+
+    window.addEventListener('resize', requestSync)
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', requestSync)
+    viewport?.addEventListener('scroll', requestSync)
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('scroll', requestSync)
+    }
+  }, [syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const frameId = window.requestAnimationFrame(() => {
+      syncNativeBottomBarClearance()
+    })
+    const timeout180Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 180)
+    const timeout360Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 360)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.clearTimeout(timeout180Id)
+      window.clearTimeout(timeout360Id)
+    }
+  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    if (!isComposerOpen) return
+
+    const timerId = window.setTimeout(() => {
+      const textarea = composerTextareaRef.current
+      if (!textarea) return
+      const nextHeight = resizeComposerTextarea(textarea)
+      setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
+      textarea.focus({ preventScroll: true })
+      const cursor = textarea.value.length
+      textarea.setSelectionRange(cursor, cursor)
+    }, 40)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [isComposerOpen])
+
+  useLayoutEffect(() => {
+    const nextHeight = resizeComposerTextarea(composerTextareaRef.current)
+    setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
+  }, [composerDraft, isComposerOpen])
+
+  useEffect(() => {
+    if (isComposerOpen) return
+    setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
+  }, [isComposerOpen])
+
   // Persist selected languages
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
-  }, [selectedLanguages])
+  }, [hasHydratedLocalUiPreferences, selectedLanguages])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_TEXT_SIZE_LEVEL, String(textSizeLevel))
     } catch { /* ignore */ }
-  }, [textSizeLevel])
+  }, [hasHydratedLocalUiPreferences, textSizeLevel])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       if (adBannerPosition) {
         localStorage.setItem(LS_KEY_AD_BANNER_POSITION, adBannerPosition)
@@ -846,9 +1160,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
       }
     } catch { /* ignore */ }
-  }, [adBannerPosition])
+  }, [adBannerPosition, hasHydratedLocalUiPreferences])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
+    try {
+      localStorage.setItem(LS_KEY_INPUT_MODE, isComposerOpen ? 'text' : 'voice')
+    } catch { /* ignore */ }
+  }, [hasHydratedLocalUiPreferences, isComposerOpen])
+
+  useEffect(() => {
+    if (!hasHydratedComposerDraft) return
+    persistComposerDraft(composerDraft)
+  }, [composerDraft, hasHydratedComposerDraft])
+
+  useEffect(() => {
+    if (!hasHydratedFeedbackDraft) return
     if (!feedbackMessage) {
       persistFeedbackDraft(null)
       return
@@ -860,7 +1187,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       email: feedbackEmail,
       emailEdited: feedbackEmailEdited,
     })
-  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage])
+  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage, hasHydratedFeedbackDraft])
 
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return
@@ -909,6 +1236,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
+        if (persistedInputModeRef.current === null) {
+          setIsComposerOpen(hydratedPreferences.inputMode === 'text')
+        }
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -942,12 +1272,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: currentPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: currentPreferences.translationModel,
-        adBannerPosition: currentPreferences.adBannerPosition,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
@@ -977,12 +1302,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: nextPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: nextPreferences.translationModel,
-        adBannerPosition: nextPreferences.adBannerPosition,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(nextPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
@@ -1881,6 +2201,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     partialTranscript,
     volume,
     toggleRecording,
+    submitExternalUtterance,
     isActive,
     isReady,
     isConnecting,
@@ -2266,6 +2587,47 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [enableAutoTTS, isActive, isLimitReached, onLimitReached, primeAudioPlayback, scheduleTtsResumeAfterStopClick, toggleRecording])
 
+  const handleToggleComposer = useCallback(() => {
+    setIsComposerOpen((previous) => {
+      const next = !previous
+      persistedInputModeRef.current = next ? 'text' : 'voice'
+      try {
+        localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
+      } catch {
+        // Ignore local persistence failures and keep in-memory state.
+      }
+      if (previous) {
+        composerTextareaRef.current?.blur()
+      }
+      return next
+    })
+  }, [])
+
+  const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    const nextDraft = event.target.value
+    setComposerDraft(nextDraft)
+    persistComposerDraft(nextDraft)
+  }, [])
+
+  const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const nextText = composerDraft.trim()
+    if (!nextText) {
+      composerTextareaRef.current?.focus({ preventScroll: true })
+      return
+    }
+
+    const submittedUtteranceId = submitExternalUtterance({
+      text: nextText,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+    if (!submittedUtteranceId) return
+    setComposerDraft('')
+    persistComposerDraft('')
+  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance])
+
   useImperativeHandle(ref, () => ({
     startRecording: handleMicClick,
   }), [handleMicClick])
@@ -2638,10 +3000,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
     ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
-  const scrollToBottomButtonReservedPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? effectiveNativeBottomContentInsetPx
-    : 0
-  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
+  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
+  const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
+    baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
+    isNativeAppRuntime,
+    displayedAdBannerPosition,
+    bottomBannerInsetPx: effectiveNativeBottomContentInsetPx,
+  })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
   const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
@@ -2654,6 +3019,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
+  const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
@@ -3815,82 +4182,237 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
-          {/* Bottom Bar with Mic Button */}
-          <div
-            className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
+          {/* Bottom Bar with STT / Text Composer Toggle */}
+          <motion.div
+            layout
+            layoutDependency={isComposerOpen}
+            onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            ref={bottomBarRef}
+            className="relative shrink-0 border-t border-gray-100 bg-white"
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              paddingTop: "10px",
-              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
+              paddingTop: '10px',
+              paddingBottom: bottomBarPaddingBottom,
+              paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
+              paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
-            <div className="justify-self-start pl-2">
-              {/* Usage progress bar */}
-              <div className="flex items-center gap-1.5">
-                {isUsageLimited ? (
-                  <>
-                    <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                      {formatLivePhoneDemoUsageDuration(remainingSec)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-sm tabular-nums text-gray-400">
-                    {formatLivePhoneDemoUsageDuration(usageSec)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onPointerDown={handleMicPointerDown}
-                onClick={handleMicClick}
-                disabled={isConnecting || isError}
-                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-              >
-                {showRipple && (
-                  <span
-                    className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                    style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
-                  />
-                )}
-
-                {isReady && (
-                  <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                )}
-
-                <span
-                  className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                    isLimitReached
-                      ? 'bg-gray-300'
-                      : isReady
-                        ? 'bg-red-500'
-                        : isConnecting
-                          ? 'bg-gray-300'
-                          : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                  }`}
+            <AnimatePresence initial={false} mode="popLayout">
+              {isComposerOpen ? (
+                <motion.div
+                  key="composer-bottom-bar"
+                  layout
+                  layoutDependency={isComposerOpen}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  className="flex items-end gap-1.5"
                 >
-                  {isConnecting ? (
-                    <Loader2 size={30} className="animate-spin text-white" />
-                  ) : isReady ? (
-                    <span
-                      aria-hidden
-                      className="h-5 w-5 rounded-[4px] bg-white"
-                    />
-                  ) : (
-                    <Mic size={28} className="text-white" />
-                  )}
-                </span>
-              </button>
-            </div>
-            <div className="justify-self-end" />
-          </div>
+                  <motion.div
+                    layoutId="live-phone-demo-mic-shell"
+                    className="flex shrink-0 items-end justify-center self-end"
+                  >
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={isConnecting || isError}
+                      className="relative flex h-[2.3rem] w-[2.3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : isConnecting
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                      >
+                        {isConnecting ? (
+                          <Loader2 size={17} className="animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="h-[0.65rem] w-[0.65rem] rounded-[3px] bg-white"
+                          />
+                        ) : (
+                          <Mic size={17} className="text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <motion.form
+                    onSubmit={handleComposerSubmit}
+                    className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
+                  >
+                    <div
+                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none transition-[height] duration-150 ease-out motion-reduce:transition-none"
+                      style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-end px-1">
+                        <textarea
+                          ref={composerTextareaRef}
+                          value={composerDraft}
+                          onChange={handleComposerDraftChange}
+                          rows={1}
+                          placeholder={composerCopy.composerPlaceholder}
+                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
+                          style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
+                        />
+                      </div>
+
+                      <motion.button
+                        layoutId="live-phone-demo-keyboard-toggle"
+                        type="button"
+                        onClick={handleToggleComposer}
+                        aria-label={composerCopy.closeKeyboardLabel}
+                        className="inline-flex h-[2.3rem] w-[2.3rem] shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
+                      >
+                        <Keyboard size={18} strokeWidth={2.2} />
+                      </motion.button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!composerCanSend}
+                      aria-label={composerCopy.sendMessageLabel}
+                      className={`inline-flex h-[2.3rem] w-[2.3rem] shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
+                        composerCanSend
+                          ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
+                          : 'bg-transparent text-gray-300'
+                      }`}
+                    >
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        className="h-[1.55rem] w-[1.55rem]"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 18.5V6.5" />
+                        <path d="M7.75 10.75L12 6.5l4.25 4.25" />
+                      </svg>
+                    </button>
+                  </motion.form>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="default-bottom-bar"
+                  layout
+                  layoutDependency={isComposerOpen}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  className="grid items-end"
+                  style={{ gridTemplateColumns: '1fr auto 1fr' }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -12 }}
+                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="self-end justify-self-start pl-2"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isUsageLimited ? (
+                        <>
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
+                          <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    layoutId="live-phone-demo-mic-shell"
+                    className="flex self-end justify-center"
+                  >
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={isConnecting || isError}
+                      className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : isConnecting
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                      >
+                        {isConnecting ? (
+                          <Loader2 size={30} className="animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="h-5 w-5 rounded-[4px] bg-white"
+                          />
+                        ) : (
+                          <Mic size={28} className="text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <div className="self-end justify-self-end">
+                    <motion.button
+                      layoutId="live-phone-demo-keyboard-toggle"
+                      type="button"
+                      onClick={handleToggleComposer}
+                      aria-label={composerCopy.openKeyboardLabel}
+                      className="inline-flex h-11 w-11 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                    >
+                      <Keyboard size={19} strokeWidth={2.15} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
     </PhoneFrame>

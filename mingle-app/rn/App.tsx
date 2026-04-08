@@ -37,6 +37,14 @@ import {
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
 import {
+  normalizeNativeBottomBarClearancePx,
+  parseWebPathname,
+  resolveNativeBannerContentHeightPx,
+  resolveNativeBottomBannerContentInsetPx,
+  shouldDisableIosWebViewScrolling,
+  shouldHideIosKeyboardAccessoryView,
+} from './src/webViewLayout';
+import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
   normalizeClientVersion,
@@ -743,6 +751,13 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeSetBottomBarClearanceCommand = {
+  type: 'native_set_bottom_bar_clearance';
+  payload?: {
+    clearancePx?: number;
+  };
+};
+
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview';
 };
@@ -758,6 +773,7 @@ type WebViewCommand =
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
+  | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand;
 
 type NativeSttEvent =
@@ -1055,11 +1071,6 @@ function resolveNativeCanvasScale(windowWidthPx: number): number {
   return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
 }
 
-function resolveNativeTranscriptInsetPx(bannerHeightPx: number, canvasScale: number): number {
-  const safeScale = canvasScale > 0 ? canvasScale : 1;
-  return Math.max(0, Math.round(bannerHeightPx / safeScale));
-}
-
 function NativeAdBanner(props: {
   position: NativeBannerPosition;
   unitId: string;
@@ -1271,6 +1282,9 @@ function AppInner(): React.JSX.Element {
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
+  const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
+  const [currentWebPathname, setCurrentWebPathname] = useState(() => parseWebPathname(webUrl));
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1298,6 +1312,28 @@ function AppInner(): React.JSX.Element {
     });
   }, [webUrl]);
 
+  useEffect(() => {
+    if (initialLoadSettledRef.current || !startupSplashVisible) {
+      if (startupSplashTimeoutRef.current) {
+        clearTimeout(startupSplashTimeoutRef.current);
+        startupSplashTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    startupSplashTimeoutRef.current = setTimeout(() => {
+      setStartupSplashVisible(false);
+      startupSplashTimeoutRef.current = null;
+    }, 4000);
+
+    return () => {
+      if (startupSplashTimeoutRef.current) {
+        clearTimeout(startupSplashTimeoutRef.current);
+        startupSplashTimeoutRef.current = null;
+      }
+    };
+  }, [startupSplashVisible]);
+
   const iosTopSafeAreaHeight = Platform.OS === 'ios'
     ? (safeAreaInsets.top > 0 ? safeAreaInsets.top : iosTopTapOverlayHeight)
     : 0;
@@ -1308,22 +1344,57 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
+  const nativeBottomBannerClearancePx = useMemo(() => {
+    if (nativeBottomBarClearancePx !== null) {
+      return normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx);
+    }
+    return Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale);
+  }, [nativeBottomBarClearancePx, nativeCanvasScale]);
   const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
-    [nativeCanvasScale, safeAreaInsets.bottom],
+    () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
+    [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
   const nativeTranscriptInsetPx = useMemo(
-    () => resolveNativeTranscriptInsetPx(nativeBannerHeightPx, nativeCanvasScale),
+    () => resolveNativeBannerContentHeightPx({
+      bannerHeightPx: nativeBannerHeightPx,
+      canvasScale: nativeCanvasScale,
+    }),
     [nativeBannerHeightPx, nativeCanvasScale],
   );
   const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
-  const nativeBannerBottomInsetPx = nativeBannerPosition === 'bottom' ? nativeTranscriptInsetPx : 0;
+  const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
+    position: nativeBannerPosition,
+    bannerHeightPx: nativeBannerHeightPx,
+    canvasScale: nativeCanvasScale,
+    bottomBannerClearancePx: nativeBottomBannerClearancePx,
+  }), [nativeBannerHeightPx, nativeBannerPosition, nativeBottomBannerClearancePx, nativeCanvasScale]);
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     !nativeBannerUnitId
   ));
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
+    isIosPlatform: Platform.OS === 'ios',
+    pathname: currentWebPathname,
+  }), [currentWebPathname]);
+  const shouldHideIosKeyboardAccessory = useMemo(() => shouldHideIosKeyboardAccessoryView({
+    isIosPlatform: Platform.OS === 'ios',
+    pathname: currentWebPathname,
+  }), [currentWebPathname]);
+
+  useEffect(() => {
+    setNativeBottomBarClearancePx(null);
+  }, [webViewMountToken]);
+
+  useEffect(() => {
+    setCurrentWebPathname(parseWebPathname(webUrl));
+  }, [webUrl]);
+
+  useEffect(() => {
+    if (shouldDisableIosScroll) return;
+    setNativeBottomBarClearancePx(null);
+  }, [shouldDisableIosScroll]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1950,6 +2021,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_set_bottom_bar_clearance') {
+      setNativeBottomBarClearancePx(normalizeNativeBottomBarClearancePx(parsed.payload?.clearancePx));
+      return;
+    }
+
     if (parsed.type === 'native_auth_ack') {
       const provider = parsed.payload?.provider === 'google' || parsed.payload?.provider === 'apple'
         ? parsed.payload.provider
@@ -2170,8 +2246,9 @@ function AppInner(): React.JSX.Element {
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
+    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
     updateSafeAreaPalette(event?.nativeEvent?.url);
-  }, [updateSafeAreaPalette]);
+  }, [updateSafeAreaPalette, webUrl]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = true;
@@ -2179,6 +2256,7 @@ function AppInner(): React.JSX.Element {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
+    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
     updateSafeAreaPalette(event?.nativeEvent?.url);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     emitToWeb({ type: 'capabilities', openAppSettings: true });
@@ -2187,7 +2265,7 @@ function AppInner(): React.JSX.Element {
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
 
   const handleDebugWebViewRemount = useCallback(() => {
     isPageReadyRef.current = false;
@@ -2206,6 +2284,7 @@ function AppInner(): React.JSX.Element {
   }, [webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
+    setCurrentWebPathname(parseWebPathname(navigationState.url));
     updateSafeAreaPalette(navigationState.url);
     setWebViewCanGoBack(Boolean(navigationState.canGoBack));
   }, [updateSafeAreaPalette]);
@@ -2283,11 +2362,15 @@ function AppInner(): React.JSX.Element {
             javaScriptEnabled
             domStorageEnabled
             cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}
-            incognito={shouldUseAggressiveWebViewCacheBypass}
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
             setSupportMultipleWindows={false}
+            scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
+            bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
+            hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
             allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}

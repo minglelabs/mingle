@@ -7,6 +7,7 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  resolveNativeBottomBarBannerClearancePx,
   shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
@@ -112,6 +113,27 @@ describe('live-phone-demo native ui bridge logic', () => {
     expect(isNativeUiBridgeEnabledFromSearch('')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('?foo=bar')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('%')).toBe(false)
+  })
+
+  it('derives bottom banner clearance from the live bottom bar position and safe area', () => {
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 706,
+      viewportHeightPx: 844,
+      safeAreaInsetBottomPx: 34,
+    })).toBe(104)
+  })
+
+  it('clamps invalid bottom banner clearance inputs to zero', () => {
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 120,
+      viewportHeightPx: 100,
+      safeAreaInsetBottomPx: 10,
+    })).toBe(0)
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 20,
+      viewportHeightPx: Number.NaN,
+      safeAreaInsetBottomPx: 0,
+    })).toBe(0)
   })
 
   describe('shouldEnableNativeDebugWebViewRemount', () => {
