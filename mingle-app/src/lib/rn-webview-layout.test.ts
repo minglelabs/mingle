@@ -73,13 +73,13 @@ describe('RN WebView layout helpers', () => {
     })).toBe(100)
   })
 
-  it('includes both clearance and banner height in bottom banner inset', () => {
+  it('reports only the banner height for the bottom banner inset', () => {
     expect(resolveNativeBottomBannerContentInsetPx({
       position: 'bottom',
       bannerHeightPx: 50,
       canvasScale: 1,
       bottomBannerClearancePx: 94,
-    })).toBe(144)
+    })).toBe(50)
   })
 
   it('returns zero bottom banner inset when the banner is not on the bottom', () => {
