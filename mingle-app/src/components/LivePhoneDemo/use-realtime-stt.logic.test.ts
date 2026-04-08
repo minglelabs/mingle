@@ -18,6 +18,7 @@ import {
   mergeDisplayUtterances,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
+  parseStopRecordingAckMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
   pruneUnresolvedTranslationTargets,
@@ -141,7 +142,51 @@ describe('use-realtime-stt pure logic', () => {
       language: 'en-US',
       isFinal: true,
       speaker: 'speaker-2',
+      turnId: null,
     })
+  })
+
+  it('parses stop ack payloads with multi-turn final arrays and turn ids', () => {
+    expect(parseStopRecordingAckMessage({
+      type: 'stop_recording_ack',
+      data: {
+        final_turns: [
+          {
+            text: ' first final ',
+            language: 'en',
+            speaker: 'speaker-1',
+            turn_id: 'speaker-1:3',
+          },
+          {
+            text: '  ',
+            language: 'ko',
+            speaker: 'speaker-2',
+            turn_id: 'speaker-2:9',
+          },
+          {
+            text: ' second final ',
+            language: 'ja',
+            speaker: 'speaker-2',
+            turn_id: 'speaker-2:10',
+          },
+        ],
+      },
+    })).toEqual([
+      {
+        rawText: ' first final ',
+        text: 'first final',
+        language: 'en',
+        speaker: 'speaker-1',
+        turnId: 'speaker-1:3',
+      },
+      {
+        rawText: ' second final ',
+        text: 'second final',
+        language: 'ja',
+        speaker: 'speaker-2',
+        turnId: 'speaker-2:10',
+      },
+    ])
   })
 
   it('returns null for malformed non-transcript payloads', () => {

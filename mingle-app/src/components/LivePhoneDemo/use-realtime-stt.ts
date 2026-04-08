@@ -20,6 +20,7 @@ export const getWsUrl = (): string => {
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
+const STOP_ACK_CLOSE_GRACE_MS = 150
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -511,6 +512,35 @@ export interface ParsedSttTranscriptMessage {
   language: string
   isFinal: boolean
   speaker: string
+  turnId: string | null
+}
+
+export interface ParsedStopRecordingAckTurn {
+  rawText: string
+  text: string
+  language: string
+  speaker: string
+  turnId: string | null
+}
+
+function parseSttTurnPayload(utterance: Record<string, unknown>): ParsedStopRecordingAckTurn {
+  const rawText = typeof utterance.text === 'string' ? utterance.text : ''
+  const text = normalizeSttTurnText(rawText)
+  const language = typeof utterance.language === 'string' ? utterance.language : 'unknown'
+  const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
+    ? utterance.speaker.trim()
+    : 'unknown'
+  const turnId = typeof utterance.turn_id === 'string' && utterance.turn_id.trim()
+    ? utterance.turn_id.trim()
+    : null
+
+  return {
+    rawText,
+    text,
+    language,
+    speaker,
+    turnId,
+  }
 }
 
 export function parseSttTranscriptMessage(
@@ -522,22 +552,34 @@ export function parseSttTranscriptMessage(
   const data = message.data as Record<string, unknown>
   if (typeof data.utterance !== 'object' || data.utterance === null) return null
 
-  const utterance = data.utterance as Record<string, unknown>
-  const rawText = typeof utterance.text === 'string' ? utterance.text : ''
-  const text = normalizeSttTurnText(rawText)
-  const language = typeof utterance.language === 'string' ? utterance.language : 'unknown'
+  const utterance = parseSttTurnPayload(data.utterance as Record<string, unknown>)
   const isFinal = data.is_final === true
-  const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
-    ? utterance.speaker.trim()
-    : 'unknown'
 
   return {
-    rawText,
-    text,
-    language,
+    rawText: utterance.rawText,
+    text: utterance.text,
+    language: utterance.language,
     isFinal,
-    speaker,
+    speaker: utterance.speaker,
+    turnId: utterance.turnId,
   }
+}
+
+export function parseStopRecordingAckMessage(
+  message: Record<string, unknown>,
+): ParsedStopRecordingAckTurn[] {
+  if (message.type !== 'stop_recording_ack') return []
+  if (typeof message.data !== 'object' || message.data === null) return []
+
+  const data = message.data as Record<string, unknown>
+  const rawTurns = Array.isArray(data.final_turns)
+    ? data.final_turns
+    : (data.final_turn ? [data.final_turn] : [])
+
+  return rawTurns
+    .filter((turn): turn is Record<string, unknown> => typeof turn === 'object' && turn !== null)
+    .map((turn) => parseSttTurnPayload(turn))
+    .filter((turn) => turn.text.length > 0)
 }
 
 export interface BuildFinalizedUtterancePayloadInput {
@@ -644,6 +686,7 @@ interface PendingSpeakerTurn {
   utteranceId: string
   utteranceSerial: number
   createdAtMs: number
+  turnId: string | null
   speaker: string
   speakerAvatarSeed: string
   speakerAvatarIndex: number
@@ -660,6 +703,7 @@ type PendingSpeakerTurnSnapshot = Pick<
   PendingSpeakerTurn,
   | 'utteranceId'
   | 'createdAtMs'
+  | 'turnId'
   | 'speaker'
   | 'speakerAvatarSeed'
   | 'speakerAvatarIndex'
@@ -675,6 +719,7 @@ function buildPendingSpeakerTurnSnapshots(
   return Object.values(pendingTurnsBySpeaker).map((turn) => ({
     utteranceId: turn.utteranceId,
     createdAtMs: turn.createdAtMs,
+    turnId: turn.turnId,
     speaker: turn.speaker,
     speakerAvatarSeed: turn.speakerAvatarSeed,
     speakerAvatarIndex: turn.speakerAvatarIndex,
@@ -694,6 +739,7 @@ function buildPendingSpeakerTurnSignature(
       [
         turn.utteranceId,
         String(turn.createdAtMs),
+        turn.turnId || '',
         turn.speaker,
         turn.speakerAvatarSeed,
         String(turn.speakerAvatarIndex),
@@ -2098,6 +2144,35 @@ export default function useRealtimeSTT({
     return null
   }, [])
 
+  const findPendingTurnForServerTurn = useCallback((speaker: string, turnId: string | null): PendingSpeakerTurn | null => {
+    const speakerPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
+    if (!turnId) {
+      return speakerPendingTurn
+    }
+    if (speakerPendingTurn?.turnId === turnId) {
+      return speakerPendingTurn
+    }
+    for (const pendingTurn of Object.values(pendingTurnsBySpeakerRef.current)) {
+      if (pendingTurn.turnId === turnId) return pendingTurn
+    }
+    return speakerPendingTurn
+  }, [])
+
+  const removePendingTurnForServerTurn = useCallback((speaker: string, turnId: string | null) => {
+    if (!turnId) {
+      removePendingTurn(speaker)
+      return
+    }
+    for (const [speakerKey, pendingTurn] of Object.entries(pendingTurnsBySpeakerRef.current)) {
+      if (pendingTurn.turnId !== turnId) continue
+      clearPendingTurnTranslationRuntime(pendingTurn.utteranceId)
+      delete pendingTurnsBySpeakerRef.current[speakerKey]
+      bumpPendingTurnRenderVersion()
+      return
+    }
+    removePendingTurn(speaker)
+  }, [bumpPendingTurnRenderVersion, clearPendingTurnTranslationRuntime, removePendingTurn])
+
   const syncVisiblePendingTurn = useCallback((preferredSpeaker?: string | null) => {
     const preferredTurn = preferredSpeaker
       ? pendingTurnsBySpeakerRef.current[preferredSpeaker] || null
@@ -2664,6 +2739,158 @@ export default function useRealtimeSTT({
     })
   }, [applyTranslationToUtterance, getCurrentTargetLanguages, logClientEvent, translateViaApi])
 
+  const applyServerFinalTurn = useCallback((input: {
+    rawText: string
+    text: string
+    language: string
+    speaker: string
+    turnId: string | null
+    reason: string
+  }) => {
+    const { rawText, text, language: lang, speaker, turnId, reason } = input
+    const pendingTurn = findPendingTurnForServerTurn(speaker, turnId)
+    const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, lang)
+    if (!text) {
+      removePendingTurnForServerTurn(speaker, turnId)
+      syncVisiblePendingTurn()
+      return
+    }
+
+    const now = Date.now()
+    const hadTurnStart = turnStartedAtRef.current !== null
+    const sttDurationMs = hadTurnStart && turnStartedAtRef.current
+      ? Math.max(0, now - turnStartedAtRef.current)
+      : undefined
+    turnStartedAtRef.current = null
+
+    const targetLanguages = getCurrentTargetLanguages()
+    const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
+    const seedTranslationState = buildSeedTranslationState(
+      targetLanguages,
+      lang,
+      options.partialTranslations,
+      options.partialTranslationPriorities,
+    )
+    const finalizedPayload = buildFinalizedUtterancePayload({
+      speaker,
+      speakerAvatarSeed: pendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarAssignment(speaker).speakerAvatarSeed,
+      speakerAvatarIndex: (
+        typeof pendingTurn?.speakerAvatarIndex === 'number'
+          ? pendingTurn.speakerAvatarIndex
+          : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
+      ),
+      rawText,
+      rawLanguage: lang,
+      languages: targetLanguages,
+      partialTranslations: seedTranslationState.translations,
+      currentTurnPreviousTranslations: seedTranslationState.translations,
+      utteranceSerial: nextUtteranceSerial,
+      utteranceId: pendingTurn?.utteranceId,
+      nowMs: now,
+      createdAtMs: pendingTurn?.createdAtMs ?? now,
+      previousStateSourceLanguage: options.previousStateSourceLanguage || lang,
+      previousStateSourceText: options.previousStateSourceText || pendingTurn?.text || text,
+    })
+    if (!finalizedPayload) {
+      return
+    }
+
+    const finalizedAvatar = getSpeakerAvatar(
+      finalizedPayload.utterance.speaker,
+      finalizedPayload.utterance.speakerAvatarSeed,
+      finalizedPayload.utterance.speakerAvatarIndex,
+    )
+    logSttDebug('transcript.avatar_mapping', {
+      speaker: finalizedPayload.utterance.speaker || 'unknown',
+      speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed || null,
+      speakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex ?? null,
+      isFinal: true,
+      avatarName: finalizedAvatar.name,
+      avatarSrc: finalizedAvatar.src,
+      utteranceId: finalizedPayload.utteranceId,
+      turnId,
+      source: reason,
+    })
+    const recentFinalizedMatch = classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: pendingTurn?.utteranceId || null,
+      finalizedUtteranceId: finalizedPayload.utteranceId,
+      recentFinalizedUtterance: recentFinalizedUtteranceRef.current,
+      nowMs: now,
+      text: finalizedPayload.text,
+      language: finalizedPayload.language,
+    })
+    if (recentFinalizedMatch.kind === 'skip_duplicate_server') {
+      logSttDebug('finalize.skip_duplicate_server', {
+        reusedUtteranceId: recentFinalizedMatch.utteranceId,
+        text: finalizedPayload.text,
+        language: finalizedPayload.language,
+        turnId,
+        source: reason,
+      })
+      removePendingTurnForServerTurn(speaker, turnId)
+      syncVisiblePendingTurn()
+      return
+    }
+    const recentLocalReuseUtteranceId = (
+      recentFinalizedMatch.kind === 'reuse_local'
+        ? recentFinalizedMatch.utteranceId
+        : null
+    )
+    if (recentLocalReuseUtteranceId) {
+      logSttDebug('finalize.reuse_recent_utterance', {
+        reusedUtteranceId: recentLocalReuseUtteranceId,
+        text: finalizedPayload.text,
+        language: finalizedPayload.language,
+        turnId,
+        source: reason,
+      })
+    } else {
+      utteranceIdRef.current = nextUtteranceSerial
+    }
+    const fallbackCurrentTurnPreviousState = options.fallbackCurrentTurnPreviousState
+    const currentTurnPreviousState = (
+      finalizedPayload.currentTurnPreviousState
+      && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
+    ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
+    if (!recentLocalReuseUtteranceId) {
+      setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
+        prev,
+        finalizedPayload.utterance,
+        seedTranslationState,
+      ))
+    }
+    recentFinalizedUtteranceRef.current = {
+      id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+      text: finalizedPayload.text,
+      language: finalizedPayload.language,
+      expiresAt: now + 2_000,
+      source: 'server',
+    }
+
+    finalizeTurnWithTranslation(
+      {
+        utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+        text: finalizedPayload.text,
+        lang: finalizedPayload.language,
+        currentTurnPreviousState,
+      },
+      {
+        sttDurationMs,
+        reason,
+      },
+    )
+    removePendingTurnForServerTurn(speaker, turnId)
+    syncVisiblePendingTurn()
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    ensureSpeakerAvatarAssignment,
+    finalizeTurnWithTranslation,
+    findPendingTurnForServerTurn,
+    getCurrentTargetLanguages,
+    removePendingTurnForServerTurn,
+    syncVisiblePendingTurn,
+  ])
+
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
@@ -2728,9 +2955,13 @@ export default function useRealtimeSTT({
         }
       } catch { /* ignore */ }
 
-      // Close socket immediately — no need to wait for ACK since translation is HTTP.
-      if (socketRef.current) {
-        socketRef.current.close()
+      if (socket && socketRef.current === socket) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, STOP_ACK_CLOSE_GRACE_MS)
+        })
+      }
+      if (socket && socketRef.current === socket) {
+        socket.close()
         socketRef.current = null
       }
     }
@@ -2958,15 +3189,31 @@ export default function useRealtimeSTT({
       return
     }
 
+    const stopAckTurns = parseStopRecordingAckMessage(message)
+    if (stopAckTurns.length > 0) {
+      for (const stopAckTurn of stopAckTurns) {
+        applyServerFinalTurn({
+          rawText: stopAckTurn.rawText,
+          text: stopAckTurn.text,
+          language: stopAckTurn.language,
+          speaker: stopAckTurn.speaker,
+          turnId: stopAckTurn.turnId,
+          reason: 'stt_stop_ack',
+        })
+      }
+      return
+    }
+
     if (message.type === 'stop_recording_ack') {
       return
     }
 
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, turnId } = transcript
       logSttDebug('transcript.received', {
         speaker,
+        turnId,
         isFinal,
         language: lang,
         rawTextPreview: buildDebugTextPreview(rawText),
@@ -2978,133 +3225,14 @@ export default function useRealtimeSTT({
       }
 
       if (isFinal) {
-        // Ignore non-meaningful turns (only "." / spaces) entirely.
-        // No bubble, translation, or TTS should be produced.
-        const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
-        const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, lang)
-        if (!text) {
-          removePendingTurn(speaker)
-          syncVisiblePendingTurn()
-          return
-        }
-        const now = Date.now()
-        const hadTurnStart = turnStartedAtRef.current !== null
-        const sttDurationMs = hadTurnStart && turnStartedAtRef.current
-          ? Math.max(0, now - turnStartedAtRef.current)
-          : undefined
-        turnStartedAtRef.current = null
-
-        const targetLanguages = getCurrentTargetLanguages()
-        const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
-        const seedTranslationState = buildSeedTranslationState(
-          targetLanguages,
-          lang,
-          options.partialTranslations,
-          options.partialTranslationPriorities,
-        )
-        const finalizedPayload = buildFinalizedUtterancePayload({
-          speaker,
-          speakerAvatarSeed: pendingTurn?.speakerAvatarSeed || ensureSpeakerAvatarAssignment(speaker).speakerAvatarSeed,
-          speakerAvatarIndex: (
-            typeof pendingTurn?.speakerAvatarIndex === 'number'
-              ? pendingTurn.speakerAvatarIndex
-              : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
-          ),
+        applyServerFinalTurn({
           rawText,
-          rawLanguage: lang,
-          languages: targetLanguages,
-          partialTranslations: seedTranslationState.translations,
-          currentTurnPreviousTranslations: seedTranslationState.translations,
-          utteranceSerial: nextUtteranceSerial,
-          utteranceId: pendingTurn?.utteranceId,
-          nowMs: now,
-          createdAtMs: pendingTurn?.createdAtMs ?? now,
-          previousStateSourceLanguage: options.previousStateSourceLanguage || lang,
-          previousStateSourceText: options.previousStateSourceText || pendingTurn?.text || text,
+          text,
+          language: lang,
+          speaker,
+          turnId,
+          reason: 'stt_server_final',
         })
-        if (!finalizedPayload) {
-          return
-        }
-        const finalizedAvatar = getSpeakerAvatar(
-          finalizedPayload.utterance.speaker,
-          finalizedPayload.utterance.speakerAvatarSeed,
-          finalizedPayload.utterance.speakerAvatarIndex,
-        )
-        logSttDebug('transcript.avatar_mapping', {
-          speaker: finalizedPayload.utterance.speaker || 'unknown',
-          speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed || null,
-          speakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex ?? null,
-          isFinal: true,
-          avatarName: finalizedAvatar.name,
-          avatarSrc: finalizedAvatar.src,
-          utteranceId: finalizedPayload.utteranceId,
-        })
-        const recentFinalizedMatch = classifyRecentFinalizedUtteranceMatch({
-          pendingUtteranceId: pendingTurn?.utteranceId || null,
-          finalizedUtteranceId: finalizedPayload.utteranceId,
-          recentFinalizedUtterance: recentFinalizedUtteranceRef.current,
-          nowMs: now,
-          text: finalizedPayload.text,
-          language: finalizedPayload.language,
-        })
-        if (recentFinalizedMatch.kind === 'skip_duplicate_server') {
-          logSttDebug('finalize.skip_duplicate_server', {
-            reusedUtteranceId: recentFinalizedMatch.utteranceId,
-            text: finalizedPayload.text,
-            language: finalizedPayload.language,
-          })
-          removePendingTurn(speaker)
-          syncVisiblePendingTurn()
-          return
-        }
-        const recentLocalReuseUtteranceId = (
-          recentFinalizedMatch.kind === 'reuse_local'
-            ? recentFinalizedMatch.utteranceId
-            : null
-        )
-        if (recentLocalReuseUtteranceId) {
-          logSttDebug('finalize.reuse_recent_utterance', {
-            reusedUtteranceId: recentLocalReuseUtteranceId,
-            text: finalizedPayload.text,
-            language: finalizedPayload.language,
-          })
-        } else {
-          utteranceIdRef.current = nextUtteranceSerial
-        }
-        const fallbackCurrentTurnPreviousState = options.fallbackCurrentTurnPreviousState
-        const currentTurnPreviousState = (
-          finalizedPayload.currentTurnPreviousState
-          && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
-        ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
-        if (!recentLocalReuseUtteranceId) {
-          setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
-            prev,
-            finalizedPayload.utterance,
-            seedTranslationState,
-          ))
-        }
-        recentFinalizedUtteranceRef.current = {
-          id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
-          text: finalizedPayload.text,
-          language: finalizedPayload.language,
-          expiresAt: now + 2_000,
-          source: 'server',
-        }
-
-        finalizeTurnWithTranslation(
-          {
-            utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
-            text: finalizedPayload.text,
-            lang: finalizedPayload.language,
-            currentTurnPreviousState,
-          },
-          {
-            sttDurationMs,
-            reason: 'stt_server_final',
-          },
-        )
-        removePendingTurn(speaker)
-        syncVisiblePendingTurn()
       } else {
         if (!turnStartedAtRef.current && text) {
           turnStartedAtRef.current = Date.now()
@@ -3116,28 +3244,49 @@ export default function useRealtimeSTT({
         }
         const now = Date.now()
         const existingPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
-        const turnIdentity = existingPendingTurn || reservePendingSpeakerTurnIdentity(utteranceIdRef.current + 1, now)
+        if (
+          existingPendingTurn
+          && turnId
+          && existingPendingTurn.turnId
+          && existingPendingTurn.turnId !== turnId
+        ) {
+          const { options } = buildLocalFinalizeOptionsForSpeaker(speaker, existingPendingTurn.language)
+          const rolloverResult = finalizePendingLocally(
+            existingPendingTurn.rawText,
+            existingPendingTurn.language,
+            options,
+          )
+          removePendingTurn(speaker)
+          if (rolloverResult) {
+            finalizeTurnWithTranslation(rolloverResult, {
+              reason: 'stt_turn_rollover',
+            })
+          }
+        }
+        const currentPendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
+        const turnIdentity = currentPendingTurn || reservePendingSpeakerTurnIdentity(utteranceIdRef.current + 1, now)
         const pendingSpeakerAvatarAssignment = ensureSpeakerAvatarAssignment(speaker)
-        const pendingSpeakerAvatarSeed = existingPendingTurn?.speakerAvatarSeed || pendingSpeakerAvatarAssignment.speakerAvatarSeed
+        const pendingSpeakerAvatarSeed = currentPendingTurn?.speakerAvatarSeed || pendingSpeakerAvatarAssignment.speakerAvatarSeed
         const pendingSpeakerAvatarIndex = (
-          typeof existingPendingTurn?.speakerAvatarIndex === 'number'
-            ? existingPendingTurn.speakerAvatarIndex
+          typeof currentPendingTurn?.speakerAvatarIndex === 'number'
+            ? currentPendingTurn.speakerAvatarIndex
             : pendingSpeakerAvatarAssignment.speakerAvatarIndex
         )
-        if (!existingPendingTurn) {
+        if (!currentPendingTurn) {
           utteranceIdRef.current = turnIdentity.utteranceSerial
         }
         pendingTurnsBySpeakerRef.current[speaker] = {
           ...turnIdentity,
+          turnId,
           speaker,
           speakerAvatarSeed: pendingSpeakerAvatarSeed,
           speakerAvatarIndex: pendingSpeakerAvatarIndex,
           rawText,
           text,
           language: lang,
-          partialTranslations: existingPendingTurn?.partialTranslations || {},
-          partialTranslationPriorities: existingPendingTurn?.partialTranslationPriorities || new Map(),
-          currentTurnPreviousState: existingPendingTurn?.currentTurnPreviousState || null,
+          partialTranslations: currentPendingTurn?.partialTranslations || {},
+          partialTranslationPriorities: currentPendingTurn?.partialTranslationPriorities || new Map(),
+          currentTurnPreviousState: currentPendingTurn?.currentTurnPreviousState || null,
           updatedAtMs: now,
         }
         const pendingAvatar = getSpeakerAvatar(speaker, pendingSpeakerAvatarSeed, pendingSpeakerAvatarIndex)
@@ -3149,22 +3298,21 @@ export default function useRealtimeSTT({
           avatarName: pendingAvatar.name,
           avatarSrc: pendingAvatar.src,
           utteranceId: turnIdentity.utteranceId,
+          turnId,
         })
         bumpPendingTurnRenderVersion()
         syncVisiblePendingTurn(speaker)
       }
     }
   }, [
+    applyServerFinalTurn,
     buildLocalFinalizeOptionsForSpeaker,
     bumpPendingTurnRenderVersion,
+    finalizePendingLocally,
     finalizeTurnWithTranslation,
-    getCurrentTargetLanguages,
     logClientEvent,
-    normalizedUsageLimitSec,
-    ensureSpeakerAvatarAssignment,
     removePendingTurn,
     startAudioProcessing,
-    stopRecordingGracefully,
     syncVisiblePendingTurn,
   ])
 
