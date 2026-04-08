@@ -45,12 +45,13 @@ const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE |
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
 const TRANSLATE_TRANSIENT_RETRY_BACKOFF_MS = 250
 const MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS = 2_000
-const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 2_000
+const OPENAI_COMPATIBLE_INTERIM_TIMEOUT_MS = 4_000
 const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
 const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
 type TranslationProvider = 'gemini' | 'gemma' | 'qwen' | 'openai-compatible'
@@ -101,6 +102,10 @@ type TranslationProviderResolution = {
 }
 
 type FinalizeTestFaultMode = 'provider_empty' | 'target_miss' | 'provider_error'
+
+type ProviderRateLimitCooldown = {
+  retryUntilMs: number
+}
 
 type TranslateRequestMeta = {
   requestPathname: string
@@ -187,6 +192,10 @@ function isGoogleGenerativeProviderConfig(
   config: TranslationProviderConfig,
 ): config is GeminiTranslationProviderConfig {
   return config.infrastructureProvider === 'google' && isGoogleGenerativeProvider(config.provider)
+}
+
+function shouldUsePreviousStateFallback(provider: TranslationProvider): boolean {
+  return provider !== 'gemma'
 }
 
 function readTranslateEnv(name: string): string {
@@ -786,6 +795,40 @@ function isRetryableOpenAICompatibleError(error: unknown): boolean {
     || normalizedMessage.includes('aborterror')
     || normalizedMessage.includes('rate limit')
   )
+}
+
+function buildProviderRateLimitCooldownKey(config: Pick<TranslationProviderConfig, 'provider' | 'infrastructureProvider' | 'model'>): string {
+  return `${config.infrastructureProvider}:${config.provider}:${config.model}`.toLowerCase()
+}
+
+function resolveActiveProviderRateLimitCooldownMs(
+  config: Pick<TranslationProviderConfig, 'provider' | 'infrastructureProvider' | 'model'>,
+): number | null {
+  const cooldownKey = buildProviderRateLimitCooldownKey(config)
+  const activeCooldown = providerRateLimitCooldowns.get(cooldownKey)
+  if (!activeCooldown) return null
+
+  const remainingMs = activeCooldown.retryUntilMs - Date.now()
+  if (remainingMs > 0) return remainingMs
+
+  providerRateLimitCooldowns.delete(cooldownKey)
+  return null
+}
+
+function rememberProviderRateLimitCooldown(
+  config: Pick<TranslationProviderConfig, 'provider' | 'infrastructureProvider' | 'model'>,
+  error: unknown,
+): number | null {
+  if (!isRateLimitProviderError(error)) return null
+
+  const retryDelayMs = extractRetryDelayMsFromError(error)
+  if (retryDelayMs === null || retryDelayMs <= MAX_AUTOMATIC_PROVIDER_RETRY_DELAY_MS) return null
+
+  providerRateLimitCooldowns.set(buildProviderRateLimitCooldownKey(config), {
+    retryUntilMs: Date.now() + retryDelayMs,
+  })
+
+  return retryDelayMs
 }
 
 function resolveOpenAICompatibleRequestTimeoutMs(isFinal: boolean): number {
@@ -1686,49 +1729,73 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     }
 
     let selectedResult: TranslationEngineResult | null = null
-    let providerRequestFailed = false
-    try {
-      if (testFaultMode === 'provider_empty') {
-        selectedResult = null
-      } else if (testFaultMode === 'target_miss') {
-        selectedResult = {
-          provider: providerConfig.provider,
-          infrastructureProvider: providerConfig.infrastructureProvider,
-          model: providerConfig.model,
-          translations: {
-            zz: 'forced_target_miss',
-          },
-        }
-      } else if (testFaultMode === 'provider_error') {
-        throw new Error('forced_provider_error_for_e2e')
-      } else {
-        if (isGoogleGenerativeProviderConfig(providerConfig)) {
-          selectedResult = await translateWithGemini(ctx, providerConfig)
-        } else {
-          selectedResult = await translateWithOpenAICompatible(ctx, providerConfig)
-        }
-      }
-    } catch (error) {
-      providerRequestFailed = true
-      logTranslateFinalizeError('provider_error', {
+    let providerRequestFailureReason: 'provider_error' | 'provider_rate_limit_cooldown' | null = null
+    const activeProviderRateLimitCooldownMs = resolveActiveProviderRateLimitCooldownMs(providerConfig)
+    if (activeProviderRateLimitCooldownMs !== null) {
+      providerRequestFailureReason = 'provider_rate_limit_cooldown'
+      console.warn('[translate/finalize] provider_rate_limit_cooldown_active', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: providerConfig.provider,
-        error: summarizeUnknownError(error),
+        model: providerConfig.model,
+        retryInMs: activeProviderRateLimitCooldownMs,
       })
+    } else {
+      try {
+        if (testFaultMode === 'provider_empty') {
+          selectedResult = null
+        } else if (testFaultMode === 'target_miss') {
+          selectedResult = {
+            provider: providerConfig.provider,
+            infrastructureProvider: providerConfig.infrastructureProvider,
+            model: providerConfig.model,
+            translations: {
+              zz: 'forced_target_miss',
+            },
+          }
+        } else if (testFaultMode === 'provider_error') {
+          throw new Error('forced_provider_error_for_e2e')
+        } else {
+          if (isGoogleGenerativeProviderConfig(providerConfig)) {
+            selectedResult = await translateWithGemini(ctx, providerConfig)
+          } else {
+            selectedResult = await translateWithOpenAICompatible(ctx, providerConfig)
+          }
+        }
+      } catch (error) {
+        providerRequestFailureReason = 'provider_error'
+        const retryInMs = rememberProviderRateLimitCooldown(providerConfig, error)
+        if (retryInMs !== null) {
+          console.warn('[translate/finalize] provider_rate_limit_cooldown_started', {
+            ...buildTranslateFinalizeLogContext(ctx),
+            provider: providerConfig.provider,
+            model: providerConfig.model,
+            retryInMs,
+          })
+        }
+        logTranslateFinalizeError('provider_error', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          provider: providerConfig.provider,
+          error: summarizeUnknownError(error),
+        })
+      }
     }
 
     if (!selectedResult || Object.keys(selectedResult.translations).length === 0) {
       logTranslateFinalizeError('provider_empty_response', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: providerConfig.provider,
-        reason: providerRequestFailed ? 'provider_error' : 'provider_empty_or_unparseable',
+        reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
         responseStatus: 502,
       })
-      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
+      if (
+        !ctx.isFinal
+        && shouldUsePreviousStateFallback(providerConfig.provider)
+        && Object.keys(fallbackTranslations).length > 0
+      ) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
-          reason: providerRequestFailed ? 'provider_error' : 'provider_empty_response',
+          reason: providerRequestFailureReason || 'provider_empty_response',
         })
         return await buildResponseWithOptionalTts(fallbackTranslations, {
           provider: providerConfig.provider,
@@ -1781,7 +1848,11 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         rawTranslations: selectedResult.translations,
         responseStatus: 502,
       })
-      if (!ctx.isFinal && Object.keys(fallbackTranslations).length > 0) {
+      if (
+        !ctx.isFinal
+        && shouldUsePreviousStateFallback(selectedResult.provider)
+        && Object.keys(fallbackTranslations).length > 0
+      ) {
         console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
