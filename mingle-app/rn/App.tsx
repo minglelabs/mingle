@@ -1286,7 +1286,7 @@ function AppInner(): React.JSX.Element {
   const initialLoadSettledRef = useRef(false);
   const [startupSplashVisible, setStartupSplashVisible] = useState(() => Boolean(webUrl));
   const startupSplashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState(0);
+  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null);
   const nativeAdModule = useMemo<NativeAdModule | null>(() => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1346,13 +1346,12 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
-  const nativeBottomBannerClearancePx = useMemo(
-    () => Math.max(
-      Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale),
-      normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx),
-    ),
-    [nativeBottomBarClearancePx, nativeCanvasScale],
-  );
+  const nativeBottomBannerClearancePx = useMemo(() => {
+    if (nativeBottomBarClearancePx !== null) {
+      return normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx);
+    }
+    return Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale);
+  }, [nativeBottomBarClearancePx, nativeCanvasScale]);
   const nativeBannerBottomOffsetPx = useMemo(
     () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
@@ -1371,7 +1370,7 @@ function AppInner(): React.JSX.Element {
   const canRenderNativeBanner = versionGate.status === 'ready';
 
   useEffect(() => {
-    setNativeBottomBarClearancePx(0);
+    setNativeBottomBarClearancePx(null);
   }, [webViewMountToken]);
 
   useEffect(() => {

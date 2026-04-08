@@ -8,42 +8,42 @@ import {
 
 describe('RN api namespace validation contract', () => {
   it('normalizes leading and trailing slashes', () => {
-    expect(normalizeApiNamespace(' /ios/v1.0.12/ ')).toBe('ios/v1.0.12')
+    expect(normalizeApiNamespace(' /ios/v1.0.13/ ')).toBe('ios/v1.0.13')
   })
 
   it('returns expected namespace by runtime os', () => {
-    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.12')
-    expect(resolveExpectedApiNamespace('android')).toBe('android/v1.0.12')
+    expect(resolveExpectedApiNamespace('ios')).toBe('ios/v1.0.13')
+    expect(resolveExpectedApiNamespace('android')).toBe('android/v1.0.13')
     expect(resolveExpectedApiNamespace('web')).toBe('')
   })
 
   it('accepts only matching iOS namespace', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'ios',
-      configuredApiNamespace: 'ios/v1.0.12',
+      configuredApiNamespace: 'ios/v1.0.13',
     })
 
-    expect(result.expectedApiNamespace).toBe('ios/v1.0.12')
-    expect(result.validatedApiNamespace).toBe('ios/v1.0.12')
+    expect(result.expectedApiNamespace).toBe('ios/v1.0.13')
+    expect(result.validatedApiNamespace).toBe('ios/v1.0.13')
   })
 
   it('accepts only matching Android namespace', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'android',
-      configuredApiNamespace: 'android/v1.0.12',
+      configuredApiNamespace: 'android/v1.0.13',
     })
 
-    expect(result.expectedApiNamespace).toBe('android/v1.0.12')
-    expect(result.validatedApiNamespace).toBe('android/v1.0.12')
+    expect(result.expectedApiNamespace).toBe('android/v1.0.13')
+    expect(result.validatedApiNamespace).toBe('android/v1.0.13')
   })
 
   it('rejects mismatched namespace for Android runtime', () => {
     const result = validateRnApiNamespace({
       runtimeOs: 'android',
-      configuredApiNamespace: 'ios/v1.0.12',
+      configuredApiNamespace: 'ios/v1.0.13',
     })
 
-    expect(result.expectedApiNamespace).toBe('android/v1.0.12')
+    expect(result.expectedApiNamespace).toBe('android/v1.0.13')
     expect(result.validatedApiNamespace).toBe('')
   })
 

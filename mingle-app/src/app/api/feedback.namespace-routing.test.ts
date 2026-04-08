@@ -16,7 +16,7 @@ import {
 import {
   GET as getAndroidV110Feedback,
   POST as postAndroidV110Feedback,
-} from '@/app/api/android/v1.0.12/feedback/route'
+} from '@/app/api/android/v1.0.13/feedback/route'
 import {
   GET as getIosV107Feedback,
   POST as postIosV107Feedback,
@@ -32,7 +32,7 @@ import {
 import {
   GET as getIosV110Feedback,
   POST as postIosV110Feedback,
-} from '@/app/api/ios/v1.0.12/feedback/route'
+} from '@/app/api/ios/v1.0.13/feedback/route'
 
 describe('feedback namespace route wiring', () => {
   it('maps Android feedback aliases to the shared feedback route', () => {

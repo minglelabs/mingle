@@ -76,19 +76,19 @@ export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {
 }
 
 export function resolveNativeBottomBarBannerClearancePx(input: {
-  bottomBarHeightPx: number
-  keyboardInsetPx: number
+  bottomBarTopPx: number
+  viewportHeightPx: number
   safeAreaInsetBottomPx: number
 }): number {
-  const bottomBarHeightPx = Number(input.bottomBarHeightPx)
-  const keyboardInsetPx = Number(input.keyboardInsetPx)
+  const bottomBarTopPx = Number(input.bottomBarTopPx)
+  const viewportHeightPx = Number(input.viewportHeightPx)
   const safeAreaInsetBottomPx = Number(input.safeAreaInsetBottomPx)
 
-  const safeBottomBarHeightPx = Number.isFinite(bottomBarHeightPx) ? bottomBarHeightPx : 0
-  const safeKeyboardInsetPx = Number.isFinite(keyboardInsetPx) ? keyboardInsetPx : 0
+  const safeBottomBarTopPx = Number.isFinite(bottomBarTopPx) ? bottomBarTopPx : 0
+  const safeViewportHeightPx = Number.isFinite(viewportHeightPx) ? viewportHeightPx : 0
   const safeSafeAreaInsetBottomPx = Number.isFinite(safeAreaInsetBottomPx) ? safeAreaInsetBottomPx : 0
 
-  return Math.max(0, Math.round(safeBottomBarHeightPx - safeKeyboardInsetPx - safeSafeAreaInsetBottomPx))
+  return Math.max(0, Math.round(safeViewportHeightPx - safeBottomBarTopPx - safeSafeAreaInsetBottomPx))
 }
 
 function isLoopbackHost(host: string): boolean {

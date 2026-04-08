@@ -115,23 +115,23 @@ describe('live-phone-demo native ui bridge logic', () => {
     expect(isNativeUiBridgeEnabledFromSearch('%')).toBe(false)
   })
 
-  it('derives bottom banner clearance from bottom bar height excluding keyboard and safe area', () => {
+  it('derives bottom banner clearance from the live bottom bar position and safe area', () => {
     expect(resolveNativeBottomBarBannerClearancePx({
-      bottomBarHeightPx: 142,
-      keyboardInsetPx: 48,
+      bottomBarTopPx: 706,
+      viewportHeightPx: 844,
       safeAreaInsetBottomPx: 34,
-    })).toBe(60)
+    })).toBe(104)
   })
 
   it('clamps invalid bottom banner clearance inputs to zero', () => {
     expect(resolveNativeBottomBarBannerClearancePx({
-      bottomBarHeightPx: 20,
-      keyboardInsetPx: 40,
+      bottomBarTopPx: 120,
+      viewportHeightPx: 100,
       safeAreaInsetBottomPx: 10,
     })).toBe(0)
     expect(resolveNativeBottomBarBannerClearancePx({
-      bottomBarHeightPx: Number.NaN,
-      keyboardInsetPx: 0,
+      bottomBarTopPx: 20,
+      viewportHeightPx: Number.NaN,
       safeAreaInsetBottomPx: 0,
     })).toBe(0)
   })

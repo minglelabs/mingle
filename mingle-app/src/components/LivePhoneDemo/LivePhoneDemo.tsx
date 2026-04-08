@@ -992,10 +992,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const bottomBarNode = bottomBarRef.current
     if (!bottomBarNode) return
 
-    const bottomBarHeightPx = bottomBarNode.getBoundingClientRect().height
+    const bottomBarRect = bottomBarNode.getBoundingClientRect()
     const nextClearancePx = resolveNativeBottomBarBannerClearancePx({
-      bottomBarHeightPx,
-      keyboardInsetPx: keyboardViewportInsetPx,
+      bottomBarTopPx: bottomBarRect.top,
+      viewportHeightPx: window.innerHeight,
       safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
     })
 
@@ -1007,7 +1007,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       payload: { clearancePx: nextClearancePx },
     }
     window.ReactNativeWebView.postMessage(JSON.stringify(command))
-  }, [keyboardViewportInsetPx])
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1050,6 +1050,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       viewport?.removeEventListener('scroll', requestSync)
     }
   }, [syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const frameId = window.requestAnimationFrame(() => {
+      syncNativeBottomBarClearance()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
 
   useEffect(() => {
     if (!isComposerOpen) return
@@ -4124,7 +4136,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <motion.div
             layout
             ref={bottomBarRef}
-            className="shrink-0 border-t border-gray-100 bg-white"
+            className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
               paddingTop: '10px',
@@ -4133,7 +4145,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {isComposerOpen ? (
                 <motion.div
                   key="composer-bottom-bar"
