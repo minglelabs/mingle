@@ -7,6 +7,7 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
 
@@ -111,6 +112,33 @@ describe('live-phone-demo native ui bridge logic', () => {
     expect(isNativeUiBridgeEnabledFromSearch('')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('?foo=bar')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('%')).toBe(false)
+  })
+
+  describe('shouldEnableNativeDebugWebViewRemount', () => {
+    it('enables the action in development mode', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle.app/ko',
+        isDevelopmentMode: true,
+      })).toBe(true)
+    })
+
+    it('enables the action for loopback and devbox cloudflare hosts', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'http://localhost:3000/ko',
+        isDevelopmentMode: false,
+      })).toBe(true)
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle-app-devbox.photo-for-passport.com/ko',
+        isDevelopmentMode: false,
+      })).toBe(true)
+    })
+
+    it('disables the action for regular production hosts', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle.photo-for-passport.com/ko',
+        isDevelopmentMode: false,
+      })).toBe(false)
+    })
   })
 
   describe('shouldEnableIosTopTapFallback', () => {
