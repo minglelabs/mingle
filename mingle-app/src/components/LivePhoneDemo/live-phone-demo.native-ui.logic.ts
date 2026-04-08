@@ -75,6 +75,22 @@ export function isNativeUiBridgeEnabledFromSearch(search: string): boolean {
   }
 }
 
+export function resolveNativeBottomBarBannerClearancePx(input: {
+  bottomBarTopPx: number
+  viewportHeightPx: number
+  safeAreaInsetBottomPx: number
+}): number {
+  const bottomBarTopPx = Number(input.bottomBarTopPx)
+  const viewportHeightPx = Number(input.viewportHeightPx)
+  const safeAreaInsetBottomPx = Number(input.safeAreaInsetBottomPx)
+
+  const safeBottomBarTopPx = Number.isFinite(bottomBarTopPx) ? bottomBarTopPx : 0
+  const safeViewportHeightPx = Number.isFinite(viewportHeightPx) ? viewportHeightPx : 0
+  const safeSafeAreaInsetBottomPx = Number.isFinite(safeAreaInsetBottomPx) ? safeAreaInsetBottomPx : 0
+
+  return Math.max(0, Math.round(safeViewportHeightPx - safeBottomBarTopPx - safeSafeAreaInsetBottomPx))
+}
+
 function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase()
   return normalized === '127.0.0.1' || normalized === 'localhost' || normalized === '::1'

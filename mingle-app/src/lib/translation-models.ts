@@ -7,9 +7,12 @@ export type UserSelectableTranslationModel =
   | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
 
+export type TranslationModelBadge = 'Best' | 'Slow'
+
 export type TranslationModelOption = {
   value: UserSelectableTranslationModel
   label: string
+  badge?: TranslationModelBadge
 }
 
 export type TranslationRuntimeSelection = {
@@ -26,14 +29,17 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
   {
     value: 'gemini-2.5-flash-lite',
     label: 'gemini-2.5-flash-lite',
+    badge: 'Best',
   },
   {
     value: 'gemma-4-31b-it',
-    label: 'gemma-4-31b-it (slow)',
+    label: 'gemma-4-31b-it',
+    badge: 'Slow',
   },
   {
     value: 'qwen/qwen3.5-9b',
     label: 'qwen3.5-9b',
+    badge: 'Slow',
   },
 ]
 

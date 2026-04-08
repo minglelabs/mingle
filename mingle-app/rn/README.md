@@ -13,7 +13,7 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.1.0`, Android: `android/v1.1.0`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.0.11`, Android: `android/v1.0.11`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
@@ -25,13 +25,13 @@ The RN app requires the following environment variables.
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
-`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.0` before launch.
-`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.0` before launch.
+`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.0.11` before launch.
+`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.0.11` before launch.
 
 On startup, the RN app calls the version-policy API and applies `force_update | recommend_update | none`.
 
-- iOS: `/api/ios/v1.1.0/client/version-policy`
-- Android: `/api/android/v1.1.0/client/version-policy`
+- iOS: `/api/ios/v1.0.11/client/version-policy`
+- Android: `/api/android/v1.0.11/client/version-policy`
 - The request body includes `platform` (`ios` | `android`).
 - The response can optionally override the banner ad unit ID via server env, while the built-in production IDs remain the fallback.
 

@@ -658,6 +658,12 @@ interface UseRealtimeSTTOptions {
   storageNamespace?: string
 }
 
+interface SubmitExternalUtteranceInput {
+  text: string
+  sourceLanguage?: string
+  speaker?: string
+}
+
 interface LocalFinalizeResult {
   utteranceId: string
   text: string
@@ -2841,6 +2847,33 @@ export default function useRealtimeSTT({
     })
   }, [applyTranslationToUtterance, getCurrentTargetLanguages, logClientEvent, translateViaApi])
 
+  const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
+    const text = normalizeSttTurnText(input.text)
+    if (!text) return null
+
+    const speaker = (input.speaker || '').trim() || 'manual'
+    const sourceLanguage = normalizeLangForCompare(input.sourceLanguage || '') || 'unknown'
+    const speakerAvatar = ensureSpeakerAvatarAssignment(speaker)
+    const localFinalizeResult = finalizePendingLocally(text, sourceLanguage, {
+      speaker,
+      speakerAvatarSeed: speakerAvatar.speakerAvatarSeed,
+      speakerAvatarIndex: speakerAvatar.speakerAvatarIndex,
+      partialTranslations: {},
+      partialTranslationPriorities: new Map(),
+      previousStateSourceLanguage: sourceLanguage,
+      previousStateSourceText: text,
+      fallbackCurrentTurnPreviousState: null,
+    })
+
+    if (!localFinalizeResult) return null
+
+    finalizeTurnWithTranslation(localFinalizeResult, {
+      reason: 'manual_text_input',
+    })
+
+    return localFinalizeResult.utteranceId
+  }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
+
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
@@ -3342,11 +3375,9 @@ export default function useRealtimeSTT({
     finalizeTurnWithTranslation,
     getCurrentTargetLanguages,
     logClientEvent,
-    normalizedUsageLimitSec,
     ensureSpeakerAvatarAssignment,
     removePendingTurn,
     startAudioProcessing,
-    stopRecordingGracefully,
     syncVisiblePendingTurn,
   ])
 
@@ -4026,6 +4057,7 @@ export default function useRealtimeSTT({
     isLimitReached,
     usageLimitSec: normalizedUsageLimitSec,
     appendUtterances,
+    submitExternalUtterance,
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
