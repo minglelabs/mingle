@@ -40,6 +40,21 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
 }
 
+export function persistUtterancesSnapshot(utterances: Utterance[]): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (utterances.length === 0) {
+      window.localStorage.removeItem(LS_KEY_UTTERANCES)
+      return
+    }
+
+    window.localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(utterances))
+  } catch {
+    // Ignore local persistence failures.
+  }
+}
+
 function isNativeAppRuntime(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -1907,9 +1922,7 @@ export default function useRealtimeSTT({
     if (!storageHydratedRef.current) return
     if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
     utterancePersistTimerRef.current = setTimeout(() => {
-      try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterances)))
-      } catch { /* ignore */ }
+      persistUtterancesSnapshot(buildMergedUtterances(utterances))
     }, 1000)
     return () => {
       if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
@@ -1923,9 +1936,7 @@ export default function useRealtimeSTT({
       if (!utterancePersistTimerRef.current) return
       clearTimeout(utterancePersistTimerRef.current)
       utterancePersistTimerRef.current = null
-      try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterancesRef.current)))
-      } catch { /* ignore */ }
+      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
@@ -2696,6 +2707,57 @@ export default function useRealtimeSTT({
 
     return localFinalizeResult.utteranceId
   }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
+
+  const clearConversationHistory = useCallback(() => {
+    const wasActiveSession = hasActiveSessionRef.current
+
+    clearLanguageChangeRestartTimer()
+    clearConnectionErrorResetTimer()
+    isStoppingRef.current = true
+    pendingLanguageChangeRestartRef.current = false
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+
+    if (useNativeSttRef.current) {
+      nativeStopRequestedRef.current = true
+      void sendNativeSttCommand({
+        type: 'native_stt_stop',
+        payload: {
+          pendingText: '',
+          pendingLanguage: '',
+        },
+      })
+    }
+
+    clearPartialBuffers()
+    resetToIdle()
+    storedUtterancesRef.current = []
+    storageLoadedCountRef.current = 0
+    utterancesRef.current = []
+    recentFinalizedUtteranceRef.current = null
+    finalizedTtsSignatureRef.current.clear()
+    pendingFinalizedTtsUtteranceIdsRef.current.clear()
+    utteranceIdRef.current = 0
+    persistUtterancesSnapshot([])
+    setHasOlderUtterances(false)
+    setUtteranceStore(createUtteranceStoreState([]))
+
+    if (wasActiveSession) {
+      void logClientEvent({
+        eventType: 'stt_session_stopped',
+        metadata: {
+          reason: 'conversation_history_cleared',
+        },
+        keepalive: true,
+      })
+    }
+  }, [
+    clearConnectionErrorResetTimer,
+    clearLanguageChangeRestartTimer,
+    clearPartialBuffers,
+    logClientEvent,
+    resetToIdle,
+    sendNativeSttCommand,
+  ])
 
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
@@ -3868,6 +3930,7 @@ export default function useRealtimeSTT({
     usageLimitSec: normalizedUsageLimitSec,
     appendUtterances,
     submitExternalUtterance,
+    clearConversationHistory,
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,

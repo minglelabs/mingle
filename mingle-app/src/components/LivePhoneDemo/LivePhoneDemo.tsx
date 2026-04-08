@@ -91,6 +91,7 @@ import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
+const MESSAGES_API_PATH = buildClientApiPath('/messages')
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
@@ -131,6 +132,17 @@ type LivePhoneDemoComposerCopy = {
   closeKeyboardLabel: string
   composerPlaceholder: string
   sendMessageLabel: string
+}
+
+type LivePhoneDemoConversationDeleteCopy = {
+  menuItemLabel: string
+  dialogTitle: string
+  dialogMessage: string
+  cancelLabel: string
+  confirmLabel: string
+  deletingLabel: string
+  successToastLabel: string
+  errorToastLabel: string
 }
 
 type PersistedFeedbackDraft = {
@@ -268,6 +280,47 @@ export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDem
     closeKeyboardLabel: 'Close text input',
     composerPlaceholder: 'Type a message',
     sendMessageLabel: 'Send message',
+  }
+}
+
+function resolveLivePhoneDemoConversationDeleteCopy(uiLocale: string): LivePhoneDemoConversationDeleteCopy {
+  const locale = (uiLocale || '').trim().toLowerCase()
+
+  if (locale.startsWith('ko')) {
+    return {
+      menuItemLabel: '대화 전체 삭제',
+      dialogTitle: '대화 전체 삭제',
+      dialogMessage: '삭제하시겠습니까?',
+      cancelLabel: '취소',
+      confirmLabel: '삭제',
+      deletingLabel: '삭제 중...',
+      successToastLabel: '대화가 전체 삭제되었습니다.',
+      errorToastLabel: '대화 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+    }
+  }
+
+  if (locale.startsWith('ja')) {
+    return {
+      menuItemLabel: '会話をすべて削除',
+      dialogTitle: '会話をすべて削除',
+      dialogMessage: '削除しますか？',
+      cancelLabel: 'キャンセル',
+      confirmLabel: '削除',
+      deletingLabel: '削除中...',
+      successToastLabel: '会話をすべて削除しました。',
+      errorToastLabel: '会話を削除できませんでした。しばらくしてからもう一度お試しください。',
+    }
+  }
+
+  return {
+    menuItemLabel: 'Delete all conversation messages',
+    dialogTitle: 'Delete all conversation messages',
+    dialogMessage: 'Delete all conversation messages?',
+    cancelLabel: 'Cancel',
+    confirmLabel: 'Delete',
+    deletingLabel: 'Deleting...',
+    successToastLabel: 'All conversation messages were deleted.',
+    errorToastLabel: 'Failed to delete the conversation. Please try again.',
   }
 }
 
@@ -822,6 +875,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
+  const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
@@ -836,6 +890,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [deleteConversationDialogOpen, setDeleteConversationDialogOpen] = useState(false)
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
@@ -892,6 +948,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
@@ -1494,6 +1551,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (boundedDepth === 0) {
       setDeleteAccountDialogOpen(false)
+      setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
       setMenuOpen(false)
       return
@@ -1566,6 +1624,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackTab('compose')
     pushMenuHistoryEntry(2)
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleDeleteConversationMenuItemPress = useCallback(() => {
+    setDeleteConversationDialogOpen(true)
+  }, [])
 
   const handleTextSizeLevelSelect = useCallback((nextTextSizeLevel: number) => {
     setTextSizeMenuOpen(false)
@@ -1706,6 +1768,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      if (deleteConversationDialogOpen) {
+        if (!isDeletingConversation) {
+          setDeleteConversationDialogOpen(false)
+        }
+        return
+      }
       if (textSizeMenuOpen) {
         setTextSizeMenuOpen(false)
         try {
@@ -1731,7 +1799,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [deleteConversationDialogOpen, isDeletingConversation, menuOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -1788,6 +1856,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isAuthActionPending) return
     setDeleteAccountDialogOpen(false)
   }, [isAuthActionPending])
+
+  const closeDeleteConversationDialog = useCallback(() => {
+    if (isDeletingConversation) return
+    setDeleteConversationDialogOpen(false)
+  }, [isDeletingConversation])
 
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
@@ -1870,6 +1943,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [closeDeleteAccountDialog, deleteAccountDialogOpen])
+
+  useEffect(() => {
+    if (!deleteConversationDialogOpen) return
+    deleteConversationCancelButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeDeleteConversationDialog()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeDeleteConversationDialog, deleteConversationDialogOpen])
 
   const ensureAudioPlayer = useCallback(() => {
     if (playerAudioRef.current) return playerAudioRef.current
@@ -2258,6 +2347,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     volume,
     toggleRecording,
     submitExternalUtterance,
+    clearConversationHistory,
     isActive,
     isReady,
     isConnecting,
@@ -2445,6 +2535,48 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     sendNativeTtsStopCommand(reason)
   }, [cleanupCurrentAudio, clearNativeTtsEventTimer, clearStopClickResumeTimers, clearTtsWaitTimer, sendNativeTtsStopCommand])
+
+  const handleDeleteConversationConfirm = useCallback(async () => {
+    if (isDeletingConversation) return
+    setIsDeletingConversation(true)
+
+    try {
+      const sessionKey = getOrCreateSessionKey()
+      const trackingUserId = getOrCreateTrackingUserId()
+      const response = await fetch(MESSAGES_API_PATH, {
+        method: 'DELETE',
+        headers: buildTrackingRequestHeaders({
+          sessionKey,
+          trackingUserId,
+          nativeAppUpdate,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`conversation_delete_failed:${response.status}`)
+      }
+
+      manualTtsRequestSeqRef.current += 1
+      setPendingManualTtsTarget(null)
+      forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      clearConversationHistory()
+      setDeleteConversationDialogOpen(false)
+      requestCloseMenuPanel()
+      toast.success(deleteConversationCopy.successToastLabel)
+    } catch {
+      toast.error(deleteConversationCopy.errorToastLabel)
+    } finally {
+      setIsDeletingConversation(false)
+    }
+  }, [
+    clearConversationHistory,
+    deleteConversationCopy.errorToastLabel,
+    deleteConversationCopy.successToastLabel,
+    forceStopTtsPlayback,
+    isDeletingConversation,
+    nativeAppUpdate,
+    requestCloseMenuPanel,
+  ])
 
   // Stop current playback when sound is disabled.
   useEffect(() => {
@@ -3190,7 +3322,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           onExitComplete={() => {
             setMenuDragOffsetX(0)
             setIsMenuDragging(false)
-            if (!deleteAccountDialogOpen) {
+            if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {
               try {
                 menuButtonRef.current?.focus({ preventScroll: true })
               } catch {
@@ -3612,6 +3744,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           >
                             <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
                             <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleDeleteConversationMenuItemPress}
+                            disabled={isDeletingConversation}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <Trash2 size={17} strokeWidth={2.2} />
+                              <span className="min-w-0 flex-1">{deleteConversationCopy.menuItemLabel}</span>
+                            </span>
+                            <span className="shrink-0 text-rose-500">
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
@@ -4206,6 +4355,58 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </div>
 
           <AnimatePresence>
+            {deleteConversationDialogOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
+                onClick={closeDeleteConversationDialog}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={deleteConversationCopy.dialogTitle}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    {deleteConversationCopy.dialogTitle}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                    {deleteConversationCopy.dialogMessage}
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      ref={deleteConversationCancelButtonRef}
+                      type="button"
+                      onClick={closeDeleteConversationDialog}
+                      disabled={isDeletingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deleteConversationCopy.cancelLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleDeleteConversationConfirm()
+                      }}
+                      disabled={isDeletingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
+                    >
+                      {isDeletingConversation
+                        ? deleteConversationCopy.deletingLabel
+                        : deleteConversationCopy.confirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
             {showAccountMenuItems && deleteAccountDialogOpen && (
               <motion.div
                 initial={{ opacity: 0 }}
