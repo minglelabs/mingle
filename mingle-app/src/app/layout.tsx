@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
@@ -72,6 +73,7 @@ export default function RootLayout({
         <TtsSettingsProvider>
           <AuthSessionProvider>
             <MobileCanvasShell>{children}</MobileCanvasShell>
+            <Analytics />
             <Toaster position="bottom-center" richColors closeButton />
           </AuthSessionProvider>
         </TtsSettingsProvider>
