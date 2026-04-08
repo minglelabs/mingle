@@ -351,6 +351,59 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('returns an error for repeated gemma requests while a long provider retry delay is still active', async () => {
+    setAuthenticatedTranslationModel('gemma-4-31b-it')
+    let nowMs = 1_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => nowMs)
+
+    mockGenerateContent.mockRejectedValueOnce(new Error(
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. Please retry in 59.616803365s. [{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"59s"}]',
+    ))
+
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    try {
+      const firstResponse = await POST(makeJsonRequest({
+        text: 'Like that.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko', 'ja'],
+        isFinal: false,
+      }) as never)
+      const firstJson = await firstResponse.json()
+
+      expect(firstResponse.status).toBe(502)
+      expect(firstJson).toEqual({ error: 'empty_translation_response' })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+
+      nowMs += 1_000
+
+      const secondResponse = await POST(makeJsonRequest({
+        text: 'Like that.',
+        sourceLanguage: 'en',
+        targetLanguages: ['ko', 'ja'],
+        isFinal: false,
+        currentTurnPreviousState: {
+          sourceLanguage: 'en',
+          sourceText: 'Like that.',
+          translations: {
+            ko: '그렇게.',
+            ja: 'そんなふうに。',
+          },
+        },
+      }) as never)
+      const secondJson = await secondResponse.json()
+
+      expect(secondResponse.status).toBe(502)
+      expect(secondJson).toEqual({ error: 'empty_translation_response' })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
+
   it('does not retry openai-compatible 429 errors when no retry delay is provided', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     const fetchMock = vi.fn()
@@ -502,6 +555,55 @@ describe('/api/translate/finalize route', () => {
     })
     expect(body.messages?.[0]?.role).toBe('system')
     expect(body.messages?.[1]?.role).toBe('user')
+  })
+
+  it('uses a longer timeout for non-final qwen openrouter requests', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"en":"no","ja":"いいえ"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+      const controller = new AbortController()
+      ;(controller.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs = ms
+      return controller.signal
+    })
+
+    try {
+      const POST = await importRouteWithQwenEnv({
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'qwen/qwen3.5-9b',
+      })
+
+      const res = await POST(makeJsonRequest({
+        text: '아니',
+        sourceLanguage: 'ko',
+        targetLanguages: ['en', 'ja'],
+        isFinal: false,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.translations).toEqual({ en: 'no', ja: 'いいえ' })
+      const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+      expect(timeoutSpy).toHaveBeenCalledWith(4_000)
+      expect((requestInit.signal as AbortSignal & { __timeoutMs?: number }).__timeoutMs).toBe(4_000)
+    } finally {
+      timeoutSpy.mockRestore()
+    }
   })
 
   it('supports gemma 4 via the Google Generative AI SDK when selected in account preferences', async () => {
