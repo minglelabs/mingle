@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
 import {
+  buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
@@ -23,8 +24,8 @@ describe('buildHydratedAccountPreferences', () => {
       translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
-      speakerEnabled: false,
-      echoAllowed: true,
+      speakerEnabled: true,
+      echoAllowed: false,
     })
   })
 
@@ -147,5 +148,27 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       },
       lastSyncedStateKey: null,
     })).toBe(false)
+  })
+})
+
+describe('buildAccountPreferencesPatchBody', () => {
+  it('includes audio flags alongside the rest of the persisted preferences', () => {
+    expect(buildAccountPreferencesPatchBody({
+      textSizeLevel: 4,
+      sonioxManualFinalizeSilenceMs: 700,
+      translationModel: 'qwen/qwen3.5-9b',
+      adBannerPosition: 'bottom',
+      inputMode: 'text',
+      speakerEnabled: true,
+      echoAllowed: false,
+    })).toEqual({
+      textSizeLevel: 4,
+      sonioxManualFinalizeSilenceMs: 700,
+      translationModel: 'qwen/qwen3.5-9b',
+      adBannerPosition: 'bottom',
+      inputMode: 'text',
+      speakerEnabled: true,
+      echoAllowed: false,
+    })
   })
 })

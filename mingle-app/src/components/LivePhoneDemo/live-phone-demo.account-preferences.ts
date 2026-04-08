@@ -41,6 +41,16 @@ export interface LivePhoneDemoAccountPreferences {
   echoAllowed: boolean
 }
 
+export interface AccountPreferencesPatchBody {
+  textSizeLevel: number
+  sonioxManualFinalizeSilenceMs: number
+  translationModel: UserSelectableTranslationModel
+  adBannerPosition: LivePhoneDemoAdBannerPosition | null
+  inputMode: LivePhoneDemoInputMode
+  speakerEnabled: boolean
+  echoAllowed: boolean
+}
+
 function normalizeIntegerPreference(
   value: unknown,
   fallback: number,
@@ -63,6 +73,10 @@ export function normalizeSonioxManualFinalizeSilencePreference(value: unknown): 
   return normalizeIntegerPreference(value, DEFAULT_SONIOX_SILENCE_MS, MIN_SONIOX_SILENCE_MS, MAX_SONIOX_SILENCE_MS)
 }
 
+function normalizeBooleanPreference(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
 export function buildHydratedAccountPreferences(
   body: AccountPreferencesResponse | null | undefined,
   isLegacySonioxSilenceSliderNamespace: boolean,
@@ -75,8 +89,22 @@ export function buildHydratedAccountPreferences(
     translationModel: normalizeSelectableTranslationModel(body?.translationModel) || DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: normalizeLivePhoneDemoAdBannerPosition(body?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
     inputMode: normalizeLivePhoneDemoInputMode(body?.inputMode) ?? DEFAULT_INPUT_MODE,
-    speakerEnabled: DEFAULT_SPEAKER_ENABLED,
-    echoAllowed: DEFAULT_ECHO_ALLOWED,
+    speakerEnabled: normalizeBooleanPreference(body?.speakerEnabled, DEFAULT_SPEAKER_ENABLED),
+    echoAllowed: normalizeBooleanPreference(body?.echoAllowed, DEFAULT_ECHO_ALLOWED),
+  }
+}
+
+export function buildAccountPreferencesPatchBody(
+  preferences: LivePhoneDemoAccountPreferences,
+): AccountPreferencesPatchBody {
+  return {
+    textSizeLevel: preferences.textSizeLevel,
+    sonioxManualFinalizeSilenceMs: preferences.sonioxManualFinalizeSilenceMs,
+    translationModel: preferences.translationModel,
+    adBannerPosition: preferences.adBannerPosition,
+    inputMode: preferences.inputMode,
+    speakerEnabled: preferences.speakerEnabled,
+    echoAllowed: preferences.echoAllowed,
   }
 }
 

@@ -36,6 +36,7 @@ import {
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
+  buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
@@ -1271,13 +1272,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: currentPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: currentPreferences.translationModel,
-        adBannerPosition: currentPreferences.adBannerPosition,
-        inputMode: currentPreferences.inputMode,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
@@ -1307,13 +1302,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: nextPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: nextPreferences.translationModel,
-        adBannerPosition: nextPreferences.adBannerPosition,
-        inputMode: nextPreferences.inputMode,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(nextPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
