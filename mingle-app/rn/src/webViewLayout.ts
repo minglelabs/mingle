@@ -54,6 +54,13 @@ export function shouldDisableIosWebViewScrolling(params: {
   return params.isIosPlatform && isLiveDemoPathname(params.pathname);
 }
 
+export function shouldHideIosKeyboardAccessoryView(params: {
+  isIosPlatform: boolean;
+  pathname: string;
+}): boolean {
+  return params.isIosPlatform && isLiveDemoPathname(params.pathname);
+}
+
 export function resolveNativeBannerContentHeightPx(params: {
   bannerHeightPx: number;
   canvasScale: number;

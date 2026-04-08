@@ -42,6 +42,7 @@ import {
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
   shouldDisableIosWebViewScrolling,
+  shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
 import {
   createCheckingNativeAppUpdateSnapshot,
@@ -1377,6 +1378,10 @@ function AppInner(): React.JSX.Element {
     isIosPlatform: Platform.OS === 'ios',
     pathname: currentWebPathname,
   }), [currentWebPathname]);
+  const shouldHideIosKeyboardAccessory = useMemo(() => shouldHideIosKeyboardAccessoryView({
+    isIosPlatform: Platform.OS === 'ios',
+    pathname: currentWebPathname,
+  }), [currentWebPathname]);
 
   useEffect(() => {
     setNativeBottomBarClearancePx(null);
@@ -2363,6 +2368,7 @@ function AppInner(): React.JSX.Element {
             setSupportMultipleWindows={false}
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
+            hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}

@@ -6,6 +6,7 @@ import {
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
   shouldDisableIosWebViewScrolling,
+  shouldHideIosKeyboardAccessoryView,
 } from '../../rn/src/webViewLayout'
 
 describe('RN WebView layout helpers', () => {
@@ -40,6 +41,23 @@ describe('RN WebView layout helpers', () => {
     expect(shouldDisableIosWebViewScrolling({
       isIosPlatform: false,
       pathname: '/ko',
+    })).toBe(false)
+  })
+
+  it('hides the iOS keyboard accessory view only on live demo routes', () => {
+    expect(shouldHideIosKeyboardAccessoryView({
+      isIosPlatform: true,
+      pathname: '/ko/translator',
+    })).toBe(true)
+
+    expect(shouldHideIosKeyboardAccessoryView({
+      isIosPlatform: true,
+      pathname: '/ko/account',
+    })).toBe(false)
+
+    expect(shouldHideIosKeyboardAccessoryView({
+      isIosPlatform: false,
+      pathname: '/ko/translator',
     })).toBe(false)
   })
 
