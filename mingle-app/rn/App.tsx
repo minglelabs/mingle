@@ -743,6 +743,10 @@ type NativeSetAdBannerPositionCommand = {
   };
 };
 
+type NativeRemountWebViewCommand = {
+  type: 'native_remount_webview';
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -753,7 +757,8 @@ type WebViewCommand =
   | NativeAuthResetCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
-  | NativeSetAdBannerPositionCommand;
+  | NativeSetAdBannerPositionCommand
+  | NativeRemountWebViewCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -1342,7 +1347,6 @@ function AppInner(): React.JSX.Element {
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
-  const shouldShowDebugWebViewRemountButton = shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1945,6 +1949,12 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_remount_webview') {
+      if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
+      handleDebugWebViewRemount();
+      return;
+    }
+
     if (parsed.type === 'native_ui_overlay_state') {
       setIsNativeMenuOverlayOpen(Boolean(parsed.payload?.menuOpen));
       return;
@@ -2080,7 +2090,7 @@ function AppInner(): React.JSX.Element {
       }
       void handleNativeAuthStart(parsed.payload);
     }
-  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleNativeAuthStart, handleNativeStart, handleNativeStop]);
+  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleDebugWebViewRemount, handleNativeAuthStart, handleNativeStart, handleNativeStop]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -2343,20 +2353,6 @@ function AppInner(): React.JSX.Element {
             <Text style={styles.errorDescription}>{loadError}</Text>
           </View>
         ) : null}
-        {versionGate.status !== 'force_update' && shouldShowDebugWebViewRemountButton ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Remount WebView"
-            onPress={handleDebugWebViewRemount}
-            style={({ pressed }) => [
-              styles.debugWebViewRemountButton,
-              { top: Math.max(16, safeAreaInsets.top + 8) },
-              pressed ? styles.debugWebViewRemountButtonPressed : null,
-            ]}
-          >
-            <Text style={styles.debugWebViewRemountButtonText}>Remount WebView</Text>
-          </Pressable>
-        ) : null}
       </View>
       {shouldRenderTopSafeAreaOverlay ? (
         <View
@@ -2482,24 +2478,6 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     fontSize: 12,
     lineHeight: 16,
-  },
-  debugWebViewRemountButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 24,
-    borderRadius: 999,
-    backgroundColor: 'rgba(17, 24, 39, 0.82)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  debugWebViewRemountButtonPressed: {
-    opacity: 0.85,
-  },
-  debugWebViewRemountButtonText: {
-    color: '#f9fafb',
-    fontSize: 12,
-    fontWeight: '700',
   },
   versionOverlay: {
     position: 'absolute',

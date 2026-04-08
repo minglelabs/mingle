@@ -47,6 +47,22 @@ describe('buildHydratedAccountPreferences', () => {
       echoAllowed: true,
     })
   })
+
+  it('keeps newly supported translation models during hydration', () => {
+    expect(buildHydratedAccountPreferences({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'gemma-4-31b-it',
+      adBannerPosition: 'top',
+    }, false)).toEqual({
+      textSizeLevel: 3,
+      sonioxManualFinalizeSilenceMs: 800,
+      translationModel: 'gemma-4-31b-it',
+      adBannerPosition: 'top',
+      speakerEnabled: false,
+      echoAllowed: true,
+    })
+  })
 })
 
 describe('shouldScheduleAccountPreferencesSync', () => {
