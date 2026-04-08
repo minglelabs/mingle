@@ -7,10 +7,10 @@ import process from "node:process";
 import {
   buildFileMediaSnapshot,
   buildScreenshotMediaSnapshot,
-  cloneMediaSnapshots,
   mediaSnapshotsEqual,
   normalizeMediaSnapshots,
 } from "./google-play-console-media-snapshots.mjs";
+import { buildUpdatedMediaSnapshots } from "./google-play-console-sync.logic.mjs";
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -380,7 +380,8 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
   const storedMediaSnapshots = normalizeMediaSnapshots(googlePlay.mediaSnapshots);
   const fallbackLocale = storeListing.defaultMetadataLocale ?? "en";
   const uploadRoot = resolveWorkspacePath(workspaceRoot, assets.phoneScreenshotsDir || "upload");
-  const localeDirectories = listLocaleDirectories(uploadRoot).filter((locale) => {
+  const allUploadLocales = listLocaleDirectories(uploadRoot);
+  const localeDirectories = allUploadLocales.filter((locale) => {
     return languageFilter.length === 0 || languageFilter.includes(locale);
   });
 
@@ -449,6 +450,7 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
     appDetails,
     assets,
     fallbackLocale,
+    allUploadLocales,
     plans,
     mediaSnapshots: {
       stored: storedMediaSnapshots,
@@ -470,31 +472,6 @@ function shouldUploadSharedAsset(currentSnapshot, storedSnapshot) {
 
 function shouldUploadScreenshotSet(currentSnapshots, storedSnapshots) {
   return !mediaSnapshotsEqual(currentSnapshots, storedSnapshots ?? []);
-}
-
-function buildUpdatedMediaSnapshots(existingSnapshots, planBundle, options) {
-  const nextSnapshots = cloneMediaSnapshots(existingSnapshots);
-
-  if (options.skipImages) {
-    return nextSnapshots;
-  }
-
-  if (!options.skipIcon && planBundle.mediaSnapshots.current.icon) {
-    nextSnapshots.icon = planBundle.mediaSnapshots.current.icon;
-  }
-
-  if (!options.skipFeatureGraphic && planBundle.mediaSnapshots.current.featureGraphic) {
-    nextSnapshots.featureGraphic = planBundle.mediaSnapshots.current.featureGraphic;
-  }
-
-  if (!options.skipScreenshots) {
-    for (const localePlan of planBundle.plans) {
-      nextSnapshots.phoneScreenshots[localePlan.uploadLocale] =
-        localePlan.mediaSnapshots.screenshotsCurrent;
-    }
-  }
-
-  return nextSnapshots;
 }
 
 function validateAutomatableConfig(configJsonPath, config, planBundle, packageName) {
