@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
@@ -75,6 +76,7 @@ export default function RootLayout({
             <Toaster position="bottom-center" richColors closeButton />
           </AuthSessionProvider>
         </TtsSettingsProvider>
+        <Analytics />
       </body>
     </html>
   );
