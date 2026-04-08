@@ -4135,6 +4135,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
             layout
+            layoutDependency={isComposerOpen}
             ref={bottomBarRef}
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -4150,6 +4151,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <motion.div
                   key="composer-bottom-bar"
                   layout
+                  layoutDependency={isComposerOpen}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
@@ -4203,7 +4205,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </motion.div>
 
                   <motion.form
-                    layout
                     onSubmit={handleComposerSubmit}
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
@@ -4215,7 +4216,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           onChange={handleComposerDraftChange}
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
-                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none placeholder:text-gray-400"
+                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
                           style={{ height: `${COMPOSER_TEXTAREA_MIN_HEIGHT_PX}px` }}
                         />
                       </div>
@@ -4261,6 +4262,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <motion.div
                   key="default-bottom-bar"
                   layout
+                  layoutDependency={isComposerOpen}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
