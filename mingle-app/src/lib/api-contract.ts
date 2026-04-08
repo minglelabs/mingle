@@ -9,8 +9,8 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.0.7', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.0.8', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.0.9', enablesFinalizeSourceRedetection: true },
-  { namespace: 'android/v1.0.12', enablesFinalizeSourceRedetection: true },
-  { namespace: 'android/v1.0.13', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v1.0.10', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v1.0.11', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -20,8 +20,8 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v1.0.7', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.8', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.9', enablesFinalizeSourceRedetection: true },
-  { namespace: 'ios/v1.0.12', enablesFinalizeSourceRedetection: true },
-  { namespace: 'ios/v1.0.13', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.0.10', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.0.11', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
