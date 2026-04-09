@@ -17,6 +17,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
@@ -1031,7 +1032,6 @@ export default function ConversationList({
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
-  const [shouldIgnoreInitialRouteConversation, setShouldIgnoreInitialRouteConversation] = useState(true);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
@@ -1314,11 +1314,6 @@ export default function ConversationList({
 
   useEffect(() => {
     setIsClientReady(true);
-    if (readConversationIdFromLocation()) {
-      replaceConversationOverlayUrl(null);
-    }
-    routeSyncConversationIdRef.current = null;
-    setShouldIgnoreInitialRouteConversation(false);
   }, []);
 
   useEffect(() => {
@@ -1630,7 +1625,6 @@ export default function ConversationList({
   }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
 
   useEffect(() => {
-    if (shouldIgnoreInitialRouteConversation) return;
     if (activeConversation) {
       routeSyncConversationIdRef.current = null;
       return;
@@ -1664,7 +1658,6 @@ export default function ConversationList({
     mutatingConversationId,
     openConversationSummary,
     routeConversationId,
-    shouldIgnoreInitialRouteConversation,
   ]);
 
   useEffect(() => {
@@ -1837,63 +1830,66 @@ export default function ConversationList({
         </button>
       </footer>
 
-      {isClientReady ? (
-        <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
-          {mountedConversations.map((conversation) => {
-            const isVisible = activeConversation?.id === conversation.id;
+      {isClientReady && typeof document !== "undefined"
+        ? createPortal(
+          <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
+            {mountedConversations.map((conversation) => {
+              const isVisible = activeConversation?.id === conversation.id;
 
-            return (
-              <motion.div
-                key={conversation.id}
-                custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                variants={conversationOverlayVariants}
-                initial="initial"
-                animate={isVisible ? "active" : "retained"}
-                exit="exit"
-                className={`absolute inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
-                  isVisible ? "" : "pointer-events-none"
-                }`}
-                aria-hidden={!isVisible}
-              >
-                <MingleHome
-                  ref={(nextRef) => {
-                    setConversationRoomRef(conversation.id, nextRef);
-                  }}
+              return (
+                <motion.div
                   key={conversation.id}
-                  dictionary={dictionary}
-                  appleOAuthEnabled={appleOAuthEnabled}
-                  googleOAuthEnabled={googleOAuthEnabled}
-                  locale={locale}
-                  headerMode="conversation"
-                  onBack={handleCloseActiveConversation}
-                  conversationId={conversation.id}
-                  sessionKeyOverride={conversation.sessionKey}
-                  storageNamespace={conversation.id}
-                  initialSelectedLanguages={conversation.selectedLanguages}
-                  autoStartOnMount={conversation.id === autoStartConversationId}
-                  onAutoStartHandled={() => {
-                    setAutoStartConversationId((current) => (
-                      current === conversation.id ? null : current
-                    ));
-                  }}
-                  isVisible={isVisible}
-                  enableNativeBannerBridge={isVisible}
-                  onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
-                  onSttSessionRunningChange={(isRunning) => {
-                    handleConversationRunningChange(conversation.id, isRunning);
-                  }}
-                  onLatestUtteranceChange={(payload) => {
-                    handleConversationLatestUtteranceChange(conversation.id, payload);
-                  }}
-                  onSelectedLanguagesChange={(selectedLanguages) => {
-                    handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
-                  }}
-                />
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      ) : null}
+                  custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
+                  variants={conversationOverlayVariants}
+                  initial="initial"
+                  animate={isVisible ? "active" : "retained"}
+                  exit="exit"
+                  className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
+                    isVisible ? "" : "pointer-events-none"
+                  }`}
+                  aria-hidden={!isVisible}
+                >
+                  <MingleHome
+                    ref={(nextRef) => {
+                      setConversationRoomRef(conversation.id, nextRef);
+                    }}
+                    key={conversation.id}
+                    dictionary={dictionary}
+                    appleOAuthEnabled={appleOAuthEnabled}
+                    googleOAuthEnabled={googleOAuthEnabled}
+                    locale={locale}
+                    headerMode="conversation"
+                    onBack={handleCloseActiveConversation}
+                    conversationId={conversation.id}
+                    sessionKeyOverride={conversation.sessionKey}
+                    storageNamespace={conversation.id}
+                    initialSelectedLanguages={conversation.selectedLanguages}
+                    autoStartOnMount={conversation.id === autoStartConversationId}
+                    onAutoStartHandled={() => {
+                      setAutoStartConversationId((current) => (
+                        current === conversation.id ? null : current
+                      ));
+                    }}
+                    isVisible={isVisible}
+                    enableNativeBannerBridge={isVisible}
+                    onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
+                    onSttSessionRunningChange={(isRunning) => {
+                      handleConversationRunningChange(conversation.id, isRunning);
+                    }}
+                    onLatestUtteranceChange={(payload) => {
+                      handleConversationLatestUtteranceChange(conversation.id, payload);
+                    }}
+                    onSelectedLanguagesChange={(selectedLanguages) => {
+                      handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
+                    }}
+                  />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>,
+          document.body,
+        )
+        : null}
     </main>
   );
 }
