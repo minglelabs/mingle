@@ -124,7 +124,11 @@ function buildConversationHistoryClearedEventData(args: {
   clientClearedAtMs: number
 }) {
   return {
-    userId: args.userId,
+    ...(args.userId ? {
+      user: {
+        connect: { id: args.userId },
+      },
+    } : {}),
     sessionKey: args.sessionKey,
     eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
     metadata: buildConversationHistoryClearedMetadata(args.clientClearedAtMs),

@@ -142,7 +142,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
             },
           },
           create: {
-            userId,
+            user: {
+              connect: { id: userId },
+            },
             sessionKey: tracking.sessionKey,
             clientMessageId,
             isDeleted: false,
@@ -157,7 +159,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
             metadata: messageMetadata,
           },
           update: {
-            userId,
+            user: {
+              connect: { id: userId },
+            },
             isDeleted: false,
             sourceLanguage,
             translationProvider: infrastructureProvider ?? provider ?? undefined,
