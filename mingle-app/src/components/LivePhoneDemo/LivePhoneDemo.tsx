@@ -712,6 +712,30 @@ function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
   )
 }
 
+function isNextDevOverlayTarget(target: EventTarget | null, event?: Event): boolean {
+  if (target instanceof Element) {
+    if (
+      target.closest(
+        'nextjs-portal, [data-next-badge-root], [data-nextjs-dialog-overlay], [data-nextjs-toast]',
+      )
+    ) {
+      return true
+    }
+  }
+
+  if (typeof event?.composedPath !== 'function') return false
+
+  return event.composedPath().some((node) => (
+    node instanceof Element
+    && (
+      node.tagName.toLowerCase() === 'nextjs-portal'
+      || node.hasAttribute('data-next-badge-root')
+      || node.hasAttribute('data-nextjs-dialog-overlay')
+      || node.hasAttribute('data-nextjs-toast')
+    )
+  ))
+}
+
 const livePhoneDemoMenuBackdropVariants: Variants = {
   initial: { opacity: 0 },
   active: { opacity: 1, transition: MENU_BACKDROP_TRANSITION },
@@ -2137,6 +2161,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (deleteAccountDialogOpen || deleteConversationDialogOpen) return
     if (textSizeMenuOpen || translationModelMenuOpen) return
     if (event.pointerType === 'mouse') return
+    if (isNextDevOverlayTarget(event.target, event.nativeEvent)) return
     if (event.clientX <= CONVERSATION_SWIPE_BACK_MIN_START_X_PX) return
     if (shouldIgnoreMenuSwipeTarget(event.target)) return
 

@@ -192,6 +192,18 @@
   overflow: hidden;
 }
 
+nextjs-portal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  overflow: auto !important;
+  pointer-events: auto !important;
+}
+
+nextjs-portal * {
+  pointer-events: auto !important;
+}
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;
