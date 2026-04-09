@@ -3694,7 +3694,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           className={`relative z-40 shrink-0 flex items-center justify-between border-b border-gray-100 px-4 ${navSurfaceClassName}`}
           style={{
             paddingTop: "env(safe-area-inset-top, 0px)",
-            height: "calc(56px + env(safe-area-inset-top, 0px))",
+            height: "calc(54px + env(safe-area-inset-top, 0px))",
           }}
         >
           {headerMode === 'conversation' && onBack ? (
