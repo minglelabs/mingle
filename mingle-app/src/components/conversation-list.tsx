@@ -17,7 +17,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { ArrowRight, Loader2, Search } from "lucide-react";
 import {
@@ -1964,66 +1963,63 @@ export default function ConversationList({
         </button>
       </footer>
 
-      {isClientReady && typeof document !== "undefined"
-        ? createPortal(
-          <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
-            {mountedConversations.map((conversation) => {
-              const isVisible = activeConversation?.id === conversation.id;
+      {isClientReady ? (
+        <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
+          {mountedConversations.map((conversation) => {
+            const isVisible = activeConversation?.id === conversation.id;
 
-              return (
-                <motion.div
+            return (
+              <motion.div
+                key={conversation.id}
+                custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
+                variants={conversationOverlayVariants}
+                initial="initial"
+                animate={isVisible ? "active" : "retained"}
+                exit="exit"
+                className={`absolute inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
+                  isVisible ? "" : "pointer-events-none"
+                }`}
+                aria-hidden={!isVisible}
+              >
+                <MingleHome
+                  ref={(nextRef) => {
+                    setConversationRoomRef(conversation.id, nextRef);
+                  }}
                   key={conversation.id}
-                  custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                  variants={conversationOverlayVariants}
-                  initial="initial"
-                  animate={isVisible ? "active" : "retained"}
-                  exit="exit"
-                  className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
-                    isVisible ? "" : "pointer-events-none"
-                  }`}
-                  aria-hidden={!isVisible}
-                >
-                  <MingleHome
-                    ref={(nextRef) => {
-                      setConversationRoomRef(conversation.id, nextRef);
-                    }}
-                    key={conversation.id}
-                    dictionary={dictionary}
-                    appleOAuthEnabled={appleOAuthEnabled}
-                    googleOAuthEnabled={googleOAuthEnabled}
-                    locale={locale}
-                    headerMode="conversation"
-                    onBack={handleCloseActiveConversation}
-                    conversationId={conversation.id}
-                    sessionKeyOverride={conversation.sessionKey}
-                    storageNamespace={conversation.id}
-                    initialSelectedLanguages={conversation.selectedLanguages}
-                    autoStartOnMount={conversation.id === autoStartConversationId}
-                    onAutoStartHandled={() => {
-                      setAutoStartConversationId((current) => (
-                        current === conversation.id ? null : current
-                      ));
-                    }}
-                    isVisible={isVisible}
-                    enableNativeBannerBridge={isVisible}
-                    onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
-                    onSttSessionRunningChange={(isRunning) => {
-                      handleConversationRunningChange(conversation.id, isRunning);
-                    }}
-                    onLatestUtteranceChange={(payload) => {
-                      handleConversationLatestUtteranceChange(conversation.id, payload);
-                    }}
-                    onSelectedLanguagesChange={(selectedLanguages) => {
-                      handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
-                    }}
-                  />
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>,
-          document.body,
-        )
-        : null}
+                  dictionary={dictionary}
+                  appleOAuthEnabled={appleOAuthEnabled}
+                  googleOAuthEnabled={googleOAuthEnabled}
+                  locale={locale}
+                  headerMode="conversation"
+                  onBack={handleCloseActiveConversation}
+                  conversationId={conversation.id}
+                  sessionKeyOverride={conversation.sessionKey}
+                  storageNamespace={conversation.id}
+                  initialSelectedLanguages={conversation.selectedLanguages}
+                  autoStartOnMount={conversation.id === autoStartConversationId}
+                  onAutoStartHandled={() => {
+                    setAutoStartConversationId((current) => (
+                      current === conversation.id ? null : current
+                    ));
+                  }}
+                  isVisible={isVisible}
+                  enableNativeBannerBridge={isVisible}
+                  onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
+                  onSttSessionRunningChange={(isRunning) => {
+                    handleConversationRunningChange(conversation.id, isRunning);
+                  }}
+                  onLatestUtteranceChange={(payload) => {
+                    handleConversationLatestUtteranceChange(conversation.id, payload);
+                  }}
+                  onSelectedLanguagesChange={(selectedLanguages) => {
+                    handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
+                  }}
+                />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      ) : null}
     </main>
   );
 }
