@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   AppState,
   BackHandler,
+  Easing,
   Image,
   Linking,
   NativeModules,
@@ -88,6 +90,9 @@ type NativeAdModule = {
     LARGE_ANCHORED_ADAPTIVE_BANNER?: string;
   };
 };
+
+const NATIVE_BANNER_OFFSET_ANIMATION_DURATION_MS = 280;
+const NATIVE_BANNER_OFFSET_ANIMATION_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 type NativeBannerPosition = 'top' | 'bottom';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
@@ -1108,12 +1113,38 @@ function NativeAdBanner(props: {
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
+  const offsetAnim = useRef(new Animated.Value(position === 'top' ? topOffsetPx : bottomOffsetPx)).current;
+  const lastOffsetPositionRef = useRef(position);
+  const targetOffsetPx = position === 'top' ? topOffsetPx : bottomOffsetPx;
 
   useEffect(() => {
     setRenderHeightPx(heightPx);
     setAdLoadState('loading');
     setLastErrorMessage('');
   }, [heightPx, position, reloadToken, unitId]);
+
+  useEffect(() => {
+    if (lastOffsetPositionRef.current === position) {
+      return;
+    }
+    offsetAnim.stopAnimation();
+    offsetAnim.setValue(targetOffsetPx);
+    lastOffsetPositionRef.current = position;
+  }, [offsetAnim, position, targetOffsetPx]);
+
+  useEffect(() => {
+    const animation = Animated.timing(offsetAnim, {
+      toValue: targetOffsetPx,
+      duration: NATIVE_BANNER_OFFSET_ANIMATION_DURATION_MS,
+      easing: NATIVE_BANNER_OFFSET_ANIMATION_EASING,
+      useNativeDriver: false,
+    });
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [offsetAnim, targetOffsetPx]);
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
     if (prefersFixedHeightBanner) return;
@@ -1142,13 +1173,13 @@ function NativeAdBanner(props: {
   }, [unitId]);
 
   const containerStyle = position === 'top'
-    ? [styles.nativeBannerContainer, { top: topOffsetPx, height: renderHeightPx }]
-    : [styles.nativeBannerContainer, { bottom: bottomOffsetPx, height: renderHeightPx }];
+    ? [styles.nativeBannerContainer, { top: offsetAnim, height: renderHeightPx }]
+    : [styles.nativeBannerContainer, { bottom: offsetAnim, height: renderHeightPx }];
 
   if (hidden || !unitId || !ready || !BannerAd || !bannerSize) return null;
 
   return (
-    <View pointerEvents="box-none" style={containerStyle}>
+    <Animated.View pointerEvents="box-none" style={containerStyle}>
       <View style={[styles.nativeBannerSlot, { width: bannerSlotWidthPx, height: renderHeightPx }]}>
         {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
           <View style={styles.nativeBannerDebugPlaceholder}>
@@ -1173,7 +1204,7 @@ function NativeAdBanner(props: {
           onAdFailedToLoad={handleAdFailedToLoad}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1978,6 +2009,13 @@ function AppInner(): React.JSX.Element {
     }
   }, [clearAuthDispatchRetryTimer, emitAuthToWeb, trustedNativeAuthOrigin]);
 
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
+
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     let parsed: WebViewCommand | null = null;
     try {
@@ -2266,13 +2304,6 @@ function AppInner(): React.JSX.Element {
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
-
-  const handleDebugWebViewRemount = useCallback(() => {
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setIsNativeMenuOverlayOpen(false);
-    setWebViewMountToken((current) => current + 1);
-  }, []);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {

@@ -122,6 +122,7 @@ const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
+const NATIVE_BOTTOM_BAR_CLEARANCE_SETTLE_DELAY_MS = 140
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
@@ -896,6 +897,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
   const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
+  const nativeBottomBarClearanceSyncFrameRef = useRef<number | null>(null)
+  const nativeBottomBarClearanceSyncTimeoutRef = useRef<number | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
@@ -1104,21 +1107,54 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     window.ReactNativeWebView.postMessage(JSON.stringify(command))
   }, [])
 
+  const clearPendingNativeBottomBarClearanceSync = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    if (nativeBottomBarClearanceSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(nativeBottomBarClearanceSyncFrameRef.current)
+      nativeBottomBarClearanceSyncFrameRef.current = null
+    }
+
+    if (nativeBottomBarClearanceSyncTimeoutRef.current !== null) {
+      window.clearTimeout(nativeBottomBarClearanceSyncTimeoutRef.current)
+      nativeBottomBarClearanceSyncTimeoutRef.current = null
+    }
+  }, [])
+
+  const scheduleNativeBottomBarClearanceSync = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    if (nativeBottomBarClearanceSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(nativeBottomBarClearanceSyncFrameRef.current)
+    }
+    nativeBottomBarClearanceSyncFrameRef.current = window.requestAnimationFrame(() => {
+      nativeBottomBarClearanceSyncFrameRef.current = null
+      syncNativeBottomBarClearance()
+    })
+
+    if (nativeBottomBarClearanceSyncTimeoutRef.current !== null) {
+      window.clearTimeout(nativeBottomBarClearanceSyncTimeoutRef.current)
+    }
+    nativeBottomBarClearanceSyncTimeoutRef.current = window.setTimeout(() => {
+      nativeBottomBarClearanceSyncTimeoutRef.current = null
+      syncNativeBottomBarClearance()
+    }, NATIVE_BOTTOM_BAR_CLEARANCE_SETTLE_DELAY_MS)
+  }, [syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    return () => {
+      clearPendingNativeBottomBarClearanceSync()
+    }
+  }, [clearPendingNativeBottomBarClearanceSync])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const bottomBarNode = bottomBarRef.current
     if (!bottomBarNode) return
 
-    let frameId = 0
     const requestSync = () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId)
-      }
-      frameId = window.requestAnimationFrame(() => {
-        frameId = 0
-        syncNativeBottomBarClearance()
-      })
+      scheduleNativeBottomBarClearanceSync()
     }
 
     requestSync()
@@ -1136,35 +1172,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     viewport?.addEventListener('scroll', requestSync)
 
     return () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId)
-      }
+      clearPendingNativeBottomBarClearanceSync()
       resizeObserver?.disconnect()
       window.removeEventListener('resize', requestSync)
       viewport?.removeEventListener('resize', requestSync)
       viewport?.removeEventListener('scroll', requestSync)
     }
-  }, [syncNativeBottomBarClearance])
+  }, [clearPendingNativeBottomBarClearanceSync, scheduleNativeBottomBarClearanceSync])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const frameId = window.requestAnimationFrame(() => {
-      syncNativeBottomBarClearance()
-    })
-    const timeout180Id = window.setTimeout(() => {
-      syncNativeBottomBarClearance()
-    }, 180)
-    const timeout360Id = window.setTimeout(() => {
-      syncNativeBottomBarClearance()
-    }, 360)
+    scheduleNativeBottomBarClearanceSync()
 
     return () => {
-      window.cancelAnimationFrame(frameId)
-      window.clearTimeout(timeout180Id)
-      window.clearTimeout(timeout360Id)
+      clearPendingNativeBottomBarClearanceSync()
     }
-  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+  }, [
+    clearPendingNativeBottomBarClearanceSync,
+    isComposerOpen,
+    keyboardViewportInsetPx,
+    scheduleNativeBottomBarClearanceSync,
+  ])
 
   useEffect(() => {
     if (!isComposerOpen) return
@@ -4260,7 +4289,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <motion.div
             layout
             layoutDependency={isComposerOpen}
-            onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            onLayoutAnimationComplete={scheduleNativeBottomBarClearanceSync}
             ref={bottomBarRef}
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -4333,8 +4362,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     onSubmit={handleComposerSubmit}
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
-                    <div
-                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none transition-[height] duration-150 ease-out motion-reduce:transition-none"
+                    <motion.div
+                      layout
+                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none"
                       style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
                     >
                       <div className="flex min-w-0 flex-1 items-end px-1">
@@ -4344,7 +4374,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           onChange={handleComposerDraftChange}
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
-                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
+                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none placeholder:text-gray-400"
                           style={{ height: `${composerTextareaHeightPx}px` }}
                         />
                       </div>
@@ -4358,7 +4388,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <Keyboard size={18} strokeWidth={2.2} />
                       </motion.button>
-                    </div>
+                    </motion.div>
 
                     <button
                       type="submit"
