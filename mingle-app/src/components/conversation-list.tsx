@@ -1496,6 +1496,7 @@ export default function ConversationList({
     return () => {
       cancelled = true;
       isImportingLegacyConversationRef.current = false;
+      setIsImportingLegacyConversation(false);
     };
   }, [
     activeConversation,
@@ -1741,6 +1742,7 @@ export default function ConversationList({
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+
       {isClientReady ? (
         <SearchOverlay
           ref={searchOverlayRef}
