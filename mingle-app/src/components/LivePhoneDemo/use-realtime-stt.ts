@@ -21,6 +21,7 @@ export const getWsUrl = (): string => {
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
+const NATIVE_STOP_ACK_TIMEOUT_MS = 1_500
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -1882,6 +1883,19 @@ export default function useRealtimeSTT({
     clearTimeout(connectionErrorResetTimerRef.current)
     connectionErrorResetTimerRef.current = null
   }, [])
+  const pendingNativeStopAckResolverRef = useRef<(() => void) | null>(null)
+  const pendingNativeStopAckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearPendingNativeStopAckTimeout = useCallback(() => {
+    if (!pendingNativeStopAckTimeoutRef.current) return
+    clearTimeout(pendingNativeStopAckTimeoutRef.current)
+    pendingNativeStopAckTimeoutRef.current = null
+  }, [])
+  const resolvePendingNativeStopAck = useCallback(() => {
+    clearPendingNativeStopAckTimeout()
+    const resolve = pendingNativeStopAckResolverRef.current
+    pendingNativeStopAckResolverRef.current = null
+    resolve?.()
+  }, [clearPendingNativeStopAckTimeout])
   const clearUtterancePersistTimer = useCallback(() => {
     if (!utterancePersistTimerRef.current) return
     clearTimeout(utterancePersistTimerRef.current)
@@ -2265,6 +2279,7 @@ export default function useRealtimeSTT({
 
   const resetToIdle = useCallback(() => {
     clearConnectionErrorResetTimer()
+    resolvePendingNativeStopAck()
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
     nativeStopRequestedRef.current = false
@@ -2275,7 +2290,7 @@ export default function useRealtimeSTT({
     cleanup()
     releaseCurrentNativeSttOwner()
     setConnectionStatus('idle')
-  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession, releaseCurrentNativeSttOwner])
+  }, [cleanup, clearConnectionErrorResetTimer, clearSpeakerAvatarSession, releaseCurrentNativeSttOwner, resolvePendingNativeStopAck])
 
   const scheduleConnectionErrorReset = useCallback(() => {
     clearConnectionErrorResetTimer()
@@ -3022,10 +3037,53 @@ export default function useRealtimeSTT({
       })
       if (!posted) {
         nativeStopRequestedRef.current = false
-      } else if (stopReason === 'language_hint_change') {
         waitingForNativeStopAck = true
       }
-      if (!waitingForNativeStopAck) {
+      if (waitingForNativeStopAck) {
+        clearPendingNativeStopAckTimeout()
+        const nativeStopAckPromise = new Promise<void>((resolve) => {
+          pendingNativeStopAckResolverRef.current = resolve
+          pendingNativeStopAckTimeoutRef.current = setTimeout(() => {
+            pendingNativeStopAckTimeoutRef.current = null
+            pendingNativeStopAckResolverRef.current = null
+            nativeStopRequestedRef.current = false
+            releaseCurrentNativeSttOwner()
+            setConnectionStatus('idle')
+            resolve()
+          }, NATIVE_STOP_ACK_TIMEOUT_MS)
+        })
+        setConnectionStatus('idle')
+        isStoppingRef.current = false
+        const wasActiveSession = hasActiveSessionRef.current
+        hasActiveSessionRef.current = false
+        clearSpeakerAvatarSession()
+
+        if (notifyLimitReached) {
+          onLimitReachedRef.current?.()
+        }
+
+        const resolvedStopReason = stopReason || (notifyLimitReached ? 'usage_limit_reached' : 'manual_stop')
+        if (wasActiveSession) {
+          void logClientEvent({
+            eventType: 'stt_session_stopped',
+            metadata: {
+              reason: resolvedStopReason,
+            },
+            keepalive: true,
+          })
+        }
+
+        turnStartedAtRef.current = null
+        for (const localFinalizeResult of localFinalizeResults) {
+          finalizeTurnWithTranslation(localFinalizeResult, {
+            sttDurationMs,
+            reason: notifyLimitReached ? 'usage_limit_reached' : 'manual_stop',
+          })
+        }
+
+        await nativeStopAckPromise
+        return
+      } else {
         nativeStopRequestedRef.current = false
         releaseCurrentNativeSttOwner()
       }
@@ -3088,6 +3146,7 @@ export default function useRealtimeSTT({
     getPendingTurnsForLocalFinalize,
     logClientEvent,
     sendNativeSttCommand,
+    clearPendingNativeStopAckTimeout,
     clearSpeakerAvatarSession,
     clearLanguageChangeRestartTimer,
     releaseCurrentNativeSttOwner,
@@ -3710,7 +3769,13 @@ export default function useRealtimeSTT({
 
       if (detail.type === 'error') {
         logSttDebug('native.error', { message: detail.message })
-        if (nativeStopRequestedRef.current) return
+        if (nativeStopRequestedRef.current) {
+          nativeStopRequestedRef.current = false
+          releaseCurrentNativeSttOwner()
+          resolvePendingNativeStopAck()
+          setConnectionStatus('idle')
+          return
+        }
         const recoveryAction = resolveNativeMicPermissionRecoveryAction(detail)
         nativeMicPermissionRecoveryActionRef.current = recoveryAction
         if (shouldResetConnectionToIdleForNativeMicRecovery(detail)) {
@@ -3730,6 +3795,8 @@ export default function useRealtimeSTT({
         logSttDebug('native.close', { reason: detail.reason })
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false
+          releaseCurrentNativeSttOwner()
+          resolvePendingNativeStopAck()
           setConnectionStatus('idle')
           return
         }
@@ -3741,7 +3808,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, resetToIdle])
+  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {
