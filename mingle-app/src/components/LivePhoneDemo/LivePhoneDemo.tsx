@@ -3378,6 +3378,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => window.cancelAnimationFrame(rafId)
   }, [isStorageHydrated, updateScrollDerivedState, utterances.length])
 
+  useLayoutEffect(() => {
+    if (!isVisible || !chatRef.current) return
+
+    const node = chatRef.current
+    node.scrollTop = node.scrollHeight
+    shouldAutoScroll.current = true
+    suppressAutoScrollRef.current = false
+    autoScrollSchedulerRef.current.markPerformed()
+
+    const rafId = window.requestAnimationFrame(() => {
+      if (!chatRef.current) return
+      chatRef.current.scrollTop = chatRef.current.scrollHeight
+      updateScrollDerivedState()
+    })
+
+    return () => window.cancelAnimationFrame(rafId)
+  }, [isVisible, updateScrollDerivedState])
+
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
     if (!isPaginatingRef.current || prevScrollHeightRef.current === null || !chatRef.current) return
