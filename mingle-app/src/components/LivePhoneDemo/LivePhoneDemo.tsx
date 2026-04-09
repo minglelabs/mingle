@@ -726,7 +726,7 @@ const livePhoneDemoMenuPanelVariants: Variants = {
 
 export interface LivePhoneDemoRef {
   startRecording: () => Promise<void>
-  stopRecording: () => Promise<void>
+  stopRecording: (options?: { deferRunningStateChange?: boolean }) => Promise<void>
   isSttSessionRunning: () => boolean
 }
 
@@ -3072,10 +3072,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     uiLocale,
   ])
 
-  const handleStopRecording = useCallback(async () => {
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean }) => {
     if (!isSttSessionRunning) return
-    onSttSessionRunningChange?.(false)
+    if (options?.deferRunningStateChange !== true) {
+      onSttSessionRunningChange?.(false)
+    }
     await stopRecording()
+    if (options?.deferRunningStateChange === true) {
+      onSttSessionRunningChange?.(false)
+    }
     scheduleTtsResumeAfterStopClick()
   }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
 
@@ -3140,8 +3145,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     startRecording: async () => {
       await handleStartRecording()
     },
-    stopRecording: async () => {
-      await handleStopRecording()
+    stopRecording: async (options) => {
+      await handleStopRecording(options)
     },
     isSttSessionRunning: () => isSttSessionRunning,
   }), [handleStartRecording, handleStopRecording, isSttSessionRunning])

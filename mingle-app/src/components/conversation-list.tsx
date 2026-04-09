@@ -1199,7 +1199,7 @@ export default function ConversationList({
     }
 
     const currentLiveRoom = conversationRoomRefs.current.get(currentLiveConversationId);
-    await currentLiveRoom?.stopRecording();
+    await currentLiveRoom?.stopRecording({ deferRunningStateChange: true });
     return { switchedFromLiveConversation: true };
   }, []);
 
