@@ -36,16 +36,16 @@ describe('api-contract namespace guard', () => {
   })
 
   it('accepts only allowed env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.11'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.11')
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.0')
   })
 
   it('accepts Android env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v1.0.11'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v1.1.0'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('android/v1.0.11')
-    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.0.11/translate/finalize')
+    expect(contract.clientApiNamespace).toBe('android/v1.1.0')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.1.0/translate/finalize')
   })
 
   it('keeps v1.0.10 namespaces allow-listed for older installed apps', async () => {
@@ -63,6 +63,7 @@ describe('api-contract namespace guard', () => {
     '/api/android/v1.0.8/translate/finalize',
     '/api/android/v1.0.9/translate/finalize',
     '/api/android/v1.0.11/translate/finalize',
+    '/api/android/v1.1.0/translate/finalize',
     '/api/ios/v1.0.4/translate/finalize',
     '/api/ios/v1.0.5/translate/finalize',
     '/api/ios/v1.0.6/translate/finalize',
@@ -70,6 +71,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.0.8/translate/finalize',
     '/api/ios/v1.0.9/translate/finalize',
     '/api/ios/v1.0.11/translate/finalize',
+    '/api/ios/v1.1.0/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)
@@ -115,9 +117,9 @@ describe('api-contract namespace guard', () => {
   })
 
   it('ignores invalid query override values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.11'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
     stubWindowSearch('?apiNs=unknown%2Fnamespace')
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.11')
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.0')
   })
 })
