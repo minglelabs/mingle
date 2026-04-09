@@ -140,11 +140,15 @@ const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const BOTTOM_BAR_EDGE_MARGIN_PX = 3
 const COMPOSER_MODE_TOP_MARGIN_PX = 9
 const COMPOSER_MODE_BOTTOM_MARGIN_PX = 7
-const VOICE_MODE_STT_BUTTON_SIZE_PX = 50
-const VOICE_MODE_STT_ICON_SIZE_PX = 22
-const VOICE_MODE_STT_STOP_SIZE_PX = 15
+const VOICE_MODE_STT_BUTTON_WIDTH_PX = 118
+const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 50
+const VOICE_MODE_STT_ICON_SIZE_PX = 20
+const VOICE_MODE_STT_STOP_SIZE_PX = 14
 const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
+// Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
+const VOICE_MODE_START_LABEL = 'Start'
+const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
@@ -5110,25 +5114,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={showConnectingOverlay}
-                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      aria-label={isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
+                      className="relative flex items-center justify-start rounded-[16px] px-4 transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
-                        width: `${VOICE_MODE_STT_BUTTON_SIZE_PX}px`,
-                        height: `${VOICE_MODE_STT_BUTTON_SIZE_PX}px`,
+                        width: `${VOICE_MODE_STT_BUTTON_WIDTH_PX}px`,
+                        height: `${VOICE_MODE_STT_BUTTON_HEIGHT_PX}px`,
                       }}
                     >
                       {showRipple && (
                         <span
-                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          className="absolute inset-0 rounded-[16px] bg-red-400 transition-transform duration-150"
                           style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
                         />
                       )}
 
                       {isReady && (
-                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                        <span className="absolute inset-0 rounded-[16px] bg-red-500 opacity-20 animate-ping" />
                       )}
 
                       <span
-                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                        className={`relative flex h-full w-full items-center justify-start gap-3 rounded-[16px] px-4 shadow-lg ${
                           isLimitReached
                             ? 'bg-gray-300'
                             : isReady
@@ -5139,19 +5144,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }`}
                       >
                         {showConnectingOverlay ? (
-                          <Loader2 size={VOICE_MODE_STT_ICON_SIZE_PX} className="animate-spin text-white" />
+                          <Loader2 size={VOICE_MODE_STT_ICON_SIZE_PX} className="shrink-0 animate-spin text-white" />
                         ) : isReady ? (
                           <span
                             aria-hidden
-                            className="rounded-[4px] bg-white"
+                            className="shrink-0 rounded-[4px] bg-white"
                             style={{
                               width: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
                               height: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
                             }}
                           />
                         ) : (
-                          <Mic size={VOICE_MODE_STT_ICON_SIZE_PX} className="text-white" />
+                          <Mic size={VOICE_MODE_STT_ICON_SIZE_PX} className="shrink-0 text-white" />
                         )}
+                        <span className="text-[0.98rem] font-semibold tracking-[0.01em] text-white">
+                          {isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
+                        </span>
                       </span>
                     </button>
                   </motion.div>
