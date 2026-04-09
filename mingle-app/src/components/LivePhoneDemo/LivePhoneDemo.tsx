@@ -687,6 +687,43 @@ function formatFeedbackTimestamp(createdAt: string, locale: string): string {
   }
 }
 
+type LivePhoneDemoPanelHeaderProps = {
+  title: string
+  backLabel: string
+  onBack: () => void
+  className?: string
+}
+
+function LivePhoneDemoPanelHeader({
+  title,
+  backLabel,
+  onBack,
+  className = '',
+}: LivePhoneDemoPanelHeaderProps) {
+  return (
+    <div
+      className={`flex shrink-0 items-center border-b border-gray-200 px-4 ${className}`.trim()}
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        height: 'calc(55px + env(safe-area-inset-top, 0px))',
+      }}
+    >
+      <button
+        type="button"
+        aria-label={backLabel}
+        onClick={onBack}
+        className="inline-flex h-[38px] w-10 items-center justify-center text-gray-700 transition hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+      >
+        <ChevronLeft size={22} strokeWidth={2.2} />
+      </button>
+      <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
+        {title}
+      </div>
+      <div className="w-10" aria-hidden="true" />
+    </div>
+  )
+}
+
 function buildMenuHistoryState(depth: number): Record<string, unknown> {
   if (typeof window === 'undefined') {
     return { [MENU_HISTORY_STATE_KEY]: depth }
@@ -3855,26 +3892,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex h-full w-[200%]"
                   >
                     <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
-                      <div
-                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
-                        style={{
-                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
-                          paddingBottom: '12px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          aria-label={feedbackCopy.closeButtonLabel}
-                          onClick={requestMenuBackStep}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                        >
-                          <ChevronLeft size={22} strokeWidth={2.2} />
-                        </button>
-                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
-                          {menuLabel}
-                        </div>
-                        <div className="w-10" />
-                      </div>
+                      <LivePhoneDemoPanelHeader
+                        title={menuLabel}
+                        backLabel={feedbackCopy.closeButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
 
                       <div
                         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -4340,26 +4362,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </section>
 
                     <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
-                      <div
-                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
-                        style={{
-                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
-                          paddingBottom: '12px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          aria-label={feedbackCopy.backButtonLabel}
-                          onClick={requestMenuBackStep}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                        >
-                          <ChevronLeft size={22} strokeWidth={2.2} />
-                        </button>
-                        <div className="flex-1 text-center text-[1.1rem] font-semibold text-gray-950">
-                          {feedbackCopy.pageTitle}
-                        </div>
-                        <div className="w-10" />
-                      </div>
+                      <LivePhoneDemoPanelHeader
+                        title={feedbackCopy.pageTitle}
+                        backLabel={feedbackCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
 
                       <div className="flex shrink-0 border-b border-gray-100 px-4">
                         {([
