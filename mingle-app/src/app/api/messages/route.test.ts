@@ -7,6 +7,7 @@ const {
   mockAppMessageFindMany,
   mockAppMessageUpdateMany,
   mockAppMessageContentUpdateMany,
+  mockAppEventLogCreate,
   mockPrismaTransaction,
   mockEnsureTrackingContext,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   mockAppMessageFindMany: vi.fn(),
   mockAppMessageUpdateMany: vi.fn(),
   mockAppMessageContentUpdateMany: vi.fn(),
+  mockAppEventLogCreate: vi.fn(),
   mockPrismaTransaction: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
 }));
@@ -39,6 +41,9 @@ vi.mock("@/lib/prisma", () => ({
     appMessageContent: {
       updateMany: mockAppMessageContentUpdateMany,
     },
+    appEventLog: {
+      create: mockAppEventLogCreate,
+    },
     $transaction: mockPrismaTransaction,
   },
 }));
@@ -57,6 +62,7 @@ describe("/api/messages route", () => {
     mockAppMessageFindMany.mockResolvedValue([]);
     mockAppMessageUpdateMany.mockResolvedValue({ count: 0 });
     mockAppMessageContentUpdateMany.mockResolvedValue({ count: 0 });
+    mockAppEventLogCreate.mockResolvedValue({ id: "event_123" });
     mockPrismaTransaction.mockImplementation((operations: Promise<unknown>[]) => Promise.all(operations));
     mockEnsureTrackingContext.mockImplementation((_request, _response, hints) => ({
       externalUserId: hints?.externalUserIdHint ?? "anon_user_123",
@@ -73,6 +79,7 @@ describe("/api/messages route", () => {
       headers: {
         "x-mingle-user-id": "anon_user_123",
         "x-mingle-session-key": "sess_123",
+        "x-mingle-conversation-cleared-at-ms": "1700000000456",
       },
     }));
 
@@ -84,6 +91,16 @@ describe("/api/messages route", () => {
     });
     expect(mockAppMessageUpdateMany).not.toHaveBeenCalled();
     expect(mockAppMessageContentUpdateMany).not.toHaveBeenCalled();
+    expect(mockAppEventLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: undefined,
+        sessionKey: "sess_123",
+        eventType: "conversation_history_cleared",
+        metadata: {
+          clientClearedAtMs: 1700000000456,
+        },
+      },
+    });
   });
 
   it("soft deletes matched messages and contents for the current tracked user", async () => {
@@ -105,6 +122,7 @@ describe("/api/messages route", () => {
       headers: {
         "x-mingle-user-id": "anon_user_123",
         "x-mingle-session-key": "sess_123",
+        "x-mingle-conversation-cleared-at-ms": "1700000001234",
       },
     }));
 
@@ -140,6 +158,16 @@ describe("/api/messages route", () => {
       },
       data: {
         isDeleted: true,
+      },
+    });
+    expect(mockAppEventLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "tracked_user_row",
+        sessionKey: "sess_123",
+        eventType: "conversation_history_cleared",
+        metadata: {
+          clientClearedAtMs: 1700000001234,
+        },
       },
     });
   });

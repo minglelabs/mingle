@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { ensureTrackingContext } from "@/lib/app-analytics";
+import {
+  CONVERSATION_CLEAR_CUTOFF_HEADER,
+  CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+  sanitizeConversationClearCutoffMs,
+} from "@/lib/conversation-history-clear";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -107,6 +112,12 @@ function withTrackingCookies(
   return response;
 }
 
+function buildConversationHistoryClearedMetadata(clientClearedAtMs: number) {
+  return {
+    clientClearedAtMs,
+  };
+}
+
 export async function DELETE(request: Request) {
   const nextRequest = request as NextRequest;
   const trackingSeedResponse = new NextResponse();
@@ -114,6 +125,10 @@ export async function DELETE(request: Request) {
     externalUserIdHint: resolveTrackingExternalUserId(request) || null,
     sessionKeyHint: resolveTrackingSessionKey(request) || null,
   });
+  const clientClearedAtMs = (
+    sanitizeConversationClearCutoffMs(request.headers.get(CONVERSATION_CLEAR_CUTOFF_HEADER))
+    ?? Date.now()
+  );
 
   try {
     const session = await getServerSession(getAuthOptions());
@@ -129,6 +144,15 @@ export async function DELETE(request: Request) {
     ];
 
     if (ownerFilters.length === 0) {
+      if (tracking.sessionKey) {
+        await prisma.appEventLog.create({
+          data: {
+            sessionKey: tracking.sessionKey,
+            eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+            metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
+          },
+        });
+      }
       const response = NextResponse.json({
         ok: true,
         deletedMessageCount: 0,
@@ -149,6 +173,14 @@ export async function DELETE(request: Request) {
     const messageIds = messages.map((message) => message.id);
 
     if (messageIds.length === 0) {
+      await prisma.appEventLog.create({
+        data: {
+          userId: userIds[0] ?? undefined,
+          sessionKey: identity.sessionKey || tracking.sessionKey,
+          eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+          metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
+        },
+      });
       const response = NextResponse.json({
         ok: true,
         deletedMessageCount: 0,
@@ -172,6 +204,14 @@ export async function DELETE(request: Request) {
         },
         data: {
           isDeleted: true,
+        },
+      }),
+      prisma.appEventLog.create({
+        data: {
+          userId: userIds[0] ?? undefined,
+          sessionKey: identity.sessionKey || tracking.sessionKey,
+          eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+          metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
         },
       }),
     ]);

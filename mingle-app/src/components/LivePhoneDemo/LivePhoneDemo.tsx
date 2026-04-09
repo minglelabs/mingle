@@ -12,6 +12,7 @@ import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
+import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -762,10 +763,12 @@ function buildTrackingRequestHeaders(args: {
   sessionKey: string
   trackingUserId: string
   nativeAppUpdate: NativeAppUpdateDetail | null
+  extraHeaders?: Record<string, string>
 }): Record<string, string> {
   const headers: Record<string, string> = {
     'x-mingle-session-key': args.sessionKey,
     'x-mingle-user-id': args.trackingUserId,
+    ...(args.extraHeaders || {}),
   }
 
   const apiNamespace = typeof window === 'undefined'
@@ -2490,6 +2493,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setIsDeletingConversation(true)
 
     try {
+      const conversationClearedAtMs = Date.now()
       const sessionKey = getOrCreateSessionKey()
       const trackingUserId = getOrCreateTrackingUserId()
       const response = await fetch(MESSAGES_API_PATH, {
@@ -2498,6 +2502,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           sessionKey,
           trackingUserId,
           nativeAppUpdate,
+          extraHeaders: {
+            [CONVERSATION_CLEAR_CUTOFF_HEADER]: String(conversationClearedAtMs),
+          },
         }),
       })
 

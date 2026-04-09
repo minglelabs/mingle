@@ -1740,6 +1740,7 @@ export default function useRealtimeSTT({
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
   const pendingTurnTranslationRuntimeRef = useRef<Record<string, PendingTurnTranslationRuntime>>({})
+  const finalizedTurnTranslationControllersRef = useRef<Record<string, AbortController>>({})
   const activePartialSpeakerRef = useRef<string | null>(null)
   const isStoppingRef = useRef(false)
   const onTtsRequestedRef = useRef(onTtsRequested)
@@ -1757,6 +1758,7 @@ export default function useRealtimeSTT({
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
+  const conversationClearSequenceRef = useRef(0)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
@@ -1808,6 +1810,20 @@ export default function useRealtimeSTT({
       runtime.controller?.abort()
     }
     pendingTurnTranslationRuntimeRef.current = {}
+  }, [])
+
+  const clearFinalizedTurnTranslationController = useCallback((utteranceId: string) => {
+    const controller = finalizedTurnTranslationControllersRef.current[utteranceId]
+    if (!controller) return
+    controller.abort()
+    delete finalizedTurnTranslationControllersRef.current[utteranceId]
+  }, [])
+
+  const clearAllFinalizedTurnTranslationControllers = useCallback(() => {
+    for (const controller of Object.values(finalizedTurnTranslationControllersRef.current)) {
+      controller.abort()
+    }
+    finalizedTurnTranslationControllersRef.current = {}
   }, [])
 
   const removePendingTurn = useCallback((speaker: string) => {
@@ -2585,6 +2601,8 @@ export default function useRealtimeSTT({
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
     const targetLanguages = [...getCurrentTargetLanguages()]
+    const conversationClearSequence = conversationClearSequenceRef.current
+    const isStaleConversationFinalize = () => conversationClearSequenceRef.current !== conversationClearSequence
 
     // 단일 언어 모드: 선택 언어가 1개인 경우
     const isSingleLanguageMode = targetLanguages.length === 1
@@ -2593,6 +2611,7 @@ export default function useRealtimeSTT({
 
     if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
       // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
+      if (isStaleConversationFinalize()) return
       void logClientEvent({
         eventType: 'stt_turn_finalized',
         clientMessageId: utteranceId,
@@ -2625,7 +2644,12 @@ export default function useRealtimeSTT({
       onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
     }
 
+    clearFinalizedTurnTranslationController(utteranceId)
+    const controller = new AbortController()
+    finalizedTurnTranslationControllersRef.current[utteranceId] = controller
+
     void translateViaApi(text, lang, effectiveTargetLanguages, {
+      signal: controller.signal,
       ttsLanguage: ttsTargetLang,
       enableTts: enableTtsRef.current,
       isFinal: true,
@@ -2634,6 +2658,13 @@ export default function useRealtimeSTT({
       excludeUtteranceId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
     }).then(result => {
+      if (isStaleConversationFinalize()) {
+        if (enableTtsRef.current && ttsTargetLang) {
+          onTtsCanceledRef.current?.(utteranceId)
+        }
+        return
+      }
+
       const hasTranslations = Object.keys(result.translations).length > 0
       if (hasTranslations) {
         applyTranslationToUtterance(
@@ -2683,8 +2714,11 @@ export default function useRealtimeSTT({
         },
         keepalive: true,
       })
+    }).finally(() => {
+      if (finalizedTurnTranslationControllersRef.current[utteranceId] !== controller) return
+      delete finalizedTurnTranslationControllersRef.current[utteranceId]
     })
-  }, [applyTranslationToUtterance, getCurrentTargetLanguages, logClientEvent, translateViaApi])
+  }, [applyTranslationToUtterance, clearFinalizedTurnTranslationController, getCurrentTargetLanguages, logClientEvent, translateViaApi])
 
   const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
     const text = normalizeSttTurnText(input.text)
@@ -2716,8 +2750,10 @@ export default function useRealtimeSTT({
   const clearConversationHistory = useCallback(() => {
     const wasActiveSession = hasActiveSessionRef.current
 
+    conversationClearSequenceRef.current += 1
     clearLanguageChangeRestartTimer()
     clearConnectionErrorResetTimer()
+    clearAllFinalizedTurnTranslationControllers()
     clearUtterancePersistTimer()
     isStoppingRef.current = true
     pendingLanguageChangeRestartRef.current = false
@@ -2757,6 +2793,7 @@ export default function useRealtimeSTT({
       })
     }
   }, [
+    clearAllFinalizedTurnTranslationControllers,
     clearConnectionErrorResetTimer,
     clearLanguageChangeRestartTimer,
     clearUtterancePersistTimer,
