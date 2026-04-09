@@ -137,7 +137,7 @@ const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
-const VOICE_MODE_TOP_MARGIN_PX = 3
+const VOICE_MODE_TOP_MARGIN_PX = 8
 const VOICE_MODE_BOTTOM_MARGIN_PX = 0
 const COMPOSER_MODE_TOP_MARGIN_PX = 9
 const COMPOSER_MODE_BOTTOM_MARGIN_PX = 7
@@ -148,7 +148,6 @@ const VOICE_MODE_STT_STOP_SIZE_PX = 14
 const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
 const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
-const CONVERSATION_HEADER_TOP_EXTRA_PX = 5
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
 const VOICE_MODE_START_LABEL = 'Start'
 const VOICE_MODE_STOP_LABEL = 'Stop'
@@ -3694,8 +3693,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         <div
           className={`relative z-40 shrink-0 flex items-center justify-between border-b border-gray-100 px-4 ${navSurfaceClassName}`}
           style={{
-            paddingTop: `calc(env(safe-area-inset-top, 0px) + ${CONVERSATION_HEADER_TOP_EXTRA_PX}px)`,
-            height: `calc(${56 + CONVERSATION_HEADER_TOP_EXTRA_PX}px + env(safe-area-inset-top, 0px))`,
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            height: "calc(56px + env(safe-area-inset-top, 0px))",
           }}
         >
           {headerMode === 'conversation' && onBack ? (
