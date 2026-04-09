@@ -681,11 +681,11 @@ function readNativeInsetPxFromWindow(queryKey: string): number {
   return parseNativeInsetPxFromSearch(window.location.search || "", queryKey);
 }
 
-function useNativeInsetPx(queryKey: string): number {
+function useNativeInsetPx(queryKey: string, initialValue = 0): number {
   return useSyncExternalStore(
     subscribeToLocationSearch,
     () => readNativeInsetPxFromWindow(queryKey),
-    () => 0,
+    () => initialValue,
   );
 }
 
@@ -703,11 +703,13 @@ function readNativeBannerPositionFromWindow(): LivePhoneDemoAdBannerPosition | n
   return parseNativeBannerPositionFromSearch(window.location.search || "");
 }
 
-function useNativeBannerPositionFromSearch(): LivePhoneDemoAdBannerPosition | null {
+function useNativeBannerPositionFromSearch(
+  initialValue: LivePhoneDemoAdBannerPosition | null = null,
+): LivePhoneDemoAdBannerPosition | null {
   return useSyncExternalStore(
     subscribeToLocationSearch,
     readNativeBannerPositionFromWindow,
-    () => null,
+    () => initialValue,
   );
 }
 
@@ -1049,6 +1051,9 @@ type ConversationListProps = {
   locale: AppLocale;
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
+  initialNativeBannerPosition?: string;
+  initialNativeTopInsetPx?: number;
+  initialNativeBottomInsetPx?: number;
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
 };
@@ -1057,6 +1062,9 @@ export default function ConversationList({
   locale,
   dictionary,
   initialConversations,
+  initialNativeBannerPosition,
+  initialNativeTopInsetPx = 0,
+  initialNativeBottomInsetPx = 0,
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
@@ -1096,9 +1104,11 @@ export default function ConversationList({
   const routeSyncConversationIdRef = useRef<string | null>(null);
   const pendingRestoredConversationIdRef = useRef<string | null>(null);
   const viewportWidthPx = useViewportWidthPx();
-  const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch();
-  const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx");
-  const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx");
+  const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch(
+    normalizeLivePhoneDemoAdBannerPosition(initialNativeBannerPosition),
+  );
+  const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx", initialNativeTopInsetPx);
+  const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx", initialNativeBottomInsetPx);
   const routeConversationId = useConversationIdFromSearch();
   const hasNativeBannerLayout = nativeBannerLayout !== null;
   const runtimeNativeBannerPosition = nativeBannerLayout?.position ?? nativeBannerPositionFromQuery;

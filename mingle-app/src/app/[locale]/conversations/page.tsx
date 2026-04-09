@@ -14,10 +14,27 @@ import { notFound } from "next/navigation";
 
 type ConversationsPageProps = {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function ConversationsPage({ params }: ConversationsPageProps) {
+function readSearchParamValue(
+  searchParams: Record<string, string | string[] | undefined>,
+  key: string,
+): string {
+  const rawValue = searchParams[key];
+  if (typeof rawValue === "string") return rawValue;
+  if (Array.isArray(rawValue)) return rawValue[0] ?? "";
+  return "";
+}
+
+function parseNativeInsetPx(rawValue: string): number {
+  const numericValue = Number.parseInt(rawValue, 10);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
+}
+
+export default async function ConversationsPage({ params, searchParams }: ConversationsPageProps) {
   const { locale } = await params;
+  const resolvedSearchParams = await searchParams;
 
   if (!isSupportedLocale(locale)) {
     notFound();
@@ -47,6 +64,9 @@ export default async function ConversationsPage({ params }: ConversationsPagePro
       locale={locale as AppLocale}
       dictionary={getDictionary(locale)}
       initialConversations={initialConversations}
+      initialNativeBannerPosition={readSearchParamValue(resolvedSearchParams, "nativeBannerPosition")}
+      initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeTopInsetPx"))}
+      initialNativeBottomInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeBottomInsetPx"))}
       // appleOAuthEnabled={isAppleOAuthConfigured()}
       appleOAuthEnabled={false}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
