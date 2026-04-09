@@ -1964,7 +1964,7 @@ export default function ConversationList({
         </button>
       </footer>
 
-      {typeof document !== "undefined"
+      {isClientReady && typeof document !== "undefined"
         ? createPortal(
           <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
             {mountedConversations.map((conversation) => {
