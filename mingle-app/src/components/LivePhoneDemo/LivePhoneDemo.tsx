@@ -3472,7 +3472,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (distanceToBottom > 1) {
         suppressAutoScrollRef.current = false
         shouldAutoScroll.current = true
-        chatRef.current.scrollTo({ top: nextScrollHeight, behavior: 'smooth' })
+        chatRef.current.scrollTop = nextScrollHeight
         autoScrollSchedulerRef.current.markPerformed()
         updateScrollDerivedState()
         openSmoothScrollStableTicksRef.current = 0
