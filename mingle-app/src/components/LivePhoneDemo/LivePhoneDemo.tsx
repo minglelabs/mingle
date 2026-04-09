@@ -3702,7 +3702,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               type="button"
               onClick={onBack}
               aria-label={backButtonLabel}
-              className={`relative z-20 inline-flex h-10 min-w-[40px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              className={`relative z-20 inline-flex h-[38px] min-w-[40px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
             >
               <ChevronLeft size={24} strokeWidth={2.4} />
             </button>
@@ -3720,7 +3720,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 }}
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
+                className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
@@ -3756,7 +3756,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   type="button"
                   onClick={handleMenuButtonPress}
                   disabled={isAuthActionPending}
-                  className={`inline-flex h-10 min-w-[40px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
+                  className={`inline-flex h-[38px] min-w-[40px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
