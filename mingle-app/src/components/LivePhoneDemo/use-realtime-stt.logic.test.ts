@@ -22,6 +22,7 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
@@ -124,30 +125,46 @@ describe('use-realtime-stt pure logic', () => {
     expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe('anon_existing_user')
   })
 
-  it('namespaces room-scoped storage keys', () => {
-    expect(buildStorageKey('mingle_demo_session_key')).toBe('mingle_demo_session_key')
-    expect(buildStorageKey('mingle_demo_session_key', 'room_1')).toBe('mingle_demo_session_key__room_1')
-  })
-
-  it('persists isolated session keys per room namespace', () => {
+  it('removes persisted utterances from localStorage when the next snapshot is empty', () => {
     const localStorage = createLocalStorageMock({
-      mingle_demo_session_key__room_1: 'sess_room_1',
-      mingle_demo_session_key__room_2: 'sess_room_2',
+      mingle_demo_utterances: '[{"id":"old"}]',
+      mingle_demo_usage_sec: '42',
     })
     vi.stubGlobal('window', { localStorage })
 
-    expect(getOrCreateSessionKey('room_1')).toBe('sess_room_1')
-    expect(getOrCreateSessionKey('room_2')).toBe('sess_room_2')
+    persistUtterancesSnapshot([])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBeNull()
+    expect(localStorage.getItem('mingle_demo_usage_sec')).toBe('42')
   })
 
-  it('prefers the conversation session override over localStorage state', () => {
-    const localStorage = createLocalStorageMock({
-      mingle_demo_session_key__room_1: 'sess_room_1',
-    })
+  it('persists utterances to localStorage when the snapshot is not empty', () => {
+    const localStorage = createLocalStorageMock()
     vi.stubGlobal('window', { localStorage })
 
-    expect(getOrCreateSessionKey('room_1', 'conv_override')).toBe('conv_override')
-    expect(localStorage.getItem('mingle_demo_session_key__room_1')).toBe('sess_room_1')
+    persistUtterancesSnapshot([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe(JSON.stringify([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ]))
   })
 
   it('parses transcript message payload and normalizes text', () => {

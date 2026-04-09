@@ -64,6 +64,7 @@ model AppMessage {
   userId                      String?  @map("user_id")
   sessionKey                  String?  @map("session_key")
   clientMessageId             String?  @map("client_message_id")
+  isDeleted                   Boolean? @map("is_deleted")
   sourceLanguage              String   @map("source_language")
   translationPromptTokens     Int?     @map("translation_prompt_tokens")
   translationCompletionTokens Int?     @map("translation_completion_tokens")
@@ -92,6 +93,7 @@ model AppMessageContent {
   messageId   String   @map("message_id")
   contentType String   @map("content_type")
   language    String
+  isDeleted   Boolean? @map("is_deleted")
   text        String   @db.Text
   provider    String?
   model       String?
