@@ -4583,7 +4583,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
-                      disabled={isConnecting || isError}
+                      disabled={isConnecting}
                       className="relative flex h-[2.3rem] w-[2.3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (
@@ -4726,7 +4726,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
-                      disabled={isConnecting || isError}
+                      disabled={isConnecting}
                       className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (

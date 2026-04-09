@@ -309,7 +309,7 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('none')
   })
 
-  it('opens native mic settings only for idle native iOS denial recovery', () => {
+  it('opens native mic settings for retryable native iOS denial recovery states', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
@@ -322,6 +322,13 @@ describe('use-realtime-stt pure logic', () => {
       connectionStatus: 'idle',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: false,
+    })).toBe(true)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'error',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
     })).toBe(true)
 
     expect(shouldOpenNativeMicSettingsOnRetry({

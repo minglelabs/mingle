@@ -2041,7 +2041,7 @@ function AppInner(): React.JSX.Element {
       const code = typeof (error as { code?: unknown })?.code === 'string'
         ? (error as { code: string }).code.trim()
         : resolveNativeSttErrorCode(message);
-      nativeStatusRef.current = 'failed';
+      nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
       emitToWeb({
         type: 'error',
         message,
@@ -2416,10 +2416,10 @@ function AppInner(): React.JSX.Element {
 
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
-      nativeStatusRef.current = 'error';
       const code = typeof event.code === 'string' && event.code.trim()
         ? event.code.trim()
         : resolveNativeSttErrorCode(event.message);
+      nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'error';
       emitToWeb({
         type: 'error',
         message: event.message,
