@@ -40,6 +40,21 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
 }
 
+export function persistUtterancesSnapshot(utterances: Utterance[]): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (utterances.length === 0) {
+      window.localStorage.removeItem(LS_KEY_UTTERANCES)
+      return
+    }
+
+    window.localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(utterances))
+  } catch {
+    // Ignore local persistence failures.
+  }
+}
+
 function isNativeAppRuntime(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
@@ -1725,6 +1740,7 @@ export default function useRealtimeSTT({
   const partialLangRef = useRef<string | null>(null)
   const pendingTurnsBySpeakerRef = useRef<Record<string, PendingSpeakerTurn>>({})
   const pendingTurnTranslationRuntimeRef = useRef<Record<string, PendingTurnTranslationRuntime>>({})
+  const finalizedTurnTranslationControllersRef = useRef<Record<string, AbortController>>({})
   const activePartialSpeakerRef = useRef<string | null>(null)
   const isStoppingRef = useRef(false)
   const onTtsRequestedRef = useRef(onTtsRequested)
@@ -1742,6 +1758,7 @@ export default function useRealtimeSTT({
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
+  const conversationClearSequenceRef = useRef(0)
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
@@ -1795,6 +1812,20 @@ export default function useRealtimeSTT({
     pendingTurnTranslationRuntimeRef.current = {}
   }, [])
 
+  const clearFinalizedTurnTranslationController = useCallback((utteranceId: string) => {
+    const controller = finalizedTurnTranslationControllersRef.current[utteranceId]
+    if (!controller) return
+    controller.abort()
+    delete finalizedTurnTranslationControllersRef.current[utteranceId]
+  }, [])
+
+  const clearAllFinalizedTurnTranslationControllers = useCallback(() => {
+    for (const controller of Object.values(finalizedTurnTranslationControllersRef.current)) {
+      controller.abort()
+    }
+    finalizedTurnTranslationControllersRef.current = {}
+  }, [])
+
   const removePendingTurn = useCallback((speaker: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker]
     if (!pendingTurn) return
@@ -1813,6 +1844,11 @@ export default function useRealtimeSTT({
     if (!connectionErrorResetTimerRef.current) return
     clearTimeout(connectionErrorResetTimerRef.current)
     connectionErrorResetTimerRef.current = null
+  }, [])
+  const clearUtterancePersistTimer = useCallback(() => {
+    if (!utterancePersistTimerRef.current) return
+    clearTimeout(utterancePersistTimerRef.current)
+    utterancePersistTimerRef.current = null
   }, [])
   const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
   const nativeShellSupportsOpenAppSettingsRef = useRef(false)
@@ -1905,31 +1941,27 @@ export default function useRealtimeSTT({
   const utterancePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!storageHydratedRef.current) return
-    if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
+    clearUtterancePersistTimer()
     utterancePersistTimerRef.current = setTimeout(() => {
-      try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterances)))
-      } catch { /* ignore */ }
+      utterancePersistTimerRef.current = null
+      persistUtterancesSnapshot(buildMergedUtterances(utterances))
     }, 1000)
     return () => {
-      if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
+      clearUtterancePersistTimer()
     }
-  }, [utterances, buildMergedUtterances])
+  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
     if (!storageHydratedRef.current) return
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
-      clearTimeout(utterancePersistTimerRef.current)
-      utterancePersistTimerRef.current = null
-      try {
-        localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(buildMergedUtterances(utterancesRef.current)))
-      } catch { /* ignore */ }
+      clearUtterancePersistTimer()
+      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances])
+  }, [buildMergedUtterances, clearUtterancePersistTimer])
 
   // Persist usage to localStorage
   useEffect(() => {
@@ -2569,6 +2601,8 @@ export default function useRealtimeSTT({
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
     const targetLanguages = [...getCurrentTargetLanguages()]
+    const conversationClearSequence = conversationClearSequenceRef.current
+    const isStaleConversationFinalize = () => conversationClearSequenceRef.current !== conversationClearSequence
 
     // 단일 언어 모드: 선택 언어가 1개인 경우
     const isSingleLanguageMode = targetLanguages.length === 1
@@ -2577,6 +2611,7 @@ export default function useRealtimeSTT({
 
     if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
       // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
+      if (isStaleConversationFinalize()) return
       void logClientEvent({
         eventType: 'stt_turn_finalized',
         clientMessageId: utteranceId,
@@ -2609,7 +2644,12 @@ export default function useRealtimeSTT({
       onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
     }
 
+    clearFinalizedTurnTranslationController(utteranceId)
+    const controller = new AbortController()
+    finalizedTurnTranslationControllersRef.current[utteranceId] = controller
+
     void translateViaApi(text, lang, effectiveTargetLanguages, {
+      signal: controller.signal,
       ttsLanguage: ttsTargetLang,
       enableTts: enableTtsRef.current,
       isFinal: true,
@@ -2618,6 +2658,13 @@ export default function useRealtimeSTT({
       excludeUtteranceId: utteranceId,
       sttDurationMs: options?.sttDurationMs,
     }).then(result => {
+      if (isStaleConversationFinalize()) {
+        if (enableTtsRef.current && ttsTargetLang) {
+          onTtsCanceledRef.current?.(utteranceId)
+        }
+        return
+      }
+
       const hasTranslations = Object.keys(result.translations).length > 0
       if (hasTranslations) {
         applyTranslationToUtterance(
@@ -2667,8 +2714,11 @@ export default function useRealtimeSTT({
         },
         keepalive: true,
       })
+    }).finally(() => {
+      if (finalizedTurnTranslationControllersRef.current[utteranceId] !== controller) return
+      delete finalizedTurnTranslationControllersRef.current[utteranceId]
     })
-  }, [applyTranslationToUtterance, getCurrentTargetLanguages, logClientEvent, translateViaApi])
+  }, [applyTranslationToUtterance, clearFinalizedTurnTranslationController, getCurrentTargetLanguages, logClientEvent, translateViaApi])
 
   const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
     const text = normalizeSttTurnText(input.text)
@@ -2696,6 +2746,62 @@ export default function useRealtimeSTT({
 
     return localFinalizeResult.utteranceId
   }, [ensureSpeakerAvatarAssignment, finalizePendingLocally, finalizeTurnWithTranslation])
+
+  const clearConversationHistory = useCallback(() => {
+    const wasActiveSession = hasActiveSessionRef.current
+
+    conversationClearSequenceRef.current += 1
+    clearLanguageChangeRestartTimer()
+    clearConnectionErrorResetTimer()
+    clearAllFinalizedTurnTranslationControllers()
+    clearUtterancePersistTimer()
+    isStoppingRef.current = true
+    pendingLanguageChangeRestartRef.current = false
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+
+    if (useNativeSttRef.current) {
+      nativeStopRequestedRef.current = true
+      void sendNativeSttCommand({
+        type: 'native_stt_stop',
+        payload: {
+          pendingText: '',
+          pendingLanguage: '',
+        },
+      })
+    }
+
+    clearPartialBuffers()
+    resetToIdle()
+    storedUtterancesRef.current = []
+    storageLoadedCountRef.current = 0
+    utterancesRef.current = []
+    recentFinalizedUtteranceRef.current = null
+    finalizedTtsSignatureRef.current.clear()
+    pendingFinalizedTtsUtteranceIdsRef.current.clear()
+    utteranceIdRef.current = 0
+    persistUtterancesSnapshot([])
+    setHasOlderUtterances(false)
+    setUtteranceStore(createUtteranceStoreState([]))
+
+    if (wasActiveSession) {
+      void logClientEvent({
+        eventType: 'stt_session_stopped',
+        metadata: {
+          reason: 'conversation_history_cleared',
+        },
+        keepalive: true,
+      })
+    }
+  }, [
+    clearAllFinalizedTurnTranslationControllers,
+    clearConnectionErrorResetTimer,
+    clearLanguageChangeRestartTimer,
+    clearUtterancePersistTimer,
+    clearPartialBuffers,
+    logClientEvent,
+    resetToIdle,
+    sendNativeSttCommand,
+  ])
 
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
@@ -3868,6 +3974,7 @@ export default function useRealtimeSTT({
     usageLimitSec: normalizedUsageLimitSec,
     appendUtterances,
     submitExternalUtterance,
+    clearConversationHistory,
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,

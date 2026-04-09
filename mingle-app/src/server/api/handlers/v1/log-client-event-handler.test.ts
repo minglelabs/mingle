@@ -4,12 +4,14 @@ import { NextRequest } from "next/server";
 const {
   mockAppMessageUpsert,
   mockAppMessageContentUpsert,
+  mockAppEventLogFindFirst,
   mockCreateTrackedEventLog,
   mockEnsureTrackingContext,
   mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
+  mockAppEventLogFindFirst: vi.fn(),
   mockCreateTrackedEventLog: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
@@ -22,6 +24,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     appMessageContent: {
       upsert: mockAppMessageContentUpsert,
+    },
+    appEventLog: {
+      findFirst: mockAppEventLogFindFirst,
     },
   },
 }));
@@ -46,6 +51,7 @@ describe("handleLogClientEventV1", () => {
     mockUpsertTrackedUser.mockResolvedValue("user_123");
     mockAppMessageUpsert.mockResolvedValue({ id: "message_123" });
     mockAppMessageContentUpsert.mockResolvedValue({});
+    mockAppEventLogFindFirst.mockResolvedValue(null);
     mockCreateTrackedEventLog.mockResolvedValue(undefined);
   });
 
@@ -121,6 +127,42 @@ describe("handleLogClientEventV1", () => {
           provider: "openrouter",
           model: "qwen/qwen3.5-9b",
         }),
+      }),
+    );
+  });
+
+  it("ignores stale finalized turns after the conversation was cleared", async () => {
+    mockAppEventLogFindFirst.mockResolvedValue({
+      createdAt: new Date("2026-04-09T00:00:00.000Z"),
+      metadata: {
+        clientClearedAtMs: 1700000000500,
+      },
+    });
+
+    const request = new NextRequest("https://example.com/api/ios/v1.0.11/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "u-1700000000000-1",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: {
+          en: "Hello",
+        },
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageContentUpsert).not.toHaveBeenCalled();
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: null,
       }),
     );
   });

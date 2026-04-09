@@ -20,6 +20,7 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
@@ -120,6 +121,48 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(getOrCreateTrackingUserId()).toBe('anon_existing_user')
     expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe('anon_existing_user')
+  })
+
+  it('removes persisted utterances from localStorage when the next snapshot is empty', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_utterances: '[{"id":"old"}]',
+      mingle_demo_usage_sec: '42',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBeNull()
+    expect(localStorage.getItem('mingle_demo_usage_sec')).toBe('42')
+  })
+
+  it('persists utterances to localStorage when the snapshot is not empty', () => {
+    const localStorage = createLocalStorageMock()
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe(JSON.stringify([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ]))
   })
 
   it('parses transcript message payload and normalizes text', () => {
