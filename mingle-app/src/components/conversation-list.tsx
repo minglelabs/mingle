@@ -1936,7 +1936,7 @@ export default function ConversationList({
           type="button"
           onClick={handleCreateConversation}
           disabled={actionDisabled}
-          className="flex w-full items-center justify-center gap-2 px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
           style={{
             minHeight: "72px",
@@ -1946,14 +1946,21 @@ export default function ConversationList({
             backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
           }}
         >
-          {isCreatingConversation ? (
-            <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
-          ) : (
+          <span
+            className={`flex min-h-[24px] items-center justify-center gap-2 transition-opacity ${
+              isCreatingConversation ? "opacity-0" : "opacity-100"
+            }`}
+          >
             <>
               <span>{copy.newConversationButtonLabel}</span>
               <ArrowRight size={18} strokeWidth={2.4} />
             </>
-          )}
+          </span>
+          {isCreatingConversation ? (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
+            </span>
+          ) : null}
         </button>
       </footer>
 
