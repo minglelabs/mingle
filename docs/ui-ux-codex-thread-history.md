@@ -5,14 +5,13 @@
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
-- Sessions with standalone UI/UX issues: 24.
-- Total standalone UI/UX issues documented in this file: 68.
-- Sessions with UI/UX feature/polish requests only: 11.
-- Sessions where a UI/UX issue was only mentioned or handed off: 6.
-- Sessions with no UI/UX issue found: 236.
+- Sessions with standalone UI/UX issues: 30.
+- Total standalone UI/UX issue atoms documented in this file: 90.
+- Sessions with UI/UX feature/polish requests only: 15.
+- Sessions where a UI/UX issue was only mentioned or handed off: 8.
+- Sessions with no UI/UX issue found: 224.
 - `019d4cae-5142-7be2-9c74-30f95bfb5787` is listed first, exactly as requested.
-- For each later session, the verdict is one of: `UI/UX issue found`, `UI/UX feature/polish request only`, `UI/UX issue mentioned but no standalone fix recorded here`, or `No UI/UX issue found`.
-- Pure backend/build/release/research threads are still listed, but they are marked as having no UI/UX issue when appropriate.
+- If a session had no UI/UX issue, the entry says only `No UI/UX issue found.`
 
 ## Detailed First Thread
 
@@ -247,14 +246,391 @@
    Attempted fix: The app already pre-hid as early as available and RN tried to infer the target zone from URL changes.
    Status: Not clearly solvable in-thread. Marked as unresolved structural limitation in the captured session.
 
-## Remaining Sessions
+## Other Issue Sessions
 
-- `019c52c6-0c6b-7ba0-b8fd-a566d5a6f8b0` | No UI/UX issue found.
+### `019c5304-b4b1-7bf0-b768-81ea87605468` | UI/UX issues found
+
+1. **The app shell exceeded the intended 480px maximum width**
+   Problem: The mobile-web shell had drifted beyond the intended 480px cap, so the centered service area looked too wide and lost the phone-frame feel the user expected.
+   Attempted fix: The max width was reset from the larger rem-based cap back to a 480px-equivalent constraint.
+   Status: Resolved in-thread.
+
+### `019c5c43-c3ae-76f1-bfbf-a3be7fd105f3` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: intermittent favicon load crash on first activation/refresh.
+   Attempted fix: serve favicon as a static public asset.
+   Status: resolved.
+
+### `019c6f40-5ed2-7933-9acd-9302b505584e` | UI/UX issues found
+
+1. **Initial and refresh entry could settle at the wrong scroll position**
+   Problem: When the conversation view hydrated, the newest content was not reliably anchored at the bottom, so users could land mid-history instead of on the live edge.
+   Attempted fix: The bottom-anchor timing was reworked so the list waits for the right hydration point before doing its one-time bottom snap.
+   Status: Resolved in-thread.
+
+2. **Top pagination could trigger before bottom anchoring finished**
+   Problem: The top-edge loading logic could wake up too early, fighting the intended bottom-follow behavior and making the initial scroll position feel unstable.
+   Attempted fix: The top-pagination trigger was tightened so it no longer races the first bottom-settle pass.
+   Status: Resolved in-thread.
+
+3. **Translation bubble confirmation UI was tied to STT final instead of translation final**
+   Problem: The translation bubble visually looked finalized as soon as STT finalized, even when the translation itself was still pending, which made the UI state misleading.
+   Attempted fix: The translation bubble styling was split so the emphasized/final state only appears after translation finalization.
+   Status: Resolved in-thread.
+
+4. **Stopping STT during TTS playback could leave playback state stuck**
+   Problem: If STT was stopped while TTS audio was already playing, playback could stop mid-stream, the playing effect could remain on screen, and later TTS playback could stop working until app restart.
+   Attempted fix: This thread reached root-cause analysis and identified a stuck TTS state / missing completion path, but the captured session ended at investigation.
+   Status: Unresolved in this session.
+
+### `019c756e-8522-7eb0-ab7a-f3032bcd29ee` | UI/UX issues found
+
+1. **The overlay disappeared too early during inertial scrolling**
+   Problem: On mobile inertial scroll, the app dropped out of its user-scrolling state too early, so the overlay vanished while the screen was still visibly moving.
+   Attempted fix: The scroll-state logic was changed to keep the overlay visible until scrolling had actually stopped.
+   Status: Resolved in-thread.
+
+### `019c95e8-00df-7180-8366-54a76bd59ccc` | UI/UX issues found
+
+1. **Hamburger menu surfaces used the wrong background color**
+   Problem: The hamburger panel and then the hamburger button itself did not match the navbar surface, so the top-right chrome looked visually inconsistent.
+   Attempted fix: The menu panel and trigger button were restyled to use the same surface treatment as the navbar.
+   Status: Resolved in-thread after multiple passes.
+
+2. **Menu and login copy were not fully internationalized**
+   Problem: Menu items and login-related text still leaked hardcoded English instead of following the 15-locale i18n system.
+   Attempted fix: Missing translation keys and locale coverage were added for the menu and login flows.
+   Status: Resolved in-thread.
+
+3. **UI locale sources disagreed with each other**
+   Problem: `Sign in`/`Sign out` could stay English while the language selector showed Korean, because page locale and selector locale were being derived from different sources.
+   Attempted fix: The selector locale was unified with the page locale so the visible UI no longer split between two locale sources.
+   Status: Resolved in-thread.
+
+4. **Borders and depth around the hamburger menu were still wrong after the first styling pass**
+   Problem: Even after the color fix, the menu still showed leftover borders or the wrong amount of chrome, so it did not match the requested flatter look.
+   Attempted fix: The trigger and panel styling were iterated again, removing the extra border/depth where inappropriate and preserving only the container border that the user wanted.
+   Status: Resolved in-thread after several corrections.
+
+5. **Dropdown positioning regressed during the flattening passes**
+   Problem: At one point the menu overlapped the navbar and even obscured the hamburger trigger, which was a direct positioning bug introduced during the flattening iteration.
+   Attempted fix: The panel was moved back below the navbar and its border restored.
+   Status: Resolved in-thread.
+
+### `019c992c-911f-7b23-8a18-3a0e4d5007df` | UI/UX issues found
+
+1. **Live message rows flickered as text updated**
+   Problem: During diarization work, each incremental transcript update caused the whole visible message UI to flash, including the translation rows, which made the conversation feel unstable.
+   Attempted fix: The partial-key / rerender path was tightened so existing bubbles no longer unnecessarily re-animate on every transcript update.
+   Status: Resolved in-thread.
+
+2. **Multi-speaker overlap still failed to finalize per speaker**
+   Problem: A second overlapping utterance could appear, but the first speaker's utterance could stay stuck without finalizing because activity/finalize logic was not truly separated per speaker.
+   Attempted fix: Speaker-specific idle/finalize handling was added end-to-end so each speaker can finalize independently.
+   Status: Resolved in-thread.
+
+### `019ca08b-fcff-7ba3-b22f-d4a11d6203a8` | UI/UX issues found
+
+1. **Login screen safe areas showed ugly white bands**
+   Problem: The RN iOS login screen rendered white safe-area strips above and below the content instead of extending the intended top and bottom colors, which made the shell look unfinished.
+   Attempted fix: The iOS shell safe-area fill was reworked so login routes extend their intended colors into the top and bottom safe areas.
+   Status: Resolved in-thread.
+
+2. **The login flow initially lacked the requested swipe-to-terms step**
+   Problem: The requested UX was social-login button -> slide to terms acceptance -> continue, but that intermediary terms panel did not exist at first.
+   Attempted fix: The login UI was restructured to slide into a terms-consent step before continuing into provider auth.
+   Status: Resolved in-thread.
+
+3. **Apple and Google auth flows did not match the requested native UX**
+   Problem: Apple needed a native Face ID-backed flow, and Google needed the system confirmation sheet plus bottom-sheet browser auth flow, but the earlier implementation did not provide that experience.
+   Attempted fix: A native iOS auth module was introduced so Apple and Google could follow the requested native/auth-session flows.
+   Status: Resolved in-thread.
+
+4. **The login flow could stall on `Checking your session` and fail when `.env.local` expectations drifted**
+   Problem: Users saw a long spinner before Google sign-in and sometimes hit `Try signing in with a different account`, exposing a fragile dependency on runtime env plumbing.
+   Attempted fix: The branch was rebased with the mainline auth/env changes and devbox was rerun so the login flow used the newer env handling.
+   Status: Resolved in-thread.
+
+5. **Menu background and i18n regressions resurfaced after rebasing the login branch**
+   Problem: After merging main and rerunning devbox, the hamburger surface and localized copy still looked unchanged, so the earlier menu/i18n fixes had effectively regressed from the user's perspective.
+   Attempted fix: The menu surface, locale resolution, and auth/menu copy were patched again on top of the rebased branch.
+   Status: Resolved in-thread.
+
+6. **Visible locale cues disagreed across the same login UI**
+   Problem: `Sign in`/`Sign out` stayed English while the language dropdown looked Korean, meaning the auth copy and selector were not reading the same locale state.
+   Attempted fix: Locale resolution was unified so both the page UI and the selector derive from the same locale source.
+   Status: Resolved in-thread.
+
+7. **Hamburger flattening passes repeatedly regressed border and placement behavior**
+   Problem: The menu went through several incorrect intermediate states: leftover borders, panel covering the trigger, and then loss of the container border the user still wanted.
+   Attempted fix: The panel was iterated until it sat below the navbar with the requested flat treatment and restored outer border.
+   Status: Resolved in-thread after multiple passes.
+
+### `019d0514-065c-7493-9eb9-ce8c137a0a98` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: users did not recognize the top-right language control as a dropdown.
+   Attempted fix: add a minimal visual cue.
+   Status: likely resolved; this captured session later focused on cleanup.
+
+### `019d09c4-4bbb-7712-bfff-af784ff51f88` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: translation bubble meta rows made bubbles too thick.
+   Attempted fix: move flags/time outside the bubble.
+   Status: likely resolved earlier; this captured session later focused on cleanup.
+
+### `019d10e1-9693-7a92-bb87-c25a4907c539` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: splash logo yellow did not match the splash background.
+   Attempted fix: replace the launch image asset so its background color matches the runtime splash color.
+   Status: resolved.
+
+### `019d162b-4b15-7763-88f2-7571532d1ed6` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: animal avatar SVGs had too much whitespace and one asset looked bad.
+   Attempted fix: asset-trim/polish request.
+   Status: likely resolved on its feature branch; this entry is design-polish rather than a runtime bug.
+
+### `019d18f0-c3d8-71c3-b1cb-f3b6a8c94e21` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: iOS resume showed a brief white flash.
+   Attempted fix: investigation only in this thread.
+   Status: unresolved in this session.
+
+### `019d18f2-8f47-7c43-b52f-b08ce0ae78b8` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: auto-scroll triggered too often and fought manual scrolling.
+   Attempted fix: throttle/recheck bottom-follow logic.
+   Status: resolved.
+
+### `019d19a3-df70-7a42-bd7b-ff6ac157d4a3` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: Android background translations did not visibly update until foreground.
+   Attempted fix: investigation only.
+   Status: unresolved in this session.
+
+### `019d29d5-7bbe-7660-a135-078eb1403e45` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: the onboarding overlay showed a ghost play icon that misled users into tapping the wrong target.
+   Attempted fix: remove the misleading icon and rely on copy/arrow guidance.
+   Status: resolved.
+
+### `019d2a13-5d6c-7892-9f2b-9143113463b0` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: initial room landing with existing history did not snap to bottom.
+   Attempted fix: wait for hydration readiness before the one-time bottom anchor.
+   Status: resolved.
+
+### `019d2a3f-2705-7810-a0e0-a2281881a606` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: relaunch auto-scroll happened only once instead of on every fresh open.
+   Attempted fix: several approaches explored.
+   Status: no clearly landed final fix in this thread.
+
+### `019d2f95-6e34-7013-8961-35857fe8f51d` | UI/UX issues found
+
+1. **Opening the redesigned drawer could shake the main screen underneath**
+   Problem: After the drawer redesign work and parent-branch merge, opening the panel caused the main screen to jolt instead of feeling like a stable overlay.
+   Attempted fix: Focus transfer and panel transition behavior were adjusted so the drawer slides in without disturbing the underlying screen.
+   Status: Resolved in-thread.
+
+2. **The flattening pass briefly put the menu in the wrong place and removed the wrong border**
+   Problem: In follow-up adjustments, the dropdown/panel styling regressed into overlapping the navbar or losing the container border the user expected to keep.
+   Attempted fix: The panel placement was reset below the navbar and only the intended outer border was restored.
+   Status: Resolved in-thread.
+
+3. **The drawer thread mixed a large UX redesign with follow-up visual corrections**
+   Problem: What started as a feature thread became a real UI bug-fix thread once the first redesign introduced open-state and chrome regressions.
+   Attempted fix: The redesign stayed in place, but the visible regressions were corrected in subsequent passes.
+   Status: Resolved in-thread.
+
+### `019d43a0-d5ec-7fd1-94b1-884dcea6de65` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: iOS banner/runtime debugging expanded into a hydration mismatch around render-time Date/Intl formatting.
+   Attempted fix: banner/runtime work landed, but the hydration mismatch itself was only diagnosed.
+   Status: mixed.
+
+### `019d43a3-c1e7-7600-858d-64964413a683` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: tab/body chrome tuning also exposed My Page scroll-chain bugs and spacing issues.
+   Attempted fix: confine scrolling to internal content and contain overscroll.
+   Status: resolved.
+
+### `019d43ae-bb58-7202-80ff-dfaa9ef50e68` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: branch-level bottom-tabs work continued banner/layout/ad polish.
+   Attempted fix: this session is mostly a meta/summary handoff, not a standalone fix thread.
+   Status: no independent verdict beyond the linked implementation threads.
+
+### `019d4caf-4787-77f2-9e97-a7695630b6d2` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: mic-permission denial recovery felt bad and could strand users in a failed state.
+   Attempted fix: reset back toward retryable/idle behavior.
+   Status: later resolved across follow-up permission-retry threads.
+
+### `019d4d16-3c07-7c91-b787-66f177fbfc1f` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: banner/ad placement and scene transitions broke across room/list/drawer/menu states.
+   Attempted fix: explicit banner zones and runtime-param preservation.
+   Status: resolved.
+
+### `019d4eba-14af-7523-ad3c-0f5a5b3a810b` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: forced WebView reload/flicker could leave STT still running while room metadata/status looked reset or stale.
+   Attempted fix: native/WebView state-reconcile work.
+   Status: issue clearly existed; exact final closure is spread across follow-up reconcile threads.
+
+### `019d4f37-af30-7872-bc3a-4f68be0fabd6` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: Android could show a stopped/orange run button while STT was still actually running.
+   Attempted fix: diagnosis of native/WebView state split only.
+   Status: unresolved in this thread.
+
+### `019d5714-6710-7343-b2a8-b4faa797c702` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: per-bubble copy buttons made the conversation UI visually noisy.
+   Attempted fix: keep only whole-utterance copy and use selection/long-press plus toast for the rest.
+   Status: resolved.
+
+### `019d6d6d-cd79-71b0-99e5-c0296b0adeae` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: keyboard-mode composer could grow but not shrink back.
+   Attempted fix: immediate remeasurement/shrink synchronization plus tests.
+   Status: resolved.
+
+### `019d6d99-14df-7910-827a-26d32cc47d39` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: keyboard mode added too much bottom margin when the banner position was bottom.
+   Attempted fix: subtract non-covering clearance and later fix native inset reporting.
+   Status: resolved.
+
+### `019d6f86-9cff-73a1-b425-1b407e9f82d5` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: voice-to-keyboard transition stuttered.
+   Attempted fix: unify clearance/composer settling so the layout drops in one smooth pass.
+   Status: resolved.
+
+## Feature Or Mention-Only Sessions
+
+### `019c52c6-0c6b-7ba0-b8fd-a566d5a6f8b0` | UI/UX feature/polish request only
+
+Focus: initial mingle-app mobile-web shell, four-tab layout, and visual redesign build-out; this was a feature construction thread, not a pre-existing bug thread.
+
+### `019c90fd-30d5-7643-8462-853738eb5975` | UI/UX feature/polish request only
+
+Focus: RN iOS login gate, social sign-in entry screen, hamburger menu, account actions, and locale plumbing. This was a substantial feature build thread, not a pre-existing UI bug thread.
+
+### `019c9f66-dff3-7612-94f5-52ab7df0303c` | UI/UX feature/polish request only
+
+Focus: login-screen redesign planning only. The session was about visual direction and worktree setup, not a pre-existing UI bug fix.
+
+### `019ca44a-10f9-7ba1-a03a-324fec2a8941` | UI/UX feature/polish request only
+
+Focus: add a delete-account confirmation modal with i18n; not a pre-existing UI bug thread.
+
+### `019ca451-b5bf-7101-ac73-32363c8c017c` | UI/UX feature/polish request only
+
+Focus: add a share button to the hamburger menu; not a bug thread.
+
+### `019caad5-6bb0-7d92-bea8-5037f761994d` | UI/UX feature/polish request only
+
+Focus: email-login flow, swipe panels, and bottom-sheet auth UX; not a pre-existing bug thread.
+
+### `019d0a14-c17f-7fd3-af01-e02b23765d6d` | UI/UX feature/polish request only
+
+Focus: add random speaker animal avatars; not a bug thread.
+
+### `019d1faf-7c71-7c53-9025-6f825575d813` | UI/UX feature/polish request only
+
+Focus: revive the hamburger drawer with a right-side full-height panel and swipe/overlay close UX.
+
+### `019d4785-e9ae-7251-901a-522eb61b1b1b` | UI/UX feature/polish request only
+
+Focus: planning how to split the large social-style UIUX branch into a smaller release train.
+
+### `019d482b-5732-7533-b684-9a706ecd36a3` | UI/UX feature/polish request only
+
+Focus: review/planning of the multi-conversation branch structure; no standalone bug fix in this thread.
+
+### `019d56dd-4efc-7131-84f3-fb54707d0fdd` | UI/UX feature/polish request only
+
+Focus: add per-bubble copy buttons and narrower bubbles. This later got reversed by thread 019d5714 because the result felt too noisy.
+
+### `019d6737-7b85-7080-bce8-dccb05377c6e` | UI/UX feature/polish request only
+
+Focus: messenger-style keyboard input bar with animated mode toggle; not a bug thread.
+
+### `019d6d79-cfda-70d2-b96c-19522f7edfbc` | UI/UX feature/polish request only
+
+Focus: translation-model dropdown badges and wider opened menu layout.
+
+### `019d6dc3-9387-7781-af63-4fb1286d9670` | UI/UX feature/polish request only
+
+Focus: add a full-delete action and confirm modal inside the drawer menu.
+
+### `019d7003-dbb6-7801-a8d9-649857671dbc` | UI/UX feature/polish request only
+
+Focus: add a drawer-level full-delete action with confirm modal and localized copy. This was a feature request thread, not a pre-existing UI bug thread.
+
+### `019c7ebf-5768-7991-b324-4587f5a62297` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned, but this thread was planning-only: the existing iOS notch tap-to-top problem was discussed and scoped, with no standalone fix landed here.
+
+### `019d391d-4b31-7ad1-91f2-03a3dcb90001` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned, but this thread is only a shadow summary of another conversation. No standalone fix was performed here.
+
+### `019d3989-cd8b-75d3-b8da-c60918a4ba01` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned, but this thread is only a Telegram summary/handoff. No standalone UI/UX fix was completed in this session.
+
+### `019d4398-a433-7652-a450-2704223b9242` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned only indirectly. The captured action here was mainly auth/config cleanup (disable noisy web Apple OAuth wiring); no standalone UI bug was resolved here.
+
+### `019d6f81-c484-7ca3-8d8e-35eda0d82a5b` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
+
+### `019d6f82-c1a0-7d70-8577-894e00b96f24` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
+
+### `019d6f83-3566-78f1-bfea-c78a915dca28` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
+
+### `019d6f83-810e-7573-ae59-bae9a403a787` | UI/UX issue mentioned but no standalone fix recorded here
+
+UI/UX issue mentioned in planning only: the opener explicitly called out fragmented i18n coverage and missing locales across surfaces, but this captured session stayed at planning/review and did not land a standalone UI/UX fix here.
+
+## Sessions With No UI/UX Issue
+
 - `019c52c6-d0f5-7c20-bf10-60abd034b1ea` | No UI/UX issue found.
 - `019c52c7-dd99-7d41-bf04-c337e06f352a` | No UI/UX issue found.
 - `019c52cf-6e60-75b1-a47b-521a4b9c6d25` | No UI/UX issue found.
 - `019c5302-fb6b-7393-a71c-ded42accc3a6` | No UI/UX issue found.
-- `019c5304-b4b1-7bf0-b768-81ea87605468` | No UI/UX issue found.
 - `019c55e2-5f5f-7e11-a066-4bfa55f62e03` | No UI/UX issue found.
 - `019c55fb-57da-7a92-aec2-2561a237566d` | No UI/UX issue found.
 - `019c55fc-6a14-7b42-b8fe-31425ac7f2e1` | No UI/UX issue found.
@@ -270,7 +646,6 @@
 - `019c5b3d-17d9-7f30-bbc0-8cba3d9f8745` | No UI/UX issue found.
 - `019c5b3f-3262-79f1-ad42-a999b8258497` | No UI/UX issue found.
 - `019c5c28-0ec3-76e3-9a0a-9d0fc59fff61` | No UI/UX issue found.
-- `019c5c43-c3ae-76f1-bfbf-a3be7fd105f3` | UI/UX issue found. Problem: intermittent favicon load crash on first activation/refresh. Attempted fix: serve favicon as a static public asset. Status: resolved.
 - `019c5c86-e70a-7880-bcbc-55dd30263975` | No UI/UX issue found.
 - `019c5c98-b2a2-77a1-9c86-b9bf9fcef5b9` | No UI/UX issue found.
 - `019c5ca5-5af0-7c61-9cb7-3ecfa9a8978d` | No UI/UX issue found.
@@ -281,9 +656,7 @@
 - `019c657c-1de3-7663-8644-226a7e33a58c` | No UI/UX issue found.
 - `019c6a45-f896-7842-8798-3ec3966d7332` | No UI/UX issue found.
 - `019c6f34-f356-78c3-b52b-15d11f5e921f` | No UI/UX issue found.
-- `019c6f40-5ed2-7933-9acd-9302b505584e` | No UI/UX issue found.
 - `019c7529-aa7d-79d1-a945-0f38ddc9fda8` | No UI/UX issue found.
-- `019c756e-8522-7eb0-ab7a-f3032bcd29ee` | No UI/UX issue found.
 - `019c757a-4441-77e2-ba5e-fb2a9ed67d8e` | No UI/UX issue found.
 - `019c757a-6667-7812-a0b9-81d2678aa85b` | No UI/UX issue found.
 - `019c7700-1655-7b40-ad13-618b3fcd7bf6` | No UI/UX issue found.
@@ -302,7 +675,6 @@
 - `019c7e96-50ab-7a42-b721-4186e5eb3115` | No UI/UX issue found.
 - `019c7e98-4b0b-7a41-ad88-e7cdd8ea64fa` | No UI/UX issue found.
 - `019c7ea8-bef7-7a22-943a-0025345790a3` | No UI/UX issue found.
-- `019c7ebf-5768-7991-b324-4587f5a62297` | No UI/UX issue found.
 - `019c7ec0-5db0-7db0-892e-b5af65bae018` | No UI/UX issue found.
 - `019c7ec4-07bf-70c2-be71-202d71a2a4f4` | No UI/UX issue found.
 - `019c7ec7-d1a1-7160-800c-5f3e81d58abf` | No UI/UX issue found.
@@ -334,18 +706,15 @@
 - `019c90e8-f2e3-7e23-8a4c-2b4ab61f0797` | No UI/UX issue found.
 - `019c90ee-2b33-7df2-8b7d-79b5dc37a806` | No UI/UX issue found.
 - `019c90f0-0940-7180-8bfa-5fd33c4faa0b` | No UI/UX issue found.
-- `019c90fd-30d5-7643-8462-853738eb5975` | No UI/UX issue found.
 - `019c9464-4a46-7ee0-bb8c-717fced42eeb` | No UI/UX issue found.
 - `019c94d3-528e-75e1-a95e-f646bb6096f5` | No UI/UX issue found.
 - `019c9515-4c61-7310-acfb-23632cb2fc6a` | No UI/UX issue found.
 - `019c9528-172a-7513-a92c-f8febcc5a33f` | No UI/UX issue found.
 - `019c9596-73a5-7ea0-9591-ea1af260b6a7` | No UI/UX issue found.
 - `019c95be-6f61-7a73-9728-c1f017a1e7ca` | No UI/UX issue found.
-- `019c95e8-00df-7180-8366-54a76bd59ccc` | No UI/UX issue found.
 - `019c981a-90c3-7ea1-852a-d72ba6d40e40` | No UI/UX issue found.
 - `019c9828-433f-7792-895f-939387497143` | No UI/UX issue found.
 - `019c9911-aa7c-7f43-8108-348dbbda5e17` | No UI/UX issue found.
-- `019c992c-911f-7b23-8a18-3a0e4d5007df` | No UI/UX issue found.
 - `019c9930-1391-7582-9e8a-35fae3ae2bc1` | No UI/UX issue found.
 - `019c9932-22f5-7870-9de6-557e8a16593b` | No UI/UX issue found.
 - `019c9987-d5df-7772-b6cf-6995e5f201c7` | No UI/UX issue found.
@@ -353,13 +722,9 @@
 - `019c9a3a-9b1b-7f13-aa0e-6abdc5366692` | No UI/UX issue found.
 - `019c9a60-fdce-73d3-8dbc-983cf8aeb628` | No UI/UX issue found.
 - `019c9ee2-e8f9-7ed3-8603-0dd4f09895af` | No UI/UX issue found.
-- `019c9f66-dff3-7612-94f5-52ab7df0303c` | No UI/UX issue found.
-- `019ca08b-fcff-7ba3-b22f-d4a11d6203a8` | No UI/UX issue found.
 - `019ca08e-1177-7141-a848-a157a080e450` | No UI/UX issue found.
 - `019ca267-86fd-73d3-b635-7608423be358` | No UI/UX issue found.
 - `019ca36e-8c7b-7b61-ac9b-d8a424c5a08d` | No UI/UX issue found.
-- `019ca44a-10f9-7ba1-a03a-324fec2a8941` | UI/UX feature/polish request only. Focus: add a delete-account confirmation modal with i18n; not a pre-existing UI bug thread.
-- `019ca451-b5bf-7101-ac73-32363c8c017c` | UI/UX feature/polish request only. Focus: add a share button to the hamburger menu; not a bug thread.
 - `019ca7dd-8216-77e1-bbfe-8e8758e651c6` | No UI/UX issue found.
 - `019ca7f0-31e2-7833-8e21-dfea8a20e507` | No UI/UX issue found.
 - `019ca859-df7f-73e0-b271-0d9081356b91` | No UI/UX issue found.
@@ -371,7 +736,6 @@
 - `019ca8b5-a45e-7481-88ae-1ec55578bb49` | No UI/UX issue found.
 - `019ca986-c3dc-77e3-91cf-b1a9bd2fb2ad` | No UI/UX issue found.
 - `019ca9f3-8e33-73d0-b68a-358667f16cea` | No UI/UX issue found.
-- `019caad5-6bb0-7d92-bea8-5037f761994d` | UI/UX feature/polish request only. Focus: email-login flow, swipe panels, and bottom-sheet auth UX; not a pre-existing bug thread.
 - `019cad53-394c-74d0-9859-9635b48a03fb` | No UI/UX issue found.
 - `019cad54-b14d-7e02-81c9-6b22dc6896e9` | No UI/UX issue found.
 - `019cad5b-6537-7b92-8579-e9f00a507532` | No UI/UX issue found.
@@ -387,14 +751,11 @@
 - `019cf5d5-1394-7680-ab90-b3af3530cb22` | No UI/UX issue found.
 - `019cf6d2-0b8a-71d3-b50a-72eb9b168f05` | No UI/UX issue found.
 - `019d0511-9a81-7cb0-9eee-67761e98cb2d` | No UI/UX issue found.
-- `019d0514-065c-7493-9eb9-ce8c137a0a98` | UI/UX issue found. Problem: users did not recognize the top-right language control as a dropdown. Attempted fix: add a minimal visual cue. Status: likely resolved; this captured session later focused on cleanup.
 - `019d0528-958b-7e20-b478-0a507b194f84` | No UI/UX issue found.
 - `019d0532-cea8-7930-8b2b-f4a087d98987` | No UI/UX issue found.
 - `019d075f-2b45-7f33-8cf3-267e79c6f503` | No UI/UX issue found.
 - `019d09ba-95de-7443-a031-9d2516c5425e` | No UI/UX issue found.
 - `019d09bb-8a9d-72c3-b709-b80d4cf6b65f` | No UI/UX issue found.
-- `019d09c4-4bbb-7712-bfff-af784ff51f88` | UI/UX issue found. Problem: translation bubble meta rows made bubbles too thick. Attempted fix: move flags/time outside the bubble. Status: likely resolved earlier; this captured session later focused on cleanup.
-- `019d0a14-c17f-7fd3-af01-e02b23765d6d` | UI/UX feature/polish request only. Focus: add random speaker animal avatars; not a bug thread.
 - `019d0a1a-70aa-7231-bb3b-ff84bd64563e` | No UI/UX issue found.
 - `019d0ad8-60e5-7600-a9d7-b9e5ca944554` | No UI/UX issue found.
 - `019d0b62-238c-77f3-8695-9cd3309958ef` | No UI/UX issue found.
@@ -415,21 +776,16 @@
 - `019d100e-aed0-71b1-8cd7-337013892e31` | No UI/UX issue found.
 - `019d104f-7e0c-7451-ab81-271aec412518` | No UI/UX issue found.
 - `019d1074-7a81-7a13-9d34-ce399753c359` | No UI/UX issue found.
-- `019d10e1-9693-7a92-bb87-c25a4907c539` | UI/UX issue found. Problem: splash logo yellow did not match the splash background. Attempted fix: replace the launch image asset so its background color matches the runtime splash color. Status: resolved.
 - `019d117a-0b87-7552-b5bb-1277eb9d2fc8` | No UI/UX issue found.
 - `019d1447-5bd5-7d43-84cf-ec956c87cb15` | No UI/UX issue found.
 - `019d144c-f526-7380-991d-988ef57ed3c6` | No UI/UX issue found.
 - `019d1503-a483-73b3-8d98-133e7ed456c8` | No UI/UX issue found.
-- `019d162b-4b15-7763-88f2-7571532d1ed6` | UI/UX issue found. Problem: animal avatar SVGs had too much whitespace and one asset looked bad. Attempted fix: asset-trim/polish request. Status: likely resolved on its feature branch; this entry is design-polish rather than a runtime bug.
 - `019d16e6-cba0-7db2-8227-56ec4b9b464d` | No UI/UX issue found.
 - `019d16e8-8c5b-73f3-8660-e4f72666236b` | No UI/UX issue found.
-- `019d18f0-c3d8-71c3-b1cb-f3b6a8c94e21` | UI/UX issue found. Problem: iOS resume showed a brief white flash. Attempted fix: investigation only in this thread. Status: unresolved in this session.
 - `019d18f1-d54f-75f2-b893-1ffb6ef5ccf0` | No UI/UX issue found.
-- `019d18f2-8f47-7c43-b52f-b08ce0ae78b8` | UI/UX issue found. Problem: auto-scroll triggered too often and fought manual scrolling. Attempted fix: throttle/recheck bottom-follow logic. Status: resolved.
 - `019d191f-7488-73d1-a772-f694c9faa9d5` | No UI/UX issue found.
 - `019d1998-e85c-75f3-ad64-e67eadf8d75f` | No UI/UX issue found.
 - `019d199b-d514-7891-99d1-f261a7feb213` | No UI/UX issue found.
-- `019d19a3-df70-7a42-bd7b-ff6ac157d4a3` | UI/UX issue found. Problem: Android background translations did not visibly update until foreground. Attempted fix: investigation only. Status: unresolved in this session.
 - `019d1a31-81a9-7233-86c4-c0d89045632b` | No UI/UX issue found.
 - `019d1a3a-5621-7443-bc5d-5b9da3eaa864` | No UI/UX issue found.
 - `019d1a4e-f254-7c42-a901-58d2d8ac9f10` | No UI/UX issue found.
@@ -437,20 +793,16 @@
 - `019d1acc-de1c-78d3-bfdc-6682552af25b` | No UI/UX issue found.
 - `019d1f5b-6d3c-7393-aecf-fc0fcd3e7951` | No UI/UX issue found.
 - `019d1f82-8255-7c20-a4c5-0203ec657330` | No UI/UX issue found.
-- `019d1faf-7c71-7c53-9025-6f825575d813` | UI/UX feature/polish request only. Focus: revive the hamburger drawer with a right-side full-height panel and swipe/overlay close UX.
 - `019d1fb4-12fb-7443-ba29-2a156d635e93` | No UI/UX issue found.
 - `019d1ff5-41d8-7801-83ec-6f0984eabb56` | No UI/UX issue found.
 - `019d2488-db3d-7820-951d-ae9c7bb2676c` | No UI/UX issue found.
 - `019d2653-9139-7143-96cf-90dc54e2a88d` | No UI/UX issue found.
 - `019d29c8-ffd0-7c40-9200-d7d7501f835c` | No UI/UX issue found.
-- `019d29d5-7bbe-7660-a135-078eb1403e45` | UI/UX issue found. Problem: the onboarding overlay showed a ghost play icon that misled users into tapping the wrong target. Attempted fix: remove the misleading icon and rely on copy/arrow guidance. Status: resolved.
 - `019d29d6-477e-74c1-aa18-d07e4823e3ec` | No UI/UX issue found.
 - `019d29e2-1298-7300-8b06-4a5abb0e978d` | No UI/UX issue found.
 - `019d29f1-a463-7c70-a3ad-626b04046182` | No UI/UX issue found.
 - `019d29fb-3dda-7680-a598-4cfac587cd4c` | No UI/UX issue found.
-- `019d2a13-5d6c-7892-9f2b-9143113463b0` | UI/UX issue found. Problem: initial room landing with existing history did not snap to bottom. Attempted fix: wait for hydration readiness before the one-time bottom anchor. Status: resolved.
 - `019d2a18-e89c-7402-a092-ea24306a0b30` | No UI/UX issue found.
-- `019d2a3f-2705-7810-a0e0-a2281881a606` | UI/UX issue found. Problem: relaunch auto-scroll happened only once instead of on every fresh open. Attempted fix: several approaches explored. Status: no clearly landed final fix in this thread.
 - `019d2a5e-1106-7c10-8ed8-d24fecd9c0e2` | No UI/UX issue found.
 - `019d2a6b-4331-7e60-8d5e-6eb8313f2035` | No UI/UX issue found.
 - `019d2a76-7c01-75e2-9512-1c6b1a8481a8` | No UI/UX issue found.
@@ -461,7 +813,6 @@
 - `019d2b2e-91d2-7c70-90b5-09043b6c4ff2` | No UI/UX issue found.
 - `019d2ec9-a8b1-7cd3-bb6e-b3fff0775f0b` | No UI/UX issue found.
 - `019d2f8d-a163-7082-93a1-fcf44ead13fd` | No UI/UX issue found.
-- `019d2f95-6e34-7013-8961-35857fe8f51d` | No UI/UX issue found.
 - `019d2ff6-1b7a-7441-9d56-992703b1d40f` | No UI/UX issue found.
 - `019d303e-8684-7980-9772-221f9bb459c8` | No UI/UX issue found.
 - `019d306f-3d86-7671-90c4-a569ee988857` | No UI/UX issue found.
@@ -469,8 +820,6 @@
 - `019d3709-051d-7301-b2a0-02c38a0e0985` | No UI/UX issue found.
 - `019d3726-7648-7163-9172-856e52a90fae` | No UI/UX issue found.
 - `019d389c-fdd9-7361-be90-b54449317e69` | No UI/UX issue found.
-- `019d391d-4b31-7ad1-91f2-03a3dcb90001` | UI/UX issue mentioned, but this thread is only a shadow summary of another conversation. No standalone fix was performed here.
-- `019d3989-cd8b-75d3-b8da-c60918a4ba01` | UI/UX issue mentioned, but this thread is only a Telegram summary/handoff. No standalone UI/UX fix was completed in this session.
 - `019d3d5d-7670-79a3-98fb-4aa6c0e1367b` | No UI/UX issue found.
 - `019d3d66-33ad-7563-b95c-43a4cebb7018` | No UI/UX issue found.
 - `019d3d66-a204-7531-8218-7d9f34ba5e6b` | No UI/UX issue found.
@@ -479,49 +828,26 @@
 - `019d4364-53e0-7df3-8573-c108b28db591` | No UI/UX issue found.
 - `019d4369-1572-77f2-ab69-44b4a7348af1` | No UI/UX issue found.
 - `019d4388-488a-78d3-9cc3-046fa784890c` | No UI/UX issue found.
-- `019d4398-a433-7652-a450-2704223b9242` | UI/UX issue mentioned only indirectly. The captured action here was mainly auth/config cleanup (disable noisy web Apple OAuth wiring); no standalone UI bug was resolved here.
 - `019d43a0-9cba-7df0-afc4-91103077efe8` | No UI/UX issue found.
-- `019d43a0-d5ec-7fd1-94b1-884dcea6de65` | UI/UX issue found. Problem: iOS banner/runtime debugging expanded into a hydration mismatch around render-time Date/Intl formatting. Attempted fix: banner/runtime work landed, but the hydration mismatch itself was only diagnosed. Status: mixed.
-- `019d43a3-c1e7-7600-858d-64964413a683` | UI/UX issue found. Problem: tab/body chrome tuning also exposed My Page scroll-chain bugs and spacing issues. Attempted fix: confine scrolling to internal content and contain overscroll. Status: resolved.
-- `019d43ae-bb58-7202-80ff-dfaa9ef50e68` | UI/UX issue found. Problem: branch-level bottom-tabs work continued banner/layout/ad polish. Attempted fix: this session is mostly a meta/summary handoff, not a standalone fix thread. Status: no independent verdict beyond the linked implementation threads.
-- `019d4785-e9ae-7251-901a-522eb61b1b1b` | UI/UX feature/polish request only. Focus: planning how to split the large social-style UIUX branch into a smaller release train.
-- `019d482b-5732-7533-b684-9a706ecd36a3` | UI/UX feature/polish request only. Focus: review/planning of the multi-conversation branch structure; no standalone bug fix in this thread.
 - `019d4868-b7ff-7743-8246-76ea234a0773` | No UI/UX issue found.
-- `019d4caf-4787-77f2-9e97-a7695630b6d2` | UI/UX issue found. Problem: mic-permission denial recovery felt bad and could strand users in a failed state. Attempted fix: reset back toward retryable/idle behavior. Status: later resolved across follow-up permission-retry threads.
-- `019d4d16-3c07-7c91-b787-66f177fbfc1f` | UI/UX issue found. Problem: banner/ad placement and scene transitions broke across room/list/drawer/menu states. Attempted fix: explicit banner zones and runtime-param preservation. Status: resolved.
 - `019d4d1e-bf31-7550-8116-f2654014ec7c` | No UI/UX issue found.
 - `019d4dc4-914e-7912-aae5-b8021b4973cf` | No UI/UX issue found.
 - `019d4e35-c559-7232-ae76-6b5ab334f0b8` | No UI/UX issue found.
 - `019d4eb1-8d6b-7192-8ffb-22deeead662c` | No UI/UX issue found.
-- `019d4eba-14af-7523-ad3c-0f5a5b3a810b` | UI/UX issue found. Problem: forced WebView reload/flicker could leave STT still running while room metadata/status looked reset or stale. Attempted fix: native/WebView state-reconcile work. Status: issue clearly existed; exact final closure is spread across follow-up reconcile threads.
-- `019d4f37-af30-7872-bc3a-4f68be0fabd6` | UI/UX issue found. Problem: Android could show a stopped/orange run button while STT was still actually running. Attempted fix: diagnosis of native/WebView state split only. Status: unresolved in this thread.
 - `019d4f51-c903-7e73-a4f0-f1d1d42bcbba` | No UI/UX issue found.
 - `019d5430-7b59-78a2-8ced-f6488ba97e7e` | No UI/UX issue found.
-- `019d56dd-4efc-7131-84f3-fb54707d0fdd` | UI/UX feature/polish request only. Focus: add per-bubble copy buttons and narrower bubbles. This later got reversed by thread 019d5714 because the result felt too noisy.
 - `019d5706-019e-7aa2-af37-3a7c53eb31b1` | No UI/UX issue found.
-- `019d5714-6710-7343-b2a8-b4faa797c702` | UI/UX issue found. Problem: per-bubble copy buttons made the conversation UI visually noisy. Attempted fix: keep only whole-utterance copy and use selection/long-press plus toast for the rest. Status: resolved.
 - `019d636a-628d-7f60-8936-e9e2637a026c` | No UI/UX issue found.
 - `019d6713-37ce-7720-9faa-73c92e919e97` | No UI/UX issue found.
 - `019d6724-7531-79e1-8f01-d5009d91318f` | No UI/UX issue found.
-- `019d6737-7b85-7080-bce8-dccb05377c6e` | UI/UX feature/polish request only. Focus: messenger-style keyboard input bar with animated mode toggle; not a bug thread.
 - `019d6c60-8f36-74e0-9be6-c4af43d77204` | No UI/UX issue found.
 - `019d6c8e-0f4b-7742-a086-9fdb21cc62d7` | No UI/UX issue found.
 - `019d6d01-77d8-7ed1-b8d3-b512139ecd15` | No UI/UX issue found.
 - `019d6d47-cbeb-7a01-9349-8ad7b520919b` | No UI/UX issue found.
-- `019d6d6d-cd79-71b0-99e5-c0296b0adeae` | UI/UX issue found. Problem: keyboard-mode composer could grow but not shrink back. Attempted fix: immediate remeasurement/shrink synchronization plus tests. Status: resolved.
 - `019d6d6f-b9c2-7343-b4f8-aeaa753c3f1c` | No UI/UX issue found.
-- `019d6d79-cfda-70d2-b96c-19522f7edfbc` | UI/UX feature/polish request only. Focus: translation-model dropdown badges and wider opened menu layout.
 - `019d6d85-612d-7622-909b-b22f7a04681b` | No UI/UX issue found.
-- `019d6d99-14df-7910-827a-26d32cc47d39` | UI/UX issue found. Problem: keyboard mode added too much bottom margin when the banner position was bottom. Attempted fix: subtract non-covering clearance and later fix native inset reporting. Status: resolved.
 - `019d6da8-8dde-7f32-be86-7f473baf85ba` | No UI/UX issue found.
 - `019d6db1-d0e3-7722-bd33-27c2ec279816` | No UI/UX issue found.
 - `019d6dbd-f288-74e1-9afa-f98dbd8c74fa` | No UI/UX issue found.
-- `019d6dc3-9387-7781-af63-4fb1286d9670` | UI/UX feature/polish request only. Focus: add a full-delete action and confirm modal inside the drawer menu.
 - `019d6f80-a10d-7b10-ac88-4dd9ad89e780` | No UI/UX issue found.
-- `019d6f81-c484-7ca3-8d8e-35eda0d82a5b` | UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
-- `019d6f82-c1a0-7d70-8577-894e00b96f24` | UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
-- `019d6f83-3566-78f1-bfea-c78a915dca28` | UI/UX issue mentioned in the opener, but this captured session ended as worktree cleanup only. No standalone UI/UX fix recorded here.
-- `019d6f83-810e-7573-ae59-bae9a403a787` | UI/UX issue found. Problem: i18n coverage was fragmented and non-ko/en/ja locales were getting dropped. Attempted fix in this captured session was planning/review only. Status: issue identified, no standalone implementation in this exact thread.
-- `019d6f86-9cff-73a1-b425-1b407e9f82d5` | UI/UX issue found. Problem: voice-to-keyboard transition stuttered. Attempted fix: unify clearance/composer settling so the layout drops in one smooth pass. Status: resolved.
-- `019d7003-dbb6-7801-a8d9-649857671dbc` | No UI/UX issue found.
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
