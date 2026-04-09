@@ -3,7 +3,7 @@
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
-import { getConversationDictionary, localizeStoredConversationTitle } from "@/i18n/conversations";
+import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
@@ -486,11 +486,7 @@ function mapConversationSummaryToItem(
     pausedStatusLabel: string;
   },
 ): ConversationItem {
-  const localizedTitle = localizeStoredConversationTitle(
-    locale,
-    conversation.title,
-    conversation.sequenceNumber,
-  );
+  const title = conversation.title;
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
     : "";
@@ -507,7 +503,7 @@ function mapConversationSummaryToItem(
 
   return {
     id: conversation.id,
-    title: localizedTitle,
+    title,
     preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
     previewFullText: conversation.latestMessagePreview || "",
     timeLabel: timeLabelsReady
@@ -516,7 +512,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: `${localizedTitle} ${avatar.name} avatar`,
+    avatarAlt: `${title} ${avatar.name} avatar`,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
