@@ -138,6 +138,8 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const BOTTOM_BAR_EDGE_MARGIN_PX = 3
+const COMPOSER_MODE_TOP_MARGIN_PX = 9
+const COMPOSER_MODE_BOTTOM_MARGIN_PX = 10
 const VOICE_MODE_STT_BUTTON_SIZE_PX = 50
 const VOICE_MODE_STT_ICON_SIZE_PX = 22
 const VOICE_MODE_STT_STOP_SIZE_PX = 15
@@ -3653,7 +3655,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
-  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${BOTTOM_BAR_EDGE_MARGIN_PX + activeKeyboardInsetPx}px), ${BOTTOM_BAR_EDGE_MARGIN_PX + activeKeyboardInsetPx}px)`
+  const bottomBarTopPaddingPx = isComposerOpen
+    ? COMPOSER_MODE_TOP_MARGIN_PX
+    : BOTTOM_BAR_EDGE_MARGIN_PX
+  const bottomBarBottomMarginPx = isComposerOpen
+    ? COMPOSER_MODE_BOTTOM_MARGIN_PX
+    : BOTTOM_BAR_EDGE_MARGIN_PX
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -4917,7 +4925,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              paddingTop: `${BOTTOM_BAR_EDGE_MARGIN_PX}px`,
+              paddingTop: `${bottomBarTopPaddingPx}px`,
               paddingBottom: bottomBarPaddingBottom,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
