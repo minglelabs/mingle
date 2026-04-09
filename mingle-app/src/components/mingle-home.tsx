@@ -985,6 +985,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       autoStartTriggeredRef.current = false;
       return;
     }
+    if (!isLiveDemoMounted) {
+      return;
+    }
     if (autoStartTriggeredRef.current) return;
     autoStartTriggeredRef.current = true;
 
@@ -1001,7 +1004,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       if (cancelled) return;
       const room = livePhoneDemoRef.current;
       if (!room) {
-        autoStartTriggeredRef.current = false;
+        if (remainingAttempts <= 0) {
+          autoStartTriggeredRef.current = false;
+          return;
+        }
+        timerId = window.setTimeout(() => {
+          pollUntilRunning(remainingAttempts - 1);
+        }, 120);
         return;
       }
       if (room.isSttSessionRunning()) {
@@ -1017,11 +1026,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }, 120);
     };
 
-    const tryAutoStart = () => {
+    const tryAutoStart = (remainingAttempts: number) => {
       if (cancelled) return;
       const room = livePhoneDemoRef.current;
       if (!room) {
-        autoStartTriggeredRef.current = false;
+        if (remainingAttempts <= 0) {
+          autoStartTriggeredRef.current = false;
+          return;
+        }
+        timerId = window.setTimeout(() => {
+          tryAutoStart(remainingAttempts - 1);
+        }, 120);
         return;
       }
       if (room.isSttSessionRunning()) {
@@ -1030,20 +1045,24 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       }
 
       void (async () => {
-        await room.startRecording();
-        pollUntilRunning(24);
+        try {
+          await room.startRecording();
+          pollUntilRunning(24);
+        } catch {
+          autoStartTriggeredRef.current = false;
+        }
       })();
     };
 
     timerId = window.setTimeout(() => {
-      tryAutoStart();
-    }, 320);
+      tryAutoStart(20);
+    }, 120);
 
     return () => {
       cancelled = true;
       clearTimer();
     };
-  }, [autoStartOnMount, onAutoStartHandled]);
+  }, [autoStartOnMount, isLiveDemoMounted, onAutoStartHandled]);
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
