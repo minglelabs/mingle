@@ -1091,6 +1091,7 @@ export default function ConversationList({
       .filter((conversation): conversation is ConversationChannelSummary => conversation !== null)
   ), [conversations, mountedConversationIds]);
   const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
+  const conversationSelectionDisabled = isCreatingConversation || isImportingLegacyConversation;
   const defaultSelectedLanguages = useMemo(
     () => deriveDefaultSttLanguagesForLocale(locale),
     [locale],
@@ -1537,7 +1538,7 @@ export default function ConversationList({
   }, []);
 
   const handleCreateConversation = useCallback(async () => {
-    if (isCreatingConversation || mutatingConversationId) return;
+    if (isCreatingConversation || isImportingLegacyConversation) return;
     setIsCreatingConversation(true);
     try {
       const response = await fetch(buildConversationApiPath(), {
@@ -1563,7 +1564,13 @@ export default function ConversationList({
     } finally {
       setIsCreatingConversation(false);
     }
-  }, [copy.createErrorMessage, defaultSelectedLanguages, isCreatingConversation, locale, mutatingConversationId]);
+  }, [
+    copy.createErrorMessage,
+    defaultSelectedLanguages,
+    isCreatingConversation,
+    isImportingLegacyConversation,
+    locale,
+  ]);
 
   const openConversationSummary = useCallback(async (
     conversation: ConversationChannelSummary,
@@ -1582,7 +1589,7 @@ export default function ConversationList({
   }, []);
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
-    if (isCreatingConversation || mutatingConversationId) return;
+    if (isCreatingConversation || isImportingLegacyConversation) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === item.id);
     if (!matchedConversation) return;
@@ -1596,7 +1603,7 @@ export default function ConversationList({
     conversations,
     copy.openErrorMessage,
     isCreatingConversation,
-    mutatingConversationId,
+    isImportingLegacyConversation,
     openConversationSummary,
   ]);
 
@@ -1635,7 +1642,7 @@ export default function ConversationList({
       return;
     }
     if (routeSyncConversationIdRef.current === routeConversationId) return;
-    if (isCreatingConversation || mutatingConversationId) return;
+    if (isCreatingConversation || isImportingLegacyConversation) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
     if (!matchedConversation) return;
@@ -1655,6 +1662,7 @@ export default function ConversationList({
     conversations,
     copy.openErrorMessage,
     isCreatingConversation,
+    isImportingLegacyConversation,
     mutatingConversationId,
     openConversationSummary,
     routeConversationId,
@@ -1701,7 +1709,7 @@ export default function ConversationList({
 
       const currentRouteConversationId = readConversationIdFromLocation();
       if (!currentRouteConversationId) return;
-      if (isCreatingConversationRef.current || mutatingConversationIdRef.current) return;
+      if (isCreatingConversationRef.current || isImportingLegacyConversationRef.current) return;
 
       const matchedConversation = conversationsRef.current.find(
         (conversation) => conversation.id === currentRouteConversationId,
@@ -1737,7 +1745,7 @@ export default function ConversationList({
           conversations={conversationItems}
           copy={copy}
           onSelectConversation={handleOpenConversation}
-          actionDisabled={actionDisabled}
+          actionDisabled={conversationSelectionDisabled}
         />
       ) : null}
 
@@ -1787,7 +1795,7 @@ export default function ConversationList({
               <div key={item.id}>
                 <ConversationRow
                   item={item}
-                  disabled={actionDisabled}
+                  disabled={conversationSelectionDisabled}
                   onSelect={handleOpenConversation}
                   className="border-b border-gray-100"
                 />
