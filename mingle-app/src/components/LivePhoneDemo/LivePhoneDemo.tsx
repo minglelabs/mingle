@@ -3183,7 +3183,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const openSmoothScrollTimerRef = useRef<number | null>(null)
   const openSmoothScrollDeadlineRef = useRef(0)
-  const openSmoothScrollCompletedRef = useRef(false)
+  const openSmoothScrollLastHeightRef = useRef(0)
+  const openSmoothScrollStableTicksRef = useRef(0)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState({
@@ -3422,12 +3423,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     clearOpenSmoothScrollTimer()
     if (!isVisible) {
       openSmoothScrollDeadlineRef.current = 0
-      openSmoothScrollCompletedRef.current = false
+      openSmoothScrollLastHeightRef.current = 0
+      openSmoothScrollStableTicksRef.current = 0
       return
     }
 
-    openSmoothScrollDeadlineRef.current = Date.now() + 1800
-    openSmoothScrollCompletedRef.current = false
+    openSmoothScrollDeadlineRef.current = Date.now() + 2500
+    openSmoothScrollLastHeightRef.current = 0
+    openSmoothScrollStableTicksRef.current = 0
 
     return () => {
       clearOpenSmoothScrollTimer()
@@ -3439,35 +3442,49 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       !isVisible
       || !isStorageHydrated
       || !chatRef.current
-      || openSmoothScrollCompletedRef.current
       || Date.now() > openSmoothScrollDeadlineRef.current
     ) {
       return
     }
 
+    openSmoothScrollDeadlineRef.current = Date.now() + 900
     clearOpenSmoothScrollTimer()
-    openSmoothScrollTimerRef.current = window.setTimeout(() => {
+    const followToBottom = () => {
       openSmoothScrollTimerRef.current = null
       if (!chatRef.current || !isVisible) return
 
-      const targetTop = chatRef.current.scrollHeight
+      const nextScrollHeight = chatRef.current.scrollHeight
       const distanceToBottom = Math.max(
         0,
         chatRef.current.scrollHeight - chatRef.current.scrollTop - chatRef.current.clientHeight,
       )
+      const heightChanged = Math.abs(nextScrollHeight - openSmoothScrollLastHeightRef.current) > 1
+      openSmoothScrollLastHeightRef.current = nextScrollHeight
 
-      if (distanceToBottom <= 1) {
-        openSmoothScrollCompletedRef.current = true
-        return
+      if (heightChanged) {
+        openSmoothScrollStableTicksRef.current = 0
+      } else {
+        openSmoothScrollStableTicksRef.current += 1
       }
 
-      suppressAutoScrollRef.current = false
-      shouldAutoScroll.current = true
-      chatRef.current.scrollTo({ top: targetTop, behavior: 'smooth' })
-      autoScrollSchedulerRef.current.markPerformed()
-      updateScrollDerivedState()
-      openSmoothScrollCompletedRef.current = true
-    }, 180)
+      if (distanceToBottom > 1) {
+        suppressAutoScrollRef.current = false
+        shouldAutoScroll.current = true
+        chatRef.current.scrollTo({ top: nextScrollHeight, behavior: 'smooth' })
+        autoScrollSchedulerRef.current.markPerformed()
+        updateScrollDerivedState()
+        openSmoothScrollStableTicksRef.current = 0
+      }
+
+      if (
+        Date.now() <= openSmoothScrollDeadlineRef.current
+        && (heightChanged || distanceToBottom > 1 || openSmoothScrollStableTicksRef.current < 3)
+      ) {
+        openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 120)
+      }
+    }
+
+    openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 180)
 
     return () => {
       clearOpenSmoothScrollTimer()
