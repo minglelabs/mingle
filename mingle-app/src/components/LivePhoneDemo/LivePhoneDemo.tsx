@@ -4923,7 +4923,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
             className="relative shrink-0 border-t border-gray-100 bg-white"
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             style={{
               paddingTop: `${bottomBarTopPaddingPx}px`,
               paddingBottom: bottomBarPaddingBottom,
@@ -4940,7 +4940,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-end gap-1.5"
                 >
                   <motion.div
@@ -5070,7 +5070,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 8 }}
-                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
                   className="grid items-end"
                   style={{ gridTemplateColumns: '1fr auto 1fr' }}
                 >
@@ -5078,7 +5078,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -12 }}
-                    transition={{ duration: 0.18, ease: 'easeOut' }}
+                    transition={{ duration: 0.09, ease: 'easeOut' }}
                     className="self-end justify-self-start pl-2"
                   >
                     <div className="flex items-center gap-1.5">
