@@ -140,7 +140,7 @@ const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const BOTTOM_BAR_EDGE_MARGIN_PX = 3
 const COMPOSER_MODE_TOP_MARGIN_PX = 9
 const COMPOSER_MODE_BOTTOM_MARGIN_PX = 7
-const VOICE_MODE_STT_BUTTON_WIDTH_PX = 118
+const VOICE_MODE_STT_BUTTON_WIDTH_PX = 136
 const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 50
 const VOICE_MODE_STT_ICON_SIZE_PX = 20
 const VOICE_MODE_STT_STOP_SIZE_PX = 14
@@ -5115,7 +5115,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onClick={handleMicClick}
                       disabled={showConnectingOverlay}
                       aria-label={isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
-                      className="relative flex items-center justify-start rounded-[16px] px-4 transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex items-center justify-start rounded-[18px] px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${VOICE_MODE_STT_BUTTON_WIDTH_PX}px`,
                         height: `${VOICE_MODE_STT_BUTTON_HEIGHT_PX}px`,
@@ -5123,17 +5123,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     >
                       {showRipple && (
                         <span
-                          className="absolute inset-0 rounded-[16px] bg-red-400 transition-transform duration-150"
+                          className="absolute inset-0 rounded-[18px] bg-red-400 transition-transform duration-150"
                           style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
                         />
                       )}
 
                       {isReady && (
-                        <span className="absolute inset-0 rounded-[16px] bg-red-500 opacity-20 animate-ping" />
+                        <span className="absolute inset-0 rounded-[18px] bg-red-500 opacity-20 animate-ping" />
                       )}
 
                       <span
-                        className={`relative flex h-full w-full items-center justify-start gap-3 rounded-[16px] px-4 shadow-lg ${
+                        className={`relative flex h-full w-full items-center justify-start gap-3 rounded-[18px] px-[18px] shadow-lg ${
                           isLimitReached
                             ? 'bg-gray-300'
                             : isReady
