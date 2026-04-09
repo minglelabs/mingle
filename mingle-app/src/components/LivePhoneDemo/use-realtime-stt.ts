@@ -1829,6 +1829,11 @@ export default function useRealtimeSTT({
     clearTimeout(connectionErrorResetTimerRef.current)
     connectionErrorResetTimerRef.current = null
   }, [])
+  const clearUtterancePersistTimer = useCallback(() => {
+    if (!utterancePersistTimerRef.current) return
+    clearTimeout(utterancePersistTimerRef.current)
+    utterancePersistTimerRef.current = null
+  }, [])
   const nativeMicPermissionRecoveryActionRef = useRef<NativeMicPermissionRecoveryAction>('none')
   const nativeShellSupportsOpenAppSettingsRef = useRef(false)
 
@@ -1920,27 +1925,27 @@ export default function useRealtimeSTT({
   const utterancePersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (!storageHydratedRef.current) return
-    if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
+    clearUtterancePersistTimer()
     utterancePersistTimerRef.current = setTimeout(() => {
+      utterancePersistTimerRef.current = null
       persistUtterancesSnapshot(buildMergedUtterances(utterances))
     }, 1000)
     return () => {
-      if (utterancePersistTimerRef.current) clearTimeout(utterancePersistTimerRef.current)
+      clearUtterancePersistTimer()
     }
-  }, [utterances, buildMergedUtterances])
+  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
     if (!storageHydratedRef.current) return
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
-      clearTimeout(utterancePersistTimerRef.current)
-      utterancePersistTimerRef.current = null
+      clearUtterancePersistTimer()
       persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances])
+  }, [buildMergedUtterances, clearUtterancePersistTimer])
 
   // Persist usage to localStorage
   useEffect(() => {
@@ -2713,6 +2718,7 @@ export default function useRealtimeSTT({
 
     clearLanguageChangeRestartTimer()
     clearConnectionErrorResetTimer()
+    clearUtterancePersistTimer()
     isStoppingRef.current = true
     pendingLanguageChangeRestartRef.current = false
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
@@ -2753,6 +2759,7 @@ export default function useRealtimeSTT({
   }, [
     clearConnectionErrorResetTimer,
     clearLanguageChangeRestartTimer,
+    clearUtterancePersistTimer,
     clearPartialBuffers,
     logClientEvent,
     resetToIdle,
