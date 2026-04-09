@@ -12,6 +12,7 @@ export type AppDictionary = {
     emptyDescription: string;
     activeStatusLabel: string;
     pausedStatusLabel: string;
+    switchLiveRoomToastLabel: string;
     createErrorMessage: string;
     openErrorMessage: string;
     pauseErrorMessage: string;

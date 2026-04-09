@@ -1699,6 +1699,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}
           connectionFailedLabel={props.dictionary.demo.connectionFailed}
+          switchLiveRoomToastLabel={
+            props.dictionary.conversations?.switchLiveRoomToastLabel
+            ?? "Stopped the live room and started STT here."
+          }
           muteTtsLabel={props.dictionary.demo.muteTts}
           unmuteTtsLabel={props.dictionary.demo.unmuteTts}
           textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}

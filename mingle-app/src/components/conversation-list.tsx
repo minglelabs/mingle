@@ -719,6 +719,23 @@ function useConversationIdFromSearch(): string | null {
   );
 }
 
+function readCachedNativeSttStatus(): string | null {
+  if (typeof window === "undefined") return null;
+  const cached = (window as Window & {
+    __MINGLE_LAST_NATIVE_STT_STATUS?: unknown;
+  }).__MINGLE_LAST_NATIVE_STT_STATUS;
+  return typeof cached === "string" ? cached.trim().toLowerCase() : null;
+}
+
+function isNativeSttStatusLive(status: string | null): boolean {
+  return status === "running"
+    || status === "ready"
+    || status === "silenced"
+    || status === "starting"
+    || status === "connecting"
+    || status === "recovering";
+}
+
 function ConversationRow({
   item,
   disabled = false,
@@ -1067,8 +1084,6 @@ export default function ConversationList({
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
-  const autoStartAttemptedConversationIdRef = useRef<string | null>(null);
-  const autoStartTimerRef = useRef<number | null>(null);
   const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
@@ -1090,10 +1105,8 @@ export default function ConversationList({
   const runtimeNativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPx;
   const runtimeNativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPx;
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
-  const effectiveNativeTopInsetPx = isNativeAppRuntime() && runtimeNativeBannerPosition === "top"
-    ? (hasNativeBannerLayout
-        ? runtimeNativeTopInsetPx
-        : resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx))
+  const effectiveNativeTopInsetPx = isNativeAppRuntime()
+    ? resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx)
     : runtimeNativeTopInsetPx;
   const effectiveNativeBottomInsetPx = isNativeAppRuntime() && runtimeNativeBannerPosition === "bottom"
     ? (hasNativeBannerLayout
@@ -1219,11 +1232,6 @@ export default function ConversationList({
       setAutoStartConversationId((current) => (
         current === conversationId ? null : current
       ));
-      autoStartAttemptedConversationIdRef.current = null;
-      if (autoStartTimerRef.current !== null) {
-        window.clearTimeout(autoStartTimerRef.current);
-        autoStartTimerRef.current = null;
-      }
     }
 
     const nextStatus = isRunning ? "active" : "paused";
@@ -1329,63 +1337,6 @@ export default function ConversationList({
     }).sort(compareConversationRecency));
   }, []);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    if (!autoStartConversationId) {
-      autoStartAttemptedConversationIdRef.current = null;
-      if (autoStartTimerRef.current !== null) {
-        window.clearTimeout(autoStartTimerRef.current);
-        autoStartTimerRef.current = null;
-      }
-      return;
-    }
-
-    if (activeConversation?.id !== autoStartConversationId) return;
-    if (autoStartAttemptedConversationIdRef.current === autoStartConversationId) return;
-
-    let cancelled = false;
-    let remainingAttempts = 12;
-
-    const runAutoStart = () => {
-      if (cancelled) return;
-      const targetConversationId = autoStartConversationId;
-      if (activeConversationRef.current?.id !== targetConversationId) {
-        return;
-      }
-
-      const targetRoom = conversationRoomRefs.current.get(targetConversationId);
-      if (!targetRoom) {
-        if (remainingAttempts <= 0) {
-          return;
-        }
-        remainingAttempts -= 1;
-        autoStartTimerRef.current = window.setTimeout(runAutoStart, 120);
-        return;
-      }
-
-      autoStartAttemptedConversationIdRef.current = targetConversationId;
-      void targetRoom.startRecording().catch(() => {
-        if (autoStartAttemptedConversationIdRef.current === targetConversationId) {
-          autoStartAttemptedConversationIdRef.current = null;
-        }
-      });
-    };
-
-    if (autoStartTimerRef.current !== null) {
-      window.clearTimeout(autoStartTimerRef.current);
-    }
-    autoStartTimerRef.current = window.setTimeout(runAutoStart, 320);
-
-    return () => {
-      cancelled = true;
-      if (autoStartTimerRef.current !== null) {
-        window.clearTimeout(autoStartTimerRef.current);
-        autoStartTimerRef.current = null;
-      }
-    };
-  }, [activeConversation?.id, autoStartConversationId]);
-
   const handleOpenSearch = useCallback(() => {
     setShowSearch(true);
     window.requestAnimationFrame(() => {
@@ -1407,6 +1358,44 @@ export default function ConversationList({
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isNativeAppRuntime()) return;
+    if (activeConversation) return;
+    if (liveConversationId) return;
+    if (isHydratingConversations) return;
+
+    const cachedNativeSttStatus = readCachedNativeSttStatus();
+    if (isNativeSttStatusLive(cachedNativeSttStatus)) return;
+
+    const staleActiveConversationIds = conversations
+      .filter((conversation) => conversation.status === "active")
+      .map((conversation) => conversation.id);
+    if (staleActiveConversationIds.length === 0) return;
+
+    for (const conversationId of staleActiveConversationIds) {
+      conversationRunningStateRef.current.set(conversationId, false);
+    }
+    setConversations((current) => current.map((conversation) => (
+      conversation.status === "active"
+        ? updateConversationSummaryStatus(conversation, "paused")
+        : conversation
+    )).sort(compareConversationRecency));
+
+    for (const conversationId of staleActiveConversationIds) {
+      void fetch(buildConversationApiPath(`/${conversationId}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...buildConversationRequestHeaders(),
+        },
+        body: JSON.stringify({ status: "paused" }),
+      }).catch(() => {
+        // Keep the local fallback paused state even when the reconciliation request fails.
+      });
+    }
+  }, [activeConversation, conversations, isHydratingConversations, liveConversationId]);
 
   useEffect(() => {
     const knownConversationIds = new Set(conversations.map((conversation) => conversation.id));
@@ -1958,6 +1947,12 @@ export default function ConversationList({
                     sessionKeyOverride={conversation.sessionKey}
                     storageNamespace={conversation.id}
                     initialSelectedLanguages={conversation.selectedLanguages}
+                    autoStartOnMount={conversation.id === autoStartConversationId}
+                    onAutoStartHandled={() => {
+                      setAutoStartConversationId((current) => (
+                        current === conversation.id ? null : current
+                      ));
+                    }}
                     isVisible={isVisible}
                     enableNativeBannerBridge={isVisible}
                     onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}

@@ -743,6 +743,7 @@ interface LivePhoneDemoProps {
   usageLimitRetryHintLabel: string
   connectingLabel: string
   connectionFailedLabel: string
+  switchLiveRoomToastLabel: string
   muteTtsLabel: string
   unmuteTtsLabel: string
   textSizeLabel: string
@@ -891,6 +892,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   usageLimitRetryHintLabel,
   connectingLabel,
   connectionFailedLabel,
+  switchLiveRoomToastLabel,
   textSizeLabel,
   silenceFinalizeLabel,
   translationModelLabel,
@@ -3037,39 +3039,44 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void primeAudioPlayback()
   }, [enableAutoTTS, isActive, primeAudioPlayback])
 
+  const [isPreparingStart, setIsPreparingStart] = useState(false)
+  const showConnectingOverlay = isPreparingStart || isConnecting
+
   const handleStartRecording = useCallback(async () => {
     if (isLimitReached) {
       onLimitReached?.()
       return
     }
-    if (isSttSessionRunning) return
+    if (isSttSessionRunning || isPreparingStart) return
 
-    const startPreparation = await onStartRecordingRequested?.()
-    if (startPreparation?.switchedFromLiveConversation) {
-      showFloatingToast(
-        uiLocale.trim().toLowerCase().startsWith('ko')
-          ? '다른 대화방의 음성 인식을 끄고 여기서 시작합니다'
-          : 'Stopped the live room and started STT here',
-      )
-    }
-
-    if (enableAutoTTS) {
-      const ok = await primeAudioPlayback()
-      if (!ok) {
-        ttsNeedsUnlockRef.current = true
+    setIsPreparingStart(true)
+    try {
+      const startPreparation = await onStartRecordingRequested?.()
+      if (startPreparation?.switchedFromLiveConversation) {
+        showFloatingToast(switchLiveRoomToastLabel)
       }
+
+      if (enableAutoTTS) {
+        const ok = await primeAudioPlayback()
+        if (!ok) {
+          ttsNeedsUnlockRef.current = true
+        }
+      }
+      await startRecording()
+    } finally {
+      setIsPreparingStart(false)
     }
-    await startRecording()
   }, [
     enableAutoTTS,
     isLimitReached,
+    isPreparingStart,
     isSttSessionRunning,
     onLimitReached,
     onStartRecordingRequested,
     primeAudioPlayback,
-    showFloatingToast,
     startRecording,
-    uiLocale,
+    showFloatingToast,
+    switchLiveRoomToastLabel,
   ])
 
   const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean }) => {
@@ -4537,14 +4544,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </div>
               )}
 
-            {/* Connecting state */}
-              {isConnecting && (
-                <div className="flex items-center justify-center gap-2 py-4">
-                  <Loader2 size={20} className="animate-spin text-amber-400" />
-                  <p className="text-sm text-gray-400">{connectingLabel}</p>
-                </div>
-              )}
-
             {/* Error state */}
               {isError && (
                 <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
@@ -4663,6 +4662,24 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </div>
               </div>
             )}
+            <AnimatePresence>
+              {showConnectingOverlay && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-0 z-[15] bg-slate-950/18 backdrop-blur-[1px]"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center px-6">
+                    <div className="flex items-center gap-2 rounded-full bg-white/92 px-4 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.14)]">
+                      <Loader2 size={18} className="animate-spin text-amber-500" />
+                      <p className="text-sm font-medium text-slate-700">{connectingLabel}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <AnimatePresence>
@@ -4802,7 +4819,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
-                      disabled={isConnecting}
+                      disabled={showConnectingOverlay}
                       className="relative flex h-[2.3rem] w-[2.3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (
@@ -4822,12 +4839,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             ? 'bg-gray-300'
                             : isReady
                               ? 'bg-red-500'
-                              : isConnecting
+                              : showConnectingOverlay
                                 ? 'bg-gray-300'
                                 : 'bg-gradient-to-br from-amber-400 to-orange-500'
                         }`}
                       >
-                        {isConnecting ? (
+                        {showConnectingOverlay ? (
                           <Loader2 size={17} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
@@ -4945,7 +4962,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
-                      disabled={isConnecting}
+                      disabled={showConnectingOverlay}
                       className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
                     >
                       {showRipple && (
@@ -4965,12 +4982,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             ? 'bg-gray-300'
                             : isReady
                               ? 'bg-red-500'
-                              : isConnecting
+                              : showConnectingOverlay
                                 ? 'bg-gray-300'
                                 : 'bg-gradient-to-br from-amber-400 to-orange-500'
                         }`}
                       >
-                        {isConnecting ? (
+                        {showConnectingOverlay ? (
                           <Loader2 size={30} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
