@@ -781,6 +781,9 @@ interface LivePhoneDemoProps {
   onLatestUtteranceChange?: (payload: {
     preview: string
     createdAt: string
+    speaker?: string
+    speakerAvatarSeed?: string
+    speakerAvatarIndex?: number
   }) => void
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
 }
@@ -2650,6 +2653,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onLatestUtteranceChange({
       preview: latestUtterance.originalText,
       createdAt: new Date(latestUtteranceCreatedAtMs).toISOString(),
+      speaker: latestUtterance.speaker,
+      speakerAvatarSeed: latestUtterance.speakerAvatarSeed,
+      speakerAvatarIndex: latestUtterance.speakerAvatarIndex,
     })
   }, [onLatestUtteranceChange, utterances])
 

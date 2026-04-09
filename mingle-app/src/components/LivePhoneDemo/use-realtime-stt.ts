@@ -2782,6 +2782,9 @@ export default function useRealtimeSTT({
     options?: {
       sttDurationMs?: number
       reason?: string
+      speaker?: string
+      speakerAvatarSeed?: string
+      speakerAvatarIndex?: number
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
@@ -2811,6 +2814,12 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           singleLanguageMode: true,
           skipTranslation: true,
+          speaker: options?.speaker || null,
+          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speakerAvatarIndex:
+            typeof options?.speakerAvatarIndex === 'number'
+              ? options.speakerAvatarIndex
+              : null,
         },
         keepalive: true,
       })
@@ -2898,6 +2907,12 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           hasInlineTts: Boolean(result.ttsAudioBase64),
           singleLanguageMode: isSingleLanguageMode,
+          speaker: options?.speaker || null,
+          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speakerAvatarIndex:
+            typeof options?.speakerAvatarIndex === 'number'
+              ? options.speakerAvatarIndex
+              : null,
         },
         keepalive: true,
       })

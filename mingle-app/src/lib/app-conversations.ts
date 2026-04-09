@@ -18,6 +18,9 @@ export type ConversationChannelSummary = {
   selectedLanguages?: string[];
   latestMessagePreview?: string;
   latestMessageAt?: string | null;
+  latestSpeaker?: string | null;
+  latestSpeakerAvatarSeed?: string | null;
+  latestSpeakerAvatarIndex?: number | null;
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -87,6 +90,9 @@ function serializeConversationChannel(
   record: ConversationChannelRecord,
   latestMessagePreview?: string,
   latestMessageAt?: string | null,
+  latestSpeaker?: string | null,
+  latestSpeakerAvatarSeed?: string | null,
+  latestSpeakerAvatarIndex?: number | null,
 ): ConversationChannelSummary {
   return {
     id: record.id,
@@ -97,6 +103,12 @@ function serializeConversationChannel(
     selectedLanguages: [...record.selectedLanguages],
     latestMessagePreview,
     latestMessageAt: latestMessageAt || null,
+    latestSpeaker: latestSpeaker || null,
+    latestSpeakerAvatarSeed: latestSpeakerAvatarSeed || null,
+    latestSpeakerAvatarIndex:
+      typeof latestSpeakerAvatarIndex === "number" && Number.isInteger(latestSpeakerAvatarIndex)
+        ? latestSpeakerAvatarIndex
+        : null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: record.pausedAt?.toISOString() ?? null,
@@ -110,7 +122,30 @@ function normalizeConversationPreview(rawValue: string | null | undefined): stri
 type LatestMessageSummary = {
   preview: string;
   createdAt: string | null;
+  speaker: string | null;
+  speakerAvatarSeed: string | null;
+  speakerAvatarIndex: number | null;
 };
+
+function readStringValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+function readIntegerValue(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    return null;
+  }
+  return value;
+}
+
+function readJsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
 
 async function listLatestMessageSummaryBySessionKey(
   sessionKeys: string[],
@@ -134,6 +169,7 @@ async function listLatestMessageSummaryBySessionKey(
       sessionKey: true,
       createdAt: true,
       sourceLanguage: true,
+      metadata: true,
       contents: {
         where: {
           contentType: "SOURCE",
@@ -153,10 +189,17 @@ async function listLatestMessageSummaryBySessionKey(
       || message.contents[0]
       || null;
     const preview = normalizeConversationPreview(sourceContent?.text);
+    const metadata = readJsonObject(message.metadata);
+    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
     if (!message.sessionKey) continue;
     summaryBySessionKey.set(message.sessionKey, {
       preview,
       createdAt: message.createdAt.toISOString(),
+      speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
+      speakerAvatarSeed:
+        readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
+      speakerAvatarIndex:
+        readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
     });
   }
 
@@ -172,6 +215,9 @@ async function serializeConversationChannelWithPreview(
     record,
     latestMessage?.preview,
     latestMessage?.createdAt,
+    latestMessage?.speaker,
+    latestMessage?.speakerAvatarSeed,
+    latestMessage?.speakerAvatarIndex,
   );
 }
 
@@ -202,6 +248,9 @@ export async function listConversationChannelsForUser(
         record,
         latestMessage?.preview,
         latestMessage?.createdAt,
+        latestMessage?.speaker,
+        latestMessage?.speakerAvatarSeed,
+        latestMessage?.speakerAvatarIndex,
       );
     })
     .sort((left, right) => {

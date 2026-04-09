@@ -41,6 +41,9 @@ type MingleHomeProps = {
   onLatestUtteranceChange?: (payload: {
     preview: string;
     createdAt: string;
+    speaker?: string;
+    speakerAvatarSeed?: string;
+    speakerAvatarIndex?: number;
   }) => void;
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
 };

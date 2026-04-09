@@ -5,6 +5,7 @@ import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
+import Image from "next/image";
 import {
   forwardRef,
   type FormEvent,
@@ -45,6 +46,7 @@ import {
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
+import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
@@ -57,14 +59,6 @@ const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
-const CONVERSATION_AVATAR_COLORS = [
-  "#fb7185",
-  "#38bdf8",
-  "#34d399",
-  "#f59e0b",
-  "#a78bfa",
-  "#f97316",
-] as const;
 const CONVERSATION_OVERLAY_TRANSITION = {
   duration: 0.28,
   ease: [0.22, 1, 0.36, 1] as const,
@@ -116,8 +110,8 @@ interface ConversationItem {
   timeLabel: string;
   status: "active" | "paused";
   statusLabel: string;
-  avatarText: string;
-  avatarColor: string;
+  avatarSrc: string;
+  avatarAlt: string;
   sequenceNumber: number;
   sessionKey: string;
   createdAt: string;
@@ -483,6 +477,12 @@ function upsertConversation(
           nextConversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
         latestMessageAt:
           nextConversation.latestMessageAt ?? previousConversation.latestMessageAt,
+        latestSpeaker:
+          nextConversation.latestSpeaker ?? previousConversation.latestSpeaker,
+        latestSpeakerAvatarSeed:
+          nextConversation.latestSpeakerAvatarSeed ?? previousConversation.latestSpeakerAvatarSeed,
+        latestSpeakerAvatarIndex:
+          nextConversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
       }
     : nextConversation;
 
@@ -562,6 +562,11 @@ function mapConversationSummaryToItem(
     deriveDefaultSttLanguagesForLocale(locale),
   );
   const languageFlags = selectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
+  const avatar = getSpeakerAvatar(
+    conversation.latestSpeaker || conversation.sessionKey,
+    conversation.latestSpeakerAvatarSeed || conversation.id,
+    conversation.latestSpeakerAvatarIndex ?? undefined,
+  );
 
   return {
     id: conversation.id,
@@ -573,9 +578,8 @@ function mapConversationSummaryToItem(
       : "",
     status: conversation.status,
     statusLabel,
-    avatarText: String(conversation.sequenceNumber),
-    avatarColor:
-      CONVERSATION_AVATAR_COLORS[(conversation.sequenceNumber - 1) % CONVERSATION_AVATAR_COLORS.length],
+    avatarSrc: avatar.src,
+    avatarAlt: `${conversation.title} ${avatar.name} avatar`,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -761,11 +765,15 @@ function ConversationRow({
       disabled={disabled}
       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
-      <div
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white"
-        style={{ backgroundColor: item.avatarColor }}
-      >
-        {item.avatarText}
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={item.avatarSrc}
+          alt={item.avatarAlt}
+          className="h-14 w-14 rounded-full bg-white object-cover"
+          width={56}
+          height={56}
+          unoptimized
+        />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -1335,6 +1343,9 @@ export default function ConversationList({
     payload: {
       preview: string;
       createdAt: string;
+      speaker?: string;
+      speakerAvatarSeed?: string;
+      speakerAvatarIndex?: number;
     },
   ) => {
     const normalizedPreview = payload.preview.trim();
@@ -1350,6 +1361,13 @@ export default function ConversationList({
         ...conversation,
         latestMessagePreview: normalizedPreview,
         latestMessageAt: normalizedCreatedAt,
+        latestSpeaker: payload.speaker?.trim() || conversation.latestSpeaker || null,
+        latestSpeakerAvatarSeed:
+          payload.speakerAvatarSeed?.trim() || conversation.latestSpeakerAvatarSeed || null,
+        latestSpeakerAvatarIndex:
+          typeof payload.speakerAvatarIndex === "number" && Number.isInteger(payload.speakerAvatarIndex)
+            ? payload.speakerAvatarIndex
+            : conversation.latestSpeakerAvatarIndex ?? null,
       };
     }).sort(compareConversationRecency));
   }, []);
