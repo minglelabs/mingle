@@ -3,6 +3,24 @@ import type { AppDictionary } from "@/i18n/types";
 
 export type ConversationDictionary = NonNullable<AppDictionary["conversations"]>;
 
+const CONVERSATION_TITLE_PREFIX_BY_LOCALE: Partial<Record<AppLocale, string>> = {
+  ko: "대화",
+  en: "Conversation",
+  ja: "会話",
+  "zh-CN": "对话",
+  "zh-TW": "對話",
+  fr: "Conversation",
+  de: "Gespräch",
+  es: "Conversación",
+  pt: "Conversa",
+  it: "Conversazione",
+  ru: "Разговор",
+  ar: "محادثة",
+  hi: "बातचीत",
+  th: "บทสนทนา",
+  vi: "Cuộc trò chuyện",
+};
+
 const ENGLISH_CONVERSATION_DICTIONARY: ConversationDictionary = {
   searchPlaceholder: "Search conversations",
   cancelAction: "Cancel",
@@ -285,4 +303,38 @@ export function getConversationDictionary(
   return dictionary.conversations
     ?? conversationDictionaries[locale]
     ?? ENGLISH_CONVERSATION_DICTIONARY;
+}
+
+export function getConversationTitlePrefix(locale: string): string {
+  return CONVERSATION_TITLE_PREFIX_BY_LOCALE[locale as AppLocale]
+    || CONVERSATION_TITLE_PREFIX_BY_LOCALE.en
+    || "Conversation";
+}
+
+export function formatLocalizedConversationTitle(
+  locale: string,
+  sequenceNumber: number,
+): string {
+  return `${getConversationTitlePrefix(locale)} ${sequenceNumber}`;
+}
+
+export function localizeStoredConversationTitle(
+  locale: string,
+  title: string,
+  sequenceNumber?: number,
+): string {
+  const normalizedTitle = title.trim();
+  const matchedLegacySequence = normalizedTitle.match(/^Conversation(?:\s*\((\d+)\)|\s+(\d+))$/i);
+  const parsedSequence = Number(
+    matchedLegacySequence?.[1]
+      || matchedLegacySequence?.[2]
+      || sequenceNumber
+      || 0,
+  );
+
+  if (Number.isInteger(parsedSequence) && parsedSequence > 0 && (matchedLegacySequence || !normalizedTitle)) {
+    return formatLocalizedConversationTitle(locale, parsedSequence);
+  }
+
+  return normalizedTitle;
 }

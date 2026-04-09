@@ -159,6 +159,7 @@ describe("/api/conversations route", () => {
       },
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      locale: "en",
       preferredSessionKey: undefined,
       selectedLanguages: [],
     });
@@ -202,6 +203,7 @@ describe("/api/conversations route", () => {
       },
     });
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      locale: "en",
       preferredSessionKey: "sess_legacy_room",
       selectedLanguages: [],
     });
@@ -227,11 +229,12 @@ describe("/api/conversations route", () => {
         "Content-Type": "application/json",
         "x-mingle-user-id": "anon_local_storage_user",
       },
-      body: JSON.stringify({ selectedLanguages: ["en", "fr"] }),
+      body: JSON.stringify({ locale: "ko", selectedLanguages: ["en", "fr"] }),
     }));
 
     expect(response.status).toBe(201);
     expect(mockCreateConversationChannelForUser).toHaveBeenCalledWith("tracked_user_123", {
+      locale: "ko",
       preferredSessionKey: undefined,
       selectedLanguages: ["en", "fr"],
     });

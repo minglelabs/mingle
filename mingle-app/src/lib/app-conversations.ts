@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client/index";
 import { prisma } from "@/lib/prisma";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
@@ -74,8 +75,11 @@ function createConversationSessionKey(): string {
   return `conv_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function formatConversationChannelTitle(sequenceNumber: number): string {
-  return `Conversation (${sequenceNumber})`;
+export function formatConversationChannelTitle(
+  sequenceNumber: number,
+  locale = "en",
+): string {
+  return formatLocalizedConversationTitle(locale, sequenceNumber);
 }
 
 export function normalizeConversationChannelStatus(
@@ -263,10 +267,12 @@ export async function listConversationChannelsForUser(
 export async function createConversationChannelForUser(
   userId: string,
   options?: {
+    locale?: string;
     preferredSessionKey?: string;
     selectedLanguages?: string[];
   },
 ): Promise<ConversationChannelSummary> {
+  const normalizedLocale = (options?.locale || "en").trim() || "en";
   const normalizedPreferredSessionKey = (options?.preferredSessionKey || "").trim();
   const normalizedSelectedLanguages = sanitizeSttLanguageSelection(options?.selectedLanguages);
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -283,7 +289,7 @@ export async function createConversationChannelForUser(
           data: {
             ownerUserId: userId,
             sequenceNumber,
-            title: formatConversationChannelTitle(sequenceNumber),
+            title: formatConversationChannelTitle(sequenceNumber, normalizedLocale),
             status: APP_CONVERSATION_STATUS_PAUSED,
             sessionKey: normalizedPreferredSessionKey || createConversationSessionKey(),
             selectedLanguages: normalizedSelectedLanguages,

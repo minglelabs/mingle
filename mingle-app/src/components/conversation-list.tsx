@@ -3,7 +3,7 @@
 import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
-import { getConversationDictionary } from "@/i18n/conversations";
+import { getConversationDictionary, localizeStoredConversationTitle } from "@/i18n/conversations";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
@@ -553,6 +553,11 @@ function mapConversationSummaryToItem(
     pausedStatusLabel: string;
   },
 ): ConversationItem {
+  const localizedTitle = localizeStoredConversationTitle(
+    locale,
+    conversation.title,
+    conversation.sequenceNumber,
+  );
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
     : "";
@@ -569,7 +574,7 @@ function mapConversationSummaryToItem(
 
   return {
     id: conversation.id,
-    title: conversation.title,
+    title: localizedTitle,
     preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
     previewFullText: conversation.latestMessagePreview || "",
     timeLabel: timeLabelsReady
@@ -578,7 +583,7 @@ function mapConversationSummaryToItem(
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
-    avatarAlt: `${conversation.title} ${avatar.name} avatar`,
+    avatarAlt: `${localizedTitle} ${avatar.name} avatar`,
     sequenceNumber: conversation.sequenceNumber,
     sessionKey: conversation.sessionKey,
     createdAt: conversation.createdAt,
@@ -1553,6 +1558,7 @@ export default function ConversationList({
             ...buildConversationRequestHeaders(),
           },
           body: JSON.stringify({
+            locale,
             legacySessionKey: legacySnapshot.sessionKey || undefined,
             selectedLanguages: legacySnapshot.selectedLanguages,
           }),
@@ -1585,6 +1591,7 @@ export default function ConversationList({
     conversations.length,
     isCreatingConversation,
     isHydratingConversations,
+    locale,
     mutatingConversationId,
   ]);
 
@@ -1635,6 +1642,7 @@ export default function ConversationList({
           ...buildConversationRequestHeaders(),
         },
         body: JSON.stringify({
+          locale,
           selectedLanguages: defaultSelectedLanguages,
         }),
       });
@@ -1650,7 +1658,7 @@ export default function ConversationList({
     } finally {
       setIsCreatingConversation(false);
     }
-  }, [copy.createErrorMessage, defaultSelectedLanguages, isCreatingConversation, mutatingConversationId]);
+  }, [copy.createErrorMessage, defaultSelectedLanguages, isCreatingConversation, locale, mutatingConversationId]);
 
   const openConversationSummary = useCallback(async (
     conversation: ConversationChannelSummary,

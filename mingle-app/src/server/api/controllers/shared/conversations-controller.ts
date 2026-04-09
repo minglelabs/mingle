@@ -11,6 +11,7 @@ import {
   resolveOrCreateUserIdForRequest,
   sanitizeRequestIdentityValue,
 } from "@/lib/request-user-identity";
+import { isSupportedLocale } from "@/i18n/config";
 
 export const runtime = "nodejs";
 
@@ -67,6 +68,7 @@ export async function postConversationResponse(request: NextRequest) {
   }
 
   let body: {
+    locale?: unknown;
     legacySessionKey?: unknown;
     selectedLanguages?: unknown;
   } | null = null;
@@ -76,6 +78,9 @@ export async function postConversationResponse(request: NextRequest) {
     body = null;
   }
 
+  const locale = typeof body?.locale === "string" && isSupportedLocale(body.locale.trim())
+    ? body.locale.trim()
+    : "en";
   const legacySessionKey = typeof body?.legacySessionKey === "string"
     ? sanitizeRequestIdentityValue(body.legacySessionKey)
     : "";
@@ -88,6 +93,7 @@ export async function postConversationResponse(request: NextRequest) {
       }
     : resolvedUser.identity;
   const conversation = await createConversationChannelForUser(resolvedUser.userId, {
+    locale,
     preferredSessionKey: legacySessionKey || undefined,
     selectedLanguages,
   });
