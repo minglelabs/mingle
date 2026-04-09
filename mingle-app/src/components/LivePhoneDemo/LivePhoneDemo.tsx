@@ -123,6 +123,9 @@ const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
+const CONVERSATION_SWIPE_BACK_DISTANCE_PX = 88
+const CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS = 0.45
 const MENU_PANEL_TRANSITION = {
   duration: 0.28,
   ease: [0.22, 1, 0.36, 1] as const,
@@ -189,6 +192,16 @@ function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) 
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
+function isNativeIosAppRuntime(): boolean {
+  if (!isNativeApp()) return false
+
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+
+  return apiNamespace.startsWith('ios/')
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -1002,6 +1015,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
+    startedAt: number
+  } | null>(null)
+  const conversationSwipeSessionRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
     startedAt: number
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -2060,6 +2079,82 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuSwipeSessionRef.current = null
     setIsMenuDragging(false)
     setMenuDragOffsetX(0)
+  }, [])
+
+  const finishConversationSwipeBack = useCallback((pointerId: number, currentX: number, currentY: number) => {
+    const swipeSession = conversationSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== pointerId) return
+
+    conversationSwipeSessionRef.current = null
+
+    const deltaX = currentX - swipeSession.startX
+    const deltaY = currentY - swipeSession.startY
+    const elapsedMs = Math.max(1, performance.now() - swipeSession.startedAt)
+    const velocityPxPerMs = deltaX / elapsedMs
+
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return
+    if (
+      deltaX >= CONVERSATION_SWIPE_BACK_DISTANCE_PX
+      || velocityPxPerMs >= CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS
+    ) {
+      onBack?.()
+    }
+  }, [onBack])
+
+  const handleConversationPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isNativeIosAppRuntime()) return
+    if (headerMode !== 'conversation' || !onBack) return
+    if (menuOpen || langSelectorOpen) return
+    if (deleteAccountDialogOpen || deleteConversationDialogOpen) return
+    if (textSizeMenuOpen || translationModelMenuOpen) return
+    if (event.pointerType === 'mouse') return
+    if (event.clientX <= CONVERSATION_SWIPE_BACK_MIN_START_X_PX) return
+    if (shouldIgnoreMenuSwipeTarget(event.target)) return
+
+    conversationSwipeSessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [
+    deleteAccountDialogOpen,
+    deleteConversationDialogOpen,
+    headerMode,
+    langSelectorOpen,
+    menuOpen,
+    onBack,
+    textSizeMenuOpen,
+    translationModelMenuOpen,
+  ])
+
+  const handleConversationPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const swipeSession = conversationSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - swipeSession.startX
+    const deltaY = event.clientY - swipeSession.startY
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 16) {
+      conversationSwipeSessionRef.current = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    }
+  }, [])
+
+  const handleConversationPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    finishConversationSwipeBack(event.pointerId, event.clientX, event.clientY)
+  }, [finishConversationSwipeBack])
+
+  const handleConversationPointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    conversationSwipeSessionRef.current = null
   }, [])
 
   const handleDeleteAccountConfirm = useCallback(() => {
@@ -3402,7 +3497,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div
+        className="relative flex h-full min-h-0 flex-col overflow-hidden"
+        onPointerDown={handleConversationPointerDown}
+        onPointerMove={handleConversationPointerMove}
+        onPointerUp={handleConversationPointerUp}
+        onPointerCancel={handleConversationPointerCancel}
+        style={{ touchAction: 'pan-y' }}
+      >
 
         {/* Header */}
         <div
