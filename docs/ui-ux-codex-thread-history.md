@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 90.
+- Total standalone UI/UX issue atoms documented in this file: 92.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 45.
+- Issue atoms currently listed for this thread: 47.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -245,6 +245,16 @@
    Problem: Even after pre-hide work, the banner could linger during the active interactive swipe because RN/WebView did not receive the gesture-start timing early enough.
    Attempted fix: The app already pre-hid as early as available and RN tried to infer the target zone from URL changes.
    Status: Not clearly solvable in-thread. Marked as unresolved structural limitation in the captured session.
+
+46. **iOS `/conversations` could enter a “nothing responds” state because WebView touch handling was internally deadlocked**
+   Problem: Later in the thread, the room/list surface could stop responding to taps entirely on iPhone. In the worst case, the user could tap conversation rows and other controls and nothing at all would happen. This was eventually traced to an RN-side WKWebView interaction rather than a web button-state issue.
+   Attempted fix: The real regression was that `allowsBackForwardNavigationGestures` had been changed to unconditional iOS enablement at the same time that `/conversations` pages were still using `scrollEnabled={false}`. On iOS WKWebView, that combination let the underlying `UIScrollView` pan recognizer steal interaction in a way that made the web content feel untouchable. The thread later corrected this by gating `allowsBackForwardNavigationGestures` behind `!shouldDisableIosScroll` for those routes, while also fixing a cleanup omission in the legacy-import path.
+   Status: Resolved in-thread once the RN gesture/scroll conflict was documented and reversed.
+
+47. **Conversation rows could still log a route change without actually showing the room UI**
+   Problem: Separate from the full touch-deadlock case, there was also a softer failure mode where tapping a room clearly triggered navigation work — server logs showed `/[locale]/conversations?...&conversation=<id>` requests and room GET calls returning `200` — but the visible screen never changed. The user described this as “touch logs appear but the screen does not move.”
+   Attempted fix: Multiple hypotheses were tried in-thread because the failure looked like a presentation-layer regression rather than an API failure. These included: allowing room-open even while room status PATCHes were pending, forcing room entry to `instant`, reverting the move of auto-start logic from `mingle-home` into `LivePhoneDemo`, restoring query-based room open on first render, removing/reverting cold-start last-view restoration, and switching between `document.body` portal rendering and inline overlay rendering for the room surface. None of those attempts was treated as a final, clearly verified root-cause fix in the captured session.
+   Status: Not conclusively resolved in-thread. The issue was important enough that the thread explicitly requested it be written down as a separate class of room-open regression, distinct from the pure iOS touch-deadlock above.
 
 ## Other Issue Sessions
 
