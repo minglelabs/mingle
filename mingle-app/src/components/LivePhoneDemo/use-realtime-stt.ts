@@ -264,7 +264,7 @@ export function shouldOpenNativeMicSettingsOnRetry(input: {
   supportsNativeOpenAppSettingsCommand: boolean
 }): boolean {
   if (!input.useNativeStt) return false
-  if (input.connectionStatus === 'ready' || input.connectionStatus === 'connecting') return false
+  if (input.connectionStatus !== 'idle') return false
   return input.recoveryAction === 'open_ios_settings'
 }
 
@@ -3719,15 +3719,6 @@ export default function useRealtimeSTT({
             platform: detail.platform,
           })
           resetToIdle()
-          const opened = sendNativeSttCommand({
-            type: 'native_open_app_settings',
-            payload: {
-              reason: 'microphone_permission_denied',
-            },
-          })
-          if (opened) {
-            nativeMicPermissionRecoveryActionRef.current = 'none'
-          }
           return
         }
         handleSttTransportError({ native: true, message: detail.message })
