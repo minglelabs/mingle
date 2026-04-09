@@ -3175,6 +3175,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
+  const openSmoothScrollTimerRef = useRef<number | null>(null)
+  const openSmoothScrollDeadlineRef = useRef(0)
+  const openSmoothScrollCompletedRef = useRef(false)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState({
@@ -3207,6 +3210,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (scrollUiHideTimerRef.current) {
       window.clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
+    }
+  }, [])
+
+  const clearOpenSmoothScrollTimer = useCallback(() => {
+    if (openSmoothScrollTimerRef.current) {
+      window.clearTimeout(openSmoothScrollTimerRef.current)
+      openSmoothScrollTimerRef.current = null
     }
   }, [])
 
@@ -3402,6 +3412,70 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => window.cancelAnimationFrame(rafId)
   }, [isVisible, updateScrollDerivedState])
 
+  useEffect(() => {
+    clearOpenSmoothScrollTimer()
+    if (!isVisible) {
+      openSmoothScrollDeadlineRef.current = 0
+      openSmoothScrollCompletedRef.current = false
+      return
+    }
+
+    openSmoothScrollDeadlineRef.current = Date.now() + 1800
+    openSmoothScrollCompletedRef.current = false
+
+    return () => {
+      clearOpenSmoothScrollTimer()
+    }
+  }, [clearOpenSmoothScrollTimer, isVisible])
+
+  useEffect(() => {
+    if (
+      !isVisible
+      || !isStorageHydrated
+      || !chatRef.current
+      || openSmoothScrollCompletedRef.current
+      || Date.now() > openSmoothScrollDeadlineRef.current
+    ) {
+      return
+    }
+
+    clearOpenSmoothScrollTimer()
+    openSmoothScrollTimerRef.current = window.setTimeout(() => {
+      openSmoothScrollTimerRef.current = null
+      if (!chatRef.current || !isVisible) return
+
+      const targetTop = chatRef.current.scrollHeight
+      const distanceToBottom = Math.max(
+        0,
+        chatRef.current.scrollHeight - chatRef.current.scrollTop - chatRef.current.clientHeight,
+      )
+
+      if (distanceToBottom <= 1) {
+        openSmoothScrollCompletedRef.current = true
+        return
+      }
+
+      suppressAutoScrollRef.current = false
+      shouldAutoScroll.current = true
+      chatRef.current.scrollTo({ top: targetTop, behavior: 'smooth' })
+      autoScrollSchedulerRef.current.markPerformed()
+      updateScrollDerivedState()
+      openSmoothScrollCompletedRef.current = true
+    }, 180)
+
+    return () => {
+      clearOpenSmoothScrollTimer()
+    }
+  }, [
+    clearOpenSmoothScrollTimer,
+    demoTypingText,
+    isStorageHydrated,
+    isVisible,
+    liveUtterances.length,
+    utterances.length,
+    updateScrollDerivedState,
+  ])
+
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
     if (!isPaginatingRef.current || prevScrollHeightRef.current === null || !chatRef.current) return
@@ -3449,8 +3523,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     return () => {
       clearPendingAutoScrollTimer()
+      clearOpenSmoothScrollTimer()
     }
   }, [
+    clearOpenSmoothScrollTimer,
     clearPendingAutoScrollTimer,
     demoTypingText,
     executeAutoScrollIfEligible,
