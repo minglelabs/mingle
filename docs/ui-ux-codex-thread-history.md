@@ -10,6 +10,7 @@
 - It excludes pure backend-only bugs, release/build-only work, and planning-only threads with no concrete UI issue.
 - Thread IDs below are local Codex session IDs from `~/.codex/sessions` / `~/.codex/archived_sessions`.
 - Some long-running threads later turned into merge or cleanup work. In those cases, the fix summary below is based on the intermediate assistant message where the actual fix was described.
+- One long-running session can contribute many separate entries. Thread `019d4cae-5142-7be2-9c74-30f95bfb5787` is one such case and is now broken out below instead of being collapsed into a single Phase 1 summary.
 
 ## Confirmed Landed Fixes
 
@@ -82,6 +83,140 @@
 - Switched iOS away from the root AdMob package import path to avoid startup crashes from early module initialization.
 - Evidence: threads `019d4398`, `019d43a0`, `019d4d16`; commits `4b054ac`, `2366d42`, `942f06d`.
 
+### 2026-04-02 to 2026-04-09 | Phase 1 conversation-list header and CTA chrome regressed repeatedly
+
+- Symptoms:
+- The conversation-list header box became taller than the reference `bottom-tabs` chrome.
+- The top gap kept getting overcounted by mixed safe-area, banner, and spacer math.
+- The launch CTA also looked washed out or sat inside an unwanted white footer shell instead of owning the whole bottom bar.
+- Fixes:
+- Restored the header to the same `56px + safe-area` structure as the reference chrome.
+- Stopped using header-level spacer hacks for banner avoidance and moved that clearance into the list body.
+- Removed the CTA's orange glow shadow and converted the footer into a full-width bottom-bar CTA surface.
+- Evidence: thread `019d4cae`; commits `e80df44`, `4419177`, `4d44bce`, `6ec8a87`.
+
+### 2026-04-02 to 2026-04-09 | Native banner offsets around the conversation list and room chrome were too loose
+
+- Symptoms:
+- The conversation-list banner floated too far below the top tab.
+- In-room top and bottom banners sat farther from the actual chrome than intended.
+- On iOS, the conversation bottom banner could still hover a few pixels above the control bar.
+- Root cause: list and room scenes were sharing stale banner offset assumptions, and iOS safe-area / coordinate rounding needed a separate nudge.
+- Fix: split list-specific vs room-specific banner offsets, tightened chat clearance around in-room banners, and added a tiny iOS-only bottom offset correction.
+- Evidence: thread `019d4cae`; commits `4ff1181`, `79b7674`, `4534439`.
+
+### 2026-04-02 to 2026-04-09 | Banner transitions lagged during room/list history moves
+
+- Symptom: when moving between the list and a room, the old banner could linger briefly before the destination screen asserted its own zone.
+- Root cause: transitions were switching directly between visible zones instead of first going through a neutral hidden phase.
+- Fix: added a `hidden` banner zone so open/close/history paths pre-hide the current banner before the next screen reasserts its zone.
+- Evidence: thread `019d4cae`; commit `283dfde`.
+
+### 2026-04-02 to 2026-04-09 | In-room header, bottom bar, and run control looked bulkier than the list chrome
+
+- Symptoms:
+- The in-room header and lower control bar looked taller than the conversation-list surfaces.
+- An old top safe-area tap fallback still existed above the header.
+- The main running control also looked visually heavy or ambiguous.
+- Fixes:
+- Reduced in-room header/control-bar density to match the list chrome.
+- Removed the legacy tap-to-top fallback from the top safe-area region.
+- Matched the bottom bar height to the list CTA, reduced the mic button size, removed extra chrome/shadow, and clarified the running-state icon to a stop square.
+- Evidence: thread `019d4cae`; commits `792c50f`, `0cb05fe`, `cb5465d`, `eef6043`, `d6feadb`.
+
+### 2026-04-02 to 2026-04-09 | `Start Conversation!` could open a room without actually starting STT
+
+- Symptom: the CTA could create and enter a room but fail to auto-start STT, or destabilize into a ref-callback update loop while trying.
+- Root cause: auto-start was being consumed before the room mount / running transition had actually been confirmed.
+- Fix: moved auto-start to the post-mount path, removed the ref-callback loop, and only consumed the flag after `running` or `connecting` was really observed so the CTA behaves like a real button press.
+- Evidence: thread `019d4cae`; commits `f4c61a3`, `ff102f46`, `d81e5a1`.
+
+### 2026-04-02 to 2026-04-09 | Conversation rows initially lacked recent-message context
+
+- Symptom: the list could show room labels and status but not the latest utterance, making the new room list hard to scan.
+- Fix: added a recent finalized-message preview to each room row and truncated it for compact display.
+- Evidence: thread `019d4cae`; commit `9d6878c`.
+
+### 2026-04-02 to 2026-04-09 | Conversation-row previews could disappear after status or language PATCH calls
+
+- Symptom: after adding recent-message previews, a room could lose that preview line as soon as the user paused it or changed languages, until the next full refetch.
+- Root cause: single-room PATCH responses were overwriting the client summary without carrying `latestMessagePreview`, and the client replaced the whole row with that partial response.
+- Fix: repopulated preview data in single-room summary responses and added a client-side defensive merge so the row preview stays stable.
+- Evidence: thread `019d4cae`; commit `9269cee`.
+
+### 2026-04-02 to 2026-04-09 | Recently viewed room context was lost on full app reopen
+
+- Symptom: reopening the app would drop the user back to a generic list entry point instead of restoring the last list/room context they had just been using.
+- Fix: stored the last viewed conversations URL per locale and tracking-user identity, then restored that state on the next `/[locale]/conversations` entry with a safe fallback to the list when the room no longer exists.
+- Evidence: thread `019d4cae`; commit `ac60813`.
+
+### 2026-04-02 to 2026-04-09 | Paused rooms could reopen without their finalized history or usage
+
+- Symptom: after app relaunch, reopening a paused room could show missing usage or missing finalized utterances even though that room had already accumulated real data.
+- Root cause: the reopen path trusted local restore too much and had no server-side hydration fallback when WebView-local state had been reset.
+- Fix: added a room-level read path and a server fallback hydration step so paused rooms can repopulate finalized messages and usage when local state is missing.
+- Evidence: thread `019d4cae`; commit `5d3e166`.
+
+### 2026-04-02 to 2026-04-09 | Multi-room STT ownership and list status synchronization were repeatedly wrong
+
+- Symptoms:
+- A non-owner room could ingest another room's live partial/final text.
+- Closing a live room could drop visible state or make the wrong room look live.
+- Restored rooms could keep stale `active` badges, and `paused` / ordering updates could land late.
+- Root cause: multiple mounted room instances could listen to the same native STT global events, and list badges were mixing room visibility, restored summaries, and real STT activity.
+- Fixes:
+- Enforced a single native STT event owner.
+- Made `live/paused` reflect real STT activity instead of mere room visibility.
+- Seeded list status from restored summaries and pushed `paused` back to the list immediately when stop is requested.
+- Evidence: thread `019d4cae`; commits `125704b`, `be08d36`, `e6b7f9c`, `0b8e079`.
+
+### 2026-04-09 | iOS mic-permission denial trapped the room in retry/error UI
+
+- Symptom: denying mic permission could leave the room stuck in retry/error UI and make recovery or navigation confusing.
+- Root cause: the web layer held onto `error` too long, and the RN side could cache `mic_permission` as a failed state that got replayed on room reopen.
+- Fix: reset denial to `idle`, kept the mic control re-clickable, cached `mic_permission` as `idle` on RN, then refined the behavior so Settings opens only on the next explicit retry instead of immediately on denial.
+- Evidence: thread `019d4cae`; commits `a4b2957`, `545b96b`.
+
+### 2026-04-09 | iOS swipe-back gestures were accidentally disabled except while the menu overlay was open
+
+- Symptom: regular iOS swipe-back stopped working because WKWebView gestures were effectively enabled only when the native menu overlay was open.
+- Root cause: `allowsBackForwardNavigationGestures` had regressed into being gated by `isNativeMenuOverlayOpen`.
+- Fix: restored gesture enablement for iOS generally instead of tying it to the menu-open state.
+- Evidence: thread `019d4cae`; commit `ff49065`.
+
+### 2026-04-09 | iOS room swipe-back flickered when returning to the conversation list
+
+- Symptom: swiping back from a room could show a `room -> list -> room re-open flicker` because history-close animation and route-sync reopen competed.
+- Root cause: the current branch was missing the native-history flag / close-mode split that the reference implementation already used.
+- Fix: restored native-history signaling and made history-driven closes go `instant`, while keeping animate mode only for explicit app-driven back actions.
+- Evidence: thread `019d4cae`; commit `d194388`.
+
+### 2026-04-09 | iOS drawer swipe-back flickered on the way back to the room
+
+- Symptom: after swiping back out of the drawer, the room could briefly show the drawer again and then close it a second time.
+- Root cause: unlike the main room overlay, the drawer had no `instant` path for natural iOS `popstate`, so it replayed its own exit animation after the system transition.
+- Fix: rolled back an earlier edge-only workaround and added the same `animate / instant` split that the room overlay already used.
+- Evidence: thread `019d4cae`; commits `8736f28`, `0b52462` (reverting the earlier `d8ce298` workaround).
+
+### 2026-04-09 | iOS forward navigation could fail to restore the conversation cleanly
+
+- Symptom: after swiping back to the list, swiping forward could leave the list visible, or replay a fresh room-open animation/flicker instead of restoring the existing room state.
+- Root cause: route sync was not subscribing directly to the URL's `conversation` query, and history-based reopen paths were not using an instant/optimistic flow.
+- Fix: made route sync subscribe directly to the conversation query and reopen via the history-specific instant path.
+- Evidence: thread `019d4cae`; commits `4715de0`, `19e98b5`.
+
+### 2026-04-09 | Room swipe-back was too edge-dependent on iOS
+
+- Symptom: users had to start from the far-left edge to leave a room, which made back navigation feel brittle inside the new multi-room UI.
+- Fix: kept the native edge swipe intact and added a web-side helper so a rightward swipe from most of the room body can also go back, while excluding buttons, inputs, drawers, and dialogs.
+- Evidence: thread `019d4cae`; commit `f0f76b4`.
+
+### 2026-04-09 | Conversation-list copy shipped partially in English
+
+- Symptom: the visible `Start Conversation!` CTA was hardcoded in English, and 7 of the 15 shipping locales fell back to English for the new conversation-list copy.
+- Fix: removed the hardcoded CTA label and filled the missing locale dictionaries for `zh-CN`, `zh-TW`, `ru`, `ar`, `hi`, `th`, and `vi`.
+- Evidence: thread `019d4cae`; commit `33358e9`.
+
 ### 2026-04-04 | Copy buttons became visually noisy
 
 - Symptom: per-bubble copy buttons made the conversation UI look crowded and distracting.
@@ -148,6 +283,13 @@
 - Investigation finding: the likely cause was a native/WebView state split where the Android foreground STT service stayed alive, while the WebView-side UI state reloaded or reset and failed to recover the active session state cleanly.
 - Status in extracted threads: the state mismatch was diagnosed, but a clearly confirmed landed UI fix was not found in the extracted session set.
 - Evidence: thread `019d4f37`.
+
+### 2026-04-09 | Late-session Phase 1 room-state bundle still had some unclosed items
+
+- Symptoms mentioned together in the same late-session pass included an `isLikelyIOSPlatform` runtime error, non-owner rooms still looking live when merely opened, and list ordering needing to follow the latest utterance rather than stale status changes.
+- Investigation finding: the session clearly identified a second-wave ownership/status split where `connectionStatus` was still leaking into non-owner room UI, but the extracted trail ends while those final edits are still in progress.
+- Status in extracted threads: adjacent fixes for ownership and list-status sync did land earlier in the same session, but this final five-item bundle was not clearly closed by a final assistant confirmation inside the extracted trail.
+- Evidence: thread `019d4cae`.
 
 ## Notes
 
