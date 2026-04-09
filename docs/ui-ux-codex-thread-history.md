@@ -2,7 +2,10 @@
 
 ## Scope
 
-- This document was built by scanning 276 unique Codex sessions whose `cwd` matched `mingle`.
+- This document was built by exhaustively rescanning 277 unique Codex sessions whose `cwd` matched `mingle`.
+- Coverage explicitly includes both `~/.codex/sessions` and `~/.codex/archived_sessions`.
+- First-seen breakdown in the rescan: 29 live sessions, 248 archived sessions.
+- From that full set, 33 sessions were treated as UI/UX candidates and then reduced into the landed-fix and investigation entries below.
 - It includes explicit user-facing UI/UX bugs, regressions, and UX cleanup threads.
 - It excludes pure backend-only bugs, release/build-only work, and planning-only threads with no concrete UI issue.
 - Thread IDs below are local Codex session IDs from `~/.codex/sessions` / `~/.codex/archived_sessions`.
@@ -131,6 +134,20 @@
 - Investigation finding: `conversation-list.tsx` was formatting time labels during render with `new Date()` and `Intl.DateTimeFormat()`, so server-rendered text and client-rendered text could diverge depending on engine/locale/time-zone differences. The structure of the bug was not iOS-only, but iOS WebKit appeared more likely to reveal it first.
 - Status in extracted threads: the root cause was identified, but a clearly confirmed fix for the time-label mismatch was not found in the extracted session set.
 - Evidence: threads `019d43a0`, `019d6f83`.
+
+### 2026-03-26 | App relaunch auto-scroll should happen on every fresh open, not only the first time ever
+
+- Symptom: the “initial landing auto-scroll to bottom” behavior worked once, but on later app relaunches it no longer consistently happened.
+- Investigation finding: a true app relaunch and a mere foreground return are hard to distinguish from inside the WebView alone. Several approaches were explored, including RN `AppState` and WebView visibility-based detection.
+- Status in extracted threads: a couple of fix branches were created and later cleaned up, but the extracted session trail does not show a clearly landed final fix on a persistent branch.
+- Evidence: thread `019d2a3f`.
+
+### 2026-04-03 | Android production could show “stopped” UI while STT was actually still running
+
+- Symptom: on Android production, the run button could turn orange again and the scroll-to-bottom affordance could flicker as if STT had stopped, even though transcripts kept arriving.
+- Investigation finding: the likely cause was a native/WebView state split where the Android foreground STT service stayed alive, while the WebView-side UI state reloaded or reset and failed to recover the active session state cleanly.
+- Status in extracted threads: the state mismatch was diagnosed, but a clearly confirmed landed UI fix was not found in the extracted session set.
+- Evidence: thread `019d4f37`.
 
 ## Notes
 
