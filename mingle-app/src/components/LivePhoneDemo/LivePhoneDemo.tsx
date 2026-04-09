@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
@@ -123,6 +123,14 @@ const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const MENU_PANEL_TRANSITION = {
+  duration: 0.28,
+  ease: [0.22, 1, 0.36, 1] as const,
+}
+const MENU_BACKDROP_TRANSITION = {
+  duration: 0.22,
+  ease: 'easeOut' as const,
+}
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
@@ -618,6 +626,13 @@ type FeedbackHistoryResponse = {
 }
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback'
+type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
+type LivePhoneDemoMenuMotionState = {
+  exitMode: LivePhoneDemoMenuTransitionMode
+  screenTransitionMode: LivePhoneDemoMenuTransitionMode
+  isDragging: boolean
+  dragOffsetX: number
+}
 
 type FeedbackPageTab = 'compose' | 'history'
 
@@ -678,6 +693,32 @@ function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
       'button, input, select, textarea, a, label, [role="button"], [data-menu-swipe-ignore="true"]',
     ),
   )
+}
+
+const livePhoneDemoMenuBackdropVariants: Variants = {
+  initial: { opacity: 0 },
+  active: { opacity: 1, transition: MENU_BACKDROP_TRANSITION },
+  exit: (motionState: LivePhoneDemoMenuMotionState) => ({
+    opacity: 0,
+    transition: motionState.exitMode === 'animate'
+      ? MENU_BACKDROP_TRANSITION
+      : { duration: 0 },
+  }),
+}
+
+const livePhoneDemoMenuPanelVariants: Variants = {
+  initial: { x: '100%' },
+  active: (motionState: LivePhoneDemoMenuMotionState) => ({
+    x: motionState.isDragging ? motionState.dragOffsetX : 0,
+    transition: motionState.isDragging
+      ? { duration: 0 }
+      : MENU_PANEL_TRANSITION,
+  }),
+  exit: (motionState: LivePhoneDemoMenuMotionState) => (
+    motionState.exitMode === 'animate'
+      ? { x: '100%', transition: MENU_PANEL_TRANSITION }
+      : { x: '100%', transition: { duration: 0 } }
+  ),
 }
 
 export interface LivePhoneDemoRef {
@@ -977,6 +1018,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
+  const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
+  const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
@@ -1014,6 +1057,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [translationModel],
   )
   const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
+  const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
+    exitMode: menuExitMode,
+    screenTransitionMode: menuScreenTransitionMode,
+    isDragging: isMenuDragging,
+    dragOffsetX: menuDragOffsetX,
+  }), [isMenuDragging, menuDragOffsetX, menuExitMode, menuScreenTransitionMode])
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -1581,15 +1630,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, nativeAppUpdate, resolveConversationSessionKey, uiLocale])
 
-  const applyMenuNavigationDepth = useCallback((nextDepth: number) => {
+  const applyMenuNavigationDepth = useCallback((
+    nextDepth: number,
+    options?: {
+      exitMode?: LivePhoneDemoMenuTransitionMode
+      screenTransitionMode?: LivePhoneDemoMenuTransitionMode
+    },
+  ) => {
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
+    const nextExitMode = options?.exitMode ?? 'animate'
+    const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
     setMenuDragOffsetX(0)
     setIsMenuDragging(false)
+    setMenuScreenTransitionMode(nextScreenTransitionMode)
 
     if (boundedDepth === 0) {
+      setMenuExitMode(nextExitMode)
       setDeleteAccountDialogOpen(false)
       setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
@@ -1597,12 +1656,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
 
+    setMenuExitMode('animate')
     setMenuOpen(true)
     setMenuScreen(boundedDepth === 1 ? 'root' : 'feedback')
   }, [])
 
   const pushMenuHistoryEntry = useCallback((nextDepth: number) => {
-    applyMenuNavigationDepth(nextDepth)
+    applyMenuNavigationDepth(nextDepth, {
+      exitMode: 'animate',
+      screenTransitionMode: 'animate',
+    })
     if (typeof window === 'undefined') return
     menuHistoryTargetDepthRef.current = null
     window.history.pushState(buildMenuHistoryState(nextDepth), '')
@@ -1610,7 +1673,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const closeMenuPanel = useCallback(() => {
     menuHistoryTargetDepthRef.current = null
-    applyMenuNavigationDepth(0)
+    applyMenuNavigationDepth(0, {
+      exitMode: 'animate',
+      screenTransitionMode: 'animate',
+    })
   }, [applyMenuNavigationDepth])
 
   const requestMenuBackStep = useCallback(() => {
@@ -1815,12 +1881,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       menuHistoryTargetDepthRef.current = null
 
       if (requestedDepth !== null) {
-        applyMenuNavigationDepth(requestedDepth)
+        applyMenuNavigationDepth(requestedDepth, {
+          exitMode: 'animate',
+          screenTransitionMode: 'animate',
+        })
         return
       }
 
       if (menuHistoryDepthRef.current <= 0) return
-      applyMenuNavigationDepth(Math.max(0, menuHistoryDepthRef.current - 1))
+      const nextDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+      applyMenuNavigationDepth(nextDepth, {
+        exitMode: nextDepth === 0 ? 'instant' : 'animate',
+        screenTransitionMode: 'instant',
+      })
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -3411,9 +3484,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </div>
 
         <AnimatePresence
+          custom={menuMotionState}
           onExitComplete={() => {
             setMenuDragOffsetX(0)
             setIsMenuDragging(false)
+            setMenuExitMode('animate')
+            setMenuScreenTransitionMode('animate')
             if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {
               try {
                 menuButtonRef.current?.focus({ preventScroll: true })
@@ -3425,10 +3501,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         >
           {menuOpen && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
+              custom={menuMotionState}
+              variants={livePhoneDemoMenuBackdropVariants}
+              initial="initial"
+              animate="active"
+              exit="exit"
               className="absolute inset-0 z-50 overflow-hidden bg-black/42"
               onClick={requestCloseMenuPanel}
             >
@@ -3439,14 +3516,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   aria-modal="true"
                   aria-label={menuLabel}
                   tabIndex={-1}
-                  initial={{ x: '100%' }}
-                  animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
-                  exit={{ x: '100%' }}
-                  transition={
-                    isMenuDragging
-                      ? { duration: 0 }
-                      : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-                  }
+                  custom={menuMotionState}
+                  variants={livePhoneDemoMenuPanelVariants}
+                  initial="initial"
+                  animate="active"
+                  exit="exit"
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={handleMenuPanelPointerDown}
                   onPointerMove={handleMenuPanelPointerMove}
@@ -3463,7 +3537,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <motion.div
                     initial={false}
                     animate={{ x: menuScreen === 'feedback' ? '-50%' : '0%' }}
-                    transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                    transition={
+                      menuScreenTransitionMode === 'animate'
+                        ? { duration: 0.26, ease: [0.22, 1, 0.36, 1] }
+                        : { duration: 0 }
+                    }
                     className="flex h-full w-[200%]"
                   >
                     <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
