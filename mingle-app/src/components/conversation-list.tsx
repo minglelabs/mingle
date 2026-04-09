@@ -1555,7 +1555,7 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       setShowSearch(false);
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("animate");
+      setOverlayEnterMode("instant");
       setOverlayExitMode("animate");
       setAutoStartConversationId(nextConversation.id);
       setActiveConversation(nextConversation);
@@ -1578,7 +1578,7 @@ export default function ConversationList({
       enterMode?: ConversationOverlayEnterMode;
     },
   ) => {
-    const enterMode = options?.enterMode ?? "animate";
+    const enterMode = options?.enterMode ?? "instant";
     postNativeBannerZone("hidden");
     setShowSearch(false);
     setOverlayEnterMode(enterMode);
