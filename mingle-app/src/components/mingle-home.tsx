@@ -32,8 +32,16 @@ type MingleHomeProps = {
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
   enableNativeBannerBridge?: boolean;
-  onStartRecordingRequested?: () => Promise<void> | void;
+  onStartRecordingRequested?: () => Promise<{
+    switchedFromLiveConversation: boolean;
+  } | void> | {
+    switchedFromLiveConversation: boolean;
+  } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
+  onLatestUtteranceChange?: (payload: {
+    preview: string;
+    createdAt: string;
+  }) => void;
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
 };
 
@@ -1724,6 +1732,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
+          onLatestUtteranceChange={props.onLatestUtteranceChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
         />
       ) : (

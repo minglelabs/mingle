@@ -17,6 +17,7 @@ export type ConversationChannelSummary = {
   sessionKey: string;
   selectedLanguages?: string[];
   latestMessagePreview?: string;
+  latestMessageAt?: string | null;
   createdAt: string;
   updatedAt: string;
   pausedAt: string | null;
@@ -85,6 +86,7 @@ export function normalizeConversationChannelStatus(
 function serializeConversationChannel(
   record: ConversationChannelRecord,
   latestMessagePreview?: string,
+  latestMessageAt?: string | null,
 ): ConversationChannelSummary {
   return {
     id: record.id,
@@ -94,6 +96,7 @@ function serializeConversationChannel(
     sessionKey: record.sessionKey,
     selectedLanguages: [...record.selectedLanguages],
     latestMessagePreview,
+    latestMessageAt: latestMessageAt || null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
     pausedAt: record.pausedAt?.toISOString() ?? null,
@@ -104,9 +107,14 @@ function normalizeConversationPreview(rawValue: string | null | undefined): stri
   return (rawValue || "").replace(/\s+/g, " ").trim();
 }
 
-async function listLatestMessagePreviewBySessionKey(
+type LatestMessageSummary = {
+  preview: string;
+  createdAt: string | null;
+};
+
+async function listLatestMessageSummaryBySessionKey(
   sessionKeys: string[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, LatestMessageSummary>> {
   if (sessionKeys.length === 0) {
     return new Map();
   }
@@ -124,6 +132,7 @@ async function listLatestMessagePreviewBySessionKey(
     distinct: ["sessionKey"],
     select: {
       sessionKey: true,
+      createdAt: true,
       sourceLanguage: true,
       contents: {
         where: {
@@ -138,24 +147,32 @@ async function listLatestMessagePreviewBySessionKey(
     },
   });
 
-  const previewBySessionKey = new Map<string, string>();
+  const summaryBySessionKey = new Map<string, LatestMessageSummary>();
   for (const message of latestMessages) {
     const sourceContent = message.contents.find((content) => content.language === message.sourceLanguage)
       || message.contents[0]
       || null;
     const preview = normalizeConversationPreview(sourceContent?.text);
-    if (!message.sessionKey || !preview) continue;
-    previewBySessionKey.set(message.sessionKey, preview);
+    if (!message.sessionKey) continue;
+    summaryBySessionKey.set(message.sessionKey, {
+      preview,
+      createdAt: message.createdAt.toISOString(),
+    });
   }
 
-  return previewBySessionKey;
+  return summaryBySessionKey;
 }
 
 async function serializeConversationChannelWithPreview(
   record: ConversationChannelRecord,
 ): Promise<ConversationChannelSummary> {
-  const previewBySessionKey = await listLatestMessagePreviewBySessionKey([record.sessionKey]);
-  return serializeConversationChannel(record, previewBySessionKey.get(record.sessionKey));
+  const summaryBySessionKey = await listLatestMessageSummaryBySessionKey([record.sessionKey]);
+  const latestMessage = summaryBySessionKey.get(record.sessionKey);
+  return serializeConversationChannel(
+    record,
+    latestMessage?.preview,
+    latestMessage?.createdAt,
+  );
 }
 
 export async function listConversationChannelsForUser(
@@ -174,14 +191,24 @@ export async function listConversationChannelsForUser(
     return [];
   }
 
-  const previewBySessionKey = await listLatestMessagePreviewBySessionKey(
+  const latestMessageSummaryBySessionKey = await listLatestMessageSummaryBySessionKey(
     records.map((record) => record.sessionKey),
   );
 
-  return records.map((record) => serializeConversationChannel(
-    record,
-    previewBySessionKey.get(record.sessionKey),
-  ));
+  return records
+    .map((record) => {
+      const latestMessage = latestMessageSummaryBySessionKey.get(record.sessionKey);
+      return serializeConversationChannel(
+        record,
+        latestMessage?.preview,
+        latestMessage?.createdAt,
+      );
+    })
+    .sort((left, right) => {
+      const leftTimestamp = Date.parse(left.latestMessageAt || left.createdAt) || 0;
+      const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
+      return rightTimestamp - leftTimestamp;
+    });
 }
 
 export async function createConversationChannelForUser(

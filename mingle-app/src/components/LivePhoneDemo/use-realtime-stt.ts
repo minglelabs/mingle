@@ -1932,6 +1932,7 @@ export default function useRealtimeSTT({
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!shouldUseNativeSttBridge()) return
+    if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) return
     const cachedWindow = window as NativeAppUpdateWindow
     const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
       ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
@@ -1949,7 +1950,7 @@ export default function useRealtimeSTT({
       nativeMicPermissionRecoveryActionRef.current = 'none'
     }
     setConnectionStatus(nextConnectionStatus)
-  }, [])
+  }, [isCurrentNativeSttOwner])
 
   useEffect(() => {
     targetLanguagesRef.current = [...languages]
@@ -4150,6 +4151,7 @@ export default function useRealtimeSTT({
     isReady: connectionStatus === 'ready',
     isConnecting: connectionStatus === 'connecting',
     isError: connectionStatus === 'error',
+    isNativeSttSessionOwner: useNativeSttRef.current ? isCurrentNativeSttOwner() : false,
     partialTranslations,
     partialLang,
     usageSec,

@@ -460,7 +460,9 @@ function consumeNativeHistoryCloseAnimationFlag(): boolean {
 }
 
 function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
-  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  const leftTimestamp = Date.parse(a.latestMessageAt || a.createdAt) || 0;
+  const rightTimestamp = Date.parse(b.latestMessageAt || b.createdAt) || 0;
+  return rightTimestamp - leftTimestamp;
 }
 
 function upsertConversation(
@@ -474,6 +476,8 @@ function upsertConversation(
         ...nextConversation,
         latestMessagePreview:
           nextConversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
+        latestMessageAt:
+          nextConversation.latestMessageAt ?? previousConversation.latestMessageAt,
       }
     : nextConversation;
 
@@ -492,7 +496,7 @@ function updateConversationSummaryStatus(
     ...conversation,
     status,
     pausedAt: status === "active" ? null : (conversation.pausedAt ?? nowIso),
-    updatedAt: nowIso,
+    updatedAt: conversation.updatedAt,
   };
 }
 
@@ -559,7 +563,9 @@ function mapConversationSummaryToItem(
     title: conversation.title,
     preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
     previewFullText: conversation.latestMessagePreview || "",
-    timeLabel: timeLabelsReady ? formatConversationTime(conversation.updatedAt, locale) : "",
+    timeLabel: timeLabelsReady
+      ? formatConversationTime(conversation.latestMessageAt || conversation.createdAt, locale)
+      : "",
     status: conversation.status,
     statusLabel,
     avatarText: String(conversation.sequenceNumber),
@@ -1188,10 +1194,13 @@ export default function ConversationList({
 
   const handleConversationStartRequested = useCallback(async (conversationId: string) => {
     const currentLiveConversationId = liveConversationIdRef.current;
-    if (!currentLiveConversationId || currentLiveConversationId === conversationId) return;
+    if (!currentLiveConversationId || currentLiveConversationId === conversationId) {
+      return { switchedFromLiveConversation: false };
+    }
 
     const currentLiveRoom = conversationRoomRefs.current.get(currentLiveConversationId);
     await currentLiveRoom?.stopRecording();
+    return { switchedFromLiveConversation: true };
   }, []);
 
   const handleConversationRunningChange = useCallback((conversationId: string, isRunning: boolean) => {
@@ -1295,6 +1304,30 @@ export default function ConversationList({
         window.alert(copy.openErrorMessage);
       });
   }, [copy.openErrorMessage, defaultSelectedLanguages]);
+
+  const handleConversationLatestUtteranceChange = useCallback((
+    conversationId: string,
+    payload: {
+      preview: string;
+      createdAt: string;
+    },
+  ) => {
+    const normalizedPreview = payload.preview.trim();
+    if (!normalizedPreview) return;
+    const normalizedCreatedAt = payload.createdAt.trim();
+    if (!normalizedCreatedAt) return;
+
+    setConversations((current) => current.map((conversation) => {
+      if (conversation.id !== conversationId) {
+        return conversation;
+      }
+      return {
+        ...conversation,
+        latestMessagePreview: normalizedPreview,
+        latestMessageAt: normalizedCreatedAt,
+      };
+    }).sort(compareConversationRecency));
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1930,6 +1963,9 @@ export default function ConversationList({
                     onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
                     onSttSessionRunningChange={(isRunning) => {
                       handleConversationRunningChange(conversation.id, isRunning);
+                    }}
+                    onLatestUtteranceChange={(payload) => {
+                      handleConversationLatestUtteranceChange(conversation.id, payload);
                     }}
                     onSelectedLanguagesChange={(selectedLanguages) => {
                       handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);

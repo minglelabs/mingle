@@ -55,10 +55,6 @@ import {
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
-import {
-  clearNativeHistoryBackAnimateFlag,
-  registerNativeBackHandler,
-} from '@/lib/native-back-handler'
 import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
@@ -112,7 +108,6 @@ const NATIVE_TTS_EVENT = 'mingle:native-tts'
 const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
-const NATIVE_BANNER_CHAT_CLEARANCE_PX = 4
 const SCROLL_UI_HIDE_DELAY_MS = 1000
 const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
@@ -202,6 +197,19 @@ function isNativeIosAppRuntime(): boolean {
     : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
 
   return apiNamespace.startsWith('ios/')
+}
+
+function isLikelyIOSPlatform(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const userAgent = navigator.userAgent || ''
+  if (/iPhone|iPad|iPod/i.test(userAgent)) {
+    return true
+  }
+
+  return /Mac/i.test(userAgent) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -665,24 +673,6 @@ function formatFeedbackTimestamp(createdAt: string, locale: string): string {
   }
 }
 
-function EchoInputRouteIcon({ echoAllowed }: { echoAllowed: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`relative inline-flex items-center gap-0.5 ${
-        echoAllowed ? 'text-orange-400' : 'text-gray-400'
-      }`}
-    >
-      <Volume2 size={12} strokeWidth={2} />
-      <ArrowRight size={12} strokeWidth={2} />
-      <Mic size={12} strokeWidth={2} />
-      {!echoAllowed && (
-        <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rotate-[-24deg] rounded bg-current" />
-      )}
-    </span>
-  )
-}
-
 function buildMenuHistoryState(depth: number): Record<string, unknown> {
   if (typeof window === 'undefined') {
     return { [MENU_HISTORY_STATE_KEY]: depth }
@@ -740,6 +730,10 @@ export interface LivePhoneDemoRef {
   isSttSessionRunning: () => boolean
 }
 
+type LivePhoneDemoStartRecordingPreparation = {
+  switchedFromLiveConversation: boolean
+}
+
 interface LivePhoneDemoProps {
   onLimitReached?: () => void
   enableAutoTTS?: boolean
@@ -781,8 +775,12 @@ interface LivePhoneDemoProps {
   initialSelectedLanguages?: string[]
   isVisible?: boolean
   enableNativeBannerBridge?: boolean
-  onStartRecordingRequested?: () => Promise<void> | void
+  onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
+  onLatestUtteranceChange?: (payload: {
+    preview: string
+    createdAt: string
+  }) => void
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
 }
 
@@ -925,6 +923,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
+  onLatestUtteranceChange,
   onSelectedLanguagesChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
@@ -976,12 +975,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [composerDraft, setComposerDraft] = useState('')
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
+  const [floatingToastMessage, setFloatingToastMessage] = useState('')
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
+  const floatingToastTimerRef = useRef<number | null>(null)
   const {
     ttsEnabled: isSoundEnabled,
-    setTtsEnabled: setIsSoundEnabled,
     aecEnabled,
-    setAecEnabled,
   } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
@@ -1034,7 +1033,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
   const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
-  const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
   const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
@@ -1046,6 +1044,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
+
+  const showFloatingToast = useCallback((message: string) => {
+    const normalizedMessage = message.trim()
+    if (!normalizedMessage) return
+    if (floatingToastTimerRef.current) {
+      clearTimeout(floatingToastTimerRef.current)
+    }
+    setFloatingToastMessage(normalizedMessage)
+    floatingToastTimerRef.current = window.setTimeout(() => {
+      setFloatingToastMessage('')
+    }, 1500)
+  }, [])
   const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
@@ -2582,13 +2592,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     volume,
     startRecording,
     stopRecording,
-    toggleRecording,
     submitExternalUtterance,
     clearConversationHistory,
     isActive,
     isReady,
     isConnecting,
     isError,
+    isNativeSttSessionOwner,
     usageSec,
     isLimitReached,
     usageLimitSec,
@@ -2613,12 +2623,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
   })
-  const isSttSessionRunning = isConnecting || isReady || isActive
+  const isSttSessionRunning = isNativeAppRuntime
+    ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
+    : (isConnecting || isReady || isActive)
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
 
   useEffect(() => {
     onSttSessionRunningChange?.(isSttSessionRunning)
   }, [isSttSessionRunning, onSttSessionRunningChange])
+
+  const lastReportedUtteranceIdRef = useRef('')
+  useEffect(() => {
+    if (!onLatestUtteranceChange) return
+    const latestUtterance = utterances[utterances.length - 1]
+    if (!latestUtterance) return
+    if (!latestUtterance.originalText.trim()) return
+    if (lastReportedUtteranceIdRef.current === latestUtterance.id) return
+    lastReportedUtteranceIdRef.current = latestUtterance.id
+    const latestUtteranceCreatedAtMs = typeof latestUtterance.createdAtMs === 'number'
+      && Number.isFinite(latestUtterance.createdAtMs)
+      ? latestUtterance.createdAtMs
+      : Date.now()
+
+    onLatestUtteranceChange({
+      preview: latestUtterance.originalText,
+      createdAt: new Date(latestUtteranceCreatedAtMs).toISOString(),
+    })
+  }, [onLatestUtteranceChange, utterances])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
@@ -3013,7 +3044,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     if (isSttSessionRunning) return
 
-    await onStartRecordingRequested?.()
+    const startPreparation = await onStartRecordingRequested?.()
+    if (startPreparation?.switchedFromLiveConversation) {
+      showFloatingToast(
+        uiLocale.trim().toLowerCase().startsWith('ko')
+          ? '다른 대화방의 음성 인식을 끄고 여기서 시작합니다'
+          : 'Stopped the live room and started STT here',
+      )
+    }
 
     if (enableAutoTTS) {
       const ok = await primeAudioPlayback()
@@ -3029,7 +3067,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onLimitReached,
     onStartRecordingRequested,
     primeAudioPlayback,
+    showFloatingToast,
     startRecording,
+    uiLocale,
   ])
 
   const handleStopRecording = useCallback(async () => {
@@ -3119,8 +3159,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollUiHideTimerRef = useRef<number | null>(null)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
-  const [copyToastVisible, setCopyToastVisible] = useState(false)
-  const copyToastTimerRef = useRef<number | null>(null)
   const [scrollMetrics, setScrollMetrics] = useState({
     thumbTop: 0,
     thumbHeight: 0,
@@ -3392,18 +3430,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     const handleCopySuccess = () => {
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
-      setCopyToastVisible(true)
-      copyToastTimerRef.current = window.setTimeout(() => {
-        setCopyToastVisible(false)
-      }, 1500)
+      showFloatingToast(copyActionCopy.copiedToastLabel)
     }
     window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
     return () => {
       window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+      if (floatingToastTimerRef.current) clearTimeout(floatingToastTimerRef.current)
     }
-  }, [])
+  }, [copyActionCopy.copiedToastLabel, showFloatingToast])
 
   useEffect(() => {
     return () => {
@@ -4570,7 +4604,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
 
             <AnimatePresence>
-              {copyToastVisible && (
+              {floatingToastMessage && (
                 <motion.div
                   key="copy-toast"
                   initial={{ opacity: 0, y: 6 }}
@@ -4585,7 +4619,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                     <span className="text-[14px] font-medium text-gray-800">
-                      {copyActionCopy.copiedToastLabel}
+                      {floatingToastMessage}
                     </span>
                   </div>
                 </motion.div>
