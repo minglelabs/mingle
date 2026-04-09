@@ -101,6 +101,9 @@ describe("/api/messages route", () => {
         },
       },
     });
+    expect(mockAppEventLogCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAppMessageFindMany.mock.invocationCallOrder[0],
+    );
   });
 
   it("soft deletes matched messages and contents for the current tracked user", async () => {
@@ -170,6 +173,10 @@ describe("/api/messages route", () => {
         },
       },
     });
+    expect(mockAppEventLogCreate).toHaveBeenCalledTimes(1);
+    expect(mockAppEventLogCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAppMessageFindMany.mock.invocationCallOrder[0],
+    );
   });
 
   it("soft deletes both authenticated and anonymous device messages in one request", async () => {
@@ -214,5 +221,18 @@ describe("/api/messages route", () => {
         id: true,
       },
     });
+    expect(mockAppEventLogCreate).toHaveBeenCalledWith({
+      data: {
+        userId: "auth_user_123",
+        sessionKey: "sess_123",
+        eventType: "conversation_history_cleared",
+        metadata: {
+          clientClearedAtMs: expect.any(Number),
+        },
+      },
+    });
+    expect(mockAppEventLogCreate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAppMessageFindMany.mock.invocationCallOrder[0],
+    );
   });
 });

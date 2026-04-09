@@ -118,6 +118,19 @@ function buildConversationHistoryClearedMetadata(clientClearedAtMs: number) {
   };
 }
 
+function buildConversationHistoryClearedEventData(args: {
+  userId?: string
+  sessionKey?: string
+  clientClearedAtMs: number
+}) {
+  return {
+    userId: args.userId,
+    sessionKey: args.sessionKey,
+    eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+    metadata: buildConversationHistoryClearedMetadata(args.clientClearedAtMs),
+  };
+}
+
 export async function DELETE(request: Request) {
   const nextRequest = request as NextRequest;
   const trackingSeedResponse = new NextResponse();
@@ -138,21 +151,24 @@ export async function DELETE(request: Request) {
       sessionKey: resolveTrackingSessionKey(request) || tracking.sessionKey,
     };
     const userIds = await resolveMessageOwnerUserIds(identity);
+    const clearEventUserId = userIds[0] ?? undefined;
+    const clearEventSessionKey = identity.sessionKey || tracking.sessionKey || undefined;
     const ownerFilters = [
       ...(userIds.length > 0 ? [{ userId: { in: userIds } }] : []),
       ...(identity.sessionKey ? [{ sessionKey: identity.sessionKey }] : []),
     ];
 
+    if (clearEventUserId || clearEventSessionKey) {
+      await prisma.appEventLog.create({
+        data: buildConversationHistoryClearedEventData({
+          userId: clearEventUserId,
+          sessionKey: clearEventSessionKey,
+          clientClearedAtMs,
+        }),
+      });
+    }
+
     if (ownerFilters.length === 0) {
-      if (tracking.sessionKey) {
-        await prisma.appEventLog.create({
-          data: {
-            sessionKey: tracking.sessionKey,
-            eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
-            metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
-          },
-        });
-      }
       const response = NextResponse.json({
         ok: true,
         deletedMessageCount: 0,
@@ -173,14 +189,6 @@ export async function DELETE(request: Request) {
     const messageIds = messages.map((message) => message.id);
 
     if (messageIds.length === 0) {
-      await prisma.appEventLog.create({
-        data: {
-          userId: userIds[0] ?? undefined,
-          sessionKey: identity.sessionKey || tracking.sessionKey,
-          eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
-          metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
-        },
-      });
       const response = NextResponse.json({
         ok: true,
         deletedMessageCount: 0,
@@ -204,14 +212,6 @@ export async function DELETE(request: Request) {
         },
         data: {
           isDeleted: true,
-        },
-      }),
-      prisma.appEventLog.create({
-        data: {
-          userId: userIds[0] ?? undefined,
-          sessionKey: identity.sessionKey || tracking.sessionKey,
-          eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
-          metadata: buildConversationHistoryClearedMetadata(clientClearedAtMs),
         },
       }),
     ]);
