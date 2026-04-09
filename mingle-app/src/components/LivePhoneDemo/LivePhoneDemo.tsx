@@ -10,7 +10,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
-import { getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
@@ -881,6 +881,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId ? conversationSelectedLanguages : fallbackLanguages,
+  )
+  const resolveConversationSessionKey = useCallback(
+    () => getOrCreateSessionKey(storageNamespace, sessionKeyOverride),
+    [sessionKeyOverride, storageNamespace],
   )
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
@@ -2423,7 +2427,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
-    ensureSessionKey,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -2444,7 +2447,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
-  const resolveConversationSessionKey = useCallback(() => ensureSessionKey(), [ensureSessionKey])
 
   useEffect(() => {
     onSttSessionRunningChange?.(isSttSessionRunning)
