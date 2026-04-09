@@ -849,6 +849,8 @@ interface LivePhoneDemoProps {
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
+  autoStartOnMount?: boolean
+  onAutoStartHandled?: () => void
   isVisible?: boolean
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
@@ -999,6 +1001,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
+  autoStartOnMount = false,
+  onAutoStartHandled,
   isVisible = true,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
@@ -1015,6 +1019,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId ? conversationSelectedLanguages : fallbackLanguages,
   )
+  const autoStartTriggeredRef = useRef(false)
+  const autoStartAttemptCountRef = useRef(0)
   const resolveConversationSessionKey = useCallback(
     () => getOrCreateSessionKey(storageNamespace, sessionKeyOverride),
     [sessionKeyOverride, storageNamespace],
@@ -3229,6 +3235,45 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
   }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance, syncComposerTextareaHeight])
+
+  useEffect(() => {
+    if (!autoStartOnMount) {
+      autoStartTriggeredRef.current = false
+      autoStartAttemptCountRef.current = 0
+      return
+    }
+    if (!isVisible) return
+    if (isSttSessionRunning || isConnecting) {
+      onAutoStartHandled?.()
+      return
+    }
+    if (isPreparingStart || autoStartTriggeredRef.current) {
+      return
+    }
+    if (autoStartAttemptCountRef.current >= 6) {
+      onAutoStartHandled?.()
+      return
+    }
+
+    autoStartTriggeredRef.current = true
+    autoStartAttemptCountRef.current += 1
+
+    void (async () => {
+      try {
+        await handleStartRecording()
+      } finally {
+        autoStartTriggeredRef.current = false
+      }
+    })()
+  }, [
+    autoStartOnMount,
+    handleStartRecording,
+    isConnecting,
+    isPreparingStart,
+    isSttSessionRunning,
+    isVisible,
+    onAutoStartHandled,
+  ])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {

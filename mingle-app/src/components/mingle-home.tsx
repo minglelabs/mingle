@@ -236,7 +236,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const { data: session, status } = useSession();
   const { autoStartOnMount, onAutoStartHandled } = props;
   const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
-  const autoStartTriggeredRef = useRef(false);
   const silenceSliderUpgradeCopy = useMemo(
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
@@ -980,90 +979,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     clearNativeAuthTimeout,
   ]);
 
-  useEffect(() => {
-    if (!autoStartOnMount) {
-      autoStartTriggeredRef.current = false;
-      return;
-    }
-    if (!isLiveDemoMounted) {
-      return;
-    }
-    if (autoStartTriggeredRef.current) return;
-    autoStartTriggeredRef.current = true;
-
-    let cancelled = false;
-    let timerId: number | null = null;
-
-    const clearTimer = () => {
-      if (timerId === null) return;
-      window.clearTimeout(timerId);
-      timerId = null;
-    };
-
-    const pollUntilRunning = (remainingAttempts: number) => {
-      if (cancelled) return;
-      const room = livePhoneDemoRef.current;
-      if (!room) {
-        if (remainingAttempts <= 0) {
-          autoStartTriggeredRef.current = false;
-          return;
-        }
-        timerId = window.setTimeout(() => {
-          pollUntilRunning(remainingAttempts - 1);
-        }, 120);
-        return;
-      }
-      if (room.isSttSessionRunning()) {
-        onAutoStartHandled?.();
-        return;
-      }
-      if (remainingAttempts <= 0) {
-        autoStartTriggeredRef.current = false;
-        return;
-      }
-      timerId = window.setTimeout(() => {
-        pollUntilRunning(remainingAttempts - 1);
-      }, 120);
-    };
-
-    const tryAutoStart = (remainingAttempts: number) => {
-      if (cancelled) return;
-      const room = livePhoneDemoRef.current;
-      if (!room) {
-        if (remainingAttempts <= 0) {
-          autoStartTriggeredRef.current = false;
-          return;
-        }
-        timerId = window.setTimeout(() => {
-          tryAutoStart(remainingAttempts - 1);
-        }, 120);
-        return;
-      }
-      if (room.isSttSessionRunning()) {
-        onAutoStartHandled?.();
-        return;
-      }
-
-      void (async () => {
-        try {
-          await room.startRecording();
-          pollUntilRunning(24);
-        } catch {
-          autoStartTriggeredRef.current = false;
-        }
-      })();
-    };
-
-    timerId = window.setTimeout(() => {
-      tryAutoStart(20);
-    }, 120);
-
-    return () => {
-      cancelled = true;
-      clearTimer();
-    };
-  }, [autoStartOnMount, isLiveDemoMounted, onAutoStartHandled]);
-
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
       await livePhoneDemoRef.current?.startRecording();
@@ -1754,6 +1669,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          autoStartOnMount={autoStartOnMount}
+          onAutoStartHandled={onAutoStartHandled}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
