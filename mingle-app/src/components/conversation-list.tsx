@@ -994,6 +994,7 @@ type ConversationListProps = {
   locale: AppLocale;
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
+  initialConversationIdToOpen?: string | null;
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
@@ -1006,6 +1007,7 @@ export default function ConversationList({
   locale,
   dictionary,
   initialConversations,
+  initialConversationIdToOpen = null,
   initialNativeUi = false,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
@@ -1013,6 +1015,9 @@ export default function ConversationList({
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
+  const initialConversationToOpen = initialConversationIdToOpen
+    ? initialConversations.find((conversation) => conversation.id === initialConversationIdToOpen) ?? null
+    : null;
   const copy = useMemo(
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
@@ -1028,7 +1033,7 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
-  const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);

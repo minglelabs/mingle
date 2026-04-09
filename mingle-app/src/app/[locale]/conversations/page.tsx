@@ -64,6 +64,7 @@ export default async function ConversationsPage({ params, searchParams }: Conver
       locale={locale as AppLocale}
       dictionary={getDictionary(locale)}
       initialConversations={initialConversations}
+      initialConversationIdToOpen={readSearchParamValue(resolvedSearchParams, "conversation") || null}
       initialNativeUi={readSearchParamValue(resolvedSearchParams, "nativeUi") === "1"}
       initialNativeBannerPosition={readSearchParamValue(resolvedSearchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeTopInsetPx"))}
