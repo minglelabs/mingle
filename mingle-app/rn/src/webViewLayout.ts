@@ -44,7 +44,10 @@ export function isLiveDemoPathname(pathname: string): boolean {
   if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
   if (segments.length === 1) return true;
 
-  return segments.length === 2 && segments[1] === 'translator';
+  return (
+    segments.length === 2
+    && (segments[1] === 'translator' || segments[1] === 'conversations')
+  );
 }
 
 export function shouldDisableIosWebViewScrolling(params: {

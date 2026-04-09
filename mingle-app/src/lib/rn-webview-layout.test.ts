@@ -19,9 +19,10 @@ describe('RN WebView layout helpers', () => {
     expect(parseWebPathname('')).toBe('')
   })
 
-  it('identifies live demo routes only for locale home and translator pages', () => {
+  it('identifies live demo routes for locale home, translator, and conversations pages', () => {
     expect(isLiveDemoPathname('/ko')).toBe(true)
     expect(isLiveDemoPathname('/en/translator')).toBe(true)
+    expect(isLiveDemoPathname('/ja/conversations')).toBe(true)
     expect(isLiveDemoPathname('/ko/account')).toBe(false)
     expect(isLiveDemoPathname('/ko/auth/native')).toBe(false)
     expect(isLiveDemoPathname('')).toBe(false)
@@ -31,6 +32,11 @@ describe('RN WebView layout helpers', () => {
     expect(shouldDisableIosWebViewScrolling({
       isIosPlatform: true,
       pathname: '/ko',
+    })).toBe(true)
+
+    expect(shouldDisableIosWebViewScrolling({
+      isIosPlatform: true,
+      pathname: '/ko/conversations',
     })).toBe(true)
 
     expect(shouldDisableIosWebViewScrolling({
@@ -48,6 +54,11 @@ describe('RN WebView layout helpers', () => {
     expect(shouldHideIosKeyboardAccessoryView({
       isIosPlatform: true,
       pathname: '/ko/translator',
+    })).toBe(true)
+
+    expect(shouldHideIosKeyboardAccessoryView({
+      isIosPlatform: true,
+      pathname: '/ko/conversations',
     })).toBe(true)
 
     expect(shouldHideIosKeyboardAccessoryView({
