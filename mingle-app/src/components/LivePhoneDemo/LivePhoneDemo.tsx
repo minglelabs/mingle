@@ -183,6 +183,16 @@ function isNativeApp(): boolean {
     && typeof window.ReactNativeWebView?.postMessage === 'function'
 }
 
+function isNativeIosApp(): boolean {
+  if (!isNativeApp()) return false
+
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+
+  return apiNamespace.startsWith('ios/')
+}
+
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
   try {
     const params = new URLSearchParams(search)
@@ -1953,6 +1963,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
+    if (isNativeIosApp()) return
     if (shouldIgnoreMenuSwipeTarget(event.target)) return
 
     menuSwipeSessionRef.current = {
