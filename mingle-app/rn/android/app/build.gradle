@@ -94,7 +94,7 @@ react {
  */
 def enableProguardInReleaseBuilds = false
 def appVersionCode = 44
-def appVersionName = "1.0.11"
+def appVersionName = "1.1.0"
 
 def normalizeRuntimeConfigValue = { String value ->
     if (value == null) {
@@ -206,7 +206,7 @@ def quoteBuildConfigString = { String value ->
 
 def runtimeSiteUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_SITE_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_SITE_URL", "DEVBOX_SITE_URL"], "https://mingle-app-xi.vercel.app")
 def runtimeWsUrl = readEnvOrPropertyOrDefault("NEXT_PUBLIC_WS_URL", repoDevboxEnvProperties, ["NEXT_PUBLIC_WS_URL", "DEVBOX_RN_WS_URL"], "wss://mingle.up.railway.app")
-def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.0.11")
+def runtimeApiNamespace = readEnvOrPropertyOrDefault("NEXT_PUBLIC_API_NAMESPACE", repoDevboxEnvProperties, ["RN_ANDROID_API_NAMESPACE"], "android/v1.1.0")
 def runtimeClientVersion = readEnvOrDefault("RN_CLIENT_VERSION", appVersionName)
 def runtimeClientBuild = readEnvOrDefault("RN_CLIENT_BUILD", String.valueOf(appVersionCode))
 def runtimeAdBannerPosition = readEnvOrPropertyOrDefault("RN_AD_BANNER_POSITION", repoDevboxEnvProperties, ["RN_AD_BANNER_POSITION", "NEXT_PUBLIC_RN_AD_BANNER_POSITION"], "bottom")
