@@ -81,6 +81,7 @@ export default async function ConversationsPage({ params, searchParams }: Conver
         routeConversationId
         || parseInitialConversationIdToOpen(lastViewedConversationCookie)
       }
+      initialNativeUi={readSearchParamValue(resolvedSearchParams, "nativeUi") === "1"}
       initialNativeBannerPosition={readSearchParamValue(resolvedSearchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeTopInsetPx"))}
       initialNativeBottomInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeBottomInsetPx"))}

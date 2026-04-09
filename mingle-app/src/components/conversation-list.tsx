@@ -1061,6 +1061,7 @@ type ConversationListProps = {
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
   initialConversationIdToOpen?: string | null;
+  initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
   initialNativeBottomInsetPx?: number;
@@ -1073,6 +1074,7 @@ export default function ConversationList({
   dictionary,
   initialConversations,
   initialConversationIdToOpen = null,
+  initialNativeUi = false,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
   initialNativeBottomInsetPx = 0,
@@ -1126,14 +1128,15 @@ export default function ConversationList({
   const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx", initialNativeBottomInsetPx);
   const routeConversationId = useConversationIdFromSearch();
   const hasNativeBannerLayout = nativeBannerLayout !== null;
+  const hasNativeRuntimeInsets = initialNativeUi || isNativeAppRuntime();
   const runtimeNativeBannerPosition = nativeBannerLayout?.position ?? nativeBannerPositionFromQuery;
   const runtimeNativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPx;
   const runtimeNativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPx;
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
-  const effectiveNativeTopInsetPx = isNativeAppRuntime()
+  const effectiveNativeTopInsetPx = hasNativeRuntimeInsets
     ? resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx)
     : runtimeNativeTopInsetPx;
-  const effectiveNativeBottomInsetPx = isNativeAppRuntime() && runtimeNativeBannerPosition === "bottom"
+  const effectiveNativeBottomInsetPx = hasNativeRuntimeInsets && runtimeNativeBannerPosition === "bottom"
     ? (hasNativeBannerLayout
         ? runtimeNativeBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeBottomInsetPx, estimatedNativeBannerInsetPx))
