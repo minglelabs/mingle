@@ -137,7 +137,8 @@ const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
-const BOTTOM_BAR_EDGE_MARGIN_PX = 3
+const VOICE_MODE_TOP_MARGIN_PX = 4
+const VOICE_MODE_BOTTOM_MARGIN_PX = 0
 const COMPOSER_MODE_TOP_MARGIN_PX = 9
 const COMPOSER_MODE_BOTTOM_MARGIN_PX = 7
 const VOICE_MODE_STT_BUTTON_WIDTH_PX = 136
@@ -3662,10 +3663,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isLimitReached
   const bottomBarTopPaddingPx = isComposerOpen
     ? COMPOSER_MODE_TOP_MARGIN_PX
-    : BOTTOM_BAR_EDGE_MARGIN_PX
+    : VOICE_MODE_TOP_MARGIN_PX
   const bottomBarBottomMarginPx = isComposerOpen
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
-    : BOTTOM_BAR_EDGE_MARGIN_PX
+    : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
