@@ -137,6 +137,12 @@ const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
+const BOTTOM_BAR_EDGE_MARGIN_PX = 3
+const VOICE_MODE_STT_BUTTON_SIZE_PX = 50
+const VOICE_MODE_STT_ICON_SIZE_PX = 22
+const VOICE_MODE_STT_STOP_SIZE_PX = 15
+const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
+const COMPOSER_MODE_CONTROL_SIZE_PX = 36
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
@@ -3630,7 +3636,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
-  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${BOTTOM_BAR_EDGE_MARGIN_PX + activeKeyboardInsetPx}px), ${BOTTOM_BAR_EDGE_MARGIN_PX + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
@@ -4894,7 +4900,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              paddingTop: '10px',
+              paddingTop: `${BOTTOM_BAR_EDGE_MARGIN_PX}px`,
               paddingBottom: bottomBarPaddingBottom,
               paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
               paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
@@ -4920,7 +4926,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={showConnectingOverlay}
-                      className="relative flex h-[2.3rem] w-[2.3rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      style={{
+                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                      }}
                     >
                       {showRipple && (
                         <span
@@ -4945,14 +4955,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }`}
                       >
                         {showConnectingOverlay ? (
-                          <Loader2 size={17} className="animate-spin text-white" />
+                          <Loader2 size={16} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
                             aria-hidden
-                            className="h-[0.65rem] w-[0.65rem] rounded-[3px] bg-white"
+                            className="rounded-[3px] bg-white"
+                            style={{
+                              width: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
+                              height: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
+                            }}
                           />
                         ) : (
-                          <Mic size={17} className="text-white" />
+                          <Mic size={16} className="text-white" />
                         )}
                       </span>
                     </button>
@@ -4983,7 +4997,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
-                        className="inline-flex h-[2.3rem] w-[2.3rem] shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
+                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
+                        style={{
+                          width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                          height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        }}
                       >
                         <Keyboard size={18} strokeWidth={2.2} />
                       </motion.button>
@@ -4993,16 +5011,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       type="submit"
                       disabled={!composerCanSend}
                       aria-label={composerCopy.sendMessageLabel}
-                      className={`inline-flex h-[2.3rem] w-[2.3rem] shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
+                      className={`inline-flex shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
                         composerCanSend
                           ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
                           : 'bg-transparent text-gray-300'
                       }`}
+                      style={{
+                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                      }}
                     >
                       <svg
                         aria-hidden
                         viewBox="0 0 24 24"
-                        className="h-[1.55rem] w-[1.55rem]"
+                        className="h-5 w-5"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2.4"
@@ -5063,7 +5085,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={showConnectingOverlay}
-                      className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      style={{
+                        width: `${VOICE_MODE_STT_BUTTON_SIZE_PX}px`,
+                        height: `${VOICE_MODE_STT_BUTTON_SIZE_PX}px`,
+                      }}
                     >
                       {showRipple && (
                         <span
@@ -5088,14 +5114,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         }`}
                       >
                         {showConnectingOverlay ? (
-                          <Loader2 size={30} className="animate-spin text-white" />
+                          <Loader2 size={VOICE_MODE_STT_ICON_SIZE_PX} className="animate-spin text-white" />
                         ) : isReady ? (
                           <span
                             aria-hidden
-                            className="h-5 w-5 rounded-[4px] bg-white"
+                            className="rounded-[4px] bg-white"
+                            style={{
+                              width: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
+                              height: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
+                            }}
                           />
                         ) : (
-                          <Mic size={28} className="text-white" />
+                          <Mic size={VOICE_MODE_STT_ICON_SIZE_PX} className="text-white" />
                         )}
                       </span>
                     </button>
@@ -5107,9 +5137,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}
-                      className="inline-flex h-11 w-11 items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                      className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                      style={{
+                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                      }}
                     >
-                      <Keyboard size={19} strokeWidth={2.15} />
+                      <Keyboard size={18} strokeWidth={2.15} />
                     </motion.button>
                   </div>
                 </motion.div>
