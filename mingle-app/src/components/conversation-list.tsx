@@ -1037,6 +1037,7 @@ export default function ConversationList({
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
+  const [isNativeRuntime, setIsNativeRuntime] = useState(false);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
@@ -1060,7 +1061,7 @@ export default function ConversationList({
   const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx", initialNativeBottomInsetPx);
   const routeConversationId = useConversationIdFromSearch();
   const hasNativeBannerLayout = nativeBannerLayout !== null;
-  const hasNativeRuntimeInsets = initialNativeUi || isNativeAppRuntime();
+  const hasNativeRuntimeInsets = initialNativeUi || isNativeRuntime;
   const runtimeNativeBannerPosition = nativeBannerLayout?.position ?? nativeBannerPositionFromQuery;
   const runtimeNativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPx;
   const runtimeNativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPx;
@@ -1320,6 +1321,7 @@ export default function ConversationList({
 
   useEffect(() => {
     setIsClientReady(true);
+    setIsNativeRuntime(isNativeAppRuntime());
   }, []);
 
   useEffect(() => {
