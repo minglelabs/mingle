@@ -6,8 +6,14 @@ import {
   resolveExpectedApiNamespace,
   validateRnApiNamespace,
 } from '../../rn/src/apiNamespace'
+import { EXPECTED_RN_API_NAMESPACE_BY_OS } from '../../scripts/rn-api-namespaces.mjs'
 
 describe('RN api namespace validation contract', () => {
+  it('keeps the script namespace checks aligned with the RN runtime contract', () => {
+    expect(EXPECTED_RN_API_NAMESPACE_BY_OS.ios).toBe(EXPECTED_API_NAMESPACE_BY_OS.ios)
+    expect(EXPECTED_RN_API_NAMESPACE_BY_OS.android).toBe(EXPECTED_API_NAMESPACE_BY_OS.android)
+  })
+
   it('normalizes leading and trailing slashes', () => {
     expect(normalizeApiNamespace(` /${EXPECTED_API_NAMESPACE_BY_OS.ios}/ `)).toBe(
       EXPECTED_API_NAMESPACE_BY_OS.ios,
