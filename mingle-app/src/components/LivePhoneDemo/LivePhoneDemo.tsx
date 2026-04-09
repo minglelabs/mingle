@@ -146,6 +146,7 @@ const VOICE_MODE_STT_ICON_SIZE_PX = 20
 const VOICE_MODE_STT_STOP_SIZE_PX = 14
 const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
 const COMPOSER_MODE_CONTROL_SIZE_PX = 36
+const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
 // Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
 const VOICE_MODE_START_LABEL = 'Start'
 const VOICE_MODE_STOP_LABEL = 'Stop'
@@ -5115,25 +5116,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       onClick={handleMicClick}
                       disabled={showConnectingOverlay}
                       aria-label={isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
-                      className="relative flex items-center justify-start rounded-[18px] px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      className="relative flex items-center justify-center px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
                       style={{
                         width: `${VOICE_MODE_STT_BUTTON_WIDTH_PX}px`,
                         height: `${VOICE_MODE_STT_BUTTON_HEIGHT_PX}px`,
+                        borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
                       }}
                     >
                       {showRipple && (
                         <span
-                          className="absolute inset-0 rounded-[18px] bg-red-400 transition-transform duration-150"
-                          style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
+                          className="absolute inset-0 bg-red-400 transition-transform duration-150"
+                          style={{
+                            transform: `scale(${rippleScale})`,
+                            opacity: 0.25,
+                            borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
+                          }}
                         />
                       )}
 
                       {isReady && (
-                        <span className="absolute inset-0 rounded-[18px] bg-red-500 opacity-20 animate-ping" />
+                        <span
+                          className="absolute inset-0 bg-red-500 opacity-20 animate-ping"
+                          style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
+                        />
                       )}
 
                       <span
-                        className={`relative flex h-full w-full items-center justify-start gap-3 rounded-[18px] px-[18px] shadow-lg ${
+                        className={`relative flex h-full w-full items-center justify-center gap-3 px-[18px] shadow-lg ${
                           isLimitReached
                             ? 'bg-gray-300'
                             : isReady
@@ -5142,6 +5151,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 ? 'bg-gray-300'
                                 : 'bg-gradient-to-br from-amber-400 to-orange-500'
                         }`}
+                        style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
                       >
                         {showConnectingOverlay ? (
                           <Loader2 size={VOICE_MODE_STT_ICON_SIZE_PX} className="shrink-0 animate-spin text-white" />
