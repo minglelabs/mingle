@@ -556,7 +556,7 @@ function mapConversationSummaryToItem(
 ): ConversationItem {
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
-    : labels.pausedStatusLabel;
+    : "";
   const selectedLanguages = sanitizeSttLanguageSelection(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
@@ -787,15 +787,11 @@ function ConversationRow({
           >
             {item.preview || "\u00A0"}
           </p>
-          <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] ${
-              item.status === "active"
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-slate-100 text-slate-500"
-            }`}
-          >
-            {item.statusLabel}
-          </span>
+          {item.status === "active" ? (
+            <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
+              {item.statusLabel}
+            </span>
+          ) : null}
         </div>
       </div>
     </button>
