@@ -3035,9 +3035,10 @@ export default function useRealtimeSTT({
           pendingLanguage: pendingLang,
         },
       })
-      if (!posted) {
-        nativeStopRequestedRef.current = false
+      if (posted) {
         waitingForNativeStopAck = true
+      } else {
+        nativeStopRequestedRef.current = false
       }
       if (waitingForNativeStopAck) {
         clearPendingNativeStopAckTimeout()
