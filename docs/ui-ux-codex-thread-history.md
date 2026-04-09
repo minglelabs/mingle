@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 24.
-- Total standalone UI/UX issues documented in this file: 43.
+- Total standalone UI/UX issues documented in this file: 68.
 - Sessions with UI/UX feature/polish requests only: 11.
 - Sessions where a UI/UX issue was only mentioned or handed off: 6.
 - Sessions with no UI/UX issue found: 236.
@@ -20,106 +20,232 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
+- Issue atoms currently listed for this thread: 45.
 
-1. **Conversation-list header and CTA chrome were repeatedly off**
-   Problem: The list header became taller than the intended `bottom-tabs` reference, the top gap was overcounted by spacer/safe-area math, the CTA sat inside the wrong shell, and the CTA shadow/glow made the whole bar look washed out or noisy.
-   Attempted fix: Realigned the header to `56px + safe-area`, removed the bad spacer logic, removed the orange glow, and converted the bottom shell into a full-width CTA bar.
+1. **The conversation-list header box was taller than the intended reference**
+   Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
+   Attempted fix: The header was reset to a fixed `56px + safe-area` structure and native banner clearance was moved out of the header box.
    Status: Resolved in-thread.
 
-2. **Conversation-list and in-room banner offsets were wrong**
-   Problem: The list banner floated too low below the header, the in-room top/bottom banners sat too far from the actual chrome, and iOS still had a small bottom-banner hover gap even after the main tightening pass.
-   Attempted fix: Split list-vs-room offsets, tightened chat/banner clearances, then added a tiny iOS-only bottom nudge.
+2. **The `Start Conversation!` CTA had an unwanted orange glow**
+   Problem: The CTA shadow read like a pale orange haze behind the button, making the bottom bar look washed out.
+   Attempted fix: The orange glow shadow was removed and replaced with a neutral shadow while keeping the gradient.
    Status: Resolved in-thread.
 
-3. **Banner transitions lagged during history navigation**
-   Problem: Moving between list and room could leave the old banner visible for too long because the app switched directly between visible zones instead of neutralizing first.
-   Attempted fix: Added a `hidden` banner zone and pre-hid the current banner before the next screen asserted its zone.
+3. **The top gap above the list was over-expanded by fallback spacer math**
+   Problem: Even after the header size was corrected, the page was still pushed down because a fallback banner estimate and a header-adjacent spacer were both being applied.
+   Attempted fix: The explicit native inset was trusted when present, the guessed `50px` fallback was demoted to old cases only, and the header-front spacer was removed.
    Status: Resolved in-thread.
 
-4. **In-room header, bottom bar, and run control were visually too bulky**
-   Problem: The in-room header and bottom control bar looked taller and heavier than the list chrome, and an old top safe-area fallback still existed above the header.
-   Attempted fix: Reduced header/bar density, removed the top fallback behavior, shrank the mic button, removed extra chrome/shadow, and clarified the running-state icon.
+4. **Android hardware back initially did not return from a room to the list**
+   Problem: The web overlay pushed history, but Android OS back was not bridged into the WebView history, so room navigation did not behave like native back.
+   Attempted fix: A native back bridge was added on the RN side so hardware back could drive the same room-close history path.
    Status: Resolved in-thread.
 
-5. **`Start Conversation!` sometimes opened a room without actually starting STT**
-   Problem: The CTA could create and enter a room but fail to behave like a true start action, and one attempted path even created a ref-callback update loop.
-   Attempted fix: Moved auto-start to the post-mount path, removed the ref-loop, and only consumed auto-start after real `running/connecting` confirmation.
+5. **iOS swipe-back was initially unavailable**
+   Problem: The WebView had back/forward gestures disabled, so iOS users could not use the normal left-edge history gesture.
+   Attempted fix: `allowsBackForwardNavigationGestures` was enabled for the iOS path during the 1.1.0 RN work.
    Status: Resolved in-thread.
 
-6. **Conversation rows initially lacked recent-message context**
-   Problem: The new room list could show only room labels/status without the latest utterance, which made the list hard to scan.
-   Attempted fix: Loaded a recent finalized-message preview into each row and truncated it for compact display.
+6. **The bottom launch area was still a button inside a footer instead of a full CTA bar**
+   Problem: The requested UX was “the whole bottom area is the CTA,” but the implementation still looked like a white footer containing a smaller button.
+   Attempted fix: The footer chrome was removed and the full bottom area was turned into one wide CTA surface.
    Status: Resolved in-thread.
 
-7. **Row previews could disappear after PATCH calls**
-   Problem: After recent-message previews were added, pausing a room or changing languages could blank that line until a full refetch.
-   Attempted fix: Reattached `latestMessagePreview` in single-room summary responses and added a defensive client merge.
+7. **The in-room header was visually too tall and heavy**
+   Problem: The room header read denser and larger than the list header, so entering a room felt like switching to a different chrome system.
+   Attempted fix: Header height and padding were tightened to match the list chrome more closely.
    Status: Resolved in-thread.
 
-8. **Recently viewed room context was lost on full app reopen**
-   Problem: A full reopen could dump the user back to the generic list instead of restoring the exact list/room context they had just been using.
-   Attempted fix: Stored the last viewed conversations URL per locale/tracking-user and restored it on the next `/[locale]/conversations` entry.
+8. **A legacy iOS tap-to-top fallback still sat above the room header**
+   Problem: Old top-padding/tap behavior survived in the room view and made the upper chrome feel padded and inconsistent.
+   Attempted fix: The fallback tap-to-top behavior and its extra padding path were removed.
    Status: Resolved in-thread.
 
-9. **Paused rooms could reopen without finalized history or usage**
-   Problem: After a relaunch, a paused room could come back looking empty or missing usage even though the room had real finalized content already.
-   Attempted fix: Added a room-level read path and a server fallback hydration step when local state was missing.
+9. **The in-room bottom control bar was bulkier than the list CTA bar**
+   Problem: The room’s bottom control bar had more outer height and spacing than the list’s bottom CTA, so the two screens did not feel part of the same UI system.
+   Attempted fix: Padding, min-height, and safe-area handling were repeatedly tightened.
+   Status: Resolved in-thread after multiple passes.
+
+10. **The in-room play/mic controls had too much chrome**
+   Problem: Shadows and gray hover/background treatments around the main control made the room bar look noisy.
+   Attempted fix: Extra shadows and adjacent gray chrome were stripped back.
    Status: Resolved in-thread.
 
-10. **Room open/close state and real STT activity were conflated**
-   Problem: The thread explicitly reworked the model because `live/paused` had been tied too much to room visibility/open state instead of actual STT activity, which caused the wrong room to look live or lose visible state.
-   Attempted fix: Separated visible-room state from live-STT ownership and made server/client room status follow real STT activity.
+11. **The iOS `/conversations` bottom safe area showed the wrong fill color**
+   Problem: The native iOS safe-area fill stayed white under the conversation list instead of letting the web footer gradient continue downward.
+   Attempted fix: RN palette handling was changed so `/conversations` does not paint the iOS bottom safe area with the native white fill.
    Status: Resolved in-thread.
 
-11. **Hidden non-owner rooms could consume another room's native STT events**
-   Problem: Background-mounted rooms were still listening to the same native STT global events, so room 2 could ingest room 1 partial/final text.
-   Attempted fix: Forced a single native STT event owner and ignored those events in non-owner rooms.
+12. **The list top banner sat too low below the header**
+   Problem: The top ad/banner spacing for the list screen had too much clearance and did not visually lock to the header.
+   Attempted fix: The list banner offset was tightened separately from the in-room banner offsets.
    Status: Resolved in-thread.
 
-12. **List status and ordering could lag after restore or stop**
-   Problem: Restored rooms could keep stale `active` badges, and pressing stop could update `paused` and row order too late, producing delayed flicker/reordering.
-   Attempted fix: Seeded list status from restored summaries and pushed `paused` to the parent list immediately when stop is requested.
-   Status: Resolved in-thread for the explicitly confirmed cases.
-
-13. **iOS mic-permission denial could trap the room in retry/error UI**
-   Problem: Permission denial could strand the room in a bad retry/error state, then the first attempted recovery aggressively jumped straight into Settings.
-   Attempted fix: First reset denial back to `idle` and kept the mic control re-clickable, then refined the flow so Settings opens only on the next explicit retry instead of immediately on denial.
+13. **The in-room top banner sat too far below the room header**
+   Problem: The room banner spacing still looked loose after the first banner pass because the list and room were sharing one clearance model.
+   Attempted fix: Room top offsets were tuned independently from the list offsets.
    Status: Resolved in-thread.
 
-14. **iOS swipe-back gestures were accidentally disabled**
-   Problem: Regular WKWebView swipe-back stopped working because gesture enablement regressed into being tied to the native menu overlay being open.
-   Attempted fix: Restored gesture enablement for iOS generally instead of gating it by menu-open state.
+14. **The in-room bottom banner sat too far above the control bar**
+   Problem: The bottom banner clearance in a room did not feel anchored to the actual visible control area.
+   Attempted fix: The bottom offset was recalculated against the visible control bar height rather than a looser container estimate.
    Status: Resolved in-thread.
 
-15. **iOS room swipe-back flickered when returning to the list**
-   Problem: A room close via swipe-back could show `room -> list -> room re-open flicker` because history-close animation and route-sync reopen were competing.
-   Attempted fix: Restored native-history signaling and added `instant` close for history-driven closes, while keeping animate mode for explicit app-driven back.
+15. **iOS still had a tiny bottom-banner hover gap after the main banner tightening**
+   Problem: After the broad banner-offset fix, iOS alone still showed a small floating gap above the bottom controls.
+   Attempted fix: An iOS-only bottom nudge was added.
    Status: Resolved in-thread.
 
-16. **iOS drawer swipe-back also flickered**
-   Problem: After swiping back out of the drawer, the drawer could appear one more time and then close again because it replayed its own exit animation after the system transition.
-   Attempted fix: Rolled back an earlier edge-only workaround and added the same `animate / instant` split already used by the main room overlay.
+16. **Banner transitions lagged during list/room history changes**
+   Problem: The old banner could remain visible while the next screen was already animating because the app switched directly between zones without a neutral state.
+   Attempted fix: A `hidden` banner zone was introduced so transitions pre-hide before the next zone asserts itself.
    Status: Resolved in-thread.
 
-17. **iOS forward navigation could fail to restore the conversation cleanly**
-   Problem: After swiping back to the list, swiping forward could leave the list visible or replay a fresh room-open animation instead of restoring the existing room state.
-   Attempted fix: Subscribed route sync directly to the `conversation` query and reopened via the history-specific instant path.
+17. **Room swipe-back on iOS flickered by reopening the room during close**
+   Problem: On gesture back, history close and route-sync reopen fought each other, producing a `room -> list -> room` flash.
+   Attempted fix: History-driven closes were split into `instant` closes while app-driven closes kept animation.
    Status: Resolved in-thread.
 
-18. **Room swipe-back was too edge-dependent on iOS**
-   Problem: Users had to start from the far-left edge to leave a room, which felt brittle inside the new multi-room UI.
-   Attempted fix: Kept the native edge swipe and added a web-side helper so a rightward swipe from most of the room body can also go back, while excluding buttons/inputs/drawers/dialogs.
+18. **iOS forward-swipe failed to restore the room cleanly**
+   Problem: After swiping back to the list, swiping forward could leave the list visible or replay a new room-open instead of restoring the prior room state.
+   Attempted fix: Route sync was made to subscribe directly to the `conversation` query and reopen through the history-specific path.
    Status: Resolved in-thread.
 
-19. **Conversation-list copy shipped partially in English**
-   Problem: The visible `Start Conversation!` CTA was hardcoded in English and 7 of the 15 shipping locales still fell back to English for the conversation-list copy.
-   Attempted fix: Removed the hardcoded CTA label and filled the missing locale dictionaries for `zh-CN`, `zh-TW`, `ru`, `ar`, `hi`, `th`, and `vi`.
+19. **The drawer had its own swipe-back flicker on iOS**
+   Problem: When swiping back out of the drawer, the drawer could briefly reappear and then disappear again because it replayed an exit animation after the native transition.
+   Attempted fix: The drawer was given the same `animate / instant` split that the room overlay received.
    Status: Resolved in-thread.
 
-20. **A late-session five-item room-state bundle was not clearly closed**
-   Problem: Late in the session the thread explicitly grouped several remaining problems together: an `isLikelyIOSPlatform` runtime error, non-owner rooms still looking live just by being opened, and ordering needing to follow latest utterances rather than stale status changes. The captured trail ends while those edits are still in progress.
-   Attempted fix: Earlier ownership/list-state fixes had already landed, and another pass started for the remaining bundle.
-   Status: Not clearly resolved inside the captured thread. Marking this as unresolved/unfinished.
+20. **Room swipe-back felt too edge-dependent**
+   Problem: Leaving a room required starting at the far-left edge, which felt too brittle for the new full-screen room UI.
+   Attempted fix: A web-side whole-body right-swipe helper was added on top of the native edge gesture, excluding buttons, drawers, dialogs, and inputs.
+   Status: Resolved in-thread.
+
+21. **The visible CTA label was hardcoded in English**
+   Problem: `Start Conversation!` was rendered as raw English text instead of using the conversations dictionary.
+   Attempted fix: The visible CTA label was switched to dictionary-backed copy.
+   Status: Resolved in-thread.
+
+22. **Seven shipping locales were missing the new conversations copy**
+   Problem: `zh-CN`, `zh-TW`, `ru`, `ar`, `hi`, `th`, and `vi` still fell back to English for the conversation-list experience.
+   Attempted fix: All missing locale blocks were added to the `conversations` dictionary.
+   Status: Resolved in-thread.
+
+23. **The app did not restore the last viewed room/list state on full reopen**
+   Problem: Re-entering `/[locale]/conversations` after a full reopen could dump the user at the generic list rather than the exact room/list view they had been using.
+   Attempted fix: The last viewed conversations URL was stored per locale and tracking user, then replayed on the next conversations entry.
+   Status: Resolved in-thread.
+
+24. **`Start Conversation!` could create a room but fail to auto-start STT because the flag was consumed too early**
+   Problem: The parent cleared the auto-start marker before the room had actually reached `running/connecting`.
+   Attempted fix: The auto-start marker was only consumed after real running/connecting confirmation.
+   Status: Resolved in-thread.
+
+25. **Auto-start broke again because the start path depended too much on child mount timing**
+   Problem: Relying on the child room effect alone meant the room could mount and still miss the auto-start action.
+   Attempted fix: The parent was changed to trigger start after the room ref became ready.
+   Status: Resolved in-thread.
+
+26. **One auto-start fix introduced a ref-callback update loop**
+   Problem: A ref callback wrote state during ref attachment and produced a `Maximum update depth exceeded` loop.
+   Attempted fix: The ref-callback state update was removed and replaced with a one-time polling/wait strategy.
+   Status: Resolved in-thread.
+
+27. **Conversation rows initially lacked recent-message context**
+   Problem: The list showed room labels/status but not the latest spoken content, making the new multi-room list hard to scan.
+   Attempted fix: The list summary API was extended to include a recent finalized-message preview.
+   Status: Resolved in-thread.
+
+28. **Recent-message previews disappeared after some PATCH calls**
+   Problem: Pausing a room or changing room languages could blank the newly added preview line until the next full refetch.
+   Attempted fix: Single-row summary responses were changed to carry `latestMessagePreview`, and client replacement logic was tightened.
+   Status: Resolved in-thread.
+
+29. **The state model tied `live/paused` too closely to room open/close instead of real STT activity**
+   Problem: Simply opening or closing rooms could make status appear live/paused in ways that did not match actual STT ownership.
+   Attempted fix: Visible-room state was separated from live-STT ownership and room status was recalculated from STT activity.
+   Status: Resolved in-thread.
+
+30. **Closing a live room could kill the live session instead of backgrounding it**
+   Problem: Unmounting the visible room also tore down STT, even when the intended UX was “close the room UI but keep STT running.”
+   Attempted fix: Live rooms were kept mounted in the background when necessary instead of being immediately destroyed on close.
+   Status: Resolved in-thread.
+
+31. **Re-entering the same live room did not reliably restore the same live instance**
+   Problem: Returning to a still-live room could fail to restore its red/live button state and current instance cleanly.
+   Attempted fix: The hidden background instance was preserved and re-shown instead of creating a fresh visual state.
+   Status: Resolved in-thread.
+
+32. **Paused rooms could reopen without finalized history or usage after relaunch**
+   Problem: After app relaunch, paused rooms could look empty or lose `usageSec` even though persisted finalized data existed.
+   Attempted fix: A room-level GET and server fallback hydration path were added to merge persisted finalized state back into the client.
+   Status: Resolved in-thread.
+
+33. **Hidden non-owner rooms kept consuming global native STT events**
+   Problem: Background-mounted rooms still listened to the same native STT event stream, so room 2 could ingest room 1 text.
+   Attempted fix: Native STT event ownership was forced to a single room and non-owners ignored the events.
+   Status: Resolved in-thread.
+
+34. **Restored list rows could keep stale `active` badges**
+   Problem: After restore/reopen flows, the list’s displayed room state could stay `active` even when the room was no longer the real live owner.
+   Attempted fix: Running-state fallback was seeded from restored summaries and cleaned whenever conversation summaries refreshed.
+   Status: Resolved in-thread.
+
+35. **Stop actions could update `paused` state and row ordering too late**
+   Problem: Stopping a live room could leave delayed list flicker because the parent list did not hear `paused` early enough.
+   Attempted fix: `paused` was pushed to the parent list immediately on stop request.
+   Status: Resolved in-thread.
+
+36. **List ordering was using the wrong signal**
+   Problem: Rooms could move based on stale status/updated metadata instead of the most recent finalized utterance time, so ordering felt wrong.
+   Attempted fix: `latestMessageAt` was added and ordering/time display were moved to the latest finalized message signal.
+   Status: Resolved in-thread.
+
+37. **A non-owner room could look live just by being opened**
+   Problem: Merely entering room 2 or room 3 while room 1 owned STT could make the newly opened room look like it was running.
+   Attempted fix: Running UI was gated by real STT ownership instead of generic connection-ready state.
+   Status: Resolved in-thread.
+
+38. **Room-to-room handoff could try to start the new room before native stop ack**
+   Problem: `room1 stop -> room2 start` could overlap, so room 2 received the start intent before room 1 had fully gone idle.
+   Attempted fix: Handoff was changed to wait for native stop ack or timeout before allowing the next start.
+   Status: Resolved in-thread.
+
+39. **The old live room could unmount too early during handoff and lose its stop listener**
+   Problem: The parent sometimes marked the first room non-live so early that its listener disappeared before the native stop ack arrived.
+   Attempted fix: During handoff only, the previous live room stayed mounted until stop completion.
+   Status: Resolved in-thread.
+
+40. **The running button still showed a play icon**
+   Problem: While STT was already running, the main red control still showed a play triangle instead of a stop square.
+   Attempted fix: The running state icon was switched to a stop square while preserving the loading spinner for connecting.
+   Status: Resolved in-thread.
+
+41. **iOS mic-permission denial could trap the room in retry/error UI**
+   Problem: Denying mic permission left the room stuck in a retry/error-looking state and the button path could become effectively dead.
+   Attempted fix: Permission denial was reset back to `idle`, the control was kept re-clickable, and native cached status stopped restoring denial as persistent error.
+   Status: Resolved in-thread.
+
+42. **The first permission-denial recovery was too aggressive about opening Settings**
+   Problem: One recovery pass jumped to iOS Settings immediately on denial, which was later judged too aggressive for the intended UX.
+   Attempted fix: The flow was adjusted so denial returns to idle first and Settings opens only on the next explicit retry tap.
+   Status: Resolved in-thread.
+
+43. **iOS swipe-back regressed again later because gesture enablement became tied to menu-open state**
+   Problem: After later merges, swipe-back silently became available only when the native menu overlay was open.
+   Attempted fix: `allowsBackForwardNavigationGestures` was restored to unconditional iOS enablement instead of `isNativeMenuOverlayOpen`.
+   Status: Resolved in-thread.
+
+44. **A later room-state pass hit an `isLikelyIOSPlatform` runtime error**
+   Problem: The thread explicitly called out a runtime `Can't find variable: isLikelyIOSPlatform` during the multi-room state/ordering cleanup phase.
+   Attempted fix: The missing runtime reference was repaired alongside the ownership/list-ordering patch set.
+   Status: Resolved in-thread.
+
+45. **iOS interactive swipe could still keep the old banner visible during the gesture**
+   Problem: Even after pre-hide work, the banner could linger during the active interactive swipe because RN/WebView did not receive the gesture-start timing early enough.
+   Attempted fix: The app already pre-hid as early as available and RN tried to infer the target zone from URL changes.
+   Status: Not clearly solvable in-thread. Marked as unresolved structural limitation in the captured session.
 
 ## Remaining Sessions
 
