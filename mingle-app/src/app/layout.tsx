@@ -69,6 +69,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang={DEFAULT_LOCALE}>
+      <head>
+        {/* Prevent Next.js 16 dev overlay from blocking pointer events.
+            Injected as raw <style> to bypass Tailwind v4 processing pipeline. */}
+        {process.env.NODE_ENV === "development" && (
+          <style
+            dangerouslySetInnerHTML={{
+              __html: [
+                "script[data-nextjs-dev-overlay]{position:fixed!important;top:-9999px!important;left:-9999px!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none!important}",
+                "nextjs-portal{display:none!important}",
+              ].join(""),
+            }}
+          />
+        )}
+      </head>
       <body className="antialiased">
         <TtsSettingsProvider>
           <AuthSessionProvider>

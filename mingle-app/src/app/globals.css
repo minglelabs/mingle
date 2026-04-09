@@ -192,9 +192,6 @@
   overflow: hidden;
 }
 
-
-
-
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;
