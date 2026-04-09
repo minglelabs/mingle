@@ -4,7 +4,7 @@ import ConversationList from "@/components/conversation-list";
 import { getDictionary, isSupportedLocale } from "@/i18n";
 import type { AppLocale } from "@/i18n/config";
 import { listConversationChannelsForUser } from "@/lib/app-conversations";
-import { getAuthOptions, isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
 import {
   findUserIdForIdentity,
   normalizeSessionUserIdentity,
@@ -47,7 +47,8 @@ export default async function ConversationsPage({ params }: ConversationsPagePro
       locale={locale as AppLocale}
       dictionary={getDictionary(locale)}
       initialConversations={initialConversations}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
+      // appleOAuthEnabled={isAppleOAuthConfigured()}
+      appleOAuthEnabled={false}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
     />
   );

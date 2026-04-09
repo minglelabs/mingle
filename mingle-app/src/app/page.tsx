@@ -1,6 +1,6 @@
 import MingleHome from "@/components/mingle-home";
 import { DEFAULT_LOCALE, getDictionary } from "@/i18n";
-import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import { isGoogleOAuthConfigured } from "@/lib/auth-options";
 
 export default function Page() {
   const locale = DEFAULT_LOCALE;
@@ -9,7 +9,8 @@ export default function Page() {
   return (
     <MingleHome
       dictionary={dictionary}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
+      // appleOAuthEnabled={isAppleOAuthConfigured()}
+      appleOAuthEnabled={false}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
       locale={locale}
     />
