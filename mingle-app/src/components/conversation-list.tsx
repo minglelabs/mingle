@@ -1035,6 +1035,7 @@ export default function ConversationList({
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
+  const [shouldIgnoreInitialRouteConversation, setShouldIgnoreInitialRouteConversation] = useState(true);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
@@ -1317,6 +1318,11 @@ export default function ConversationList({
 
   useEffect(() => {
     setIsClientReady(true);
+    if (readConversationIdFromLocation()) {
+      replaceConversationOverlayUrl(null);
+    }
+    routeSyncConversationIdRef.current = null;
+    setShouldIgnoreInitialRouteConversation(false);
   }, []);
 
   useEffect(() => {
@@ -1628,6 +1634,7 @@ export default function ConversationList({
   }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
 
   useEffect(() => {
+    if (shouldIgnoreInitialRouteConversation) return;
     if (activeConversation) {
       routeSyncConversationIdRef.current = null;
       return;
@@ -1661,6 +1668,7 @@ export default function ConversationList({
     mutatingConversationId,
     openConversationSummary,
     routeConversationId,
+    shouldIgnoreInitialRouteConversation,
   ]);
 
   useEffect(() => {
