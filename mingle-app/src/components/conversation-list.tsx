@@ -1096,6 +1096,7 @@ export default function ConversationList({
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
+  const [isClientReady, setIsClientReady] = useState(false);
   const [isLastViewedScreenReady, setIsLastViewedScreenReady] = useState(Boolean(initialConversationToOpen));
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -1365,6 +1366,10 @@ export default function ConversationList({
     window.setTimeout(() => {
       searchOverlayRef.current?.focusInput();
     }, 180);
+  }, []);
+
+  useEffect(() => {
+    setIsClientReady(true);
   }, []);
 
   useEffect(() => {
@@ -1840,16 +1845,18 @@ export default function ConversationList({
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
-      <SearchOverlay
-        ref={searchOverlayRef}
-        open={showSearch}
-        topInsetPx={effectiveNativeTopInsetPx}
-        onClose={() => setShowSearch(false)}
-        conversations={conversationItems}
-        copy={copy}
-        onSelectConversation={handleOpenConversation}
-        actionDisabled={actionDisabled}
-      />
+      {isClientReady ? (
+        <SearchOverlay
+          ref={searchOverlayRef}
+          open={showSearch}
+          topInsetPx={effectiveNativeTopInsetPx}
+          onClose={() => setShowSearch(false)}
+          conversations={conversationItems}
+          copy={copy}
+          onSelectConversation={handleOpenConversation}
+          actionDisabled={actionDisabled}
+        />
+      ) : null}
 
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
