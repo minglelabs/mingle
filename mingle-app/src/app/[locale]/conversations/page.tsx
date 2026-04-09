@@ -17,6 +17,8 @@ type ConversationsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+const LAST_VIEWED_SCREEN_COOKIE_NAME = "mingle_last_screen";
+
 function readSearchParamValue(
   searchParams: Record<string, string | string[] | undefined>,
   key: string,
@@ -32,6 +34,15 @@ function parseNativeInsetPx(rawValue: string): number {
   return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
 }
 
+function parseInitialConversationIdToOpen(rawValue: string): string | null {
+  const normalizedValue = rawValue.trim();
+  if (!normalizedValue) return null;
+  if (!normalizedValue.startsWith("conversation:")) return null;
+
+  const conversationId = normalizedValue.slice("conversation:".length).trim();
+  return conversationId || null;
+}
+
 export default async function ConversationsPage({ params, searchParams }: ConversationsPageProps) {
   const { locale } = await params;
   const resolvedSearchParams = await searchParams;
@@ -43,6 +54,8 @@ export default async function ConversationsPage({ params, searchParams }: Conver
   const session = await getServerSession(getAuthOptions());
   const requestHeaders = await headers();
   const cookieStore = await cookies();
+  const routeConversationId = readSearchParamValue(resolvedSearchParams, "conversation").trim();
+  const lastViewedConversationCookie = cookieStore.get(LAST_VIEWED_SCREEN_COOKIE_NAME)?.value || "";
   const identity = {
     ...normalizeSessionUserIdentity(session),
     externalUserId: sanitizeRequestIdentityValue(
@@ -64,6 +77,10 @@ export default async function ConversationsPage({ params, searchParams }: Conver
       locale={locale as AppLocale}
       dictionary={getDictionary(locale)}
       initialConversations={initialConversations}
+      initialConversationIdToOpen={
+        routeConversationId
+        || parseInitialConversationIdToOpen(lastViewedConversationCookie)
+      }
       initialNativeBannerPosition={readSearchParamValue(resolvedSearchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeTopInsetPx"))}
       initialNativeBottomInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeBottomInsetPx"))}

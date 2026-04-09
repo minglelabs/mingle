@@ -49,6 +49,7 @@ import MingleWordmark from "@/components/mingle-wordmark";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const LAST_VIEWED_SCREEN_STORAGE_KEY_PREFIX = "mingle:conversation-last-screen";
+const LAST_VIEWED_SCREEN_COOKIE_NAME = "mingle_last_screen";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
@@ -312,6 +313,10 @@ function writeStoredLastViewedConversationScreen(
       buildLastViewedScreenStorageKey(locale),
       JSON.stringify(screen),
     );
+    const serializedScreen = screen.kind === "conversation"
+      ? `conversation:${screen.conversationId}`
+      : "list";
+    document.cookie = `${LAST_VIEWED_SCREEN_COOKIE_NAME}=${encodeURIComponent(serializedScreen)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
   } catch {
     // Ignore storage write failures in restricted environments.
   }
@@ -1051,6 +1056,7 @@ type ConversationListProps = {
   locale: AppLocale;
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
+  initialConversationIdToOpen?: string | null;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
   initialNativeBottomInsetPx?: number;
@@ -1062,12 +1068,16 @@ export default function ConversationList({
   locale,
   dictionary,
   initialConversations,
+  initialConversationIdToOpen = null,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
   initialNativeBottomInsetPx = 0,
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
+  const initialConversationToOpen = initialConversationIdToOpen
+    ? initialConversations.find((conversation) => conversation.id === initialConversationIdToOpen) ?? null
+    : null;
   const copy = useMemo(
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
@@ -1083,10 +1093,10 @@ export default function ConversationList({
     [...initialConversations].sort(compareConversationRecency),
   );
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
-  const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(null);
+  const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
-  const [isLastViewedScreenReady, setIsLastViewedScreenReady] = useState(false);
+  const [isLastViewedScreenReady, setIsLastViewedScreenReady] = useState(Boolean(initialConversationToOpen));
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
