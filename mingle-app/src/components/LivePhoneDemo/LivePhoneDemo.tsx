@@ -10,7 +10,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
-import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import { getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
@@ -2371,7 +2371,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const language = input.language.trim()
     if (!text || !language) return null
 
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
     try {
@@ -2401,13 +2401,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate])
+  }, [nativeAppUpdate, resolveConversationSessionKey])
 
   const {
     utterances,
     liveUtterances,
     partialTranscript,
     volume,
+    startRecording,
+    stopRecording,
     toggleRecording,
     submitExternalUtterance,
     clearConversationHistory,
@@ -2421,6 +2423,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
+    ensureSessionKey,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -2441,6 +2444,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+  const resolveConversationSessionKey = useCallback(() => ensureSessionKey(), [ensureSessionKey])
 
   useEffect(() => {
     onSttSessionRunningChange?.(isSttSessionRunning)
@@ -2612,7 +2616,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     try {
       const conversationClearedAtMs = Date.now()
-      const sessionKey = getOrCreateSessionKey()
+      const sessionKey = resolveConversationSessionKey()
       const trackingUserId = getOrCreateTrackingUserId()
       const response = await fetch(MESSAGES_API_PATH, {
         method: 'DELETE',
@@ -2649,6 +2653,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     forceStopTtsPlayback,
     isDeletingConversation,
     nativeAppUpdate,
+    resolveConversationSessionKey,
     requestCloseMenuPanel,
   ])
 
