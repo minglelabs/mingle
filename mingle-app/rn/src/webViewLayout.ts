@@ -1,20 +1,4 @@
-const WEB_SUPPORTED_LOCALE_SEGMENTS = new Set([
-  'ko',
-  'en',
-  'ja',
-  'zh-cn',
-  'zh-tw',
-  'fr',
-  'de',
-  'es',
-  'pt',
-  'it',
-  'ru',
-  'ar',
-  'hi',
-  'th',
-  'vi',
-]);
+import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
 
 function splitPathname(pathname: string): string[] {
   return pathname

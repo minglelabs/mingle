@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
-  resolveDictionaryLocale,
+  getVersionPolicyCopy,
   resolveSupportedLocaleTag,
   type AppLocale,
-  type TranslatedAppLocale,
 } from '@/i18n'
-import {
-  generatedVersionPolicyCopy,
-  type VersionPolicyCopy,
-} from '@/i18n/generated-version-policy-copy'
 
 type VersionTuple = [number, number, number]
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none'
@@ -75,130 +70,6 @@ const VERSION_POLICY_ADMOB_ENV_KEYS: Record<ClientPlatform, { bannerUnitId: stri
     bannerUnitId: 'RN_ADMOB_BANNER_UNIT_ID_ANDROID',
   },
 }
-
-const VERSION_POLICY_COPY = {
-  ko: {
-    forceMessage: '현재 버전에서는 서비스를 사용할 수 없습니다. 최신 버전으로 업데이트해 주세요.',
-    recommendMessage: '새 버전이 출시되었습니다. 더 안정적인 사용을 위해 업데이트를 권장합니다.',
-    forceTitle: '업데이트 필요',
-    recommendTitle: '업데이트 권장',
-    updateButtonLabel: '업데이트',
-    laterButtonLabel: '나중에',
-  },
-  en: {
-    forceMessage: 'This version is no longer supported. Please update to the latest version.',
-    recommendMessage: 'A new version is available. We recommend updating for a better experience.',
-    forceTitle: 'Update Required',
-    recommendTitle: 'Update Recommended',
-    updateButtonLabel: 'Update',
-    laterButtonLabel: 'Later',
-  },
-  ja: {
-    forceMessage: 'このバージョンはサポートされていません。最新バージョンにアップデートしてください。',
-    recommendMessage: '新しいバージョンが利用可能です。より安定した利用のためにアップデートをお勧めします。',
-    forceTitle: 'アップデートが必要です',
-    recommendTitle: 'アップデート推奨',
-    updateButtonLabel: 'アップデート',
-    laterButtonLabel: 'あとで',
-  },
-  'zh-CN': {
-    forceMessage: '当前版本已不再受支持。请更新到最新版本。',
-    recommendMessage: '新版本已发布，建议更新以获得更稳定的体验。',
-    forceTitle: '更新必需',
-    recommendTitle: '建议更新',
-    updateButtonLabel: '更新',
-    laterButtonLabel: '稍后',
-  },
-  'zh-TW': {
-    forceMessage: '目前版本已不再支援。請更新至最新版本。',
-    recommendMessage: '新版本已推出，建議更新以獲得更穩定的體驗。',
-    forceTitle: '必須更新',
-    recommendTitle: '建議更新',
-    updateButtonLabel: '更新',
-    laterButtonLabel: '稍後',
-  },
-  fr: {
-    forceMessage: 'Cette version n\'est plus prise en charge. Veuillez mettre à jour vers la dernière version.',
-    recommendMessage: 'Une nouvelle version est disponible. Nous vous recommandons de mettre à jour pour une meilleure stabilité.',
-    forceTitle: 'Mise à jour requise',
-    recommendTitle: 'Mise à jour recommandée',
-    updateButtonLabel: 'Mettre à jour',
-    laterButtonLabel: 'Plus tard',
-  },
-  de: {
-    forceMessage: 'Diese Version wird nicht mehr unterstützt. Bitte aktualisieren Sie auf die neueste Version.',
-    recommendMessage: 'Eine neue Version ist verfügbar. Wir empfehlen ein Update für eine stabilere Nutzung.',
-    forceTitle: 'Update erforderlich',
-    recommendTitle: 'Update empfohlen',
-    updateButtonLabel: 'Aktualisieren',
-    laterButtonLabel: 'Später',
-  },
-  es: {
-    forceMessage: 'Esta versión ya no es compatible. Actualiza a la última versión.',
-    recommendMessage: 'Hay una nueva versión disponible. Recomendamos actualizar para una experiencia más estable.',
-    forceTitle: 'Actualización obligatoria',
-    recommendTitle: 'Actualización recomendada',
-    updateButtonLabel: 'Actualizar',
-    laterButtonLabel: 'Más tarde',
-  },
-  pt: {
-    forceMessage: 'Esta versão não é mais compatível. Atualize para a versão mais recente.',
-    recommendMessage: 'Há uma nova versão disponível. Recomendamos atualizar para uma experiência mais estável.',
-    forceTitle: 'Atualização obrigatória',
-    recommendTitle: 'Atualização recomendada',
-    updateButtonLabel: 'Atualizar',
-    laterButtonLabel: 'Mais tarde',
-  },
-  it: {
-    forceMessage: 'Questa versione non è più supportata. Aggiorna all\'ultima versione.',
-    recommendMessage: 'È disponibile una nuova versione. Ti consigliamo di aggiornare per un\'esperienza più stabile.',
-    forceTitle: 'Aggiornamento obbligatorio',
-    recommendTitle: 'Aggiornamento consigliato',
-    updateButtonLabel: 'Aggiorna',
-    laterButtonLabel: 'Più tardi',
-  },
-  ru: {
-    forceMessage: 'Эта версия больше не поддерживается. Обновите приложение до последней версии.',
-    recommendMessage: 'Доступна новая версия. Рекомендуем обновить приложение для более стабильной работы.',
-    forceTitle: 'Требуется обновление',
-    recommendTitle: 'Рекомендуется обновление',
-    updateButtonLabel: 'Обновить',
-    laterButtonLabel: 'Позже',
-  },
-  ar: {
-    forceMessage: 'هذا الإصدار لم يعد مدعومًا. يرجى التحديث إلى أحدث إصدار.',
-    recommendMessage: 'يتوفر إصدار جديد. نوصي بالتحديث للحصول على تجربة أكثر استقرارًا.',
-    forceTitle: 'التحديث مطلوب',
-    recommendTitle: 'يوصى بالتحديث',
-    updateButtonLabel: 'تحديث',
-    laterButtonLabel: 'لاحقًا',
-  },
-  hi: {
-    forceMessage: 'यह संस्करण अब समर्थित नहीं है। कृपया नवीनतम संस्करण में अपडेट करें।',
-    recommendMessage: 'नया संस्करण उपलब्ध है। अधिक स्थिर अनुभव के लिए अपडेट करने की सलाह दी जाती है।',
-    forceTitle: 'अपडेट आवश्यक',
-    recommendTitle: 'अपडेट की अनुशंसा',
-    updateButtonLabel: 'अपडेट करें',
-    laterButtonLabel: 'बाद में',
-  },
-  th: {
-    forceMessage: 'เวอร์ชันนี้ไม่รองรับแล้ว กรุณาอัปเดตเป็นเวอร์ชันล่าสุด',
-    recommendMessage: 'มีเวอร์ชันใหม่พร้อมใช้งาน แนะนำให้อัปเดตเพื่อการใช้งานที่เสถียรยิ่งขึ้น',
-    forceTitle: 'จำเป็นต้องอัปเดต',
-    recommendTitle: 'แนะนำให้อัปเดต',
-    updateButtonLabel: 'อัปเดต',
-    laterButtonLabel: 'ภายหลัง',
-  },
-  vi: {
-    forceMessage: 'Phiên bản này không còn được hỗ trợ. Vui lòng cập nhật lên phiên bản mới nhất.',
-    recommendMessage: 'Đã có phiên bản mới. Chúng tôi khuyên bạn nên cập nhật để có trải nghiệm ổn định hơn.',
-    forceTitle: 'Cần cập nhật',
-    recommendTitle: 'Khuyến nghị cập nhật',
-    updateButtonLabel: 'Cập nhật',
-    laterButtonLabel: 'Để sau',
-  },
-  ...generatedVersionPolicyCopy,
-} satisfies Record<TranslatedAppLocale, VersionPolicyCopy>
 
 const DEFAULT_LOCALE: AppLocale = 'en'
 
@@ -389,7 +260,7 @@ export async function handleClientVersionPolicy(
   }
 
   const locale = resolveLocale(body.locale)
-  const localizedLocale = resolveDictionaryLocale(locale)
+  const versionPolicyCopy = getVersionPolicyCopy(locale)
   const clientPlatform = options?.platformOverride || resolveClientPlatform(body.platform)
   const clientVersionRaw = typeof body.clientVersion === 'string' ? body.clientVersion : ''
   const clientBuildRaw = typeof body.clientBuild === 'string' ? body.clientBuild.trim() : ''
@@ -407,15 +278,15 @@ export async function handleClientVersionPolicy(
     : 'force_update'
 
   const message = action === 'force_update'
-    ? VERSION_POLICY_COPY[localizedLocale].forceMessage
+    ? versionPolicyCopy.forceMessage
     : action === 'recommend_update'
-      ? VERSION_POLICY_COPY[localizedLocale].recommendMessage
+      ? versionPolicyCopy.recommendMessage
       : ''
 
   const title = action === 'force_update'
-    ? VERSION_POLICY_COPY[localizedLocale].forceTitle
+    ? versionPolicyCopy.forceTitle
     : action === 'recommend_update'
-      ? VERSION_POLICY_COPY[localizedLocale].recommendTitle
+      ? versionPolicyCopy.recommendTitle
       : ''
 
   const responseBody = {
@@ -431,8 +302,8 @@ export async function handleClientVersionPolicy(
     updateUrl: policyRead.snapshot.updateUrl,
     title,
     message,
-    updateButtonLabel: VERSION_POLICY_COPY[localizedLocale].updateButtonLabel,
-    laterButtonLabel: VERSION_POLICY_COPY[localizedLocale].laterButtonLabel,
+    updateButtonLabel: versionPolicyCopy.updateButtonLabel,
+    laterButtonLabel: versionPolicyCopy.laterButtonLabel,
     adMob: adMobConfig,
   }
 

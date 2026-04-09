@@ -3,9 +3,10 @@
 import { useParams } from 'next/navigation'
 import HomePage from '@/components/HomePage'
 import { notFound } from 'next/navigation'
+import { PRIMARY_UI_LOCALES } from '../../../../shared/i18n/mingle-locales'
 
 const versions = ['normal', 'flirting', 'working', 'gaming']
-const locales = ['en', 'ko', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi']
+const localeSet = new Set(PRIMARY_UI_LOCALES)
 
 export default function VersionPage() {
   const params = useParams()
@@ -19,7 +20,7 @@ export default function VersionPage() {
   }
 
   // locale이 있는데 유효하지 않으면 404
-  if (locale && !locales.includes(locale)) {
+  if (locale && !localeSet.has(locale as (typeof PRIMARY_UI_LOCALES)[number])) {
     notFound()
   }
 

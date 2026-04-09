@@ -22,6 +22,8 @@ describe('RN WebView layout helpers', () => {
   it('identifies live demo routes only for locale home and translator pages', () => {
     expect(isLiveDemoPathname('/ko')).toBe(true)
     expect(isLiveDemoPathname('/en/translator')).toBe(true)
+    expect(isLiveDemoPathname('/pl')).toBe(true)
+    expect(isLiveDemoPathname('/he/translator')).toBe(true)
     expect(isLiveDemoPathname('/ko/account')).toBe(false)
     expect(isLiveDemoPathname('/ko/auth/native')).toBe(false)
     expect(isLiveDemoPathname('')).toBe(false)

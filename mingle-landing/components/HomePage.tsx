@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { logButtonClick, logVisit } from '@/components/sections/tracking'
 import NavBar from '@/components/sections/NavBar'
 import EmailModal from '@/components/sections/EmailModal'
