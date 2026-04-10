@@ -738,7 +738,7 @@ function resolveMenuContentTransition(
   transitionMode: LivePhoneDemoMenuTransitionMode,
 ) {
   return transitionMode === 'animate'
-    ? { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const }
+    ? { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
     : { duration: 0 }
 }
 
@@ -2048,8 +2048,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (menuHistoryDepthRef.current <= 0) return
       const nextDepth = nextStateDepth || Math.max(0, menuHistoryDepthRef.current - 1)
       applyMenuNavigationDepth(nextDepth, {
-        exitMode: nextDepth === 0 ? 'instant' : 'animate',
-        screenTransitionMode: 'instant',
+        exitMode: 'animate',
+        screenTransitionMode: 'animate',
         screen: nextStateScreen,
       })
     }
@@ -2247,6 +2247,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
+    if (isNativeIosAppRuntime()) return
     if (shouldIgnoreMenuSwipeTarget(event.target)) return
 
     menuSwipeSessionRef.current = {
