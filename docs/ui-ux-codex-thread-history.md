@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 112.
+- Total standalone UI/UX issue atoms documented in this file: 117.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 67.
+- Issue atoms currently listed for this thread: 72.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -354,6 +354,31 @@
 67. **Conversation-list action tooltips chose the wrong vertical direction near the top of the screen**
    Problem: Only the very first row opened its tooltip downward. Rows slightly lower in the upper part of the list still opened upward, which felt wrong and cramped near the top header area.
    Attempted fix: The positioning rule was expanded so conversation rows in roughly the top 40% of the list viewport also open their tooltip downward.
+   Status: Resolved in-thread.
+
+68. **Android OS back skipped the menu subpage stack and closed the room**
+   Problem: When the hamburger menu was on `Feedback` or `Conversation Management`, Android hardware back did not close the submenu first. It fell through to the room-close handler, so the user was dumped back to the conversation list instead of stepping back inside the menu.
+   Attempted fix: A higher-priority native back handler was registered inside the room menu so submenu/modals/dropdowns consume Android back before the room overlay does.
+   Status: Resolved in-thread.
+
+69. **Opening feedback from Android 1.1.0 hit a 404**
+   Problem: The UI exposed the feedback page from the hamburger menu, but `/api/android/v1.1.0/feedback` and `/api/ios/v1.1.0/feedback` were missing, so entering the page could immediately fail with a 404 and an apparently broken empty state.
+   Attempted fix: Versioned `feedback` route aliases were added for API `v1.1.0` on both Android and iOS, and the namespace routing contract test was expanded.
+   Status: Resolved in-thread.
+
+70. **iOS submenu transitions became unnaturally fast and snap-like**
+   Problem: After the menu tree refactor, entering and especially leaving `Feedback`/`Conversation Management` felt too fast, with the close transition appearing half-smooth and then disappearing abruptly.
+   Attempted fix: Menu subpage timing and back-direction animation handling were retuned so open/close transitions use the same smoother content transition path.
+   Status: Resolved in-thread.
+
+71. **iOS edge-swipe back from a submenu replayed the closed page and flashed it away**
+   Problem: Swiping from the left edge did return from `Feedback`/`Conversation Management` to the root menu, but roughly half a second later the just-closed submenu could flash back in and then vanish. The user perceived this as a severe flicker/regression in the back gesture.
+   Attempted fix: Natural iOS history-gesture `popstate` is now treated separately from app-requested back steps, so the system swipe no longer replays a second JS-side submenu animation after the native transition already completed.
+   Status: Resolved in-thread.
+
+72. **An iOS submenu back-gesture fix accidentally removed menu swipe-dismiss**
+   Problem: To stop edge-swipe flicker, the menu’s own swipe-dismiss was briefly disabled on iOS, which regressed the expected ability to dismiss the menu by swiping inside the panel.
+   Attempted fix: The gesture model was split by start region: the left-edge gutter is reserved for native iOS history swipe, while swipes starting farther inside the panel still trigger the custom menu dismiss.
    Status: Resolved in-thread.
 
 ## Other Issue Sessions
