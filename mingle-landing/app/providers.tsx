@@ -23,10 +23,20 @@ export function Providers(props: {
 }) {
   const { children, routeLocale } = props
   const resolvedRouteLocale = routeLocale ? resolveLandingLocale(routeLocale) : null
-  const [detectedLocale, setDetectedLocale] = useState<PrimaryUiLocale>(() => (
-    resolvedRouteLocale ?? DEFAULT_LANDING_LOCALE
+  const [detectedLocale, setDetectedLocale] = useState<PrimaryUiLocale>(() => {
+    if (resolvedRouteLocale) {
+      return resolvedRouteLocale
+    }
+
+    if (typeof window === 'undefined') {
+      return DEFAULT_LANDING_LOCALE
+    }
+
+    return detectClientPreferredLocale()
+  })
+  const [isLocaleReady, setIsLocaleReady] = useState(() => (
+    resolvedRouteLocale !== null || typeof window !== 'undefined'
   ))
-  const [isLocaleReady, setIsLocaleReady] = useState(() => Boolean(resolvedRouteLocale))
 
   const handleChangeLanguage = useCallback((nextLanguage: string) => {
     setDetectedLocale(resolveLandingLocale(nextLanguage))
@@ -40,7 +50,6 @@ export function Providers(props: {
       return
     }
 
-    setDetectedLocale(detectClientPreferredLocale())
     setIsLocaleReady(true)
   }, [resolvedRouteLocale])
 
