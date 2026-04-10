@@ -8,7 +8,7 @@ import { itDictionary } from "@/i18n/dictionaries/it";
 import { jaDictionary } from "@/i18n/dictionaries/ja";
 import { koDictionary } from "@/i18n/dictionaries/ko";
 import { ptDictionary } from "@/i18n/dictionaries/pt";
-import type { AppDictionary } from "@/i18n/types";
+import type { BaseAppDictionarySource } from "@/i18n/types";
 
 export const localeDictionaries = {
   ko: koDictionary,
@@ -20,4 +20,4 @@ export const localeDictionaries = {
   pt: ptDictionary,
   it: itDictionary,
   ...generatedLocaleDictionaries,
-} satisfies Record<AppLocale, AppDictionary>;
+} satisfies Record<AppLocale, BaseAppDictionarySource>;

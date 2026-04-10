@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { UserPlus, ArrowRight, Send } from 'lucide-react'
 import { fadeInUp } from '@/components/sections/shared'
 

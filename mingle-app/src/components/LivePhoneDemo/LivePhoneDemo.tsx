@@ -88,6 +88,7 @@ import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actio
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
+import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 
 const VOLUME_THRESHOLD = 0.05
 function buildAccountPreferencesApiPath(): string {
@@ -153,14 +154,6 @@ const VOICE_MODE_START_LABEL = 'Start'
 const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
-
-type LivePhoneDemoComposerCopy = {
-  manualSpeakerLabel: string
-  openKeyboardLabel: string
-  closeKeyboardLabel: string
-  composerPlaceholder: string
-  sendMessageLabel: string
-}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -288,38 +281,6 @@ function resolveEffectiveNativeBannerInsetPx(explicitInsetPx: number, estimatedI
 
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
-}
-
-export function resolveLivePhoneDemoComposerCopy(uiLocale: string): LivePhoneDemoComposerCopy {
-  const locale = (uiLocale || '').trim().toLowerCase()
-
-  if (locale.startsWith('ko')) {
-    return {
-      manualSpeakerLabel: '나',
-      openKeyboardLabel: '텍스트 입력 열기',
-      closeKeyboardLabel: '텍스트 입력 닫기',
-      composerPlaceholder: '메시지를 입력하세요',
-      sendMessageLabel: '메시지 보내기',
-    }
-  }
-
-  if (locale.startsWith('ja')) {
-    return {
-      manualSpeakerLabel: '自分',
-      openKeyboardLabel: 'テキスト入力を開く',
-      closeKeyboardLabel: 'テキスト入力を閉じる',
-      composerPlaceholder: 'メッセージを入力',
-      sendMessageLabel: 'メッセージを送信',
-    }
-  }
-
-  return {
-    manualSpeakerLabel: 'You',
-    openKeyboardLabel: 'Open text input',
-    closeKeyboardLabel: 'Close text input',
-    composerPlaceholder: 'Type a message',
-    sendMessageLabel: 'Send message',
-  }
 }
 
 export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {

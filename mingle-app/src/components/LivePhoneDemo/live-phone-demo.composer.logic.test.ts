@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveKeyboardViewportInsetPx,
   resolveHydratedComposerOpenState,
-  resolveLivePhoneDemoComposerCopy,
   resolveNativeBottomBannerOverlayInsetPx,
   resolveScrollToBottomButtonBottomPx,
   resizeComposerTextarea,
 } from './LivePhoneDemo'
+import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 
 describe('live phone demo composer logic', () => {
   afterEach(() => {
@@ -23,8 +23,8 @@ describe('live phone demo composer logic', () => {
     })
   })
 
-  it('falls back to English composer copy for unknown locales', () => {
-    expect(resolveLivePhoneDemoComposerCopy('de')).toEqual({
+  it('falls back to English composer copy for locales outside the primary UI set', () => {
+    expect(resolveLivePhoneDemoComposerCopy('pl')).toEqual({
       manualSpeakerLabel: 'You',
       openKeyboardLabel: 'Open text input',
       closeKeyboardLabel: 'Close text input',
