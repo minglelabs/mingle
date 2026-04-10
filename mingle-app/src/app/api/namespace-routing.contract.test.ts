@@ -56,7 +56,10 @@ import {
   GET as getAndroidV1_1_0Conversations,
   POST as postAndroidV1_1_0Conversations,
 } from '@/app/api/android/v1.1.0/conversations/route'
-import { PATCH as patchAndroidV1_1_0Conversation } from '@/app/api/android/v1.1.0/conversations/[conversationId]/route'
+import {
+  DELETE as deleteAndroidV1_1_0Conversation,
+  PATCH as patchAndroidV1_1_0Conversation,
+} from '@/app/api/android/v1.1.0/conversations/[conversationId]/route'
 import { POST as postIosV100ClientVersionPolicy } from '@/app/api/ios/v1.0.0/client/version-policy/route'
 import { POST as postIosV102ClientVersionPolicy } from '@/app/api/ios/v1.0.2/client/version-policy/route'
 import { POST as postIosV103ClientVersionPolicy } from '@/app/api/ios/v1.0.3/client/version-policy/route'
@@ -109,7 +112,10 @@ import {
   GET as getIosV1_1_0Conversations,
   POST as postIosV1_1_0Conversations,
 } from '@/app/api/ios/v1.1.0/conversations/route'
-import { PATCH as patchIosV1_1_0Conversation } from '@/app/api/ios/v1.1.0/conversations/[conversationId]/route'
+import {
+  DELETE as deleteIosV1_1_0Conversation,
+  PATCH as patchIosV1_1_0Conversation,
+} from '@/app/api/ios/v1.1.0/conversations/[conversationId]/route'
 import { postAndroidClientVersionPolicyForAndroidV1_0_0 } from '@/server/api/controllers/android/v1.0.0/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_2 } from '@/server/api/controllers/android/v1.0.2/client-version-policy-controller'
 import { postAndroidClientVersionPolicyForAndroidV1_0_3 } from '@/server/api/controllers/android/v1.0.3/client-version-policy-controller'
@@ -166,7 +172,10 @@ import {
   getConversationChannelsForAndroidV1_1_0,
   postCreateConversationForAndroidV1_1_0,
 } from '@/server/api/controllers/android/v1.1.0/conversations-controller'
-import { patchConversationRouteForAndroidV1_1_0 } from '@/server/api/controllers/android/v1.1.0/conversation-controller'
+import {
+  deleteConversationRouteForAndroidV1_1_0,
+  patchConversationRouteForAndroidV1_1_0,
+} from '@/server/api/controllers/android/v1.1.0/conversation-controller'
 import { postIosClientVersionPolicyForIosV1_0_0 } from '@/server/api/controllers/ios/v1.0.0/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_2 } from '@/server/api/controllers/ios/v1.0.2/client-version-policy-controller'
 import { postIosClientVersionPolicyForIosV1_0_3 } from '@/server/api/controllers/ios/v1.0.3/client-version-policy-controller'
@@ -223,7 +232,10 @@ import {
   getConversationChannelsForIosV1_1_0,
   postCreateConversationForIosV1_1_0,
 } from '@/server/api/controllers/ios/v1.1.0/conversations-controller'
-import { patchConversationRouteForIosV1_1_0 } from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
+import {
+  deleteConversationRouteForIosV1_1_0,
+  patchConversationRouteForIosV1_1_0,
+} from '@/server/api/controllers/ios/v1.1.0/conversation-controller'
 import { postClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/client-version-policy-controller'
 import { postIosClientVersionPolicyForLegacy } from '@/server/api/controllers/legacy/ios-client-version-policy-controller'
 import { postLogClientEventForLegacy } from '@/server/api/controllers/legacy/log-client-event-controller'
@@ -318,6 +330,7 @@ describe('mingle-app namespace route wiring', () => {
     expect(getAndroidV1_1_0Conversations).toBe(getConversationChannelsForAndroidV1_1_0)
     expect(postAndroidV1_1_0Conversations).toBe(postCreateConversationForAndroidV1_1_0)
     expect(patchAndroidV1_1_0Conversation).toBe(patchConversationRouteForAndroidV1_1_0)
+    expect(deleteAndroidV1_1_0Conversation).toBe(deleteConversationRouteForAndroidV1_1_0)
   })
 
   it('maps /ios/v1.0.0 routes to iOS v1.0.0 controllers', () => {
@@ -400,6 +413,7 @@ describe('mingle-app namespace route wiring', () => {
     expect(getIosV1_1_0Conversations).toBe(getConversationChannelsForIosV1_1_0)
     expect(postIosV1_1_0Conversations).toBe(postCreateConversationForIosV1_1_0)
     expect(patchIosV1_1_0Conversation).toBe(patchConversationRouteForIosV1_1_0)
+    expect(deleteIosV1_1_0Conversation).toBe(deleteConversationRouteForIosV1_1_0)
   })
 
   it('keeps iOS v1.0.0 controller code identical to legacy controllers', () => {

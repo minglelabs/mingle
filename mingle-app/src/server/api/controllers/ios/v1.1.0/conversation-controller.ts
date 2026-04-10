@@ -2,10 +2,12 @@ import { NextRequest } from "next/server";
 
 export { runtime } from "@/server/api/controllers/shared/conversation-controller";
 import {
+  deleteConversationResponse,
   getConversationResponse,
   patchConversationResponse,
 } from "@/server/api/controllers/shared/conversation-controller";
 
+export { deleteConversationResponse as deleteConversationForIosV1_1_0 };
 export { getConversationResponse as getConversationForIosV1_1_0 };
 export { patchConversationResponse as patchConversationForIosV1_1_0 };
 
@@ -23,4 +25,12 @@ export async function patchConversationRouteForIosV1_1_0(
 ) {
   const { conversationId } = await context.params;
   return patchConversationResponse(request, conversationId);
+}
+
+export async function deleteConversationRouteForIosV1_1_0(
+  request: NextRequest,
+  context: { params: Promise<{ conversationId: string }> },
+) {
+  const { conversationId } = await context.params;
+  return deleteConversationResponse(request, conversationId);
 }
