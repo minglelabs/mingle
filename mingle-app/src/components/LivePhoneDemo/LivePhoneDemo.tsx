@@ -1785,10 +1785,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const pushMenuHistoryEntry = useCallback((
     nextDepth: number,
     screen: LivePhoneDemoMenuScreen = 'root',
+    options?: {
+      screenTransitionMode?: LivePhoneDemoMenuTransitionMode
+    },
   ) => {
     applyMenuNavigationDepth(nextDepth, {
       exitMode: 'animate',
-      screenTransitionMode: 'animate',
+      screenTransitionMode: options?.screenTransitionMode ?? 'animate',
       screen,
     })
     if (typeof window === 'undefined') return
@@ -1858,7 +1861,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleConversationManagementMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'conversation-management') return
-    pushMenuHistoryEntry(2, 'conversation-management')
+    pushMenuHistoryEntry(2, 'conversation-management', {
+      // Skip the intermediate feedback panel when jumping directly from the root menu.
+      screenTransitionMode: menuScreen === 'root' ? 'instant' : 'animate',
+    })
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDeleteConversationMenuItemPress = useCallback(() => {
