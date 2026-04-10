@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 100.
+- Total standalone UI/UX issue atoms documented in this file: 112.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 55.
+- Issue atoms currently listed for this thread: 67.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -294,6 +294,66 @@
 55. **The `Connecting...` overlay oscillated rapidly even while transcript text was already arriving**
    Problem: One later regression produced especially bad UX: the room would show `Connecting...`, words would begin arriving, and the overlay would flash on and off many times over the first few seconds. The user described it as the overlay appearing and disappearing more than twenty times while speech was already being recognized.
    Attempted fix: The native `running/silenced` statuses were kept in `connecting` only until the first real server-ready or transcript activity, and once the room reached `ready`, later repeated native running statuses were prevented from downgrading it back to `connecting`.
+   Status: Resolved in-thread.
+
+56. **The room-rename dialog sat too low and could be covered by the keyboard**
+   Problem: Both the in-room rename dialog and the conversation-list rename dialog initially rendered around the vertical center of the screen. On iPhone, opening the keyboard could partially cover the field and action buttons.
+   Attempted fix: The dialogs were moved to a safe-area-aware top offset instead of center alignment, and both implementations were normalized to use the same upper placement model.
+   Status: Resolved in-thread after multiple follow-up passes.
+
+57. **The first rename-dialog positioning fix was misleading because only one of the two dialogs actually moved**
+   Problem: One pass moved the in-room dialog but left the list-side dialog centered, so the user kept reporting “the rename modal is still too low” even though one implementation had changed.
+   Attempted fix: The list rename modal and the room rename modal were both audited and then moved together so they shared the same top anchoring behavior.
+   Status: Resolved in-thread.
+
+58. **Long-pressing a conversation row selected text instead of cleanly showing the room-actions tooltip**
+   Problem: On the conversation list, a long press could trigger iOS-style text selection on the preview/time labels, producing blue text-selection affordances that fought the intended room-action menu.
+   Attempted fix: User-select and touch-callout behavior were disabled on the room rows so long press opens the room-actions tooltip without text-selection chrome.
+   Status: Resolved in-thread.
+
+59. **Long-pressing a room avatar could open image-preview behavior instead of room actions**
+   Problem: The avatar image on a conversation row still behaved like a draggable/previewable image on iOS, so long-pressing it could surface image preview behavior rather than the intended room-action tooltip.
+   Attempted fix: Drag/image-preview behavior was disabled on the list avatars so long press remains dedicated to room actions.
+   Status: Resolved in-thread.
+
+60. **The room-delete action from the conversation list initially failed with `405 Method Not Allowed`**
+   Problem: The UI exposed room deletion from the list, but versioned `/api/ios/.../conversations/:id` and `/api/android/.../conversations/:id` routes were not exporting `DELETE`, so the visible action failed immediately for users.
+   Attempted fix: `DELETE` was added to the versioned iOS/Android conversation-detail routes and controllers so room deletion used the same soft-delete API through namespace-specific endpoints.
+   Status: Resolved in-thread.
+
+61. **Freshly created rooms could immediately 404 on follow-up GET/PATCH calls**
+   Problem: A newly created room could appear to exist for one moment and then fail hydration/status requests because `is_deleted = NULL` rows were being filtered out as if they were deleted. This created visible “room not found” behavior right after room creation.
+   Attempted fix: Conversation queries were changed to treat `is_deleted = NULL` the same as `false`, so newly created rooms remain queryable until explicitly soft-deleted.
+   Status: Resolved in-thread.
+
+62. **Deleting a live room from the list could revive the room or leave behind an empty shell**
+   Problem: When STT was still active or just winding down, room deletion could race against live-state PATCHes and room-summary upserts. The user could see the room disappear and then reappear as a blank/initial-looking room, often accompanied by 404s.
+   Attempted fix: Deleting-room IDs were tracked explicitly, running-state PATCHes were suppressed for deleting rooms, and delete success removed the room from all live/list state immediately instead of allowing later upserts to resurrect it.
+   Status: Resolved in-thread after several passes.
+
+63. **Pending STT finalization after delete could still write into a deleted room**
+   Problem: Even after STT stopped, a pending finalization/translation turn could land after deletion and touch the just-deleted room again. This produced confusing server 404s and visible “why is this room still here?” moments.
+   Attempted fix: A dedicated `prepareForDeletion()` path was added so pending turns and in-flight finalization work are discarded before the delete completes.
+   Status: Resolved in-thread.
+
+64. **Live-room deletion could surface a failure alert even when the room was already gone**
+   Problem: The room visually disappeared, but a late `PATCH 404` or `DELETE 404` could still bubble up as `대화방을 삭제하지 못했습니다`, making the user think the delete had failed even though the room was already removed.
+   Attempted fix: Late 404s that happen during or after confirmed deletion were treated as benign and no longer surfaced as a user-facing failure.
+   Status: Resolved in-thread.
+
+65. **The room-management menu briefly flashed the feedback screen while opening**
+   Problem: The submenu carousel was implemented as `root -> feedback -> room management` on a shared three-panel strip. Jumping from the root menu to room management animated across the middle panel, making the feedback page flash by for a frame.
+   Attempted fix: Direct root-to-room-management navigation now uses an instant screen transition instead of visibly sliding through the feedback panel.
+   Status: Resolved in-thread.
+
+66. **Global success/error toasts appeared too low and did not match the in-room toast style**
+   Problem: Several user-facing messages such as room-delete success/failure and STT failure surfaced through a bottom-edge toast style that sat much lower than the in-room `Connecting...` or `Copied` toasts, making the feedback feel visually inconsistent.
+   Attempted fix: The global toast stack was moved into the same visual lane and design language as the in-room toast treatment.
+   Status: Resolved in-thread.
+
+67. **Conversation-list action tooltips chose the wrong vertical direction near the top of the screen**
+   Problem: Only the very first row opened its tooltip downward. Rows slightly lower in the upper part of the list still opened upward, which felt wrong and cramped near the top header area.
+   Attempted fix: The positioning rule was expanded so conversation rows in roughly the top 40% of the list viewport also open their tooltip downward.
    Status: Resolved in-thread.
 
 ## Other Issue Sessions
