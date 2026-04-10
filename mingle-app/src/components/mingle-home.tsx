@@ -301,7 +301,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
       if (room.isSttSessionRunning()) {
-        onAutoStartHandledRef.current?.();
+        onAutoStartHandled?.();
         return;
       }
       if (remainingAttempts <= 0) {
@@ -1755,6 +1755,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          conversationTitle={props.conversationTitle}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}

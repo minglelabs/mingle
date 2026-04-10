@@ -1659,7 +1659,7 @@ export default function ConversationList({
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {
-    if (!activeConversation || isCreatingConversation) return;
+    if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
 
     const currentConversationId = readConversationIdFromLocation();
     if (
@@ -1920,6 +1920,7 @@ export default function ConversationList({
                     locale={locale}
                     headerMode="conversation"
                     onBack={handleCloseActiveConversation}
+                    conversationTitle={conversation.title}
                     conversationId={conversation.id}
                     sessionKeyOverride={conversation.sessionKey}
                     storageNamespace={conversation.id}
