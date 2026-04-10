@@ -285,11 +285,17 @@ export function resolveConnectionStatusFromNativeBridgeStatus(input: {
   const nativeStatus = (input.nativeStatus || '').trim().toLowerCase()
   if (!nativeStatus) return null
 
-  if (nativeStatus === 'running' || nativeStatus === 'silenced' || nativeStatus === 'ready') {
+  if (nativeStatus === 'ready') {
     return 'ready'
   }
 
-  if (nativeStatus === 'connecting' || nativeStatus === 'starting' || nativeStatus === 'recovering') {
+  if (
+    nativeStatus === 'connecting'
+    || nativeStatus === 'starting'
+    || nativeStatus === 'recovering'
+    || nativeStatus === 'running'
+    || nativeStatus === 'silenced'
+  ) {
     return 'connecting'
   }
 
