@@ -158,6 +158,15 @@ function shouldSkipCreateConversationMicWarmup(): boolean {
   return cachedPermission === "denied";
 }
 
+function rememberDeniedCreateConversationMicWarmup(): void {
+  if (typeof window === "undefined") return;
+  if (!isNativeAppRuntime()) return;
+  if (!clientApiNamespace.startsWith("ios/")) return;
+
+  const cachedWindow = window as ConversationListWindow;
+  cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION = "denied";
+}
+
 function normalizeSearchTerm(rawValue: string): string {
   return rawValue.trim().replace(/\s+/g, " ");
 }
@@ -1579,6 +1588,7 @@ export default function ConversationList({
         warmStream.getTracks().forEach((t) => t.stop());
       } catch {
         // If mic access is denied up-front, open the room but skip auto-start.
+        rememberDeniedCreateConversationMicWarmup();
         shouldAutoStartNewConversation = false;
       }
     }
