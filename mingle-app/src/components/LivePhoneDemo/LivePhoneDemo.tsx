@@ -2161,6 +2161,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setRenameConversationValue(conversationTitle ?? '')
   }, [conversationTitle, isRenamingConversation])
 
+  const openRenameConversationDialog = useCallback(() => {
+    if (!conversationId || isRenamingConversation) return
+    setRenameConversationValue(conversationTitle ?? '')
+    setRenameConversationDialogOpen(true)
+  }, [conversationId, conversationTitle, isRenamingConversation])
+
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
     if (!swipeSession || swipeSession.pointerId !== pointerId) return
@@ -3909,9 +3915,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <ChevronLeft size={24} strokeWidth={2.4} />
               </button>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-left text-[0.98rem] font-semibold text-gray-950">
+                <button
+                  type="button"
+                  onClick={openRenameConversationDialog}
+                  disabled={!conversationId || isRenamingConversation}
+                  aria-label={roomManagementCopy.renameButtonLabel}
+                  className="block w-full truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100"
+                >
                   {displayConversationTitle || ''}
-                </div>
+                </button>
               </div>
             </div>
           ) : (
@@ -4759,10 +4771,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 py-4">
                           <button
                             type="button"
-                            onClick={() => {
-                              setRenameConversationValue(conversationTitle ?? '')
-                              setRenameConversationDialogOpen(true)
-                            }}
+                            onClick={openRenameConversationDialog}
                             disabled={!conversationId || isRenamingConversation}
                             className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
                           >
