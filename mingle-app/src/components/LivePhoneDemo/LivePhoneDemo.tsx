@@ -86,6 +86,7 @@ import {
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
+import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
@@ -117,6 +118,7 @@ const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
+const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
@@ -621,7 +623,7 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback'
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuMotionState = {
   exitMode: LivePhoneDemoMenuTransitionMode
@@ -685,19 +687,47 @@ function LivePhoneDemoPanelHeader({
   )
 }
 
-function buildMenuHistoryState(depth: number): Record<string, unknown> {
+function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuScreen {
+  return value === 'root' || value === 'feedback' || value === 'conversation-management'
+}
+
+function resolveMenuScreenForDepth(
+  depth: number,
+  preferredScreen?: LivePhoneDemoMenuScreen,
+): LivePhoneDemoMenuScreen {
+  if (depth <= 1) return 'root'
+  return preferredScreen === 'conversation-management' ? 'conversation-management' : 'feedback'
+}
+
+function resolveMenuScreenOffset(screen: LivePhoneDemoMenuScreen): string {
+  if (screen === 'feedback') return '-33.333333%'
+  if (screen === 'conversation-management') return '-66.666667%'
+  return '0%'
+}
+
+function buildMenuHistoryState(
+  depth: number,
+  screen: LivePhoneDemoMenuScreen = 'root',
+): Record<string, unknown> {
   if (typeof window === 'undefined') {
-    return { [MENU_HISTORY_STATE_KEY]: depth }
+    return {
+      [MENU_HISTORY_STATE_KEY]: depth,
+      [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
+    }
   }
 
   const currentState = window.history.state
   if (!currentState || typeof currentState !== 'object') {
-    return { [MENU_HISTORY_STATE_KEY]: depth }
+    return {
+      [MENU_HISTORY_STATE_KEY]: depth,
+      [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
+    }
   }
 
   return {
     ...(currentState as Record<string, unknown>),
     [MENU_HISTORY_STATE_KEY]: depth,
+    [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
   }
 }
 
@@ -986,6 +1016,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
@@ -1130,7 +1161,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
-  const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
+  const isNativeMenuOverlayVisible = menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
     exitMode: menuExitMode,
     screenTransitionMode: menuScreenTransitionMode,
@@ -1709,11 +1740,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     options?: {
       exitMode?: LivePhoneDemoMenuTransitionMode
       screenTransitionMode?: LivePhoneDemoMenuTransitionMode
+      screen?: LivePhoneDemoMenuScreen
     },
   ) => {
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
     const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
+    const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
@@ -1732,17 +1765,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     setMenuExitMode('animate')
     setMenuOpen(true)
-    setMenuScreen(boundedDepth === 1 ? 'root' : 'feedback')
+    setMenuScreen(nextScreen)
   }, [])
 
-  const pushMenuHistoryEntry = useCallback((nextDepth: number) => {
+  const pushMenuHistoryEntry = useCallback((
+    nextDepth: number,
+    screen: LivePhoneDemoMenuScreen = 'root',
+  ) => {
     applyMenuNavigationDepth(nextDepth, {
       exitMode: 'animate',
       screenTransitionMode: 'animate',
+      screen,
     })
     if (typeof window === 'undefined') return
     menuHistoryTargetDepthRef.current = null
-    window.history.pushState(buildMenuHistoryState(nextDepth), '')
+    window.history.pushState(buildMenuHistoryState(nextDepth, screen), '')
   }, [applyMenuNavigationDepth])
 
   const closeMenuPanel = useCallback(() => {
@@ -1802,8 +1839,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!menuOpen || menuScreen === 'feedback') return
     clearFeedbackSubmitState()
     setFeedbackTab('compose')
-    pushMenuHistoryEntry(2)
+    pushMenuHistoryEntry(2, 'feedback')
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleConversationManagementMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'conversation-management') return
+    pushMenuHistoryEntry(2, 'conversation-management')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDeleteConversationMenuItemPress = useCallback(() => {
     setDeleteConversationDialogOpen(true)
@@ -1950,23 +1992,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
+      const state = event.state
+      const nextStateDepth = (
+        state
+        && typeof state === "object"
+        && typeof (state as Record<string, unknown>)[MENU_HISTORY_STATE_KEY] === 'number'
+      )
+        ? Math.max(0, Math.min(2, Number((state as Record<string, unknown>)[MENU_HISTORY_STATE_KEY])))
+        : 0
+      const nextStateScreen = (
+        state
+        && typeof state === 'object'
+        && isLivePhoneDemoMenuScreen((state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY])
+      )
+        ? (state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY] as LivePhoneDemoMenuScreen
+        : undefined
 
       if (requestedDepth !== null) {
         applyMenuNavigationDepth(requestedDepth, {
           exitMode: 'animate',
           screenTransitionMode: 'animate',
+          screen: nextStateScreen,
         })
         return
       }
 
       if (menuHistoryDepthRef.current <= 0) return
-      const nextDepth = Math.max(0, menuHistoryDepthRef.current - 1)
+      const nextDepth = nextStateDepth || Math.max(0, menuHistoryDepthRef.current - 1)
       applyMenuNavigationDepth(nextDepth, {
         exitMode: nextDepth === 0 ? 'instant' : 'animate',
         screenTransitionMode: 'instant',
+        screen: nextStateScreen,
       })
     }
 
@@ -3864,15 +3923,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 >
                   <motion.div
                     initial={false}
-                    animate={{ x: menuScreen === 'feedback' ? '-50%' : '0%' }}
+                    animate={{ x: resolveMenuScreenOffset(menuScreen) }}
                     transition={
                       menuScreenTransitionMode === 'animate'
                         ? { duration: 0.26, ease: [0.22, 1, 0.36, 1] }
                         : { duration: 0 }
                     }
-                    className="flex h-full w-[200%]"
+                    className="flex h-full w-[300%]"
                   >
-                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
+                    <section className="flex h-full w-1/3 min-w-0 flex-col bg-white">
                       <LivePhoneDemoPanelHeader
                         title={menuLabel}
                         backLabel={feedbackCopy.closeButtonLabel}
@@ -4222,10 +4281,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 pb-4">
                           <button
                             type="button"
-                            onClick={handleFeedbackMenuItemPress}
+                            onClick={handleConversationManagementMenuItemPress}
                             className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                           >
-                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
                             <span className="shrink-0 text-gray-500">
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
@@ -4235,15 +4294,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 pb-4">
                           <button
                             type="button"
-                            onClick={handleDeleteConversationMenuItemPress}
-                            disabled={isDeletingConversation}
-                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={handleFeedbackMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                           >
-                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                              <Trash2 size={17} strokeWidth={2.2} />
-                              <span className="min-w-0 flex-1">{deleteConversationCopy.menuItemLabel}</span>
-                            </span>
-                            <span className="shrink-0 text-rose-500">
+                            <span className="min-w-0 flex-1">{feedbackCopy.feedbackMenuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
@@ -4342,7 +4397,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       )}
                     </section>
 
-                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
+                    <section className="flex h-full w-1/3 min-w-0 flex-col bg-white">
                       <LivePhoneDemoPanelHeader
                         title={feedbackCopy.pageTitle}
                         backLabel={feedbackCopy.backButtonLabel}
@@ -4579,6 +4634,38 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </div>
                           </div>
                         )}
+                      </div>
+                    </section>
+
+                    <section className="flex h-full w-1/3 min-w-0 flex-col bg-white">
+                      <LivePhoneDemoPanelHeader
+                        title={roomManagementCopy.pageTitle}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                        }}
+                      >
+                        <div className="px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={handleDeleteConversationMenuItemPress}
+                            disabled={isDeletingConversation}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <Trash2 size={17} strokeWidth={2.2} />
+                              <span className="min-w-0 flex-1">{deleteConversationCopy.menuItemLabel}</span>
+                            </span>
+                            <span className="shrink-0 text-rose-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </section>
                   </motion.div>
