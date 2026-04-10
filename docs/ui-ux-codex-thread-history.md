@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 120.
+- Total standalone UI/UX issue atoms documented in this file: 121.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 75.
+- Issue atoms currently listed for this thread: 76.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -395,6 +395,11 @@
    Problem: Even after stale-state handling was tightened, a completed iOS back/forward gesture could still be followed by one late `menu <-> room` reversal. Users saw the correct destination first, then a brief return to the opposite screen, then the intended screen again.
    Attempted fix: A short iOS gesture-settle guard now ignores delayed natural `popstate` replays that would bounce only between room depth `0` and menu depth `1/2`, while still allowing normal in-menu depth changes.
    Status: Resolved in-thread.
+
+76. **iOS menu swipe history required one final stabilization pass before it stopped flickering**
+   Problem: The earlier back/forward fixes each removed one layer of the glitch, but the room/menu boundary remained fragile enough that users still saw intermediate regressions while testing real gestures. The practical UX issue was not just one bug but a chain of related history/gesture mismatches that had to be iterated on until the same back/forward flow finally behaved consistently.
+   Attempted fix: The thread ultimately converged on a stable combination of native edge-swipe handling, in-panel swipe-dismiss routing, forward restoration, stale-state avoidance, and delayed-replay suppression. Once those pieces were in place together, the user confirmed that the duplicate swipe replay issue appeared to be behaving correctly.
+   Status: Resolved in-thread after multiple follow-up passes.
 
 ## Other Issue Sessions
 
