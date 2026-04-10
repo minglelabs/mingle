@@ -1532,6 +1532,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   useEffect(() => {
+    // Hydrate from the server only on lifecycle inputs. Re-fetching on live local
+    // preference changes would clobber in-progress edits with the last server snapshot.
     let cancelled = false
     clearAccountPreferencesSyncTimer()
 
