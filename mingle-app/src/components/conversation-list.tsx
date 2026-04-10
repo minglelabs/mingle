@@ -68,6 +68,9 @@ const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const ROW_ACTION_TOOLTIP_GAP_PX = 8;
 const ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX = 200;
 const ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO = 0.4;
+const LIST_PULL_REFRESH_TRIGGER_PX = 72;
+const LIST_PULL_REFRESH_MAX_PX = 108;
+const LIST_PULL_REFRESH_RESISTANCE = 0.45;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -489,6 +492,33 @@ function mergeConversationLists(
     merged.set(conversation.id, conversation);
   }
   return [...merged.values()].sort(compareConversationRecency);
+}
+
+function replaceConversationLists(
+  current: ConversationChannelSummary[],
+  incoming: ConversationChannelSummary[],
+): ConversationChannelSummary[] {
+  const currentById = new Map(current.map((conversation) => [conversation.id, conversation]));
+  return incoming.map((conversation) => {
+    const previousConversation = currentById.get(conversation.id);
+    if (!previousConversation) {
+      return conversation;
+    }
+    return {
+      ...previousConversation,
+      ...conversation,
+      latestMessagePreview:
+        conversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
+      latestMessageAt:
+        conversation.latestMessageAt ?? previousConversation.latestMessageAt,
+      latestSpeaker:
+        conversation.latestSpeaker ?? previousConversation.latestSpeaker,
+      latestSpeakerAvatarSeed:
+        conversation.latestSpeakerAvatarSeed ?? previousConversation.latestSpeakerAvatarSeed,
+      latestSpeakerAvatarIndex:
+        conversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
+    };
+  }).sort(compareConversationRecency);
 }
 
 function formatConversationTime(isoTimestamp: string, locale: string): string {
@@ -1168,6 +1198,7 @@ export default function ConversationList({
     initialConversations.length === 0,
   );
   const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
+  const [isRefreshingConversations, setIsRefreshingConversations] = useState(false);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
@@ -1180,13 +1211,14 @@ export default function ConversationList({
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
-  const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const [rowActionMenu, setRowActionMenu] = useState<ConversationRowActionMenuState | null>(null);
   const [renameDialogConversationId, setRenameDialogConversationId] = useState<string | null>(null);
   const [renameConversationValue, setRenameConversationValue] = useState("");
   const [isRenamingConversation, setIsRenamingConversation] = useState(false);
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
   const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
@@ -1200,6 +1232,8 @@ export default function ConversationList({
   const isImportingLegacyConversationRef = useRef(false);
   const pendingHistoryCloseAnimationRef = useRef<ConversationOverlayExitMode>("instant");
   const routeSyncConversationIdRef = useRef<string | null>(null);
+  const pullRefreshStartYRef = useRef<number | null>(null);
+  const pullRefreshTrackingRef = useRef(false);
   const viewportWidthPx = useViewportWidthPx();
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch(
     normalizeLivePhoneDemoAdBannerPosition(initialNativeBannerPosition),
@@ -1245,10 +1279,60 @@ export default function ConversationList({
   ), [conversations, mountedConversationIds]);
   const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
   const conversationSelectionDisabled = isCreatingConversation || isImportingLegacyConversation;
+  const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
   const defaultSelectedLanguages = useMemo(
     () => deriveDefaultSttLanguagesForLocale(locale),
     [locale],
   );
+  const effectivePullRefreshOffsetPx = isRefreshingConversations
+    ? LIST_PULL_REFRESH_TRIGGER_PX
+    : pullRefreshDistance;
+  const pullRefreshProgress = Math.min(
+    1,
+    effectivePullRefreshOffsetPx / LIST_PULL_REFRESH_TRIGGER_PX,
+  );
+
+  const resetPullRefresh = useCallback(() => {
+    pullRefreshStartYRef.current = null;
+    pullRefreshTrackingRef.current = false;
+    setPullRefreshDistance(0);
+  }, []);
+
+  const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
+    const response = await fetch(buildConversationApiPath(), {
+      cache: "no-store",
+      headers: buildConversationRequestHeaders(),
+    });
+    const nextConversations = await readConversationListResponse(response);
+    setConversations((current) => (
+      options?.replaceCurrent
+        ? replaceConversationLists(current, nextConversations)
+        : mergeConversationLists(current, nextConversations)
+    ));
+    return nextConversations;
+  }, []);
+
+  const triggerPullToRefresh = useCallback(async () => {
+    if (isRefreshingConversations || isHydratingConversations || activeConversation || showSearch) {
+      return;
+    }
+
+    setIsRefreshingConversations(true);
+    try {
+      await refreshConversationList({ replaceCurrent: true });
+    } catch {
+      // Keep the current list when the refresh request fails.
+    } finally {
+      setIsRefreshingConversations(false);
+      setPullRefreshDistance(0);
+    }
+  }, [
+    activeConversation,
+    isHydratingConversations,
+    isRefreshingConversations,
+    refreshConversationList,
+    showSearch,
+  ]);
 
   const updateConversationStatus = useCallback(async (
     conversationId: string,
@@ -1681,14 +1765,10 @@ export default function ConversationList({
   useEffect(() => {
     let cancelled = false;
 
-    void fetch(buildConversationApiPath(), {
-      cache: "no-store",
-      headers: buildConversationRequestHeaders(),
-    })
-      .then(readConversationListResponse)
+    void refreshConversationList()
       .then((nextConversations) => {
         if (cancelled) return;
-        setConversations((current) => mergeConversationLists(current, nextConversations));
+        return nextConversations;
       })
       .catch(() => {
         // Keep the server-rendered or in-memory state when hydration fails.
@@ -1701,7 +1781,7 @@ export default function ConversationList({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshConversationList]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2046,6 +2126,11 @@ export default function ConversationList({
     };
   }, [copy.openErrorMessage, openConversationSummary]);
 
+  useEffect(() => {
+    if (!activeConversation) return;
+    resetPullRefresh();
+  }, [activeConversation, resetPullRefresh]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
@@ -2082,46 +2167,126 @@ export default function ConversationList({
       </header>
 
       <div
+        ref={conversationListScrollRef}
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
           paddingBottom: "20px",
         }}
+        onTouchStart={(event) => {
+          if (showSearch || activeConversation || isRefreshingConversations) return;
+          const container = conversationListScrollRef.current;
+          const touch = event.touches[0];
+          if (!container || !touch || container.scrollTop > 0) {
+            pullRefreshTrackingRef.current = false;
+            pullRefreshStartYRef.current = null;
+            return;
+          }
+          pullRefreshTrackingRef.current = true;
+          pullRefreshStartYRef.current = touch.clientY;
+        }}
+        onTouchMove={(event) => {
+          if (!pullRefreshTrackingRef.current) return;
+          const container = conversationListScrollRef.current;
+          const touch = event.touches[0];
+          const startY = pullRefreshStartYRef.current;
+          if (!container || !touch || startY === null) return;
+          if (container.scrollTop > 0) {
+            resetPullRefresh();
+            return;
+          }
+          const dy = touch.clientY - startY;
+          if (dy <= 0) {
+            setPullRefreshDistance(0);
+            return;
+          }
+          event.preventDefault();
+          setPullRefreshDistance(
+            Math.min(LIST_PULL_REFRESH_MAX_PX, Math.round(dy * LIST_PULL_REFRESH_RESISTANCE)),
+          );
+        }}
+        onTouchEnd={() => {
+          if (!pullRefreshTrackingRef.current) return;
+          pullRefreshTrackingRef.current = false;
+          pullRefreshStartYRef.current = null;
+          if (pullRefreshDistance >= LIST_PULL_REFRESH_TRIGGER_PX) {
+            void triggerPullToRefresh();
+            return;
+          }
+          setPullRefreshDistance(0);
+        }}
+        onTouchCancel={resetPullRefresh}
       >
-        {isHydratingConversations ? (
-          <div className="flex flex-col items-center py-16 text-gray-400">
-            <Loader2 size={28} className="animate-spin" />
+        <div
+          className="pointer-events-none sticky top-0 z-10 flex h-0 justify-center overflow-visible"
+          aria-hidden
+        >
+          <div
+            className="mt-3 flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
+            style={{
+              opacity: pullRefreshProgress,
+              transform: `translateY(${Math.max(0, effectivePullRefreshOffsetPx - 56)}px) scale(${0.92 + pullRefreshProgress * 0.08})`,
+              transition: pullRefreshTrackingRef.current
+                ? "none"
+                : "transform 180ms ease, opacity 180ms ease",
+            }}
+          >
+            <Loader2
+              size={16}
+              className={isRefreshingConversations ? "animate-spin text-slate-500" : "text-slate-400"}
+              strokeWidth={2.25}
+            />
           </div>
-        ) : conversationItems.length === 0 ? (
-          <div className="flex flex-col items-center px-6 py-16 text-center text-gray-400">
-            <span className="mb-3 text-5xl">💬</span>
-            <p className="text-[15px] font-semibold text-slate-700">
-              {copy.emptyTitle}
-            </p>
-            <p className="mt-1 text-[13px] text-gray-400">
-              {copy.emptyDescription}
-            </p>
-          </div>
-        ) : (
-          <div className="border-t border-gray-100">
-            {conversationItems.map((item) => (
-              <div key={item.id}>
-                <ConversationRow
-                  item={item}
-                  disabled={conversationSelectionDisabled}
-                  onSelect={handleOpenConversation}
-                  onOpenActions={(selectedItem, position) => {
-                    setRowActionMenu({
-                      item: selectedItem,
-                      position,
-                    });
-                  }}
-                  className="border-b border-gray-100"
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        </div>
+
+        <div
+          style={{
+            transform: `translateY(${effectivePullRefreshOffsetPx}px)`,
+            transition: pullRefreshTrackingRef.current
+              ? "none"
+              : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          {isHydratingConversations ? (
+            <div className="flex flex-col items-center py-16 text-gray-400">
+              <Loader2 size={28} className="animate-spin" />
+            </div>
+          ) : conversationItems.length === 0 ? (
+            <div className="flex flex-col items-center px-6 py-16 text-center text-gray-400">
+              <span className="mb-3 text-5xl">💬</span>
+              <p className="text-[15px] font-semibold text-slate-700">
+                {copy.emptyTitle}
+              </p>
+              <p className="mt-1 text-[13px] text-gray-400">
+                {copy.emptyDescription}
+              </p>
+            </div>
+          ) : (
+            <div className="border-t border-gray-100">
+              {conversationItems.map((item) => (
+                <div key={item.id}>
+                  <ConversationRow
+                    item={item}
+                    disabled={conversationSelectionDisabled}
+                    onSelect={handleOpenConversation}
+                    onOpenActions={(selectedItem, position) => {
+                      setRowActionMenu({
+                        item: selectedItem,
+                        position,
+                      });
+                    }}
+                    className="border-b border-gray-100"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {isRefreshingConversations ? (
+            <div className="flex items-center justify-center pb-5 pt-3 text-slate-400">
+              <Loader2 size={18} className="animate-spin" strokeWidth={2.2} />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <footer className="shrink-0">
