@@ -137,11 +137,20 @@ describe("/api/messages route", () => {
     });
     expect(mockAppMessageFindMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { userId: { in: ["tracked_user_row"] } },
-          { sessionKey: "sess_123" },
+        AND: [
+          {
+            OR: [
+              { userId: { in: ["tracked_user_row"] } },
+              { sessionKey: "sess_123" },
+            ],
+          },
+          {
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+            ],
+          },
         ],
-        isDeleted: { not: true },
       },
       select: {
         id: true,
@@ -213,11 +222,20 @@ describe("/api/messages route", () => {
     expect(response.status).toBe(200);
     expect(mockAppMessageFindMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { userId: { in: ["auth_user_123", "anon_user_row"] } },
-          { sessionKey: "sess_123" },
+        AND: [
+          {
+            OR: [
+              { userId: { in: ["auth_user_123", "anon_user_row"] } },
+              { sessionKey: "sess_123" },
+            ],
+          },
+          {
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+            ],
+          },
         ],
-        isDeleted: { not: true },
       },
       select: {
         id: true,

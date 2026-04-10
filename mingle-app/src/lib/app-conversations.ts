@@ -67,6 +67,15 @@ const conversationChannelSelect = {
   pausedAt: true,
 } satisfies Prisma.AppConversationChannelSelect;
 
+function buildVisibleConversationWhere(): Prisma.AppConversationChannelWhereInput {
+  return {
+    OR: [
+      { isDeleted: false },
+      { isDeleted: null },
+    ],
+  };
+}
+
 function createConversationSessionKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `conv_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -231,7 +240,7 @@ export async function listConversationChannelsForUser(
   const records = await prisma.appConversationChannel.findMany({
     where: {
       ownerUserId: userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     orderBy: [
       { updatedAt: "desc" },
@@ -326,7 +335,7 @@ export async function updateConversationChannelStatus(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     select: { id: true },
   });
@@ -343,6 +352,7 @@ export async function updateConversationChannelStatus(args: {
           ownerUserId: args.userId,
           id: { not: args.conversationId },
           status: APP_CONVERSATION_STATUS_ACTIVE,
+          ...buildVisibleConversationWhere(),
         },
         data: {
           status: APP_CONVERSATION_STATUS_PAUSED,
@@ -378,7 +388,7 @@ export async function updateConversationChannelSelectedLanguages(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     select: { id: true },
   });
@@ -412,7 +422,7 @@ export async function updateConversationChannelTitle(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     select: { id: true },
   });
@@ -440,7 +450,7 @@ export async function getConversationHydrationStateForUser(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     select: conversationChannelSelect,
   });
@@ -524,7 +534,7 @@ export async function deleteConversationChannel(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
-      isDeleted: { not: true },
+      ...buildVisibleConversationWhere(),
     },
     select: { id: true },
   });

@@ -11,6 +11,15 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+function buildVisibleMessageWhere() {
+  return {
+    OR: [
+      { isDeleted: false },
+      { isDeleted: null },
+    ],
+  } as const;
+}
+
 type SessionUserIdentity = {
   id: string;
   email: string;
@@ -183,8 +192,10 @@ export async function DELETE(request: Request) {
 
     const messages = await prisma.appMessage.findMany({
       where: {
-        OR: ownerFilters,
-        isDeleted: { not: true },
+        AND: [
+          { OR: ownerFilters },
+          buildVisibleMessageWhere(),
+        ],
       },
       select: {
         id: true,
