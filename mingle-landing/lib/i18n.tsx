@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from 'react'
 import {
@@ -53,6 +52,7 @@ type TranslateFunction = (key: string, options?: TranslationOptions) => any
 type LandingI18nContextValue = {
   language: PrimaryUiLocale
   changeLanguage: (nextLanguage: string) => void
+  isReady: boolean
 }
 
 type TranslationResourceMap = Record<PrimaryUiLocale, TranslationObject>
@@ -157,28 +157,27 @@ function translateValue(
 
 export function LandingI18nProvider(props: {
   children: ReactNode
-  initialLocale?: string
+  language: PrimaryUiLocale
+  changeLanguage: (nextLanguage: string) => void
+  isReady?: boolean
 }) {
-  const { children, initialLocale } = props
-  const [language, setLanguage] = useState<PrimaryUiLocale>(() => resolveLandingLocale(initialLocale))
-
-  useEffect(() => {
-    setLanguage(resolveLandingLocale(initialLocale))
-  }, [initialLocale])
+  const {
+    children,
+    language,
+    changeLanguage,
+    isReady = true,
+  } = props
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(LOCALE_STORAGE_KEY, language)
   }, [language])
 
-  const changeLanguage = useCallback((nextLanguage: string) => {
-    setLanguage(resolveLandingLocale(nextLanguage))
-  }, [])
-
   const value = useMemo<LandingI18nContextValue>(() => ({
     language,
     changeLanguage,
-  }), [changeLanguage, language])
+    isReady,
+  }), [changeLanguage, isReady, language])
 
   return (
     <LandingI18nContext.Provider value={value}>
@@ -192,6 +191,7 @@ export function useTranslation(): {
   i18n: {
     language: PrimaryUiLocale
     changeLanguage: (nextLanguage: string) => void
+    isReady: boolean
   }
 } {
   const context = useContext(LandingI18nContext)
@@ -207,7 +207,8 @@ export function useTranslation(): {
   const i18n = useMemo(() => ({
     language: context.language,
     changeLanguage: context.changeLanguage,
-  }), [context.changeLanguage, context.language])
+    isReady: context.isReady,
+  }), [context.changeLanguage, context.isReady, context.language])
 
   return { t, i18n }
 }

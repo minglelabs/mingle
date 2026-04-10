@@ -28,10 +28,10 @@ export default function HomePage({ version, locale }: HomePageProps) {
   // Log page visit on mount (ref guard prevents Strict Mode double-fire)
   const visitLoggedRef = useRef(false)
   useEffect(() => {
-    if (visitLoggedRef.current) return
+    if (visitLoggedRef.current || !i18n.isReady) return
     visitLoggedRef.current = true
     logVisit(i18n.language)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [i18n.isReady, i18n.language])
 
   const openModal = (buttonType: string) => {
     logButtonClick(buttonType)

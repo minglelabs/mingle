@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   DEFAULT_LANDING_LOCALE,
   LandingI18nProvider,
@@ -26,18 +26,30 @@ export function Providers(props: {
   const [detectedLocale, setDetectedLocale] = useState<PrimaryUiLocale>(() => (
     resolvedRouteLocale ?? DEFAULT_LANDING_LOCALE
   ))
+  const [isLocaleReady, setIsLocaleReady] = useState(() => Boolean(resolvedRouteLocale))
+
+  const handleChangeLanguage = useCallback((nextLanguage: string) => {
+    setDetectedLocale(resolveLandingLocale(nextLanguage))
+    setIsLocaleReady(true)
+  }, [])
 
   useEffect(() => {
     if (resolvedRouteLocale) {
       setDetectedLocale(resolvedRouteLocale)
+      setIsLocaleReady(true)
       return
     }
 
     setDetectedLocale(detectClientPreferredLocale())
+    setIsLocaleReady(true)
   }, [resolvedRouteLocale])
 
   return (
-    <LandingI18nProvider initialLocale={detectedLocale}>
+    <LandingI18nProvider
+      language={detectedLocale}
+      changeLanguage={handleChangeLanguage}
+      isReady={isLocaleReady}
+    >
       {children}
     </LandingI18nProvider>
   )
