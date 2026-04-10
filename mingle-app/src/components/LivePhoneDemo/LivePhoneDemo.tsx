@@ -121,6 +121,7 @@ const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX = 28
+const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 1400
 const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
 const CONVERSATION_SWIPE_BACK_DISTANCE_PX = 88
 const CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS = 0.45
@@ -1098,6 +1099,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(0)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
+  const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
@@ -2041,8 +2043,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       )
         ? (state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY] as LivePhoneDemoMenuScreen
         : undefined
+      const isNativeIosHistoryGesture = requestedDepth === null && isNativeIosAppRuntime()
+      const settleState = menuIosHistorySettleRef.current
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+      if (settleState && nowMs > settleState.expiresAt) {
+        menuIosHistorySettleRef.current = null
+      }
+      const activeSettleState = menuIosHistorySettleRef.current
 
       if (requestedDepth !== null) {
+        menuIosHistorySettleRef.current = null
         applyMenuNavigationDepth(requestedDepth, {
           exitMode: 'animate',
           screenTransitionMode: 'animate',
@@ -2053,12 +2064,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
       if (menuHistoryDepthRef.current <= 0 && nextStateDepth <= 0) return
       const nextDepth = nextStateDepth
-      const isNativeIosHistoryGesture = requestedDepth === null && isNativeIosAppRuntime()
+      const shouldIgnoreSettlingReplay = (
+        isNativeIosHistoryGesture
+        && activeSettleState !== null
+        && nowMs <= activeSettleState.expiresAt
+        && activeSettleState.depth !== nextDepth
+        && (activeSettleState.depth === 0 || nextDepth === 0)
+      )
+
+      if (shouldIgnoreSettlingReplay) {
+        return
+      }
+
       applyMenuNavigationDepth(nextDepth, {
         exitMode: isNativeIosHistoryGesture && nextDepth === 0 ? 'instant' : 'animate',
         screenTransitionMode: isNativeIosHistoryGesture ? 'instant' : 'animate',
         screen: nextStateScreen,
       })
+
+      if (isNativeIosHistoryGesture) {
+        menuIosHistorySettleRef.current = {
+          depth: nextDepth,
+          expiresAt: nowMs + MENU_IOS_HISTORY_SETTLE_WINDOW_MS,
+        }
+        return
+      }
+
+      menuIosHistorySettleRef.current = null
     }
 
     window.addEventListener('popstate', handlePopState)
