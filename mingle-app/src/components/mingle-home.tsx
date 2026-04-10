@@ -24,6 +24,7 @@ type MingleHomeProps = {
   locale: AppLocale;
   headerMode?: "default" | "conversation";
   onBack?: () => void;
+  conversationTitle?: string;
   conversationId?: string;
   sessionKeyOverride?: string;
   storageNamespace?: string;
@@ -300,7 +301,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
       if (room.isSttSessionRunning()) {
-        onAutoStartHandled?.();
+        onAutoStartHandledRef.current?.();
         return;
       }
       if (remainingAttempts <= 0) {

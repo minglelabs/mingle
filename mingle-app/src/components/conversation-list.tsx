@@ -1659,7 +1659,7 @@ export default function ConversationList({
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {
-    if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
+    if (!activeConversation || isCreatingConversation) return;
 
     const currentConversationId = readConversationIdFromLocation();
     if (
