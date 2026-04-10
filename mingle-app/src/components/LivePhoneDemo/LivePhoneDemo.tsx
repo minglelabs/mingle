@@ -120,6 +120,7 @@ const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX = 28
 const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
 const CONVERSATION_SWIPE_BACK_DISTANCE_PX = 88
 const CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS = 0.45
@@ -2247,7 +2248,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
-    if (isNativeIosAppRuntime()) return
+    if (isNativeIosAppRuntime() && event.clientX <= MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX) return
     if (shouldIgnoreMenuSwipeTarget(event.target)) return
 
     menuSwipeSessionRef.current = {
