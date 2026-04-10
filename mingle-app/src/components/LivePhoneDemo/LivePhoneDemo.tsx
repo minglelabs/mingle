@@ -3101,13 +3101,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         showFloatingToast(switchLiveRoomToastLabel)
       }
 
+      let primeAudioPromise: Promise<boolean> | null = null
       if (enableAutoTTS) {
-        const ok = await primeAudioPlayback()
-        if (!ok) {
-          ttsNeedsUnlockRef.current = true
-        }
+        // Do not block STT start on iOS/WebView audio priming.
+        // HTMLMediaElement.play() may stay pending until a later user gesture,
+        // which makes the room look "stuck" in connecting even though STT has
+        // not started yet. Prime in the background and let STT start first.
+        primeAudioPromise = primeAudioPlayback()
       }
       await startRecording()
+      if (primeAudioPromise) {
+        void primeAudioPromise.then((ok) => {
+          if (!ok) {
+            ttsNeedsUnlockRef.current = true
+          }
+        })
+      }
     } finally {
       setIsPreparingStart(false)
     }
