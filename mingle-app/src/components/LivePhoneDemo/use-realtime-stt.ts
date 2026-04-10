@@ -293,10 +293,12 @@ export function resolveConnectionStatusFromNativeBridgeStatus(input: {
     nativeStatus === 'connecting'
     || nativeStatus === 'starting'
     || nativeStatus === 'recovering'
-    || nativeStatus === 'running'
-    || nativeStatus === 'silenced'
   ) {
     return 'connecting'
+  }
+
+  if (nativeStatus === 'running' || nativeStatus === 'silenced') {
+    return input.previousConnectionStatus === 'ready' ? 'ready' : 'connecting'
   }
 
   if (nativeStatus === 'idle' || nativeStatus === 'stopped' || nativeStatus === 'closed') {

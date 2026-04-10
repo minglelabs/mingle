@@ -384,6 +384,16 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('connecting')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'ready',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'silenced',
+      previousConnectionStatus: 'ready',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'starting',
       previousConnectionStatus: 'idle',
     })).toBe('connecting')
