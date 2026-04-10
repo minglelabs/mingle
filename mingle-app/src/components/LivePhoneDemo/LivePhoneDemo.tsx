@@ -89,6 +89,7 @@ import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-m
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
+import { registerNativeBackHandler } from '@/lib/native-back-handler'
 
 const VOLUME_THRESHOLD = 0.05
 function buildAccountPreferencesApiPath(): string {
@@ -2177,6 +2178,50 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setRenameConversationValue(conversationTitle ?? '')
     setRenameConversationDialogOpen(true)
   }, [conversationId, conversationTitle, isRenamingConversation])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (renameConversationDialogOpen) {
+      if (!isRenamingConversation) {
+        closeRenameConversationDialog()
+      }
+      return true
+    }
+
+    if (deleteConversationDialogOpen) {
+      if (!isDeletingConversation) {
+        closeDeleteConversationDialog()
+      }
+      return true
+    }
+
+    if (textSizeMenuOpen) {
+      setTextSizeMenuOpen(false)
+      return true
+    }
+
+    if (translationModelMenuOpen) {
+      setTranslationModelMenuOpen(false)
+      return true
+    }
+
+    if (menuHistoryDepthRef.current > 0 || menuOpen) {
+      requestMenuBackStep()
+      return true
+    }
+
+    return false
+  }, 10), [
+    closeDeleteConversationDialog,
+    closeRenameConversationDialog,
+    deleteConversationDialogOpen,
+    isDeletingConversation,
+    isRenamingConversation,
+    menuOpen,
+    renameConversationDialogOpen,
+    requestMenuBackStep,
+    textSizeMenuOpen,
+    translationModelMenuOpen,
+  ])
 
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
