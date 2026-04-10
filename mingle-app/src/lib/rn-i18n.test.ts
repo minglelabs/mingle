@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  LEGAL_DOCUMENT_LOCALES,
+  SUPPORTED_LOCALES,
+  resolveLegalDocumentLocale,
+} from '@/i18n'
+import {
   WEB_SUPPORTED_LOCALE_SEGMENTS,
   getVersionPolicyFallbackCopy,
   resolveVersionPolicyLocale,
@@ -21,5 +26,14 @@ describe('RN i18n bridge', () => {
     expect(resolveVersionPolicyLocale('hi-IN')).toBe('hi')
     expect(getVersionPolicyFallbackCopy('pl').checkingTitle).toBe('Checking version')
     expect(getVersionPolicyFallbackCopy('ja').updateButtonLabel).toBe('アップデート')
+  })
+
+  it('shares the same fallback contract between app and RN surfaces', () => {
+    expect(LEGAL_DOCUMENT_LOCALES).toHaveLength(15)
+
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(resolveVersionPolicyLocale(locale)).toBe(resolveLegalDocumentLocale(locale))
+      expect(WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale.toLowerCase())).toBe(true)
+    }
   })
 })

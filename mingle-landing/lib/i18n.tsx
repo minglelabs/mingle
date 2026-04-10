@@ -58,6 +58,7 @@ type LandingI18nContextValue = {
 type TranslationResourceMap = Record<PrimaryUiLocale, TranslationObject>
 
 const LOCALE_STORAGE_KEY = 'i18nextLng'
+export const DEFAULT_LANDING_LOCALE: PrimaryUiLocale = 'en'
 
 const resources: TranslationResourceMap = {
   en,
@@ -82,8 +83,19 @@ const LandingI18nContext = createContext<LandingI18nContextValue | null>(null)
 export const languages = PRIMARY_UI_LANGUAGE_OPTIONS
 
 export function resolveLandingLocale(rawLocale: string | null | undefined): PrimaryUiLocale {
-  if (typeof rawLocale !== 'string') return 'en'
-  return resolvePrimaryUiLocaleTag(rawLocale) ?? 'en'
+  if (typeof rawLocale !== 'string') return DEFAULT_LANDING_LOCALE
+  return resolvePrimaryUiLocaleTag(rawLocale) ?? DEFAULT_LANDING_LOCALE
+}
+
+export function resolvePreferredLandingLocale(args?: {
+  storedLocale?: string | null
+  navigatorLocale?: string | null
+}): PrimaryUiLocale {
+  if (typeof args?.storedLocale === 'string' && args.storedLocale.trim()) {
+    return resolveLandingLocale(args.storedLocale)
+  }
+
+  return resolveLandingLocale(args?.navigatorLocale)
 }
 
 function readNestedValue(source: TranslationObject, key: string): TranslationValue | undefined {

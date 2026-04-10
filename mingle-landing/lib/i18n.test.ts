@@ -15,7 +15,8 @@ import th from '@/locales/th.json'
 import vi from '@/locales/vi.json'
 import zhCN from '@/locales/zh-CN.json'
 import zhTW from '@/locales/zh-TW.json'
-import { languages, resolveLandingLocale } from '@/lib/i18n'
+import { languages, resolveLandingLocale, resolvePreferredLandingLocale } from '@/lib/i18n'
+import { PRIMARY_UI_LANGUAGE_OPTIONS, PRIMARY_UI_LOCALES } from '../../shared/i18n/mingle-locales'
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
 
@@ -41,6 +42,19 @@ describe('landing i18n adapter', () => {
     expect(resolveLandingLocale('pl-PL')).toBe('en')
     expect(resolveLandingLocale(undefined)).toBe('en')
     expect(languages).toHaveLength(15)
+    expect(languages).toEqual(PRIMARY_UI_LANGUAGE_OPTIONS)
+    expect(languages.map(({ code }) => code).sort()).toEqual([...PRIMARY_UI_LOCALES].sort())
+  })
+
+  it('prefers persisted locale over browser locale for client-only fallback routing', () => {
+    expect(resolvePreferredLandingLocale({
+      storedLocale: 'ja',
+      navigatorLocale: 'fr-CA',
+    })).toBe('ja')
+    expect(resolvePreferredLandingLocale({
+      storedLocale: null,
+      navigatorLocale: 'fr-CA',
+    })).toBe('fr')
   })
 
   it('keeps every landing locale JSON aligned with the English keyset', () => {
