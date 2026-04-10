@@ -623,16 +623,11 @@ type FeedbackHistoryResponse = {
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
-type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 type LivePhoneDemoMenuMotionState = {
   exitMode: LivePhoneDemoMenuTransitionMode
   screenTransitionMode: LivePhoneDemoMenuTransitionMode
   isDragging: boolean
   dragOffsetX: number
-}
-type LivePhoneDemoMenuContentMotionState = {
-  screenTransitionMode: LivePhoneDemoMenuTransitionMode
-  direction: LivePhoneDemoMenuScreenDirection
 }
 
 type FeedbackPageTab = 'compose' | 'history'
@@ -737,6 +732,14 @@ function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
   )
 }
 
+function resolveMenuContentTransition(
+  transitionMode: LivePhoneDemoMenuTransitionMode,
+) {
+  return transitionMode === 'animate'
+    ? { duration: 0.24, ease: [0.22, 1, 0.36, 1] as const }
+    : { duration: 0 }
+}
+
 function isNextDevOverlayTarget(target: EventTarget | null, event?: Event): boolean {
   if (target instanceof Element) {
     if (
@@ -784,40 +787,6 @@ const livePhoneDemoMenuPanelVariants: Variants = {
     motionState.exitMode === 'animate'
       ? { x: '100%', transition: MENU_PANEL_TRANSITION }
       : { x: '100%', transition: { duration: 0 } }
-  ),
-}
-
-const livePhoneDemoMenuContentVariants: Variants = {
-  initial: (motionState: LivePhoneDemoMenuContentMotionState) => (
-    motionState.screenTransitionMode === 'animate'
-      ? {
-          x: motionState.direction === 'forward' ? '10%' : '-10%',
-          opacity: 0.55,
-        }
-      : {
-          x: '0%',
-          opacity: 1,
-        }
-  ),
-  active: (motionState: LivePhoneDemoMenuContentMotionState) => ({
-    x: '0%',
-    opacity: 1,
-    transition: motionState.screenTransitionMode === 'animate'
-      ? { duration: 0.24, ease: [0.22, 1, 0.36, 1] }
-      : { duration: 0 },
-  }),
-  exit: (motionState: LivePhoneDemoMenuContentMotionState) => (
-    motionState.screenTransitionMode === 'animate'
-      ? {
-          x: motionState.direction === 'forward' ? '-10%' : '10%',
-          opacity: 0.45,
-          transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] },
-        }
-      : {
-          x: '0%',
-          opacity: 1,
-          transition: { duration: 0 },
-        }
   ),
 }
 
@@ -1056,7 +1025,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
-  const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
@@ -1791,19 +1759,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       screen?: LivePhoneDemoMenuScreen
     },
   ) => {
-    const previousDepth = menuHistoryDepthRef.current
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
     const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
     const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
-    const nextDirection: LivePhoneDemoMenuScreenDirection = boundedDepth < previousDepth ? 'back' : 'forward'
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
     setMenuDragOffsetX(0)
     setIsMenuDragging(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
-    setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
       setMenuExitMode(nextExitMode)
@@ -4084,27 +4049,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }}
                 >
                   <div className="relative h-full overflow-hidden">
-                    <AnimatePresence
+                    <motion.section
                       initial={false}
-                      mode="wait"
-                      custom={{
-                        screenTransitionMode: menuScreenTransitionMode,
-                        direction: menuScreenDirection,
-                      } satisfies LivePhoneDemoMenuContentMotionState}
+                      animate={menuScreen === 'root' ? { x: '0%', opacity: 1 } : { x: '-8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'root'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'root' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'root' ? 3 : 1,
+                      }}
                     >
-                      {menuScreen === 'root' ? (
-                        <motion.section
-                          key="root"
-                          custom={{
-                            screenTransitionMode: menuScreenTransitionMode,
-                            direction: menuScreenDirection,
-                          } satisfies LivePhoneDemoMenuContentMotionState}
-                          variants={livePhoneDemoMenuContentVariants}
-                          initial="initial"
-                          animate="active"
-                          exit="exit"
-                          className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
-                        >
                       <LivePhoneDemoPanelHeader
                         title={menuLabel}
                         backLabel={feedbackCopy.closeButtonLabel}
@@ -4568,22 +4523,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         </div>
                       )}
-                        </motion.section>
-                      ) : null}
+                    </motion.section>
 
-                      {menuScreen === 'feedback' ? (
-                        <motion.section
-                          key="feedback"
-                          custom={{
-                            screenTransitionMode: menuScreenTransitionMode,
-                            direction: menuScreenDirection,
-                          } satisfies LivePhoneDemoMenuContentMotionState}
-                          variants={livePhoneDemoMenuContentVariants}
-                          initial="initial"
-                          animate="active"
-                          exit="exit"
-                          className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
-                        >
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'feedback'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'feedback' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'feedback' ? 3 : 1,
+                      }}
+                    >
                       <LivePhoneDemoPanelHeader
                         title={feedbackCopy.pageTitle}
                         backLabel={feedbackCopy.backButtonLabel}
@@ -4821,22 +4773,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         )}
                       </div>
-                        </motion.section>
-                      ) : null}
+                    </motion.section>
 
-                      {menuScreen === 'conversation-management' ? (
-                        <motion.section
-                          key="conversation-management"
-                          custom={{
-                            screenTransitionMode: menuScreenTransitionMode,
-                            direction: menuScreenDirection,
-                          } satisfies LivePhoneDemoMenuContentMotionState}
-                          variants={livePhoneDemoMenuContentVariants}
-                          initial="initial"
-                          animate="active"
-                          exit="exit"
-                          className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
-                        >
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'conversation-management'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'conversation-management' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'conversation-management' ? 3 : 1,
+                      }}
+                    >
                       <LivePhoneDemoPanelHeader
                         title={roomManagementCopy.pageTitle}
                         backLabel={roomManagementCopy.backButtonLabel}
@@ -4878,9 +4827,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </button>
                         </div>
                       </div>
-                        </motion.section>
-                      ) : null}
-                    </AnimatePresence>
+                    </motion.section>
                   </div>
                 </motion.div>
               </div>
