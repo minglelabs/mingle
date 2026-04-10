@@ -393,6 +393,39 @@ export async function updateConversationChannelSelectedLanguages(args: {
   return serializeConversationChannelWithPreview(record);
 }
 
+export async function updateConversationChannelTitle(args: {
+  conversationId: string;
+  userId: string;
+  title: string;
+}): Promise<ConversationChannelSummary | null> {
+  const normalizedTitle = args.title.trim();
+  if (!normalizedTitle) {
+    throw new Error("invalid_title");
+  }
+
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: {
+      title: normalizedTitle,
+    },
+    select: conversationChannelSelect,
+  });
+
+  return serializeConversationChannelWithPreview(record);
+}
+
 export async function getConversationHydrationStateForUser(args: {
   conversationId: string;
   userId: string;

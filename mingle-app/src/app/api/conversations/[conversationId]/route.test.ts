@@ -6,6 +6,7 @@ const {
   mockGetConversationHydrationStateForUser,
   mockUpdateConversationChannelStatus,
   mockUpdateConversationChannelSelectedLanguages,
+  mockUpdateConversationChannelTitle,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
   mockSanitizeSttLanguageSelection,
@@ -14,6 +15,7 @@ const {
   mockGetConversationHydrationStateForUser: vi.fn(),
   mockUpdateConversationChannelStatus: vi.fn(),
   mockUpdateConversationChannelSelectedLanguages: vi.fn(),
+  mockUpdateConversationChannelTitle: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
@@ -36,6 +38,7 @@ vi.mock("@/lib/app-conversations", () => ({
   ),
   updateConversationChannelStatus: mockUpdateConversationChannelStatus,
   updateConversationChannelSelectedLanguages: mockUpdateConversationChannelSelectedLanguages,
+  updateConversationChannelTitle: mockUpdateConversationChannelTitle,
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
@@ -274,6 +277,55 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(json).toEqual({ error: "invalid_selected_languages" });
     expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
     expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTitle).not.toHaveBeenCalled();
+  });
+
+  it("updates the conversation title", async () => {
+    mockUpdateConversationChannelTitle.mockResolvedValue({
+      id: "conv_1",
+      sequenceNumber: 1,
+      title: "Trip planning",
+      status: "paused",
+      sessionKey: "conv_session_1",
+      selectedLanguages: ["en", "ko", "ja"],
+      createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:03:00.000Z",
+      pausedAt: "2026-04-02T00:03:00.000Z",
+    });
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Trip planning" }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.conversation?.title).toBe("Trip planning");
+    expect(mockUpdateConversationChannelTitle).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      title: "Trip planning",
+    });
+  });
+
+  it("rejects empty conversation titles", async () => {
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "   " }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_title" });
+    expect(mockUpdateConversationChannelTitle).not.toHaveBeenCalled();
   });
 
   it("validates the whole patch body before mutating the conversation", async () => {

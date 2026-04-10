@@ -1032,6 +1032,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [deleteConversationDialogOpen, setDeleteConversationDialogOpen] = useState(false)
   const [isDeletingConversation, setIsDeletingConversation] = useState(false)
+  const [renameConversationDialogOpen, setRenameConversationDialogOpen] = useState(false)
+  const [renameConversationValue, setRenameConversationValue] = useState(conversationTitle ?? '')
+  const [isRenamingConversation, setIsRenamingConversation] = useState(false)
+  const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
@@ -1100,6 +1104,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
@@ -1188,6 +1193,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (feedbackEmailEdited) return
     setFeedbackEmail(normalizedDefaultFeedbackEmail)
   }, [feedbackEmailEdited, normalizedDefaultFeedbackEmail])
+
+  useEffect(() => {
+    setRenameConversationValue(conversationTitle ?? '')
+  }, [conversationTitle])
+
+  useEffect(() => {
+    setDisplayConversationTitle(conversationTitle ?? '')
+  }, [conversationTitle])
 
   useLayoutEffect(() => {
     let cancelled = false
@@ -2041,6 +2054,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      if (renameConversationDialogOpen) {
+        if (!isRenamingConversation) {
+          setRenameConversationDialogOpen(false)
+          setRenameConversationValue(conversationTitle ?? '')
+        }
+        return
+      }
       if (deleteConversationDialogOpen) {
         if (!isDeletingConversation) {
           setDeleteConversationDialogOpen(false)
@@ -2072,7 +2092,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [deleteConversationDialogOpen, isDeletingConversation, menuOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -2134,6 +2154,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isDeletingConversation) return
     setDeleteConversationDialogOpen(false)
   }, [isDeletingConversation])
+
+  const closeRenameConversationDialog = useCallback(() => {
+    if (isRenamingConversation) return
+    setRenameConversationDialogOpen(false)
+    setRenameConversationValue(conversationTitle ?? '')
+  }, [conversationTitle, isRenamingConversation])
 
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
@@ -2309,6 +2335,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [closeDeleteConversationDialog, deleteConversationDialogOpen])
+
+  useEffect(() => {
+    if (!renameConversationDialogOpen) return
+    renameConversationInputRef.current?.focus()
+    renameConversationInputRef.current?.select()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeRenameConversationDialog()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeRenameConversationDialog, renameConversationDialogOpen])
 
   const ensureAudioPlayer = useCallback(() => {
     if (playerAudioRef.current) return playerAudioRef.current
@@ -2964,6 +3007,55 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     nativeAppUpdate,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
+  ])
+
+  const handleRenameConversationConfirm = useCallback(async () => {
+    if (isRenamingConversation || !conversationId) return
+
+    const normalizedTitle = renameConversationValue.trim()
+    if (!normalizedTitle) {
+      toast.error(roomManagementCopy.renameEmptyMessage)
+      return
+    }
+
+    setIsRenamingConversation(true)
+
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId: getOrCreateTrackingUserId(),
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({ title: normalizedTitle }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`conversation_rename_failed:${response.status}`)
+      }
+
+      setDisplayConversationTitle(normalizedTitle)
+      setRenameConversationValue(normalizedTitle)
+      setRenameConversationDialogOpen(false)
+      toast.success(roomManagementCopy.renameSuccessToastLabel)
+    } catch {
+      toast.error(roomManagementCopy.renameErrorToastLabel)
+    } finally {
+      setIsRenamingConversation(false)
+    }
+  }, [
+    conversationId,
+    isRenamingConversation,
+    nativeAppUpdate,
+    renameConversationValue,
+    resolveConversationSessionKey,
+    roomManagementCopy.renameEmptyMessage,
+    roomManagementCopy.renameErrorToastLabel,
+    roomManagementCopy.renameSuccessToastLabel,
   ])
 
   // Stop current playback when sound is disabled.
@@ -3804,7 +3896,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               </button>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-left text-[0.98rem] font-semibold text-gray-950">
-                  {conversationTitle || ''}
+                  {displayConversationTitle || ''}
                 </div>
               </div>
             </div>
@@ -4653,6 +4745,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 py-4">
                           <button
                             type="button"
+                            onClick={() => {
+                              setRenameConversationValue(conversationTitle ?? '')
+                              setRenameConversationDialogOpen(true)
+                            }}
+                            disabled={!conversationId || isRenamingConversation}
+                            className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.renameButtonLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={handleDeleteConversationMenuItemPress}
                             disabled={isDeletingConversation}
                             className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
@@ -4920,6 +5027,67 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           </div>
 
           <AnimatePresence>
+            {renameConversationDialogOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
+                onClick={closeRenameConversationDialog}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={roomManagementCopy.renameDialogTitle}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full max-w-[20rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    {roomManagementCopy.renameDialogTitle}
+                  </p>
+                  <label className="mt-3 block text-sm font-medium text-gray-700">
+                    {roomManagementCopy.renameFieldLabel}
+                  </label>
+                  <input
+                    ref={renameConversationInputRef}
+                    type="text"
+                    value={renameConversationValue}
+                    onChange={(event) => setRenameConversationValue(event.target.value)}
+                    placeholder={roomManagementCopy.renameFieldPlaceholder}
+                    disabled={isRenamingConversation}
+                    maxLength={120}
+                    className="mt-2 h-11 w-full rounded-xl border border-gray-300 px-3 text-[0.98rem] text-gray-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-gray-100"
+                  />
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={closeRenameConversationDialog}
+                      disabled={isRenamingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {roomManagementCopy.renameCancelLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleRenameConversationConfirm()
+                      }}
+                      disabled={isRenamingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      {isRenamingConversation
+                        ? roomManagementCopy.renamingLabel
+                        : roomManagementCopy.renameConfirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
             {deleteConversationDialogOpen && (
               <motion.div
                 initial={{ opacity: 0 }}

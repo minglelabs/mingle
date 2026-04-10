@@ -8,6 +8,7 @@ import {
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
+  updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
@@ -47,7 +48,7 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { status?: unknown; selectedLanguages?: unknown };
+  let body: { status?: unknown; selectedLanguages?: unknown; title?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -56,8 +57,9 @@ export async function patchConversationResponse(
 
   const hasStatus = typeof body.status === "string";
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
+  const hasTitle = typeof body.title === "string";
 
-  if (!hasStatus && !hasSelectedLanguages) {
+  if (!hasStatus && !hasSelectedLanguages && !hasTitle) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
   }
 
@@ -79,6 +81,13 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "invalid_status" }, { status: 400 });
   }
 
+  const requestedTitle = hasTitle && typeof body.title === "string"
+    ? body.title.trim()
+    : "";
+  if (hasTitle && !requestedTitle) {
+    return NextResponse.json({ error: "invalid_title" }, { status: 400 });
+  }
+
   let conversation = null;
 
   if (hasSelectedLanguages) {
@@ -94,6 +103,14 @@ export async function patchConversationResponse(
       conversationId,
       userId: resolvedUser.userId,
       status: normalizeConversationChannelStatus(requestedStatus),
+    });
+  }
+
+  if (hasTitle) {
+    conversation = await updateConversationChannelTitle({
+      conversationId,
+      userId: resolvedUser.userId,
+      title: requestedTitle,
     });
   }
 
