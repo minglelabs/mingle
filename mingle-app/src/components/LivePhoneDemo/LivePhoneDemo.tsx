@@ -623,6 +623,7 @@ type FeedbackHistoryResponse = {
 
 type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
+type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 type LivePhoneDemoMenuMotionState = {
   exitMode: LivePhoneDemoMenuTransitionMode
   screenTransitionMode: LivePhoneDemoMenuTransitionMode
@@ -1025,6 +1026,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
+  const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
@@ -1759,16 +1761,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       screen?: LivePhoneDemoMenuScreen
     },
   ) => {
+    const previousDepth = menuHistoryDepthRef.current
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
     const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
     const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
+    const nextDirection: LivePhoneDemoMenuScreenDirection = boundedDepth < previousDepth ? 'back' : 'forward'
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
     setMenuDragOffsetX(0)
     setIsMenuDragging(false)
     setMenuScreenTransitionMode(nextScreenTransitionMode)
+    setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
       setMenuExitMode(nextExitMode)
@@ -4057,7 +4062,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
                         pointerEvents: menuScreen === 'root' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'root' ? 3 : 1,
+                        zIndex: menuScreen === 'root'
+                          ? (menuScreenDirection === 'back' ? 2 : 3)
+                          : 1,
                       }}
                     >
                       <LivePhoneDemoPanelHeader
@@ -4533,7 +4540,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
                         pointerEvents: menuScreen === 'feedback' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'feedback' ? 3 : 1,
+                        zIndex: menuScreen === 'feedback'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
                     >
                       <LivePhoneDemoPanelHeader
@@ -4783,7 +4792,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
                       style={{
                         pointerEvents: menuScreen === 'conversation-management' ? 'auto' : 'none',
-                        zIndex: menuScreen === 'conversation-management' ? 3 : 1,
+                        zIndex: menuScreen === 'conversation-management'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
                       }}
                     >
                       <LivePhoneDemoPanelHeader
