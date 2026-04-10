@@ -1577,12 +1577,10 @@ export default function ConversationList({
       shouldAutoStartNewConversation = false;
     }
 
-    // Request mic permission while still in the user gesture context.
-    // iOS defers system permission dialogs during view transitions, so
-    // we must trigger the prompt before the conversation room opens.
-    // On native apps the native STT bridge handles mic access separately,
-    // but getUserMedia still triggers the shared app-level iOS permission.
-    if (shouldAutoStartNewConversation && navigator.mediaDevices?.getUserMedia) {
+    // In native apps, the native STT bridge owns microphone permission.
+    // Avoid getUserMedia warm-ups here so the WebView never triggers an
+    // extra origin-level mic permission dialog on top of the app-level flow.
+    if (!isNativeAppRuntime() && shouldAutoStartNewConversation && navigator.mediaDevices?.getUserMedia) {
       try {
         const warmStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         warmStream.getTracks().forEach((t) => t.stop());
