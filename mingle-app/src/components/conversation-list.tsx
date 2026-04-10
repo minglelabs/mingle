@@ -830,6 +830,8 @@ function ConversationRow({
           className="h-14 w-14 rounded-full bg-white object-cover"
           width={56}
           height={56}
+          draggable={false}
+          style={{ WebkitUserDrag: "none", pointerEvents: "none" }}
           unoptimized
         />
       </div>
