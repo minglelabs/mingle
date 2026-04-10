@@ -13,7 +13,6 @@ import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
-import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -96,7 +95,6 @@ function buildAccountPreferencesApiPath(): string {
   return buildClientApiPath('/account/preferences')
 }
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
-const MESSAGES_API_PATH = buildClientApiPath('/messages')
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
@@ -836,6 +834,7 @@ interface LivePhoneDemoProps {
   headerMode?: 'default' | 'conversation'
   backButtonLabel?: string
   onBack?: () => void
+  onConversationDeleted?: () => void
   conversationTitle?: string
   conversationId?: string
   sessionKeyOverride?: string
@@ -989,6 +988,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   headerMode = 'default',
   backButtonLabel = 'Back',
   onBack,
+  onConversationDeleted,
   conversationTitle,
   conversationId,
   sessionKeyOverride,
@@ -2963,22 +2963,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [cleanupCurrentAudio, clearNativeTtsEventTimer, clearStopClickResumeTimers, clearTtsWaitTimer, sendNativeTtsStopCommand])
 
   const handleDeleteConversationConfirm = useCallback(async () => {
-    if (isDeletingConversation) return
+    if (isDeletingConversation || !conversationId) return
     setIsDeletingConversation(true)
 
     try {
-      const conversationClearedAtMs = Date.now()
-      const sessionKey = resolveConversationSessionKey()
+      if (isSttSessionRunning) {
+        try {
+          onSttSessionRunningChange?.(false)
+          await stopRecording()
+          scheduleTtsResumeAfterStopClick()
+        } catch {
+          // Continue deleting the room even if the native stop path races.
+        }
+      }
+
       const trackingUserId = getOrCreateTrackingUserId()
-      const response = await fetch(MESSAGES_API_PATH, {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
         method: 'DELETE',
         headers: buildTrackingRequestHeaders({
-          sessionKey,
+          sessionKey: resolveConversationSessionKey(),
           trackingUserId,
           nativeAppUpdate,
-          extraHeaders: {
-            [CONVERSATION_CLEAR_CUTOFF_HEADER]: String(conversationClearedAtMs),
-          },
         }),
       })
 
@@ -2992,6 +2997,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       clearConversationHistory()
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
+      onConversationDeleted?.()
+      onBack?.()
       toast.success(deleteConversationCopy.successToastLabel)
     } catch {
       toast.error(deleteConversationCopy.errorToastLabel)
@@ -3000,13 +3007,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [
     clearConversationHistory,
+    conversationId,
     deleteConversationCopy.errorToastLabel,
     deleteConversationCopy.successToastLabel,
     forceStopTtsPlayback,
     isDeletingConversation,
+    isSttSessionRunning,
     nativeAppUpdate,
+    onBack,
+    onConversationDeleted,
+    onSttSessionRunningChange,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
+    scheduleTtsResumeAfterStopClick,
+    stopRecording,
   ])
 
   const handleRenameConversationConfirm = useCallback(async () => {

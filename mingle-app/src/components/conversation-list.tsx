@@ -1150,6 +1150,25 @@ export default function ConversationList({
     }
   }, []);
 
+  const handleConversationDeleted = useCallback((conversationId: string) => {
+    replaceConversationOverlayUrl(null);
+    postNativeBannerZone("hidden");
+    setOverlayExitMode("instant");
+    setAutoStartConversationId((current) => (
+      current === conversationId ? null : current
+    ));
+    setLiveConversationId((current) => (
+      current === conversationId ? null : current
+    ));
+    selectedLanguagesSyncVersionRef.current.delete(conversationId);
+    conversationRunningStateRef.current.delete(conversationId);
+    conversationRoomRefs.current.delete(conversationId);
+    setActiveConversation((current) => (
+      current?.id === conversationId ? null : current
+    ));
+    setConversations((current) => current.filter((conversation) => conversation.id !== conversationId));
+  }, []);
+
   const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
     if (nextRef) {
       conversationRoomRefs.current.set(conversationId, nextRef);
@@ -1920,6 +1939,9 @@ export default function ConversationList({
                     locale={locale}
                     headerMode="conversation"
                     onBack={handleCloseActiveConversation}
+                    onConversationDeleted={() => {
+                      handleConversationDeleted(conversation.id);
+                    }}
                     conversationTitle={conversation.title}
                     conversationId={conversation.id}
                     sessionKeyOverride={conversation.sessionKey}

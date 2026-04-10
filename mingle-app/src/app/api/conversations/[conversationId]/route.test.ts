@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 
 const {
+  mockDeleteConversationChannel,
   mockGetServerSession,
   mockGetConversationHydrationStateForUser,
   mockUpdateConversationChannelStatus,
@@ -11,6 +12,7 @@ const {
   mockResolveOrCreateUserIdForRequest,
   mockSanitizeSttLanguageSelection,
 } = vi.hoisted(() => ({
+  mockDeleteConversationChannel: vi.fn(),
   mockGetServerSession: vi.fn(),
   mockGetConversationHydrationStateForUser: vi.fn(),
   mockUpdateConversationChannelStatus: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock("@/lib/auth-options", () => ({
 vi.mock("@/lib/app-conversations", () => ({
   APP_CONVERSATION_STATUS_ACTIVE: "active",
   APP_CONVERSATION_STATUS_PAUSED: "paused",
+  deleteConversationChannel: mockDeleteConversationChannel,
   getConversationHydrationStateForUser: mockGetConversationHydrationStateForUser,
   normalizeConversationChannelStatus: (status: string) => (
     status === "paused" ? "paused" : "active"
@@ -53,7 +56,7 @@ vi.mock("@/lib/request-user-identity", () => ({
   resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
 }));
 
-import { GET, PATCH } from "@/app/api/conversations/[conversationId]/route";
+import { DELETE, GET, PATCH } from "@/app/api/conversations/[conversationId]/route";
 
 describe("/api/conversations/[conversationId] route", () => {
   beforeEach(() => {
@@ -213,6 +216,37 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ error: "invalid_status" });
     expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+  });
+
+  it("soft deletes a conversation room for a guest request", async () => {
+    mockDeleteConversationChannel.mockResolvedValue({
+      id: "conv_1",
+      sequenceNumber: 1,
+      title: "Conversation 1",
+      status: "paused",
+      sessionKey: "conv_session_1",
+      selectedLanguages: ["en", "ko"],
+      createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:03:00.000Z",
+      pausedAt: "2026-04-02T00:03:00.000Z",
+    });
+
+    const response = await DELETE(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      deletedConversationId: "conv_1",
+    });
+    expect(mockDeleteConversationChannel).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+    });
   });
 
   it("updates selected languages for a guest request", async () => {

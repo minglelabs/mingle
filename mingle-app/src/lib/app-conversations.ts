@@ -229,7 +229,10 @@ export async function listConversationChannelsForUser(
   userId: string,
 ): Promise<ConversationChannelSummary[]> {
   const records = await prisma.appConversationChannel.findMany({
-    where: { ownerUserId: userId },
+    where: {
+      ownerUserId: userId,
+      isDeleted: { not: true },
+    },
     orderBy: [
       { updatedAt: "desc" },
       { createdAt: "desc" },
@@ -323,6 +326,7 @@ export async function updateConversationChannelStatus(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
+      isDeleted: { not: true },
     },
     select: { id: true },
   });
@@ -374,6 +378,7 @@ export async function updateConversationChannelSelectedLanguages(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
+      isDeleted: { not: true },
     },
     select: { id: true },
   });
@@ -407,6 +412,7 @@ export async function updateConversationChannelTitle(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
+      isDeleted: { not: true },
     },
     select: { id: true },
   });
@@ -434,6 +440,7 @@ export async function getConversationHydrationStateForUser(args: {
     where: {
       id: args.conversationId,
       ownerUserId: args.userId,
+      isDeleted: { not: true },
     },
     select: conversationChannelSelect,
   });
@@ -507,4 +514,34 @@ export async function getConversationHydrationStateForUser(args: {
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     utterances,
   };
+}
+
+export async function deleteConversationChannel(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<ConversationChannelSummary | null> {
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+      isDeleted: { not: true },
+    },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: {
+      isDeleted: true,
+      status: APP_CONVERSATION_STATUS_PAUSED,
+      pausedAt: new Date(),
+    },
+    select: conversationChannelSelect,
+  });
+
+  return serializeConversationChannel(record);
 }

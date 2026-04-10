@@ -24,6 +24,7 @@ type MingleHomeProps = {
   locale: AppLocale;
   headerMode?: "default" | "conversation";
   onBack?: () => void;
+  onConversationDeleted?: () => void;
   conversationTitle?: string;
   conversationId?: string;
   sessionKeyOverride?: string;
@@ -1751,6 +1752,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           headerMode={props.headerMode}
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
+          onConversationDeleted={props.onConversationDeleted}
           conversationId={props.conversationId}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}

@@ -144,6 +144,7 @@ model AppConversationChannel {
   ownerUserId    String    @map("owner_user_id")
   sequenceNumber Int       @map("sequence_number")
   title          String
+  isDeleted      Boolean?  @map("is_deleted")
   status         String    @default("active")
   sessionKey     String    @unique @map("session_key")
   selectedLanguages String[] @default([]) @map("selected_languages")
