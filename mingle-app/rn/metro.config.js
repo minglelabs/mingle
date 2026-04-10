@@ -13,6 +13,11 @@ const config = {
     path.resolve(__dirname, '..'),
     path.resolve(__dirname, '../..'),
   ],
+  resolver: {
+    // Prefer Metro's node crawler over Watchman so release builds do not
+    // leave .watchman-cookie-* files behind in the workspace.
+    useWatchman: false,
+  },
 };
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);
