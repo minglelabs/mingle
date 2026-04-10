@@ -19,13 +19,15 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ArrowRight, Loader2, Search } from "lucide-react";
+import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
+import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import {
   LS_KEY_LANGUAGES,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
+import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import {
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
@@ -61,6 +63,10 @@ const CONVERSATION_OVERLAY_TRANSITION = {
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
+const ROW_ACTION_LONG_PRESS_DELAY_MS = 450;
+const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
+const ROW_ACTION_TOOLTIP_GAP_PX = 8;
+const ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX = 200;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -115,6 +121,15 @@ interface ConversationItem {
   selectedLanguages: string[];
   languageFlags: string;
 }
+
+type TooltipPos =
+  | { side: "above"; bottom: number; left: number }
+  | { side: "below"; top: number; left: number };
+
+type ConversationRowActionMenuState = {
+  item: ConversationItem;
+  position: TooltipPos;
+};
 
 function truncateConversationPreview(value: string, maxLength = 20): string {
   const normalized = value.trim();
@@ -704,21 +719,102 @@ function isNativeSttStatusLive(status: string | null): boolean {
     || status === "recovering";
 }
 
+function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
+  const rect = element.getBoundingClientRect();
+  const left = rect.left + rect.width / 2;
+  if (rect.top - ROW_ACTION_TOOLTIP_GAP_PX >= ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX) {
+    return {
+      side: "above",
+      bottom: window.innerHeight - rect.top + ROW_ACTION_TOOLTIP_GAP_PX,
+      left,
+    };
+  }
+  return {
+    side: "below",
+    top: rect.bottom + ROW_ACTION_TOOLTIP_GAP_PX,
+    left,
+  };
+}
+
 function ConversationRow({
   item,
   disabled = false,
   onSelect,
+  onOpenActions,
   className = "",
 }: {
   item: ConversationItem;
   disabled?: boolean;
   onSelect?: (item: ConversationItem) => void;
+  onOpenActions?: (item: ConversationItem, position: TooltipPos) => void;
   className?: string;
 }) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const touchOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchOriginRef.current = null;
+  }, []);
+
+  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer]);
+
+  const openActions = useCallback(() => {
+    if (disabled) return;
+    const element = buttonRef.current;
+    if (!element) return;
+    suppressNextClickRef.current = true;
+    onOpenActions?.(item, calculateConversationRowTooltipPos(element));
+  }, [disabled, item, onOpenActions]);
+
   return (
     <button
+      ref={buttonRef}
       type="button"
-      onClick={() => onSelect?.(item)}
+      onClick={() => {
+        if (suppressNextClickRef.current) {
+          suppressNextClickRef.current = false;
+          return;
+        }
+        onSelect?.(item);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        openActions();
+      }}
+      onTouchStart={(event) => {
+        if (disabled) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        touchOriginRef.current = { x: touch.clientX, y: touch.clientY };
+        longPressTimerRef.current = window.setTimeout(() => {
+          longPressTimerRef.current = null;
+          openActions();
+        }, ROW_ACTION_LONG_PRESS_DELAY_MS);
+      }}
+      onTouchMove={(event) => {
+        const touch = event.touches[0];
+        const origin = touchOriginRef.current;
+        if (!touch || !origin) return;
+        const dx = touch.clientX - origin.x;
+        const dy = touch.clientY - origin.y;
+        if (Math.hypot(dx, dy) > ROW_ACTION_CANCEL_DISTANCE_PX) {
+          clearLongPressTimer();
+        }
+      }}
+      onTouchEnd={() => {
+        if (longPressTimerRef.current !== null) {
+          clearLongPressTimer();
+        }
+      }}
+      onTouchCancel={() => {
+        clearLongPressTimer();
+      }}
       disabled={disabled}
       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
@@ -1045,6 +1141,14 @@ export default function ConversationList({
     () => getConversationDictionary(locale, dictionary),
     [dictionary, locale],
   );
+  const roomManagementCopy = useMemo(
+    () => resolveLivePhoneDemoRoomManagementCopy(locale),
+    [locale],
+  );
+  const deleteConversationCopy = useMemo(
+    () => resolveLivePhoneDemoConversationDeleteCopy(locale),
+    [locale],
+  );
   const [showSearch, setShowSearch] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
@@ -1065,6 +1169,13 @@ export default function ConversationList({
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const [rowActionMenu, setRowActionMenu] = useState<ConversationRowActionMenuState | null>(null);
+  const [renameDialogConversationId, setRenameDialogConversationId] = useState<string | null>(null);
+  const [renameConversationValue, setRenameConversationValue] = useState("");
+  const [isRenamingConversation, setIsRenamingConversation] = useState(false);
+  const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
+  const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
   const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
@@ -1168,6 +1279,79 @@ export default function ConversationList({
     ));
     setConversations((current) => current.filter((conversation) => conversation.id !== conversationId));
   }, []);
+
+  const handleRenameConversationFromList = useCallback(async () => {
+    if (isRenamingConversation || !renameDialogConversationId) return;
+
+    const normalizedTitle = renameConversationValue.trim();
+    if (!normalizedTitle) {
+      window.alert(roomManagementCopy.renameEmptyMessage);
+      return;
+    }
+
+    setIsRenamingConversation(true);
+    try {
+      const response = await fetch(buildConversationApiPath(`/${renameDialogConversationId}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...buildConversationRequestHeaders(),
+        },
+        body: JSON.stringify({ title: normalizedTitle }),
+      });
+      const nextConversation = await readConversationResponse(response);
+      setConversations((current) => upsertConversation(current, nextConversation));
+      setRenameDialogConversationId(null);
+      setRenameConversationValue("");
+    } catch {
+      window.alert(roomManagementCopy.renameErrorToastLabel);
+    } finally {
+      setIsRenamingConversation(false);
+    }
+  }, [
+    isRenamingConversation,
+    renameConversationValue,
+    renameDialogConversationId,
+    roomManagementCopy.renameEmptyMessage,
+    roomManagementCopy.renameErrorToastLabel,
+  ]);
+
+  const handleDeleteConversationFromList = useCallback(async () => {
+    if (isDeletingConversation || !deleteDialogConversationId) return;
+
+    setIsDeletingConversation(true);
+    try {
+      const roomRef = conversationRoomRefs.current.get(deleteDialogConversationId);
+      if (roomRef?.isSttSessionRunning()) {
+        try {
+          await roomRef.stopRecording({ deferRunningStateChange: true });
+        } catch {
+          // Ignore stop races and continue deleting the room.
+        }
+      }
+
+      const response = await fetch(buildConversationApiPath(`/${deleteDialogConversationId}`), {
+        method: "DELETE",
+        headers: buildConversationRequestHeaders(),
+      });
+      const body = await response.json() as { deletedConversationId?: string; error?: string };
+      if (!response.ok || !body.deletedConversationId) {
+        throw new Error(body.error || "conversation_delete_failed");
+      }
+
+      handleConversationDeleted(body.deletedConversationId);
+      setDeleteDialogConversationId(null);
+    } catch {
+      window.alert(deleteConversationCopy.errorToastLabel);
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }, [
+    deleteConversationCopy.errorToastLabel,
+    deleteDialogConversationId,
+    handleConversationDeleted,
+    isDeletingConversation,
+  ]);
 
   const setConversationRoomRef = useCallback((conversationId: string, nextRef: MingleHomeRef | null) => {
     if (nextRef) {
@@ -1556,6 +1740,34 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
+    if (!rowActionMenu) return;
+
+    const dismissMenu = () => {
+      setRowActionMenu(null);
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        dismissMenu();
+        return;
+      }
+      if (rowActionMenuRef.current?.contains(target)) return;
+      dismissMenu();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("scroll", dismissMenu, true);
+    window.addEventListener("resize", dismissMenu);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("scroll", dismissMenu, true);
+      window.removeEventListener("resize", dismissMenu);
+    };
+  }, [rowActionMenu]);
+
+  useEffect(() => {
     if (!activeConversation) return;
     const nextConversation = conversations.find((conversation) => conversation.id === activeConversation.id);
     if (!nextConversation) return;
@@ -1868,6 +2080,12 @@ export default function ConversationList({
                   item={item}
                   disabled={conversationSelectionDisabled}
                   onSelect={handleOpenConversation}
+                  onOpenActions={(selectedItem, position) => {
+                    setRowActionMenu({
+                      item: selectedItem,
+                      position,
+                    });
+                  }}
                   className="border-b border-gray-100"
                 />
               </div>
@@ -1911,68 +2129,249 @@ export default function ConversationList({
 
       {isClientReady && typeof document !== "undefined"
         ? createPortal(
-          <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
-            {mountedConversations.map((conversation) => {
-              const isVisible = activeConversation?.id === conversation.id;
+          <>
+            {rowActionMenu ? createPortal(
+              <div
+                ref={rowActionMenuRef}
+                style={rowActionMenu.position.side === "above"
+                  ? {
+                      position: "fixed",
+                      bottom: rowActionMenu.position.bottom,
+                      left: rowActionMenu.position.left,
+                      transform: "translateX(-50%)",
+                      zIndex: 9999,
+                    }
+                  : {
+                      position: "fixed",
+                      top: rowActionMenu.position.top,
+                      left: rowActionMenu.position.left,
+                      transform: "translateX(-50%)",
+                      zIndex: 9999,
+                    }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+              >
+                <div className="w-44 rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_8px_32px_rgba(15,23,42,0.13),0_2px_10px_rgba(15,23,42,0.07)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenameDialogConversationId(rowActionMenu.item.id);
+                      setRenameConversationValue(rowActionMenu.item.title);
+                      setRowActionMenu(null);
+                    }}
+                    className="flex w-full items-center justify-between rounded-t-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span>{roomManagementCopy.renameButtonLabel}</span>
+                    <PencilLine className="h-4 w-4 shrink-0 text-slate-400" />
+                  </button>
+                  <div className="h-px bg-gray-100" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteDialogConversationId(rowActionMenu.item.id);
+                      setRowActionMenu(null);
+                    }}
+                    className="flex w-full items-center justify-between rounded-b-2xl px-4 py-3 text-[14px] font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
+                  >
+                    <span>{deleteConversationCopy.menuItemLabel}</span>
+                    <Trash2 className="h-4 w-4 shrink-0 text-slate-400" />
+                  </button>
+                </div>
+              </div>,
+              document.body,
+            ) : null}
+            <AnimatePresence custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}>
+              {mountedConversations.map((conversation) => {
+                const isVisible = activeConversation?.id === conversation.id;
 
-              return (
-                <motion.div
-                  key={conversation.id}
-                  custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
-                  variants={conversationOverlayVariants}
-                  initial="initial"
-                  animate={isVisible ? "active" : "retained"}
-                  exit="exit"
-                  className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
-                    isVisible ? "" : "pointer-events-none"
-                  }`}
-                  aria-hidden={!isVisible}
-                >
-                  <MingleHome
-                    ref={(nextRef) => {
-                      setConversationRoomRef(conversation.id, nextRef);
-                    }}
+                return (
+                  <motion.div
                     key={conversation.id}
-                    dictionary={dictionary}
-                    appleOAuthEnabled={appleOAuthEnabled}
-                    googleOAuthEnabled={googleOAuthEnabled}
-                    locale={locale}
-                    headerMode="conversation"
-                    onBack={handleCloseActiveConversation}
-                    onConversationDeleted={() => {
-                      handleConversationDeleted(conversation.id);
-                    }}
-                    conversationTitle={conversation.title}
-                    conversationId={conversation.id}
-                    sessionKeyOverride={conversation.sessionKey}
-                    storageNamespace={conversation.id}
-                    initialSelectedLanguages={conversation.selectedLanguages}
-                    autoStartOnMount={conversation.id === autoStartConversationId}
-                    onAutoStartHandled={() => {
-                      setAutoStartConversationId((current) => (
-                        current === conversation.id ? null : current
-                      ));
-                    }}
-                    isVisible={isVisible}
-                    enableNativeBannerBridge={isVisible}
-                    onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
-                    onSttSessionRunningChange={(isRunning) => {
-                      handleConversationRunningChange(conversation.id, isRunning);
-                    }}
-                    onLatestUtteranceChange={(payload) => {
-                      handleConversationLatestUtteranceChange(conversation.id, payload);
-                    }}
-                    onSelectedLanguagesChange={(selectedLanguages) => {
-                      handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
-                    }}
-                  />
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>,
+                    custom={{ enterMode: overlayEnterMode, exitMode: overlayExitMode }}
+                    variants={conversationOverlayVariants}
+                    initial="initial"
+                    animate={isVisible ? "active" : "retained"}
+                    exit="exit"
+                    className={`fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden bg-white ${
+                      isVisible ? "" : "pointer-events-none"
+                    }`}
+                    aria-hidden={!isVisible}
+                  >
+                    <MingleHome
+                      ref={(nextRef) => {
+                        setConversationRoomRef(conversation.id, nextRef);
+                      }}
+                      key={conversation.id}
+                      dictionary={dictionary}
+                      appleOAuthEnabled={appleOAuthEnabled}
+                      googleOAuthEnabled={googleOAuthEnabled}
+                      locale={locale}
+                      headerMode="conversation"
+                      onBack={handleCloseActiveConversation}
+                      onConversationDeleted={() => {
+                        handleConversationDeleted(conversation.id);
+                      }}
+                      conversationTitle={conversation.title}
+                      conversationId={conversation.id}
+                      sessionKeyOverride={conversation.sessionKey}
+                      storageNamespace={conversation.id}
+                      initialSelectedLanguages={conversation.selectedLanguages}
+                      autoStartOnMount={conversation.id === autoStartConversationId}
+                      onAutoStartHandled={() => {
+                        setAutoStartConversationId((current) => (
+                          current === conversation.id ? null : current
+                        ));
+                      }}
+                      isVisible={isVisible}
+                      enableNativeBannerBridge={isVisible}
+                      onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
+                      onSttSessionRunningChange={(isRunning) => {
+                        handleConversationRunningChange(conversation.id, isRunning);
+                      }}
+                      onLatestUtteranceChange={(payload) => {
+                        handleConversationLatestUtteranceChange(conversation.id, payload);
+                      }}
+                      onSelectedLanguagesChange={(selectedLanguages) => {
+                        handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
+                      }}
+                    />
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </>,
           document.body,
         )
         : null}
+
+      <AnimatePresence>
+        {renameDialogConversationId ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+            onClick={() => {
+              if (isRenamingConversation) return;
+              setRenameDialogConversationId(null);
+              setRenameConversationValue("");
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={roomManagementCopy.renameDialogTitle}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                {roomManagementCopy.renameDialogTitle}
+              </p>
+              <label className="mt-4 flex flex-col gap-2 text-sm text-gray-700">
+                <span>{roomManagementCopy.renameFieldLabel}</span>
+                <input
+                  type="text"
+                  value={renameConversationValue}
+                  onChange={(event) => setRenameConversationValue(event.currentTarget.value)}
+                  placeholder={roomManagementCopy.renameFieldPlaceholder}
+                  disabled={isRenamingConversation}
+                  maxLength={80}
+                  autoFocus
+                  className="h-11 rounded-xl border border-gray-300 px-3 text-sm text-gray-900 outline-none transition focus:border-gray-900"
+                />
+              </label>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isRenamingConversation) return;
+                    setRenameDialogConversationId(null);
+                    setRenameConversationValue("");
+                  }}
+                  disabled={isRenamingConversation}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {roomManagementCopy.renameCancelLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleRenameConversationFromList();
+                  }}
+                  disabled={isRenamingConversation}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {isRenamingConversation
+                    ? roomManagementCopy.renamingLabel
+                    : roomManagementCopy.renameConfirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+        {deleteDialogConversationId ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+            onClick={() => {
+              if (isDeletingConversation) return;
+              setDeleteDialogConversationId(null);
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={deleteConversationCopy.dialogTitle}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+            >
+              <p className="text-sm font-semibold text-gray-900">
+                {deleteConversationCopy.dialogTitle}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                {deleteConversationCopy.dialogMessage}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isDeletingConversation) return;
+                    setDeleteDialogConversationId(null);
+                  }}
+                  disabled={isDeletingConversation}
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {deleteConversationCopy.cancelLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDeleteConversationFromList();
+                  }}
+                  disabled={isDeletingConversation}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
+                >
+                  {isDeletingConversation
+                    ? deleteConversationCopy.deletingLabel
+                    : deleteConversationCopy.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </main>
   );
 }
