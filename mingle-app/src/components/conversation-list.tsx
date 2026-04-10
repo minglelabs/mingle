@@ -2446,7 +2446,10 @@ export default function ConversationList({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="absolute inset-0 z-[120] flex items-start justify-center bg-black/40 px-5 pt-[12vh] pb-8"
+            className="absolute inset-0 z-[120] flex items-start justify-center bg-black/40 px-5 pb-8"
+            style={{
+              paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)",
+            }}
             onClick={() => {
               if (isRenamingConversation) return;
               setRenameDialogConversationId(null);
