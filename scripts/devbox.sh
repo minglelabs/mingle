@@ -150,6 +150,12 @@ die() {
   exit 1
 }
 
+cleanup_watchman_cookie_files() {
+  find "$ROOT_DIR" -maxdepth 1 -type f -name '.watchman-cookie-*' -delete 2>/dev/null || true
+}
+
+trap cleanup_watchman_cookie_files EXIT
+
 require_nonempty_runtime_value() {
   local key="$1"
   local value="${2:-}"
