@@ -15,6 +15,9 @@ describe("getDictionary", () => {
       expect(dictionary.demo.textSizeLabel).toBeTruthy();
       expect(dictionary.demo.translationModelLabel).toBeTruthy();
       expect(dictionary.demo.adBannerPositionBottomLabel).toBeTruthy();
+      expect(dictionary.conversations.searchPlaceholder).toBeTruthy();
+      expect(dictionary.conversations.newConversationButtonLabel).toBeTruthy();
+      expect(dictionary.conversations.switchLiveRoomToastLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.composer.sendMessageLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.copyActions.copiedToastLabel).toBeTruthy();
       expect(dictionary.livePhoneDemo.feedback.categoryLabels.feedback).toBeTruthy();

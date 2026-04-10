@@ -296,13 +296,16 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
   },
 };
 
+export function getConversationCopy(locale: AppLocale): ConversationDictionary {
+  return conversationDictionaries[locale] ?? ENGLISH_CONVERSATION_DICTIONARY;
+}
+
 export function getConversationDictionary(
   locale: AppLocale,
   dictionary: AppDictionary,
 ): ConversationDictionary {
   return dictionary.conversations
-    ?? conversationDictionaries[locale]
-    ?? ENGLISH_CONVERSATION_DICTIONARY;
+    ?? getConversationCopy(locale);
 }
 
 export function getConversationTitlePrefix(locale: string): string {
