@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 117.
+- Total standalone UI/UX issue atoms documented in this file: 118.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 72.
+- Issue atoms currently listed for this thread: 73.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -379,6 +379,11 @@
 72. **An iOS submenu back-gesture fix accidentally removed menu swipe-dismiss**
    Problem: To stop edge-swipe flicker, the menu’s own swipe-dismiss was briefly disabled on iOS, which regressed the expected ability to dismiss the menu by swiping inside the panel.
    Attempted fix: The gesture model was split by start region: the left-edge gutter is reserved for native iOS history swipe, while swipes starting farther inside the panel still trigger the custom menu dismiss.
+   Status: Resolved in-thread.
+
+73. **iOS forward-swipe could preview the menu and then let the room snap back over it**
+   Problem: After returning from a menu/subpage to the room via iOS edge-swipe back, using the forward gesture could momentarily show the previous menu state and then abruptly let the room reclaim the screen. The system gesture preview looked correct, but the JS state refused to restore the menu.
+   Attempted fix: The menu `popstate` handler was changed to accept forward restoration from depth `0 -> 1/2` instead of bailing out whenever the current menu depth was already zero.
    Status: Resolved in-thread.
 
 ## Other Issue Sessions

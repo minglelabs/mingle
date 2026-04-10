@@ -2046,7 +2046,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         return
       }
 
-      if (menuHistoryDepthRef.current <= 0) return
+      if (menuHistoryDepthRef.current <= 0 && nextStateDepth <= 0) return
       const nextDepth = nextStateDepth || Math.max(0, menuHistoryDepthRef.current - 1)
       const isNativeIosHistoryGesture = requestedDepth === null && isNativeIosAppRuntime()
       applyMenuNavigationDepth(nextDepth, {
