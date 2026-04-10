@@ -806,6 +806,7 @@ interface LivePhoneDemoProps {
   headerMode?: 'default' | 'conversation'
   backButtonLabel?: string
   onBack?: () => void
+  conversationTitle?: string
   conversationId?: string
   sessionKeyOverride?: string
   storageNamespace?: string
@@ -958,6 +959,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   headerMode = 'default',
   backButtonLabel = 'Back',
   onBack,
+  conversationTitle,
   conversationId,
   sessionKeyOverride,
   storageNamespace,
@@ -3732,14 +3734,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           }}
         >
           {headerMode === 'conversation' && onBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              aria-label={backButtonLabel}
-              className={`relative z-20 inline-flex h-[38px] min-w-[40px] items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
-            >
-              <ChevronLeft size={24} strokeWidth={2.4} />
-            </button>
+            <div className="relative z-20 flex min-w-0 flex-1 items-center gap-2 pr-3">
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label={backButtonLabel}
+                className={`inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              >
+                <ChevronLeft size={24} strokeWidth={2.4} />
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-left text-[0.98rem] font-semibold text-gray-950">
+                  {conversationTitle || ''}
+                </div>
+              </div>
+            </div>
           ) : (
             <MingleWordmark className="relative z-20" />
           )}
