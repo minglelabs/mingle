@@ -1787,7 +1787,10 @@ function AppInner(): React.JSX.Element {
     const cacheStatusScript = payload.type === 'status'
       ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
       : '';
-    const script = `${cacheStatusScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cachePermissionScript = payload.type === 'permission'
+      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(payload.permission)}; `
+      : '';
+    const script = `${cacheStatusScript}${cachePermissionScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -2042,6 +2045,13 @@ function AppInner(): React.JSX.Element {
         ? (error as { code: string }).code.trim()
         : resolveNativeSttErrorCode(message);
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
+      if (code === 'mic_permission') {
+        emitToWeb({
+          type: 'permission',
+          permission: 'denied',
+          platform: Platform.OS,
+        });
+      }
       emitToWeb({
         type: 'error',
         message,
@@ -2420,6 +2430,13 @@ function AppInner(): React.JSX.Element {
         ? event.code.trim()
         : resolveNativeSttErrorCode(event.message);
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'error';
+      if (code === 'mic_permission') {
+        emitToWeb({
+          type: 'permission',
+          permission: 'denied',
+          platform: Platform.OS,
+        });
+      }
       emitToWeb({
         type: 'error',
         message: event.message,

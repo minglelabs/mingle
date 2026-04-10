@@ -61,6 +61,7 @@ export function buildStorageKey(baseKey: string, namespace?: string): string {
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
+  __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown
 }
 
 export function persistUtterancesSnapshot(utterances: Utterance[]): void {
@@ -1967,6 +1968,20 @@ export default function useRealtimeSTT({
   }, [isCurrentNativeSttOwner])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!shouldUseNativeSttBridge()) return
+    const cachedWindow = window as NativeAppUpdateWindow
+    const cachedPermission = typeof cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION === 'string'
+      ? cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION
+      : null
+    if (!cachedPermission) return
+    nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction({
+      platform: 'ios',
+      permission: cachedPermission,
+    })
+  }, [])
+
+  useEffect(() => {
     targetLanguagesRef.current = [...languages]
   }, [languages])
 
@@ -3732,11 +3747,10 @@ export default function useRealtimeSTT({
         return
       }
 
-      if (!isCurrentNativeSttOwner()) {
-        return
-      }
-
       if (detail.type === 'status') {
+        if (!isCurrentNativeSttOwner()) {
+          return
+        }
         logSttDebug('native.status', { status: detail.status })
         const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
           nativeStatus: detail.status,
@@ -3755,6 +3769,9 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
+        if (!isCurrentNativeSttOwner()) {
+          return
+        }
         if (shouldPromoteConnectionStatusFromNativeActivity({
           previousConnectionStatus: connectionStatusRef.current,
         })) {
@@ -3779,11 +3796,22 @@ export default function useRealtimeSTT({
           permission: detail.permission,
           platform: detail.platform,
         })
-        nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction(detail)
+        const recoveryAction = resolveNativeMicPermissionRecoveryAction(detail)
+        nativeMicPermissionRecoveryActionRef.current = recoveryAction
+        if (
+          recoveryAction === 'open_ios_settings'
+          && isCurrentNativeSttOwner()
+          && connectionStatusRef.current !== 'idle'
+        ) {
+          resetToIdle()
+        }
         return
       }
 
       if (detail.type === 'error') {
+        if (!isCurrentNativeSttOwner()) {
+          return
+        }
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false
@@ -3808,6 +3836,9 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'close') {
+        if (!isCurrentNativeSttOwner()) {
+          return
+        }
         logSttDebug('native.close', { reason: detail.reason })
         if (nativeStopRequestedRef.current) {
           nativeStopRequestedRef.current = false

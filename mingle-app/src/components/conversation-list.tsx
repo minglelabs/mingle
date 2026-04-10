@@ -1548,6 +1548,23 @@ export default function ConversationList({
   const handleCreateConversation = useCallback(async () => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
     setIsCreatingConversation(true);
+    let shouldAutoStartNewConversation = true;
+
+    // Request mic permission while still in the user gesture context.
+    // iOS defers system permission dialogs during view transitions, so
+    // we must trigger the prompt before the conversation room opens.
+    // On native apps the native STT bridge handles mic access separately,
+    // but getUserMedia still triggers the shared app-level iOS permission.
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const warmStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        warmStream.getTracks().forEach((t) => t.stop());
+      } catch {
+        // If mic access is denied up-front, open the room but skip auto-start.
+        shouldAutoStartNewConversation = false;
+      }
+    }
+
     try {
       const response = await fetch(buildConversationApiPath(), {
         method: "POST",
@@ -1565,7 +1582,7 @@ export default function ConversationList({
       setConversations((current) => upsertConversation(current, nextConversation));
       setOverlayEnterMode("instant");
       setOverlayExitMode("animate");
-      setAutoStartConversationId(nextConversation.id);
+      setAutoStartConversationId(shouldAutoStartNewConversation ? nextConversation.id : null);
       setActiveConversation(nextConversation);
     } catch {
       window.alert(copy.createErrorMessage);
