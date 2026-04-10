@@ -1698,7 +1698,10 @@ export default function ConversationList({
     if (isNativeSttStatusLive(cachedNativeSttStatus)) return;
 
     const staleActiveConversationIds = conversations
-      .filter((conversation) => conversation.status === "active")
+      .filter((conversation) => (
+        conversation.status === "active"
+        && !deletingConversationIdsRef.current.has(conversation.id)
+      ))
       .map((conversation) => conversation.id);
     if (staleActiveConversationIds.length === 0) return;
 
