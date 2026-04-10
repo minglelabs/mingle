@@ -37,7 +37,6 @@ const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
 let activeNativeSttOwnerKey: string | null = null
-let nativeSttOwnerSequence = 0
 
 function claimNativeSttOwner(ownerKey: string): void {
   activeNativeSttOwnerKey = ownerKey
@@ -1907,12 +1906,10 @@ export default function useRealtimeSTT({
   const serverHydrationKeyRef = useRef('')
   const nativeSttOwnerKeyRef = useRef('')
   if (!nativeSttOwnerKeyRef.current) {
-    nativeSttOwnerSequence += 1
     nativeSttOwnerKeyRef.current = [
       'native-stt-owner',
       conversationId || 'no-conversation',
       storageNamespace || sessionKeyOverride || 'default',
-      String(nativeSttOwnerSequence),
     ].join(':')
   }
 
@@ -1927,6 +1924,13 @@ export default function useRealtimeSTT({
   const isCurrentNativeSttOwner = useCallback(() => (
     isNativeSttOwner(nativeSttOwnerKeyRef.current)
   ), [])
+
+  const claimCurrentNativeSttOwnerIfUnclaimed = useCallback(() => {
+    if (!activeNativeSttOwnerKey) {
+      claimCurrentNativeSttOwner()
+    }
+    return isCurrentNativeSttOwner()
+  }, [claimCurrentNativeSttOwner, isCurrentNativeSttOwner])
 
   const sendNativeSttCommand = useCallback((command: NativeSttBridgeCommand): boolean => {
     if (typeof window === 'undefined') return false
@@ -1947,7 +1951,6 @@ export default function useRealtimeSTT({
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!shouldUseNativeSttBridge()) return
-    if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) return
     const cachedWindow = window as NativeAppUpdateWindow
     const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
       ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
@@ -1957,6 +1960,11 @@ export default function useRealtimeSTT({
       previousConnectionStatus: connectionStatusRef.current,
     })
     if (!nextConnectionStatus) return
+    if (nextConnectionStatus === 'connecting' || nextConnectionStatus === 'ready') {
+      if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
+    } else if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) {
+      return
+    }
     if (nextConnectionStatus === 'ready') {
       hasActiveSessionRef.current = true
       nativeMicPermissionRecoveryActionRef.current = 'none'
@@ -1965,7 +1973,7 @@ export default function useRealtimeSTT({
       nativeMicPermissionRecoveryActionRef.current = 'none'
     }
     setConnectionStatus(nextConnectionStatus)
-  }, [isCurrentNativeSttOwner])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, isCurrentNativeSttOwner])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -3748,7 +3756,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'status') {
-        if (!isCurrentNativeSttOwner()) {
+        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
         }
         logSttDebug('native.status', { status: detail.status })
@@ -3769,7 +3777,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
-        if (!isCurrentNativeSttOwner()) {
+        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
         }
         if (shouldPromoteConnectionStatusFromNativeActivity({
@@ -3809,7 +3817,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'error') {
-        if (!isCurrentNativeSttOwner()) {
+        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
         }
         logSttDebug('native.error', { message: detail.message })
@@ -3836,7 +3844,7 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'close') {
-        if (!isCurrentNativeSttOwner()) {
+        if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
         }
         logSttDebug('native.close', { reason: detail.reason })
@@ -3855,7 +3863,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {
