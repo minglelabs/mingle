@@ -1225,6 +1225,7 @@ export default function ConversationList({
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
+  const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
   const isCreatingConversationRef = useRef(isCreatingConversation);
@@ -1680,6 +1681,11 @@ export default function ConversationList({
   }, [activeConversation]);
 
   useEffect(() => {
+    if (!activeConversation) return;
+    setRowActionMenu(null);
+  }, [activeConversation]);
+
+  useEffect(() => {
     liveConversationIdRef.current = liveConversationId;
   }, [liveConversationId]);
 
@@ -2000,6 +2006,9 @@ export default function ConversationList({
     const matchedConversation = conversations.find((conversation) => conversation.id === item.id);
     if (!matchedConversation) return;
 
+    setRowActionMenu(null);
+    suppressRowActionMenuUntilRef.current = Date.now() + ROW_ACTION_LONG_PRESS_DELAY_MS + 120;
+
     try {
       await openConversationSummary(matchedConversation);
     } catch {
@@ -2284,6 +2293,8 @@ export default function ConversationList({
                     disabled={conversationSelectionDisabled}
                     onSelect={handleOpenConversation}
                     onOpenActions={(selectedItem, position) => {
+                      if (activeConversationRef.current) return;
+                      if (Date.now() < suppressRowActionMenuUntilRef.current) return;
                       setRowActionMenu({
                         item: selectedItem,
                         position,
