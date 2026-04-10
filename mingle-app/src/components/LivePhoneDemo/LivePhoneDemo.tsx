@@ -2021,13 +2021,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handlePopState = (event: PopStateEvent) => {
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
-      const state = event.state
-      const nextStateDepth = (
+      const currentHistoryState = typeof window === 'undefined' ? null : window.history.state
+      const state = (
+        currentHistoryState && typeof currentHistoryState === 'object'
+          ? currentHistoryState
+          : event.state
+      ) as Record<string, unknown> | null
+      const hasMenuDepthState = Boolean(
         state
-        && typeof state === "object"
-        && typeof (state as Record<string, unknown>)[MENU_HISTORY_STATE_KEY] === 'number'
+        && typeof state[MENU_HISTORY_STATE_KEY] === 'number'
       )
-        ? Math.max(0, Math.min(2, Number((state as Record<string, unknown>)[MENU_HISTORY_STATE_KEY])))
+      const nextStateDepth = hasMenuDepthState
+        ? Math.max(0, Math.min(2, Number(state?.[MENU_HISTORY_STATE_KEY])))
         : 0
       const nextStateScreen = (
         state
@@ -2047,7 +2052,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       }
 
       if (menuHistoryDepthRef.current <= 0 && nextStateDepth <= 0) return
-      const nextDepth = nextStateDepth || Math.max(0, menuHistoryDepthRef.current - 1)
+      const nextDepth = nextStateDepth
       const isNativeIosHistoryGesture = requestedDepth === null && isNativeIosAppRuntime()
       applyMenuNavigationDepth(nextDepth, {
         exitMode: isNativeIosHistoryGesture && nextDepth === 0 ? 'instant' : 'animate',

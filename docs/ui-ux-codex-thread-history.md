@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 118.
+- Total standalone UI/UX issue atoms documented in this file: 119.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 73.
+- Issue atoms currently listed for this thread: 74.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -384,6 +384,11 @@
 73. **iOS forward-swipe could preview the menu and then let the room snap back over it**
    Problem: After returning from a menu/subpage to the room via iOS edge-swipe back, using the forward gesture could momentarily show the previous menu state and then abruptly let the room reclaim the screen. The system gesture preview looked correct, but the JS state refused to restore the menu.
    Attempted fix: The menu `popstate` handler was changed to accept forward restoration from depth `0 -> 1/2` instead of bailing out whenever the current menu depth was already zero.
+   Status: Resolved in-thread.
+
+74. **iOS forward-swipe still replayed a delayed room/menu double transition**
+   Problem: Even after forward restoration was enabled, the system could show the menu correctly and then, about a second later, replay a `menu -> room -> menu` sequence. The UI looked like it had recovered, then the room suddenly covered it, then the menu slid back in.
+   Attempted fix: Menu history restoration now reads the latest `window.history.state` instead of trusting a stale `popstate` payload, and it no longer invents fallback depths by decrementing the current depth. This avoids delayed second transitions from stale history snapshots.
    Status: Resolved in-thread.
 
 ## Other Issue Sessions
