@@ -67,6 +67,7 @@ const ROW_ACTION_LONG_PRESS_DELAY_MS = 450;
 const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const ROW_ACTION_TOOLTIP_GAP_PX = 8;
 const ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX = 200;
+const ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO = 0.4;
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -722,7 +723,11 @@ function isNativeSttStatusLive(status: string | null): boolean {
 function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   const rect = element.getBoundingClientRect();
   const left = rect.left + rect.width / 2;
-  if (rect.top - ROW_ACTION_TOOLTIP_GAP_PX >= ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX) {
+  const shouldForceBelow = rect.top <= window.innerHeight * ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO;
+  if (
+    !shouldForceBelow
+    && rect.top - ROW_ACTION_TOOLTIP_GAP_PX >= ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX
+  ) {
     return {
       side: "above",
       bottom: window.innerHeight - rect.top + ROW_ACTION_TOOLTIP_GAP_PX,
