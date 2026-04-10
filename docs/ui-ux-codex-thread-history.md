@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 92.
+- Total standalone UI/UX issue atoms documented in this file: 100.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +19,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 47.
+- Issue atoms currently listed for this thread: 55.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -255,6 +255,46 @@
    Problem: Separate from the full touch-deadlock case, there was also a softer failure mode where tapping a room clearly triggered navigation work — server logs showed `/[locale]/conversations?...&conversation=<id>` requests and room GET calls returning `200` — but the visible screen never changed. The user described this as “touch logs appear but the screen does not move.”
    Attempted fix: Multiple hypotheses were tried in-thread because the failure looked like a presentation-layer regression rather than an API failure. These included: allowing room-open even while room status PATCHes were pending, forcing room entry to `instant`, reverting the move of auto-start logic from `mingle-home` into `LivePhoneDemo`, restoring query-based room open on first render, removing/reverting cold-start last-view restoration, and switching between `document.body` portal rendering and inline overlay rendering for the room surface. None of those attempts was treated as a final, clearly verified root-cause fix in the captured session.
    Status: Not conclusively resolved in-thread. The issue was important enough that the thread explicitly requested it be written down as a separate class of room-open regression, distinct from the pure iOS touch-deadlock above.
+
+48. **iOS permission denial on `Start Conversation!` could still create a room and immediately strand it in `Connecting...`**
+   Problem: The desired UX became “create the room, but do not auto-start STT if the initial iOS mic request was denied.” Instead, the room could still enter a visible `Connecting...` state and just sit there until the user manually backed out.
+   Attempted fix: The create-room flow was changed so iOS native mic denial short-circuits auto-start, letting the room be created without pretending STT is actively connecting.
+   Status: Resolved in-thread after follow-up permission-flow passes.
+
+49. **After an iOS denial, the first explicit `Start` retry did not reliably open Settings**
+   Problem: Once the user had denied microphone permission, re-entering the room and pressing `Start` was supposed to jump directly to the iOS Settings screen on the first retry. Instead, one pass left the room flashing or entering `Connecting...` once, and Settings opened only on a later interaction.
+   Attempted fix: The thread cached the last native mic-permission outcome and reused it when re-entering rooms, so an already-denied state could trigger the Settings redirect immediately instead of burning the first retry tap.
+   Status: Resolved in-thread after native permission caching was added and then refined.
+
+50. **A hidden WebView site-level mic prompt appeared inside the native app**
+   Problem: Even though the native app already owned microphone permission, `Start Conversation!` could still trigger a web-origin mic prompt (`Allow "...photo-for-passport.com" to use your microphone?`) from the embedded WebView. This was confusing and wrong for the intended native UX.
+   Attempted fix: The room-creation warm-up path stopped calling `getUserMedia()` for native iOS/Android runtimes, so native permission stayed the only source of truth and the site-origin prompt stopped appearing.
+   Status: Resolved in-thread.
+
+51. **Web warm-up denial state and native denial state could drift apart**
+   Problem: When denial happened through the warm-up path before the room UI was visible, the room-level `Start` logic did not always inherit that denial. This created a split-brain state where the room thought it should connect, while the earlier create-room flow had already learned that mic permission was denied.
+   Attempted fix: The denial result from the create-room warm-up path was explicitly written into the same last-known native permission channel consumed by the room STT hook.
+   Status: Resolved in-thread.
+
+52. **STT could be truly running while the room UI stayed stuck in `Connecting...`**
+   Problem: Later in the thread, the user found that `Connecting...` could remain on-screen even when STT was actually active. Evidence included server-side STT connection logs and, after navigating away and back, a red running button and working transcript ingestion.
+   Attempted fix: Multiple state-reconciliation passes were added so the current room could recover native STT ownership on remount, re-read cached native status while connecting, and promote itself out of `connecting` when the native/runtime state proved STT was already alive.
+   Status: Resolved in-thread after several iterations.
+
+53. **The first STT server connection could be blocked until an unrelated user gesture**
+   Problem: In one particularly confusing version of the bug, the STT server did not log a client connection until the user hit back or otherwise interacted again. This made it look like “the room is stuck,” even though the actual cause was a blocked async step in the front-end start pipeline.
+   Attempted fix: The thread found that `primeAudioPlayback()` was being awaited before STT start, and on iOS/WebView that promise could stall waiting for a user gesture. The fix moved TTS priming to the background so the STT websocket start could happen immediately.
+   Status: Resolved in-thread.
+
+54. **Leaving a still-running room did not immediately update the list badge to `대화중`**
+   Problem: The list badge for the live room sometimes remained stale after backing out of a room. The user could see that STT was active only after re-entering the room, at which point the red running button appeared and only then did the list eventually update to `대화중`.
+   Attempted fix: Parent summary updates were made more eager, and the room/list ownership recovery path was expanded so the list could learn about the live owner even if the visible room UI had just unmounted.
+   Status: Resolved in-thread after the later state-sync passes.
+
+55. **The `Connecting...` overlay oscillated rapidly even while transcript text was already arriving**
+   Problem: One later regression produced especially bad UX: the room would show `Connecting...`, words would begin arriving, and the overlay would flash on and off many times over the first few seconds. The user described it as the overlay appearing and disappearing more than twenty times while speech was already being recognized.
+   Attempted fix: The native `running/silenced` statuses were kept in `connecting` only until the first real server-ready or transcript activity, and once the room reached `ready`, later repeated native running statuses were prevented from downgrading it back to `connecting`.
+   Status: Resolved in-thread.
 
 ## Other Issue Sessions
 
