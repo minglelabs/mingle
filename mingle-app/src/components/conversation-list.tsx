@@ -1990,7 +1990,7 @@ export default function ConversationList({
       enterMode?: ConversationOverlayEnterMode;
     },
   ) => {
-    const enterMode = options?.enterMode ?? "instant";
+    const enterMode = options?.enterMode ?? "animate";
     postNativeBannerZone("hidden");
     setShowSearch(false);
     setOverlayEnterMode(enterMode);
@@ -2023,7 +2023,7 @@ export default function ConversationList({
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {
-    if (!activeConversation || isCreatingConversation || mutatingConversationId) return;
+    if (!activeConversation || isCreatingConversation) return;
 
     const currentConversationId = readConversationIdFromLocation();
     if (
@@ -2038,13 +2038,13 @@ export default function ConversationList({
     }
 
     closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
-  }, [activeConversation, closeConversationOverlay, isCreatingConversation, mutatingConversationId]);
+  }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
-    if (!activeConversation || isCreatingConversation || mutatingConversationId) return false;
-    void handleCloseActiveConversation();
+    if (!activeConversation || isCreatingConversation) return false;
+    closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
     return true;
-  }, 0), [activeConversation, handleCloseActiveConversation, isCreatingConversation, mutatingConversationId]);
+  }, 0), [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => {
     if (activeConversation) {

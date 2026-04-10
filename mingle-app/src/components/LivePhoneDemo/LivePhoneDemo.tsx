@@ -121,7 +121,7 @@ const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX = 28
-const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 1400
+const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
 const CONVERSATION_SWIPE_BACK_DISTANCE_PX = 88
 const CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS = 0.45
@@ -628,6 +628,7 @@ type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 type LivePhoneDemoMenuMotionState = {
+  enterMode: LivePhoneDemoMenuTransitionMode
   exitMode: LivePhoneDemoMenuTransitionMode
   screenTransitionMode: LivePhoneDemoMenuTransitionMode
   isDragging: boolean
@@ -769,7 +770,9 @@ function isNextDevOverlayTarget(target: EventTarget | null, event?: Event): bool
 }
 
 const livePhoneDemoMenuBackdropVariants: Variants = {
-  initial: { opacity: 0 },
+  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
+    opacity: motionState?.enterMode === 'instant' ? 1 : 0,
+  }),
   active: { opacity: 1, transition: MENU_BACKDROP_TRANSITION },
   exit: (motionState: LivePhoneDemoMenuMotionState) => ({
     opacity: 0,
@@ -780,7 +783,9 @@ const livePhoneDemoMenuBackdropVariants: Variants = {
 }
 
 const livePhoneDemoMenuPanelVariants: Variants = {
-  initial: { x: '100%' },
+  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
+    x: motionState?.enterMode === 'instant' ? 0 : '100%',
+  }),
   active: (motionState: LivePhoneDemoMenuMotionState) => ({
     x: motionState.isDragging ? motionState.dragOffsetX : 0,
     transition: motionState.isDragging
@@ -1125,6 +1130,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
+  const [menuEnterMode, setMenuEnterMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
@@ -1177,11 +1183,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const isNativeMenuOverlayVisible = menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
+    enterMode: menuEnterMode,
     exitMode: menuExitMode,
     screenTransitionMode: menuScreenTransitionMode,
     isDragging: isMenuDragging,
     dragOffsetX: menuDragOffsetX,
-  }), [isMenuDragging, menuDragOffsetX, menuExitMode, menuScreenTransitionMode])
+  }), [isMenuDragging, menuDragOffsetX, menuEnterMode, menuExitMode, menuScreenTransitionMode])
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -1760,6 +1767,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const applyMenuNavigationDepth = useCallback((
     nextDepth: number,
     options?: {
+      enterMode?: LivePhoneDemoMenuTransitionMode
       exitMode?: LivePhoneDemoMenuTransitionMode
       screenTransitionMode?: LivePhoneDemoMenuTransitionMode
       screen?: LivePhoneDemoMenuScreen
@@ -1767,6 +1775,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   ) => {
     const previousDepth = menuHistoryDepthRef.current
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
+    const nextEnterMode = options?.enterMode ?? 'animate'
     const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
     const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
@@ -1788,6 +1797,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return
     }
 
+    setMenuEnterMode(nextEnterMode)
     setMenuExitMode('animate')
     setMenuOpen(true)
     setMenuScreen(nextScreen)
@@ -2073,10 +2083,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       )
 
       if (shouldIgnoreSettlingReplay) {
+        // iOS already moved history, but we're treating this as a delayed replay.
+        // Correct browser history to match the settled JS state so they stay in sync.
+        const correctionDelta = activeSettleState!.depth - nextDepth
+        if (correctionDelta !== 0) {
+          menuHistoryTargetDepthRef.current = activeSettleState!.depth
+          window.history.go(correctionDelta)
+        }
         return
       }
 
       applyMenuNavigationDepth(nextDepth, {
+        enterMode: isNativeIosHistoryGesture && nextDepth > 0 ? 'instant' : 'animate',
         exitMode: isNativeIosHistoryGesture && nextDepth === 0 ? 'instant' : 'animate',
         screenTransitionMode: isNativeIosHistoryGesture ? 'instant' : 'animate',
         screen: nextStateScreen,
@@ -4092,6 +4110,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           onExitComplete={() => {
             setMenuDragOffsetX(0)
             setIsMenuDragging(false)
+            setMenuEnterMode('animate')
             setMenuExitMode('animate')
             setMenuScreenTransitionMode('animate')
             if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {

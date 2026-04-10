@@ -240,6 +240,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const { autoStartOnMount, onAutoStartHandled } = props;
   const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
   const autoStartTriggeredRef = useRef(false);
+  const onAutoStartHandledRef = useRef(onAutoStartHandled);
+  onAutoStartHandledRef.current = onAutoStartHandled;
   const silenceSliderUpgradeCopy = useMemo(
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
@@ -303,7 +305,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
       if (room.isSttSessionRunning()) {
-        onAutoStartHandled?.();
+        onAutoStartHandledRef.current?.();
         return;
       }
       if (remainingAttempts <= 0) {
@@ -329,7 +331,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         return;
       }
       if (room.isSttSessionRunning()) {
-        onAutoStartHandled?.();
+        onAutoStartHandledRef.current?.();
         return;
       }
 
@@ -343,15 +345,19 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       })();
     };
 
+    // Wait for the conversation overlay slide-in animation (280ms) to settle
+    // before requesting mic permission. iOS defers permission dialogs during
+    // view transitions, so requesting too early causes the prompt to be
+    // delayed or suppressed until a later user interaction.
     timerId = window.setTimeout(() => {
       tryAutoStart(20);
-    }, 120);
+    }, 450);
 
     return () => {
       cancelled = true;
       clearTimer();
     };
-  }, [autoStartOnMount, isLiveDemoMounted, onAutoStartHandled]);
+  }, [autoStartOnMount, isLiveDemoMounted]);
   const [loginPassword, setLoginPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupName, setSignupName] = useState("");
@@ -1757,11 +1763,11 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           backButtonLabel={props.dictionary.profile.emailBackLabel}
           onBack={props.onBack}
           onConversationDeleted={props.onConversationDeleted}
+          conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
-          conversationTitle={props.conversationTitle}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
