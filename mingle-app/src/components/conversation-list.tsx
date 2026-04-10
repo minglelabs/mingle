@@ -130,6 +130,7 @@ function truncateConversationPreview(value: string, maxLength = 20): string {
 
 type ConversationListWindow = Window & {
   [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
+  __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown;
 };
 
 type LegacySingleRoomSnapshot = {
@@ -142,6 +143,19 @@ type LegacySingleRoomSnapshot = {
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
+}
+
+function shouldSkipCreateConversationMicWarmup(): boolean {
+  if (typeof window === "undefined") return false;
+  if (!isNativeAppRuntime()) return false;
+  if (!clientApiNamespace.startsWith("ios/")) return false;
+
+  const cachedWindow = window as ConversationListWindow;
+  const cachedPermission = typeof cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION === "string"
+    ? cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION.trim().toLowerCase()
+    : "";
+
+  return cachedPermission === "denied";
 }
 
 function normalizeSearchTerm(rawValue: string): string {
@@ -1550,12 +1564,16 @@ export default function ConversationList({
     setIsCreatingConversation(true);
     let shouldAutoStartNewConversation = true;
 
+    if (shouldSkipCreateConversationMicWarmup()) {
+      shouldAutoStartNewConversation = false;
+    }
+
     // Request mic permission while still in the user gesture context.
     // iOS defers system permission dialogs during view transitions, so
     // we must trigger the prompt before the conversation room opens.
     // On native apps the native STT bridge handles mic access separately,
     // but getUserMedia still triggers the shared app-level iOS permission.
-    if (navigator.mediaDevices?.getUserMedia) {
+    if (shouldAutoStartNewConversation && navigator.mediaDevices?.getUserMedia) {
       try {
         const warmStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         warmStream.getTracks().forEach((t) => t.stop());
@@ -1580,7 +1598,7 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       setShowSearch(false);
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("instant");
+      setOverlayEnterMode("animate");
       setOverlayExitMode("animate");
       setAutoStartConversationId(shouldAutoStartNewConversation ? nextConversation.id : null);
       setActiveConversation(nextConversation);
