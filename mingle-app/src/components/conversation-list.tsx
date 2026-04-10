@@ -1339,7 +1339,8 @@ export default function ConversationList({
       const roomRef = conversationRoomRefs.current.get(deleteDialogConversationId);
       if (roomRef?.isSttSessionRunning()) {
         try {
-          await roomRef.stopRecording({ deferRunningStateChange: true });
+          roomRef.prepareForDeletion?.();
+          await roomRef.stopRecording({ deferRunningStateChange: true, discardPendingFinalization: true });
         } catch {
           // Ignore stop races and continue deleting the room.
         }

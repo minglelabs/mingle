@@ -52,7 +52,8 @@ type MingleHomeProps = {
 
 export type MingleHomeRef = {
   startRecording: () => Promise<void>;
-  stopRecording: (options?: { deferRunningStateChange?: boolean }) => Promise<void>;
+  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  prepareForDeletion: () => void;
   isSttSessionRunning: () => boolean;
 };
 
@@ -1072,6 +1073,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     },
     stopRecording: async (options) => {
       await livePhoneDemoRef.current?.stopRecording(options);
+    },
+    prepareForDeletion: () => {
+      livePhoneDemoRef.current?.prepareForDeletion();
     },
     isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
   }), []);

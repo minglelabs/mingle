@@ -790,7 +790,8 @@ const livePhoneDemoMenuPanelVariants: Variants = {
 
 export interface LivePhoneDemoRef {
   startRecording: () => Promise<void>
-  stopRecording: (options?: { deferRunningStateChange?: boolean }) => Promise<void>
+  stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => Promise<void>
+  prepareForDeletion: () => void
   isSttSessionRunning: () => boolean
 }
 
@@ -2748,6 +2749,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     stopRecording,
     submitExternalUtterance,
     clearConversationHistory,
+    prepareForDeletion,
     isActive,
     isReady,
     isConnecting,
@@ -2975,7 +2977,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       if (isSttSessionRunning) {
         try {
-          await stopRecording()
+          prepareForDeletion()
+          await stopRecording({ discardPendingFinalization: true })
           scheduleTtsResumeAfterStopClick()
         } catch {
           // Continue deleting the room even if the native stop path races.
@@ -3019,6 +3022,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isSttSessionRunning,
     nativeAppUpdate,
     onConversationDeleted,
+    prepareForDeletion,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
     scheduleTtsResumeAfterStopClick,
@@ -3302,12 +3306,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     switchLiveRoomToastLabel,
   ])
 
-  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean }) => {
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => {
     if (!isSttSessionRunning) return
     if (options?.deferRunningStateChange !== true) {
       onSttSessionRunningChange?.(false)
     }
-    await stopRecording()
+    await stopRecording({ discardPendingFinalization: options?.discardPendingFinalization })
     if (options?.deferRunningStateChange === true) {
       onSttSessionRunningChange?.(false)
     }
@@ -3376,10 +3380,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       await handleStartRecording()
     },
     stopRecording: async (options) => {
+      if (options?.discardPendingFinalization) {
+        prepareForDeletion()
+      }
       await handleStopRecording(options)
     },
+    prepareForDeletion,
     isSttSessionRunning: () => isSttSessionRunning,
-  }), [handleStartRecording, handleStopRecording, isSttSessionRunning])
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)

@@ -682,6 +682,10 @@ interface UseRealtimeSTTOptions {
   storageNamespace?: string
 }
 
+type StopRecordingOptions = {
+  discardPendingFinalization?: boolean
+}
+
 interface SubmitExternalUtteranceInput {
   text: string
   sourceLanguage?: string
@@ -3086,6 +3090,24 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
   ])
 
+  const prepareForDeletion = useCallback(() => {
+    conversationClearSequenceRef.current += 1
+    clearLanguageChangeRestartTimer()
+    clearConnectionErrorResetTimer()
+    clearAllFinalizedTurnTranslationControllers()
+    clearPartialBuffers()
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+    turnStartedAtRef.current = null
+    recentFinalizedUtteranceRef.current = null
+    pendingFinalizedTtsUtteranceIdsRef.current.clear()
+    finalizedTtsSignatureRef.current.clear()
+  }, [
+    clearAllFinalizedTurnTranslationControllers,
+    clearConnectionErrorResetTimer,
+    clearLanguageChangeRestartTimer,
+    clearPartialBuffers,
+  ])
+
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
@@ -3249,6 +3271,13 @@ export default function useRealtimeSTT({
     releaseCurrentNativeSttOwner,
     stopAudioPipeline,
   ])
+
+  const stopRecordingWithOptions = useCallback(async (options?: StopRecordingOptions) => {
+    if (options?.discardPendingFinalization) {
+      prepareForDeletion()
+    }
+    await stopRecordingGracefully()
+  }, [prepareForDeletion, stopRecordingGracefully])
 
   const visualize = useCallback(() => {
     if (analyserRef.current) {
@@ -4340,11 +4369,12 @@ export default function useRealtimeSTT({
     appendUtterances,
     submitExternalUtterance,
     clearConversationHistory,
+    prepareForDeletion,
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
     ensureSessionKey,
     startRecording,
-    stopRecording: stopRecordingGracefully,
+    stopRecording: stopRecordingWithOptions,
   }
 }
