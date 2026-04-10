@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
@@ -24,6 +25,8 @@ const metadataBase =
   toMetadataBaseUrl(process.env.NEXTAUTH_URL) ??
   toMetadataBaseUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL) ??
   toMetadataBaseUrl(process.env.VERCEL_URL);
+
+const TOAST_BOTTOM_OFFSET = "calc(env(safe-area-inset-bottom, 0px) + 108px)";
 
 export const metadata: Metadata = {
   metadataBase,
@@ -73,7 +76,38 @@ export default function RootLayout({
         <TtsSettingsProvider>
           <AuthSessionProvider>
             <MobileCanvasShell>{children}</MobileCanvasShell>
-            <Toaster position="bottom-center" richColors closeButton />
+            <Toaster
+              position="bottom-center"
+              closeButton={false}
+              offset={{ bottom: TOAST_BOTTOM_OFFSET }}
+              mobileOffset={{ bottom: TOAST_BOTTOM_OFFSET }}
+              icons={{
+                success: (
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                ),
+                error: (
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                    <AlertCircle className="h-3 w-3" strokeWidth={2.5} />
+                  </span>
+                ),
+                loading: <Loader2 className="h-4 w-4 animate-spin text-amber-500" />,
+              }}
+              toastOptions={{
+                classNames: {
+                  toast: "!rounded-full !border !border-gray-200 !bg-white !px-4 !py-2.5 !shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)] !gap-2 !min-h-0",
+                  content: "!flex !items-center !gap-2",
+                  title: "!text-[14px] !font-medium !text-gray-800",
+                  icon: "!m-0 !h-auto !w-auto",
+                  success: "!text-gray-800",
+                  error: "!text-gray-800",
+                  loading: "!text-gray-800",
+                  default: "!text-gray-800",
+                },
+                duration: 2200,
+              }}
+            />
           </AuthSessionProvider>
         </TtsSettingsProvider>
         <Analytics />
