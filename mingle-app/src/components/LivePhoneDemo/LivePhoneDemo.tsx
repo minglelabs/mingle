@@ -2975,7 +2975,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       if (isSttSessionRunning) {
         try {
-          onSttSessionRunningChange?.(false)
           await stopRecording()
           scheduleTtsResumeAfterStopClick()
         } catch {
@@ -3004,7 +3003,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setDeleteConversationDialogOpen(false)
       requestCloseMenuPanel()
       onConversationDeleted?.()
-      onBack?.()
       toast.success(deleteConversationCopy.successToastLabel)
     } catch {
       toast.error(deleteConversationCopy.errorToastLabel)
@@ -3020,9 +3018,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     isDeletingConversation,
     isSttSessionRunning,
     nativeAppUpdate,
-    onBack,
     onConversationDeleted,
-    onSttSessionRunningChange,
     resolveConversationSessionKey,
     requestCloseMenuPanel,
     scheduleTtsResumeAfterStopClick,

@@ -1192,6 +1192,7 @@ export default function ConversationList({
   const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
+  const deletingConversationIdsRef = useRef(new Set<string>());
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
   const isCreatingConversationRef = useRef(isCreatingConversation);
@@ -1274,6 +1275,7 @@ export default function ConversationList({
   }, []);
 
   const handleConversationDeleted = useCallback((conversationId: string) => {
+    deletingConversationIdsRef.current.add(conversationId);
     replaceConversationOverlayUrl(null);
     postNativeBannerZone("hidden");
     setOverlayExitMode("instant");
@@ -1333,6 +1335,7 @@ export default function ConversationList({
 
     setIsDeletingConversation(true);
     try {
+      deletingConversationIdsRef.current.add(deleteDialogConversationId);
       const roomRef = conversationRoomRefs.current.get(deleteDialogConversationId);
       if (roomRef?.isSttSessionRunning()) {
         try {
@@ -1354,6 +1357,7 @@ export default function ConversationList({
       handleConversationDeleted(body.deletedConversationId);
       setDeleteDialogConversationId(null);
     } catch {
+      deletingConversationIdsRef.current.delete(deleteDialogConversationId);
       window.alert(deleteConversationCopy.errorToastLabel);
     } finally {
       setIsDeletingConversation(false);
@@ -1417,6 +1421,19 @@ export default function ConversationList({
   }, []);
 
   const handleConversationRunningChange = useCallback((conversationId: string, isRunning: boolean) => {
+    if (deletingConversationIdsRef.current.has(conversationId)) {
+      conversationRunningStateRef.current.set(conversationId, isRunning);
+      if (!isRunning) {
+        setLiveConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+        setAutoStartConversationId((current) => (
+          current === conversationId ? null : current
+        ));
+      }
+      return;
+    }
+
     const previousRunning = getDerivedConversationRunningState(conversationId);
     if (previousRunning === isRunning) {
       return;
