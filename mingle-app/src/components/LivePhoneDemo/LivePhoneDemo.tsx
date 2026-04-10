@@ -5056,7 +5056,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.16, ease: 'easeOut' }}
-                className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
+                className="absolute inset-0 z-[60] flex items-start justify-center bg-black/40 px-5 pt-[22vh] pb-8"
                 onClick={closeRenameConversationDialog}
               >
                 <motion.div
@@ -5084,7 +5084,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     placeholder={roomManagementCopy.renameFieldPlaceholder}
                     disabled={isRenamingConversation}
                     maxLength={120}
-                    className="mt-2 h-11 w-full rounded-xl border border-gray-300 px-3 text-[0.98rem] text-gray-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-gray-100"
+                    className="mt-2 h-11 w-full rounded-xl border border-gray-300 px-3 text-[0.98rem] text-gray-900 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:bg-gray-100"
                   />
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
