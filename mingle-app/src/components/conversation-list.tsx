@@ -1348,6 +1348,9 @@ export default function ConversationList({
         },
         body: JSON.stringify({ status }),
       });
+      if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
+        return null;
+      }
       const nextConversation = await readConversationResponse(response);
       setConversations((current) => upsertConversation(current, nextConversation));
       return nextConversation;
@@ -1434,7 +1437,12 @@ export default function ConversationList({
         method: "DELETE",
         headers: buildConversationRequestHeaders(),
       });
-      const body = await response.json() as { deletedConversationId?: string; error?: string };
+      const body = await response.json().catch(() => ({})) as { deletedConversationId?: string; error?: string };
+      if (response.status === 404) {
+        handleConversationDeleted(deleteDialogConversationId);
+        setDeleteDialogConversationId(null);
+        return;
+      }
       if (!response.ok || !body.deletedConversationId) {
         throw new Error(body.error || "conversation_delete_failed");
       }
@@ -1538,6 +1546,9 @@ export default function ConversationList({
 
     const nextStatus = isRunning ? "active" : "paused";
     void updateConversationStatus(conversationId, nextStatus).catch(() => {
+      if (deletingConversationIdsRef.current.has(conversationId)) {
+        return;
+      }
       setConversations((current) => {
         const conversation = current.find((item) => item.id === conversationId);
         if (!conversation) return current;

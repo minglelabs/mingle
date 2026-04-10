@@ -2995,7 +2995,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }),
       })
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 404) {
         throw new Error(`conversation_delete_failed:${response.status}`)
       }
 
