@@ -2265,7 +2265,7 @@ function AppInner(): React.JSX.Element {
             hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && !shouldDisableIosScroll}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && canWebViewGoBack}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}
