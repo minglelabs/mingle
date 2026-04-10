@@ -1978,6 +1978,56 @@ export default function useRealtimeSTT({
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!shouldUseNativeSttBridge()) return
+    if (connectionStatus !== 'connecting') return
+
+    let cancelled = false
+    let attemptsRemaining = 20
+
+    const reconcileNativeStatus = () => {
+      if (cancelled) return
+      const cachedWindow = window as NativeAppUpdateWindow
+      const cachedNativeStatus = typeof cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS === 'string'
+        ? cachedWindow.__MINGLE_LAST_NATIVE_STT_STATUS
+        : null
+      const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
+        nativeStatus: cachedNativeStatus,
+        previousConnectionStatus: connectionStatusRef.current,
+      })
+      if (!nextConnectionStatus) return
+
+      if (nextConnectionStatus === 'ready') {
+        if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
+        hasActiveSessionRef.current = true
+        nativeMicPermissionRecoveryActionRef.current = 'none'
+        setConnectionStatus('ready')
+        return
+      }
+
+      if (nextConnectionStatus === 'idle' || nextConnectionStatus === 'error') {
+        if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) return
+        setConnectionStatus(nextConnectionStatus)
+      }
+    }
+
+    const timer = window.setInterval(() => {
+      reconcileNativeStatus()
+      attemptsRemaining -= 1
+      if (attemptsRemaining <= 0 || connectionStatusRef.current !== 'connecting') {
+        window.clearInterval(timer)
+      }
+    }, 120)
+
+    reconcileNativeStatus()
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, connectionStatus, isCurrentNativeSttOwner])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!shouldUseNativeSttBridge()) return
     const cachedWindow = window as NativeAppUpdateWindow
     const cachedPermission = typeof cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION === 'string'
       ? cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION
