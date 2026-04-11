@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import process from 'node:process';
 
 import { remote } from 'webdriverio';
@@ -45,6 +46,7 @@ function parseArgs(argv) {
     iosXcodeOrgId: process.env.MINGLE_UI_QA_IOS_XCODE_ORG_ID || '',
     iosXcodeSigningId: process.env.MINGLE_UI_QA_IOS_XCODE_SIGNING_ID || '',
     iosUpdatedWdaBundleId: process.env.MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID || '',
+    iosDisableReservedIdentifierWarnings: process.env.MINGLE_UI_QA_IOS_DISABLE_RESERVED_IDENTIFIER_WARNINGS !== '0',
     iosShowXcodeLog: process.env.MINGLE_UI_QA_IOS_SHOW_XCODE_LOG === '1',
     iosWdaLocalPort: Number(process.env.MINGLE_UI_QA_IOS_WDA_LOCAL_PORT || 0),
     appiumPort: Number(process.env.MINGLE_UI_QA_APPIUM_PORT || DEFAULT_APPIUM_PORT),
@@ -303,6 +305,11 @@ async function createAndroidSession(options) {
 async function createIosSession(options) {
   assert(options.iosUdid, 'An iOS simulator/device UDID is required for iOS mobile UI QA.');
 
+  const iosRealDevice = !(await isIosSimulator(options.iosUdid));
+  const iosXcodeConfigFile = iosRealDevice
+    ? await ensureIosRealDeviceXcodeConfig(options)
+    : '';
+
   const capabilities = {
     platformName: 'iOS',
     'appium:automationName': 'XCUITest',
@@ -325,6 +332,10 @@ async function createIosSession(options) {
 
   if (options.iosUpdatedWdaBundleId) {
     capabilities['appium:updatedWDABundleId'] = options.iosUpdatedWdaBundleId;
+  }
+
+  if (iosXcodeConfigFile) {
+    capabilities['appium:xcodeConfigFile'] = iosXcodeConfigFile;
   }
 
   if (options.iosShowXcodeLog) {
@@ -372,6 +383,31 @@ async function prepareIosSimulator(udid) {
     },
   });
   await delay(3000);
+}
+
+async function ensureIosRealDeviceXcodeConfig(options) {
+  const lines = [];
+
+  if (options.iosXcodeOrgId) {
+    lines.push(`DEVELOPMENT_TEAM = ${options.iosXcodeOrgId}`);
+  }
+
+  if (options.iosXcodeSigningId) {
+    lines.push(`CODE_SIGN_IDENTITY = ${options.iosXcodeSigningId}`);
+  }
+
+  if (options.iosDisableReservedIdentifierWarnings) {
+    lines.push('WARNING_CFLAGS = $(inherited) -Wno-error=reserved-identifier -Wno-reserved-identifier');
+  }
+
+  if (lines.length === 0) {
+    return '';
+  }
+
+  const configDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mingle-ios-wda-'));
+  const configPath = path.join(configDir, 'wda-signing.xcconfig');
+  await fs.writeFile(configPath, `${lines.join('\n')}\n`);
+  return configPath;
 }
 
 function parseCodeSigningIdentities(output) {
