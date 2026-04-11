@@ -30,6 +30,8 @@ function run(command, args) {
 }
 
 try {
+  process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = process.env.MINGLE_RELEASE_TARGET || '';
+
   const releaseTargetValidation = validateReleaseTargetConfig({
     releaseTarget: process.env.MINGLE_RELEASE_TARGET || '',
     siteUrl: process.env.NEXT_PUBLIC_SITE_URL || '',

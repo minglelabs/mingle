@@ -4,6 +4,11 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import type { ConversationHydrationUtterance } from '@/lib/app-conversations'
+import {
+  resolveDefaultMingleBehaviorProfile,
+  resolveMingleBehaviorProfile,
+  type MingleBehaviorProfile,
+} from '@/lib/client-behavior-profile'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
 import {
@@ -61,6 +66,27 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown
+}
+
+function resolveRuntimeApiNamespace(): string {
+  if (typeof window === 'undefined') {
+    return clientApiNamespace
+  }
+
+  return readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+}
+
+function resolveSttRuntimeBehaviorContext(): {
+  apiNamespace: string
+  behaviorProfile: MingleBehaviorProfile
+} {
+  const apiNamespace = resolveRuntimeApiNamespace()
+  return {
+    apiNamespace,
+    behaviorProfile: apiNamespace
+      ? resolveMingleBehaviorProfile(apiNamespace)
+      : resolveDefaultMingleBehaviorProfile(),
+  }
 }
 
 export function persistUtterancesSnapshot(utterances: Utterance[]): void {
@@ -190,6 +216,8 @@ type NativeSttStartCommand = {
     wsUrl: string
     sttModel: string
     aecEnabled: boolean
+    apiNamespace: string
+    behaviorProfile: MingleBehaviorProfile
     sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
   }
@@ -1634,7 +1662,7 @@ function buildClientContextPayload(usageSec: number): Record<string, unknown> {
 
   const nativeTracking = resolveNativeAppTrackingContext({
     detail: (window as NativeAppUpdateWindow).__MINGLE_NATIVE_APP_UPDATE_STATUS,
-    apiNamespace: readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace,
+    apiNamespace: resolveRuntimeApiNamespace(),
     isNativeAppRuntime: isNativeAppRuntime(),
   })
 
@@ -2155,13 +2183,13 @@ export default function useRealtimeSTT({
 
     const nativeTracking = resolveNativeAppTrackingContext({
       detail: (window as NativeAppUpdateWindow).__MINGLE_NATIVE_APP_UPDATE_STATUS,
-      apiNamespace: readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace,
+      apiNamespace: resolveRuntimeApiNamespace(),
       isNativeAppRuntime: isNativeAppRuntime(),
     })
 
     const headers: Record<string, string> = {
       'x-mingle-user-id': getOrCreateTrackingUserId(),
-      'x-mingle-api-namespace': nativeTracking.apiNamespace || clientApiNamespace,
+      'x-mingle-api-namespace': nativeTracking.apiNamespace || resolveRuntimeApiNamespace(),
     }
 
     if (nativeTracking.clientPlatform) {
@@ -3726,6 +3754,7 @@ export default function useRealtimeSTT({
 
       if (useNativeStt) {
         claimCurrentNativeSttOwner()
+        const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
         const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         logSttDebug('native.start.begin')
         const posted = sendNativeSttCommand({
@@ -3734,6 +3763,8 @@ export default function useRealtimeSTT({
             wsUrl: getWsUrl(),
             sttModel: 'soniox',
             aecEnabled: enableAec,
+            apiNamespace: runtimeBehaviorContext.apiNamespace,
+            behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
           },
@@ -3777,10 +3808,13 @@ export default function useRealtimeSTT({
       socketRef.current = socket
 
       socket.onopen = () => {
+        const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
         const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         const config = {
           sample_rate: context.sampleRate,
           stt_model: 'soniox',
+          api_namespace: runtimeBehaviorContext.apiNamespace,
+          behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
         }

@@ -5,12 +5,18 @@ import { getDictionary, isSupportedLocale } from "@/i18n";
 import type { AppLocale } from "@/i18n/config";
 import { listConversationChannelsForUser } from "@/lib/app-conversations";
 import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  resolveDefaultMingleBehaviorProfile,
+  readRequestedApiNamespaceFromSearchParams,
+  resolveMingleBehaviorProfile,
+} from "@/lib/client-behavior-profile";
 import {
   findUserIdForIdentity,
   normalizeSessionUserIdentity,
   sanitizeRequestIdentityValue,
 } from "@/lib/request-user-identity";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 type ConversationsPageProps = {
   params: Promise<{ locale: string }>;
@@ -38,6 +44,15 @@ export default async function ConversationsPage({ params, searchParams }: Conver
 
   if (!isSupportedLocale(locale)) {
     notFound();
+  }
+
+  const requestedApiNamespace = readRequestedApiNamespaceFromSearchParams(resolvedSearchParams);
+  const behaviorProfile = requestedApiNamespace
+    ? resolveMingleBehaviorProfile(requestedApiNamespace)
+    : resolveDefaultMingleBehaviorProfile();
+
+  if (behaviorProfile === "legacy_1_0_11") {
+    redirect(buildPathWithSearchParams(`/${locale}`, resolvedSearchParams));
   }
 
   const session = await getServerSession(getAuthOptions());

@@ -779,6 +779,8 @@ class NativeSTTModule: RCTEventEmitter {
         wsUrlString: String,
         sttModel: String,
         aecEnabled: Bool,
+        apiNamespace: String,
+        behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
@@ -863,6 +865,12 @@ class NativeSTTModule: RCTEventEmitter {
             "sample_rate": sampleRate,
             "stt_model": sttModel,
         ]
+        if !apiNamespace.isEmpty {
+            configPayload["api_namespace"] = apiNamespace
+        }
+        if !behaviorProfile.isEmpty {
+            configPayload["behavior_profile"] = behaviorProfile
+        }
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
@@ -899,6 +907,8 @@ class NativeSTTModule: RCTEventEmitter {
 
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -914,6 +924,8 @@ class NativeSTTModule: RCTEventEmitter {
                 wsUrlString: wsUrlString,
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
+                apiNamespace: apiNamespace,
+                behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 resolve: resolve,
@@ -932,6 +944,8 @@ class NativeSTTModule: RCTEventEmitter {
                             wsUrlString: wsUrlString,
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
+                            apiNamespace: apiNamespace,
+                            behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             resolve: resolve,
