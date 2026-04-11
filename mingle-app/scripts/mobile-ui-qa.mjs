@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { spawn } from 'node:child_process';
+import { X509Certificate } from 'node:crypto';
 import os from 'node:os';
 import process from 'node:process';
 
@@ -410,27 +411,81 @@ async function ensureIosRealDeviceXcodeConfig(options) {
   return configPath;
 }
 
-function parseCodeSigningIdentities(output) {
+function parseCodeSigningIdentityRefs(output) {
   return output
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/"(?<label>Apple [^"]+)"$/);
-      if (!match?.groups?.label) return null;
-      const label = match.groups.label;
-      const teamIdMatch = label.match(/\((?<teamId>[A-Z0-9]{10})\)$/);
+      const match = line.match(/^\d+\)\s+(?<hash>[A-F0-9]{40})\s+"(?<label>Apple [^"]+)"(?:\s+\((?<status>[^)]+)\))?$/);
+      if (!match?.groups?.label || !match.groups.hash) return null;
       return {
-        label,
-        teamId: teamIdMatch?.groups?.teamId || '',
+        hash: match.groups.hash,
+        label: match.groups.label,
+        status: match.groups.status || '',
       };
     })
     .filter(Boolean);
 }
 
+function parseTeamIdFromCertificateSubject(subject) {
+  const match = subject.match(/^OU=(?<teamId>[A-Z0-9]{10})$/m);
+  return match?.groups?.teamId || '';
+}
+
+function parseCodeSigningCertificates(output) {
+  return [...output.matchAll(/SHA-1 hash:\s*(?<hash>[A-F0-9]{40})\n(?<pem>-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----)/g)]
+    .map((match) => {
+      const hash = match.groups?.hash || '';
+      const pem = match.groups?.pem || '';
+      if (!hash || !pem) return null;
+
+      try {
+        const certificate = new X509Certificate(pem);
+        return {
+          hash,
+          label: certificate.subject.match(/^CN=(?<label>[^\n]+)$/m)?.groups?.label || '',
+          subject: certificate.subject,
+          teamId: parseTeamIdFromCertificateSubject(certificate.subject),
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 async function listCodeSigningIdentities() {
-  const result = await runCommand('security', ['find-identity', '-v', '-p', 'codesigning']);
-  return parseCodeSigningIdentities(result.stdout);
+  const [identityResult, certificateResult] = await Promise.all([
+    runCommand('security', ['find-identity', '-v', '-p', 'codesigning']),
+    runCommand('security', [
+      'find-certificate',
+      '-a',
+      '-Z',
+      '-p',
+      '-c',
+      'Apple Development',
+      `${process.env.HOME}/Library/Keychains/login.keychain-db`,
+    ]),
+  ]);
+
+  const identityRefs = parseCodeSigningIdentityRefs(identityResult.stdout);
+  const certificatesByHash = new Map(
+    parseCodeSigningCertificates(certificateResult.stdout).map((certificate) => [certificate.hash, certificate]),
+  );
+
+  return identityRefs.map((identityRef) => {
+    const certificate = certificatesByHash.get(identityRef.hash);
+    const fallbackTeamId = identityRef.label.match(/\((?<teamId>[A-Z0-9]{10})\)$/)?.groups?.teamId || '';
+
+    return {
+      hash: identityRef.hash,
+      label: identityRef.label,
+      status: identityRef.status,
+      subject: certificate?.subject || '',
+      teamId: certificate?.teamId || fallbackTeamId,
+    };
+  });
 }
 
 async function getIosDeviceListingState(udid) {
@@ -464,7 +519,7 @@ async function getIosDeviceListingState(udid) {
   };
 }
 
-function buildIosRealDeviceWdaArgs(options) {
+async function buildIosRealDeviceWdaArgs(options) {
   const args = [
     '-project',
     WDA_PROJECT_PATH,
@@ -474,6 +529,11 @@ function buildIosRealDeviceWdaArgs(options) {
     `id=${options.iosUdid}`,
     '-allowProvisioningUpdates',
   ];
+
+  const iosXcodeConfigFile = await ensureIosRealDeviceXcodeConfig(options);
+  if (iosXcodeConfigFile) {
+    args.push('-xcconfig', iosXcodeConfigFile);
+  }
 
   if (options.iosXcodeOrgId) {
     args.push(`DEVELOPMENT_TEAM=${options.iosXcodeOrgId}`);
@@ -547,7 +607,7 @@ async function collectIosRealDeviceDiagnostics(options, originalError) {
     );
   }
 
-  const wdaArgs = buildIosRealDeviceWdaArgs(options);
+  const wdaArgs = await buildIosRealDeviceWdaArgs(options);
   diagnostics.wdaBuild = {
     command: 'xcodebuild',
     args: wdaArgs,
@@ -940,6 +1000,7 @@ async function runIosCases(driver, reportDir, options) {
   await waitForQaBridge(driver);
 
   const results = [];
+  const iosSimulator = await isIosSimulator(options.iosUdid);
 
   results.push(await runCase({
     driver,
@@ -956,37 +1017,39 @@ async function runIosCases(driver, reportDir, options) {
     },
   }));
 
-  results.push(await runCase({
-    driver,
-    platform: 'ios',
-    reportDir,
-    caseId: 'permission-denial-recovers-to-idle',
-    runner: async () => {
-      await resetQaDemoState(driver);
-      await runCommand('xcrun', ['simctl', 'privacy', options.iosUdid, 'revoke', 'microphone', IOS_BUNDLE_ID]);
-      await driver.terminateApp(IOS_BUNDLE_ID);
-      await driver.activateApp(IOS_BUNDLE_ID);
-      await switchToWebView(driver);
-      await waitForQaBridge(driver);
+  if (iosSimulator) {
+    results.push(await runCase({
+      driver,
+      platform: 'ios',
+      reportDir,
+      caseId: 'permission-denial-recovers-to-idle',
+      runner: async () => {
+        await resetQaDemoState(driver);
+        await runCommand('xcrun', ['simctl', 'privacy', options.iosUdid, 'revoke', 'microphone', IOS_BUNDLE_ID]);
+        await driver.terminateApp(IOS_BUNDLE_ID);
+        await driver.activateApp(IOS_BUNDLE_ID);
+        await switchToWebView(driver);
+        await waitForQaBridge(driver);
 
-      const micButton = await driver.$('[data-qa="live-demo-mic-button"]');
-      await micButton.click();
-      await switchToNative(driver);
-      const alertDismissed = await dismissIosAlertIfPresent(driver);
+        const micButton = await driver.$('[data-qa="live-demo-mic-button"]');
+        await micButton.click();
+        await switchToNative(driver);
+        const alertDismissed = await dismissIosAlertIfPresent(driver);
 
-      await switchToWebView(driver);
-      const snapshot = await waitFor(async () => {
-        const next = await getQaSnapshot(driver);
-        return next?.micVisualState === 'idle' ? next : null;
-      }, 'the mic UI to recover back to idle after denial', 15000, 500);
+        await switchToWebView(driver);
+        const snapshot = await waitFor(async () => {
+          const next = await getQaSnapshot(driver);
+          return next?.micVisualState === 'idle' ? next : null;
+        }, 'the mic UI to recover back to idle after denial', 15000, 500);
 
-      assert(snapshot.micVisualState === 'idle', 'Mic UI did not return to idle after permission denial.', snapshot);
-      return {
-        alertDismissed,
-        snapshot,
-      };
-    },
-  }));
+        assert(snapshot.micVisualState === 'idle', 'Mic UI did not return to idle after permission denial.', snapshot);
+        return {
+          alertDismissed,
+          snapshot,
+        };
+      },
+    }));
+  }
 
   return results;
 }

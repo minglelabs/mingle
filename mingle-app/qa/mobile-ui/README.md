@@ -40,6 +40,8 @@ scripts/devbox mobile --platform ios --ios-configuration Debug --device-app-env 
 
 For iOS real-device runs, do not install from the local profile when the app URL points to `127.0.0.1` or `localhost`. Use the device profile so the WebView loads through the tunnel URL and the QA bridge remains reachable from Appium.
 
+For iOS real-device Appium runs, install a `Debug` build. The current RN shell enables iOS WebView debugging only in debug builds, so a `Release` build will not expose the QA WebView context to Appium on a physical phone.
+
 ## iOS Real-Device WDA Requirements
 
 Real iPhone automation requires Appium to install and launch WebDriverAgent on the phone. On this workstation, the blocker was not the app itself but WDA signing. Before running against a physical iPhone, make sure the items below are true:
@@ -81,6 +83,8 @@ Run iOS simulator or device QA:
 ```bash
 pnpm test:qa:ui:ios -- --ios-udid <udid>
 ```
+
+On physical iPhones, the current suite runs the locale/menu regression only. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
 
 The runner automatically seeds `RCT_jsLocation` for iOS simulators so debug builds attach to the worktree Metro port before Appium connects.
 
