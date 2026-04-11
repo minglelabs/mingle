@@ -6,6 +6,7 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemoLegacy from "@/components/LivePhoneDemo/LivePhoneDemoLegacy";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
@@ -246,10 +247,8 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
   const nativeAuthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const callbackUrl = useMemo(
-    () => `/${props.locale}/translator`,
-    [props.locale],
-  );
+  const callbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}/translator`);
+  const signedOutCallbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}`);
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
     [props.locale],
@@ -940,8 +939,8 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
 
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
-    void signOut({ callbackUrl: `/${props.locale}` });
-  }, [isDeletingAccount, props.locale]);
+    void signOut({ callbackUrl: signedOutCallbackUrl });
+  }, [isDeletingAccount, signedOutCallbackUrl]);
 
   const handleDeleteAccount = useCallback(async () => {
     if (isDeletingAccount) return;
@@ -953,7 +952,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
-      await signOut({ callbackUrl: `/${props.locale}` });
+      await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);
     } finally {
@@ -962,7 +961,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
   }, [
     isDeletingAccount,
     props.dictionary.profile.deleteAccountFailed,
-    props.locale,
+    signedOutCallbackUrl,
   ]);
 
   // Keep loading and unauthenticated states within one stable layout.

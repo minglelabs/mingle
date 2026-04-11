@@ -7,6 +7,7 @@ import {
     resolveMingleSttReleaseVariant,
 } from '../behavior-profile';
 import { resolveMingleSttReleaseRuntime } from '../release-runtime';
+import type { MingleSttClientConfig } from '../release-runtime';
 
 test('legacy namespaces stay on the 1.0.11 STT profile', () => {
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.0.11'), 'legacy_1_0_11');
@@ -33,7 +34,6 @@ test('release runtimes stay pinned to the resolved release variant', () => {
     const legacyRuntime = resolveMingleSttReleaseRuntime('ios_v1_0_11');
     assert.deepEqual(
         legacyRuntime.buildReadyPayload({
-            behaviorProfile: 'legacy_1_0_11',
             sonioxLanguageHintsEnabled: true,
         }),
         {
@@ -47,7 +47,6 @@ test('release runtimes stay pinned to the resolved release variant', () => {
     const modernRuntime = resolveMingleSttReleaseRuntime('android_v1_1_0');
     assert.deepEqual(
         modernRuntime.buildStopRecordingAckData({
-            behaviorProfile: 'v1_1_0',
             finalizedTurn: { text: 'hello', language: 'en' },
         }),
         {
@@ -57,4 +56,123 @@ test('release runtimes stay pinned to the resolved release variant', () => {
             final_turn: { text: 'hello', language: 'en' },
         },
     );
+});
+
+test('release runtime owns provider startup dispatch', () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+    const calls: string[] = [];
+    const config: MingleSttClientConfig = {
+        sample_rate: 16_000,
+        languages: ['en'],
+        stt_model: 'deepgram-multi',
+    };
+
+    runtime.startConnectionForModel({
+        config,
+        starters: {
+            startGladia: () => calls.push('gladia'),
+            startDeepgram: () => calls.push('deepgram'),
+            startDeepgramMulti: () => calls.push('deepgram-multi'),
+            startFireworks: () => calls.push('fireworks'),
+            startSoniox: () => calls.push('soniox'),
+        },
+    });
+
+    assert.deepEqual(calls, ['deepgram-multi']);
+});
+
+test('release runtime owns non-soniox stop lifecycle handling', () => {
+    const runtime = resolveMingleSttReleaseRuntime('android_v1_0_11');
+    let sonioxStopRequested = true;
+    let providerClosed = false;
+    let clientCloseScheduled = false;
+    let speakerStatesDisposed = false;
+    let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
+
+    runtime.handleStopRecording({
+        pendingText: ' hello ',
+        pendingLanguage: 'en',
+        currentModel: 'gladia',
+        lifecycle: {
+            setSonioxStopRequested: (nextValue) => {
+                sonioxStopRequested = nextValue;
+            },
+            finalizePendingTurnFromProvider: null,
+            sendForcedFinalTurn: (rawText, rawLanguage) => ({
+                text: rawText.trim(),
+                language: rawLanguage,
+            }),
+            closeProviderSocket: () => {
+                providerClosed = true;
+            },
+            sendStopRecordingAck: (data) => {
+                ackData = data;
+            },
+            scheduleClientCloseAfterAck: () => {
+                clientCloseScheduled = true;
+            },
+            disposeSpeakerStates: () => {
+                speakerStatesDisposed = true;
+            },
+        },
+    });
+
+    assert.equal(sonioxStopRequested, false);
+    assert.equal(providerClosed, true);
+    assert.equal(clientCloseScheduled, true);
+    assert.equal(speakerStatesDisposed, true);
+    assert.deepEqual(ackData, {
+        release_variant: 'android_v1_0_11',
+        behavior_profile: 'legacy_1_0_11',
+        finalized: true,
+        final_turn: { text: 'hello', language: 'en' },
+    });
+});
+
+test('release runtime owns soniox stop lifecycle handling', async () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+    let sonioxStopRequested = false;
+    let finalizeCalls = 0;
+    let providerClosed = false;
+    let speakerStatesDisposed = false;
+    let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
+
+    runtime.handleStopRecording({
+        pendingText: '',
+        pendingLanguage: 'unknown',
+        currentModel: 'soniox',
+        lifecycle: {
+            setSonioxStopRequested: (nextValue) => {
+                sonioxStopRequested = nextValue;
+            },
+            finalizePendingTurnFromProvider: async () => {
+                finalizeCalls += 1;
+                return null;
+            },
+            sendForcedFinalTurn: () => null,
+            closeProviderSocket: () => {
+                providerClosed = true;
+            },
+            sendStopRecordingAck: (data) => {
+                ackData = data;
+            },
+            scheduleClientCloseAfterAck: () => undefined,
+            disposeSpeakerStates: () => {
+                speakerStatesDisposed = true;
+            },
+        },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(sonioxStopRequested, true);
+    assert.equal(finalizeCalls, 1);
+    assert.equal(providerClosed, true);
+    assert.equal(speakerStatesDisposed, false);
+    assert.deepEqual(ackData, {
+        release_variant: 'ios_v1_1_0',
+        behavior_profile: 'v1_1_0',
+        finalized: false,
+        final_turn: null,
+    });
 });

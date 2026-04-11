@@ -26,7 +26,14 @@ import {
     type MingleSttBehaviorProfile,
     type MingleSttReleaseVariant,
 } from './behavior-profile';
-import { resolveMingleSttReleaseRuntime } from './release-runtime';
+import {
+    resolveMingleSttReleaseRuntime,
+    type MingleSttClientConfig,
+    type MingleSttConnectionStarters,
+    type MingleSttFinalTurnPayload,
+    type MingleSttModel,
+    type MingleSttStopRecordingLifecycle,
+} from './release-runtime';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -62,24 +69,6 @@ const SONIOX_DEBUG_TOKEN_LOGS = (() => {
 const server = createServer();
 const wss = new WebSocketServer({ server });
 
-interface ClientConfig {
-    sample_rate: number;
-    languages: string[];
-    stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
-    api_namespace?: string;
-    behavior_profile?: MingleSttBehaviorProfile;
-    release_variant?: MingleSttReleaseVariant;
-    lang_hints_strict?: boolean;
-    soniox_language_hints?: string[];
-    soniox_manual_finalize_silence_ms?: number;
-}
-
-interface FinalTurnPayload {
-    text: string;
-    language: string;
-    speaker?: string;
-}
-
 let connectionCounter = 0;
 
 wss.on('connection', (clientWs) => {
@@ -90,12 +79,12 @@ wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
-    let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
+    let currentModel: MingleSttModel = 'gladia';
     let behaviorProfile: MingleSttBehaviorProfile = 'legacy_1_0_11';
     let releaseVariant: MingleSttReleaseVariant = 'legacy_default_v1_0_11';
     let releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
     let selectedLanguages: string[] = [];
-    let finalizePendingTurnFromProvider: (() => Promise<FinalTurnPayload | null>) | null = null;
+    let finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null = null;
     let sonioxStopRequested = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
@@ -125,37 +114,13 @@ wss.on('connection', (clientWs) => {
         if (clientWs.readyState !== WebSocket.OPEN) return;
         clientWs.send(JSON.stringify(
             releaseRuntime.buildReadyPayload({
-                behaviorProfile,
                 sonioxLanguageHintsEnabled: SONIOX_USE_LANGUAGE_HINTS,
             }),
         ));
     };
 
-    const buildStopRecordingAckDataForReleaseVariant = (
-        finalizedTurn: FinalTurnPayload | null,
-    ) => releaseRuntime.buildStopRecordingAckData({
-        behaviorProfile,
-        finalizedTurn,
-    });
-
-    const startConnectionForModel = (config: ClientConfig) => {
-        if (currentModel === 'deepgram') {
-            void startDeepgramConnection(config);
-        } else if (currentModel === 'deepgram-multi') {
-            void startDeepgramMultiConnection(config);
-        } else if (currentModel === 'fireworks') {
-            void startFireworksConnection(config);
-        } else if (currentModel === 'soniox') {
-            void startSonioxConnection(config);
-        } else if (currentModel === 'gladia-stt') {
-            void startGladiaConnection(config, false);
-        } else {
-            void startGladiaConnection(config, true);
-        }
-    };
-
     // ===== GLADIA 연결 =====
-    const startGladiaConnection = async (config: ClientConfig, enableTranslation = true) => {
+    const startGladiaConnection = async (config: MingleSttClientConfig, enableTranslation = true) => {
         if (!gladiaApiKey) {
             console.error("GLADIA_API_KEY environment variable not set!");
             clientWs.close(1011, "Server configuration error: Gladia API key not found.");
@@ -264,7 +229,7 @@ wss.on('connection', (clientWs) => {
     };
 
     // ===== DEEPGRAM 연결 =====
-    const startDeepgramConnection = async (config: ClientConfig) => {
+    const startDeepgramConnection = async (config: MingleSttClientConfig) => {
         if (!deepgramApiKey) {
             console.error("DEEPGRAM_API_KEY environment variable not set!");
             clientWs.close(1011, "Server configuration error: Deepgram API key not found.");
@@ -385,7 +350,7 @@ wss.on('connection', (clientWs) => {
     };
 
     // ===== DEEPGRAM MULTI 연결 (다국어 코드 스위칭) =====
-    const startDeepgramMultiConnection = async (config: ClientConfig) => {
+    const startDeepgramMultiConnection = async (config: MingleSttClientConfig) => {
         if (!deepgramApiKey) {
             console.error("DEEPGRAM_API_KEY environment variable not set!");
             clientWs.close(1011, "Server configuration error: Deepgram API key not found.");
@@ -487,7 +452,7 @@ wss.on('connection', (clientWs) => {
     };
 
     // ===== FIREWORKS 연결 =====
-    const startFireworksConnection = async (config: ClientConfig) => {
+    const startFireworksConnection = async (config: MingleSttClientConfig) => {
         if (!fireworksApiKey) {
             console.error("FIREWORKS_API_KEY environment variable not set!");
             clientWs.close(1011, "Server configuration error: Fireworks API key not found.");
@@ -575,7 +540,7 @@ wss.on('connection', (clientWs) => {
     };
 
     // ===== SONIOX 연결 (다국어 실시간, 토큰 기반, 발화자 분리) =====
-    const startSonioxConnection = async (config: ClientConfig) => {
+    const startSonioxConnection = async (config: MingleSttClientConfig) => {
         if (!sonioxApiKey) {
             console.error("SONIOX_API_KEY environment variable not set!");
             clientWs.close(1011, "Server configuration error: Soniox API key not found.");
@@ -797,7 +762,7 @@ wss.on('connection', (clientWs) => {
                 language: string,
                 isFinal: boolean,
                 speaker?: string,
-            ): FinalTurnPayload | null => {
+            ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
                 const cleanedLang = (language || '').trim() || 'unknown';
                 const cleanedSpeaker = (speaker || '').trim() || 'unknown';
@@ -840,7 +805,7 @@ wss.on('connection', (clientWs) => {
                 state.strategy.resetState();
             };
 
-            const finalizeSpeakerTurn = (speaker: string): FinalTurnPayload | null => {
+            const finalizeSpeakerTurn = (speaker: string): MingleSttFinalTurnPayload => {
                 const state = speakerStates.get(speaker);
                 if (!state) return null;
                 const merged = composeTurnText(state.providerFinalizedText, state.latestNonFinalText);
@@ -862,8 +827,8 @@ wss.on('connection', (clientWs) => {
                 return payload;
             };
 
-            const flushAllSpeakerTurns = (): FinalTurnPayload | null => {
-                let lastPayload: FinalTurnPayload | null = null;
+            const flushAllSpeakerTurns = (): MingleSttFinalTurnPayload => {
+                let lastPayload: MingleSttFinalTurnPayload = null;
                 for (const speaker of Array.from(speakerStates.keys())) {
                     const payload = finalizeSpeakerTurn(speaker);
                     if (payload) {
@@ -1284,7 +1249,7 @@ wss.on('connection', (clientWs) => {
         rawText: string,
         rawLanguage: string,
         rawSpeaker?: string,
-    ): FinalTurnPayload | null => {
+    ): MingleSttFinalTurnPayload => {
         const text = (rawText || '').trim();
         const language = (rawLanguage || '').trim() || 'unknown';
         const speaker = (rawSpeaker || '').trim() || 'unknown';
@@ -1307,6 +1272,55 @@ wss.on('connection', (clientWs) => {
         return { text, language, speaker };
     };
 
+    const connectionStarters: MingleSttConnectionStarters = {
+        startGladia: (config, enableTranslation) => {
+            void startGladiaConnection(config, enableTranslation);
+        },
+        startDeepgram: (config) => {
+            void startDeepgramConnection(config);
+        },
+        startDeepgramMulti: (config) => {
+            void startDeepgramMultiConnection(config);
+        },
+        startFireworks: (config) => {
+            void startFireworksConnection(config);
+        },
+        startSoniox: (config) => {
+            void startSonioxConnection(config);
+        },
+    };
+
+    const buildStopRecordingLifecycle = (): MingleSttStopRecordingLifecycle => ({
+        setSonioxStopRequested: (nextValue) => {
+            sonioxStopRequested = nextValue;
+        },
+        finalizePendingTurnFromProvider,
+        sendForcedFinalTurn,
+        closeProviderSocket: () => {
+            if (sttWs && (sttWs.readyState === WebSocket.OPEN || sttWs.readyState === WebSocket.CONNECTING)) {
+                sttWs.close();
+            }
+        },
+        sendStopRecordingAck: (ackData) => {
+            if (clientWs.readyState !== WebSocket.OPEN) return;
+            clientWs.send(JSON.stringify({
+                type: 'stop_recording_ack',
+                data: ackData,
+            }));
+        },
+        scheduleClientCloseAfterAck: () => {
+            setTimeout(() => {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.close();
+                }
+            }, 50);
+        },
+        disposeSpeakerStates: () => {
+            disposeSonioxSpeakerStates?.();
+            disposeSonioxSpeakerStates = null;
+        },
+    });
+
     // ===== 클라이언트 메시지 핸들러 =====
     clientWs.onmessage = (event) => {
         const message = event.data.toString();
@@ -1318,43 +1332,12 @@ wss.on('connection', (clientWs) => {
         }
 
         if (data?.type === 'stop_recording') {
-            const pendingText = (data?.data?.pending_text || '').toString();
-            const pendingLang = data?.data?.pending_language || 'unknown';
-            const cleanedPendingText = pendingText.trim();
-            sonioxStopRequested = currentModel === 'soniox';
-
-            let finalizedTurn: FinalTurnPayload | null = null;
-
-            // User-initiated stop: finalize what the user currently sees.
-            if (currentModel === 'soniox' && finalizePendingTurnFromProvider) {
-                void finalizePendingTurnFromProvider();
-            } else if (cleanedPendingText) {
-                finalizedTurn = sendForcedFinalTurn(pendingText, pendingLang);
-            } else if (finalizePendingTurnFromProvider) {
-                // Synchronous path: just emit transcript, no async translation.
-                void finalizePendingTurnFromProvider();
-            }
-
-            if (sttWs && (sttWs.readyState === WebSocket.OPEN || sttWs.readyState === WebSocket.CONNECTING)) {
-                sttWs.close();
-            }
-
-            if (clientWs.readyState === WebSocket.OPEN) {
-                clientWs.send(JSON.stringify({
-                    type: 'stop_recording_ack',
-                    data: buildStopRecordingAckDataForReleaseVariant(finalizedTurn),
-                }));
-                // Close client socket after ack.
-                setTimeout(() => {
-                    if (clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.close();
-                    }
-                }, 50);
-            }
-            if (currentModel !== 'soniox') {
-                disposeSonioxSpeakerStates?.();
-                disposeSonioxSpeakerStates = null;
-            }
+            releaseRuntime.handleStopRecording({
+                pendingText: (data?.data?.pending_text || '').toString(),
+                pendingLanguage: data?.data?.pending_language || 'unknown',
+                currentModel,
+                lifecycle: buildStopRecordingLifecycle(),
+            });
             return;
         }
 
@@ -1374,7 +1357,7 @@ wss.on('connection', (clientWs) => {
                 behavior_profile: resolveMingleSttBehaviorProfile(apiNamespace),
                 release_variant: resolveMingleSttReleaseVariant(apiNamespace),
                 languages: normalizedLanguages,
-            } as ClientConfig;
+            } as MingleSttClientConfig;
 
             currentModel = clientConfig.stt_model || 'gladia';
             behaviorProfile = clientConfig.behavior_profile || 'legacy_1_0_11';
@@ -1386,8 +1369,11 @@ wss.on('connection', (clientWs) => {
             console.log(
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
             );
-            
-            startConnectionForModel(clientConfig);
+
+            releaseRuntime.startConnectionForModel({
+                config: clientConfig,
+                starters: connectionStarters,
+            });
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
             if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {
