@@ -1,5 +1,12 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-11 Ongoing Dev Validation Notes
+
+- **Ngrok interstitial can masquerade as a layout regression on mobile WebView**
+  Problem: When device builds pointed at a free ngrok tunnel, the RN WebView could render ngrok's anti-abuse warning page instead of the app. On Android this looked like the 1.0.11 microphone/footer UI had suddenly shrunk or changed, even though the app screen was never reached.
+  Fix: Native WebView requests now add `ngrok-skip-browser-warning: true` for `*.ngrok-free.dev` and `*.ngrok-free.app` URLs so local mobile validation reaches the actual app surface.
+  Status: Resolved in-thread.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.

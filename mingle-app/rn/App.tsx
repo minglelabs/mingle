@@ -238,6 +238,37 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
   }
 }
 
+function isNgrokUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app');
+  } catch {
+    return /\.ngrok-free\.(dev|app)/i.test(raw);
+  }
+}
+
+function buildWebViewSource(rawUrl: string | null): { uri: string; headers?: Record<string, string> } | { html: string } {
+  if (!rawUrl) {
+    return { html: '<html><body style="margin:0;background:#fff;"></body></html>' };
+  }
+
+  if (isNgrokUrl(rawUrl)) {
+    return {
+      uri: rawUrl,
+      headers: {
+        // Skip ngrok's free-tier browser interstitial so the WebView reaches the actual app.
+        'ngrok-skip-browser-warning': 'true',
+      },
+    };
+  }
+
+  return { uri: rawUrl };
+}
+
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
   return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
 }
@@ -2286,9 +2317,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={webUrl
-              ? { uri: webUrl }
-              : { html: '<html><body style=\"margin:0;background:#fff;\"></body></html>' }}
+            source={buildWebViewSource(webUrl)}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
