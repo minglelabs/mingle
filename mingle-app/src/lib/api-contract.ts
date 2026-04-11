@@ -1,4 +1,8 @@
 const DEFAULT_API_NAMESPACE = ''
+const DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM = {
+  android: 'android/v1.1.0',
+  ios: 'ios/v1.1.0',
+} as const
 const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'android/v1.0.2', enablesFinalizeSourceRedetection: false },
@@ -58,10 +62,48 @@ function readApiNamespaceFromLocation(): string | null {
   }
 }
 
+function normalizeReleaseTarget(raw: string): string {
+  return raw.trim().toLowerCase()
+}
+
+function detectRuntimePlatform(): 'android' | 'ios' | null {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return null
+  }
+
+  const userAgent = navigator.userAgent || ''
+  if (/android/i.test(userAgent)) {
+    return 'android'
+  }
+  if (/iPhone|iPad|iPod/i.test(userAgent)) {
+    return 'ios'
+  }
+
+  const platform = navigator.platform || ''
+  if (/Mac/i.test(platform) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1) {
+    return 'ios'
+  }
+
+  return null
+}
+
+function resolveReleaseTargetDefaultApiNamespace(): string {
+  if (normalizeReleaseTarget(process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET || '') !== 'v1_1_0') {
+    return DEFAULT_API_NAMESPACE
+  }
+
+  const runtimePlatform = detectRuntimePlatform()
+  if (runtimePlatform === 'android') {
+    return DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM.android
+  }
+  return DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM.ios
+}
+
 const envNamespace = parseAllowedApiNamespace(process.env.NEXT_PUBLIC_API_NAMESPACE || '')
 const queryNamespace = readApiNamespaceFromLocation()
+const releaseTargetNamespace = parseAllowedApiNamespace(resolveReleaseTargetDefaultApiNamespace())
 
-export const clientApiNamespace = queryNamespace || envNamespace || DEFAULT_API_NAMESPACE
+export const clientApiNamespace = queryNamespace || envNamespace || releaseTargetNamespace || DEFAULT_API_NAMESPACE
 
 function parseVersionedApiNamespaceFromFinalizePath(pathname: string): string | null {
   const match = pathname.match(/^\/api\/((?:android|ios)\/v\d+\.\d+\.\d+)\/translate\/finalize\/?$/)

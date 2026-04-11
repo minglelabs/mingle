@@ -1,5 +1,18 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-11 Ongoing Dev Validation Notes
+
+- **Legacy bottom mic could render in the tiny composer size after hydration**
+  Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
+  Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
+  Fix: Removed the shared `layoutId` bridge between the composer/default mic shell and keyboard toggle in both legacy `1.0.11` and `1.1.0` web runtimes. This keeps the hydration swap discrete instead of animating between incompatible layouts.
+  Status: Resolved in-thread.
+
+- **Ngrok interstitial can masquerade as a layout regression on mobile WebView**
+  Problem: When device builds pointed at a free ngrok tunnel, the RN WebView could render ngrok's anti-abuse warning page instead of the app. On Android this looked like the 1.0.11 microphone/footer UI had suddenly shrunk or changed, even though the app screen was never reached.
+  Fix: Native WebView requests now add `ngrok-skip-browser-warning: true` for `*.ngrok-free.dev` and `*.ngrok-free.app` URLs so local mobile validation reaches the actual app surface.
+  Status: Resolved in-thread.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.

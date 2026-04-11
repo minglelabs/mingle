@@ -92,9 +92,7 @@ import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-compose
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 
 const VOLUME_THRESHOLD = 0.05
-function buildAccountPreferencesApiPath(): string {
-  return buildClientApiPath('/account/preferences')
-}
+const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
@@ -1029,6 +1027,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
@@ -1549,7 +1548,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(buildAccountPreferencesApiPath(), {
+    void fetch(accountPreferencesApiPath, {
       method: 'GET',
       cache: 'no-store',
       headers: buildTrackingRequestHeaders({
@@ -1591,7 +1590,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+  }, [
+    accountPreferencesApiPath,
+    clearAccountPreferencesSyncTimer,
+    enableAccountPreferencesSync,
+    nativeAppUpdate,
+    resolveConversationSessionKey,
+  ])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
@@ -1600,7 +1605,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(buildAccountPreferencesApiPath(), {
+    void fetch(accountPreferencesApiPath, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1621,7 +1626,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
     if (!enableAccountPreferencesSync) return
@@ -1630,7 +1635,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(buildAccountPreferencesApiPath(), {
+    void fetch(accountPreferencesApiPath, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1651,7 +1656,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
+  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const clearFeedbackSubmitState = useCallback(() => {
     setFeedbackSubmitError(null)
@@ -5390,10 +5395,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-end gap-1.5"
                 >
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex shrink-0 items-end justify-center self-end"
-                  >
+                  <motion.div className="flex shrink-0 items-end justify-center self-end">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -5465,7 +5467,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       <motion.button
-                        layoutId="live-phone-demo-keyboard-toggle"
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
@@ -5549,10 +5550,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </div>
                   </motion.div>
 
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex self-end justify-center"
-                  >
+                  <motion.div className="flex self-end justify-center">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -5618,7 +5616,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="self-end justify-self-end">
                     <motion.button
-                      layoutId="live-phone-demo-keyboard-toggle"
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}

@@ -54,6 +54,10 @@
 	<string>$(NEXT_PUBLIC_SITE_HOST)</string>
 	<key>MingleDefaultWsURL</key>
 	<string>$(NEXT_PUBLIC_WS_URL)</string>
+	<key>MingleLegacyWebAppBaseURL</key>
+	<string>$(MINGLE_LEGACY_SITE_URL)</string>
+	<key>MingleLegacyDefaultWsURL</key>
+	<string>$(MINGLE_LEGACY_WS_URL)</string>
 	<key>MingleDefaultWsScheme</key>
 	<string>$(NEXT_PUBLIC_WS_SCHEME)</string>
 	<key>MingleDefaultWsHost</key>

@@ -154,16 +154,23 @@ function readNativeRuntimeConfig(): NativeRuntimeConfig {
   const runtimeConfigModule = (NativeModules as {
     NativeRuntimeConfigModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
     NativeSTTModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
   }).NativeRuntimeConfigModule;
-  const runtimeConfig = runtimeConfigModule?.runtimeConfig ?? (NativeModules.NativeSTTModule as
+  const sttModule = NativeModules.NativeSTTModule as
     | {
         runtimeConfig?: NativeRuntimeConfig;
+        getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
       }
-    | undefined)?.runtimeConfig;
+    | undefined;
+  const runtimeConfig = runtimeConfigModule?.runtimeConfig
+    ?? runtimeConfigModule?.getConstants?.().runtimeConfig
+    ?? sttModule?.runtimeConfig
+    ?? sttModule?.getConstants?.().runtimeConfig;
   if (!runtimeConfig || typeof runtimeConfig !== 'object') {
     return {};
   }
@@ -457,6 +464,8 @@ type NativeSttStartPayload = {
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  apiNamespace?: string;
+  behaviorProfile?: string;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
 };
@@ -1696,6 +1705,8 @@ function AppInner(): React.JSX.Element {
       ? payload.sttModel.trim()
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
+    const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
+    const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
     const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
       ? payload.sonioxLanguageHints
         .filter((language): language is string => typeof language === 'string')
@@ -1712,6 +1723,8 @@ function AppInner(): React.JSX.Element {
         wsUrl,
         sttModel,
         aecEnabled,
+        ...(apiNamespace ? { apiNamespace } : {}),
+        ...(behaviorProfile ? { behaviorProfile } : {}),
         sonioxLanguageHints,
         ...(typeof sonioxManualFinalizeSilenceMs === 'number'
           ? { sonioxManualFinalizeSilenceMs }
@@ -2248,9 +2261,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={webUrl
-              ? { uri: webUrl }
-              : { html: '<html><body style=\"margin:0;background:#fff;\"></body></html>' }}
+            source={webUrl ? { uri: webUrl } : { html: '<html><body style="margin:0;background:#fff;"></body></html>' }}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled

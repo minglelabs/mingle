@@ -18,4 +18,13 @@ describe('runtimeConfig', () => {
       'android/v1.1.0',
     );
   });
+
+  it('decodes plist-style quoted URLs from the native runtime config', () => {
+    expect(
+      readPreferredRuntimeValue(
+        '"wss:\\/\\/mingle-stt-devbox.photo-for-passport.com"',
+        'wss://fallback.example.com',
+      ),
+    ).toBe('wss://mingle-stt-devbox.photo-for-passport.com');
+  });
 });
