@@ -6,7 +6,7 @@
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 122.
+- Total standalone UI/UX issue atoms documented in this file: 123.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -405,6 +405,11 @@
    Problem: If the user closed the hamburger menu with the custom in-panel swipe-dismiss gesture instead of native edge-swipe back, a later iOS forward-swipe could restore an in-between frame rather than a clean full menu. The left side of the room stayed visible because iOS appeared to snapshot the menu at the exact drag offset where the finger was released, then React finished a second internal slide into the real destination.
    Attempted fix: The thread narrowed the cause to the custom swipe-dismiss path firing history navigation while the panel still visually reflected a partial drag offset. The likely remediation identified in-thread was to force the menu back to a clean fully-open frame before navigating history, but that final code fix had not been landed yet at the time of documentation.
    Status: Still open at thread end.
+
+78. **Android create-room auto-start could misread cached mic denial as an iOS Settings recovery**
+   Problem: On Android 1.1.0, denying microphone permission and then pressing `Start Conversation!` again could jump straight to app settings instead of showing the normal in-app permission prompt. Manual `Start` inside the room still behaved correctly, so the regression was isolated to the auto-start path used by newly created rooms.
+   Attempted fix: The thread found that cached native mic-permission state was always being rehydrated as if it belonged to iOS, which converted any cached `denied` value into the `open_ios_settings` recovery path. The fix resolved the cached recovery action against the current API namespace platform so Android denial stays on the in-app retry path while iOS denial still routes to Settings.
+   Status: Resolved in-thread.
 
 ## Other Issue Sessions
 

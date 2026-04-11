@@ -258,6 +258,23 @@ export function resolveNativeMicPermissionRecoveryAction(input: {
   return 'none'
 }
 
+export function resolveCachedNativeMicPermissionRecoveryAction(input: {
+  apiNamespace?: string
+  permission?: string
+}): NativeMicPermissionRecoveryAction {
+  const normalizedNamespace = (input.apiNamespace || '').trim().toLowerCase()
+  const platform = normalizedNamespace.startsWith('ios/')
+    ? 'ios'
+    : normalizedNamespace.startsWith('android/')
+      ? 'android'
+      : undefined
+
+  return resolveNativeMicPermissionRecoveryAction({
+    platform,
+    permission: input.permission,
+  })
+}
+
 export function shouldOpenNativeMicSettingsOnRetry(input: {
   useNativeStt: boolean
   connectionStatus: ConnectionStatus
@@ -2045,8 +2062,8 @@ export default function useRealtimeSTT({
       ? cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION
       : null
     if (!cachedPermission) return
-    nativeMicPermissionRecoveryActionRef.current = resolveNativeMicPermissionRecoveryAction({
-      platform: 'ios',
+    nativeMicPermissionRecoveryActionRef.current = resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: resolveRuntimeApiNamespace(),
       permission: cachedPermission,
     })
   }, [])

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLanguageSelectionSignature,
-  buildStorageKey,
   buildSonioxLanguageHints,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
@@ -15,7 +14,6 @@ import {
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
-  getOrCreateSessionKey,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
   resolveRenderedTtsCandidateFromUtterance,
@@ -24,6 +22,7 @@ import {
   parsePositiveIntWithFallback,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
@@ -307,6 +306,18 @@ describe('use-realtime-stt pure logic', () => {
       code: 'mic_permission',
       message: 'Microphone permission denied',
     })).toBe('none')
+  })
+
+  it('keeps cached Android microphone denials on the in-app retry path', () => {
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'android/v1.1.0',
+      permission: 'denied',
+    })).toBe('none')
+
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'ios/v1.1.0',
+      permission: 'denied',
+    })).toBe('open_ios_settings')
   })
 
   it('opens native mic settings only after iOS denial recovery returns to idle', () => {
