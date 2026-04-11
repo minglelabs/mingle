@@ -13,13 +13,18 @@
   Fix: Native WebView requests now add `ngrok-skip-browser-warning: true` for `*.ngrok-free.dev` and `*.ngrok-free.app` URLs so local mobile validation reaches the actual app surface.
   Status: Resolved in-thread.
 
+- **Android conversation list could get stuck because RN treated total history length as active back availability**
+  Problem: The RN WebView bridge reported `canGoBack` from `window.history.length > 1`, which is not the same as “the current entry has a backward target.” After opening a room and returning to the list with `history.back()`, Android hardware back could still be consumed by the WebView even though web history was already at the first entry, leaving the user stuck on the conversation list.
+  Fix: The native navigation bridge now stamps a synthetic per-entry history index into `history.state` and derives `canGoBack` from the current index instead of total history length.
+  Status: Resolved in-thread.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 123.
+- Total standalone UI/UX issue atoms documented in this file: 124.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -32,7 +37,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 77.
+- Issue atoms currently listed for this thread: 78.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
