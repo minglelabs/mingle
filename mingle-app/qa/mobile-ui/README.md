@@ -27,7 +27,7 @@ The first pass covers the regression categories that still exist in the current 
 
 Older multi-room conversation-list regressions are intentionally not automated here because the current app surface no longer exposes that UI.
 
-See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping and [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for the expanded iOS validation list.
+See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping, [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for the expanded iOS validation list, and [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) for the Android-focused inventory.
 
 ## Prerequisites
 
@@ -94,6 +94,12 @@ Run Android device QA:
 pnpm test:qa:ui:android -- --android-serial <serial>
 ```
 
+Run the expanded Android regression inventory:
+
+```bash
+pnpm test:qa:ui:android:regressions -- --android-serial <serial>
+```
+
 Run iOS simulator or device QA:
 
 ```bash
@@ -104,6 +110,12 @@ Or through devbox:
 
 ```bash
 scripts/devbox qa --platform ios --ios-udid <udid>
+```
+
+Or through devbox for the expanded Android regression inventory:
+
+```bash
+scripts/devbox qa --android-regressions --android-serial <serial>
 ```
 
 Run the expanded iOS regression inventory:

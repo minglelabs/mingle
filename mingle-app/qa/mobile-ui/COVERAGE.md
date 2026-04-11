@@ -2,7 +2,7 @@
 
 This document maps the still-relevant UI/UX regressions from [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md) to the current hybrid mobile QA suite.
 
-For the expanded iOS target list that is executed today, see [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md). For the remaining unmapped atoms and their backlog classification, see [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md).
+For the expanded iOS target list that is executed today, see [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md). For Android-specific targets, see [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md). For the remaining unmapped atoms and their backlog classification, see [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md).
 
 ## Covered in the current app surface
 
@@ -30,6 +30,9 @@ The current mobile app surface is the React Native shell plus the live translato
 | Native banner position updates the effective content insets | issue atoms 11, 12, 13, 14, 15 | `pnpm test:qa:ui:android` -> `banner-position-updates-insets` |
 | Persisted transcript hydration restores the bottom anchor instead of leaving the transcript floating | issue atoms related to restored history and reopen flows, especially 23 and 32 | `pnpm test:qa:ui:android` -> `bottom-anchor-restores-after-storage-hydration` |
 | Composer growth and collapse restores the compact bottom bar | bottom control bar sizing regressions, especially issue atoms 9 and 10 | `pnpm test:qa:ui:android` -> `composer-roundtrip-restores-compact-bottom-bar` |
+| Android hardware back still closes the history overlay instead of getting stuck in the RN shell | `019d4cae#4` | `pnpm test:qa:ui:android:regressions` -> `hardware-back-closes-history-overlay` |
+| Android native/WebView remount still restores the running mic state after state-split regressions | `019d4eba#1`, `019d4f37#1` | `pnpm test:qa:ui:android:regressions` -> `android-native-stt-reconcile-contracts`, `native-remount-restores-running-mic-state` |
+| Android native transcript/status reconcile logic still promotes the UI back into running after background gaps | `019d19a3#1`, `019d4eba#1`, `019d4f37#1` | `pnpm test:qa:ui:android:regressions` -> `android-native-stt-reconcile-contracts` |
 | Korean menu label matches the active locale on iOS and the locale catalog stays in sync | issue atoms 21 and 22, plus menu/i18n follow-ups in `019c95e8-00df-7180-8366-54a76bd59ccc` and `019ca08b-fcff-7ba3-b22f-d4a11d6203a8` | `pnpm test:qa:ui:ios:regressions` -> menu-locale and locale-copy targets |
 | iOS microphone denial recovers back to idle instead of trapping the UI | issue atoms 41 and 42 | `pnpm test:qa:ui:ios:regressions` -> `permission-denial-recovers-to-idle-simulator` |
 
@@ -48,6 +51,7 @@ Those areas should only be re-automated if that product surface returns.
 
 - Use `pnpm test:qa:ui:contracts` as the fast WebView-only contract gate.
 - Use `pnpm test:qa:ui:ios:regressions -- --ios-real-udid <physical-udid> --ios-sim-udid <sim-udid>` for the expanded iOS regression inventory.
+- Use `pnpm test:qa:ui:android:regressions -- --android-serial <serial>` for the expanded Android regression inventory.
 - Use `pnpm test:qa:ui:android -- --android-serial <serial>` for the Android real-device regression pass.
 - Use `pnpm test:qa:ui:ios -- --ios-udid <udid>` for the iOS simulator/device regression pass.
 - Use `pnpm test:qa:ui` for the combined smoke gate once the local devbox runtime is up.

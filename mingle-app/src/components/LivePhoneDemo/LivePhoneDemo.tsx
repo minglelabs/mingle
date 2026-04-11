@@ -218,6 +218,8 @@ declare global {
       setMenuOpen: (nextOpen: boolean) => void
       setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => void
       setComposerOpen: (nextOpen: boolean) => void
+      remountWebView: () => boolean
+      setNativeSttStatusForQa: (status: string) => boolean
     }
   }
 }
@@ -826,6 +828,13 @@ type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
 }
 
+type NativeQaSetSttStatusCommand = {
+  type: 'native_qa_set_stt_status'
+  payload?: {
+    status?: string
+  }
+}
+
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
 }
@@ -836,6 +845,19 @@ function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): 
 
 function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
   return `translation:${utteranceId}:${language.trim().toLowerCase()}`
+}
+
+function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
+  if (typeof window === 'undefined') return false
+  const bridge = window.ReactNativeWebView
+  if (!bridge || typeof bridge.postMessage !== 'function') return false
+
+  try {
+    bridge.postMessage(JSON.stringify(command))
+    return true
+  } catch {
+    return false
+  }
 }
 
 function buildTrackingRequestHeaders(args: {
@@ -1630,13 +1652,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
     if (!isNativeApp()) return
 
-    try {
-      window.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: 'native_remount_webview',
-      } satisfies NativeRemountWebViewCommand))
-    } catch {
-      // Ignore bridge errors for the native-only debug action.
-    }
+    postNativeQaCommand({
+      type: 'native_remount_webview',
+    } satisfies NativeRemountWebViewCommand)
   }, [])
 
   const handleMenuButtonPress = useCallback(() => {
@@ -3390,6 +3408,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         } catch {
           // Ignore persistence failures during QA-only state control.
         }
+      },
+      remountWebView: () => {
+        if (!isNativeAppRuntime) return false
+        return postNativeQaCommand({
+          type: 'native_remount_webview',
+        } satisfies NativeRemountWebViewCommand)
+      },
+      setNativeSttStatusForQa: (status: string) => {
+        if (!isNativeAppRuntime) return false
+        const normalizedStatus = typeof status === 'string' ? status.trim() : ''
+        if (!normalizedStatus) return false
+        return postNativeQaCommand({
+          type: 'native_qa_set_stt_status',
+          payload: {
+            status: normalizedStatus,
+          },
+        } satisfies NativeQaSetSttStatusCommand)
       },
     }
 

@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-12 Android Real-Device QA Follow-Up
+
+### `2026-04-12-android-real-device-ui-qa` | UI/UX issues found
+
+1. **Android native/WebView remount can still fall back to the orange idle/play state while native STT is supposed to remain running**
+   Problem: On the connected physical Android device, the live-demo WebView still comes back in the idle visual state (`Tap play to start`, orange mic/play control) after a native-driven WebView remount, even when the native QA status injector keeps the underlying STT status pinned to `running`. That matches the old state-split regression where Android could show a stopped/orange button while STT was still effectively active underneath.
+   Attempted fix: The Android regression suite now has both contract coverage for the native-to-WebView reconcile rules and a physical-device remount case that only checks the post-remount recovery path. Narrowing the test removed earlier bridge flakiness, but the real-device remount case still reproduces the idle-state fallback.
+   Status: Reproduced on 2026-04-12 during the connected Android physical-device pass. Not resolved in-thread.
+
 ## 2026-04-11 Real-Device QA Follow-Up
 
 ### `2026-04-11-real-device-ui-qa-automation` | UI/UX issues found

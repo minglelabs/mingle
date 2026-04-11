@@ -26,6 +26,7 @@
     "test:live": "vitest run src/integration/live",
     "test:qa:ui": "node scripts/mobile-ui-qa.mjs",
     "test:qa:ui:android": "node scripts/mobile-ui-qa.mjs --platform android",
+    "test:qa:ui:android:regressions": "node scripts/android-ui-regression-suite.mjs",
     "test:qa:ui:ios": "node scripts/mobile-ui-qa.mjs --platform ios",
     "test:qa:ui:ios:regressions": "node scripts/ios-ui-regression-suite.mjs",
     "test:qa:ui:contracts": "vitest run src/lib/rn-webview-layout.test.ts",

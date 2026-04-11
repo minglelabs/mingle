@@ -214,7 +214,7 @@ Usage:
   scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
-  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
+  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
   scripts/devbox status
 
 Commands:
@@ -5170,13 +5170,18 @@ cmd_qa() {
     case "$1" in
       --platform) platform="${2:-}"; shift 2 ;;
       --contracts)
-        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts or --ios-regressions"
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
         mode="contracts"
         shift
         ;;
       --ios-regressions)
-        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts or --ios-regressions"
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
         mode="ios-regressions"
+        shift
+        ;;
+      --android-regressions)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        mode="android-regressions"
         shift
         ;;
       --ios-udid) ios_udid="${2:-}"; shift 2 ;;
@@ -5197,6 +5202,7 @@ Options:
                                Default: all
   --contracts                  Run the fast contract gate only.
   --ios-regressions            Run the expanded iOS regression inventory.
+  --android-regressions        Run the expanded Android regression inventory.
   --ios-udid UDID              Physical iPhone or simulator UDID for the standard iOS QA runner.
   --ios-real-udid UDID         Physical iPhone UDID for the expanded iOS regression inventory.
   --ios-sim-udid UDID          Simulator UDID for the expanded iOS regression inventory.
@@ -5207,6 +5213,7 @@ Examples:
   scripts/devbox qa --contracts
   scripts/devbox qa --platform ios --ios-udid <UDID>
   scripts/devbox qa --ios-regressions --ios-real-udid <REAL_UDID> --ios-sim-udid <SIM_UDID>
+  scripts/devbox qa --android-regressions --android-serial <SERIAL>
 EOF
         return 0
         ;;
@@ -5234,6 +5241,10 @@ EOF
       script_name="test:qa:ui:ios:regressions"
       [[ -n "$ios_real_udid" ]] && runner_args+=(--ios-real-udid "$ios_real_udid")
       [[ -n "$ios_sim_udid" ]] && runner_args+=(--ios-sim-udid "$ios_sim_udid")
+      ;;
+    android-regressions)
+      script_name="test:qa:ui:android:regressions"
+      [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
       ;;
     platform)
       case "$platform" in
@@ -5355,6 +5366,7 @@ Run:
 - scripts/devbox qa --contracts
 - scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
 - scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
+- scripts/devbox qa --android-regressions --android-serial <ANDROID_SERIAL>
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
 EOF

@@ -791,6 +791,13 @@ type NativeRemountWebViewCommand = {
   type: 'native_remount_webview';
 };
 
+type NativeQaSetSttStatusCommand = {
+  type: 'native_qa_set_stt_status';
+  payload?: {
+    status?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -803,7 +810,8 @@ type WebViewCommand =
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
   | NativeSetBottomBarClearanceCommand
-  | NativeRemountWebViewCommand;
+  | NativeRemountWebViewCommand
+  | NativeQaSetSttStatusCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -2052,6 +2060,19 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_remount_webview') {
       if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
       handleDebugWebViewRemount();
+      return;
+    }
+
+    if (parsed.type === 'native_qa_set_stt_status') {
+      if (!__DEV__) return;
+      const requestedStatus = typeof parsed.payload?.status === 'string'
+        ? parsed.payload.status.trim()
+        : '';
+      if (!requestedStatus) return;
+      nativeStatusRef.current = requestedStatus;
+      if (isPageReadyRef.current) {
+        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      }
       return;
     }
 

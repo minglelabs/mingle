@@ -360,6 +360,7 @@ async function createAndroidSession(options) {
       'appium:appPackage': APP_PACKAGE,
       'appium:appActivity': APP_ACTIVITY,
       'appium:noReset': true,
+      'appium:autoGrantPermissions': true,
       'appium:newCommandTimeout': 180,
       'appium:chromedriverExecutableDir': CHROMEDRIVER_DIR,
       'appium:chromedriverChromeMappingFile': CHROMEDRIVER_MAPPING_FILE,
@@ -1074,7 +1075,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
     runner: async () => {
       await resetQaDemoState(driver);
       const snapshot = await waitForQaBridge(driver);
-      assert(snapshot.routePathname === '/ko', 'The QA bridge did not hydrate the Korean live-demo route.', snapshot);
+      assert(/^\/(ko|en|ja)$/.test(snapshot.routePathname), 'The QA bridge did not hydrate a locale-scoped live-demo route.', snapshot);
       assert(snapshot.isNativeAppRuntime === true, 'The QA bridge did not report the native runtime.', snapshot);
       assert(snapshot.isStorageHydrated === true, 'The QA bridge did not report a hydrated UI state.', snapshot);
       return snapshot;
@@ -1088,8 +1089,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
     caseId: 'banner-position-updates-insets',
     runner: async () => await withQaFailureDetails(driver, async () => {
       await resetQaDemoState(driver);
-      await ensureMenuOpen(driver);
-      await clickQaElement(driver, '[data-qa="live-demo-ad-banner-top"]', 'the top banner option');
+      await invokeQaMethod(driver, 'setAdBannerPosition', 'top');
       const topSnapshot = await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
         return snapshot?.displayedAdBannerPosition === 'top' && snapshot.nativeBannerLayoutPosition === 'top'
@@ -1097,7 +1097,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
           : null;
       }, 'the top banner position to apply', 10000, 500);
 
-      await clickQaElement(driver, '[data-qa="live-demo-ad-banner-bottom"]', 'the bottom banner option');
+      await invokeQaMethod(driver, 'setAdBannerPosition', 'bottom');
       const bottomSnapshot = await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
         return snapshot?.displayedAdBannerPosition === 'bottom' && snapshot.nativeBannerLayoutPosition === 'bottom'
@@ -1254,11 +1254,82 @@ async function runAndroidCases(driver, reportDir) {
   await switchToWebView(driver);
   await waitForQaBridge(driver);
 
-  return await runSharedLiveDemoCases({
+  const results = await runSharedLiveDemoCases({
     driver,
     reportDir,
     platform: 'android',
   });
+
+  results.push(await runCase({
+    driver,
+    platform: 'android',
+    reportDir,
+    caseId: 'hardware-back-closes-history-overlay',
+    runner: async () => await withQaFailureDetails(driver, async () => {
+      await resetQaDemoState(driver);
+      const before = await ensureMenuOpen(driver);
+      assert(before?.menuOpen === true, 'The Android menu overlay did not open before the hardware-back test.', before);
+
+      await switchToNative(driver);
+      await driver.back();
+      await delay(800);
+
+      await switchToWebView(driver);
+      await waitForQaBridge(driver);
+
+      const after = await waitFor(async () => {
+        const snapshot = await getQaSnapshot(driver);
+        return snapshot && snapshot.menuOpen === false ? snapshot : null;
+      }, 'Android hardware back to close the overlay history state', 10000, 500);
+
+      return {
+        before,
+        after,
+      };
+    }),
+  }));
+
+  results.push(await runCase({
+    driver,
+    platform: 'android',
+    reportDir,
+    caseId: 'native-remount-restores-running-mic-state',
+    runner: async () => await withQaFailureDetails(driver, async () => {
+      await resetQaDemoState(driver);
+      const baseline = await getQaSnapshot(driver);
+
+      const injected = await invokeQaMethod(driver, 'setNativeSttStatusForQa', 'running');
+      assert(injected === true, 'The Android QA bridge could not inject native STT state.', {
+        baseline,
+        injected,
+      });
+
+      const remountRequested = await invokeQaMethod(driver, 'remountWebView');
+      assert(remountRequested === true, 'The Android QA bridge could not request a native WebView remount.', {
+        baseline,
+        injected,
+        remountRequested,
+      });
+
+      await delay(1500);
+      await switchToWebView(driver);
+      await waitForQaBridge(driver);
+
+      const runningAfterRemount = await waitFor(async () => {
+        const snapshot = await getQaSnapshot(driver);
+        return snapshot?.micVisualState === 'running' ? snapshot : null;
+      }, 'the reloaded Android WebView to restore the running mic state', 15000, 500);
+
+      return {
+        baseline,
+        injected,
+        remountRequested,
+        runningAfterRemount,
+      };
+    }),
+  }));
+
+  return results;
 }
 
 async function runIosCases(driver, reportDir, options) {
