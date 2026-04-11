@@ -43,6 +43,14 @@ function isLoopbackUrl(rawValue: string): boolean {
 function isDevelopmentTunnelUrl(rawValue: string): boolean {
   const normalizedValue = rawValue.trim();
   if (!normalizedValue) return false;
+  const normalizedLowerValue = normalizedValue.toLowerCase();
+
+  if (
+    normalizedLowerValue.includes('mingle-app-devbox.photo-for-passport.com')
+    || normalizedLowerValue.includes('mingle-stt-devbox.photo-for-passport.com')
+  ) {
+    return true;
+  }
 
   try {
     const { hostname } = new URL(normalizedValue);
@@ -97,12 +105,18 @@ export function validateDedicatedReleaseTargetConfig(
   const normalizedLegacyWsUrl = normalizeUrlForComparison(
     input.legacyWsUrl || DEFAULT_LEGACY_PRODUCTION_WS_URL,
   );
+  const currentWebIsDevelopmentLike = isDevelopmentLikeTargetUrl(normalizedWebAppBaseUrl);
+  const currentWsIsDevelopmentLike = isDevelopmentLikeTargetUrl(normalizedWsUrl);
+
+  if (currentWebIsDevelopmentLike) {
+    return { ok: true };
+  }
 
   if (
     normalizedWebAppBaseUrl
     && normalizedLegacyWebAppBaseUrl
     && normalizedWebAppBaseUrl === normalizedLegacyWebAppBaseUrl
-    && !isDevelopmentLikeTargetUrl(normalizedWebAppBaseUrl)
+    && !currentWebIsDevelopmentLike
   ) {
     return {
       ok: false,
@@ -114,7 +128,7 @@ export function validateDedicatedReleaseTargetConfig(
     normalizedWsUrl
     && normalizedLegacyWsUrl
     && normalizedWsUrl === normalizedLegacyWsUrl
-    && !isDevelopmentLikeTargetUrl(normalizedWsUrl)
+    && !currentWsIsDevelopmentLike
   ) {
     return {
       ok: false,

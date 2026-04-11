@@ -1,21 +1,29 @@
 function decodeQuotedRuntimeValue(rawValue: string): string {
-  const trimmed = rawValue.trim();
-  if (!trimmed) {
+  let currentValue = rawValue.trim();
+  if (!currentValue) {
     return '';
   }
 
-  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!(currentValue.startsWith('"') && currentValue.endsWith('"'))) {
+      break;
+    }
+
     try {
-      const parsed = JSON.parse(trimmed);
-      if (typeof parsed === 'string') {
-        return parsed.trim();
+      const parsed = JSON.parse(currentValue);
+      if (typeof parsed !== 'string') {
+        break;
       }
+      currentValue = parsed.trim();
+      continue;
     } catch {
-      return trimmed.slice(1, -1).trim();
+      currentValue = currentValue.slice(1, -1).trim();
     }
   }
 
-  return trimmed;
+  return currentValue
+    .replace(/\\\//g, '/')
+    .trim();
 }
 
 export function readPreferredRuntimeValue(

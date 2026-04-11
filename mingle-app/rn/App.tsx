@@ -157,16 +157,23 @@ function readNativeRuntimeConfig(): NativeRuntimeConfig {
   const runtimeConfigModule = (NativeModules as {
     NativeRuntimeConfigModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
     NativeSTTModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
   }).NativeRuntimeConfigModule;
-  const runtimeConfig = runtimeConfigModule?.runtimeConfig ?? (NativeModules.NativeSTTModule as
+  const sttModule = NativeModules.NativeSTTModule as
     | {
         runtimeConfig?: NativeRuntimeConfig;
+        getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
       }
-    | undefined)?.runtimeConfig;
+    | undefined;
+  const runtimeConfig = runtimeConfigModule?.runtimeConfig
+    ?? runtimeConfigModule?.getConstants?.().runtimeConfig
+    ?? sttModule?.runtimeConfig
+    ?? sttModule?.getConstants?.().runtimeConfig;
   if (!runtimeConfig || typeof runtimeConfig !== 'object') {
     return {};
   }
