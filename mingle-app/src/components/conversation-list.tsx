@@ -907,7 +907,6 @@ type SearchOverlayHandle = {
 
 type SearchOverlayProps = {
   open: boolean;
-  topInsetPx: number;
   onClose: () => void;
   conversations: ConversationItem[];
   copy: ReturnType<typeof getConversationDictionary>;
@@ -917,7 +916,6 @@ type SearchOverlayProps = {
 
 const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(function SearchOverlay({
   open,
-  topInsetPx,
   onClose,
   conversations,
   copy,
@@ -1057,7 +1055,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
         onSubmit={handleSubmit}
         className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4 pb-3"
         style={{
-          paddingTop: `calc(env(safe-area-inset-top, 0px) + ${topInsetPx + 12}px)`,
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
         }}
       >
         <div className="flex flex-1 items-center gap-2 rounded-xl bg-gray-100 px-3 py-2">
@@ -1762,9 +1760,13 @@ export default function ConversationList({
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
+    if (showSearch) {
+      postNativeBannerZone("hidden");
+      return;
+    }
     if (activeConversation) return;
     postNativeBannerZone("list");
-  }, [activeConversation]);
+  }, [activeConversation, showSearch]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2161,7 +2163,6 @@ export default function ConversationList({
         <SearchOverlay
           ref={searchOverlayRef}
           open={showSearch}
-          topInsetPx={effectiveNativeTopInsetPx}
           onClose={() => setShowSearch(false)}
           conversations={conversationItems}
           copy={copy}
