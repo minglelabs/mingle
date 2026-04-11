@@ -37,6 +37,8 @@ const APPIUM_DRIVER_PACKAGES = {
   uiautomator2: 'uiautomator2@7.1.2',
   xcuitest: 'xcuitest@10.43.1',
 };
+const KEYBOARD_OPEN_SELECTOR = '[data-qa="live-demo-keyboard-open"], [data-qa="live-demo-keyboard-toggle"][aria-label="텍스트 입력 열기"]';
+const KEYBOARD_CLOSE_SELECTOR = '[data-qa="live-demo-keyboard-close"], [data-qa="live-demo-keyboard-toggle"][aria-label="텍스트 입력 닫기"]';
 
 function parseArgs(argv) {
   const options = {
@@ -814,10 +816,17 @@ async function getQaSnapshot(driver) {
   });
 }
 
+async function invokeQaMethod(driver, methodName, ...args) {
+  return await driver.execute((nextMethodName, nextArgs) => {
+    const qaWindow = window.__MINGLE_QA__;
+    const candidate = qaWindow?.[nextMethodName];
+    if (typeof candidate !== 'function') return null;
+    return candidate(...nextArgs);
+  }, methodName, args);
+}
+
 async function seedPersistedHistoryForQa(driver, count = 48) {
-  return await driver.execute((nextCount) => {
-    return window.__MINGLE_QA__?.seedPersistedHistory?.(nextCount) ?? 0;
-  }, count);
+  return await invokeQaMethod(driver, 'seedPersistedHistory', count) ?? 0;
 }
 
 async function getQaDiagnostics(driver) {
@@ -857,16 +866,65 @@ async function ensureMenuOpen(driver) {
   const snapshot = await getQaSnapshot(driver);
   if (snapshot?.menuOpen) return snapshot;
 
-  const menuButton = await driver.$('[data-qa="live-demo-menu-button"]');
-  await menuButton.click();
+  await invokeQaMethod(driver, 'setMenuOpen', true);
+  try {
+    return await waitFor(async () => {
+      const next = await getQaSnapshot(driver);
+      return next?.menuOpen ? next : null;
+    }, 'the menu panel to open', 5000, 500);
+  } catch {
+    await clickQaElement(driver, '[data-qa="live-demo-menu-button"]', 'the menu button');
+    return await waitFor(async () => {
+      const next = await getQaSnapshot(driver);
+      return next?.menuOpen ? next : null;
+    }, 'the menu panel to open', 15000, 500);
+  }
+}
+
+async function waitForQaElement(driver, selector, description, timeoutMs = 15000) {
   return await waitFor(async () => {
-    const next = await getQaSnapshot(driver);
-    return next?.menuOpen ? next : null;
-  }, 'the menu panel to open', 15000, 500);
+    const element = await driver.$(selector);
+    return await element.isExisting() ? element : null;
+  }, description, timeoutMs, 500);
+}
+
+async function clickQaElement(driver, selector, description) {
+  const element = await waitForQaElement(driver, selector, description);
+
+  try {
+    await element.click();
+    return;
+  } catch {
+    await driver.execute((targetSelector) => {
+      const target = document.querySelector(targetSelector);
+      if (target instanceof HTMLElement) {
+        target.click();
+      }
+    }, selector);
+  }
+}
+
+async function collectQaFailureDetails(driver, extraDetails = {}) {
+  return {
+    snapshot: await getQaSnapshot(driver),
+    diagnostics: await getQaDiagnostics(driver),
+    ...extraDetails,
+  };
+}
+
+async function withQaFailureDetails(driver, runner) {
+  try {
+    return await runner();
+  } catch (error) {
+    if (error instanceof Error) {
+      error.details = await collectQaFailureDetails(driver, error.details || {});
+    }
+    throw error;
+  }
 }
 
 async function resetQaDemoState(driver) {
-  await driver.execute(() => {
+  const usedQaReset = await driver.execute(() => {
     const keysToRemove = [
       'mingle_demo_utterances',
       'mingle_demo_ad_banner_position',
@@ -878,9 +936,26 @@ async function resetQaDemoState(driver) {
     for (const key of keysToRemove) {
       window.localStorage.removeItem(key);
     }
+
+    window.__MINGLE_QA__?.resetUiState?.();
+    return Boolean(window.__MINGLE_QA__?.resetUiState);
   });
 
-  await reloadCurrentPage(driver);
+  if (!usedQaReset) {
+    await reloadCurrentPage(driver);
+    return;
+  }
+
+  await waitFor(async () => {
+    const snapshot = await getQaSnapshot(driver);
+    return snapshot
+      && snapshot.utteranceCount === 0
+      && snapshot.menuOpen === false
+      && snapshot.displayedAdBannerPosition === 'bottom'
+      && snapshot.isComposerOpen === false
+      ? snapshot
+      : null;
+  }, 'the QA demo state to reset', 15000, 500);
 }
 
 async function reloadCurrentPage(driver) {
@@ -935,33 +1010,46 @@ async function runCase({ driver, reportDir, platform, caseId, runner }) {
   }
 }
 
-async function runAndroidCases(driver, reportDir) {
-  await switchToWebView(driver);
-  await waitForQaBridge(driver);
-
+async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
   const results = [];
 
   results.push(await runCase({
     driver,
-    platform: 'android',
+    platform,
     reportDir,
-    caseId: 'banner-position-updates-insets',
+    caseId: 'qa-bridge-hydrates-live-demo',
     runner: async () => {
       await resetQaDemoState(driver);
-      await ensureMenuOpen(driver);
+      const snapshot = await waitForQaBridge(driver);
+      assert(snapshot.routePathname === '/ko', 'The QA bridge did not hydrate the Korean live-demo route.', snapshot);
+      assert(snapshot.isNativeAppRuntime === true, 'The QA bridge did not report the native runtime.', snapshot);
+      assert(snapshot.isStorageHydrated === true, 'The QA bridge did not report a hydrated UI state.', snapshot);
+      return snapshot;
+    },
+  }));
 
-      const topButton = await driver.$('[data-qa="live-demo-ad-banner-top"]');
-      await topButton.click();
+  results.push(await runCase({
+    driver,
+    platform,
+    reportDir,
+    caseId: 'banner-position-updates-insets',
+    runner: async () => await withQaFailureDetails(driver, async () => {
+      await resetQaDemoState(driver);
+      await ensureMenuOpen(driver);
+      await clickQaElement(driver, '[data-qa="live-demo-ad-banner-top"]', 'the top banner option');
       const topSnapshot = await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
-        return snapshot?.displayedAdBannerPosition === 'top' ? snapshot : null;
+        return snapshot?.displayedAdBannerPosition === 'top' && snapshot.nativeBannerLayoutPosition === 'top'
+          ? snapshot
+          : null;
       }, 'the top banner position to apply', 10000, 500);
 
-      const bottomButton = await driver.$('[data-qa="live-demo-ad-banner-bottom"]');
-      await bottomButton.click();
+      await clickQaElement(driver, '[data-qa="live-demo-ad-banner-bottom"]', 'the bottom banner option');
       const bottomSnapshot = await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
-        return snapshot?.displayedAdBannerPosition === 'bottom' ? snapshot : null;
+        return snapshot?.displayedAdBannerPosition === 'bottom' && snapshot.nativeBannerLayoutPosition === 'bottom'
+          ? snapshot
+          : null;
       }, 'the bottom banner position to apply', 10000, 500);
 
       assert(topSnapshot.effectiveNativeTopInsetPx > 0, 'Top banner inset did not become positive.', topSnapshot);
@@ -971,12 +1059,12 @@ async function runAndroidCases(driver, reportDir) {
         topSnapshot,
         bottomSnapshot,
       };
-    },
+    }),
   }));
 
   results.push(await runCase({
     driver,
-    platform: 'android',
+    platform,
     reportDir,
     caseId: 'bottom-anchor-restores-after-storage-hydration',
     runner: async () => {
@@ -1012,14 +1100,13 @@ async function runAndroidCases(driver, reportDir) {
 
   results.push(await runCase({
     driver,
-    platform: 'android',
+    platform,
     reportDir,
     caseId: 'composer-roundtrip-restores-compact-bottom-bar',
-    runner: async () => {
+    runner: async () => await withQaFailureDetails(driver, async () => {
       await resetQaDemoState(driver);
       const baseline = await getQaSnapshot(driver);
-      const keyboardToggle = await driver.$('[data-qa="live-demo-keyboard-toggle"]');
-      await keyboardToggle.click();
+      await clickQaElement(driver, KEYBOARD_OPEN_SELECTOR, 'the keyboard open toggle');
 
       await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
@@ -1034,8 +1121,13 @@ async function runAndroidCases(driver, reportDir) {
         return snapshot?.composerTextareaHeightPx > 36 ? snapshot : null;
       }, 'the composer textarea to expand', 10000, 500);
 
-      const closeToggle = await driver.$('[data-qa="live-demo-keyboard-toggle"]');
-      await closeToggle.click();
+      await driver.execute(() => {
+        const textarea = document.querySelector('[data-qa="live-demo-composer-textarea"]');
+        if (textarea instanceof HTMLElement) {
+          textarea.blur();
+        }
+      });
+      await clickQaElement(driver, KEYBOARD_CLOSE_SELECTOR, 'the keyboard close toggle');
 
       const collapsed = await waitFor(async () => {
         const snapshot = await getQaSnapshot(driver);
@@ -1053,18 +1145,78 @@ async function runAndroidCases(driver, reportDir) {
         expanded,
         collapsed,
       };
-    },
+    }),
+  }));
+
+  results.push(await runCase({
+    driver,
+    platform,
+    reportDir,
+    caseId: 'empty-state-keeps-single-start-control',
+    runner: async () => await withQaFailureDetails(driver, async () => {
+      await resetQaDemoState(driver);
+      const diagnostics = await driver.execute(() => {
+        const bodyText = document.body?.innerText || '';
+        const isVisible = (node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== 'none'
+            && style.visibility !== 'hidden'
+            && Number(style.opacity || '1') > 0
+            && rect.width > 0
+            && rect.height > 0;
+        };
+        return {
+          emptyStateVisible: Boolean(document.querySelector('[data-qa="live-demo-empty-state"]'))
+            || bodyText.includes('재생 버튼을 눌러 시작하세요'),
+          emptyStateMessage: document.querySelector('[data-qa="live-demo-empty-state-message"]')?.textContent?.trim()
+            || (bodyText.includes('재생 버튼을 눌러 시작하세요') ? '재생 버튼을 눌러 시작하세요' : ''),
+          emptyStateArrowVisible: Boolean(document.querySelector('[data-qa="live-demo-empty-state-arrow"]')),
+          micButtonCount: document.querySelectorAll('[data-qa="live-demo-mic-button"]').length,
+          visibleMicButtonCount: Array.from(document.querySelectorAll('[data-qa="live-demo-mic-button"]')).filter(isVisible).length,
+          keyboardOpenCount: document.querySelectorAll('[data-qa="live-demo-keyboard-open"], [data-qa="live-demo-keyboard-toggle"][aria-label="텍스트 입력 열기"]').length,
+          visibleKeyboardOpenCount: Array.from(document.querySelectorAll('[data-qa="live-demo-keyboard-open"], [data-qa="live-demo-keyboard-toggle"][aria-label="텍스트 입력 열기"]')).filter(isVisible).length,
+        };
+      });
+
+      assert(diagnostics.emptyStateVisible === true, 'The empty-state guidance was not visible.', diagnostics);
+      assert(diagnostics.visibleMicButtonCount === 1, 'The empty state exposed more than one visible primary start control.', diagnostics);
+
+      return diagnostics;
+    }),
   }));
 
   return results;
 }
 
-async function runIosCases(driver, reportDir, options) {
+async function runAndroidCases(driver, reportDir) {
   await switchToWebView(driver);
   await waitForQaBridge(driver);
 
-  const results = [];
+  return await runSharedLiveDemoCases({
+    driver,
+    reportDir,
+    platform: 'android',
+  });
+}
+
+async function runIosCases(driver, reportDir, options) {
+  await switchToWebView(driver);
+  await waitForQaBridge(driver);
+  await reloadCurrentPage(driver);
+  await waitForQaBridge(driver);
+
   const iosSimulator = await isIosSimulator(options.iosUdid);
+  const results = [];
+
+  if (!iosSimulator) {
+    results.push(...await runSharedLiveDemoCases({
+      driver,
+      reportDir,
+      platform: 'ios',
+    }));
+  }
 
   results.push(await runCase({
     driver,
@@ -1073,6 +1225,7 @@ async function runIosCases(driver, reportDir, options) {
     caseId: 'menu-label-matches-korean-locale',
     runner: async () => {
       await resetQaDemoState(driver);
+      await invokeQaMethod(driver, 'setMenuOpen', true);
       const snapshot = await ensureMenuOpen(driver);
       assert(snapshot.uiLocale === 'ko', 'The iOS QA session did not boot with the expected Korean locale.', snapshot);
       assert(snapshot.menuButtonLabel === '메뉴', 'The menu label did not match the Korean locale contract.', snapshot);

@@ -203,6 +203,10 @@ declare global {
       getLiveDemoSnapshot: () => LivePhoneDemoQaSnapshot
       seedPersistedHistory: (count?: number) => number
       resetPersistedHistory: () => void
+      resetUiState: () => void
+      setMenuOpen: (nextOpen: boolean) => void
+      setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => void
+      setComposerOpen: (nextOpen: boolean) => void
     }
   }
 }
@@ -3332,13 +3336,60 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         allowAutoTopPaginationRef.current = false
         clearConversationHistory()
       },
+      resetUiState: () => {
+        hasInitialBottomAnchorRef.current = false
+        allowAutoTopPaginationRef.current = false
+        clearConversationHistory()
+        setComposerDraft('')
+        persistComposerDraft('')
+        persistedInputModeRef.current = 'voice'
+        setIsComposerOpen(false)
+        setAdBannerPosition('bottom')
+        closeMenuPanel()
+        try {
+          localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
+          localStorage.setItem(LS_KEY_INPUT_MODE, 'voice')
+        } catch {
+          // Ignore persistence failures during QA-only state reset.
+        }
+      },
+      setMenuOpen: (nextOpen: boolean) => {
+        if (nextOpen) {
+          pushMenuHistoryEntry(1)
+          return
+        }
+        closeMenuPanel()
+      },
+      setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => {
+        setAdBannerPosition(nextPosition)
+        try {
+          localStorage.setItem(LS_KEY_AD_BANNER_POSITION, nextPosition)
+        } catch {
+          // Ignore persistence failures during QA-only state control.
+        }
+      },
+      setComposerOpen: (nextOpen: boolean) => {
+        persistedInputModeRef.current = nextOpen ? 'text' : 'voice'
+        setIsComposerOpen(nextOpen)
+        if (!nextOpen) {
+          composerTextareaRef.current?.blur()
+        }
+        try {
+          localStorage.setItem(LS_KEY_INPUT_MODE, nextOpen ? 'text' : 'voice')
+        } catch {
+          // Ignore persistence failures during QA-only state control.
+        }
+      },
     }
 
     return () => {
       delete window.__MINGLE_QA__
     }
   }, [
+    clearConversationHistory,
+    closeMenuPanel,
     composerTextareaHeightPx,
+    composerTextareaRef,
     displayedAdBannerPosition,
     effectiveNativeBottomBannerInsetPx,
     effectiveNativeBottomContentInsetPx,
@@ -3353,7 +3404,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuScreen,
     nativeBannerLayout?.position,
     nativeBottomBarClearancePx,
+    persistComposerDraft,
     persistedUtteranceCount,
+    pushMenuHistoryEntry,
+    setAdBannerPosition,
+    setComposerDraft,
+    setIsComposerOpen,
     replaceConversationHistoryForQa,
     showScrollToBottom,
     uiLocale,
@@ -4453,14 +4509,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {showEmptyState && (
-              <div className="pointer-events-none absolute inset-0 z-10">
+              <div
+                data-qa="live-demo-empty-state"
+                className="pointer-events-none absolute inset-0 z-10"
+              >
                 <p
+                  data-qa="live-demo-empty-state-message"
                   className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
                   style={{ top: '48%' }}
                 >
                   {tapPlayToStartLabel}
                 </p>
                 <div
+                  data-qa="live-demo-empty-state-arrow"
                   className="absolute left-1/2 w-7 -translate-x-1/2"
                   style={{
                     top: 'calc(48% + 24px)',
@@ -4688,7 +4749,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
-                        data-qa="live-demo-keyboard-toggle"
+                        data-qa="live-demo-keyboard-close"
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
@@ -4814,7 +4875,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div className="self-end justify-self-end">
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
-                      data-qa="live-demo-keyboard-toggle"
+                      data-qa="live-demo-keyboard-open"
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}

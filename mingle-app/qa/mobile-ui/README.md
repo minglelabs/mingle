@@ -12,15 +12,18 @@ The current app surface is a React Native shell around the live translator WebVi
 The first pass covers the regression categories that still exist in the current app:
 
 - iOS WebView back/forward gesture contract.
+- Bubble structure, timestamp placement, and lightweight copy affordances.
+- Deterministic speaker avatars.
 - Menu locale consistency.
 - Native banner position and content inset layout.
 - Bottom-anchor restoration after local history hydration.
 - Composer growth/shrink round-trip.
+- Empty-state onboarding guidance without a ghost start control.
 - iOS microphone-permission denial recovery.
 
 Older multi-room conversation-list regressions are intentionally not automated here because the current app surface no longer exposes that UI.
 
-See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping.
+See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping and [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for the expanded iOS validation list.
 
 ## Prerequisites
 
@@ -87,7 +90,13 @@ Run iOS simulator or device QA:
 pnpm test:qa:ui:ios -- --ios-udid <udid>
 ```
 
-On physical iPhones, the current suite runs the locale/menu regression only. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
+Run the expanded iOS regression inventory:
+
+```bash
+pnpm test:qa:ui:ios:regressions -- --ios-real-udid <physical-udid> --ios-sim-udid <sim-udid>
+```
+
+On physical iPhones, the current suite now runs the QA-bridge hydration, banner inset, persisted-history hydration, composer round-trip, locale/menu regressions, and empty-state guidance checks. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
 
 The runner automatically seeds `RCT_jsLocation` for iOS simulators so debug builds attach to the worktree Metro port before Appium connects.
 
