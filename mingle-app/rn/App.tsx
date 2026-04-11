@@ -41,6 +41,8 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
+  shouldEnableIosWebViewBackForwardNavigation,
+  shouldEnableNativeWebViewDebugging,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
@@ -1259,7 +1261,7 @@ function AppInner(): React.JSX.Element {
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
-    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
+    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1&qa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
   }, [nativeAvailable, webLocale]);
@@ -2369,9 +2371,14 @@ function AppInner(): React.JSX.Element {
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
+            webviewDebuggingEnabled={shouldEnableNativeWebViewDebugging({
+              isDebugBuild: __DEV__,
+            })}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
+            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+              isIosPlatform: Platform.OS === 'ios',
+            })}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}

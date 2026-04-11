@@ -2803,6 +2803,40 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
   ])
 
+  const replaceConversationHistoryForQa = useCallback((items: Utterance[]) => {
+    clearUtterancePersistTimer()
+
+    const seen = new Set<string>()
+    const normalized = items
+      .filter((item) => {
+        if (!item || typeof item.id !== 'string' || !item.id.trim()) return false
+        if (seen.has(item.id)) return false
+        seen.add(item.id)
+        return true
+      })
+      .map(normalizeStoredUtterance)
+
+    storedUtterancesRef.current = normalized
+    const initial = normalized.slice(-LOAD_BATCH_SIZE)
+    storageLoadedCountRef.current = initial.length
+    utterancesRef.current = initial
+    recentFinalizedUtteranceRef.current = initial.at(-1)
+      ? {
+          id: initial.at(-1)?.id || '',
+          text: initial.at(-1)?.originalText || '',
+          language: initial.at(-1)?.originalLang || 'unknown',
+          expiresAt: 0,
+          source: 'server',
+        }
+      : null
+    finalizedTtsSignatureRef.current.clear()
+    pendingFinalizedTtsUtteranceIdsRef.current.clear()
+    stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
+    setHasOlderUtterances(normalized.length > initial.length)
+    setUtteranceStore(createUtteranceStoreState(initial))
+    persistUtterancesSnapshot(normalized)
+  }, [clearUtterancePersistTimer])
+
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
@@ -3978,5 +4012,7 @@ export default function useRealtimeSTT({
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
+    persistedUtteranceCount: storedUtterancesRef.current.length,
+    replaceConversationHistoryForQa,
   }
 }

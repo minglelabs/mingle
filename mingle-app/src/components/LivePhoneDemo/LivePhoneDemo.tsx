@@ -143,6 +143,70 @@ type PersistedFeedbackDraft = {
   emailEdited: boolean
 }
 
+type LivePhoneDemoQaSnapshot = {
+  routePathname: string
+  documentLanguage: string
+  uiLocale: string
+  isNativeAppRuntime: boolean
+  isStorageHydrated: boolean
+  persistedUtteranceCount: number
+  menuOpen: boolean
+  menuScreen: LivePhoneDemoMenuScreen
+  menuButtonLabel: string
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  nativeBannerLayoutPosition: 'top' | 'bottom' | null
+  effectiveNativeTopInsetPx: number
+  effectiveNativeBottomContentInsetPx: number
+  effectiveNativeBottomBannerInsetPx: number
+  nativeBottomBarClearancePx: number
+  headerHeightPx: number
+  bottomBarHeightPx: number
+  chatPaddingTopPx: number
+  chatPaddingBottomPx: number
+  chatClientHeight: number
+  chatScrollHeight: number
+  chatScrollTop: number
+  isAtBottom: boolean
+  showScrollToBottom: boolean
+  isComposerOpen: boolean
+  composerTextareaHeightPx: number
+  utteranceCount: number
+  micVisualState: 'idle' | 'connecting' | 'running' | 'error'
+}
+
+function buildQaSeededUtterances(count: number): Utterance[] {
+  const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
+  const startedAtMs = Date.now() - 60_000
+
+  return Array.from({ length: safeCount }, (_, index) => {
+    const createdAtMs = startedAtMs + (index * 1000)
+    return {
+      id: `u-${createdAtMs}-${index}`,
+      speaker: 'qa',
+      originalText: `Seeded QA utterance ${index + 1}`,
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {
+        ko: `자동화 QA 번역 ${index + 1}`,
+      },
+      translationFinalized: {
+        ko: true,
+      },
+      createdAtMs,
+    }
+  })
+}
+
+declare global {
+  interface Window {
+    __MINGLE_QA__?: {
+      getLiveDemoSnapshot: () => LivePhoneDemoQaSnapshot
+      seedPersistedHistory: (count?: number) => number
+      resetPersistedHistory: () => void
+    }
+  }
+}
+
 type FeedbackSubmitErrorCode =
   | 'message_too_short'
   | 'invalid_contact_email'
@@ -886,6 +950,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
+  const headerRef = useRef<HTMLDivElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
   const textSizeDropdownRef = useRef<HTMLDivElement | null>(null)
@@ -2312,6 +2377,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
+    persistedUtteranceCount,
+    replaceConversationHistoryForQa,
     // Demo animation states
     isDemoAnimating,
     demoTypingText,
@@ -3191,12 +3258,116 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     toast(silenceFinalizeLockedMessage)
   }, [silenceFinalizeLockedMessage])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const search = new URLSearchParams(window.location.search || '')
+    if (search.get('qa') !== '1') {
+      delete window.__MINGLE_QA__
+      return
+    }
+
+    window.__MINGLE_QA__ = {
+      getLiveDemoSnapshot: () => {
+        const headerNode = headerRef.current
+        const chatNode = chatRef.current
+        const bottomBarNode = bottomBarRef.current
+        const menuButtonNode = menuButtonRef.current
+        const computedChatStyle = chatNode ? window.getComputedStyle(chatNode) : null
+        const headerHeightPx = headerNode ? Math.round(headerNode.getBoundingClientRect().height) : 0
+        const bottomBarHeightPx = bottomBarNode ? Math.round(bottomBarNode.getBoundingClientRect().height) : 0
+        const chatPaddingTopPx = computedChatStyle ? Math.round(parseFloat(computedChatStyle.paddingTop) || 0) : 0
+        const chatPaddingBottomPx = computedChatStyle ? Math.round(parseFloat(computedChatStyle.paddingBottom) || 0) : 0
+        const chatClientHeight = chatNode ? Math.round(chatNode.clientHeight) : 0
+        const chatScrollHeight = chatNode ? Math.round(chatNode.scrollHeight) : 0
+        const chatScrollTop = chatNode ? Math.round(chatNode.scrollTop) : 0
+        const bottomDelta = Math.max(0, chatScrollHeight - chatClientHeight - chatScrollTop)
+        const micVisualState: LivePhoneDemoQaSnapshot['micVisualState'] = isError
+          ? 'error'
+          : isConnecting
+            ? 'connecting'
+            : isReady
+              ? 'running'
+              : 'idle'
+
+        return {
+          routePathname: window.location.pathname,
+          documentLanguage: document.documentElement.lang || '',
+          uiLocale,
+          isNativeAppRuntime,
+          isStorageHydrated,
+          persistedUtteranceCount,
+          menuOpen,
+          menuScreen,
+          menuButtonLabel: menuButtonNode?.getAttribute('aria-label') || '',
+          displayedAdBannerPosition,
+          nativeBannerLayoutPosition: nativeBannerLayout?.position ?? null,
+          effectiveNativeTopInsetPx,
+          effectiveNativeBottomContentInsetPx,
+          effectiveNativeBottomBannerInsetPx,
+          nativeBottomBarClearancePx: Math.max(0, Math.round(nativeBottomBarClearancePx ?? 0)),
+          headerHeightPx,
+          bottomBarHeightPx,
+          chatPaddingTopPx,
+          chatPaddingBottomPx,
+          chatClientHeight,
+          chatScrollHeight,
+          chatScrollTop,
+          isAtBottom: bottomDelta <= 8,
+          showScrollToBottom,
+          isComposerOpen,
+          composerTextareaHeightPx,
+          utteranceCount: utterances.length,
+          micVisualState,
+        }
+      },
+      seedPersistedHistory: (count = 48) => {
+        hasInitialBottomAnchorRef.current = false
+        allowAutoTopPaginationRef.current = false
+        replaceConversationHistoryForQa(buildQaSeededUtterances(count))
+        return Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
+      },
+      resetPersistedHistory: () => {
+        hasInitialBottomAnchorRef.current = false
+        allowAutoTopPaginationRef.current = false
+        clearConversationHistory()
+      },
+    }
+
+    return () => {
+      delete window.__MINGLE_QA__
+    }
+  }, [
+    composerTextareaHeightPx,
+    displayedAdBannerPosition,
+    effectiveNativeBottomBannerInsetPx,
+    effectiveNativeBottomContentInsetPx,
+    effectiveNativeTopInsetPx,
+    isComposerOpen,
+    isConnecting,
+    isError,
+    isNativeAppRuntime,
+    isReady,
+    isStorageHydrated,
+    menuOpen,
+    menuScreen,
+    nativeBannerLayout?.position,
+    nativeBottomBarClearancePx,
+    persistedUtteranceCount,
+    replaceConversationHistoryForQa,
+    showScrollToBottom,
+    uiLocale,
+    utterances.length,
+  ])
+
   return (
     <PhoneFrame>
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div data-qa="live-demo-root" className="relative flex h-full min-h-0 flex-col overflow-hidden">
 
         {/* Header */}
         <div
+          ref={headerRef}
+          data-qa="live-demo-header"
           className={`relative z-40 shrink-0 flex items-center justify-between ${navSurfaceClassName}`}
           style={{
             paddingTop: "max(calc(env(safe-area-inset-top) + 20px), 24px)",
@@ -3259,11 +3430,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </div>
             {showMenuButton ? (
               <div className="relative">
-                <button
-                  ref={menuButtonRef}
-                  type="button"
-                  onClick={handleMenuButtonPress}
-                  disabled={isAuthActionPending}
+              <button
+                ref={menuButtonRef}
+                data-qa="live-demo-menu-button"
+                type="button"
+                onClick={handleMenuButtonPress}
+                disabled={isAuthActionPending}
                   className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
                   aria-haspopup="dialog"
@@ -3301,6 +3473,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               <div className="flex h-full w-full justify-end sm:justify-center">
                 <motion.div
                   ref={menuPanelRef}
+                  data-qa="live-demo-menu-panel"
                   role="dialog"
                   aria-modal="true"
                   aria-label={menuLabel}
@@ -3674,6 +3847,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                     return (
                                       <button
                                         key={option.value}
+                                        data-qa={`live-demo-ad-banner-${option.value}`}
                                         type="button"
                                         aria-pressed={isSelected}
                                         onClick={() => handleAdBannerPositionSelect(option.value)}
@@ -4083,6 +4257,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           <div className="relative min-h-0 flex-1 bg-gray-50/50">
             <div
               ref={chatRef}
+              data-qa="live-demo-chat-scroll"
               onScroll={handleScroll}
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
@@ -4421,6 +4596,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             layoutDependency={isComposerOpen}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
+            data-qa="live-demo-bottom-bar"
             className="relative shrink-0 border-t border-gray-100 bg-white"
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
@@ -4447,6 +4623,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex shrink-0 items-end justify-center self-end"
                   >
                     <button
+                      data-qa="live-demo-mic-button"
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={isConnecting || isError}
@@ -4499,6 +4676,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <div className="flex min-w-0 flex-1 items-end px-1">
                         <textarea
                           ref={composerTextareaRef}
+                          data-qa="live-demo-composer-textarea"
                           value={composerDraft}
                           onChange={handleComposerDraftChange}
                           rows={1}
@@ -4510,6 +4688,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                       <motion.button
                         layoutId="live-phone-demo-keyboard-toggle"
+                        data-qa="live-demo-keyboard-toggle"
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
@@ -4590,6 +4769,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex self-end justify-center"
                   >
                     <button
+                      data-qa="live-demo-mic-button"
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
                       disabled={isConnecting || isError}
@@ -4634,6 +4814,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div className="self-end justify-self-end">
                     <motion.button
                       layoutId="live-phone-demo-keyboard-toggle"
+                      data-qa="live-demo-keyboard-toggle"
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}

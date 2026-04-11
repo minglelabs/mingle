@@ -5,6 +5,8 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
+  shouldEnableIosWebViewBackForwardNavigation,
+  shouldEnableNativeWebViewDebugging,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from '../../rn/src/webViewLayout'
@@ -58,6 +60,26 @@ describe('RN WebView layout helpers', () => {
     expect(shouldHideIosKeyboardAccessoryView({
       isIosPlatform: false,
       pathname: '/ko/translator',
+    })).toBe(false)
+  })
+
+  it('keeps iOS back-forward gestures enabled even when unrelated overlays change', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+    })).toBe(true)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: false,
+    })).toBe(false)
+  })
+
+  it('enables native WebView debugging only in debug builds', () => {
+    expect(shouldEnableNativeWebViewDebugging({
+      isDebugBuild: true,
+    })).toBe(true)
+
+    expect(shouldEnableNativeWebViewDebugging({
+      isDebugBuild: false,
     })).toBe(false)
   })
 
