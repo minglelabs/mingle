@@ -22,7 +22,7 @@ const DEFAULT_IOS_SIMULATOR_PACKAGER_HOST = '127.0.0.1';
 const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPORT_ROOT = path.resolve(import.meta.dirname, '../qa/mobile-ui/reports');
 const APPIUM_HOME = path.resolve(import.meta.dirname, '../.appium');
-const APPIUM_BIN = path.resolve(APP_ROOT, 'node_modules/.bin/appium');
+const APPIUM_BIN = path.resolve(APP_ROOT, 'node_modules/appium/index.js');
 const WDA_PROJECT_PATH = path.resolve(
   APP_ROOT,
   '.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent/WebDriverAgent.xcodeproj',
@@ -32,9 +32,10 @@ const CHROMEDRIVER_DIR = path.join(APPIUM_HOME, 'chromedrivers');
 const CHROMEDRIVER_MAPPING_FILE = path.join(APPIUM_HOME, 'chromedriver-mapping.json');
 const DEFAULT_IOS_LOCALE = 'ko_KR';
 const DEFAULT_IOS_LANGUAGE = 'ko';
+const APPLE_SILICON_NODE22_BIN = '/opt/homebrew/opt/node@22/bin/node';
 const APPIUM_DRIVER_PACKAGES = {
-  uiautomator2: 'uiautomator2@4.2.9',
-  xcuitest: 'xcuitest@8.4.3',
+  uiautomator2: 'uiautomator2@7.1.2',
+  xcuitest: 'xcuitest@10.43.1',
 };
 
 function parseArgs(argv) {
@@ -109,6 +110,56 @@ async function ensureDir(target) {
   await fs.mkdir(target, { recursive: true });
 }
 
+function parseNodeVersion(versionString) {
+  const normalized = String(versionString).trim().replace(/^v/, '');
+  const [major = '0', minor = '0', patch = '0'] = normalized.split('.');
+  return {
+    major: Number(major),
+    minor: Number(minor),
+    patch: Number(patch),
+  };
+}
+
+function isAppium3CompatibleNode(versionString) {
+  const version = parseNodeVersion(versionString);
+  if (version.major > 24) return true;
+  if (version.major === 24) return true;
+  if (version.major === 22) return version.minor >= 12;
+  if (version.major === 20) {
+    return version.minor > 19 || (version.minor === 19 && version.patch >= 0);
+  }
+  return false;
+}
+
+let cachedAppiumNodeBinary = '';
+
+async function resolveAppiumNodeBinary() {
+  if (cachedAppiumNodeBinary) return cachedAppiumNodeBinary;
+
+  const candidates = [
+    process.execPath,
+    process.env.MINGLE_UI_QA_APPIUM_NODE_BINARY || '',
+    APPLE_SILICON_NODE22_BIN,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (!(await pathExists(candidate))) continue;
+    try {
+      const versionCheck = await runCommand(candidate, ['-v']);
+      if (isAppium3CompatibleNode(versionCheck.stdout.trim())) {
+        cachedAppiumNodeBinary = candidate;
+        return cachedAppiumNodeBinary;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(
+    `No Node.js runtime compatible with Appium 3 was found. Current process uses ${process.version}; install Node 22.12+ or set MINGLE_UI_QA_APPIUM_NODE_BINARY.`,
+  );
+}
+
 async function runCommand(command, args, options = {}) {
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -142,7 +193,8 @@ async function runCommand(command, args, options = {}) {
 
 async function runAppiumCommand(args) {
   await ensureDir(APPIUM_CLI_CWD);
-  return await runCommand(APPIUM_BIN, args, { cwd: APPIUM_CLI_CWD });
+  const nodeBinary = await resolveAppiumNodeBinary();
+  return await runCommand(nodeBinary, [APPIUM_BIN, ...args], { cwd: APPIUM_CLI_CWD });
 }
 
 async function pathExists(target) {
@@ -187,11 +239,21 @@ async function waitFor(test, description, timeoutMs = 30000, intervalMs = 500) {
 }
 
 async function ensureAppiumDriver(driverName) {
-  const listed = await runAppiumCommand(['driver', 'list', '--installed']);
-  const listedOutput = `${listed.stdout}\n${listed.stderr}`;
-  if (listedOutput.includes(driverName)) return;
-  const packageName = APPIUM_DRIVER_PACKAGES[driverName];
-  if (packageName) {
+  const listed = await runAppiumCommand(['driver', 'list', '--installed', '--json']);
+  const installedDrivers = JSON.parse(listed.stdout || '{}');
+  const packageName = APPIUM_DRIVER_PACKAGES[driverName] || driverName;
+  const [, expectedVersion = ''] = packageName.split('@');
+  const installedDriver = installedDrivers[driverName];
+
+  if (installedDriver?.installed && (!expectedVersion || installedDriver.version === expectedVersion)) {
+    return;
+  }
+
+  if (installedDriver?.installed) {
+    await runAppiumCommand(['driver', 'uninstall', driverName]);
+  }
+
+  if (APPIUM_DRIVER_PACKAGES[driverName]) {
     await runAppiumCommand([
       'driver',
       'install',
@@ -216,14 +278,16 @@ async function startAppiumServer(port) {
   if (await isAppiumReady(port)) return null;
   await ensureDir(APPIUM_CLI_CWD);
   const androidSdkRoot = await resolveAndroidSdkRoot();
+  const nodeBinary = await resolveAppiumNodeBinary();
 
-  const child = spawn(APPIUM_BIN, [
+  const child = spawn(nodeBinary, [
+    APPIUM_BIN,
     'server',
     '-p',
     String(port),
     '--session-override',
     '--allow-insecure',
-    'chromedriver_autodownload',
+    '*:chromedriver_autodownload',
   ], {
     cwd: APPIUM_CLI_CWD,
     env: {
@@ -1095,8 +1159,8 @@ async function main() {
   await ensureDir(APPIUM_HOME);
   await ensureDir(REPORT_ROOT);
 
-  await ensureAppiumDriver('uiautomator2');
   await ensureAppiumDriver('xcuitest');
+  await ensureAppiumDriver('uiautomator2');
 
   const appiumHandle = options.reuseAppium ? null : await startAppiumServer(options.appiumPort);
   const reportDir = path.join(REPORT_ROOT, timestamp());

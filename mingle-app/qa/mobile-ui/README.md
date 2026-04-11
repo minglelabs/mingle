@@ -27,6 +27,7 @@ See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-u
 1. Start the local web and STT servers through devbox.
 2. Keep Metro running for debug mobile builds.
 3. Install a debug build on the target Android device or iOS simulator/device.
+4. Use an Appium 3-compatible Node runtime for the automation stack. The runner now auto-falls back to `/opt/homebrew/opt/node@22/bin/node` when the shell `node` is too old for Appium 3.
 
 Recommended setup from the repository root:
 
@@ -63,6 +64,8 @@ pnpm test:qa:ui:ios -- --ios-udid "$MINGLE_UI_QA_IOS_UDID"
 ```
 
 The runner now records a failed `session-start` report with direct WDA diagnostics if Appium returns the generic `xcodebuild` code `65` error.
+
+On iOS 26 real devices, the current runner also expects an Appium 3 stack with a current `xcuitest` driver. Older `Appium 2.x + xcuitest 8.x` builds can expose the WebView context but still fail every `title`/`execute` call with `code=-32601` and `"'Runtime' domain was not found"`.
 
 ## Commands
 

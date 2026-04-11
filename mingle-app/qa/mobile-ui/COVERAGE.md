@@ -36,7 +36,4 @@ Those areas should only be re-automated if that product surface returns.
 ## Known limitations
 
 - The Android `bottom-anchor-restores-after-storage-hydration` case now uses an app-owned QA bridge to seed the hydrated transcript deterministically. This avoids false negatives from raw WebView local-storage timing, but it is less faithful than a full cold-launch restore.
-- Physical iPhone automation still depends on WebDriverAgent real-device signing. On this workstation, the direct `xcodebuild` failures were:
-- `PLA Update available: You currently don't have access to this membership resource.`
-- `Provisioning profile "iOS Team Provisioning Profile: *" doesn't include signing certificate "Apple Development: HYEONGKEOL NAM (974JPGTA2A)".`
-- The QA runner now emits these WDA diagnostics into the report instead of stopping at Appium's generic `xcodebuild` code `65` message.
+- Physical iPhone automation still depends on WebDriverAgent real-device signing and an Appium 3-compatible Node runtime. The runner now auto-selects a compatible Node binary for Appium and emits direct WDA diagnostics into the report instead of stopping at Appium's generic `xcodebuild` code `65` message.

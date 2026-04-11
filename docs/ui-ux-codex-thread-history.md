@@ -9,6 +9,11 @@
    Attempted fix: The native app now appends `ngrok-skip-browser-warning=1` to the initial WebView URL and sends the `ngrok-skip-browser-warning: 1` header on the first WebView request so the root page itself stops landing on the ngrok warning interstitial.
    Status: Partially resolved in-thread. The root page now loads as the real app, but subresource requests still do not inherit the bypass header, so full hydration on real-device ngrok remains blocked until the WebView can propagate the header to same-origin asset requests or the tunnel/provider path changes.
 
+2. **Cloudflare removed the tunnel hydration issue, but iOS 26 real-device WebView automation still lost the JavaScript runtime**
+   Problem: After switching the physical iPhone build from `ngrok` to the named `cloudflare` tunnel, the WebView finally opened the real `mingle-app-devbox.photo-for-passport.com` page. However, Appium could no longer run `title`, `execute`, or any QA bridge JavaScript inside that `WEBVIEW_*` context because WebKit returned `code=-32601, "'Runtime' domain was not found"`. The page rendered in the accessibility tree, but the automation layer could not evaluate `window.__MINGLE_QA__` or any DOM script, so real-device regression assertions still stalled at session start.
+   Attempted fix: The QA runner was traced down to an outdated automation stack (`Appium 2.19.0` with `xcuitest 8.4.3`) that matches the upstream iOS 26 WebKit failure mode. The in-thread remediation is to move the local QA stack to `Appium 3.x` with a current `xcuitest` driver so real-device WebView commands can speak the newer WebKit target/runtime protocol.
+   Status: Root cause identified in-thread. Tunnel hydration is resolved on Cloudflare, but real-device iPhone QA remains blocked until the Appium/XCUITest stack is upgraded and revalidated.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.
