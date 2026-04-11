@@ -52,12 +52,16 @@ scripts/devbox up --profile device --device-app-env prod
 
 # 6) (선택) 연결된 테스트폰 앱 빌드/설치
 scripts/devbox mobile --platform all
+# Appium QA용 앱이면 QA bridge까지 포함
+scripts/devbox mobile --platform all --qa-bridge
 
 # 7) (선택) 서버+모바일 설치를 한 번에
 scripts/devbox up --profile device --with-mobile-install
 
 # 8) (선택) iOS만 설치
 scripts/devbox up --profile device --with-ios-install
+# Appium QA용 iOS Debug 앱이면
+scripts/devbox up --profile device --with-ios-install --qa-bridge
 
 # 8-1) (선택) 기존 iOS 앱 삭제 후 재설치
 scripts/devbox up --profile device --with-ios-install --with-ios-clean-install
@@ -209,6 +213,7 @@ scripts/devbox bootstrap --vault-push
     (실패 시 기존 인라인 실행으로 폴백)
   - `--with-ios-install`, `--with-android-install`, `--with-mobile-install`, `--with-ios-clean-install` 옵션으로
     연결된 테스트폰 앱 빌드/설치를 함께 수행
+  - Appium QA용 설치일 때는 `--qa-bridge`를 추가해 QA bridge가 켜진 Debug 앱을 설치
   - 연결된/설치 가능한 기기가 없으면 해당 플랫폼 설치 단계는 자동 스킵
   - `--with-ios-clean-install`은 기존 iOS 앱 번들을 삭제한 뒤 재설치합니다.
   - `--profile device`면 ngrok이 없을 경우 함께 기동 후 터널 URL을 자동 반영
@@ -230,6 +235,7 @@ scripts/devbox bootstrap --vault-push
   - `--ios-udid`, `--android-serial`로 대상 기기 지정 가능
   - `--ios-configuration Debug|Release` (기본 Release)
   - `--android-variant debug|release` (기본 release)
+  - `--qa-bridge`를 주면 Appium QA용 bridge/query param 경로가 켜진 앱을 설치
   - `--with-ios-clean-install`은 RN iOS 설치 전에 기존 앱을 먼저 삭제
   - 연결 기기 미탐지 시 자동 스킵
 
@@ -257,7 +263,7 @@ scripts/devbox bootstrap --vault-push
     - `scripts/devbox qa --platform ios --ios-udid <IOS_UDID>`
     - `scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>`
     - `scripts/devbox qa --android-regressions --android-serial <ANDROID_SERIAL>`
-  - 주의: 이 명령은 서버/터널을 대신 띄우지 않으므로, 먼저 `scripts/devbox up ...` 또는 `scripts/devbox mobile ...`로 환경을 준비해야 함
+  - 주의: 이 명령은 서버/터널을 대신 띄우지 않으므로, 먼저 `scripts/devbox up ...` 또는 `scripts/devbox mobile ... --qa-bridge`로 환경을 준비해야 함
 
 ## ngrok 연동
 

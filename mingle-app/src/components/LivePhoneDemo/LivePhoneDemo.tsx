@@ -860,6 +860,20 @@ function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetS
   }
 }
 
+function shouldExposeLiveDemoQaBridge(params: {
+  search: string
+  isNativeAppRuntime: boolean
+}): boolean {
+  if (!params.isNativeAppRuntime) return false
+  const search = new URLSearchParams(params.search || '')
+  return (
+    search.get('qa') === '1'
+    && search.get('nativeQa') === '1'
+    && search.get('sttDebug') === '1'
+    && search.get('ttsDebug') === '1'
+  )
+}
+
 function buildTrackingRequestHeaders(args: {
   sessionKey: string
   trackingUserId: string
@@ -3294,8 +3308,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const search = new URLSearchParams(window.location.search || '')
-    if (search.get('qa') !== '1') {
+    if (!shouldExposeLiveDemoQaBridge({
+      search: window.location.search || '',
+      isNativeAppRuntime,
+    })) {
       delete window.__MINGLE_QA__
       return
     }

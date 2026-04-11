@@ -53,7 +53,10 @@ import {
   resolveNativeAppUpdateSnapshot,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
-import { readPreferredRuntimeValue } from './src/runtimeConfig';
+import {
+  readPreferredRuntimeBoolean,
+  readPreferredRuntimeValue,
+} from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -62,6 +65,7 @@ type NativeRuntimeConfig = {
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
+  qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
   adBannerPosition?: string;
@@ -287,6 +291,10 @@ const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
 const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.apiNamespace,
   readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
+);
+const RUNTIME_QA_BRIDGE_ENABLED = readPreferredRuntimeBoolean(
+  NATIVE_RUNTIME_CONFIG.qaBridgeEnabled,
+  readRuntimeEnvValue(['NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED', 'RN_QA_BRIDGE_ENABLED']),
 );
 const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
@@ -1296,9 +1304,10 @@ function AppInner(): React.JSX.Element {
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
-    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1&qa=1' : '';
+    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
+    const qaParams = __DEV__ && RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
   }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);

@@ -62,6 +62,8 @@
 	<string>$(NEXT_PUBLIC_WS_HOST)</string>
 	<key>MingleApiNamespace</key>
 	<string>$(NEXT_PUBLIC_API_NAMESPACE)</string>
+	<key>MingleQaBridgeEnabled</key>
+	<string>$(NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED)</string>
 	<key>MingleAdBannerPosition</key>
 	<string>$(NEXT_PUBLIC_RN_AD_BANNER_POSITION)</string>
 	<key>MingleAdBannerHeightPx</key>

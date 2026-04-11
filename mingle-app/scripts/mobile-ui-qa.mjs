@@ -721,6 +721,7 @@ function formatIosRealDeviceSessionError(error, diagnostics) {
 async function switchToWebView(driver) {
   const platformName = String(driver.capabilities.platformName || '').toLowerCase();
   const isAndroid = platformName === 'android';
+  const qaBridgeHint = 'QA bridge URL markers were not found. Reinstall the debug app with `scripts/devbox mobile ... --qa-bridge` or `scripts/devbox up ... --qa-bridge`.';
 
   return await waitFor(async () => {
     const contexts = await driver.getContexts({
@@ -754,12 +755,30 @@ async function switchToWebView(driver) {
             return false;
           }
           if (!('bundleId' in context) || typeof context.bundleId !== 'string') return false;
-          return context.bundleId === IOS_BUNDLE_ID;
+          if (context.bundleId !== IOS_BUNDLE_ID) return false;
+          if ('url' in context && typeof context.url === 'string' && context.url.trim()) return false;
+          return true;
         })
       : null;
 
+    const nonQaTarget = contexts.find((context) => {
+      if (!context || typeof context !== 'object') return false;
+      if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
+        return false;
+      }
+      if (isAndroid) {
+        return context.packageName === APP_PACKAGE;
+      }
+      return context.bundleId === IOS_BUNDLE_ID;
+    });
+
     const target = exactTarget ?? fallbackIosTarget;
-    if (!target) return null;
+    if (!target) {
+      if (nonQaTarget) {
+        throw new Error(qaBridgeHint);
+      }
+      return null;
+    }
 
     if (isAndroid) {
       await driver.switchContext({

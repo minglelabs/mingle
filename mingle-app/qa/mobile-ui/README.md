@@ -43,14 +43,16 @@ Recommended setup from the repository root:
 ```bash
 scripts/devbox bootstrap
 scripts/devbox up --profile local --with-metro
-scripts/devbox mobile --platform android --android-variant debug
+scripts/devbox mobile --platform android --android-variant debug --qa-bridge
 scripts/devbox up --profile device --device-app-env dev --with-metro
-scripts/devbox mobile --platform ios --ios-configuration Debug --device-app-env dev
+scripts/devbox mobile --platform ios --ios-configuration Debug --device-app-env dev --qa-bridge
 ```
 
 For iOS real-device runs, do not install from the local profile when the app URL points to `127.0.0.1` or `localhost`. Use the device profile so the WebView loads through the tunnel URL and the QA bridge remains reachable from Appium.
 
 For iOS real-device Appium runs, install a `Debug` build. The current RN shell enables iOS WebView debugging only in debug builds, so a `Release` build will not expose the QA WebView context to Appium on a physical phone.
+
+For both iOS and Android Appium runs, install the app with `--qa-bridge`. The QA bridge is no longer enabled in every debug build by default.
 
 ## iOS Real-Device WDA Requirements
 
@@ -159,7 +161,7 @@ Today, the most reliable debugging flow is still the per-platform split:
 
 The combined command is now stable enough to use as a top-level smoke gate after the Android hydration case moved to an app-owned QA bridge instead of raw WebView storage timing.
 
-The devbox wrapper does not replace `scripts/devbox up` or `scripts/devbox mobile`. Keep using devbox to start the device profile/tunnel and install the debug app first, then use `scripts/devbox qa ...` to launch the QA runner itself.
+The devbox wrapper does not replace `scripts/devbox up` or `scripts/devbox mobile`. Keep using devbox to start the device profile/tunnel and install the debug app first, then use `scripts/devbox qa ...` to launch the QA runner itself. For Appium-backed runs, the install step should use `--qa-bridge`.
 
 ## Devbox QA Command Matrix
 
@@ -185,7 +187,7 @@ scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-ud
 scripts/devbox qa
 ```
 
-Use `scripts/devbox up ...` and `scripts/devbox mobile ...` first when the local servers, tunnel, Metro, or debug app install are not already in the expected state.
+Use `scripts/devbox up ...` and `scripts/devbox mobile ... --qa-bridge` first when the local servers, tunnel, Metro, or debug app install are not already in the expected state.
 
 ## Coverage Snapshot
 

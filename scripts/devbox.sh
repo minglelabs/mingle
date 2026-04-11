@@ -136,6 +136,7 @@ DEVBOX_LOG_FILE=""
 DEVBOX_OPENCLAW_ROOT=""
 DEVBOX_IOS_TEAM_ID="${DEVBOX_IOS_TEAM_ID:-}"
 DEVBOX_ACTIVE_DEVICE_APP_ENV=""
+DEVBOX_QA_BRIDGE_ENABLED="${DEVBOX_QA_BRIDGE_ENABLED:-}"
 
 log() {
   printf '[devbox] %s\n' "$*"
@@ -210,8 +211,8 @@ Usage:
   scripts/devbox ios-appstore-sync-metadata [--json PATH] [--api-key-json PATH] [--app-id BUNDLE_ID] [--dry-run] [--no-fallback]
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
-  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--qa-bridge] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
   scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
@@ -389,6 +390,14 @@ is_truthy() {
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+resolve_devbox_qa_bridge_enabled() {
+  if is_truthy "${DEVBOX_QA_BRIDGE_ENABLED:-0}"; then
+    printf '1'
+    return 0
+  fi
+  printf '0'
 }
 
 normalize_domain_input() {
@@ -1975,6 +1984,7 @@ write_rn_ios_runtime_xcconfig() {
   local site_host="${DEVBOX_SITE_URL#*://}"
   local ws_scheme="${DEVBOX_RN_WS_URL%%://*}"
   local ws_host="${DEVBOX_RN_WS_URL#*://}"
+  local qa_bridge_enabled=""
   local ad_banner_position=""
   local ad_banner_height_px=""
   local admob_app_id_ios=""
@@ -1989,6 +1999,7 @@ write_rn_ios_runtime_xcconfig() {
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
   escaped_ws_url="${escaped_ws_url//\//\\/}"
+  qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
   ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
@@ -2010,6 +2021,7 @@ NEXT_PUBLIC_SITE_HOST = $site_host
 NEXT_PUBLIC_WS_SCHEME = $ws_scheme
 NEXT_PUBLIC_WS_HOST = $ws_host
 NEXT_PUBLIC_API_NAMESPACE = $IOS_RN_REQUIRED_API_NAMESPACE
+NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED = $qa_bridge_enabled
 RN_ADMOB_APP_ID_IOS = $xcconfig_admob_app_id_ios
 NEXT_PUBLIC_RN_AD_BANNER_POSITION = $ad_banner_position
 NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = $ad_banner_height_px
@@ -2712,6 +2724,7 @@ run_ios_mobile_install() {
   local coredevice_id=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_app_id_android=""
+  local runtime_qa_bridge_enabled=""
 
   if [[ -z "$destination_udid" ]]; then
     destination_udid="$(detect_ios_xcode_destination_udid || true)"
@@ -2739,6 +2752,7 @@ run_ios_mobile_install() {
   bundle_id="$(resolve_ios_bundle_id)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
+  runtime_qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
 
   if [[ "$with_clean_install" -eq 1 && -n "$bundle_id" ]]; then
     log "uninstalling existing iOS app before reinstall: $bundle_id (device=$coredevice_id)"
@@ -2757,6 +2771,9 @@ run_ios_mobile_install() {
   [[ -d "$workspace_path" ]] || die "RN iOS workspace not found: $workspace_path"
 
   log "building iOS app ($configuration) for destination: $destination_udid"
+  if [[ "$runtime_qa_bridge_enabled" == "1" ]]; then
+    log "iOS QA bridge is enabled for this install"
+  fi
   (
     local rn_app_json_backup=""
     local had_original_rn_app_json=0
@@ -2799,6 +2816,7 @@ run_android_mobile_install() {
   local runtime_admob_app_id_android=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_banner_unit_id_android=""
+  local runtime_qa_bridge_enabled=""
 
   if [[ -z "$serial" ]]; then
     serial="$(detect_android_device_serial || true)"
@@ -2823,8 +2841,12 @@ run_android_mobile_install() {
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
+  runtime_qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
 
   log "building Android app ($variant) for device: $serial"
+  if [[ "$runtime_qa_bridge_enabled" == "1" ]]; then
+    log "Android QA bridge is enabled for this install"
+  fi
   (
     local rn_app_json_backup=""
     local had_original_rn_app_json=0
@@ -2844,6 +2866,7 @@ run_android_mobile_install() {
     RN_AD_BANNER_HEIGHT_PX="$runtime_ad_banner_height_px" \
     RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
     RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
+    RN_QA_BRIDGE_ENABLED="$runtime_qa_bridge_enabled" \
       ./gradlew "$gradle_task"
   )
 
@@ -2865,9 +2888,11 @@ run_mobile_install_targets() {
   local app_site_override="${8:-}"
   local app_ws_override="${9:-}"
   local device_app_env="${10:-}"
+  local qa_bridge_enabled="${11:-0}"
 
   (
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
+    DEVBOX_QA_BRIDGE_ENABLED="$qa_bridge_enabled"
     if [[ -n "$app_site_override" ]]; then
       DEVBOX_SITE_URL="$app_site_override"
     fi
@@ -4493,6 +4518,7 @@ cmd_mobile() {
   local android_serial=""
   local ios_configuration="Release"
   local android_variant="release"
+  local qa_bridge_enabled=0
   local tunnel_provider_override=""
   local mobile_site_override=""
   local mobile_ws_override=""
@@ -4511,6 +4537,7 @@ cmd_mobile() {
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --android-variant) android_variant="${2:-}"; shift 2 ;;
       --with-ios-clean-install) with_ios_clean_install=1; shift ;;
+      --qa-bridge) qa_bridge_enabled=1; shift ;;
       --device-app-env) device_app_env="${2:-}"; shift 2 ;;
       --tunnel-provider) tunnel_provider_override="${2:-}"; shift 2 ;;
       --site-url) site_override="${2:-}"; shift 2 ;;
@@ -4648,7 +4675,8 @@ cmd_mobile() {
     "$with_ios_clean_install" \
     "$mobile_site_override" \
     "$mobile_ws_override" \
-    "$device_app_env"
+    "$device_app_env" \
+    "$qa_bridge_enabled"
 
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
   log "mobile build/install complete"
@@ -4667,6 +4695,7 @@ cmd_up() {
   local with_android_install=0
   local ios_runtime="rn"
   local with_ios_clean_install=0
+  local qa_bridge_enabled=0
   local device_app_env=""
   local ios_udid=""
   local android_serial=""
@@ -4686,6 +4715,7 @@ cmd_up() {
       --with-mobile-install) with_ios_install=1; with_android_install=1; shift ;;
       --ios-runtime) ios_runtime="${2:-}"; shift 2 ;;
       --with-ios-clean-install) with_ios_clean_install=1; shift ;;
+      --qa-bridge) qa_bridge_enabled=1; shift ;;
       --ios-udid) ios_udid="${2:-}"; with_ios_install=1; shift 2 ;;
       --android-serial) android_serial="${2:-}"; with_android_install=1; shift 2 ;;
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
@@ -4932,7 +4962,8 @@ $(ngrok_plan_capacity_hint)"
       "$with_ios_clean_install" \
       "$mobile_site_override" \
       "$mobile_ws_override" \
-      "$device_app_env"
+      "$device_app_env" \
+      "$qa_bridge_enabled"
   fi
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
