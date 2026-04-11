@@ -18,13 +18,18 @@
   Fix: The native navigation bridge now stamps a synthetic per-entry history index into `history.state` and derives `canGoBack` from the current index instead of total history length.
   Status: Resolved in-thread.
 
+- **Conversation-list search initially ignored Android OS back and iOS edge-swipe history**
+  Problem: The search UI in the conversation list was only a local `showSearch` state with no dedicated history entry. On Android, pressing OS back while search was open could fall through to app exit instead of closing just the search drawer. On iOS, the same search surface had no real edge-swipe back/forward path and risked reproducing the room-menu replay glitches if a multi-depth history stack was copied over too literally.
+  Fix: Search now uses a single dedicated history state (`list <-> search`) instead of a local-only flag. Android native back consumes that entry and closes only the search drawer, while iOS popstate synchronization restores or dismisses search instantly to match native history snapshots without reusing the room menu's deeper stack logic.
+  Status: Resolved in-thread.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 124.
+- Total standalone UI/UX issue atoms documented in this file: 125.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.

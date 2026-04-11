@@ -49,6 +49,8 @@ import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
+const SEARCH_OVERLAY_HISTORY_STATE_KEY = "__mingleConversationSearchOpen";
+const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
@@ -77,9 +79,16 @@ let recentSearchesSnapshotRaw = "__initial__";
 
 type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
+type SearchOverlayTransitionMode = "animate" | "instant";
 type ConversationOverlayTransitionState = {
   enterMode: ConversationOverlayEnterMode;
   exitMode: ConversationOverlayExitMode;
+};
+
+type ConversationListWindow = Window & {
+  [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
+  [SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG]?: boolean;
+  __MINGLE_LAST_NATIVE_MIC_PERMISSION?: "unknown" | "granted" | "denied" | "prompt";
 };
 
 const conversationOverlayVariants: Variants = {
@@ -146,11 +155,6 @@ function truncateConversationPreview(value: string, maxLength = 20): string {
 
   return `${characters.slice(0, maxLength).join("")}...`;
 }
-
-type ConversationListWindow = Window & {
-  [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
-  __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown;
-};
 
 type LegacySingleRoomSnapshot = {
   utterancesRaw: string | null;
@@ -422,6 +426,66 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
   } catch {
     // Ignore history synchronization failures in restricted environments.
   }
+}
+
+function mergeSearchOverlayHistoryState(state: unknown, open: boolean): Record<string, unknown> {
+  const nextState = state && typeof state === "object" && !Array.isArray(state)
+    ? { ...(state as Record<string, unknown>) }
+    : {};
+
+  if (open) {
+    nextState[SEARCH_OVERLAY_HISTORY_STATE_KEY] = true;
+  } else {
+    delete nextState[SEARCH_OVERLAY_HISTORY_STATE_KEY];
+  }
+
+  return nextState;
+}
+
+function isSearchOverlayHistoryOpen(state: unknown): boolean {
+  return Boolean(
+    state
+    && typeof state === "object"
+    && !Array.isArray(state)
+    && (state as Record<string, unknown>)[SEARCH_OVERLAY_HISTORY_STATE_KEY] === true,
+  );
+}
+
+function pushSearchOverlayHistoryState(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.history.pushState(
+      mergeSearchOverlayHistoryState(window.history.state, true),
+      "",
+      window.location.href,
+    );
+  } catch {
+    // Ignore history synchronization failures in restricted environments.
+  }
+}
+
+function replaceSearchOverlayHistoryState(open: boolean): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.history.replaceState(
+      mergeSearchOverlayHistoryState(window.history.state, open),
+      "",
+      window.location.href,
+    );
+  } catch {
+    // Ignore history synchronization failures in restricted environments.
+  }
+}
+
+function consumeSearchOverlayHistoryCloseAnimationFlag(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const conversationWindow = window as ConversationListWindow;
+  const shouldAnimate = conversationWindow[SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG] === true;
+  conversationWindow[SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG] = false;
+  return shouldAnimate;
 }
 
 function consumeNativeHistoryCloseAnimationFlag(): boolean {
@@ -907,6 +971,7 @@ type SearchOverlayHandle = {
 
 type SearchOverlayProps = {
   open: boolean;
+  transitionMode: SearchOverlayTransitionMode;
   onClose: () => void;
   conversations: ConversationItem[];
   copy: ReturnType<typeof getConversationDictionary>;
@@ -916,6 +981,7 @@ type SearchOverlayProps = {
 
 const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(function SearchOverlay({
   open,
+  transitionMode,
   onClose,
   conversations,
   copy,
@@ -1036,6 +1102,7 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
       style={{
         transform: open ? "translateX(0)" : "translateX(100%)",
         pointerEvents: open ? "auto" : "none",
+        transitionDuration: transitionMode === "animate" ? undefined : "0ms",
       }}
       aria-hidden={!open}
       onTouchStart={(event) => {
@@ -1190,6 +1257,7 @@ export default function ConversationList({
     [locale],
   );
   const [showSearch, setShowSearch] = useState(false);
+  const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
@@ -1296,6 +1364,55 @@ export default function ConversationList({
     pullRefreshTrackingRef.current = false;
     setPullRefreshDistance(0);
   }, []);
+
+  const setSearchOverlayVisible = useCallback((
+    nextVisible: boolean,
+    transitionMode: SearchOverlayTransitionMode,
+  ) => {
+    setSearchTransitionMode(transitionMode);
+    setShowSearch(nextVisible);
+  }, []);
+
+  const closeSearchOverlay = useCallback((options?: {
+    transitionMode?: SearchOverlayTransitionMode;
+    syncHistory?: "back" | "replace" | "none";
+  }) => {
+    const transitionMode = options?.transitionMode ?? "animate";
+    const syncHistory = options?.syncHistory ?? "none";
+
+    if (syncHistory === "back" && isSearchOverlayHistoryOpen(window.history.state)) {
+      const conversationWindow = window as ConversationListWindow;
+      conversationWindow[SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG] = transitionMode === "animate";
+      window.history.back();
+      return;
+    }
+
+    if (syncHistory === "replace") {
+      replaceSearchOverlayHistoryState(false);
+    }
+
+    setSearchOverlayVisible(false, transitionMode);
+  }, [setSearchOverlayVisible]);
+
+  const openSearchOverlay = useCallback((options?: {
+    transitionMode?: SearchOverlayTransitionMode;
+    syncHistory?: "push" | "none";
+  }) => {
+    const transitionMode = options?.transitionMode ?? "animate";
+    const syncHistory = options?.syncHistory ?? "none";
+
+    if (syncHistory === "push" && !isSearchOverlayHistoryOpen(window.history.state)) {
+      pushSearchOverlayHistoryState();
+    }
+
+    setSearchOverlayVisible(true, transitionMode);
+    window.requestAnimationFrame(() => {
+      searchOverlayRef.current?.focusInput();
+    });
+    window.setTimeout(() => {
+      searchOverlayRef.current?.focusInput();
+    }, 180);
+  }, [setSearchOverlayVisible]);
 
   const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
     const response = await fetch(buildConversationApiPath(), {
@@ -1660,14 +1777,8 @@ export default function ConversationList({
   }, []);
 
   const handleOpenSearch = useCallback(() => {
-    setShowSearch(true);
-    window.requestAnimationFrame(() => {
-      searchOverlayRef.current?.focusInput();
-    });
-    window.setTimeout(() => {
-      searchOverlayRef.current?.focusInput();
-    }, 180);
-  }, []);
+    openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
+  }, [openSearchOverlay]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -1677,6 +1788,21 @@ export default function ConversationList({
   useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (activeConversation) {
+      if (showSearch) {
+        setSearchOverlayVisible(false, "instant");
+      }
+      return;
+    }
+
+    const shouldShowSearchFromHistory = isSearchOverlayHistoryOpen(window.history.state);
+    if (shouldShowSearchFromHistory === showSearch) return;
+    setSearchOverlayVisible(shouldShowSearchFromHistory, "instant");
+  }, [activeConversation, setSearchOverlayVisible, showSearch]);
 
   useEffect(() => {
     if (!activeConversation) return;
@@ -1967,7 +2093,7 @@ export default function ConversationList({
         }),
       });
       const nextConversation = await readConversationResponse(response);
-      setShowSearch(false);
+      closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setConversations((current) => upsertConversation(current, nextConversation));
       setOverlayEnterMode("animate");
       setOverlayExitMode("animate");
@@ -1979,6 +2105,7 @@ export default function ConversationList({
       setIsCreatingConversation(false);
     }
   }, [
+    closeSearchOverlay,
     copy.createErrorMessage,
     defaultSelectedLanguages,
     isCreatingConversation,
@@ -1994,13 +2121,13 @@ export default function ConversationList({
   ) => {
     const enterMode = options?.enterMode ?? "animate";
     postNativeBannerZone("hidden");
-    setShowSearch(false);
+    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
     setOverlayEnterMode(enterMode);
     setOverlayExitMode("animate");
     setAutoStartConversationId(null);
     setActiveConversation(conversation);
     return conversation;
-  }, []);
+  }, [closeSearchOverlay]);
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
@@ -2043,10 +2170,20 @@ export default function ConversationList({
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
+    if (showSearch && !activeConversation) {
+      closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
+      return true;
+    }
     if (!activeConversation || isCreatingConversation) return false;
     closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
     return true;
-  }, 0), [activeConversation, closeConversationOverlay, isCreatingConversation]);
+  }, 5), [
+    activeConversation,
+    closeConversationOverlay,
+    closeSearchOverlay,
+    isCreatingConversation,
+    showSearch,
+  ]);
 
   useEffect(() => {
     if (activeConversation) {
@@ -2095,6 +2232,25 @@ export default function ConversationList({
     if (!nextUrl) return;
     window.history.pushState({ conversationId: activeConversation.id }, "", nextUrl);
   }, [activeConversation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleSearchPopState = () => {
+      if (activeConversationRef.current) return;
+
+      const nextSearchOpen = isSearchOverlayHistoryOpen(window.history.state);
+      const transitionMode = nextSearchOpen
+        ? "instant"
+        : (consumeSearchOverlayHistoryCloseAnimationFlag() ? "animate" : "instant");
+      setSearchOverlayVisible(nextSearchOpen, transitionMode);
+    };
+
+    window.addEventListener("popstate", handleSearchPopState);
+    return () => {
+      window.removeEventListener("popstate", handleSearchPopState);
+    };
+  }, [setSearchOverlayVisible]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2163,7 +2319,8 @@ export default function ConversationList({
         <SearchOverlay
           ref={searchOverlayRef}
           open={showSearch}
-          onClose={() => setShowSearch(false)}
+          transitionMode={searchTransitionMode}
+          onClose={() => closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" })}
           conversations={conversationItems}
           copy={copy}
           onSelectConversation={handleOpenConversation}
