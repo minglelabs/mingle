@@ -74,6 +74,11 @@ scripts/devbox test --target app
 # live STT 통합테스트는 명시적으로만 실행
 # scripts/devbox test --target app --with-live
 
+# 11-a) (선택) 모바일 UI QA 실행
+scripts/devbox qa --contracts
+scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
+scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
+
 # 12) (권장) 로컬 서버 + RN iOS 클린 재설치 한 번에
 scripts/devbox up --profile local --with-ios-install --with-ios-clean-install
 ```
@@ -242,6 +247,15 @@ scripts/devbox bootstrap --vault-push
 - `scripts/devbox test --target app [--with-live]`
   - `app` 기본값: 현재 devbox 설정값으로 `mingle-app` unit test 실행
   - `app --with-live`: 현재 devbox 설정값으로 `mingle-app` live integration test 실행
+
+- `scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions]`
+  - `pnpm test:qa:ui*`를 devbox 래퍼로 실행
+  - 현재 devbox URL/WS/test endpoint와 QA용 UDID/serial env를 함께 주입
+  - 예시
+    - `scripts/devbox qa --contracts`
+    - `scripts/devbox qa --platform ios --ios-udid <IOS_UDID>`
+    - `scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>`
+  - 주의: 이 명령은 서버/터널을 대신 띄우지 않으므로, 먼저 `scripts/devbox up ...` 또는 `scripts/devbox mobile ...`로 환경을 준비해야 함
 
 ## ngrok 연동
 

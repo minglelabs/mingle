@@ -214,6 +214,7 @@ Usage:
   scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
+  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
   scripts/devbox status
 
 Commands:
@@ -230,6 +231,7 @@ Commands:
   up           Start STT + Next app together (device profile includes tunnel startup).
   down         Stop devbox runtime processes (web/stt/metro/tunnels) for this repo.
   test         Run mingle-app unit tests by default (live with --with-live).
+  qa           Run mingle-app mobile UI QA wrappers (contracts/Appium/iOS regression inventory).
   status       Print current endpoints for PC/iOS/Android web and app targets.
 
 Global Options:
@@ -5152,6 +5154,136 @@ cmd_test() {
   fi
 }
 
+cmd_qa() {
+  require_devbox_env
+  require_cmd pnpm
+
+  local platform="all"
+  local mode="platform"
+  local ios_udid="${MINGLE_UI_QA_IOS_UDID:-}"
+  local ios_real_udid="${MINGLE_UI_QA_IOS_REAL_UDID:-${MINGLE_UI_QA_IOS_UDID:-}}"
+  local ios_sim_udid="${MINGLE_UI_QA_IOS_SIM_UDID:-}"
+  local android_serial="${MINGLE_UI_QA_ANDROID_SERIAL:-}"
+  local -a qa_args=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --platform) platform="${2:-}"; shift 2 ;;
+      --contracts)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts or --ios-regressions"
+        mode="contracts"
+        shift
+        ;;
+      --ios-regressions)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts or --ios-regressions"
+        mode="ios-regressions"
+        shift
+        ;;
+      --ios-udid) ios_udid="${2:-}"; shift 2 ;;
+      --ios-real-udid) ios_real_udid="${2:-}"; shift 2 ;;
+      --ios-sim-udid) ios_sim_udid="${2:-}"; shift 2 ;;
+      --android-serial) android_serial="${2:-}"; shift 2 ;;
+      --)
+        shift
+        qa_args+=("$@")
+        break
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage: scripts/devbox qa [options] [-- extra-runner-args...]
+
+Options:
+  --platform ios|android|all   Run the standard mobile UI QA runner for one platform or both.
+                               Default: all
+  --contracts                  Run the fast contract gate only.
+  --ios-regressions            Run the expanded iOS regression inventory.
+  --ios-udid UDID              Physical iPhone or simulator UDID for the standard iOS QA runner.
+  --ios-real-udid UDID         Physical iPhone UDID for the expanded iOS regression inventory.
+  --ios-sim-udid UDID          Simulator UDID for the expanded iOS regression inventory.
+  --android-serial SERIAL      Android device serial for the standard Android QA runner.
+  --                          Pass remaining arguments directly to the underlying QA script.
+
+Examples:
+  scripts/devbox qa --contracts
+  scripts/devbox qa --platform ios --ios-udid <UDID>
+  scripts/devbox qa --ios-regressions --ios-real-udid <REAL_UDID> --ios-sim-udid <SIM_UDID>
+EOF
+        return 0
+        ;;
+      *)
+        qa_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  case "$platform" in
+    ios|android|all) ;;
+    *) die "invalid --platform for qa: $platform (expected ios|android|all)" ;;
+  esac
+
+  local script_name=""
+  local -a runner_args=()
+  local -a command_args=()
+
+  case "$mode" in
+    contracts)
+      script_name="test:qa:ui:contracts"
+      ;;
+    ios-regressions)
+      script_name="test:qa:ui:ios:regressions"
+      [[ -n "$ios_real_udid" ]] && runner_args+=(--ios-real-udid "$ios_real_udid")
+      [[ -n "$ios_sim_udid" ]] && runner_args+=(--ios-sim-udid "$ios_sim_udid")
+      ;;
+    platform)
+      case "$platform" in
+        ios)
+          script_name="test:qa:ui:ios"
+          [[ -n "$ios_udid" ]] && runner_args+=(--ios-udid "$ios_udid")
+          ;;
+        android)
+          script_name="test:qa:ui:android"
+          [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+          ;;
+        all)
+          script_name="test:qa:ui"
+          [[ -n "$ios_udid" ]] && runner_args+=(--ios-udid "$ios_udid")
+          [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+          ;;
+      esac
+      ;;
+    *)
+      die "unsupported QA mode: $mode"
+      ;;
+  esac
+
+  log "running mingle-app QA via devbox (script=$script_name)"
+  command_args=("$script_name")
+  if ((${#runner_args[@]} > 0)); then
+    command_args+=("${runner_args[@]}")
+  fi
+  if ((${#qa_args[@]} > 0)); then
+    command_args+=("${qa_args[@]}")
+  fi
+  (
+    cd "$ROOT_DIR/mingle-app"
+    DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
+    DEVBOX_PROFILE="$DEVBOX_PROFILE" \
+    DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
+    DEVBOX_STT_PORT="$DEVBOX_STT_PORT" \
+    DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT" \
+    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
+    NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
+    MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
+    MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
+    MINGLE_UI_QA_IOS_UDID="$ios_udid" \
+    MINGLE_UI_QA_IOS_REAL_UDID="$ios_real_udid" \
+    MINGLE_UI_QA_IOS_SIM_UDID="$ios_sim_udid" \
+    MINGLE_UI_QA_ANDROID_SERIAL="$android_serial" \
+      pnpm "${command_args[@]}"
+  )
+}
+
 cmd_status() {
   require_devbox_env
   local ngrok_web_domain="(auto)"
@@ -5220,6 +5352,9 @@ Run:
 - scripts/devbox mobile --platform ios
 - scripts/devbox mobile --platform android
 - scripts/devbox test --with-live
+- scripts/devbox qa --contracts
+- scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
+- scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
 EOF
@@ -5341,6 +5476,7 @@ main() {
       ;;
     down) cmd_down "$@" ;;
     test|test-live) cmd_test "$@" ;;
+    qa|qa-ui) cmd_qa "$@" ;;
     status) cmd_status "$@" ;;
     help|-h|--help) usage ;;
     *) die "unknown command: $cmd (run: scripts/devbox help)" ;;

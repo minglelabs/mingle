@@ -82,6 +82,12 @@ Run the contract gate:
 pnpm test:qa:ui:contracts
 ```
 
+Or through devbox:
+
+```bash
+scripts/devbox qa --contracts
+```
+
 Run Android device QA:
 
 ```bash
@@ -94,10 +100,22 @@ Run iOS simulator or device QA:
 pnpm test:qa:ui:ios -- --ios-udid <udid>
 ```
 
+Or through devbox:
+
+```bash
+scripts/devbox qa --platform ios --ios-udid <udid>
+```
+
 Run the expanded iOS regression inventory:
 
 ```bash
 pnpm test:qa:ui:ios:regressions -- --ios-real-udid <physical-udid> --ios-sim-udid <sim-udid>
+```
+
+Or through devbox:
+
+```bash
+scripts/devbox qa --ios-regressions --ios-real-udid <physical-udid> --ios-sim-udid <sim-udid>
 ```
 
 On physical iPhones, the current suite now runs the QA-bridge hydration, banner inset, persisted-history hydration, composer round-trip, top-bar chrome/drawer stability, locale/menu regressions, and empty-state guidance checks. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
@@ -110,6 +128,12 @@ Run both:
 pnpm test:qa:ui
 ```
 
+Or through devbox:
+
+```bash
+scripts/devbox qa
+```
+
 The runner writes timestamped reports under `qa/mobile-ui/reports/`.
 
 Today, the most reliable debugging flow is still the per-platform split:
@@ -118,3 +142,5 @@ Today, the most reliable debugging flow is still the per-platform split:
 - `pnpm test:qa:ui:ios -- --ios-udid <udid>`
 
 The combined command is now stable enough to use as a top-level smoke gate after the Android hydration case moved to an app-owned QA bridge instead of raw WebView storage timing.
+
+The devbox wrapper does not replace `scripts/devbox up` or `scripts/devbox mobile`. Keep using devbox to start the device profile/tunnel and install the debug app first, then use `scripts/devbox qa ...` to launch the QA runner itself.
