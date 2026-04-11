@@ -7,9 +7,9 @@ import { listConversationChannelsForUser } from "@/lib/app-conversations";
 import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
 import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
 import {
-  resolveDefaultMingleBehaviorProfile,
+  resolveDefaultMingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
-  resolveMingleBehaviorProfile,
+  resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
 import {
   findUserIdForIdentity,
@@ -47,12 +47,18 @@ export default async function ConversationsPage({ params, searchParams }: Conver
   }
 
   const requestedApiNamespace = readRequestedApiNamespaceFromSearchParams(resolvedSearchParams);
-  const behaviorProfile = requestedApiNamespace
-    ? resolveMingleBehaviorProfile(requestedApiNamespace)
-    : resolveDefaultMingleBehaviorProfile();
+  const releaseVariant = requestedApiNamespace
+    ? resolveMingleClientReleaseVariant(requestedApiNamespace)
+    : resolveDefaultMingleClientReleaseVariant();
 
-  if (behaviorProfile === "legacy_1_0_11") {
-    redirect(buildPathWithSearchParams(`/${locale}`, resolvedSearchParams));
+  switch (releaseVariant) {
+    case "legacy_default_v1_0_11":
+    case "ios_v1_0_11":
+    case "android_v1_0_11":
+      redirect(buildPathWithSearchParams(`/${locale}`, resolvedSearchParams));
+    case "ios_v1_1_0":
+    case "android_v1_1_0":
+      break;
   }
 
   const session = await getServerSession(getAuthOptions());
@@ -76,6 +82,7 @@ export default async function ConversationsPage({ params, searchParams }: Conver
 
   return (
     <ConversationList
+      clientReleaseVariant={releaseVariant}
       locale={locale as AppLocale}
       dictionary={getDictionary(locale)}
       initialConversations={initialConversations}

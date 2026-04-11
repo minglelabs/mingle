@@ -41,7 +41,7 @@ describe('release-target-config', () => {
     expect(validateReleaseTargetConfig({
       releaseTarget: 'v1_1_0',
       siteUrl: 'https://mingle-app-devbox.photo-for-passport.com',
-      wsUrl: 'wss://foo.ngrok-free.app',
+      wsUrl: 'wss://mingle-stt-devbox.photo-for-passport.com',
     })).toEqual({ ok: true });
   });
 

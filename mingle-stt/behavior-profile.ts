@@ -1,4 +1,10 @@
 export type MingleSttBehaviorProfile = 'legacy_1_0_11' | 'v1_1_0'
+export type MingleSttReleaseVariant =
+    | 'legacy_default_v1_0_11'
+    | 'ios_v1_0_11'
+    | 'android_v1_0_11'
+    | 'ios_v1_1_0'
+    | 'android_v1_1_0'
 
 type ApiNamespaceVersion = {
   platform: 'android' | 'ios'
@@ -41,13 +47,34 @@ function compareApiNamespaceVersions(
   return 0
 }
 
-export function resolveMingleSttBehaviorProfile(apiNamespace: string): MingleSttBehaviorProfile {
-  const parsedNamespace = parseApiNamespaceVersion(apiNamespace)
-  if (!parsedNamespace) {
-    return 'legacy_1_0_11'
-  }
+export function resolveMingleSttReleaseVariant(apiNamespace: string): MingleSttReleaseVariant {
+    const parsedNamespace = parseApiNamespaceVersion(apiNamespace)
+    if (!parsedNamespace) {
+        return 'legacy_default_v1_0_11'
+    }
 
-  return compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_0_VERSION) >= 0
-    ? 'v1_1_0'
-    : 'legacy_1_0_11'
+    const versionLine = compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_0_VERSION) >= 0
+        ? 'v1_1_0'
+        : 'v1_0_11'
+
+    if (parsedNamespace.platform === 'ios') {
+        return versionLine === 'v1_1_0' ? 'ios_v1_1_0' : 'ios_v1_0_11'
+    }
+
+    return versionLine === 'v1_1_0' ? 'android_v1_1_0' : 'android_v1_0_11'
+}
+
+export function resolveMingleSttBehaviorProfile(apiNamespace: string): MingleSttBehaviorProfile {
+    const releaseVariant = resolveMingleSttReleaseVariant(apiNamespace)
+    return releaseVariant === 'ios_v1_1_0' || releaseVariant === 'android_v1_1_0'
+        ? 'v1_1_0'
+        : 'legacy_1_0_11'
+}
+
+export function isLegacyMingleSttReleaseVariant(
+    releaseVariant: MingleSttReleaseVariant,
+): boolean {
+    return releaseVariant === 'legacy_default_v1_0_11'
+        || releaseVariant === 'ios_v1_0_11'
+        || releaseVariant === 'android_v1_0_11'
 }

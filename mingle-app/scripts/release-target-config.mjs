@@ -36,9 +36,10 @@ function isDevelopmentTunnelUrl(rawValue) {
     const normalizedHost = new URL(normalizedValue).hostname.toLowerCase();
     return normalizedHost.endsWith('.ngrok-free.dev')
       || normalizedHost.endsWith('.ngrok-free.app')
-      || normalizedHost === 'mingle-app-devbox.photo-for-passport.com';
+      || normalizedHost === 'mingle-app-devbox.photo-for-passport.com'
+      || normalizedHost === 'mingle-stt-devbox.photo-for-passport.com';
   } catch {
-    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(normalizedValue);
+    return /(\.ngrok-free\.(dev|app)|mingle-(app|stt)-devbox\.photo-for-passport\.com)/i.test(normalizedValue);
   }
 }
 

@@ -3,9 +3,9 @@ import { getDictionary, isSupportedLocale } from "@/i18n";
 import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
 import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
 import {
-  resolveDefaultMingleBehaviorProfile,
+  resolveDefaultMingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
-  resolveMingleBehaviorProfile,
+  resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
 import { notFound, redirect } from "next/navigation";
 
@@ -25,20 +25,25 @@ export default async function LocalePage({ params, searchParams }: LocalePagePro
   }
 
   const requestedApiNamespace = readRequestedApiNamespaceFromSearchParams(resolvedSearchParams);
-  const behaviorProfile = requestedApiNamespace
-    ? resolveMingleBehaviorProfile(requestedApiNamespace)
-    : resolveDefaultMingleBehaviorProfile();
+  const releaseVariant = requestedApiNamespace
+    ? resolveMingleClientReleaseVariant(requestedApiNamespace)
+    : resolveDefaultMingleClientReleaseVariant();
 
-  if (behaviorProfile === "legacy_1_0_11") {
-    return (
-      <MingleHome
-        dictionary={getDictionary(locale)}
-        appleOAuthEnabled={isAppleOAuthConfigured()}
-        googleOAuthEnabled={isGoogleOAuthConfigured()}
-        locale={locale}
-      />
-    );
+  switch (releaseVariant) {
+    case "legacy_default_v1_0_11":
+    case "ios_v1_0_11":
+    case "android_v1_0_11":
+      return (
+        <MingleHome
+          clientReleaseVariant={releaseVariant}
+          dictionary={getDictionary(locale)}
+          appleOAuthEnabled={isAppleOAuthConfigured()}
+          googleOAuthEnabled={isGoogleOAuthConfigured()}
+          locale={locale}
+        />
+      );
+    case "ios_v1_1_0":
+    case "android_v1_1_0":
+      redirect(buildPathWithSearchParams(`/${locale}/conversations`, resolvedSearchParams));
   }
-
-  redirect(buildPathWithSearchParams(`/${locale}/conversations`, resolvedSearchParams));
 }

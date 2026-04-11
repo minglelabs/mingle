@@ -42,7 +42,7 @@ describe('releaseTargets', () => {
     expect(validateDedicatedReleaseTargetConfig({
       apiNamespace: 'ios/v1.1.0',
       webAppBaseUrl: 'https://mingle-app-devbox.photo-for-passport.com',
-      wsUrl: 'wss://foo.ngrok-free.app',
+      wsUrl: 'wss://mingle-stt-devbox.photo-for-passport.com',
     })).toEqual({ ok: true });
   });
 

@@ -22,8 +22,11 @@ import {
 } from './soniox-language';
 import {
     resolveMingleSttBehaviorProfile,
+    resolveMingleSttReleaseVariant,
     type MingleSttBehaviorProfile,
+    type MingleSttReleaseVariant,
 } from './behavior-profile';
+import { resolveMingleSttReleaseRuntime } from './release-runtime';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -65,6 +68,7 @@ interface ClientConfig {
     stt_model: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox';
     api_namespace?: string;
     behavior_profile?: MingleSttBehaviorProfile;
+    release_variant?: MingleSttReleaseVariant;
     lang_hints_strict?: boolean;
     soniox_language_hints?: string[];
     soniox_manual_finalize_silence_ms?: number;
@@ -88,6 +92,8 @@ wss.on('connection', (clientWs) => {
     let abortController: AbortController | null = null;
     let currentModel: 'gladia' | 'gladia-stt' | 'deepgram' | 'deepgram-multi' | 'fireworks' | 'soniox' = 'gladia';
     let behaviorProfile: MingleSttBehaviorProfile = 'legacy_1_0_11';
+    let releaseVariant: MingleSttReleaseVariant = 'legacy_default_v1_0_11';
+    let releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
     let selectedLanguages: string[] = [];
     let finalizePendingTurnFromProvider: (() => Promise<FinalTurnPayload | null>) | null = null;
     let sonioxStopRequested = false;
@@ -117,11 +123,12 @@ wss.on('connection', (clientWs) => {
 
     const sendReadyStatus = () => {
         if (clientWs.readyState !== WebSocket.OPEN) return;
-        clientWs.send(JSON.stringify({
-            status: 'ready',
-            behavior_profile: behaviorProfile,
-            soniox_language_hints_enabled: SONIOX_USE_LANGUAGE_HINTS,
-        }));
+        clientWs.send(JSON.stringify(
+            releaseRuntime.buildReadyPayload({
+                behaviorProfile,
+                sonioxLanguageHintsEnabled: SONIOX_USE_LANGUAGE_HINTS,
+            }),
+        ));
     };
 
     // ===== GLADIA 연결 =====
@@ -1312,11 +1319,10 @@ wss.on('connection', (clientWs) => {
             if (clientWs.readyState === WebSocket.OPEN) {
                 clientWs.send(JSON.stringify({
                     type: 'stop_recording_ack',
-                    data: {
-                        behavior_profile: behaviorProfile,
-                        finalized: Boolean(finalizedTurn),
-                        final_turn: finalizedTurn,
-                    },
+                    data: releaseRuntime.buildStopRecordingAckData({
+                        behaviorProfile,
+                        finalizedTurn,
+                    }),
                 }));
                 // Close client socket after ack.
                 setTimeout(() => {
@@ -1346,16 +1352,19 @@ wss.on('connection', (clientWs) => {
                 ...data,
                 api_namespace: apiNamespace,
                 behavior_profile: resolveMingleSttBehaviorProfile(apiNamespace),
+                release_variant: resolveMingleSttReleaseVariant(apiNamespace),
                 languages: normalizedLanguages,
             } as ClientConfig;
 
             currentModel = clientConfig.stt_model || 'gladia';
             behaviorProfile = clientConfig.behavior_profile || 'legacy_1_0_11';
+            releaseVariant = clientConfig.release_variant || 'legacy_default_v1_0_11';
+            releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
             selectedLanguages = normalizedLanguages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
             console.log(
-                `[conn:${connId}] config profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
+                `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
             );
             
             if (currentModel === 'deepgram') {
