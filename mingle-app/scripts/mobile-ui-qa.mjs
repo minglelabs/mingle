@@ -21,6 +21,10 @@ const APP_ROOT = path.resolve(import.meta.dirname, '..');
 const REPORT_ROOT = path.resolve(import.meta.dirname, '../qa/mobile-ui/reports');
 const APPIUM_HOME = path.resolve(import.meta.dirname, '../.appium');
 const APPIUM_BIN = path.resolve(APP_ROOT, 'node_modules/.bin/appium');
+const WDA_PROJECT_PATH = path.resolve(
+  APP_ROOT,
+  '.appium/node_modules/appium-xcuitest-driver/node_modules/appium-webdriveragent/WebDriverAgent.xcodeproj',
+);
 const APPIUM_CLI_CWD = path.resolve(process.env.TMPDIR || '/tmp', 'mingle-appium-cli');
 const CHROMEDRIVER_DIR = path.join(APPIUM_HOME, 'chromedrivers');
 const CHROMEDRIVER_MAPPING_FILE = path.join(APPIUM_HOME, 'chromedriver-mapping.json');
@@ -368,6 +372,187 @@ async function prepareIosSimulator(udid) {
     },
   });
   await delay(3000);
+}
+
+function parseCodeSigningIdentities(output) {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/"(?<label>Apple [^"]+)"$/);
+      if (!match?.groups?.label) return null;
+      const label = match.groups.label;
+      const teamIdMatch = label.match(/\((?<teamId>[A-Z0-9]{10})\)$/);
+      return {
+        label,
+        teamId: teamIdMatch?.groups?.teamId || '',
+      };
+    })
+    .filter(Boolean);
+}
+
+async function listCodeSigningIdentities() {
+  const result = await runCommand('security', ['find-identity', '-v', '-p', 'codesigning']);
+  return parseCodeSigningIdentities(result.stdout);
+}
+
+async function getIosDeviceListingState(udid) {
+  const result = await runCommand('xcrun', ['xctrace', 'list', 'devices']);
+  let section = '';
+
+  for (const rawLine of result.stdout.split('\n')) {
+    const line = rawLine.trim();
+    if (line === '== Devices ==') {
+      section = 'devices';
+      continue;
+    }
+    if (line === '== Devices Offline ==') {
+      section = 'offline';
+      continue;
+    }
+    if (line.startsWith('==')) {
+      section = '';
+      continue;
+    }
+    if (!line.includes(udid)) continue;
+    return {
+      state: section || 'unknown',
+      line,
+    };
+  }
+
+  return {
+    state: 'missing',
+    line: '',
+  };
+}
+
+function buildIosRealDeviceWdaArgs(options) {
+  const args = [
+    '-project',
+    WDA_PROJECT_PATH,
+    '-scheme',
+    'WebDriverAgentRunner',
+    '-destination',
+    `id=${options.iosUdid}`,
+    '-allowProvisioningUpdates',
+  ];
+
+  if (options.iosXcodeOrgId) {
+    args.push(`DEVELOPMENT_TEAM=${options.iosXcodeOrgId}`);
+  }
+
+  if (options.iosXcodeSigningId) {
+    args.push(`CODE_SIGN_IDENTITY=${options.iosXcodeSigningId}`);
+  }
+
+  if (options.iosUpdatedWdaBundleId) {
+    args.push(`PRODUCT_BUNDLE_IDENTIFIER=${options.iosUpdatedWdaBundleId}`);
+  }
+
+  args.push('test');
+  return args;
+}
+
+function extractIosRealDeviceIssues(output) {
+  const patterns = [
+    /PLA Update available:[^\n]*/gi,
+    /Provisioning profile "[^"]+" doesn't include signing certificate "[^"]+"\./gi,
+    /No Account for Team "[^"]+"\./gi,
+    /No profiles for '[^']+' were found:[^\n]*/gi,
+    /No signing certificate "[^"]+" found:[^\n]*/gi,
+    /conflicting provisioning settings\.[^\n]*/gi,
+  ];
+
+  return [...new Set(patterns.flatMap((pattern) => output.match(pattern) || []))];
+}
+
+async function collectIosRealDeviceDiagnostics(options, originalError) {
+  const identities = await listCodeSigningIdentities();
+  const deviceState = await getIosDeviceListingState(options.iosUdid);
+  const matchingDevelopmentIdentities = identities.filter((identity) => {
+    return identity.label.startsWith('Apple Development') && identity.teamId === options.iosXcodeOrgId;
+  });
+
+  const diagnostics = {
+    udid: options.iosUdid,
+    requestedTeamId: options.iosXcodeOrgId || null,
+    requestedSigningId: options.iosXcodeSigningId || null,
+    requestedUpdatedWdaBundleId: options.iosUpdatedWdaBundleId || null,
+    deviceState,
+    matchingDevelopmentIdentities,
+    availableDevelopmentTeams: [...new Set(
+      identities
+        .filter((identity) => identity.label.startsWith('Apple Development'))
+        .map((identity) => identity.teamId)
+        .filter(Boolean),
+    )],
+    originalError: originalError instanceof Error ? originalError.message : String(originalError),
+    wdaBuild: null,
+    issues: [],
+  };
+
+  if (!options.iosXcodeOrgId) {
+    diagnostics.issues.push('`MINGLE_UI_QA_IOS_XCODE_ORG_ID` is not set for the real-device run.');
+  }
+
+  if (!options.iosUpdatedWdaBundleId) {
+    diagnostics.issues.push('`MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID` is not set for the real-device run.');
+  }
+
+  if (deviceState.state === 'offline') {
+    diagnostics.issues.push(`The target iPhone appears offline to Xcode: ${deviceState.line}`);
+  }
+
+  if (options.iosXcodeOrgId && matchingDevelopmentIdentities.length === 0) {
+    diagnostics.issues.push(
+      `No Apple Development signing identity for team ${options.iosXcodeOrgId} is installed in the local keychain.`,
+    );
+  }
+
+  const wdaArgs = buildIosRealDeviceWdaArgs(options);
+  diagnostics.wdaBuild = {
+    command: 'xcodebuild',
+    args: wdaArgs,
+  };
+
+  try {
+    const result = await runCommand('xcodebuild', wdaArgs);
+    diagnostics.wdaBuild.stdout = result.stdout;
+    diagnostics.wdaBuild.stderr = result.stderr;
+  } catch (error) {
+    const output = error instanceof Error ? error.message : String(error);
+    diagnostics.wdaBuild.error = output;
+    diagnostics.issues.push(...extractIosRealDeviceIssues(output));
+  }
+
+  diagnostics.issues = [...new Set(diagnostics.issues)];
+  return diagnostics;
+}
+
+function formatIosRealDeviceSessionError(error, diagnostics) {
+  const messageLines = [
+    error instanceof Error ? error.message : String(error),
+    '',
+    'Real-device WDA diagnostics:',
+  ];
+
+  for (const issue of diagnostics.issues) {
+    messageLines.push(`- ${issue}`);
+  }
+
+  if (diagnostics.deviceState?.state && diagnostics.deviceState.state !== 'devices') {
+    messageLines.push(`- Xcode device state: ${diagnostics.deviceState.state}`);
+  }
+
+  if (diagnostics.availableDevelopmentTeams.length > 0) {
+    messageLines.push(`- Local Apple Development teams: ${diagnostics.availableDevelopmentTeams.join(', ')}`);
+  }
+
+  const wrapped = new Error(messageLines.join('\n'));
+  wrapped.details = diagnostics;
+  return wrapped;
 }
 
 async function switchToWebView(driver) {
@@ -841,11 +1026,14 @@ async function main() {
     }
 
     if (options.platform === 'all' || options.platform === 'ios') {
-      if (await isIosSimulator(options.iosUdid)) {
+      const iosSimulator = await isIosSimulator(options.iosUdid);
+      if (iosSimulator) {
         await prepareIosSimulator(options.iosUdid);
       }
-      const iosSession = await createIosSession(options);
+
+      let iosSession = null;
       try {
+        iosSession = await createIosSession(options);
         const results = await runIosCases(iosSession.driver, reportDir, options);
         report.platforms.push({
           platform: 'ios',
@@ -853,8 +1041,27 @@ async function main() {
           status: results.every((result) => result.status === 'passed') ? 'passed' : 'failed',
           results,
         });
+      } catch (error) {
+        const failure = !iosSimulator
+          ? formatIosRealDeviceSessionError(error, await collectIosRealDeviceDiagnostics(options, error))
+          : error;
+        report.platforms.push({
+          platform: 'ios',
+          deviceLabel: `ios:${options.iosUdid}`,
+          status: 'failed',
+          results: [
+            {
+              id: 'session-start',
+              status: 'failed',
+              error: failure instanceof Error ? failure.message : String(failure),
+              details: failure instanceof Error ? failure.details || null : null,
+            },
+          ],
+        });
       } finally {
-        await iosSession.driver.deleteSession();
+        if (iosSession) {
+          await iosSession.driver.deleteSession();
+        }
       }
     }
   } finally {

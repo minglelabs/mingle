@@ -40,6 +40,28 @@ scripts/devbox mobile --platform ios --ios-configuration Debug --device-app-env 
 
 For iOS real-device runs, do not install from the local profile when the app URL points to `127.0.0.1` or `localhost`. Use the device profile so the WebView loads through the tunnel URL and the QA bridge remains reachable from Appium.
 
+## iOS Real-Device WDA Requirements
+
+Real iPhone automation requires Appium to install and launch WebDriverAgent on the phone. On this workstation, the blocker was not the app itself but WDA signing. Before running against a physical iPhone, make sure the items below are true:
+
+- The target phone is visible to Xcode as an online device, not under `Devices Offline`.
+- Xcode Accounts has a valid Apple developer account for the team you want Appium to use.
+- The latest Apple Developer Program License Agreement has been accepted for that team.
+- A local `Apple Development` signing identity exists for the same team ID as `MINGLE_UI_QA_IOS_XCODE_ORG_ID`.
+- A provisionable bundle ID is reserved for WDA, passed through `MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID`.
+
+Recommended environment for real-device runs:
+
+```bash
+export MINGLE_UI_QA_IOS_UDID=<physical-device-udid>
+export MINGLE_UI_QA_IOS_XCODE_ORG_ID=<apple-team-id>
+export MINGLE_UI_QA_IOS_XCODE_SIGNING_ID='Apple Development'
+export MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID=<team-owned-wda-bundle-id>
+pnpm test:qa:ui:ios -- --ios-udid "$MINGLE_UI_QA_IOS_UDID"
+```
+
+The runner now records a failed `session-start` report with direct WDA diagnostics if Appium returns the generic `xcodebuild` code `65` error.
+
 ## Commands
 
 Run the contract gate:
