@@ -888,7 +888,40 @@ async function waitForQaElement(driver, selector, description, timeoutMs = 15000
   }, description, timeoutMs, 500);
 }
 
+async function waitForVisibleDomElement(driver, selector, description, timeoutMs = 15000) {
+  return await waitFor(async () => {
+    return await driver.execute((targetSelector) => {
+      const target = document.querySelector(targetSelector);
+      if (!(target instanceof HTMLElement)) return false;
+      const style = window.getComputedStyle(target);
+      const rect = target.getBoundingClientRect();
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number(style.opacity || '1') > 0
+        && rect.width > 0
+        && rect.height > 0;
+    }, selector);
+  }, description, timeoutMs, 500);
+}
+
 async function clickQaElement(driver, selector, description) {
+  try {
+    await waitForVisibleDomElement(driver, selector, description);
+    const clicked = await driver.execute((targetSelector) => {
+      const target = document.querySelector(targetSelector);
+      if (target instanceof HTMLElement) {
+        target.click();
+        return true;
+      }
+      return false;
+    }, selector);
+    if (clicked) {
+      return;
+    }
+  } catch {
+    // Fall back to the WebDriver element path below.
+  }
+
   const element = await waitForQaElement(driver, selector, description);
 
   try {
@@ -956,6 +989,26 @@ async function resetQaDemoState(driver) {
       ? snapshot
       : null;
   }, 'the QA demo state to reset', 15000, 500);
+
+  try {
+    await waitFor(async () => {
+      return await driver.execute(() => {
+        return document.querySelector('[data-qa="live-demo-menu-panel"]') === null;
+      });
+    }, 'the menu panel DOM to unmount after reset', 4000, 250);
+  } catch {
+    await reloadCurrentPage(driver);
+    await waitFor(async () => {
+      const snapshot = await getQaSnapshot(driver);
+      return snapshot
+        && snapshot.utteranceCount === 0
+        && snapshot.menuOpen === false
+        && snapshot.displayedAdBannerPosition === 'bottom'
+        && snapshot.isComposerOpen === false
+        ? snapshot
+        : null;
+    }, 'the QA demo state to rehydrate after a forced reload', 20000, 500);
+  }
 }
 
 async function reloadCurrentPage(driver) {
@@ -1134,16 +1187,21 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
         return snapshot && !snapshot.isComposerOpen ? snapshot : null;
       }, 'the composer to close', 10000, 500);
 
-      assert(collapsed.bottomBarHeightPx <= baseline.bottomBarHeightPx + 10, 'Bottom bar did not return to the compact height after closing the composer.', {
+      await delay(1200);
+      const settled = await getQaSnapshot(driver);
+
+      assert(settled && settled.bottomBarHeightPx <= baseline.bottomBarHeightPx + 10, 'Bottom bar did not return to the compact height after closing the composer.', {
         baseline,
         expanded,
         collapsed,
+        settled,
       });
 
       return {
         baseline,
         expanded,
         collapsed,
+        settled,
       };
     }),
   }));
@@ -1155,6 +1213,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
     caseId: 'empty-state-keeps-single-start-control',
     runner: async () => await withQaFailureDetails(driver, async () => {
       await resetQaDemoState(driver);
+      await delay(800);
       const diagnostics = await driver.execute(() => {
         const bodyText = document.body?.innerText || '';
         const isVisible = (node) => {
@@ -1168,11 +1227,11 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
             && rect.height > 0;
         };
         return {
-          emptyStateVisible: Boolean(document.querySelector('[data-qa="live-demo-empty-state"]'))
+          emptyStateVisible: isVisible(document.querySelector('[data-qa="live-demo-empty-state"]'))
             || bodyText.includes('재생 버튼을 눌러 시작하세요'),
           emptyStateMessage: document.querySelector('[data-qa="live-demo-empty-state-message"]')?.textContent?.trim()
             || (bodyText.includes('재생 버튼을 눌러 시작하세요') ? '재생 버튼을 눌러 시작하세요' : ''),
-          emptyStateArrowVisible: Boolean(document.querySelector('[data-qa="live-demo-empty-state-arrow"]')),
+          emptyStateArrowVisible: isVisible(document.querySelector('[data-qa="live-demo-empty-state-arrow"]')),
           micButtonCount: document.querySelectorAll('[data-qa="live-demo-mic-button"]').length,
           visibleMicButtonCount: Array.from(document.querySelectorAll('[data-qa="live-demo-mic-button"]')).filter(isVisible).length,
           keyboardOpenCount: document.querySelectorAll('[data-qa="live-demo-keyboard-open"], [data-qa="live-demo-keyboard-toggle"][aria-label="텍스트 입력 열기"]').length,
@@ -1181,6 +1240,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
       });
 
       assert(diagnostics.emptyStateVisible === true, 'The empty-state guidance was not visible.', diagnostics);
+      assert(diagnostics.emptyStateArrowVisible === true, 'The empty-state arrow guidance did not remain visible.', diagnostics);
       assert(diagnostics.visibleMicButtonCount === 1, 'The empty state exposed more than one visible primary start control.', diagnostics);
 
       return diagnostics;
@@ -1215,6 +1275,142 @@ async function runIosCases(driver, reportDir, options) {
       driver,
       reportDir,
       platform: 'ios',
+    }));
+
+    results.push(await runCase({
+      driver,
+      platform: 'ios',
+      reportDir,
+      caseId: 'menu-chrome-keeps-dropdown-cue-and-stable-overlay',
+      runner: async () => await withQaFailureDetails(driver, async () => {
+        await resetQaDemoState(driver);
+        const before = await driver.execute(() => {
+          const header = document.querySelector('[data-qa="live-demo-header"]');
+          const headerButtons = header instanceof HTMLElement
+            ? Array.from(header.querySelectorAll('button'))
+            : [];
+          const langButton = document.querySelector('[data-qa="live-demo-language-button"]')
+            || headerButtons.find((candidate) => {
+              return candidate.getAttribute('aria-haspopup') === 'menu';
+            })
+            || null;
+          const chevron = document.querySelector('[data-qa="live-demo-language-chevron"]')
+            || (langButton instanceof HTMLElement
+              ? langButton.querySelector('svg')
+              : null);
+          const buttonStyle = langButton instanceof HTMLElement
+            ? window.getComputedStyle(langButton)
+            : null;
+          const headerRect = header instanceof HTMLElement
+            ? header.getBoundingClientRect()
+            : null;
+
+          return {
+            langButtonExists: Boolean(langButton),
+            langChevronVisible: Boolean(chevron),
+            langHasPopup: langButton instanceof HTMLElement
+              ? langButton.getAttribute('aria-haspopup')
+              : null,
+            langBorderTopWidthPx: buttonStyle ? Number.parseFloat(buttonStyle.borderTopWidth || '0') : 0,
+            langHeightPx: langButton instanceof HTMLElement
+              ? Math.round(langButton.getBoundingClientRect().height)
+              : 0,
+            headerRect: headerRect
+              ? {
+                  x: Math.round(headerRect.x),
+                  y: Math.round(headerRect.y),
+                  width: Math.round(headerRect.width),
+                  height: Math.round(headerRect.height),
+                }
+              : null,
+            headerButtonCount: headerButtons.length,
+          };
+        });
+
+        assert(before.langButtonExists, 'The top-right language button did not render.', before);
+        assert(before.langChevronVisible, 'The top-right language button lost its dropdown chevron cue.', before);
+        assert(before.langHasPopup === 'menu', 'The top-right language button no longer exposes a dropdown menu contract.', before);
+        assert(before.langBorderTopWidthPx > 0, 'The top-right language button lost its visible border cue.', before);
+        assert(before.langHeightPx >= 38, 'The top-right language button became smaller than the intended affordance height.', before);
+
+        await clickQaElement(driver, '[data-qa="live-demo-menu-button"]', 'the menu button');
+        const after = await waitFor(async () => {
+          const diagnostics = await driver.execute(() => {
+            const header = document.querySelector('[data-qa="live-demo-header"]');
+            const panel = document.querySelector('[data-qa="live-demo-menu-panel"]');
+            if (!(header instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+              return null;
+            }
+
+            const findOverlay = (startNode) => {
+              let current = startNode.parentElement;
+              while (current) {
+                const className = current.className || '';
+                if (
+                  typeof className === 'string'
+                  && className.includes('absolute')
+                  && className.includes('inset-0')
+                  && className.includes('z-50')
+                ) {
+                  return current;
+                }
+                current = current.parentElement;
+              }
+              return null;
+            };
+
+            const headerRect = header.getBoundingClientRect();
+            const panelRect = panel.getBoundingClientRect();
+            const overlay = findOverlay(panel);
+            const panelClassName = panel.className || '';
+
+            return {
+              headerRect: {
+                x: Math.round(headerRect.x),
+                y: Math.round(headerRect.y),
+                width: Math.round(headerRect.width),
+                height: Math.round(headerRect.height),
+              },
+              panelRect: {
+                x: Math.round(panelRect.x),
+                y: Math.round(panelRect.y),
+                width: Math.round(panelRect.width),
+                height: Math.round(panelRect.height),
+              },
+              panelRole: panel.getAttribute('role'),
+              panelClassName,
+              panelHasBorder: typeof panelClassName === 'string'
+                && panelClassName.includes('sm:border-x')
+                && panelClassName.includes('sm:border-gray-200'),
+              overlayClassName: overlay?.className || '',
+              overlayAbsolute: overlay instanceof HTMLElement,
+              scrollContainerCount: document.querySelectorAll('[class*="overscroll-contain"]').length,
+            };
+          });
+
+          return diagnostics?.panelRole === 'dialog' ? diagnostics : null;
+        }, 'the menu overlay to open', 10000, 500);
+
+        const deltaX = Math.abs((after.headerRect?.x || 0) - (before.headerRect?.x || 0));
+        const deltaY = Math.abs((after.headerRect?.y || 0) - (before.headerRect?.y || 0));
+
+        assert(after.panelHasBorder, 'The menu panel lost the restored container border contract.', after);
+        assert(after.overlayAbsolute, 'The menu panel no longer lives inside a full-screen overlay layer.', after);
+        assert(after.scrollContainerCount >= 2, 'The internal menu surfaces lost their overscroll containment.', after);
+        assert(deltaX <= 1 && deltaY <= 1, 'Opening the drawer shifted the underlying header instead of keeping it stable.', {
+          before,
+          after,
+          deltaX,
+          deltaY,
+        });
+
+        return {
+          before,
+          after,
+          deltaX,
+          deltaY,
+        };
+      }),
     }));
   }
 

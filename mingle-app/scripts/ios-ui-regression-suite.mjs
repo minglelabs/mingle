@@ -93,9 +93,35 @@ const VITEST_TARGETS = [
     ],
   },
   {
+    id: 'ios-auth-gate-contracts',
+    title: 'Auth gate safe-area, terms-step, and loading contracts',
+    issueAtoms: ['019ca08b#1', '019ca08b#2', '019ca08b#4'],
+    files: [
+      'src/components/mingle-home.auth-contract.test.ts',
+    ],
+  },
+  {
+    id: 'ios-native-auth-route-contracts',
+    title: 'Native Apple and Google auth routes stay on the intended iOS path',
+    issueAtoms: ['019ca08b#3'],
+    files: [
+      'src/lib/native-auth-bridge.test.ts',
+      'src/app/[locale]/auth/signin/page.test.ts',
+      'src/app/[locale]/auth/native/page.test.ts',
+    ],
+  },
+  {
+    id: 'ios-menu-chrome-contracts',
+    title: 'Top-right dropdown cues and drawer chrome stay visually stable',
+    issueAtoms: ['019c95e8#4', '019c95e8#5', '019d0514#1', '019d2f95#1', '019d2f95#2', '019d2f95#3', '019d43a3#1'],
+    files: [
+      'src/components/LivePhoneDemo/live-phone-demo.chrome-contract.test.ts',
+    ],
+  },
+  {
     id: 'ios-native-mic-recovery-contracts',
-    title: 'Native mic-permission recovery logic stays retryable',
-    issueAtoms: ['019d4cae#41', '019d4cae#42', '019d4caf#1'],
+    title: 'Speaker-isolated STT finalization and native mic recovery stay retryable',
+    issueAtoms: ['019c992c#2', '019d4cae#41', '019d4cae#42', '019d4caf#1'],
     files: [
       'src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts',
     ],
@@ -122,6 +148,10 @@ const APPIUM_CASE_METADATA = {
   'menu-label-matches-korean-locale': {
     title: 'Visible menu label follows the Korean locale',
     issueAtoms: ['019d4cae#21', '019d4cae#22', '019c95e8#2', '019c95e8#3', '019ca08b#5', '019ca08b#6'],
+  },
+  'menu-chrome-keeps-dropdown-cue-and-stable-overlay': {
+    title: 'Top-right dropdown cue and drawer overlay stay stable on the real iPhone surface',
+    issueAtoms: ['019c95e8#4', '019c95e8#5', '019d0514#1', '019d2f95#1', '019d2f95#2', '019d2f95#3', '019d43a3#1'],
   },
   'permission-denial-recovers-to-idle': {
     title: 'Mic permission denial returns the UI to idle',

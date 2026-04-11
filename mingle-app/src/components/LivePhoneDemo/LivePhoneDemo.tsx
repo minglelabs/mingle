@@ -84,6 +84,17 @@ import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
+import {
+  LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA,
+  LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA,
+  LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP,
+  LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME,
+  LIVE_DEMO_MENU_OVERLAY_CLASSNAME,
+  LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME,
+  resolveLiveDemoMenuPanelClassName,
+  resolveLiveDemoMenuPanelShadow,
+  resolveLiveDemoMenuTriggerClassName,
+} from './live-phone-demo.chrome-contract'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
@@ -3448,14 +3459,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
+                data-qa={LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA}
                 type="button"
                 onClick={() => {
                   closeMenuPanel()
                   setLangSelectorOpen(o => !o)
                 }}
-                aria-haspopup="menu"
+                aria-haspopup={LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP}
                 aria-expanded={langSelectorOpen}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
+                className={LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME}
                 style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
@@ -3468,6 +3480,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   </span>
                 ))}
                 <ChevronDown
+                  data-qa={LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA}
                   size={14}
                   strokeWidth={2.4}
                   className={`shrink-0 text-black transition-transform ${
@@ -3492,7 +3505,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 type="button"
                 onClick={handleMenuButtonPress}
                 disabled={isAuthActionPending}
-                  className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
+                  className={resolveLiveDemoMenuTriggerClassName(navSurfaceClassName)}
                   aria-label={menuLabel}
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
@@ -3523,7 +3536,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="absolute inset-0 z-50 overflow-hidden bg-black/42"
+              className={LIVE_DEMO_MENU_OVERLAY_CLASSNAME}
               onClick={requestCloseMenuPanel}
             >
               <div className="flex h-full w-full justify-end sm:justify-center">
@@ -3547,11 +3560,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   onPointerMove={handleMenuPanelPointerMove}
                   onPointerUp={handleMenuPanelPointerUp}
                   onPointerCancel={handleMenuPanelPointerCancel}
-                  className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
+                  className={resolveLiveDemoMenuPanelClassName(navSurfaceClassName)}
                   style={{
-                    boxShadow: isCenteredMenuLayout
-                      ? '0 22px 64px rgba(15, 23, 42, 0.24)'
-                      : '-18px 0 40px rgba(15, 23, 42, 0.22)',
+                    boxShadow: resolveLiveDemoMenuPanelShadow(isCenteredMenuLayout),
                     touchAction: 'pan-y',
                   }}
                 >
@@ -3584,7 +3595,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       <div
-                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
                         style={{
                           paddingBottom: showAccountMenuItems ? '16px' : 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
                         }}
@@ -4094,7 +4105,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       <div
-                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        className={LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME}
                         style={{
                           paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
                         }}

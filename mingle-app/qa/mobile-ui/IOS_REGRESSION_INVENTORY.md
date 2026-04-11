@@ -3,7 +3,7 @@
 This inventory expands the iOS side of the mobile UI regression suite so the current automation no longer looks like a single-case smoke test.
 
 - Historical issue atoms in [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md): `92`
-- Current automated iOS validation targets: `19`
+- Current automated iOS validation targets: `23`
 - These targets cover only the current React Native shell plus live-demo WebView surface.
 - Older multi-room conversation-list atoms stay documented in the history file, but they are intentionally marked as not in the current app surface until that UI returns.
 
@@ -21,11 +21,15 @@ This inventory expands the iOS side of the mobile UI regression suite so the cur
 | `ios-bubble-structure-contracts` | contract | `019c6f40#3`, `019c992c#1`, `019d09c4#1` | `chat-bubble`, `chat-bubble.timestamp`, `translation-bubble-row` tests |
 | `ios-copy-affordance-contracts` | contract | `019d09c4#1`, `019d5714#1` | `copyable-bubble-surface`, `copyable-bubble-surface.logic`, `live-phone-demo.copy` tests |
 | `ios-speaker-avatar-contracts` | contract | `019d162b#1` | `speaker-avatar` tests |
-| `ios-native-mic-recovery-contracts` | contract | `019d4cae#41`, `019d4cae#42`, `019d4caf#1` | `use-realtime-stt.logic` tests |
+| `ios-auth-gate-contracts` | contract | `019ca08b#1`, `019ca08b#2`, `019ca08b#4` | `src/components/mingle-home.auth-contract.test.ts` |
+| `ios-native-auth-route-contracts` | contract | `019ca08b#3` | `native-auth-bridge`, `[locale]/auth/signin/page`, `[locale]/auth/native/page` tests |
+| `ios-menu-chrome-contracts` | contract | `019c95e8#4`, `019c95e8#5`, `019d0514#1`, `019d2f95#1`, `019d2f95#2`, `019d2f95#3`, `019d43a3#1` | `src/components/LivePhoneDemo/live-phone-demo.chrome-contract.test.ts` |
+| `ios-native-mic-recovery-contracts` | contract | `019c992c#2`, `019d4cae#41`, `019d4cae#42`, `019d4caf#1` | `use-realtime-stt.logic` tests |
 | `qa-bridge-hydrates-live-demo-real-device` | physical iPhone | `2026-real-device#1`, `2026-real-device#2` | `scripts/mobile-ui-qa.mjs` |
 | `banner-position-updates-insets-real-device` | physical iPhone | `019d4cae#11`, `019d4cae#12`, `019d4cae#13`, `019d4cae#14`, `019d4cae#15` | `scripts/mobile-ui-qa.mjs` |
 | `bottom-anchor-restores-after-storage-hydration-real-device` | physical iPhone | `019d4cae#23`, `019d4cae#32` | `scripts/mobile-ui-qa.mjs` |
 | `composer-roundtrip-restores-compact-bottom-bar-real-device` | physical iPhone | `019d4cae#9`, `019d4cae#10` | `scripts/mobile-ui-qa.mjs` |
+| `menu-chrome-keeps-dropdown-cue-and-stable-overlay-real-device` | physical iPhone | `019c95e8#4`, `019c95e8#5`, `019d0514#1`, `019d2f95#1`, `019d2f95#2`, `019d2f95#3`, `019d43a3#1` | `scripts/mobile-ui-qa.mjs` |
 | `menu-label-matches-korean-locale-real-device` | physical iPhone | `019d4cae#21`, `019d4cae#22`, `019c95e8#2`, `019c95e8#3`, `019ca08b#5`, `019ca08b#6` | `scripts/mobile-ui-qa.mjs` |
 | `empty-state-keeps-single-start-control-real-device` | physical iPhone | `019d29d5#1` | `scripts/mobile-ui-qa.mjs` |
 | `menu-label-matches-korean-locale-simulator` | iOS simulator | `019d4cae#21`, `019d4cae#22`, `019c95e8#2`, `019c95e8#3`, `019ca08b#5`, `019ca08b#6` | `scripts/mobile-ui-qa.mjs` |

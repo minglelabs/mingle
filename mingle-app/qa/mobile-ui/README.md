@@ -12,8 +12,12 @@ The current app surface is a React Native shell around the live translator WebVi
 The first pass covers the regression categories that still exist in the current app:
 
 - iOS WebView back/forward gesture contract.
+- Login safe-area fill, terms-step progression, and loading-state gating.
+- Native Apple/Google auth route wiring for the iOS launch path.
 - Bubble structure, timestamp placement, and lightweight copy affordances.
+- Speaker-isolated STT finalization.
 - Deterministic speaker avatars.
+- Top-right dropdown/menu chrome and drawer overlay stability.
 - Menu locale consistency.
 - Native banner position and content inset layout.
 - Bottom-anchor restoration after local history hydration.
@@ -96,7 +100,7 @@ Run the expanded iOS regression inventory:
 pnpm test:qa:ui:ios:regressions -- --ios-real-udid <physical-udid> --ios-sim-udid <sim-udid>
 ```
 
-On physical iPhones, the current suite now runs the QA-bridge hydration, banner inset, persisted-history hydration, composer round-trip, locale/menu regressions, and empty-state guidance checks. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
+On physical iPhones, the current suite now runs the QA-bridge hydration, banner inset, persisted-history hydration, composer round-trip, top-bar chrome/drawer stability, locale/menu regressions, and empty-state guidance checks. The microphone permission-denial regression remains simulator-only because `xcrun simctl privacy` cannot revoke permissions on a real device.
 
 The runner automatically seeds `RCT_jsLocation` for iOS simulators so debug builds attach to the worktree Metro port before Appium connects.
 

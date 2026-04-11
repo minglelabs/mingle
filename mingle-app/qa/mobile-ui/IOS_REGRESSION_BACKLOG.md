@@ -3,8 +3,8 @@
 This document explains why [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md) currently has more issue atoms than the automated iOS regression suite.
 
 - Historical issue atoms in the history doc: `92`
-- Historical issue atoms already linked to the iOS regression inventory: `35`
-- Historical issue atoms still not linked to the iOS regression inventory: `57`
+- Historical issue atoms already linked to the iOS regression inventory: `47`
+- Historical issue atoms still not linked to the iOS regression inventory: `45`
 
 The `19` items in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) are validation targets, not one-to-one issue atoms. One target can cover several historical atoms.
 
@@ -13,7 +13,7 @@ The `19` items in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b
 | Category | Count | Meaning |
 | --- | --- | --- |
 | Legacy surface removed from the current iOS app | `29` | The issue belongs to the old multi-room conversations/list/room drawer UI that the current iOS shell no longer exposes. |
-| Current iOS surface, but not automated yet | `12` | The issue still belongs to a visible iOS surface, but we have not built the dedicated automation for it yet. |
+| Current iOS surface, but not automated yet | `0` | The previously identified 12 current-surface atoms are now linked into the iOS regression inventory. |
 | Likely already covered semantically, but not backlinked in the inventory yet | `5` | A current test already checks the same behavior class, but the historical atom has not been explicitly mapped into the inventory document. |
 | Oracle or reproduction rule still unclear | `7` | The issue exists as a user-facing complaint, but the automation pass/fail rule is still too fuzzy to encode safely. |
 | Web-only or Android-only, not an iOS regression target | `4` | The issue is out of scope for the current iOS suite. |
@@ -70,20 +70,13 @@ These atoms belong to the old RN 1.1.0 multi-room conversations/list/room stack 
 
 ## 2. Current iOS Surface, But Not Automated Yet
 
-These atoms still belong to surfaces that the current iOS app exposes. They are the next candidates for automation expansion.
+There are currently no known current-surface iOS atoms left in the "not automated yet" bucket. The last expansion pass linked the previous 12-item backlog into the inventory:
 
-- `019c95e8#4` hamburger borders/depth still wrong after flattening
-- `019c95e8#5` dropdown/menu positioning regressed
-- `019c992c#2` multi-speaker overlap did not finalize per speaker
-- `019ca08b#1` login safe areas showed white bands
-- `019ca08b#2` login flow lacked the swipe-to-terms step
-- `019ca08b#3` Apple/Google auth did not match the intended native UX
-- `019ca08b#4` login could stall on `Checking your session`
-- `019d0514#1` top-right language control was not recognizable as a dropdown
-- `019d2f95#1` opening the redesigned drawer shook the main screen
-- `019d2f95#2` flattening pass misplaced the drawer and wrong border
-- `019d2f95#3` redesign introduced follow-up visible regressions
-- `019d43a3#1` My Page scroll-chain and spacing bug
+- `019c95e8#4` and `019c95e8#5` -> `ios-menu-chrome-contracts`, `menu-chrome-keeps-dropdown-cue-and-stable-overlay-real-device`
+- `019c992c#2` -> `ios-native-mic-recovery-contracts`
+- `019ca08b#1`, `019ca08b#2`, and `019ca08b#4` -> `ios-auth-gate-contracts`
+- `019ca08b#3` -> `ios-native-auth-route-contracts`
+- `019d0514#1`, `019d2f95#1`, `019d2f95#2`, `019d2f95#3`, and `019d43a3#1` -> `ios-menu-chrome-contracts`, `menu-chrome-keeps-dropdown-cue-and-stable-overlay-real-device`
 
 ## 3. Likely Already Covered Semantically, But Not Backlinked Yet
 
