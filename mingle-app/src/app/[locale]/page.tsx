@@ -1,13 +1,15 @@
-import MingleHomeLegacy from "@/components/mingle-home-legacy";
-import { getDictionary, isSupportedLocale } from "@/i18n";
-import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
-import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
+import { isSupportedLocale } from "@/i18n";
 import {
   resolveDefaultMingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
-import { notFound, redirect } from "next/navigation";
+import LegacyHomeEntry from "@/web/legacy/v1.0.11/home-entry";
+import AndroidV1011HomeEntry from "@/web/android/v1.0.11/home-entry";
+import AndroidV110HomeEntry from "@/web/android/v1.1.0/home-entry";
+import IosV1011HomeEntry from "@/web/ios/v1.0.11/home-entry";
+import IosV110HomeEntry from "@/web/ios/v1.1.0/home-entry";
+import { notFound } from "next/navigation";
 
 type LocalePageProps = {
   params: Promise<{
@@ -31,18 +33,14 @@ export default async function LocalePage({ params, searchParams }: LocalePagePro
 
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":
+      return LegacyHomeEntry({ locale });
     case "ios_v1_0_11":
+      return IosV1011HomeEntry({ locale });
     case "android_v1_0_11":
-      return (
-        <MingleHomeLegacy
-          dictionary={getDictionary(locale)}
-          appleOAuthEnabled={isAppleOAuthConfigured()}
-          googleOAuthEnabled={isGoogleOAuthConfigured()}
-          locale={locale}
-        />
-      );
+      return AndroidV1011HomeEntry({ locale });
     case "ios_v1_1_0":
+      return IosV110HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_0":
-      redirect(buildPathWithSearchParams(`/${locale}/conversations`, resolvedSearchParams));
+      return AndroidV110HomeEntry({ locale, searchParams: resolvedSearchParams });
   }
 }

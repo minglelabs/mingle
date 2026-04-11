@@ -13,11 +13,6 @@ import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
-import {
-  supportsConversationRoomsForReleaseVariant,
-  type MingleClientReleaseVariant,
-  usesVersionedAccountPreferencesApiForReleaseVariant,
-} from '@/lib/client-behavior-profile'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -97,11 +92,7 @@ import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-compose
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 
 const VOLUME_THRESHOLD = 0.05
-function buildAccountPreferencesApiPath(releaseVariant: MingleClientReleaseVariant): string {
-  return usesVersionedAccountPreferencesApiForReleaseVariant(releaseVariant)
-    ? buildClientApiPath('/account/preferences')
-    : '/api/account/preferences'
-}
+const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
@@ -818,7 +809,6 @@ type LivePhoneDemoStartRecordingPreparation = {
 }
 
 interface LivePhoneDemoProps {
-  clientReleaseVariant: MingleClientReleaseVariant
   onLimitReached?: () => void
   enableAutoTTS?: boolean
   uiLocale: string
@@ -975,7 +965,6 @@ function buildTrackingRequestHeaders(args: {
 }
 
 const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function LivePhoneDemo({
-  clientReleaseVariant,
   onLimitReached,
   enableAutoTTS = false,
   uiLocale,
@@ -1022,7 +1011,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLatestUtteranceChange,
   onSelectedLanguagesChange,
 }, ref) {
-  const supportsConversationManagement = supportsConversationRoomsForReleaseVariant(clientReleaseVariant)
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
@@ -1039,10 +1027,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
-  const accountPreferencesApiPath = useMemo(
-    () => buildAccountPreferencesApiPath(clientReleaseVariant),
-    [clientReleaseVariant],
-  )
+  const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
@@ -1903,17 +1888,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleConversationManagementMenuItemPress = useCallback(() => {
-    if (!supportsConversationManagement) return
     if (!menuOpen || menuScreen === 'conversation-management') return
     pushMenuHistoryEntry(2, 'conversation-management')
-  }, [menuOpen, menuScreen, pushMenuHistoryEntry, supportsConversationManagement])
-
-  useEffect(() => {
-    if (supportsConversationManagement) return
-    if (menuScreen !== 'conversation-management') return
-    setMenuScreen('root')
-    setMenuScreenDirection('back')
-  }, [menuScreen, supportsConversationManagement])
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDeleteConversationMenuItemPress = useCallback(() => {
     setDeleteConversationDialogOpen(true)
@@ -4547,20 +4524,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         </div>
 
-                        {supportsConversationManagement ? (
-                          <div className="px-4 pb-4">
-                            <button
-                              type="button"
-                              onClick={handleConversationManagementMenuItemPress}
-                              className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
-                            >
-                              <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
-                              <span className="shrink-0 text-gray-500">
-                                <ChevronRight size={18} strokeWidth={2.4} />
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleConversationManagementMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
 
                         <div className="px-4 pb-4">
                           <button
@@ -5420,10 +5395,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-end gap-1.5"
                 >
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex shrink-0 items-end justify-center self-end"
-                  >
+                  <motion.div className="flex shrink-0 items-end justify-center self-end">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -5495,7 +5467,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       <motion.button
-                        layoutId="live-phone-demo-keyboard-toggle"
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
@@ -5579,10 +5550,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </div>
                   </motion.div>
 
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex self-end justify-center"
-                  >
+                  <motion.div className="flex self-end justify-center">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -5648,7 +5616,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="self-end justify-self-end">
                     <motion.button
-                      layoutId="live-phone-demo-keyboard-toggle"
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}

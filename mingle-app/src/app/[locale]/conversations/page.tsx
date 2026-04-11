@@ -1,42 +1,20 @@
-import { cookies, headers } from "next/headers";
-import { getServerSession } from "next-auth";
-import ConversationList from "@/components/conversation-list";
-import { getDictionary, isSupportedLocale } from "@/i18n";
-import type { AppLocale } from "@/i18n/config";
-import { listConversationChannelsForUser } from "@/lib/app-conversations";
-import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
-import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
+import { isSupportedLocale } from "@/i18n";
 import {
   resolveDefaultMingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
-import {
-  findUserIdForIdentity,
-  normalizeSessionUserIdentity,
-  sanitizeRequestIdentityValue,
-} from "@/lib/request-user-identity";
-import { notFound, redirect } from "next/navigation";
+import LegacyConversationsEntry from "@/web/legacy/v1.0.11/conversations-entry";
+import AndroidV1011ConversationsEntry from "@/web/android/v1.0.11/conversations-entry";
+import AndroidV110ConversationsEntry from "@/web/android/v1.1.0/conversations-entry";
+import IosV1011ConversationsEntry from "@/web/ios/v1.0.11/conversations-entry";
+import IosV110ConversationsEntry from "@/web/ios/v1.1.0/conversations-entry";
+import { notFound } from "next/navigation";
 
 type ConversationsPageProps = {
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-function readSearchParamValue(
-  searchParams: Record<string, string | string[] | undefined>,
-  key: string,
-): string {
-  const rawValue = searchParams[key];
-  if (typeof rawValue === "string") return rawValue;
-  if (Array.isArray(rawValue)) return rawValue[0] ?? "";
-  return "";
-}
-
-function parseNativeInsetPx(rawValue: string): number {
-  const numericValue = Number.parseInt(rawValue, 10);
-  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
-}
 
 export default async function ConversationsPage({ params, searchParams }: ConversationsPageProps) {
   const { locale } = await params;
@@ -53,47 +31,14 @@ export default async function ConversationsPage({ params, searchParams }: Conver
 
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":
+      return LegacyConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_0_11":
+      return IosV1011ConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_0_11":
-      redirect(buildPathWithSearchParams(`/${locale}`, resolvedSearchParams));
+      return AndroidV1011ConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_1_0":
+      return IosV110ConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_0":
-      break;
+      return AndroidV110ConversationsEntry({ locale, searchParams: resolvedSearchParams });
   }
-
-  const session = await getServerSession(getAuthOptions());
-  const requestHeaders = await headers();
-  const cookieStore = await cookies();
-  const identity = {
-    ...normalizeSessionUserIdentity(session),
-    externalUserId: sanitizeRequestIdentityValue(
-      requestHeaders.get("x-mingle-user-id")
-      || cookieStore.get("mingle_uid")?.value,
-    ),
-    sessionKey: sanitizeRequestIdentityValue(
-      requestHeaders.get("x-mingle-session-key")
-      || cookieStore.get("mingle_sid")?.value,
-    ),
-  };
-  const userId = await findUserIdForIdentity(identity);
-  const initialConversations = userId
-    ? await listConversationChannelsForUser(userId)
-    : [];
-
-  return (
-    <ConversationList
-      clientReleaseVariant={releaseVariant}
-      locale={locale as AppLocale}
-      dictionary={getDictionary(locale)}
-      initialConversations={initialConversations}
-      initialConversationIdToOpen={readSearchParamValue(resolvedSearchParams, "conversation") || null}
-      initialNativeUi={readSearchParamValue(resolvedSearchParams, "nativeUi") === "1"}
-      initialNativeBannerPosition={readSearchParamValue(resolvedSearchParams, "nativeBannerPosition")}
-      initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeTopInsetPx"))}
-      initialNativeBottomInsetPx={parseNativeInsetPx(readSearchParamValue(resolvedSearchParams, "nativeBottomInsetPx"))}
-      // appleOAuthEnabled={isAppleOAuthConfigured()}
-      appleOAuthEnabled={false}
-      googleOAuthEnabled={isGoogleOAuthConfigured()}
-    />
-  );
 }

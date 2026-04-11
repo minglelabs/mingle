@@ -1,73 +1,22 @@
-import type {
-    MingleSttBehaviorProfile,
-    MingleSttReleaseVariant,
-} from './behavior-profile';
+import type { MingleSttReleaseVariant } from './behavior-profile';
+import legacyV1011Runtime from './runtime/legacy/v1.0.11';
+import iosV1011Runtime from './runtime/ios/v1.0.11';
+import androidV1011Runtime from './runtime/android/v1.0.11';
+import iosV110Runtime from './runtime/ios/v1.1.0';
+import androidV110Runtime from './runtime/android/v1.1.0';
 
-type FinalTurnPayload = {
-    text: string;
-    language: string;
-    speaker?: string;
-} | null;
+export type { MingleSttReleaseRuntime } from './runtime/shared/create-release-runtime';
 
-type ReadyPayloadInput = {
-    behaviorProfile: MingleSttBehaviorProfile;
-    sonioxLanguageHintsEnabled: boolean;
-};
-
-type StopRecordingAckInput = {
-    behaviorProfile: MingleSttBehaviorProfile;
-    finalizedTurn: FinalTurnPayload;
-};
-
-export type MingleSttReleaseRuntime = {
-    readonly releaseVariant: MingleSttReleaseVariant;
-    readonly behaviorLine: MingleSttBehaviorProfile;
-    buildReadyPayload: (input: ReadyPayloadInput) => {
-        status: 'ready';
-        release_variant: MingleSttReleaseVariant;
-        behavior_profile: MingleSttBehaviorProfile;
-        soniox_language_hints_enabled: boolean;
-    };
-    buildStopRecordingAckData: (input: StopRecordingAckInput) => {
-        release_variant: MingleSttReleaseVariant;
-        behavior_profile: MingleSttBehaviorProfile;
-        finalized: boolean;
-        final_turn: FinalTurnPayload;
-    };
-};
-
-function createReleaseRuntime(
-    releaseVariant: MingleSttReleaseVariant,
-    behaviorLine: MingleSttBehaviorProfile,
-): MingleSttReleaseRuntime {
-    return {
-        releaseVariant,
-        behaviorLine,
-        buildReadyPayload: ({ behaviorProfile, sonioxLanguageHintsEnabled }) => ({
-            status: 'ready',
-            release_variant: releaseVariant,
-            behavior_profile: behaviorProfile,
-            soniox_language_hints_enabled: sonioxLanguageHintsEnabled,
-        }),
-        buildStopRecordingAckData: ({ behaviorProfile, finalizedTurn }) => ({
-            release_variant: releaseVariant,
-            behavior_profile: behaviorProfile,
-            finalized: Boolean(finalizedTurn),
-            final_turn: finalizedTurn,
-        }),
-    };
-}
-
-const releaseRuntimes: Record<MingleSttReleaseVariant, MingleSttReleaseRuntime> = {
-    legacy_default_v1_0_11: createReleaseRuntime('legacy_default_v1_0_11', 'legacy_1_0_11'),
-    ios_v1_0_11: createReleaseRuntime('ios_v1_0_11', 'legacy_1_0_11'),
-    android_v1_0_11: createReleaseRuntime('android_v1_0_11', 'legacy_1_0_11'),
-    ios_v1_1_0: createReleaseRuntime('ios_v1_1_0', 'v1_1_0'),
-    android_v1_1_0: createReleaseRuntime('android_v1_1_0', 'v1_1_0'),
-};
+const releaseRuntimes = {
+    legacy_default_v1_0_11: legacyV1011Runtime,
+    ios_v1_0_11: iosV1011Runtime,
+    android_v1_0_11: androidV1011Runtime,
+    ios_v1_1_0: iosV110Runtime,
+    android_v1_1_0: androidV110Runtime,
+} satisfies Record<MingleSttReleaseVariant, typeof legacyV1011Runtime>;
 
 export function resolveMingleSttReleaseRuntime(
     releaseVariant: MingleSttReleaseVariant,
-): MingleSttReleaseRuntime {
+) {
     return releaseRuntimes[releaseVariant];
 }

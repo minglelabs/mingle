@@ -4442,10 +4442,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                   className="flex items-end gap-1.5"
                 >
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex shrink-0 items-end justify-center self-end"
-                  >
+                  <motion.div className="flex shrink-0 items-end justify-center self-end">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -4509,7 +4506,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       </div>
 
                       <motion.button
-                        layoutId="live-phone-demo-keyboard-toggle"
                         type="button"
                         onClick={handleToggleComposer}
                         aria-label={composerCopy.closeKeyboardLabel}
@@ -4585,10 +4581,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     </div>
                   </motion.div>
 
-                  <motion.div
-                    layoutId="live-phone-demo-mic-shell"
-                    className="flex self-end justify-center"
-                  >
+                  <motion.div className="flex self-end justify-center">
                     <button
                       onPointerDown={handleMicPointerDown}
                       onClick={handleMicClick}
@@ -4633,7 +4626,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
                   <div className="self-end justify-self-end">
                     <motion.button
-                      layoutId="live-phone-demo-keyboard-toggle"
                       type="button"
                       onClick={handleToggleComposer}
                       aria-label={composerCopy.openKeyboardLabel}

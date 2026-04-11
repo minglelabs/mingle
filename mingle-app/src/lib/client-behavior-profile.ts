@@ -56,26 +56,6 @@ export function isV1_1_0MingleClientReleaseVariant(
   return releaseVariant === 'ios_v1_1_0' || releaseVariant === 'android_v1_1_0'
 }
 
-export function supportsConversationRoomsForReleaseVariant(
-  releaseVariant: MingleClientReleaseVariant,
-): boolean {
-  return isV1_1_0MingleClientReleaseVariant(releaseVariant)
-}
-
-export function resolvePostAuthPathForReleaseVariant(
-  releaseVariant: MingleClientReleaseVariant,
-): '/translator' | '/conversations' {
-  return supportsConversationRoomsForReleaseVariant(releaseVariant)
-    ? '/conversations'
-    : '/translator'
-}
-
-export function usesVersionedAccountPreferencesApiForReleaseVariant(
-  releaseVariant: MingleClientReleaseVariant,
-): boolean {
-  return supportsConversationRoomsForReleaseVariant(releaseVariant)
-}
-
 export function readRequestedApiNamespaceFromSearchParams(
   searchParams: Record<string, string | string[] | undefined>,
 ): string {

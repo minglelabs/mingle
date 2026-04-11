@@ -5,7 +5,6 @@ import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
-import type { MingleClientReleaseVariant } from "@/lib/client-behavior-profile";
 import Image from "next/image";
 import {
   forwardRef,
@@ -1153,7 +1152,6 @@ const SearchOverlay = forwardRef<SearchOverlayHandle, SearchOverlayProps>(functi
 });
 
 type ConversationListProps = {
-  clientReleaseVariant: MingleClientReleaseVariant;
   locale: AppLocale;
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
@@ -1167,7 +1165,6 @@ type ConversationListProps = {
 };
 
 export default function ConversationList({
-  clientReleaseVariant,
   locale,
   dictionary,
   initialConversations,
@@ -2425,7 +2422,6 @@ export default function ConversationList({
                         setConversationRoomRef(conversation.id, nextRef);
                       }}
                       key={conversation.id}
-                      clientReleaseVariant={clientReleaseVariant}
                       dictionary={dictionary}
                       appleOAuthEnabled={appleOAuthEnabled}
                       googleOAuthEnabled={googleOAuthEnabled}

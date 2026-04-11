@@ -133,20 +133,10 @@ wss.on('connection', (clientWs) => {
 
     const buildStopRecordingAckDataForReleaseVariant = (
         finalizedTurn: FinalTurnPayload | null,
-    ) => {
-        switch (releaseVariant) {
-            case 'legacy_default_v1_0_11':
-            case 'ios_v1_0_11':
-            case 'android_v1_0_11':
-            case 'ios_v1_1_0':
-            case 'android_v1_1_0':
-            default:
-                return releaseRuntime.buildStopRecordingAckData({
-                    behaviorProfile,
-                    finalizedTurn,
-                });
-        }
-    };
+    ) => releaseRuntime.buildStopRecordingAckData({
+        behaviorProfile,
+        finalizedTurn,
+    });
 
     const startConnectionForModel = (config: ClientConfig) => {
         if (currentModel === 'deepgram') {
@@ -161,25 +151,6 @@ wss.on('connection', (clientWs) => {
             void startGladiaConnection(config, false);
         } else {
             void startGladiaConnection(config, true);
-        }
-    };
-
-    // Keep the release dispatch explicit even where the concrete provider wiring is
-    // still shared. This is the seam where legacy 1.0.11 and 1.1.0 STT lifecycle
-    // can safely diverge without regressing already deployed clients.
-    const startConnectionForReleaseVariant = (config: ClientConfig) => {
-        switch (releaseVariant) {
-            case 'legacy_default_v1_0_11':
-            case 'ios_v1_0_11':
-            case 'android_v1_0_11':
-                startConnectionForModel(config);
-                return;
-            case 'ios_v1_1_0':
-            case 'android_v1_1_0':
-                startConnectionForModel(config);
-                return;
-            default:
-                startConnectionForModel(config);
         }
     };
 
@@ -1416,7 +1387,7 @@ wss.on('connection', (clientWs) => {
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
             );
             
-            startConnectionForReleaseVariant(clientConfig);
+            startConnectionForModel(clientConfig);
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
             if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {

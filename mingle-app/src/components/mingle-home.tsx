@@ -16,13 +16,8 @@ import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
-import {
-  resolvePostAuthPathForReleaseVariant,
-  type MingleClientReleaseVariant,
-} from "@/lib/client-behavior-profile";
 
 type MingleHomeProps = {
-  clientReleaseVariant: MingleClientReleaseVariant;
   dictionary: AppDictionary;
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
@@ -387,8 +382,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     null,
   );
   const callbackUrl = useMemo(() => (
-    `/${props.locale}${resolvePostAuthPathForReleaseVariant(props.clientReleaseVariant)}`
-  ), [props.clientReleaseVariant, props.locale]);
+    `/${props.locale}/conversations`
+  ), [props.locale]);
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
     [props.locale],
@@ -1730,7 +1725,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
       {isLiveDemoMounted ? (
         <LivePhoneDemo
           ref={livePhoneDemoRef}
-          clientReleaseVariant={props.clientReleaseVariant}
           enableAutoTTS
           uiLocale={props.locale}
           tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}

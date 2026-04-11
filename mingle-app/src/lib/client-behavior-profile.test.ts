@@ -2,14 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   isLegacyMingleClientReleaseVariant,
+  isV1_1_0MingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
   resolveMingleClientReleaseVariant,
   resolveMingleBehaviorProfile,
-  resolvePostAuthPathForReleaseVariant,
-  supportsConversationRoomsForReleaseVariant,
-  usesVersionedAccountPreferencesApiForReleaseVariant,
 } from './client-behavior-profile'
 
 describe('resolveMingleBehaviorProfile', () => {
@@ -75,18 +73,14 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
 })
 
 describe('release-variant feature flags', () => {
-  it('keeps legacy variants on the translator shell without conversation rooms', () => {
-    expect(supportsConversationRoomsForReleaseVariant('legacy_default_v1_0_11')).toBe(false)
-    expect(supportsConversationRoomsForReleaseVariant('ios_v1_0_11')).toBe(false)
-    expect(supportsConversationRoomsForReleaseVariant('android_v1_0_11')).toBe(false)
-    expect(resolvePostAuthPathForReleaseVariant('ios_v1_0_11')).toBe('/translator')
-    expect(usesVersionedAccountPreferencesApiForReleaseVariant('android_v1_0_11')).toBe(false)
+  it('keeps legacy variants on the legacy release line', () => {
+    expect(isLegacyMingleClientReleaseVariant('legacy_default_v1_0_11')).toBe(true)
+    expect(isLegacyMingleClientReleaseVariant('ios_v1_0_11')).toBe(true)
+    expect(isLegacyMingleClientReleaseVariant('android_v1_0_11')).toBe(true)
   })
 
-  it('keeps 1.1.0 variants on the conversations shell with versioned preferences', () => {
-    expect(supportsConversationRoomsForReleaseVariant('ios_v1_1_0')).toBe(true)
-    expect(supportsConversationRoomsForReleaseVariant('android_v1_1_0')).toBe(true)
-    expect(resolvePostAuthPathForReleaseVariant('android_v1_1_0')).toBe('/conversations')
-    expect(usesVersionedAccountPreferencesApiForReleaseVariant('ios_v1_1_0')).toBe(true)
+  it('keeps 1.1.0 variants on the new release line', () => {
+    expect(isV1_1_0MingleClientReleaseVariant('ios_v1_1_0')).toBe(true)
+    expect(isV1_1_0MingleClientReleaseVariant('android_v1_1_0')).toBe(true)
   })
 })
