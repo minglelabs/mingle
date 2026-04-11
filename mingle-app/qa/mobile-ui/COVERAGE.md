@@ -4,6 +4,15 @@ This document maps the still-relevant UI/UX regressions from [docs/ui-ux-codex-t
 
 For the expanded iOS target list that is executed today, see [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md). For Android-specific targets, see [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md). For the remaining unmapped atoms and their backlog classification, see [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md) and [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md).
 
+## Current Coverage Snapshot
+
+| Platform | Validation targets | Historical atoms explicitly linked in inventory | Inventory source |
+| --- | --- | --- | --- |
+| iOS | `23` | `47 / 92` | [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) |
+| Android | `21` | `49 / 92` | [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) |
+
+For the exact not-covered-yet buckets, use the backlog documents rather than inferring from this table. They are the source of truth for why an atom is not currently automated.
+
 ## Covered in the current app surface
 
 The current mobile app surface is the React Native shell plus the live translator WebView. The suite currently covers the regression categories below.

@@ -160,3 +160,65 @@ Today, the most reliable debugging flow is still the per-platform split:
 The combined command is now stable enough to use as a top-level smoke gate after the Android hydration case moved to an app-owned QA bridge instead of raw WebView storage timing.
 
 The devbox wrapper does not replace `scripts/devbox up` or `scripts/devbox mobile`. Keep using devbox to start the device profile/tunnel and install the debug app first, then use `scripts/devbox qa ...` to launch the QA runner itself.
+
+## Devbox QA Command Matrix
+
+From the repository root:
+
+```bash
+# Fast cross-platform contract gate
+scripts/devbox qa --contracts
+
+# Standard Android physical-device QA
+scripts/devbox qa --platform android --android-serial <ANDROID_SERIAL>
+
+# Expanded Android regression inventory
+scripts/devbox qa --android-regressions --android-serial <ANDROID_SERIAL>
+
+# Standard iOS simulator or device QA
+scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
+
+# Expanded iOS regression inventory
+scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
+
+# Standard combined smoke
+scripts/devbox qa
+```
+
+Use `scripts/devbox up ...` and `scripts/devbox mobile ...` first when the local servers, tunnel, Metro, or debug app install are not already in the expected state.
+
+## Source Of Truth For Future Agents
+
+These files are the maintenance chain for the mobile regression suite:
+
+1. [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md)
+   - Canonical historical issue atom list.
+2. [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md)
+   - Cross-platform mapping from historical atoms to current automated gates.
+3. [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md)
+   - Executed iOS targets, per-target atom links, and current coverage count.
+4. [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md)
+   - Executed Android targets, per-target atom links, and current coverage count.
+5. [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md)
+   - iOS atoms still outside the inventory, grouped by reason.
+6. [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md)
+   - Android atoms still outside the inventory, grouped by reason.
+7. `qa/mobile-ui/reports/<timestamp>/`
+   - Latest execution results, pass/fail counts, and device-specific diagnostics.
+
+The code entrypoints that future agents should edit when extending the suite are:
+
+- [scripts/devbox.sh](/Users/nam/.codex/worktrees/a92b/mingle/scripts/devbox.sh)
+- [scripts/mobile-ui-qa.mjs](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/scripts/mobile-ui-qa.mjs)
+- [scripts/ios-ui-regression-suite.mjs](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/scripts/ios-ui-regression-suite.mjs)
+- [scripts/android-ui-regression-suite.mjs](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/scripts/android-ui-regression-suite.mjs)
+
+## Maintenance Rule
+
+When a future agent adds or removes a regression target, update these together:
+
+1. The relevant runner script.
+2. The relevant inventory document.
+3. The relevant backlog document if atoms moved buckets.
+4. [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) if the high-level mapping changed.
+5. [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md) if a newly discovered UI/UX issue was found during QA work.
