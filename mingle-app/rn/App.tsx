@@ -231,6 +231,33 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
   }
 }
 
+function shouldApplyNgrokBrowserWarningBypass(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app');
+  } catch {
+    return /\.ngrok-free\.(dev|app)/i.test(raw);
+  }
+}
+
+function appendNgrokBrowserWarningBypass(raw: string): string {
+  if (!shouldApplyNgrokBrowserWarningBypass(raw)) return raw;
+
+  try {
+    const url = new URL(raw);
+    if (!url.searchParams.has('ngrok-skip-browser-warning')) {
+      url.searchParams.set('ngrok-skip-browser-warning', '1');
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
   return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
 }
@@ -1274,12 +1301,28 @@ function AppInner(): React.JSX.Element {
     try {
       const url = new URL(baseWebUrl);
       url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
-      return url.toString();
+      return appendNgrokBrowserWarningBypass(url.toString());
     } catch {
       const separator = baseWebUrl.includes('?') ? '&' : '?';
-      return `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`;
+      return appendNgrokBrowserWarningBypass(
+        `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`,
+      );
     }
   }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const webViewSource = useMemo(() => {
+    if (!webUrl) {
+      return { html: '<html><body style="margin:0;background:#fff;"></body></html>' };
+    }
+
+    if (!shouldApplyNgrokBrowserWarningBypass(webUrl)) {
+      return { uri: webUrl };
+    }
+
+    return {
+      uri: webUrl,
+      headers: { 'ngrok-skip-browser-warning': '1' },
+    };
+  }, [webUrl]);
   const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
@@ -1980,6 +2023,13 @@ function AppInner(): React.JSX.Element {
     }
   }, [clearAuthDispatchRetryTimer, emitAuthToWeb, trustedNativeAuthOrigin]);
 
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
+
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     let parsed: WebViewCommand | null = null;
     try {
@@ -2269,13 +2319,6 @@ function AppInner(): React.JSX.Element {
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
 
-  const handleDebugWebViewRemount = useCallback(() => {
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setIsNativeMenuOverlayOpen(false);
-    setWebViewMountToken((current) => current + 1);
-  }, []);
-
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -2356,9 +2399,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={webUrl
-              ? { uri: webUrl }
-              : { html: '<html><body style=\"margin:0;background:#fff;\"></body></html>' }}
+            source={webViewSource}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled

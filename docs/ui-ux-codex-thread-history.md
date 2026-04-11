@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-11 Real-Device QA Follow-Up
+
+### `2026-04-11-real-device-ui-qa-automation` | UI/UX issues found
+
+1. **The iPhone WebView could load the ngrok root page but still fail to hydrate into the real UI**
+   Problem: On a physical iPhone, the RN WebView could open the main `ngrok` URL and expose a `WEBVIEW_*` context, but Next.js client chunks under `/_next/static/...` were still being replaced by `ERR_NGROK_6024` HTML. That left the page title intact while the visible body stayed on the server-rendered loading shell, so the `window.__MINGLE_QA__` bridge never attached and the automated UI regression suite could not assert real UI state.
+   Attempted fix: The native app now appends `ngrok-skip-browser-warning=1` to the initial WebView URL and sends the `ngrok-skip-browser-warning: 1` header on the first WebView request so the root page itself stops landing on the ngrok warning interstitial.
+   Status: Partially resolved in-thread. The root page now loads as the real app, but subresource requests still do not inherit the bypass header, so full hydration on real-device ngrok remains blocked until the WebView can propagate the header to same-origin asset requests or the tunnel/provider path changes.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.
