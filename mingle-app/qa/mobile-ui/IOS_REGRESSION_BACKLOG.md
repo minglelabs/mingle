@@ -6,7 +6,7 @@ This document explains why [docs/ui-ux-codex-thread-history.md](/Users/nam/.code
 - Historical issue atoms already linked to the iOS regression inventory: `47`
 - Historical issue atoms still not linked to the iOS regression inventory: `45`
 
-The `19` items in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) are validation targets, not one-to-one issue atoms. One target can cover several historical atoms.
+The `23` items in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) are validation targets, not one-to-one issue atoms. One target can cover several historical atoms.
 
 ## Category Summary
 
@@ -14,8 +14,10 @@ The `19` items in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b
 | --- | --- | --- |
 | Legacy surface removed from the current iOS app | `29` | The issue belongs to the old multi-room conversations/list/room drawer UI that the current iOS shell no longer exposes. |
 | Current iOS surface, but not automated yet | `0` | The previously identified 12 current-surface atoms are now linked into the iOS regression inventory. |
-| Likely already covered semantically, but not backlinked in the inventory yet | `5` | A current test already checks the same behavior class, but the historical atom has not been explicitly mapped into the inventory document. |
-| Oracle or reproduction rule still unclear | `7` | The issue exists as a user-facing complaint, but the automation pass/fail rule is still too fuzzy to encode safely. |
+| Likely already covered semantically, but not backlinked in the inventory yet | `6` | A current test already checks the same behavior class, but the historical atom has not been explicitly mapped into the inventory document. |
+| Oracle still unclear | `2` | The problem is understood, but the pass/fail rule is still too fuzzy to encode safely. |
+| Reproduction rule still unclear | `1` | The history entry is too meta or blended to recreate as one clean, observable bug. |
+| Deferred or deprioritized for now | `3` | The issue is known, but the current product/testing priority is to leave it out of the active iOS automation backlog. |
 | Web-only or Android-only, not an iOS regression target | `4` | The issue is out of scope for the current iOS suite. |
 
 ## What "Oracle" Means
@@ -88,31 +90,41 @@ These atoms describe the same behavior class as an existing target, but the expl
   Current likely gate: `bottom-anchor-restores-after-storage-hydration-real-device`
 - `019d2a3f#1` relaunch auto-scroll happened only once
   Current likely gate: `bottom-anchor-restores-after-storage-hydration-real-device`
+- `019d4eba#1` forced WebView reload left native STT running while the UI fell back toward idle/play
+  Current likely gate: `ios-native-mic-recovery-contracts` via `use-realtime-stt.logic.test.ts` (`promotes native transcript activity back into ready state after unexpected web reloads`)
 - `019d6d6d#1` keyboard composer grew but did not shrink back
   Current likely gate: `composer-roundtrip-restores-compact-bottom-bar-real-device`
 - `019d6d99#1` keyboard mode added too much bottom margin with bottom banner
   Current likely gate: `banner-position-updates-insets-real-device` plus composer round-trip
 
-## 4. Oracle Or Reproduction Rule Still Unclear
+## 4. Oracle Still Unclear
 
-These atoms still matter, but we need a stronger pass/fail rule before turning them into reliable automation.
+These atoms still matter, but we still need a stronger pass/fail rule before turning them into reliable automation.
 
 - `019c6f40#4` stopping STT during TTS left playback state stuck
   Needs a deterministic live audio/TTS event oracle.
-- `019d10e1#1` splash logo yellow mismatched the splash background
-  Needs a visual asset/screenshot oracle.
-- `019d18f0#1` iOS resume showed a brief white flash
-  Needs a frame-level resume-flash oracle.
-- `019d43a0#1` hydration mismatch around render-time `Date`/`Intl`
-  Needs a precise hydration-error oracle, not just a visual symptom.
+- `019d43a0#1` live-demo hydration mismatch around client-only initialization and `Date`/`Intl` rendering
+  Needs a precise hydration-error oracle, not just a vague first-paint symptom.
+
+## 5. Reproduction Rule Still Unclear
+
+These atoms are not blocked on pass/fail measurement first. They are blocked because the history entry itself is too blended or meta to reproduce as one clean bug.
+
 - `019d43ae#1` bottom-tabs branch meta summary, not a clean standalone bug
   Needs decomposition into actual observable regressions first.
-- `019d4eba#1` forced WebView reload left STT/state out of sync
-  Needs a deterministic native/WebView reconcile oracle.
-- `019d6f86#1` voice-to-keyboard transition stuttered
-  Needs a measurable motion oracle, not just subjective smoothness.
 
-## 5. Web-Only Or Android-Only
+## 6. Deferred Or Deprioritized For Now
+
+These atoms stay in history, but the current plan is not to spend active iOS automation time on them.
+
+- `019d10e1#1` splash logo yellow mismatched the splash background
+  Deprioritized for now.
+- `019d18f0#1` iOS resume showed a brief white flash
+  Still unresolved, but explicitly deferred for now.
+- `019d6f86#1` voice-to-keyboard transition stuttered
+  Deprioritized for now.
+
+## 7. Web-Only Or Android-Only
 
 These atoms should not be counted as missing iOS coverage.
 

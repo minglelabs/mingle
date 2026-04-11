@@ -471,9 +471,9 @@
 ### `019d43a0-d5ec-7fd1-94b1-884dcea6de65` | UI/UX issues found
 
 1. **Thread-level UI/UX issue**
-   Problem: iOS banner/runtime debugging expanded into a hydration mismatch around render-time Date/Intl formatting.
-   Attempted fix: banner/runtime work landed, but the hydration mismatch itself was only diagnosed.
-   Status: mixed.
+   Problem: iOS banner/runtime debugging exposed a wider live-demo hydration mismatch family. Server-rendered markup could disagree with the client once localStorage-backed preferences, native inset query params, and timestamp `Date`/`Intl` formatting were applied on the browser side, which produced hydration warnings and sometimes first-paint UI drift.
+   Attempted fix: the thread mainly diagnosed the mismatch class and pointed at client-only initialization paths. Follow-up work later moved storage-backed initialization behind client hydration, stabilized native inset reads, suppressed timestamp hydration drift, and briefly disabled SSR for the live demo during one mitigation pass.
+   Status: diagnosed in-thread; follow-up commits later resolved the underlying hydration mismatch paths.
 
 ### `019d43a3-c1e7-7600-858d-64964413a683` | UI/UX issues found
 
@@ -506,9 +506,9 @@
 ### `019d4eba-14af-7523-ad3c-0f5a5b3a810b` | UI/UX issues found
 
 1. **Thread-level UI/UX issue**
-   Problem: forced WebView reload/flicker could leave STT still running while room metadata/status looked reset or stale.
-   Attempted fix: native/WebView state-reconcile work.
-   Status: issue clearly existed; exact final closure is spread across follow-up reconcile threads.
+   Problem: after a forced WebView reload/flicker, native STT could still be running while the reloaded React state fell back toward idle. In practice that meant the UI could show the orange play/start control instead of the red stop/running control, and related room metadata could look reset or stale even though audio capture was still active.
+   Attempted fix: native/WebView state-reconcile work taught the reloaded WebView to restore native STT status and promote the UI back into its ready/running state when native status or transcript activity resumed.
+   Status: issue clearly existed in-thread; follow-up reconcile commits later targeted the state-restore path directly.
 
 ### `019d4f37-af30-7872-bc3a-4f68be0fabd6` | UI/UX issues found
 
