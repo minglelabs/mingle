@@ -4,6 +4,7 @@ import {
   readRequestedApiNamespaceFromSearchParams,
   resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
+import DefaultV110ConversationsEntry from "@/web/default/v1.1.0/conversations-entry";
 import LegacyConversationsEntry from "@/web/legacy/v1.0.11/conversations-entry";
 import AndroidV1011ConversationsEntry from "@/web/android/v1.0.11/conversations-entry";
 import AndroidV110ConversationsEntry from "@/web/android/v1.1.0/conversations-entry";
@@ -32,6 +33,8 @@ export default async function ConversationsPage({ params, searchParams }: Conver
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":
       return LegacyConversationsEntry({ locale, searchParams: resolvedSearchParams });
+    case "default_v1_1_0":
+      return DefaultV110ConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_0_11":
       return IosV1011ConversationsEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_0_11":

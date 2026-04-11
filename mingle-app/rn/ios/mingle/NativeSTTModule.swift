@@ -780,6 +780,7 @@ class NativeSTTModule: RCTEventEmitter {
         sttModel: String,
         aecEnabled: Bool,
         apiNamespace: String,
+        releaseVariant: String,
         behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
@@ -868,6 +869,9 @@ class NativeSTTModule: RCTEventEmitter {
         if !apiNamespace.isEmpty {
             configPayload["api_namespace"] = apiNamespace
         }
+        if !releaseVariant.isEmpty {
+            configPayload["release_variant"] = releaseVariant
+        }
         if !behaviorProfile.isEmpty {
             configPayload["behavior_profile"] = behaviorProfile
         }
@@ -908,6 +912,7 @@ class NativeSTTModule: RCTEventEmitter {
         let sttModel = options["sttModel"] as? String ?? "soniox"
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -925,6 +930,7 @@ class NativeSTTModule: RCTEventEmitter {
                 sttModel: sttModel,
                 aecEnabled: aecEnabled,
                 apiNamespace: apiNamespace,
+                releaseVariant: releaseVariant,
                 behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
@@ -945,6 +951,7 @@ class NativeSTTModule: RCTEventEmitter {
                             sttModel: sttModel,
                             aecEnabled: aecEnabled,
                             apiNamespace: apiNamespace,
+                            releaseVariant: releaseVariant,
                             behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,

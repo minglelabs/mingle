@@ -4,6 +4,7 @@ import {
   readRequestedApiNamespaceFromSearchParams,
   resolveMingleClientReleaseVariant,
 } from "@/lib/client-behavior-profile";
+import DefaultV110HomeEntry from "@/web/default/v1.1.0/home-entry";
 import LegacyHomeEntry from "@/web/legacy/v1.0.11/home-entry";
 import AndroidV1011HomeEntry from "@/web/android/v1.0.11/home-entry";
 import AndroidV110HomeEntry from "@/web/android/v1.1.0/home-entry";
@@ -34,6 +35,8 @@ export default async function TranslatorPage({ params, searchParams }: Translato
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":
       return LegacyHomeEntry({ locale });
+    case "default_v1_1_0":
+      return DefaultV110HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_0_11":
       return IosV1011HomeEntry({ locale });
     case "android_v1_0_11":

@@ -21,6 +21,7 @@ import {
     shouldUseTokenLanguageForCurrentTurn,
 } from './soniox-language';
 import {
+    parseMingleSttReleaseVariant,
     resolveMingleSttBehaviorProfile,
     resolveMingleSttReleaseVariant,
     type MingleSttBehaviorProfile,
@@ -1351,18 +1352,27 @@ wss.on('connection', (clientWs) => {
             const apiNamespace = typeof data.api_namespace === 'string'
                 ? data.api_namespace.trim()
                 : '';
+            const requestedReleaseVariant = typeof data.release_variant === 'string'
+                ? parseMingleSttReleaseVariant(data.release_variant)
+                : null;
+            const resolvedReleaseVariant = apiNamespace
+                ? resolveMingleSttReleaseVariant(apiNamespace)
+                : requestedReleaseVariant || 'legacy_default_v1_0_11';
+            const resolvedReleaseRuntime = resolveMingleSttReleaseRuntime(resolvedReleaseVariant);
             const clientConfig = {
                 ...data,
                 api_namespace: apiNamespace,
-                behavior_profile: resolveMingleSttBehaviorProfile(apiNamespace),
-                release_variant: resolveMingleSttReleaseVariant(apiNamespace),
+                behavior_profile: apiNamespace
+                    ? resolveMingleSttBehaviorProfile(apiNamespace)
+                    : resolvedReleaseRuntime.behaviorLine,
+                release_variant: resolvedReleaseVariant,
                 languages: normalizedLanguages,
             } as MingleSttClientConfig;
 
             currentModel = clientConfig.stt_model || 'gladia';
             behaviorProfile = clientConfig.behavior_profile || 'legacy_1_0_11';
             releaseVariant = clientConfig.release_variant || 'legacy_default_v1_0_11';
-            releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
+            releaseRuntime = resolvedReleaseRuntime;
             selectedLanguages = normalizedLanguages;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
     isLegacyMingleSttReleaseVariant,
+    parseMingleSttReleaseVariant,
+    resolveMingleSttBehaviorProfileForReleaseVariant,
     resolveMingleSttBehaviorProfile,
     resolveMingleSttReleaseVariant,
 } from '../behavior-profile';
@@ -22,6 +24,7 @@ test('1.1.0 namespaces use the new STT profile', () => {
 
 test('release variants stay explicit for ios/android 1.0.11 and 1.1.0', () => {
     assert.equal(resolveMingleSttReleaseVariant(''), 'legacy_default_v1_0_11');
+    assert.equal(parseMingleSttReleaseVariant('default_v1_1_0'), 'default_v1_1_0');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.0.11'), 'ios_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.0.7'), 'android_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.0'), 'ios_v1_1_0');
@@ -56,6 +59,10 @@ test('release runtimes stay pinned to the resolved release variant', () => {
             final_turn: { text: 'hello', language: 'en' },
         },
     );
+
+    const defaultV110Runtime = resolveMingleSttReleaseRuntime('default_v1_1_0');
+    assert.equal(defaultV110Runtime.behaviorLine, 'v1_1_0');
+    assert.equal(resolveMingleSttBehaviorProfileForReleaseVariant('default_v1_1_0'), 'v1_1_0');
 });
 
 test('release runtime owns provider startup dispatch', () => {

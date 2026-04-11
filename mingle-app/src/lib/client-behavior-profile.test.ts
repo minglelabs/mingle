@@ -6,8 +6,10 @@ import {
   readRequestedApiNamespaceFromSearchParams,
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
+  resolveMingleBehaviorProfileForReleaseVariant,
   resolveMingleClientReleaseVariant,
   resolveMingleBehaviorProfile,
+  resolveMingleReleaseTarget,
 } from './client-behavior-profile'
 
 describe('resolveMingleBehaviorProfile', () => {
@@ -39,6 +41,13 @@ describe('resolveMingleClientReleaseVariant', () => {
   })
 })
 
+describe('resolveMingleReleaseTarget', () => {
+  it('recognizes the dedicated 1.1.0 web release target', () => {
+    expect(resolveMingleReleaseTarget('v1_1_0')).toBe('v1_1_0')
+    expect(resolveMingleReleaseTarget('')).toBe('unknown')
+  })
+})
+
 describe('readRequestedApiNamespaceFromSearchParams', () => {
   it('prefers apiNamespace and falls back to apiNs', () => {
     expect(
@@ -58,17 +67,28 @@ describe('readRequestedApiNamespaceFromSearchParams', () => {
 
 describe('resolveDefaultMingleBehaviorProfile', () => {
   const originalNamespace = process.env.NEXT_PUBLIC_API_NAMESPACE
+  const originalReleaseTarget = process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET
 
   afterEach(() => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = originalNamespace
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = originalReleaseTarget
   })
 
   it('defaults to the safe legacy profile when no namespace is configured', () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = ''
 
     expect(resolveDefaultMingleBehaviorProfile()).toBe('legacy_1_0_11')
     expect(resolveDefaultMingleClientReleaseVariant()).toBe('legacy_default_v1_0_11')
     expect(isLegacyMingleClientReleaseVariant(resolveDefaultMingleClientReleaseVariant())).toBe(true)
+  })
+
+  it('uses the dedicated 1.1.0 release target when the namespace is intentionally blank', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_0'
+
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_0')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_0')
   })
 })
 
@@ -80,7 +100,9 @@ describe('release-variant feature flags', () => {
   })
 
   it('keeps 1.1.0 variants on the new release line', () => {
+    expect(isV1_1_0MingleClientReleaseVariant('default_v1_1_0')).toBe(true)
     expect(isV1_1_0MingleClientReleaseVariant('ios_v1_1_0')).toBe(true)
     expect(isV1_1_0MingleClientReleaseVariant('android_v1_1_0')).toBe(true)
+    expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_0')).toBe('v1_1_0')
   })
 })

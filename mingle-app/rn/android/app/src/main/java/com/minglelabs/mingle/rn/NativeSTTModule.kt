@@ -49,6 +49,7 @@ class NativeSTTModule(
     val sttModel: String,
     val aecEnabled: Boolean,
     val apiNamespace: String,
+    val releaseVariant: String,
     val behaviorProfile: String,
     val sonioxLanguageHints: List<String>,
     val sonioxManualFinalizeSilenceMs: Int?,
@@ -138,6 +139,7 @@ class NativeSTTModule(
       sttModel = options.getString("sttModel")?.trim().orEmpty().ifEmpty { "soniox" },
       aecEnabled = if (options.hasKey("aecEnabled")) options.getBoolean("aecEnabled") else false,
       apiNamespace = options.getString("apiNamespace")?.trim().orEmpty(),
+      releaseVariant = options.getString("releaseVariant")?.trim().orEmpty(),
       behaviorProfile = options.getString("behaviorProfile")?.trim().orEmpty(),
       sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
       sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
@@ -303,6 +305,9 @@ class NativeSTTModule(
             .put("stt_model", options.sttModel)
           if (options.apiNamespace.isNotEmpty()) {
             config.put("api_namespace", options.apiNamespace)
+          }
+          if (options.releaseVariant.isNotEmpty()) {
+            config.put("release_variant", options.releaseVariant)
           }
           if (options.behaviorProfile.isNotEmpty()) {
             config.put("behavior_profile", options.behaviorProfile)

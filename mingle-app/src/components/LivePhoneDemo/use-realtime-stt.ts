@@ -5,8 +5,11 @@ import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import type { ConversationHydrationUtterance } from '@/lib/app-conversations'
 import {
+  resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
+  resolveMingleClientReleaseVariant,
   resolveMingleBehaviorProfile,
+  type MingleClientReleaseVariant,
   type MingleBehaviorProfile,
 } from '@/lib/client-behavior-profile'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
@@ -78,11 +81,16 @@ function resolveRuntimeApiNamespace(): string {
 
 function resolveSttRuntimeBehaviorContext(): {
   apiNamespace: string
+  releaseVariant: MingleClientReleaseVariant
   behaviorProfile: MingleBehaviorProfile
 } {
   const apiNamespace = resolveRuntimeApiNamespace()
+  const releaseVariant = apiNamespace
+    ? resolveMingleClientReleaseVariant(apiNamespace)
+    : resolveDefaultMingleClientReleaseVariant()
   return {
     apiNamespace,
+    releaseVariant,
     behaviorProfile: apiNamespace
       ? resolveMingleBehaviorProfile(apiNamespace)
       : resolveDefaultMingleBehaviorProfile(),
@@ -217,6 +225,7 @@ type NativeSttStartCommand = {
     sttModel: string
     aecEnabled: boolean
     apiNamespace: string
+    releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
     sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
@@ -3764,6 +3773,7 @@ export default function useRealtimeSTT({
             sttModel: 'soniox',
             aecEnabled: enableAec,
             apiNamespace: runtimeBehaviorContext.apiNamespace,
+            releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
@@ -3814,6 +3824,7 @@ export default function useRealtimeSTT({
           sample_rate: context.sampleRate,
           stt_model: 'soniox',
           api_namespace: runtimeBehaviorContext.apiNamespace,
+          release_variant: runtimeBehaviorContext.releaseVariant,
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
