@@ -131,6 +131,58 @@ wss.on('connection', (clientWs) => {
         ));
     };
 
+    const buildStopRecordingAckDataForReleaseVariant = (
+        finalizedTurn: FinalTurnPayload | null,
+    ) => {
+        switch (releaseVariant) {
+            case 'legacy_default_v1_0_11':
+            case 'ios_v1_0_11':
+            case 'android_v1_0_11':
+            case 'ios_v1_1_0':
+            case 'android_v1_1_0':
+            default:
+                return releaseRuntime.buildStopRecordingAckData({
+                    behaviorProfile,
+                    finalizedTurn,
+                });
+        }
+    };
+
+    const startConnectionForModel = (config: ClientConfig) => {
+        if (currentModel === 'deepgram') {
+            void startDeepgramConnection(config);
+        } else if (currentModel === 'deepgram-multi') {
+            void startDeepgramMultiConnection(config);
+        } else if (currentModel === 'fireworks') {
+            void startFireworksConnection(config);
+        } else if (currentModel === 'soniox') {
+            void startSonioxConnection(config);
+        } else if (currentModel === 'gladia-stt') {
+            void startGladiaConnection(config, false);
+        } else {
+            void startGladiaConnection(config, true);
+        }
+    };
+
+    // Keep the release dispatch explicit even where the concrete provider wiring is
+    // still shared. This is the seam where legacy 1.0.11 and 1.1.0 STT lifecycle
+    // can safely diverge without regressing already deployed clients.
+    const startConnectionForReleaseVariant = (config: ClientConfig) => {
+        switch (releaseVariant) {
+            case 'legacy_default_v1_0_11':
+            case 'ios_v1_0_11':
+            case 'android_v1_0_11':
+                startConnectionForModel(config);
+                return;
+            case 'ios_v1_1_0':
+            case 'android_v1_1_0':
+                startConnectionForModel(config);
+                return;
+            default:
+                startConnectionForModel(config);
+        }
+    };
+
     // ===== GLADIA 연결 =====
     const startGladiaConnection = async (config: ClientConfig, enableTranslation = true) => {
         if (!gladiaApiKey) {
@@ -1319,10 +1371,7 @@ wss.on('connection', (clientWs) => {
             if (clientWs.readyState === WebSocket.OPEN) {
                 clientWs.send(JSON.stringify({
                     type: 'stop_recording_ack',
-                    data: releaseRuntime.buildStopRecordingAckData({
-                        behaviorProfile,
-                        finalizedTurn,
-                    }),
+                    data: buildStopRecordingAckDataForReleaseVariant(finalizedTurn),
                 }));
                 // Close client socket after ack.
                 setTimeout(() => {
@@ -1367,19 +1416,7 @@ wss.on('connection', (clientWs) => {
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
             );
             
-            if (currentModel === 'deepgram') {
-                startDeepgramConnection(clientConfig);
-            } else if (currentModel === 'deepgram-multi') {
-                startDeepgramMultiConnection(clientConfig);
-            } else if (currentModel === 'fireworks') {
-                startFireworksConnection(clientConfig);
-            } else if (currentModel === 'soniox') {
-                startSonioxConnection(clientConfig);
-            } else if (currentModel === 'gladia-stt') {
-                startGladiaConnection(clientConfig, false);
-            } else {
-                startGladiaConnection(clientConfig, true);
-            }
+            startConnectionForReleaseVariant(clientConfig);
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송
             if (currentModel === 'deepgram' || currentModel === 'deepgram-multi' || currentModel === 'fireworks' || currentModel === 'soniox') {

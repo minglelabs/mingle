@@ -1,4 +1,4 @@
-import MingleHome from "@/components/mingle-home";
+import MingleHomeLegacy from "@/components/mingle-home-legacy";
 import { getDictionary, isSupportedLocale } from "@/i18n";
 import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
 import { buildPathWithSearchParams } from "@/lib/build-path-with-search-params";
@@ -34,8 +34,7 @@ export default async function TranslatorPage({ params, searchParams }: Translato
     case "ios_v1_0_11":
     case "android_v1_0_11":
       return (
-        <MingleHome
-          clientReleaseVariant={releaseVariant}
+        <MingleHomeLegacy
           dictionary={getDictionary(locale)}
           appleOAuthEnabled={isAppleOAuthConfigured()}
           googleOAuthEnabled={isGoogleOAuthConfigured()}
