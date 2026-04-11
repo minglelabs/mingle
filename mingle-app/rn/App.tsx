@@ -36,7 +36,6 @@ import {
   type NativeAuthProvider,
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
-import { validateDedicatedReleaseTargetConfig } from './src/releaseTargets';
 import {
   normalizeNativeBottomBarClearancePx,
   parseWebPathname,
@@ -64,8 +63,6 @@ type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
   webAppBaseUrl?: string;
   defaultWsUrl?: string;
-  legacyWebAppBaseUrl?: string;
-  legacyDefaultWsUrl?: string;
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
@@ -238,37 +235,6 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
   }
 }
 
-function isNgrokUrl(raw: string): boolean {
-  if (!raw) return false;
-
-  try {
-    const { hostname } = new URL(raw);
-    const normalized = hostname.toLowerCase();
-    return normalized.endsWith('.ngrok-free.dev')
-      || normalized.endsWith('.ngrok-free.app');
-  } catch {
-    return /\.ngrok-free\.(dev|app)/i.test(raw);
-  }
-}
-
-function buildWebViewSource(rawUrl: string | null): { uri: string; headers?: Record<string, string> } | { html: string } {
-  if (!rawUrl) {
-    return { html: '<html><body style="margin:0;background:#fff;"></body></html>' };
-  }
-
-  if (isNgrokUrl(rawUrl)) {
-    return {
-      uri: rawUrl,
-      headers: {
-        // Skip ngrok's free-tier browser interstitial so the WebView reaches the actual app.
-        'ngrok-skip-browser-warning': 'true',
-      },
-    };
-  }
-
-  return { uri: rawUrl };
-}
-
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
   return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
 }
@@ -298,14 +264,6 @@ const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
 const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.apiNamespace,
   readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
-);
-const LEGACY_PRODUCTION_WEB_APP_BASE_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyWebAppBaseUrl,
-  readRuntimeEnvValue(['MINGLE_LEGACY_SITE_URL']),
-);
-const LEGACY_PRODUCTION_WS_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyDefaultWsUrl,
-  readRuntimeEnvValue(['MINGLE_LEGACY_WS_URL']),
 );
 const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
@@ -348,20 +306,6 @@ if (EXPECTED_API_NAMESPACE && !CONFIGURED_API_NAMESPACE) {
   missingRuntimeConfig.push(`NEXT_PUBLIC_API_NAMESPACE (expected: ${EXPECTED_API_NAMESPACE})`);
 } else if (EXPECTED_API_NAMESPACE && !VALIDATED_API_NAMESPACE) {
   missingRuntimeConfig.push(`NEXT_PUBLIC_API_NAMESPACE must match current platform namespace: ${EXPECTED_API_NAMESPACE}`);
-}
-const releaseTargetValidation = validateDedicatedReleaseTargetConfig({
-  apiNamespace: VALIDATED_API_NAMESPACE || CONFIGURED_API_NAMESPACE,
-  webAppBaseUrl: WEB_APP_BASE_URL,
-  wsUrl: DEFAULT_WS_URL,
-  legacyWebAppBaseUrl: LEGACY_PRODUCTION_WEB_APP_BASE_URL,
-  legacyWsUrl: LEGACY_PRODUCTION_WS_URL,
-  allowLegacyProductionTargets: __DEV__
-    || ['1', 'true', 'yes', 'on'].includes(
-      readRuntimeEnvValue(['MINGLE_ALLOW_LEGACY_RELEASE_TARGETS']).trim().toLowerCase(),
-    ),
-});
-if (!releaseTargetValidation.ok) {
-  missingRuntimeConfig.push(releaseTargetValidation.error);
 }
 const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
   ? `Missing or invalid runtime config: ${missingRuntimeConfig.join(', ')}`
@@ -2317,7 +2261,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={buildWebViewSource(webUrl)}
+            source={webUrl ? { uri: webUrl } : { html: '<html><body style="margin:0;background:#fff;"></body></html>' }}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
