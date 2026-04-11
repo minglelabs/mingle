@@ -24,10 +24,12 @@ The first pass covers the regression categories that still exist in the current 
 - Composer growth/shrink round-trip.
 - Empty-state onboarding guidance without a ghost start control.
 - iOS microphone-permission denial recovery.
+- Android shared WebView/auth/menu/bubble contracts that still apply to the current RN shell.
+- Android native/WebView remount recovery on a physical device.
 
 Older multi-room conversation-list regressions are intentionally not automated here because the current app surface no longer exposes that UI.
 
-See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping, [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for the expanded iOS validation list, and [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) for the Android-focused inventory.
+See [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the issue-to-test mapping, [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md) for the expanded iOS validation list, [ANDROID_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_INVENTORY.md) for the Android-focused inventory, and [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md) for the remaining Android backlog classification.
 
 ## Prerequisites
 
@@ -99,6 +101,8 @@ Run the expanded Android regression inventory:
 ```bash
 pnpm test:qa:ui:android:regressions -- --android-serial <serial>
 ```
+
+The expanded Android suite now runs both shared contract targets and physical-device checks. The current reference run covers `21` validation targets mapped to `49` historical issue atoms.
 
 Run iOS simulator or device QA:
 

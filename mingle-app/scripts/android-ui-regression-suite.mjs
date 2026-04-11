@@ -11,6 +11,105 @@ const UI_UX_HISTORY_PATH = path.resolve(APP_ROOT, '../docs/ui-ux-codex-thread-hi
 
 const VITEST_TARGETS = [
   {
+    id: 'android-native-ui-bridge-contracts',
+    title: 'Android native UI bridge contracts',
+    issueAtoms: ['019d4cae#11', '019d4cae#12', '019d4cae#13', '019d4cae#14', '019d4cae#15'],
+    files: ['src/components/LivePhoneDemo/live-phone-demo.native-ui.logic.test.ts'],
+  },
+  {
+    id: 'android-scroll-platform-contracts',
+    title: 'Android live-demo scroll contracts',
+    issueAtoms: ['019c6f40#1', '019c6f40#2', '019c756e#1', '019d18f2#1'],
+    files: ['src/components/LivePhoneDemo/live-phone-demo.scroll.logic.test.ts'],
+  },
+  {
+    id: 'android-composer-layout-contracts',
+    title: 'Android composer layout contracts',
+    issueAtoms: ['019d4cae#9', '019d4cae#10', '019d6d6d#1', '019d6d99#1'],
+    files: ['src/components/LivePhoneDemo/live-phone-demo.composer.logic.test.ts'],
+  },
+  {
+    id: 'android-preference-hydration-contracts',
+    title: 'Android preference hydration contracts',
+    issueAtoms: ['019d4cae#23', '019d4cae#32', '019d2a13#1', '019d2a3f#1'],
+    files: [
+      'src/components/LivePhoneDemo/live-phone-demo.preferences.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.account-preferences.test.ts',
+    ],
+  },
+  {
+    id: 'android-locale-catalog-contracts',
+    title: 'Android locale catalog contracts',
+    issueAtoms: ['019d4cae#21', '019d4cae#22', '019c95e8#2', '019c95e8#3', '019ca08b#5', '019ca08b#6'],
+    files: ['src/i18n/config.test.ts', 'src/i18n/get-dictionary.test.ts'],
+  },
+  {
+    id: 'android-localized-surface-copy-contracts',
+    title: 'Android localized surface copy contracts',
+    issueAtoms: ['019d4cae#21', '019d4cae#22', '019c95e8#1', '019c95e8#2', '019c95e8#3', '019ca08b#5', '019ca08b#6', '019ca08b#7'],
+    files: [
+      'src/components/LivePhoneDemo/live-phone-demo.feedback-copy.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.delete-copy.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.copy-actions.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.tts-actions.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.app-update.logic.test.ts',
+    ],
+  },
+  {
+    id: 'android-bubble-structure-contracts',
+    title: 'Android bubble structure contracts',
+    issueAtoms: ['019c6f40#3', '019c992c#1', '019d09c4#1'],
+    files: [
+      'src/components/LivePhoneDemo/chat-bubble.test.ts',
+      'src/components/LivePhoneDemo/chat-bubble.timestamp.test.ts',
+      'src/components/LivePhoneDemo/translation-bubble-row.test.ts',
+    ],
+  },
+  {
+    id: 'android-copy-affordance-contracts',
+    title: 'Android copy affordance contracts',
+    issueAtoms: ['019d09c4#1', '019d5714#1'],
+    files: [
+      'src/components/LivePhoneDemo/copyable-bubble-surface.test.ts',
+      'src/components/LivePhoneDemo/copyable-bubble-surface.logic.test.ts',
+      'src/components/LivePhoneDemo/live-phone-demo.copy.test.ts',
+    ],
+  },
+  {
+    id: 'android-speaker-avatar-contracts',
+    title: 'Android speaker avatar contracts',
+    issueAtoms: ['019d162b#1'],
+    files: ['src/components/LivePhoneDemo/speaker-avatar.test.ts'],
+  },
+  {
+    id: 'android-auth-gate-contracts',
+    title: 'Android auth gate contracts',
+    issueAtoms: ['019ca08b#1', '019ca08b#2', '019ca08b#4'],
+    files: ['src/components/mingle-home.auth-contract.test.ts'],
+  },
+  {
+    id: 'android-native-auth-route-contracts',
+    title: 'Android native auth route contracts',
+    issueAtoms: ['019ca08b#3'],
+    files: [
+      'src/lib/native-auth-bridge.test.ts',
+      'src/app/[locale]/auth/signin/page.test.ts',
+      'src/app/[locale]/auth/native/page.test.ts',
+    ],
+  },
+  {
+    id: 'android-menu-chrome-contracts',
+    title: 'Android menu chrome contracts',
+    issueAtoms: ['019c95e8#1', '019c95e8#4', '019c95e8#5', '019d0514#1', '019d2f95#1', '019d2f95#2', '019d2f95#3', '019d43a3#1'],
+    files: ['src/components/LivePhoneDemo/live-phone-demo.chrome-contract.test.ts'],
+  },
+  {
+    id: 'android-shared-stt-restore-contracts',
+    title: 'Android shared STT restore contracts',
+    issueAtoms: ['019c992c#2', '019d19a3#1', '019d4eba#1', '019d4f37#1'],
+    files: ['src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts'],
+  },
+  {
     id: 'android-native-stt-reconcile-contracts',
     title: 'Android native STT reconcile contracts',
     issueAtoms: ['019d19a3#1', '019d4eba#1', '019d4f37#1'],
