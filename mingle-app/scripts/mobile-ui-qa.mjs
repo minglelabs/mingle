@@ -1119,11 +1119,13 @@ async function runIosCases(driver, reportDir, options) {
 }
 
 function renderMarkdownReport(report) {
+  const summary = report.summary || summarizeReport(report);
   const lines = [
     '# Mobile UI QA Report',
     '',
     `- Timestamp: ${report.timestamp}`,
     `- Appium port: ${report.appiumPort}`,
+    `- Summary: ${summary.passed}/${summary.total} passed, ${summary.failed} failed, ${summary.skipped} skipped`,
     '',
   ];
 
@@ -1132,6 +1134,7 @@ function renderMarkdownReport(report) {
     lines.push('');
     lines.push(`- Device: ${platformReport.deviceLabel}`);
     lines.push(`- Status: ${platformReport.status}`);
+    lines.push(`- Summary: ${platformReport.summary.passed}/${platformReport.summary.total} passed, ${platformReport.summary.failed} failed, ${platformReport.summary.skipped} skipped`);
     lines.push('');
     for (const result of platformReport.results) {
       lines.push(`### ${result.id}`);
@@ -1152,6 +1155,50 @@ function renderMarkdownReport(report) {
   }
 
   return `${lines.join('\n').trim()}\n`;
+}
+
+function summarizeResults(results) {
+  const summary = {
+    total: results.length,
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+  };
+
+  for (const result of results) {
+    if (result.status === 'passed') {
+      summary.passed += 1;
+      continue;
+    }
+
+    if (result.status === 'skipped') {
+      summary.skipped += 1;
+      continue;
+    }
+
+    summary.failed += 1;
+  }
+
+  return summary;
+}
+
+function summarizeReport(report) {
+  const summary = {
+    total: 0,
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+  };
+
+  for (const platformReport of report.platforms) {
+    const platformSummary = platformReport.summary || summarizeResults(platformReport.results);
+    summary.total += platformSummary.total;
+    summary.passed += platformSummary.passed;
+    summary.failed += platformSummary.failed;
+    summary.skipped += platformSummary.skipped;
+  }
+
+  return summary;
 }
 
 async function main() {
@@ -1181,6 +1228,7 @@ async function main() {
           platform: 'android',
           deviceLabel: androidSession.deviceLabel,
           status: results.every((result) => result.status === 'passed') ? 'passed' : 'failed',
+          summary: summarizeResults(results),
           results,
         });
       } finally {
@@ -1202,6 +1250,7 @@ async function main() {
           platform: 'ios',
           deviceLabel: iosSession.deviceLabel,
           status: results.every((result) => result.status === 'passed') ? 'passed' : 'failed',
+          summary: summarizeResults(results),
           results,
         });
       } catch (error) {
@@ -1212,6 +1261,12 @@ async function main() {
           platform: 'ios',
           deviceLabel: `ios:${options.iosUdid}`,
           status: 'failed',
+          summary: summarizeResults([
+            {
+              id: 'session-start',
+              status: 'failed',
+            },
+          ]),
           results: [
             {
               id: 'session-start',
@@ -1233,6 +1288,8 @@ async function main() {
     }
   }
 
+  report.summary = summarizeReport(report);
+
   const reportJsonPath = path.join(reportDir, 'report.json');
   const reportMarkdownPath = path.join(reportDir, 'report.md');
   await fs.writeFile(reportJsonPath, JSON.stringify(report, null, 2));
@@ -1242,6 +1299,7 @@ async function main() {
   console.log(JSON.stringify({
     reportJsonPath,
     reportMarkdownPath,
+    summary: report.summary,
     hasFailure,
   }, null, 2));
 
