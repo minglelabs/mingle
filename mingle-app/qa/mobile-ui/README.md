@@ -187,6 +187,36 @@ scripts/devbox qa
 
 Use `scripts/devbox up ...` and `scripts/devbox mobile ...` first when the local servers, tunnel, Metro, or debug app install are not already in the expected state.
 
+## Coverage Snapshot
+
+Current documented history size and explicit automation coverage:
+
+| Platform | Validation targets | Historical atoms explicitly linked in inventory | Backlog doc |
+| --- | --- | --- | --- |
+| iOS | `23` | `47 / 92` | [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md) |
+| Android | `21` | `49 / 92` | [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md) |
+
+Use [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) for the cross-platform mapping and use the inventory/backlog documents for exact per-atom accounting.
+
+## Issue Classification
+
+The historical atom source is always [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md).
+
+Atoms that are not currently automated are classified into the backlog buckets below:
+
+- `Legacy surface removed`: old multi-room/list/drawer UI that the current mobile shell no longer exposes.
+- `Current surface, but not automated yet`: still relevant to the current app surface and should be the next automation candidates.
+- `Likely already covered semantically, but not backlinked yet`: behavior is effectively checked, but the historical atom link is missing from the inventory docs.
+- `Oracle still unclear`: the bug is understood, but the pass/fail rule is not measurable enough yet.
+- `Reproduction rule still unclear`: the history entry is too blended or meta to replay as one clean regression.
+- `Deferred or deprioritized`: known issue, but intentionally outside the active automation queue for now.
+- `Web-only or platform-specific`: intentionally out of scope for the other platform.
+
+The exact atom lists for each bucket live in:
+
+- [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md)
+- [ANDROID_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ANDROID_REGRESSION_BACKLOG.md)
+
 ## Source Of Truth For Future Agents
 
 These files are the maintenance chain for the mobile regression suite:
