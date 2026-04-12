@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck background still read as scattered color spots instead of one calm field**
+  Problem: The lightened deck removed the dark card treatment, but the remaining warm color accents still appeared as separate soft spots. That made the backdrop feel a bit patterned rather than like one clean presentation canvas.
+  Cause: The page background still relied on multiple localized radial highlights with relatively noticeable opacity.
+  Fix: Reworked the background into a mostly white full-field gradient with only very subtle large-scale Mingle key-color washes, so the page reads as one calm surface instead of a white canvas with scattered blobs.
+  Status: Resolved in-thread.
+
 - **XR presentation deck could occasionally sweep backward at the loop boundary**
   Problem: Repeatedly advancing in one direction sometimes caused the deck to perform a long reverse-looking slide when wrapping from the cloned edge slide back to the real slide. That broke the illusion of a true infinite carousel.
   Cause: The loop-reset path changed `transition` and `transform` too close together, so the browser could occasionally animate the reposition jump instead of treating it as an invisible reset.
