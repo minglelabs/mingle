@@ -43,5 +43,6 @@ This inventory lists the regression targets that are explicitly wired into the c
 ## Notes
 
 - The iOS inventory includes both contract targets and Appium targets because either one can be the authoritative guard for a historical atom.
+- The latest connected physical iPhone run on `2026-04-12` finished at `6 / 7 passed`; the remaining failing target is `banner-position-updates-insets-real-device`, which currently reproduces the in-room top-banner regression family instead of a runner/bootstrap failure.
 - Atoms that are missing from this inventory are not necessarily missing from mobile automation overall. Some are covered only on Android, and the rest are classified in [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md).
 - Use [IOS_REGRESSION_BACKLOG.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_BACKLOG.md) to see which atoms are outside the iOS inventory specifically.

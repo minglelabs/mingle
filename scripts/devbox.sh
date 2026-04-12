@@ -2597,6 +2597,16 @@ resolve_rn_ios_development_team() {
   printf '%s' ""
 }
 
+resolve_ios_wda_bundle_id() {
+  local app_bundle_id=""
+  app_bundle_id="$(trim_whitespace "$(resolve_ios_bundle_id)")"
+  if [[ -n "$app_bundle_id" ]]; then
+    printf '%s' "${app_bundle_id}.WebDriverAgentRunner"
+    return 0
+  fi
+  printf '%s' "com.minglelabs.mingle.rn.WebDriverAgentRunner"
+}
+
 resolve_android_application_id() {
   local gradle_file="$ROOT_DIR/mingle-app/rn/android/app/build.gradle"
   if [[ -f "$gradle_file" ]]; then
@@ -5200,6 +5210,9 @@ cmd_qa() {
   local ios_real_udid="${MINGLE_UI_QA_IOS_REAL_UDID:-${MINGLE_UI_QA_IOS_UDID:-}}"
   local ios_sim_udid="${MINGLE_UI_QA_IOS_SIM_UDID:-}"
   local android_serial="${MINGLE_UI_QA_ANDROID_SERIAL:-}"
+  local ios_xcode_org_id="${MINGLE_UI_QA_IOS_XCODE_ORG_ID:-}"
+  local ios_xcode_signing_id="${MINGLE_UI_QA_IOS_XCODE_SIGNING_ID:-}"
+  local ios_updated_wda_bundle_id="${MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID:-}"
   local -a qa_args=()
 
   while [[ $# -gt 0 ]]; do
@@ -5265,6 +5278,21 @@ EOF
     *) die "invalid --platform for qa: $platform (expected ios|android|all)" ;;
   esac
 
+  if [[ "$platform" == "ios" || "$platform" == "all" || "$mode" == "ios-regressions" ]]; then
+    if [[ -z "$ios_xcode_org_id" ]]; then
+      ios_xcode_org_id="$(trim_whitespace "${DEVBOX_IOS_TEAM_ID:-}")"
+    fi
+    if [[ -z "$ios_xcode_org_id" ]]; then
+      ios_xcode_org_id="$(trim_whitespace "$(resolve_rn_ios_development_team)")"
+    fi
+    if [[ -z "$ios_xcode_signing_id" ]]; then
+      ios_xcode_signing_id="Apple Development"
+    fi
+    if [[ -z "$ios_updated_wda_bundle_id" ]]; then
+      ios_updated_wda_bundle_id="$(resolve_ios_wda_bundle_id)"
+    fi
+  fi
+
   local script_name=""
   local -a runner_args=()
   local -a command_args=()
@@ -5326,6 +5354,9 @@ EOF
     MINGLE_UI_QA_IOS_UDID="$ios_udid" \
     MINGLE_UI_QA_IOS_REAL_UDID="$ios_real_udid" \
     MINGLE_UI_QA_IOS_SIM_UDID="$ios_sim_udid" \
+    MINGLE_UI_QA_IOS_XCODE_ORG_ID="$ios_xcode_org_id" \
+    MINGLE_UI_QA_IOS_XCODE_SIGNING_ID="$ios_xcode_signing_id" \
+    MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID="$ios_updated_wda_bundle_id" \
     MINGLE_UI_QA_ANDROID_SERIAL="$android_serial" \
       pnpm "${command_args[@]}"
   )

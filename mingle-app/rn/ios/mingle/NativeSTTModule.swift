@@ -1080,6 +1080,7 @@ class NativeRuntimeConfigModule: NSObject {
             "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
+            "qaBridgeEnabled": NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled"),
             "adBannerPosition": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerPosition"),
             "adBannerHeightPx": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerHeightPx"),
             "adBannerUnitIdIos": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),

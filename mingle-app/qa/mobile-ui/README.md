@@ -73,6 +73,7 @@ For Appium-backed runs:
 - Use `Debug` builds, not `Release` builds.
 - Install the app with `--qa-bridge`.
 - Use the `device` profile for real-device iOS runs so the WebView uses the tunnel URL instead of `localhost`.
+- `scripts/devbox qa --platform ios ...` now auto-derives the WDA signing team and updated runner bundle ID from the current devbox/Xcode setup, but the Mac still needs a valid Apple Development certificate for that team.
 
 ## Commands
 
@@ -105,6 +106,11 @@ Expanded iOS regression inventory:
 ```bash
 scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
 ```
+
+Latest connected real-device note:
+
+- The 2026-04-12 connected iPhone pass reached the full physical-device suite after the QA bootstrap fixes and finished at `6 / 7 passed`.
+- The remaining failing target is `banner-position-updates-insets-real-device`, which currently reproduces the historical in-room top-banner regression family on the physical iPhone.
 
 Combined smoke:
 

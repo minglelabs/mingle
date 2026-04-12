@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-12 iPhone Real-Device QA Follow-Up
+
+### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found
+
+1. **The in-room top-banner toggle still fails to move the native iPhone banner out of the bottom slot**
+   Problem: During the connected physical iPhone regression pass, the QA bridge could flip the live-demo preference to `top`, but the native banner layout stayed pinned to `bottom` and the real screen still rendered the bottom banner above the orange start control. This reopens the old in-room top-banner placement family around `019d4cae#13`: instead of merely sitting too low below the room header, the iPhone conversation surface can now fail to switch into the top-banner mode at all.
+   Attempted fix: The iPhone QA path itself was repaired first so the physical-device runner now reaches the conversations surface through the same QA bridge/bootstrap path as Android, exports the QA bridge runtime flag from native config, and auto-infers WDA signing defaults from `scripts/devbox qa`. That removed the earlier session/bootstrap failures and isolated the remaining failure to the actual banner-position regression.
+   Status: Reproduced on 2026-04-12 during the connected iPhone physical-device pass. Not resolved in-thread.
+
 ## 2026-04-12 Android Real-Device QA Follow-Up
 
 ### `2026-04-12-android-real-device-ui-qa` | UI/UX issues found

@@ -1015,7 +1015,7 @@ async function waitForConversationListQaBridge(driver, timeoutMs = 20000) {
   }
 }
 
-async function ensureAndroidConversationRoom(driver) {
+async function ensureConversationRoom(driver) {
   try {
     return await waitForQaBridge(driver, 5000);
   } catch {
@@ -1421,7 +1421,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
 
 async function runAndroidCases(driver, reportDir) {
   await switchToWebView(driver);
-  await ensureAndroidConversationRoom(driver);
+  await ensureConversationRoom(driver);
 
   const results = await runSharedLiveDemoCases({
     driver,
@@ -1503,9 +1503,9 @@ async function runAndroidCases(driver, reportDir) {
 
 async function runIosCases(driver, reportDir, options) {
   await switchToWebView(driver);
-  await waitForQaBridge(driver);
+  await ensureConversationRoom(driver);
   await reloadCurrentPage(driver);
-  await waitForQaBridge(driver);
+  await ensureConversationRoom(driver);
 
   const iosSimulator = await isIosSimulator(options.iosUdid);
   const results = [];
@@ -1682,7 +1682,7 @@ async function runIosCases(driver, reportDir, options) {
         await driver.terminateApp(IOS_BUNDLE_ID);
         await driver.activateApp(IOS_BUNDLE_ID);
         await switchToWebView(driver);
-        await waitForQaBridge(driver);
+        await ensureConversationRoom(driver);
 
         const micButton = await driver.$('[data-qa="live-demo-mic-button"]');
         await micButton.click();
