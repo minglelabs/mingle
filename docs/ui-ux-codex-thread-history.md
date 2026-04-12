@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR reason slide needed paired reference visuals to show why generic translators fail**
+  Problem: The "reason" slide was text-only, so the point about UI and usage context differing by scenario was still abstract instead of immediately legible.
+  Cause: The deck had strong target-customer examples later, but this earlier bridge slide lacked concrete evidence that existing translation products ship radically different experience shapes.
+  Fix: Added a two-image comparison stack on the reason slide with matched heights, placing the chat-translation visual on the left as the front layer and the generic translator promo on the right behind it.
+  Status: Resolved in-thread.
+
 - **XR deck needed a clearer narrative bridge before the target-customer slides**
   Problem: The deck was moving from the generic solution statement straight into customer examples, which made the "why existing translators fail" logic feel under-explained.
   Cause: The narrative jump was too abrupt, so the audience could see the vertical examples before fully understanding that the core issue is context-specific product experience rather than raw translation accuracy.

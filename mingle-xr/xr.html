@@ -99,6 +99,10 @@
         max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
       }
 
+      .slide-copy--with-reason-media {
+        max-width: min(56rem, calc(100% - clamp(420px, 42vw, 660px)));
+      }
+
       .slide-copy--with-wide-side-media {
         max-width: min(980px, calc(100% - clamp(160px, 16vw, 240px)));
       }
@@ -120,6 +124,13 @@
         right: clamp(36px, 4vw, 76px);
         width: clamp(430px, 42vw, 640px);
         height: clamp(300px, 34vw, 470px);
+      }
+
+      .slide-side-media--reason {
+        top: clamp(128px, 16vh, 188px);
+        right: clamp(28px, 4vw, 76px);
+        width: clamp(500px, 46vw, 720px);
+        height: clamp(280px, 32vw, 420px);
       }
 
       .slide-collage-image {
@@ -151,6 +162,29 @@
         width: clamp(212px, 20vw, 296px);
         transform: rotate(8deg);
         z-index: 2;
+      }
+
+      .slide-reason-image {
+        position: absolute;
+        display: block;
+        height: clamp(260px, 28vw, 380px);
+        width: auto;
+        border-radius: 28px;
+        box-shadow: 0 24px 56px rgba(52, 43, 16, 0.18);
+      }
+
+      .slide-reason-image--left {
+        top: 0;
+        left: 0;
+        z-index: 3;
+        transform: rotate(-3deg);
+      }
+
+      .slide-reason-image--right {
+        top: 0;
+        right: 0;
+        z-index: 2;
+        transform: rotate(3deg);
       }
 
       .slide-kicker {
@@ -240,6 +274,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-reason-media {
+          max-width: 100%;
+        }
+
         .slide-copy--with-wide-side-media {
           max-width: 100%;
         }
@@ -254,6 +292,10 @@
         }
 
         .slide-side-media--collage {
+          display: none;
+        }
+
+        .slide-side-media--reason {
           display: none;
         }
       }
@@ -312,7 +354,7 @@
               <h1 class="slide-title">그래서 소셜링을 위한<br />
                 실시간 통번역 서비스를 만듭니다</h1>
               <p class="slide-body">
-                통번역에 대한 상황은 온오프라인을 가리지 않습니다.<br/>
+                통번역에 대한 수요는 온오프라인을 가리지 않습니다.<br/>
                 그 모든 버티컬에서 사용가능한 서비스를 만듭니다.<br/>
               </p>
             </div>
@@ -322,20 +364,38 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">그런데, 번역기는 많고 많은데<br/>왜 거의 다 별 도움이 안될까요?</h1>
+              <p class="slide-kicker">의문</p>
+              <h1 class="slide-title">그런데<br/>
+                번역기는 옛날부터 많고 많았는데<br/>
+                왜 거의 다 별 도움이 안될까요?</h1>
+                <p class="slide-body">
+                외국인과 친해지고자 할 때 ChatGPT가 큰 도움이 되나요?
+              </p>
             </div>
           </article>
         </section>
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
-              <p class="slide-kicker">이유</p>
+            <div class="slide-copy slide-copy--with-reason-media">
+              <p class="slide-kicker">저희가 찾은 이유 1</p>
               <h1 class="slide-title">상황마다 필요한 UI/UX가<br/>다 다르기 때문입니다</h1>
               <p class="slide-body">
-                즉 고객이 원하는 것은 단순한 번역이 아니라, "필요한 상황에서, 원하는
-                형태로, 끊기지 않는 통번역 경험"입니다.
+                즉 고객에게 필요한 것은 단순한 번역이 아니라<br/>
+                "필요한 상황에서, 원하는 형태로, 끊기지 않는 심리스한 경험"입니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--reason" aria-hidden="true">
+              <img
+                class="slide-reason-image slide-reason-image--left"
+                src="./assets/translator-chat-overlay.webp"
+                alt=""
+              />
+              <img
+                class="slide-reason-image slide-reason-image--right"
+                src="./assets/translator-promo-korean.png"
+                alt=""
+              />
             </div>
           </article>
         </section>
