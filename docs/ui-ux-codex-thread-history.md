@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR problem slide needed real quotation glyphs instead of inline straight quotes**
+  Problem: The problem slide's quote marks were rendered as straight ASCII quotes on their own lines, which made them read like two dots and sit awkwardly at the top and bottom edges of the title block.
+  Cause: The quotation marks were part of the headline text flow instead of being styled as independent visual punctuation.
+  Fix: Rebuilt the problem headline with dedicated open and close quote spans, switched those marks to a serif quotation style, and vertically centered them against the two-line headline block.
+  Status: Resolved in-thread.
+
 - **XR reason slide needed paired reference visuals to show why generic translators fail**
   Problem: The "reason" slide was text-only, so the point about UI and usage context differing by scenario was still abstract instead of immediately legible.
   Cause: The deck had strong target-customer examples later, but this earlier bridge slide lacked concrete evidence that existing translation products ship radically different experience shapes.

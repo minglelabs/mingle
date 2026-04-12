@@ -219,6 +219,31 @@
         text-wrap: balance;
       }
 
+      .slide-title--quoted {
+        position: relative;
+        display: inline-block;
+        padding-inline: clamp(2.8rem, 4vw, 4.6rem);
+      }
+
+      .slide-title-quote {
+        position: absolute;
+        top: 50%;
+        font-family: "Baskerville", "Times New Roman", Georgia, serif;
+        font-size: clamp(4rem, 6vw, 6.6rem);
+        font-weight: 500;
+        line-height: 1;
+        color: rgba(45, 42, 30, 0.9);
+        transform: translateY(-50%);
+      }
+
+      .slide-title-quote--open {
+        left: 0;
+      }
+
+      .slide-title-quote--close {
+        right: 0;
+      }
+
       .slide--hero .slide-title {
         font-size: clamp(4.2rem, 8vw, 8.6rem);
         font-weight: 650;
@@ -260,6 +285,14 @@
 
         .slide-title {
           font-size: clamp(2rem, 8vw, 3.2rem);
+        }
+
+        .slide-title--quoted {
+          padding-inline: 2.4rem;
+        }
+
+        .slide-title-quote {
+          font-size: clamp(3.2rem, 9vw, 4.4rem);
         }
 
         .slide--hero .slide-title {
@@ -335,14 +368,18 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
-              <p class="slide-kicker">저희가 주목한 문제</p>
-              <h1 class="slide-title">문제는 외국인과 친해지고 싶어도<br/>
-                언어 장벽을 넘기 어렵다는 점입니다</h1>
-              <p class="slide-body">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open">“</span><br/>
+                외국인과 친해지고 싶어도,<br/>
+                언어 장벽을 넘기 어렵다<br/>
+                <span class="slide-title-quote slide-title-quote--close">”</span>
+              </h1>
+              <!-- <p class="slide-body">
                 AI 기술이 빠르게 발전하고 있지만 여전히 언어 장벽은 남아 있습니다. <br/>
                 실제 대화가 끊기지 않고 통번역되는 경험은 아직 전무합니다.
-              </p>
+              </p> -->
             </div>
           </article>
         </section>
