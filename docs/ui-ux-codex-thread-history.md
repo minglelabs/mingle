@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR problem slide quotes needed to stay above and below the two-line statement**
+  Problem: Centering the quote marks on the left and right edges made the punctuation cleaner, but it broke the intended composition because the statement is visually structured as a two-line quoted block.
+  Cause: The previous refinement optimized the quote glyphs themselves, but it changed the reading pattern away from the original top-and-bottom framing the user had set.
+  Fix: Kept the improved quotation glyph styling, but moved the marks back into stacked top and bottom positions and tightened their spacing so they sit closer to the text block instead of drifting to the extremes.
+  Status: Resolved in-thread.
+
 - **XR problem slide needed real quotation glyphs instead of inline straight quotes**
   Problem: The problem slide's quote marks were rendered as straight ASCII quotes on their own lines, which made them read like two dots and sit awkwardly at the top and bottom edges of the title block.
   Cause: The quotation marks were part of the headline text flow instead of being styled as independent visual punctuation.
