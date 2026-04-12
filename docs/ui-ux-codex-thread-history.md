@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck needed slide-level alignment control once the cover and inner slides diverged**
+  Problem: The deck started needing two different horizontal compositions at once: a centered cover-style treatment for select slides and the existing left-aligned reading layout for the main body slides.
+  Cause: Alignment was effectively hardcoded into one shared copy block style, so changing the cover also changed every interior slide.
+  Fix: Added an explicit center-alignment modifier for the slide copy block while keeping left alignment as the default. This also enabled slide 1 to become a centered date cover and slide 2 to reuse the original intro content with normal title sizing.
+  Status: Resolved in-thread.
+
 - **XR presentation deck let the kicker and title start position drift by slide height**
   Problem: Even after individual kicker spacing was improved, the visible top position of the kicker and the headline still drifted between slides because the whole text block was vertically centered based on its own height.
   Cause: The slide copy container was anchored through content-height-dependent centering, so slides with more or fewer lines shifted upward or downward as a unit.

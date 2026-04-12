@@ -70,10 +70,28 @@
         display: grid;
         gap: clamp(18px, 2vw, 28px);
         max-width: min(980px, 100%);
+        justify-items: start;
         position: relative;
         --kicker-slot: clamp(36px, 3vw, 44px);
         padding-top: var(--kicker-slot);
         margin-top: clamp(188px, calc(37vh - 140px), 264px);
+        text-align: left;
+      }
+
+      .slide-copy--center {
+        justify-items: center;
+        margin-inline: auto;
+        text-align: center;
+      }
+
+      .slide-copy--center .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+        justify-items: center;
+      }
+
+      .slide-copy--center .slide-body {
+        margin-inline: auto;
       }
 
       .slide-kicker {
@@ -172,7 +190,16 @@
       <div class="track" id="deck-track">
         <section class="slide slide--hero">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">소셜 번역기 Mingle</h1>
+              <p class="slide-body">이 자료는 26년 4월 12일 제작되었습니다</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
               <h1 class="slide-title">소셜 번역기 Mingle</h1>
               <p class="slide-body">
                 Mingle은 단순 번역기가 아니라 <br/>
@@ -401,7 +428,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 18</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 19</div>
     </main>
 
     <script>
