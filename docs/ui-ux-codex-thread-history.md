@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed to use spare horizontal space without squeezing the text block**
+  Problem: The collage still felt too tightly stacked even after the hierarchy was improved, because the three images were overlapping more than necessary while visible space remained to the left of the media cluster.
+  Cause: The slide was still reserving too much width for the collage as a dense stack and too little of the surrounding whitespace as usable composition space.
+  Fix: Relaxed the special text-width constraint for that slide, widened the collage footprint itself, and moved the two rear images further left so the cluster spreads out without shrinking the text column.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed the guild visual to sit lower in the stack**
   Problem: After the guild image was promoted to the top layer and enlarged, it still sat a bit too high and crowded the upper part of the collage.
   Cause: The previous top offset preserved the original stack balance, but the larger guild card shifted too much weight into the top-right corner.
