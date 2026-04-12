@@ -919,12 +919,47 @@ async function getQaSnapshot(driver) {
   });
 }
 
+async function getConversationListQaSnapshot(driver) {
+  return await driver.execute(() => {
+    return window.__MINGLE_CONVERSATION_LIST_QA__?.getConversationListSnapshot?.() ?? null;
+  });
+}
+
 async function invokeQaMethod(driver, methodName, ...args) {
   return await driver.execute((nextMethodName, nextArgs) => {
     const qaWindow = window.__MINGLE_QA__;
     const candidate = qaWindow?.[nextMethodName];
     if (typeof candidate !== 'function') return null;
     return candidate(...nextArgs);
+  }, methodName, args);
+}
+
+async function invokeConversationListQaMethod(driver, methodName, ...args) {
+  return await driver.execute((nextMethodName, nextArgs) => {
+    const qaWindow = window.__MINGLE_CONVERSATION_LIST_QA__;
+    const candidate = qaWindow?.[nextMethodName];
+    if (typeof candidate !== 'function') return null;
+    return candidate(...nextArgs);
+  }, methodName, args);
+}
+
+async function invokeConversationListQaAsyncMethod(driver, methodName, ...args) {
+  return await driver.executeAsync((nextMethodName, nextArgs, done) => {
+    const qaWindow = window.__MINGLE_CONVERSATION_LIST_QA__;
+    const candidate = qaWindow?.[nextMethodName];
+    if (typeof candidate !== 'function') {
+      done(null);
+      return;
+    }
+
+    Promise.resolve()
+      .then(() => candidate(...nextArgs))
+      .then((result) => done(result))
+      .catch((error) => {
+        done({
+          __qaError: error instanceof Error ? error.message : String(error),
+        });
+      });
   }, methodName, args);
 }
 
@@ -941,6 +976,7 @@ async function getQaDiagnostics(driver) {
         title: document.title,
         readyState: document.readyState,
         hasQaBridge: Boolean(window.__MINGLE_QA__?.getLiveDemoSnapshot),
+        hasConversationListQaBridge: Boolean(window.__MINGLE_CONVERSATION_LIST_QA__?.getConversationListSnapshot),
         bodyPreview: bodyText.slice(0, 240),
       };
     });
@@ -951,17 +987,47 @@ async function getQaDiagnostics(driver) {
   }
 }
 
-async function waitForQaBridge(driver) {
+async function waitForQaBridge(driver, timeoutMs = 45000) {
   try {
     return await waitFor(async () => {
       const snapshot = await getQaSnapshot(driver);
       return snapshot && snapshot.routePathname ? snapshot : null;
-    }, 'the QA bridge to become available', 45000, 1000);
+    }, 'the QA bridge to become available', timeoutMs, 1000);
   } catch (error) {
     if (error instanceof Error) {
       error.details = await getQaDiagnostics(driver);
     }
     throw error;
+  }
+}
+
+async function waitForConversationListQaBridge(driver, timeoutMs = 20000) {
+  try {
+    return await waitFor(async () => {
+      const snapshot = await getConversationListQaSnapshot(driver);
+      return snapshot && snapshot.routePathname ? snapshot : null;
+    }, 'the conversation-list QA bridge to become available', timeoutMs, 1000);
+  } catch (error) {
+    if (error instanceof Error) {
+      error.details = await getQaDiagnostics(driver);
+    }
+    throw error;
+  }
+}
+
+async function ensureAndroidConversationRoom(driver) {
+  try {
+    return await waitForQaBridge(driver, 5000);
+  } catch {
+    const listSnapshot = await waitForConversationListQaBridge(driver, 30000);
+    const ensuredRoom = await invokeConversationListQaAsyncMethod(driver, 'ensureConversationRoom');
+
+    assert(ensuredRoom?.conversationId, 'The conversation-list QA bridge could not open a conversation room.', {
+      listSnapshot,
+      ensuredRoom,
+    });
+
+    return await waitForQaBridge(driver, 45000);
   }
 }
 
@@ -1043,6 +1109,7 @@ async function clickQaElement(driver, selector, description) {
 async function collectQaFailureDetails(driver, extraDetails = {}) {
   return {
     snapshot: await getQaSnapshot(driver),
+    conversationListSnapshot: await getConversationListQaSnapshot(driver),
     diagnostics: await getQaDiagnostics(driver),
     ...extraDetails,
   };
@@ -1177,7 +1244,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
     runner: async () => {
       await resetQaDemoState(driver);
       const snapshot = await waitForQaBridge(driver);
-      assert(/^\/(ko|en|ja)$/.test(snapshot.routePathname), 'The QA bridge did not hydrate a locale-scoped live-demo route.', snapshot);
+      assert(/^\/(ko|en|ja)(\/conversations)?$/.test(snapshot.routePathname), 'The QA bridge did not hydrate a locale-scoped mobile route.', snapshot);
       assert(snapshot.isNativeAppRuntime === true, 'The QA bridge did not report the native runtime.', snapshot);
       assert(snapshot.isStorageHydrated === true, 'The QA bridge did not report a hydrated UI state.', snapshot);
       return snapshot;
@@ -1354,7 +1421,7 @@ async function runSharedLiveDemoCases({ driver, reportDir, platform }) {
 
 async function runAndroidCases(driver, reportDir) {
   await switchToWebView(driver);
-  await waitForQaBridge(driver);
+  await ensureAndroidConversationRoom(driver);
 
   const results = await runSharedLiveDemoCases({
     driver,

@@ -102,6 +102,35 @@ type ConversationListWindow = Window & {
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: "unknown" | "granted" | "denied" | "prompt";
 };
 
+type ConversationListQaSnapshot = {
+  routePathname: string;
+  documentLanguage: string;
+  uiLocale: string;
+  isNativeAppRuntime: boolean;
+  isHydratingConversations: boolean;
+  conversationCount: number;
+  activeConversationId: string | null;
+  showSearch: boolean;
+  effectiveNativeTopInsetPx: number;
+  effectiveNativeBottomInsetPx: number;
+  nativeBannerLayoutPosition: "top" | "bottom" | null;
+  createButtonLabel: string;
+};
+
+type ConversationListQaEnsureRoomResult = {
+  conversationId: string;
+  action: "active" | "opened-existing" | "created";
+};
+
+declare global {
+  interface Window {
+    __MINGLE_CONVERSATION_LIST_QA__?: {
+      getConversationListSnapshot: () => ConversationListQaSnapshot;
+      ensureConversationRoom: () => Promise<ConversationListQaEnsureRoomResult>;
+    };
+  }
+}
+
 const conversationOverlayVariants: Variants = {
   initial: (transitionState: ConversationOverlayTransitionState) => (
     transitionState.enterMode === "animate"
@@ -173,6 +202,20 @@ type LegacySingleRoomSnapshot = {
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
+}
+
+function shouldExposeConversationListQaBridge(params: {
+  search: string;
+  isNativeAppRuntime: boolean;
+}): boolean {
+  if (!params.isNativeAppRuntime) return false;
+  const search = new URLSearchParams(params.search || "");
+  return (
+    search.get("qa") === "1"
+    && search.get("nativeQa") === "1"
+    && search.get("sttDebug") === "1"
+    && search.get("ttsDebug") === "1"
+  );
 }
 
 function shouldSkipCreateConversationMicWarmup(): boolean {
@@ -1990,6 +2033,49 @@ export default function ConversationList({
     return conversation;
   }, [closeSearchOverlay]);
 
+  const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
+    const currentActiveConversation = activeConversationRef.current;
+    if (currentActiveConversation?.id) {
+      return {
+        conversationId: currentActiveConversation.id,
+        action: "active",
+      };
+    }
+
+    const mostRecentConversation = conversationsRef.current[0] ?? null;
+    if (mostRecentConversation) {
+      await openConversationSummary(mostRecentConversation, { enterMode: "instant" });
+      return {
+        conversationId: mostRecentConversation.id,
+        action: "opened-existing",
+      };
+    }
+
+    const response = await fetch(buildConversationApiPath(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(),
+      },
+      body: JSON.stringify({
+        locale,
+        selectedLanguages: defaultSelectedLanguages,
+      }),
+    });
+    const nextConversation = await readConversationResponse(response);
+    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+    setConversations((current) => upsertConversation(current, nextConversation));
+    setOverlayEnterMode("instant");
+    setOverlayExitMode("animate");
+    setAutoStartConversationId(null);
+    setActiveConversation(nextConversation);
+
+    return {
+      conversationId: nextConversation.id,
+      action: "created",
+    };
+  }, [closeSearchOverlay, defaultSelectedLanguages, locale, openConversationSummary]);
+
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
 
@@ -2010,6 +2096,50 @@ export default function ConversationList({
     isCreatingConversation,
     isImportingLegacyConversation,
     openConversationSummary,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!shouldExposeConversationListQaBridge({
+      search: window.location.search,
+      isNativeAppRuntime: isNativeRuntime,
+    })) {
+      delete window.__MINGLE_CONVERSATION_LIST_QA__;
+      return;
+    }
+
+    window.__MINGLE_CONVERSATION_LIST_QA__ = {
+      getConversationListSnapshot: () => ({
+        routePathname: window.location.pathname,
+        documentLanguage: document.documentElement.lang || "",
+        uiLocale: locale,
+        isNativeAppRuntime: isNativeRuntime,
+        isHydratingConversations,
+        conversationCount: conversationsRef.current.length,
+        activeConversationId: activeConversationRef.current?.id ?? null,
+        showSearch,
+        effectiveNativeTopInsetPx,
+        effectiveNativeBottomInsetPx,
+        nativeBannerLayoutPosition: nativeBannerLayout?.position ?? null,
+        createButtonLabel: copy.newConversationButtonLabel,
+      }),
+      ensureConversationRoom: async () => await ensureConversationRoomForQa(),
+    };
+
+    return () => {
+      delete window.__MINGLE_CONVERSATION_LIST_QA__;
+    };
+  }, [
+    copy.newConversationButtonLabel,
+    effectiveNativeBottomInsetPx,
+    effectiveNativeTopInsetPx,
+    ensureConversationRoomForQa,
+    isHydratingConversations,
+    isNativeRuntime,
+    locale,
+    nativeBannerLayout?.position,
+    showSearch,
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {

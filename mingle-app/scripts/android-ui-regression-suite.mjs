@@ -162,7 +162,7 @@ const VITEST_TARGETS = [
 
 const APPIUM_CASE_METADATA = {
   'qa-bridge-hydrates-live-demo': {
-    title: 'Android live-demo QA bridge hydrates a locale-scoped route on a real device',
+    title: 'Android QA bridge hydrates the native conversation surface on a real device',
     issueAtoms: ['2026-real-device#1', '2026-real-device#2'],
   },
   'banner-position-updates-insets': {
