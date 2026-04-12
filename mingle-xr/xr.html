@@ -198,6 +198,7 @@
       let activeIndex = 1;
       let isAnimating = false;
       let wheelLock = false;
+      let restoreTransitionFrame = null;
 
       function realSlideNumber(index) {
         if (index === 0) {
@@ -218,6 +219,25 @@
         track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
       }
 
+      function jumpToIndex(index) {
+        if (restoreTransitionFrame !== null) {
+          window.cancelAnimationFrame(restoreTransitionFrame);
+          restoreTransitionFrame = null;
+        }
+
+        activeIndex = index;
+        track.style.transition = "none";
+        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
+
+        // Force layout so the browser commits the jump before transition is restored.
+        void track.offsetWidth;
+
+        restoreTransitionFrame = window.requestAnimationFrame(() => {
+          track.style.transition = "transform var(--slide-duration) var(--slide-ease)";
+          restoreTransitionFrame = null;
+        });
+      }
+
       function updateUi() {
         allSlides.forEach((slide, index) => {
           const isActive = index === activeIndex;
@@ -232,19 +252,13 @@
 
       function finishAnimation() {
         if (activeIndex === 0) {
-          activeIndex = slideCount;
-          syncPosition(false);
+          jumpToIndex(slideCount);
         } else if (activeIndex === slideCount + 1) {
-          activeIndex = 1;
-          syncPosition(false);
+          jumpToIndex(1);
         }
 
         updateUi();
         isAnimating = false;
-
-        requestAnimationFrame(() => {
-          track.style.transition = "transform var(--slide-duration) var(--slide-ease)";
-        });
       }
 
       function move(step) {
@@ -266,7 +280,13 @@
         move(-1);
       }
 
-      track.addEventListener("transitionend", finishAnimation);
+      track.addEventListener("transitionend", (event) => {
+        if (event.target !== track || event.propertyName !== "transform") {
+          return;
+        }
+
+        finishAnimation();
+      });
 
       window.addEventListener("resize", () => {
         syncPosition(false);

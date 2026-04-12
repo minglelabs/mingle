@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck could occasionally sweep backward at the loop boundary**
+  Problem: Repeatedly advancing in one direction sometimes caused the deck to perform a long reverse-looking slide when wrapping from the cloned edge slide back to the real slide. That broke the illusion of a true infinite carousel.
+  Cause: The loop-reset path changed `transition` and `transform` too close together, so the browser could occasionally animate the reposition jump instead of treating it as an invisible reset.
+  Fix: Added a dedicated jump helper that disables transition, forces layout commit, repositions to the real slide, and only then restores transform animation. The transition-end listener was also narrowed to the track's own `transform` event.
+  Status: Resolved in-thread.
+
 - **XR presentation deck lost slide-number orientation while being simplified**
   Problem: During the cleanup toward a lighter, non-card layout, the slide counter disappeared entirely. That made the deck cleaner, but it also removed the presenter's quick sense of where they were in the sequence.
   Cause: The simplification pass removed the old deck UI wholesale, including the page counter, instead of preserving the one piece of orientation chrome that was still useful.
