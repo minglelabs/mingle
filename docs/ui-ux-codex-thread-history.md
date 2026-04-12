@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck needed a stable title baseline whether a kicker exists or not**
+  Problem: Once the optional kicker was introduced, slides with a kicker pushed the title lower than slides without one, and the whole text block also sat a bit too low on the page.
+  Cause: The kicker still occupied normal layout space above the title, so title placement changed depending on whether that element existed.
+  Fix: Turned the kicker into an absolute positioned overlay within a reserved top slot and nudged the overall copy block slightly upward. Titles now start from nearly the same vertical position whether a kicker is present or not.
+  Status: Resolved in-thread.
+
 - **XR cover title became too heavy after the hierarchy split**
   Problem: The larger first-slide title gained enough scale, but its heavier weight made the cover feel denser than intended.
   Cause: The hero title inherited an extra-bold weight in the hierarchy pass instead of only separating itself through size.

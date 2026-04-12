@@ -70,9 +70,15 @@
         display: grid;
         gap: clamp(18px, 2vw, 28px);
         max-width: min(980px, 100%);
+        position: relative;
+        padding-top: clamp(26px, 2.4vw, 34px);
+        transform: translateY(-14px);
       }
 
       .slide-kicker {
+        position: absolute;
+        top: 0;
+        left: 0;
         margin: 0;
         display: inline-grid;
         gap: 10px;
@@ -132,6 +138,11 @@
       @media (max-width: 900px) {
         .slide-shell {
           padding: 28px;
+        }
+
+        .slide-copy {
+          padding-top: 24px;
+          transform: translateY(-10px);
         }
 
         .slide-title {
