@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck lost slide-number orientation while being simplified**
+  Problem: During the cleanup toward a lighter, non-card layout, the slide counter disappeared entirely. That made the deck cleaner, but it also removed the presenter's quick sense of where they were in the sequence.
+  Cause: The simplification pass removed the old deck UI wholesale, including the page counter, instead of preserving the one piece of orientation chrome that was still useful.
+  Fix: Restored a minimal page counter as plain text only, placed unobtrusively at the bottom-right without reintroducing a card, badge, or boxed control treatment.
+  Status: Resolved in-thread.
+
 - **XR presentation deck still felt too dark and card-like after adopting the Mingle palette**
   Problem: Even after the deck picked up Mingle's warm key colors, it still rendered as a dark card floating over a separate outer background. That contradicted the requested direction for a lighter, cleaner relations deck built from white space plus brand color, with dark tones used only for text.
   Cause: The prior pass only swapped palette values and kept the card container, inner panel fill, border, and shadow structure intact.

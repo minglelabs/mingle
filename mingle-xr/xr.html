@@ -91,6 +91,19 @@
         text-wrap: pretty;
       }
 
+      .page-counter {
+        position: fixed;
+        right: clamp(24px, 4vw, 44px);
+        bottom: clamp(20px, 3vw, 36px);
+        z-index: 2;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: rgba(45, 42, 30, 0.52);
+        text-transform: uppercase;
+        user-select: none;
+      }
+
       @media (max-width: 900px) {
         .slide-shell {
           padding: 28px;
@@ -164,10 +177,12 @@
           </article>
         </section>
       </div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 04</div>
     </main>
 
     <script>
       const track = document.getElementById("deck-track");
+      const pageCounter = document.getElementById("page-counter");
       const baseSlides = Array.from(track.querySelectorAll(".slide"));
       const slideCount = baseSlides.length;
 
@@ -184,6 +199,18 @@
       let isAnimating = false;
       let wheelLock = false;
 
+      function realSlideNumber(index) {
+        if (index === 0) {
+          return slideCount;
+        }
+
+        if (index === slideCount + 1) {
+          return 1;
+        }
+
+        return index;
+      }
+
       function syncPosition(useTransition) {
         track.style.transition = useTransition
           ? "transform var(--slide-duration) var(--slide-ease)"
@@ -197,6 +224,10 @@
           slide.classList.toggle("is-active", isActive);
           slide.setAttribute("aria-hidden", String(!isActive));
         });
+
+        const currentNumber = String(realSlideNumber(activeIndex)).padStart(2, "0");
+        const totalNumber = String(slideCount).padStart(2, "0");
+        pageCounter.textContent = `${currentNumber} / ${totalNumber}`;
       }
 
       function finishAnimation() {
