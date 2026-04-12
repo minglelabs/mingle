@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { ChevronDown } from 'lucide-react'
 import { languages } from '@/lib/i18n'
 import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'

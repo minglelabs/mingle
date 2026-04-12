@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { PRIMARY_UI_LOCALES } from '../shared/i18n/mingle-locales'
 
-const locales = ['en', 'ko', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi']
 const versions = ['normal', 'flirting', 'working', 'gaming'] // 지원하는 버전 목록
 const defaultVersion = 'normal'
+const localeSet = new Set(PRIMARY_UI_LOCALES)
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
@@ -27,7 +28,7 @@ export function middleware(request: NextRequest) {
   // Case 2: /[version] (예: /normal, /flirting)
   if (versions.includes(first)) {
     // /normal 또는 /normal/ko 형태
-    if (second && locales.includes(second)) {
+    if (second && localeSet.has(second as (typeof PRIMARY_UI_LOCALES)[number])) {
       // /normal/ko -> 그대로 서빙
       return NextResponse.next()
     }
@@ -37,7 +38,7 @@ export function middleware(request: NextRequest) {
 
   // Case 3: /[locale] (예: /ko, /ja) - 이전 URL 호환
   // 기존 /ko 링크는 /normal/ko로 rewrite
-  if (locales.includes(first)) {
+  if (localeSet.has(first as (typeof PRIMARY_UI_LOCALES)[number])) {
     const newPath = second 
       ? `/${defaultVersion}/${first}/${segments.slice(1).join('/')}`
       : `/${defaultVersion}/${first}`

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { X, Download, Check } from 'lucide-react'
 import { getUserInfo } from '@/components/sections/tracking'
 import { buildLandingApiPath } from '@/lib/api-contract'

@@ -315,8 +315,14 @@ export async function createTrackedEventLog(args: {
 
   await prisma.appEventLog.create({
     data: {
-      userId,
-      messageId: args.messageId ?? undefined,
+      user: {
+        connect: { id: userId },
+      },
+      ...(args.messageId ? {
+        message: {
+          connect: { id: args.messageId },
+        },
+      } : {}),
       sessionKey: args.sessionKey ?? tracking.sessionKey,
       eventType: args.eventType,
       ipAddress: tracking.ipAddress ?? undefined,

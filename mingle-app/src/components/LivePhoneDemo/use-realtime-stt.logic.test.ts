@@ -20,7 +20,9 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
@@ -120,6 +122,48 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(getOrCreateTrackingUserId()).toBe('anon_existing_user')
     expect(localStorage.getItem('mingle_demo_tracking_user_id')).toBe('anon_existing_user')
+  })
+
+  it('removes persisted utterances from localStorage when the next snapshot is empty', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_utterances: '[{"id":"old"}]',
+      mingle_demo_usage_sec: '42',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBeNull()
+    expect(localStorage.getItem('mingle_demo_usage_sec')).toBe('42')
+  })
+
+  it('persists utterances to localStorage when the snapshot is not empty', () => {
+    const localStorage = createLocalStorageMock()
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ])
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe(JSON.stringify([
+      {
+        id: 'u-1-1',
+        originalText: 'hello',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '안녕하세요',
+        },
+      },
+    ]))
   })
 
   it('parses transcript message payload and normalizes text', () => {
@@ -264,7 +308,19 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('none')
   })
 
-  it('opens native mic settings only for idle native iOS denial recovery', () => {
+  it('keeps cached Android microphone denials on the in-app retry path', () => {
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'android/v1.1.0',
+      permission: 'denied',
+    })).toBe('none')
+
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'ios/v1.1.0',
+      permission: 'denied',
+    })).toBe('open_ios_settings')
+  })
+
+  it('opens native mic settings only after iOS denial recovery returns to idle', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
@@ -282,6 +338,13 @@ describe('use-realtime-stt pure logic', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'connecting',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
+    })).toBe(false)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'error',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: true,
     })).toBe(false)
@@ -324,11 +387,21 @@ describe('use-realtime-stt pure logic', () => {
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'running',
       previousConnectionStatus: 'idle',
-    })).toBe('ready')
+    })).toBe('connecting')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'silenced',
       previousConnectionStatus: 'idle',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'ready',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'silenced',
+      previousConnectionStatus: 'ready',
     })).toBe('ready')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({

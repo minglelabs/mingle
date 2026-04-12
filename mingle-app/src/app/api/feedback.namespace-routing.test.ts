@@ -16,7 +16,11 @@ import {
 import {
   GET as getAndroidV110Feedback,
   POST as postAndroidV110Feedback,
-} from '@/app/api/android/v1.0.10/feedback/route'
+} from '@/app/api/android/v1.0.11/feedback/route'
+import {
+  GET as getAndroidV1100Feedback,
+  POST as postAndroidV1100Feedback,
+} from '@/app/api/android/v1.1.0/feedback/route'
 import {
   GET as getIosV107Feedback,
   POST as postIosV107Feedback,
@@ -32,7 +36,11 @@ import {
 import {
   GET as getIosV110Feedback,
   POST as postIosV110Feedback,
-} from '@/app/api/ios/v1.0.10/feedback/route'
+} from '@/app/api/ios/v1.0.11/feedback/route'
+import {
+  GET as getIosV1100Feedback,
+  POST as postIosV1100Feedback,
+} from '@/app/api/ios/v1.1.0/feedback/route'
 
 describe('feedback namespace route wiring', () => {
   it('maps Android feedback aliases to the shared feedback route', () => {
@@ -44,6 +52,8 @@ describe('feedback namespace route wiring', () => {
     expect(postAndroidV109Feedback).toBe(postFeedback)
     expect(getAndroidV110Feedback).toBe(getFeedback)
     expect(postAndroidV110Feedback).toBe(postFeedback)
+    expect(getAndroidV1100Feedback).toBe(getFeedback)
+    expect(postAndroidV1100Feedback).toBe(postFeedback)
   })
 
   it('maps iOS feedback aliases to the shared feedback route', () => {
@@ -55,5 +65,7 @@ describe('feedback namespace route wiring', () => {
     expect(postIosV109Feedback).toBe(postFeedback)
     expect(getIosV110Feedback).toBe(getFeedback)
     expect(postIosV110Feedback).toBe(postFeedback)
+    expect(getIosV1100Feedback).toBe(getFeedback)
+    expect(postIosV1100Feedback).toBe(postFeedback)
   })
 })

@@ -1,8 +1,10 @@
 import {
+  DEFAULT_LOCALE,
   resolveLegalDocumentLocale,
+  resolveSupportedLocaleTag,
   type AppLocale,
   type LegalDocumentLocale,
-} from "@/i18n";
+} from "@/i18n/config";
 
 export type SilenceSliderUpgradeCopy = {
   message: string;
@@ -73,8 +75,11 @@ const SILENCE_SLIDER_UPGRADE_COPY = {
 } satisfies Record<LegalDocumentLocale, SilenceSliderUpgradeCopy>;
 
 export function getSilenceSliderUpgradeCopy(
-  locale: AppLocale,
+  locale: AppLocale | string,
 ): SilenceSliderUpgradeCopy {
-  const resolvedLocale = resolveLegalDocumentLocale(locale);
+  const supportedLocale = typeof locale === "string"
+    ? (resolveSupportedLocaleTag(locale) ?? DEFAULT_LOCALE)
+    : locale;
+  const resolvedLocale = resolveLegalDocumentLocale(supportedLocale);
   return SILENCE_SLIDER_UPGRADE_COPY[resolvedLocale] ?? SILENCE_SLIDER_UPGRADE_COPY.en;
 }
