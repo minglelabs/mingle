@@ -313,7 +313,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = mingle/Info.plist;
@@ -322,8 +322,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.11;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.11;
+				MARKETING_VERSION = 1.1.0;
+				MINGLE_LEGACY_SITE_URL = "https://mingle-app-xi.vercel.app";
+				MINGLE_LEGACY_WS_URL = "wss://mingle.up.railway.app";
+				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.0;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
@@ -357,7 +359,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = mingle/mingle.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 43;
+				CURRENT_PROJECT_VERSION = 46;
 				DEVELOPMENT_TEAM = 3RFBMN8TKZ;
 				INFOPLIST_FILE = mingle/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -365,8 +367,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.11;
-				NEXT_PUBLIC_API_NAMESPACE = ios/v1.0.11;
+				MARKETING_VERSION = 1.1.0;
+				MINGLE_LEGACY_SITE_URL = "https://mingle-app-xi.vercel.app";
+				MINGLE_LEGACY_WS_URL = "wss://mingle.up.railway.app";
+				NEXT_PUBLIC_API_NAMESPACE = ios/v1.1.0;
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;

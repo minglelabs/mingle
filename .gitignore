@@ -50,8 +50,10 @@ next-env.d.ts
 
 .claude/
 .codex/
+.omc/
 .worktrees/
 .credentials/
+/.watchman-cookie-*
 
 # mingle-ios build artifacts
 mingle-ios/.derived-data-simulator/

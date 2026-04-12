@@ -3,7 +3,7 @@ import {
   resolveLegalDocumentLocale,
   resolveSupportedLocaleTag,
   type LegalDocumentLocale,
-} from '@/i18n'
+} from '@/i18n/config'
 
 export type LivePhoneDemoCopyActionCopy = {
   copyBubbleLabel: string

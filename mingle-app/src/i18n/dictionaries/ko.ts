@@ -1,6 +1,6 @@
-import type { AppDictionary } from "@/i18n/types";
+import type { BaseAppDictionarySource } from "@/i18n/types";
 
-export const koDictionary: AppDictionary = {
+export const koDictionary: BaseAppDictionarySource = {
   demo: {
     tapPlayToStart: "재생 버튼을 눌러 시작하세요",
     usageLimitReached: "사용 한도에 도달했습니다",

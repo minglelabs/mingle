@@ -11,6 +11,15 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
+function buildVisibleMessageWhere() {
+  return {
+    OR: [
+      { isDeleted: false },
+      { isDeleted: null },
+    ],
+  } as const;
+}
+
 type SessionUserIdentity = {
   id: string;
   email: string;
@@ -124,7 +133,11 @@ function buildConversationHistoryClearedEventData(args: {
   clientClearedAtMs: number
 }) {
   return {
-    userId: args.userId,
+    ...(args.userId ? {
+      user: {
+        connect: { id: args.userId },
+      },
+    } : {}),
     sessionKey: args.sessionKey,
     eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
     metadata: buildConversationHistoryClearedMetadata(args.clientClearedAtMs),
@@ -179,8 +192,10 @@ export async function DELETE(request: Request) {
 
     const messages = await prisma.appMessage.findMany({
       where: {
-        OR: ownerFilters,
-        isDeleted: { not: true },
+        AND: [
+          { OR: ownerFilters },
+          buildVisibleMessageWhere(),
+        ],
       },
       select: {
         id: true,

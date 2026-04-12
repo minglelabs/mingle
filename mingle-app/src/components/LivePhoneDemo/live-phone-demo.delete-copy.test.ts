@@ -5,20 +5,20 @@ import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.de
 describe('live-phone-demo.delete-copy', () => {
   it('resolves Korean delete copy from a regional locale tag', () => {
     const copy = resolveLivePhoneDemoConversationDeleteCopy('ko-KR')
-    expect(copy.menuItemLabel).toBe('대화 전체 삭제')
+    expect(copy.menuItemLabel).toBe('대화방 삭제')
     expect(copy.dialogMessage).toBe('삭제하시겠습니까?')
-    expect(copy.successToastLabel).toBe('대화가 전체 삭제되었습니다.')
+    expect(copy.successToastLabel).toBe('대화방이 삭제되었습니다.')
   })
 
   it('resolves Traditional Chinese delete copy from a locale alias', () => {
     const copy = resolveLivePhoneDemoConversationDeleteCopy('zh-Hant-HK')
-    expect(copy.menuItemLabel).toBe('刪除全部對話')
+    expect(copy.menuItemLabel).toBe('刪除對話房間')
     expect(copy.confirmLabel).toBe('刪除')
   })
 
   it('falls back to English for unsupported translated locales', () => {
     const copy = resolveLivePhoneDemoConversationDeleteCopy('sv-SE')
-    expect(copy.menuItemLabel).toBe('Delete all conversation messages')
+    expect(copy.menuItemLabel).toBe('Delete')
     expect(copy.confirmLabel).toBe('Delete')
   })
 

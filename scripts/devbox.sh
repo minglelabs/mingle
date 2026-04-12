@@ -13,8 +13,8 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.0.11"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.0.11"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.0"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.0"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -149,6 +149,12 @@ die() {
   printf '[devbox] %s\n' "$*" >&2
   exit 1
 }
+
+cleanup_watchman_cookie_files() {
+  find "$ROOT_DIR" -maxdepth 1 -type f -name '.watchman-cookie-*' -delete 2>/dev/null || true
+}
+
+trap cleanup_watchman_cookie_files EXIT
 
 require_nonempty_runtime_value() {
   local key="$1"
@@ -1983,10 +1989,8 @@ write_rn_ios_runtime_xcconfig() {
   local xcconfig_admob_banner_unit_id_ios=""
   escaped_site_url="${escaped_site_url//\\/\\\\}"
   escaped_site_url="${escaped_site_url//\"/\\\"}"
-  escaped_site_url="${escaped_site_url//\//\\/}"
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
-  escaped_ws_url="${escaped_ws_url//\//\\/}"
   ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"

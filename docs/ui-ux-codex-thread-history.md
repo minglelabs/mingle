@@ -1,12 +1,35 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-11 Ongoing Dev Validation Notes
+
+- **Legacy bottom mic could render in the tiny composer size after hydration**
+  Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
+  Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
+  Fix: Removed the shared `layoutId` bridge between the composer/default mic shell and keyboard toggle in both legacy `1.0.11` and `1.1.0` web runtimes. This keeps the hydration swap discrete instead of animating between incompatible layouts.
+  Status: Resolved in-thread.
+
+- **Ngrok interstitial can masquerade as a layout regression on mobile WebView**
+  Problem: When device builds pointed at a free ngrok tunnel, the RN WebView could render ngrok's anti-abuse warning page instead of the app. On Android this looked like the 1.0.11 microphone/footer UI had suddenly shrunk or changed, even though the app screen was never reached.
+  Fix: Native WebView requests now add `ngrok-skip-browser-warning: true` for `*.ngrok-free.dev` and `*.ngrok-free.app` URLs so local mobile validation reaches the actual app surface.
+  Status: Resolved in-thread.
+
+- **Android conversation list could get stuck because RN treated total history length as active back availability**
+  Problem: The RN WebView bridge reported `canGoBack` from `window.history.length > 1`, which is not the same as “the current entry has a backward target.” After opening a room and returning to the list with `history.back()`, Android hardware back could still be consumed by the WebView even though web history was already at the first entry, leaving the user stuck on the conversation list.
+  Fix: The native navigation bridge now stamps a synthetic per-entry history index into `history.state` and derives `canGoBack` from the current index instead of total history length.
+  Status: Resolved in-thread.
+
+- **Conversation-list search initially ignored Android OS back and iOS edge-swipe history**
+  Problem: The search UI in the conversation list was only a local `showSearch` state with no dedicated history entry. On Android, pressing OS back while search was open could fall through to app exit instead of closing just the search drawer. On iOS, the same search surface had no real edge-swipe back/forward path and risked reproducing the room-menu replay glitches if a multi-depth history stack was copied over too literally.
+  Fix: Search now uses a single dedicated history state (`list <-> search`) instead of a local-only flag. Android native back consumes that entry and closes only the search drawer, while iOS popstate synchronization restores or dismisses search instantly to match native history snapshots without reusing the room menu's deeper stack logic.
+  Status: Resolved in-thread.
+
 ## Scope
 
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
 - Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 90.
+- Total standalone UI/UX issue atoms documented in this file: 125.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
 - Sessions with no UI/UX issue found: 224.
@@ -19,7 +42,7 @@
 
 - Thread focus: Phase 1 multi-conversation rooms on web/API/DB first, followed by a long chain of multi-room UI/UX fixes.
 - High-level verdict: this thread absolutely contained many separate UI/UX issues. It should not have been collapsed into one line item.
-- Issue atoms currently listed for this thread: 45.
+- Issue atoms currently listed for this thread: 78.
 
 1. **The conversation-list header box was taller than the intended reference**
    Problem: `nativeTopInsetPx` was being added to the header box itself, so the list header looked larger than the older `bottom-tabs` chrome it was supposed to match.
@@ -245,6 +268,171 @@
    Problem: Even after pre-hide work, the banner could linger during the active interactive swipe because RN/WebView did not receive the gesture-start timing early enough.
    Attempted fix: The app already pre-hid as early as available and RN tried to infer the target zone from URL changes.
    Status: Not clearly solvable in-thread. Marked as unresolved structural limitation in the captured session.
+
+46. **iOS `/conversations` could enter a “nothing responds” state because WebView touch handling was internally deadlocked**
+   Problem: Later in the thread, the room/list surface could stop responding to taps entirely on iPhone. In the worst case, the user could tap conversation rows and other controls and nothing at all would happen. This was eventually traced to an RN-side WKWebView interaction rather than a web button-state issue.
+   Attempted fix: The real regression was that `allowsBackForwardNavigationGestures` had been changed to unconditional iOS enablement at the same time that `/conversations` pages were still using `scrollEnabled={false}`. On iOS WKWebView, that combination let the underlying `UIScrollView` pan recognizer steal interaction in a way that made the web content feel untouchable. The thread later corrected this by gating `allowsBackForwardNavigationGestures` behind `!shouldDisableIosScroll` for those routes, while also fixing a cleanup omission in the legacy-import path.
+   Status: Resolved in-thread once the RN gesture/scroll conflict was documented and reversed.
+
+47. **Conversation rows could still log a route change without actually showing the room UI**
+   Problem: Separate from the full touch-deadlock case, there was also a softer failure mode where tapping a room clearly triggered navigation work — server logs showed `/[locale]/conversations?...&conversation=<id>` requests and room GET calls returning `200` — but the visible screen never changed. The user described this as “touch logs appear but the screen does not move.”
+   Attempted fix: Multiple hypotheses were tried in-thread because the failure looked like a presentation-layer regression rather than an API failure. These included: allowing room-open even while room status PATCHes were pending, forcing room entry to `instant`, reverting the move of auto-start logic from `mingle-home` into `LivePhoneDemo`, restoring query-based room open on first render, removing/reverting cold-start last-view restoration, and switching between `document.body` portal rendering and inline overlay rendering for the room surface. None of those attempts was treated as a final, clearly verified root-cause fix in the captured session.
+   Status: Not conclusively resolved in-thread. The issue was important enough that the thread explicitly requested it be written down as a separate class of room-open regression, distinct from the pure iOS touch-deadlock above.
+
+48. **iOS permission denial on `Start Conversation!` could still create a room and immediately strand it in `Connecting...`**
+   Problem: The desired UX became “create the room, but do not auto-start STT if the initial iOS mic request was denied.” Instead, the room could still enter a visible `Connecting...` state and just sit there until the user manually backed out.
+   Attempted fix: The create-room flow was changed so iOS native mic denial short-circuits auto-start, letting the room be created without pretending STT is actively connecting.
+   Status: Resolved in-thread after follow-up permission-flow passes.
+
+49. **After an iOS denial, the first explicit `Start` retry did not reliably open Settings**
+   Problem: Once the user had denied microphone permission, re-entering the room and pressing `Start` was supposed to jump directly to the iOS Settings screen on the first retry. Instead, one pass left the room flashing or entering `Connecting...` once, and Settings opened only on a later interaction.
+   Attempted fix: The thread cached the last native mic-permission outcome and reused it when re-entering rooms, so an already-denied state could trigger the Settings redirect immediately instead of burning the first retry tap.
+   Status: Resolved in-thread after native permission caching was added and then refined.
+
+50. **A hidden WebView site-level mic prompt appeared inside the native app**
+   Problem: Even though the native app already owned microphone permission, `Start Conversation!` could still trigger a web-origin mic prompt (`Allow "...photo-for-passport.com" to use your microphone?`) from the embedded WebView. This was confusing and wrong for the intended native UX.
+   Attempted fix: The room-creation warm-up path stopped calling `getUserMedia()` for native iOS/Android runtimes, so native permission stayed the only source of truth and the site-origin prompt stopped appearing.
+   Status: Resolved in-thread.
+
+51. **Web warm-up denial state and native denial state could drift apart**
+   Problem: When denial happened through the warm-up path before the room UI was visible, the room-level `Start` logic did not always inherit that denial. This created a split-brain state where the room thought it should connect, while the earlier create-room flow had already learned that mic permission was denied.
+   Attempted fix: The denial result from the create-room warm-up path was explicitly written into the same last-known native permission channel consumed by the room STT hook.
+   Status: Resolved in-thread.
+
+52. **STT could be truly running while the room UI stayed stuck in `Connecting...`**
+   Problem: Later in the thread, the user found that `Connecting...` could remain on-screen even when STT was actually active. Evidence included server-side STT connection logs and, after navigating away and back, a red running button and working transcript ingestion.
+   Attempted fix: Multiple state-reconciliation passes were added so the current room could recover native STT ownership on remount, re-read cached native status while connecting, and promote itself out of `connecting` when the native/runtime state proved STT was already alive.
+   Status: Resolved in-thread after several iterations.
+
+53. **The first STT server connection could be blocked until an unrelated user gesture**
+   Problem: In one particularly confusing version of the bug, the STT server did not log a client connection until the user hit back or otherwise interacted again. This made it look like “the room is stuck,” even though the actual cause was a blocked async step in the front-end start pipeline.
+   Attempted fix: The thread found that `primeAudioPlayback()` was being awaited before STT start, and on iOS/WebView that promise could stall waiting for a user gesture. The fix moved TTS priming to the background so the STT websocket start could happen immediately.
+   Status: Resolved in-thread.
+
+54. **Leaving a still-running room did not immediately update the list badge to `대화중`**
+   Problem: The list badge for the live room sometimes remained stale after backing out of a room. The user could see that STT was active only after re-entering the room, at which point the red running button appeared and only then did the list eventually update to `대화중`.
+   Attempted fix: Parent summary updates were made more eager, and the room/list ownership recovery path was expanded so the list could learn about the live owner even if the visible room UI had just unmounted.
+   Status: Resolved in-thread after the later state-sync passes.
+
+55. **The `Connecting...` overlay oscillated rapidly even while transcript text was already arriving**
+   Problem: One later regression produced especially bad UX: the room would show `Connecting...`, words would begin arriving, and the overlay would flash on and off many times over the first few seconds. The user described it as the overlay appearing and disappearing more than twenty times while speech was already being recognized.
+   Attempted fix: The native `running/silenced` statuses were kept in `connecting` only until the first real server-ready or transcript activity, and once the room reached `ready`, later repeated native running statuses were prevented from downgrading it back to `connecting`.
+   Status: Resolved in-thread.
+
+56. **The room-rename dialog sat too low and could be covered by the keyboard**
+   Problem: Both the in-room rename dialog and the conversation-list rename dialog initially rendered around the vertical center of the screen. On iPhone, opening the keyboard could partially cover the field and action buttons.
+   Attempted fix: The dialogs were moved to a safe-area-aware top offset instead of center alignment, and both implementations were normalized to use the same upper placement model.
+   Status: Resolved in-thread after multiple follow-up passes.
+
+57. **The first rename-dialog positioning fix was misleading because only one of the two dialogs actually moved**
+   Problem: One pass moved the in-room dialog but left the list-side dialog centered, so the user kept reporting “the rename modal is still too low” even though one implementation had changed.
+   Attempted fix: The list rename modal and the room rename modal were both audited and then moved together so they shared the same top anchoring behavior.
+   Status: Resolved in-thread.
+
+58. **Long-pressing a conversation row selected text instead of cleanly showing the room-actions tooltip**
+   Problem: On the conversation list, a long press could trigger iOS-style text selection on the preview/time labels, producing blue text-selection affordances that fought the intended room-action menu.
+   Attempted fix: User-select and touch-callout behavior were disabled on the room rows so long press opens the room-actions tooltip without text-selection chrome.
+   Status: Resolved in-thread.
+
+59. **Long-pressing a room avatar could open image-preview behavior instead of room actions**
+   Problem: The avatar image on a conversation row still behaved like a draggable/previewable image on iOS, so long-pressing it could surface image preview behavior rather than the intended room-action tooltip.
+   Attempted fix: Drag/image-preview behavior was disabled on the list avatars so long press remains dedicated to room actions.
+   Status: Resolved in-thread.
+
+60. **The room-delete action from the conversation list initially failed with `405 Method Not Allowed`**
+   Problem: The UI exposed room deletion from the list, but versioned `/api/ios/.../conversations/:id` and `/api/android/.../conversations/:id` routes were not exporting `DELETE`, so the visible action failed immediately for users.
+   Attempted fix: `DELETE` was added to the versioned iOS/Android conversation-detail routes and controllers so room deletion used the same soft-delete API through namespace-specific endpoints.
+   Status: Resolved in-thread.
+
+61. **Freshly created rooms could immediately 404 on follow-up GET/PATCH calls**
+   Problem: A newly created room could appear to exist for one moment and then fail hydration/status requests because `is_deleted = NULL` rows were being filtered out as if they were deleted. This created visible “room not found” behavior right after room creation.
+   Attempted fix: Conversation queries were changed to treat `is_deleted = NULL` the same as `false`, so newly created rooms remain queryable until explicitly soft-deleted.
+   Status: Resolved in-thread.
+
+62. **Deleting a live room from the list could revive the room or leave behind an empty shell**
+   Problem: When STT was still active or just winding down, room deletion could race against live-state PATCHes and room-summary upserts. The user could see the room disappear and then reappear as a blank/initial-looking room, often accompanied by 404s.
+   Attempted fix: Deleting-room IDs were tracked explicitly, running-state PATCHes were suppressed for deleting rooms, and delete success removed the room from all live/list state immediately instead of allowing later upserts to resurrect it.
+   Status: Resolved in-thread after several passes.
+
+63. **Pending STT finalization after delete could still write into a deleted room**
+   Problem: Even after STT stopped, a pending finalization/translation turn could land after deletion and touch the just-deleted room again. This produced confusing server 404s and visible “why is this room still here?” moments.
+   Attempted fix: A dedicated `prepareForDeletion()` path was added so pending turns and in-flight finalization work are discarded before the delete completes.
+   Status: Resolved in-thread.
+
+64. **Live-room deletion could surface a failure alert even when the room was already gone**
+   Problem: The room visually disappeared, but a late `PATCH 404` or `DELETE 404` could still bubble up as `대화방을 삭제하지 못했습니다`, making the user think the delete had failed even though the room was already removed.
+   Attempted fix: Late 404s that happen during or after confirmed deletion were treated as benign and no longer surfaced as a user-facing failure.
+   Status: Resolved in-thread.
+
+65. **The room-management menu briefly flashed the feedback screen while opening**
+   Problem: The submenu carousel was implemented as `root -> feedback -> room management` on a shared three-panel strip. Jumping from the root menu to room management animated across the middle panel, making the feedback page flash by for a frame.
+   Attempted fix: Direct root-to-room-management navigation now uses an instant screen transition instead of visibly sliding through the feedback panel.
+   Status: Resolved in-thread.
+
+66. **Global success/error toasts appeared too low and did not match the in-room toast style**
+   Problem: Several user-facing messages such as room-delete success/failure and STT failure surfaced through a bottom-edge toast style that sat much lower than the in-room `Connecting...` or `Copied` toasts, making the feedback feel visually inconsistent.
+   Attempted fix: The global toast stack was moved into the same visual lane and design language as the in-room toast treatment.
+   Status: Resolved in-thread.
+
+67. **Conversation-list action tooltips chose the wrong vertical direction near the top of the screen**
+   Problem: Only the very first row opened its tooltip downward. Rows slightly lower in the upper part of the list still opened upward, which felt wrong and cramped near the top header area.
+   Attempted fix: The positioning rule was expanded so conversation rows in roughly the top 40% of the list viewport also open their tooltip downward.
+   Status: Resolved in-thread.
+
+68. **Android OS back skipped the menu subpage stack and closed the room**
+   Problem: When the hamburger menu was on `Feedback` or `Conversation Management`, Android hardware back did not close the submenu first. It fell through to the room-close handler, so the user was dumped back to the conversation list instead of stepping back inside the menu.
+   Attempted fix: A higher-priority native back handler was registered inside the room menu so submenu/modals/dropdowns consume Android back before the room overlay does.
+   Status: Resolved in-thread.
+
+69. **Opening feedback from Android 1.1.0 hit a 404**
+   Problem: The UI exposed the feedback page from the hamburger menu, but `/api/android/v1.1.0/feedback` and `/api/ios/v1.1.0/feedback` were missing, so entering the page could immediately fail with a 404 and an apparently broken empty state.
+   Attempted fix: Versioned `feedback` route aliases were added for API `v1.1.0` on both Android and iOS, and the namespace routing contract test was expanded.
+   Status: Resolved in-thread.
+
+70. **iOS submenu transitions became unnaturally fast and snap-like**
+   Problem: After the menu tree refactor, entering and especially leaving `Feedback`/`Conversation Management` felt too fast, with the close transition appearing half-smooth and then disappearing abruptly.
+   Attempted fix: Menu subpage timing and back-direction animation handling were retuned so open/close transitions use the same smoother content transition path.
+   Status: Resolved in-thread.
+
+71. **iOS edge-swipe back from a submenu replayed the closed page and flashed it away**
+   Problem: Swiping from the left edge did return from `Feedback`/`Conversation Management` to the root menu, but roughly half a second later the just-closed submenu could flash back in and then vanish. The user perceived this as a severe flicker/regression in the back gesture.
+   Attempted fix: Natural iOS history-gesture `popstate` is now treated separately from app-requested back steps, so the system swipe no longer replays a second JS-side submenu animation after the native transition already completed.
+   Status: Resolved in-thread.
+
+72. **An iOS submenu back-gesture fix accidentally removed menu swipe-dismiss**
+   Problem: To stop edge-swipe flicker, the menu’s own swipe-dismiss was briefly disabled on iOS, which regressed the expected ability to dismiss the menu by swiping inside the panel.
+   Attempted fix: The gesture model was split by start region: the left-edge gutter is reserved for native iOS history swipe, while swipes starting farther inside the panel still trigger the custom menu dismiss.
+   Status: Resolved in-thread.
+
+73. **iOS forward-swipe could preview the menu and then let the room snap back over it**
+   Problem: After returning from a menu/subpage to the room via iOS edge-swipe back, using the forward gesture could momentarily show the previous menu state and then abruptly let the room reclaim the screen. The system gesture preview looked correct, but the JS state refused to restore the menu.
+   Attempted fix: The menu `popstate` handler was changed to accept forward restoration from depth `0 -> 1/2` instead of bailing out whenever the current menu depth was already zero.
+   Status: Resolved in-thread.
+
+74. **iOS forward-swipe still replayed a delayed room/menu double transition**
+   Problem: Even after forward restoration was enabled, the system could show the menu correctly and then, about a second later, replay a `menu -> room -> menu` sequence. The UI looked like it had recovered, then the room suddenly covered it, then the menu slid back in.
+   Attempted fix: Menu history restoration now reads the latest `window.history.state` instead of trusting a stale `popstate` payload, and it no longer invents fallback depths by decrementing the current depth. This avoids delayed second transitions from stale history snapshots.
+   Status: Resolved in-thread.
+
+75. **iOS natural history gestures could still emit one delayed room/menu replay across the room boundary**
+   Problem: Even after stale-state handling was tightened, a completed iOS back/forward gesture could still be followed by one late `menu <-> room` reversal. Users saw the correct destination first, then a brief return to the opposite screen, then the intended screen again.
+   Attempted fix: A short iOS gesture-settle guard now ignores delayed natural `popstate` replays that would bounce only between room depth `0` and menu depth `1/2`, while still allowing normal in-menu depth changes.
+   Status: Resolved in-thread.
+
+76. **iOS menu swipe history required one final stabilization pass before it stopped flickering**
+   Problem: The earlier back/forward fixes each removed one layer of the glitch, but the room/menu boundary remained fragile enough that users still saw intermediate regressions while testing real gestures. The practical UX issue was not just one bug but a chain of related history/gesture mismatches that had to be iterated on until the same back/forward flow finally behaved consistently.
+   Attempted fix: The thread ultimately converged on a stable combination of native edge-swipe handling, in-panel swipe-dismiss routing, forward restoration, stale-state avoidance, and delayed-replay suppression. Once those pieces were in place together, the user confirmed that the duplicate swipe replay issue appeared to be behaving correctly.
+   Status: Resolved in-thread after multiple follow-up passes.
+
+77. **Forward history after custom menu swipe-dismiss could restore a partially dragged menu snapshot**
+   Problem: If the user closed the hamburger menu with the custom in-panel swipe-dismiss gesture instead of native edge-swipe back, a later iOS forward-swipe could restore an in-between frame rather than a clean full menu. The left side of the room stayed visible because iOS appeared to snapshot the menu at the exact drag offset where the finger was released, then React finished a second internal slide into the real destination.
+   Attempted fix: The thread narrowed the cause to the custom swipe-dismiss path firing history navigation while the panel still visually reflected a partial drag offset. The likely remediation identified in-thread was to force the menu back to a clean fully-open frame before navigating history, but that final code fix had not been landed yet at the time of documentation.
+   Status: Still open at thread end.
+
+78. **Android create-room auto-start could misread cached mic denial as an iOS Settings recovery**
+   Problem: On Android 1.1.0, denying microphone permission and then pressing `Start Conversation!` again could jump straight to app settings instead of showing the normal in-app permission prompt. Manual `Start` inside the room still behaved correctly, so the regression was isolated to the auto-start path used by newly created rooms.
+   Attempted fix: The thread found that cached native mic-permission state was always being rehydrated as if it belonged to iOS, which converted any cached `denied` value into the `open_ios_settings` recovery path. The fix resolved the cached recovery action against the current API namespace platform so Android denial stays on the in-app retry path while iOS denial still routes to Settings.
+   Status: Resolved in-thread.
 
 ## Other Issue Sessions
 

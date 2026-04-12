@@ -3,9 +3,9 @@ import {
   resolveLegalDocumentLocale,
   resolveSupportedLocaleTag,
   type LegalDocumentLocale,
-} from '@/i18n'
-
-export type LivePhoneDemoFeedbackCategory = 'feedback' | 'suggestion' | 'inquiry'
+} from '@/i18n/config'
+import type { LivePhoneDemoFeedbackCategory } from '@/i18n/types'
+export type { LivePhoneDemoFeedbackCategory } from '@/i18n/types'
 
 export type LivePhoneDemoFeedbackCopy = {
   pageTitle: string

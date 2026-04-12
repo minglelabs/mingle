@@ -1,20 +1,4 @@
-const WEB_SUPPORTED_LOCALE_SEGMENTS = new Set([
-  'ko',
-  'en',
-  'ja',
-  'zh-cn',
-  'zh-tw',
-  'fr',
-  'de',
-  'es',
-  'pt',
-  'it',
-  'ru',
-  'ar',
-  'hi',
-  'th',
-  'vi',
-]);
+import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
 
 function splitPathname(pathname: string): string[] {
   return pathname
@@ -44,7 +28,10 @@ export function isLiveDemoPathname(pathname: string): boolean {
   if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
   if (segments.length === 1) return true;
 
-  return segments.length === 2 && segments[1] === 'translator';
+  return (
+    segments.length === 2
+    && (segments[1] === 'translator' || segments[1] === 'conversations')
+  );
 }
 
 export function shouldDisableIosWebViewScrolling(params: {

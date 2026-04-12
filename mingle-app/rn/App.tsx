@@ -45,6 +45,12 @@ import {
   shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
 import {
+  WEB_SUPPORTED_LOCALE_SEGMENTS,
+  getVersionPolicyFallbackCopy,
+  resolveVersionPolicyLocale,
+  resolveWebLocaleSegment,
+} from './src/i18n';
+import {
   createCheckingNativeAppUpdateSnapshot,
   createUnknownNativeAppUpdateSnapshot,
   normalizeClientVersion,
@@ -89,6 +95,7 @@ type NativeAdModule = {
   };
 };
 type NativeBannerPosition = 'top' | 'bottom';
+type BannerZone = 'list' | 'conversation' | 'hidden';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
   bannerUnitId?: string;
@@ -147,16 +154,23 @@ function readNativeRuntimeConfig(): NativeRuntimeConfig {
   const runtimeConfigModule = (NativeModules as {
     NativeRuntimeConfigModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
     NativeSTTModule?: {
       runtimeConfig?: NativeRuntimeConfig;
+      getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
     };
   }).NativeRuntimeConfigModule;
-  const runtimeConfig = runtimeConfigModule?.runtimeConfig ?? (NativeModules.NativeSTTModule as
+  const sttModule = NativeModules.NativeSTTModule as
     | {
         runtimeConfig?: NativeRuntimeConfig;
+        getConstants?: () => { runtimeConfig?: NativeRuntimeConfig };
       }
-    | undefined)?.runtimeConfig;
+    | undefined;
+  const runtimeConfig = runtimeConfigModule?.runtimeConfig
+    ?? runtimeConfigModule?.getConstants?.().runtimeConfig
+    ?? sttModule?.runtimeConfig
+    ?? sttModule?.getConstants?.().runtimeConfig;
   if (!runtimeConfig || typeof runtimeConfig !== 'object') {
     return {};
   }
@@ -180,14 +194,6 @@ function normalizeConfiguredUrl(
   } catch {
     return '';
   }
-}
-
-function resolveConfiguredUrl(
-  keys: string[],
-  allowedProtocols: string[],
-  options?: { trimTrailingSlash?: boolean },
-): string {
-  return normalizeConfiguredUrl(readRuntimeEnvValue(keys), allowedProtocols, options);
 }
 
 function isLoopbackHost(host: string): boolean {
@@ -313,51 +319,13 @@ const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
-const NATIVE_AD_BANNER_OFFSET_TOP_PX = 78;
-const NATIVE_AD_BANNER_OFFSET_BOTTOM_PX = 94;
+const NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX = 56;
+const NATIVE_CONVERSATION_HEADER_HEIGHT_PX = 56;
+const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
+const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
+const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-const WEB_SUPPORTED_LOCALES = new Set([
-  'ko',
-  'en',
-  'ja',
-  'zh-CN',
-  'zh-TW',
-  'fr',
-  'de',
-  'es',
-  'pt',
-  'it',
-  'ru',
-  'ar',
-  'hi',
-  'th',
-  'vi',
-]);
-const WEB_LOCALE_ALIASES: Record<string, string> = {
-  ko: 'ko',
-  en: 'en',
-  ja: 'ja',
-  fr: 'fr',
-  de: 'de',
-  es: 'es',
-  pt: 'pt',
-  it: 'it',
-  ru: 'ru',
-  ar: 'ar',
-  hi: 'hi',
-  th: 'th',
-  vi: 'vi',
-  zh: 'zh-CN',
-  'zh-cn': 'zh-CN',
-  'zh-hans': 'zh-CN',
-  'zh-sg': 'zh-CN',
-  'zh-tw': 'zh-TW',
-  'zh-hant': 'zh-TW',
-  'zh-hk': 'zh-TW',
-  'zh-mo': 'zh-TW',
-};
-const WEB_SUPPORTED_LOCALE_SEGMENTS = new Set(Array.from(WEB_SUPPORTED_LOCALES).map(locale => locale.toLowerCase()));
 
 type SafeAreaPalette = {
   topColor: string;
@@ -388,6 +356,134 @@ const AUTH_LOGIN_SAFE_AREA_PALETTE: SafeAreaPalette = {
   topEdgeMode: 'transparent',
   bottomEdgeMode: 'transparent',
 };
+
+const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  ...DEFAULT_SAFE_AREA_PALETTE,
+  bottomEdgeMode: 'transparent',
+};
+
+const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
+  (function () {
+    if (window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__) {
+      return true;
+    }
+    window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__ = true;
+
+    var NATIVE_NAV_INDEX_KEY = '__MINGLE_NATIVE_NAV_INDEX__';
+    var NATIVE_NAV_RAW_STATE_KEY = '__MINGLE_NATIVE_NAV_RAW_STATE__';
+    var currentHistoryIndex = 0;
+
+    var isMergeableState = function (state) {
+      return state !== null && typeof state === 'object' && !Array.isArray(state);
+    };
+
+    var readHistoryIndex = function (state) {
+      if (!state || typeof state !== 'object') {
+        return null;
+      }
+      var value = state[NATIVE_NAV_INDEX_KEY];
+      if (typeof value !== 'number' || !isFinite(value)) {
+        return null;
+      }
+      return Math.max(0, Math.floor(value));
+    };
+
+    var stampHistoryState = function (state, index) {
+      if (isMergeableState(state)) {
+        var nextState = {};
+        for (var key in state) {
+          if (Object.prototype.hasOwnProperty.call(state, key) && key !== NATIVE_NAV_INDEX_KEY) {
+            nextState[key] = state[key];
+          }
+        }
+        nextState[NATIVE_NAV_INDEX_KEY] = index;
+        return nextState;
+      }
+
+      var wrappedState = {};
+      wrappedState[NATIVE_NAV_INDEX_KEY] = index;
+      wrappedState[NATIVE_NAV_RAW_STATE_KEY] = typeof state === 'undefined' ? null : state;
+      return wrappedState;
+    };
+
+    var ensureStampedCurrentEntry = function (fallbackIndex) {
+      currentHistoryIndex = fallbackIndex;
+      try {
+        window.history.replaceState(
+          stampHistoryState(window.history.state, currentHistoryIndex),
+          '',
+          window.location.href
+        );
+      } catch (error) {
+        // Ignore replaceState failures on locked-down history entries.
+      }
+    };
+
+    var postCurrentUrl = function () {
+      var bridge = window.ReactNativeWebView;
+      if (!bridge || typeof bridge.postMessage !== 'function') {
+        return;
+      }
+      try {
+        bridge.postMessage(JSON.stringify({
+          type: 'native_navigation_state',
+          payload: {
+            url: window.location.href,
+            canGoBack: currentHistoryIndex > 0,
+          }
+        }));
+      } catch (error) {
+        // Ignore bridge serialization failures.
+      }
+    };
+
+    var wrapHistoryMethod = function (methodName) {
+      var original = window.history[methodName];
+      if (typeof original !== 'function') {
+        return;
+      }
+      window.history[methodName] = function () {
+        var nextIndex = methodName === 'pushState'
+          ? currentHistoryIndex + 1
+          : currentHistoryIndex;
+        var nextArgs = [];
+        nextArgs[0] = stampHistoryState(arguments[0], nextIndex);
+        for (var argumentIndex = 1; argumentIndex < arguments.length; argumentIndex += 1) {
+          nextArgs[argumentIndex] = arguments[argumentIndex];
+        }
+        var result = original.apply(window.history, nextArgs);
+        currentHistoryIndex = nextIndex;
+        postCurrentUrl();
+        return result;
+      };
+    };
+
+    var initialHistoryIndex = readHistoryIndex(window.history.state);
+    if (initialHistoryIndex === null) {
+      ensureStampedCurrentEntry(0);
+    } else {
+      currentHistoryIndex = initialHistoryIndex;
+    }
+
+    wrapHistoryMethod('pushState');
+    wrapHistoryMethod('replaceState');
+    window.addEventListener('popstate', function (event) {
+      var nextIndex = readHistoryIndex(event && event.state);
+      if (nextIndex === null) {
+        nextIndex = readHistoryIndex(window.history.state);
+      }
+      if (nextIndex === null) {
+        ensureStampedCurrentEntry(0);
+      } else {
+        currentHistoryIndex = nextIndex;
+      }
+      postCurrentUrl();
+    });
+    window.addEventListener('hashchange', postCurrentUrl);
+    postCurrentUrl();
+    return true;
+  })();
+`;
 type VersionPolicyLocale =
   | 'ko'
   | 'en'
@@ -422,244 +518,31 @@ const VERSION_POLICY_SUPPORTED_LOCALES = new Set<VersionPolicyLocale>([
   'th',
   'vi',
 ]);
+
+function resolveBannerZoneForUrl(rawUrl: string): Exclude<BannerZone, 'hidden'> | null {
+  if (!rawUrl) return null;
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
+  if (pathSegments.length < 2) return null;
+  if (pathSegments[1] !== 'conversations') return null;
+
+  return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
+}
 const IOS_VERSION_POLICY_TIMEOUT_MS = 8000;
-const VERSION_POLICY_LOCALE_ALIASES: Record<string, VersionPolicyLocale> = {
-  ko: 'ko',
-  en: 'en',
-  ja: 'ja',
-  fr: 'fr',
-  de: 'de',
-  es: 'es',
-  pt: 'pt',
-  it: 'it',
-  ru: 'ru',
-  ar: 'ar',
-  hi: 'hi',
-  th: 'th',
-  vi: 'vi',
-  zh: 'zh-CN',
-  'zh-cn': 'zh-CN',
-  'zh-hans': 'zh-CN',
-  'zh-sg': 'zh-CN',
-  'zh-tw': 'zh-TW',
-  'zh-hant': 'zh-TW',
-  'zh-hk': 'zh-TW',
-  'zh-mo': 'zh-TW',
-};
-const VERSION_POLICY_FALLBACK_COPY: Record<VersionPolicyLocale, {
-  checkingTitle: string;
-  checkingMessage: string;
-  forceTitle: string;
-  forceMessage: string;
-  recommendTitle: string;
-  recommendMessage: string;
-  updateLabel: string;
-  laterLabel: string;
-  updateNowA11y: string;
-  webViewLoadFailedTitle: string;
-  unknownVersionLabel: string;
-}> = {
-  ko: {
-    checkingTitle: '버전 확인 중',
-    checkingMessage: '최신 업데이트 정책을 확인하고 있습니다.',
-    forceTitle: '업데이트 필요',
-    forceMessage: '현재 버전은 더 이상 지원되지 않습니다. 최신 버전으로 업데이트해 주세요.',
-    recommendTitle: '업데이트 권장',
-    recommendMessage: '새 버전 업데이트를 권장합니다.',
-    updateLabel: '업데이트',
-    laterLabel: '나중에',
-    updateNowA11y: '지금 업데이트',
-    webViewLoadFailedTitle: 'WebView 로드 실패',
-    unknownVersionLabel: '알 수 없음',
-  },
-  en: {
-    checkingTitle: 'Checking version',
-    checkingMessage: 'Checking the latest update policy.',
-    forceTitle: 'Update Required',
-    forceMessage: 'This version is no longer supported. Please update to the latest version.',
-    recommendTitle: 'Update Recommended',
-    recommendMessage: 'A new version is available. We recommend updating for a better experience.',
-    updateLabel: 'Update',
-    laterLabel: 'Later',
-    updateNowA11y: 'Update now',
-    webViewLoadFailedTitle: 'WebView Load Failed',
-    unknownVersionLabel: 'unknown',
-  },
-  ja: {
-    checkingTitle: 'バージョン確認中',
-    checkingMessage: '最新のアップデートポリシーを確認しています。',
-    forceTitle: 'アップデートが必要です',
-    forceMessage: 'このバージョンはサポートされていません。最新バージョンにアップデートしてください。',
-    recommendTitle: 'アップデート推奨',
-    recommendMessage: '新しいバージョンが利用可能です。アップデートをお勧めします。',
-    updateLabel: 'アップデート',
-    laterLabel: 'あとで',
-    updateNowA11y: '今すぐアップデート',
-    webViewLoadFailedTitle: 'WebView の読み込みに失敗しました',
-    unknownVersionLabel: '不明',
-  },
-  'zh-CN': {
-    checkingTitle: '正在检查版本',
-    checkingMessage: '正在检查最新更新策略。',
-    forceTitle: '更新必需',
-    forceMessage: '当前版本已不再受支持。请更新到最新版本。',
-    recommendTitle: '建议更新',
-    recommendMessage: '新版本已发布，建议更新以获得更稳定的体验。',
-    updateLabel: '更新',
-    laterLabel: '稍后',
-    updateNowA11y: '立即更新',
-    webViewLoadFailedTitle: 'WebView 加载失败',
-    unknownVersionLabel: '未知',
-  },
-  'zh-TW': {
-    checkingTitle: '正在檢查版本',
-    checkingMessage: '正在檢查最新更新政策。',
-    forceTitle: '必須更新',
-    forceMessage: '目前版本已不再支援。請更新至最新版本。',
-    recommendTitle: '建議更新',
-    recommendMessage: '新版本已推出，建議更新以獲得更穩定的體驗。',
-    updateLabel: '更新',
-    laterLabel: '稍後',
-    updateNowA11y: '立即更新',
-    webViewLoadFailedTitle: 'WebView 載入失敗',
-    unknownVersionLabel: '未知',
-  },
-  fr: {
-    checkingTitle: 'Vérification de la version',
-    checkingMessage: 'Vérification de la politique de mise à jour la plus récente.',
-    forceTitle: 'Mise à jour requise',
-    forceMessage: 'Cette version n\'est plus prise en charge. Veuillez mettre à jour vers la dernière version.',
-    recommendTitle: 'Mise à jour recommandée',
-    recommendMessage: 'Une nouvelle version est disponible. Nous recommandons la mise à jour.',
-    updateLabel: 'Mettre à jour',
-    laterLabel: 'Plus tard',
-    updateNowA11y: 'Mettre à jour maintenant',
-    webViewLoadFailedTitle: 'Échec du chargement de WebView',
-    unknownVersionLabel: 'inconnu',
-  },
-  de: {
-    checkingTitle: 'Version wird überprüft',
-    checkingMessage: 'Die neuesten Update-Richtlinien werden geprüft.',
-    forceTitle: 'Update erforderlich',
-    forceMessage: 'Diese Version wird nicht mehr unterstützt. Bitte aktualisieren Sie auf die neueste Version.',
-    recommendTitle: 'Update empfohlen',
-    recommendMessage: 'Eine neue Version ist verfügbar. Wir empfehlen ein Update.',
-    updateLabel: 'Aktualisieren',
-    laterLabel: 'Später',
-    updateNowA11y: 'Jetzt aktualisieren',
-    webViewLoadFailedTitle: 'WebView-Laden fehlgeschlagen',
-    unknownVersionLabel: 'unbekannt',
-  },
-  es: {
-    checkingTitle: 'Comprobando versión',
-    checkingMessage: 'Estamos comprobando la política de actualización más reciente.',
-    forceTitle: 'Actualización obligatoria',
-    forceMessage: 'Esta versión ya no es compatible. Actualiza a la última versión.',
-    recommendTitle: 'Actualización recomendada',
-    recommendMessage: 'Hay una nueva versión disponible. Recomendamos actualizar.',
-    updateLabel: 'Actualizar',
-    laterLabel: 'Más tarde',
-    updateNowA11y: 'Actualizar ahora',
-    webViewLoadFailedTitle: 'Error al cargar WebView',
-    unknownVersionLabel: 'desconocida',
-  },
-  pt: {
-    checkingTitle: 'Verificando versão',
-    checkingMessage: 'Estamos verificando a política de atualização mais recente.',
-    forceTitle: 'Atualização obrigatória',
-    forceMessage: 'Esta versão não é mais compatível. Atualize para a versão mais recente.',
-    recommendTitle: 'Atualização recomendada',
-    recommendMessage: 'Há uma nova versão disponível. Recomendamos atualizar.',
-    updateLabel: 'Atualizar',
-    laterLabel: 'Mais tarde',
-    updateNowA11y: 'Atualizar agora',
-    webViewLoadFailedTitle: 'Falha ao carregar o WebView',
-    unknownVersionLabel: 'desconhecida',
-  },
-  it: {
-    checkingTitle: 'Verifica versione in corso',
-    checkingMessage: 'Stiamo verificando la policy di aggiornamento più recente.',
-    forceTitle: 'Aggiornamento obbligatorio',
-    forceMessage: 'Questa versione non è più supportata. Aggiorna all\'ultima versione.',
-    recommendTitle: 'Aggiornamento consigliato',
-    recommendMessage: 'È disponibile una nuova versione. Ti consigliamo di aggiornare.',
-    updateLabel: 'Aggiorna',
-    laterLabel: 'Più tardi',
-    updateNowA11y: 'Aggiorna ora',
-    webViewLoadFailedTitle: 'Caricamento WebView non riuscito',
-    unknownVersionLabel: 'sconosciuta',
-  },
-  ru: {
-    checkingTitle: 'Проверка версии',
-    checkingMessage: 'Проверяем актуальную политику обновлений.',
-    forceTitle: 'Требуется обновление',
-    forceMessage: 'Эта версия больше не поддерживается. Обновите приложение до последней версии.',
-    recommendTitle: 'Рекомендуется обновление',
-    recommendMessage: 'Доступна новая версия. Рекомендуем обновить приложение.',
-    updateLabel: 'Обновить',
-    laterLabel: 'Позже',
-    updateNowA11y: 'Обновить сейчас',
-    webViewLoadFailedTitle: 'Не удалось загрузить WebView',
-    unknownVersionLabel: 'неизвестно',
-  },
-  ar: {
-    checkingTitle: 'جارٍ التحقق من الإصدار',
-    checkingMessage: 'جارٍ التحقق من سياسة التحديث الأحدث.',
-    forceTitle: 'التحديث مطلوب',
-    forceMessage: 'هذا الإصدار لم يعد مدعومًا. يرجى التحديث إلى أحدث إصدار.',
-    recommendTitle: 'يوصى بالتحديث',
-    recommendMessage: 'يتوفر إصدار جديد. نوصي بالتحديث.',
-    updateLabel: 'تحديث',
-    laterLabel: 'لاحقًا',
-    updateNowA11y: 'حدّث الآن',
-    webViewLoadFailedTitle: 'فشل تحميل WebView',
-    unknownVersionLabel: 'غير معروف',
-  },
-  hi: {
-    checkingTitle: 'संस्करण जाँचा जा रहा है',
-    checkingMessage: 'नवीनतम अपडेट नीति की जाँच की जा रही है।',
-    forceTitle: 'अपडेट आवश्यक',
-    forceMessage: 'यह संस्करण अब समर्थित नहीं है। कृपया नवीनतम संस्करण में अपडेट करें।',
-    recommendTitle: 'अपडेट की अनुशंसा',
-    recommendMessage: 'नया संस्करण उपलब्ध है। अपडेट करने की सलाह दी जाती है।',
-    updateLabel: 'अपडेट करें',
-    laterLabel: 'बाद में',
-    updateNowA11y: 'अभी अपडेट करें',
-    webViewLoadFailedTitle: 'WebView लोड विफल',
-    unknownVersionLabel: 'अज्ञात',
-  },
-  th: {
-    checkingTitle: 'กำลังตรวจสอบเวอร์ชัน',
-    checkingMessage: 'กำลังตรวจสอบนโยบายอัปเดตล่าสุด',
-    forceTitle: 'จำเป็นต้องอัปเดต',
-    forceMessage: 'เวอร์ชันนี้ไม่รองรับแล้ว กรุณาอัปเดตเป็นเวอร์ชันล่าสุด',
-    recommendTitle: 'แนะนำให้อัปเดต',
-    recommendMessage: 'มีเวอร์ชันใหม่พร้อมใช้งาน แนะนำให้อัปเดต',
-    updateLabel: 'อัปเดต',
-    laterLabel: 'ภายหลัง',
-    updateNowA11y: 'อัปเดตตอนนี้',
-    webViewLoadFailedTitle: 'โหลด WebView ไม่สำเร็จ',
-    unknownVersionLabel: 'ไม่ทราบ',
-  },
-  vi: {
-    checkingTitle: 'Đang kiểm tra phiên bản',
-    checkingMessage: 'Đang kiểm tra chính sách cập nhật mới nhất.',
-    forceTitle: 'Cần cập nhật',
-    forceMessage: 'Phiên bản này không còn được hỗ trợ. Vui lòng cập nhật lên phiên bản mới nhất.',
-    recommendTitle: 'Khuyến nghị cập nhật',
-    recommendMessage: 'Đã có phiên bản mới. Chúng tôi khuyên bạn nên cập nhật.',
-    updateLabel: 'Cập nhật',
-    laterLabel: 'Để sau',
-    updateNowA11y: 'Cập nhật ngay',
-    webViewLoadFailedTitle: 'Tải WebView thất bại',
-    unknownVersionLabel: 'không rõ',
-  },
-};
 
 type NativeSttStartPayload = {
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
+  apiNamespace?: string;
+  behaviorProfile?: string;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
 };
@@ -730,6 +613,14 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeNavigationStateCommand = {
+  type: 'native_navigation_state';
+  payload?: {
+    canGoBack?: boolean;
+    url?: string;
+  };
+};
+
 type NativeOpenUpdateStoreCommand = {
   type: 'native_open_update_store';
   payload?: {
@@ -748,6 +639,13 @@ type NativeSetAdBannerPositionCommand = {
   type: 'native_set_ad_banner_position';
   payload?: {
     position?: string;
+  };
+};
+
+type NativeSetBannerZoneCommand = {
+  type: 'native_set_banner_zone';
+  payload?: {
+    zone?: BannerZone;
   };
 };
 
@@ -770,9 +668,11 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
+  | NativeNavigationStateCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
+  | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
   | NativeRemountWebViewCommand;
 
@@ -921,60 +821,6 @@ function resolveDeviceLocaleTag(): string {
   }
 }
 
-function resolveWebLocaleSegment(rawLocaleTag: string): string {
-  const normalized = rawLocaleTag.trim().replace(/_/g, '-').toLowerCase();
-  if (!normalized) return 'ko';
-
-  const directMatch = WEB_LOCALE_ALIASES[normalized];
-  if (directMatch && WEB_SUPPORTED_LOCALES.has(directMatch)) {
-    return directMatch;
-  }
-
-  if (normalized.startsWith('zh-')) {
-    if (normalized.includes('-tw') || normalized.includes('-hant') || normalized.includes('-hk') || normalized.includes('-mo')) {
-      return 'zh-TW';
-    }
-    return 'zh-CN';
-  }
-
-  const base = normalized.split('-')[0] || '';
-  const baseMatch = WEB_LOCALE_ALIASES[base];
-  if (baseMatch && WEB_SUPPORTED_LOCALES.has(baseMatch)) {
-    return baseMatch;
-  }
-
-  return 'ko';
-}
-
-function resolveVersionPolicyLocale(rawLocaleTag: string): VersionPolicyLocale {
-  const normalized = rawLocaleTag.trim().replace(/_/g, '-').toLowerCase();
-  if (!normalized) return 'en';
-
-  const directMatch = VERSION_POLICY_LOCALE_ALIASES[normalized];
-  if (directMatch && VERSION_POLICY_SUPPORTED_LOCALES.has(directMatch)) {
-    return directMatch;
-  }
-
-  if (normalized.startsWith('zh-')) {
-    if (normalized.includes('-tw') || normalized.includes('-hant') || normalized.includes('-hk') || normalized.includes('-mo')) {
-      return 'zh-TW';
-    }
-    return 'zh-CN';
-  }
-
-  const base = normalized.split('-')[0] || '';
-  const baseMatch = VERSION_POLICY_LOCALE_ALIASES[base];
-  if (baseMatch && VERSION_POLICY_SUPPORTED_LOCALES.has(baseMatch)) {
-    return baseMatch;
-  }
-
-  return 'en';
-}
-
-function getVersionPolicyFallbackCopy(locale: VersionPolicyLocale) {
-  return VERSION_POLICY_FALLBACK_COPY[locale];
-}
-
 function isAuthLikePathname(pathname: string): boolean {
   const segments = pathname
     .split('/')
@@ -1008,6 +854,23 @@ function isAllowedNativeAuthStartPath(pathname: string): boolean {
   return segments[1] === 'auth' && segments[2] === 'native';
 }
 
+function isConversationsLikePathname(pathname: string): boolean {
+  const normalized = pathname.trim();
+  if (!normalized.startsWith('/')) return false;
+
+  const segments = normalized
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'conversations';
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -1016,6 +879,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     const parsed = new URL(candidate);
     if (isAuthLikePathname(parsed.pathname)) {
       return AUTH_LOGIN_SAFE_AREA_PALETTE;
+    }
+    if (isConversationsLikePathname(parsed.pathname)) {
+      return CONVERSATIONS_SAFE_AREA_PALETTE;
     }
   } catch {
     return DEFAULT_SAFE_AREA_PALETTE;
@@ -1109,11 +975,14 @@ function NativeAdBanner(props: {
     : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
 
+  /* eslint-disable react-hooks/set-state-in-effect */
+  // Reset banner state when a new slot/unit configuration is mounted.
   useEffect(() => {
     setRenderHeightPx(heightPx);
     setAdLoadState('loading');
     setLastErrorMessage('');
   }, [heightPx, position, reloadToken, unitId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const applyBannerDimensions = useCallback((dimensions?: { width?: number; height?: number }) => {
     if (prefersFixedHeightBanner) return;
@@ -1340,15 +1209,23 @@ function AppInner(): React.JSX.Element {
   const shouldRenderTopSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'fill';
   const shouldRenderTopSafeAreaOverlay = Platform.OS === 'ios' && safeAreaPalette.topEdgeMode === 'overlay';
   const shouldRenderBottomSafeAreaFill = Platform.OS === 'ios' && safeAreaPalette.bottomEdgeMode === 'fill';
-  const nativeBannerTopOffsetPx = useMemo(
-    () => safeAreaInsets.top + Math.round(NATIVE_AD_BANNER_OFFSET_TOP_PX * nativeCanvasScale),
+  const nativeConversationListBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_LIST_HEADER_HEIGHT_PX * nativeCanvasScale),
+    [nativeCanvasScale, safeAreaInsets.top],
+  );
+  const nativeConversationBannerTopOffsetPx = useMemo(
+    () => safeAreaInsets.top + Math.round(NATIVE_CONVERSATION_HEADER_HEIGHT_PX * nativeCanvasScale),
     [nativeCanvasScale, safeAreaInsets.top],
   );
   const nativeBottomBannerClearancePx = useMemo(() => {
     if (nativeBottomBarClearancePx !== null) {
       return normalizeNativeBottomBarClearancePx(nativeBottomBarClearancePx);
     }
-    return Math.round(NATIVE_AD_BANNER_OFFSET_BOTTOM_PX * nativeCanvasScale);
+    const baseOffsetPx = Math.round(NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX * nativeCanvasScale);
+    if (Platform.OS !== 'ios') {
+      return baseOffsetPx;
+    }
+    return Math.max(0, baseOffsetPx - IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX);
   }, [nativeBottomBarClearancePx, nativeCanvasScale]);
   const nativeBannerBottomOffsetPx = useMemo(
     () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
@@ -1361,6 +1238,11 @@ function AppInner(): React.JSX.Element {
     }),
     [nativeBannerHeightPx, nativeCanvasScale],
   );
+  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
+  const activeBannerZoneRef = useRef<BannerZone>('list');
+  const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
+  const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
+  const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
   const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
@@ -1371,8 +1253,8 @@ function AppInner(): React.JSX.Element {
   const [nativeAdsReady, setNativeAdsReady] = useState(() => (
     !nativeBannerUnitId
   ));
+  const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
-  const [webViewCanGoBack, setWebViewCanGoBack] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
     isIosPlatform: Platform.OS === 'ios',
@@ -1395,6 +1277,10 @@ function AppInner(): React.JSX.Element {
     if (shouldDisableIosScroll) return;
     setNativeBottomBarClearancePx(null);
   }, [shouldDisableIosScroll]);
+
+  useEffect(() => {
+    activeBannerZoneRef.current = activeBannerZone;
+  }, [activeBannerZone]);
 
   useEffect(() => {
     updateSafeAreaPalette(webUrl);
@@ -1449,6 +1335,42 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (versionGate.status === 'force_update') {
+        return false;
+      }
+      if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
+        return false;
+      }
+      webViewRef.current?.injectJavaScript(`
+        (function () {
+          try {
+            if (typeof window.__MINGLE_HANDLE_NATIVE_BACK__ === 'function' && window.__MINGLE_HANDLE_NATIVE_BACK__()) {
+              return true;
+            }
+          } catch (error) {
+            // Fall through to the browser history path.
+          }
+
+          if (window.history.length > 1) {
+            window[${JSON.stringify(NATIVE_HISTORY_BACK_ANIMATE_FLAG)}] = true;
+            window.history.back();
+          }
+          return true;
+        })();
+        true;
+      `);
+      return true;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [canWebViewGoBack, isNativeMenuOverlayOpen, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1555,7 +1477,7 @@ function AppInner(): React.JSX.Element {
               : versionPolicyFallback.forceTitle,
             updateButtonLabel: typeof policy.updateButtonLabel === 'string' && policy.updateButtonLabel.trim()
               ? policy.updateButtonLabel.trim()
-              : versionPolicyFallback.updateLabel,
+              : versionPolicyFallback.updateButtonLabel,
             clientVersion: typeof policy.clientVersion === 'string' ? policy.clientVersion : clientVersion,
             latestVersion: typeof policy.latestVersion === 'string' ? policy.latestVersion : '',
           });
@@ -1575,10 +1497,10 @@ function AppInner(): React.JSX.Element {
             : versionPolicyFallback.recommendMessage;
           const updateLabel = typeof policy.updateButtonLabel === 'string' && policy.updateButtonLabel.trim()
             ? policy.updateButtonLabel.trim()
-            : versionPolicyFallback.updateLabel;
+            : versionPolicyFallback.updateButtonLabel;
           const laterLabel = typeof policy.laterButtonLabel === 'string' && policy.laterButtonLabel.trim()
             ? policy.laterButtonLabel.trim()
-            : versionPolicyFallback.laterLabel;
+            : versionPolicyFallback.laterButtonLabel;
 
           const prompt = {
             title: promptTitle,
@@ -1630,7 +1552,10 @@ function AppInner(): React.JSX.Element {
     const cacheStatusScript = payload.type === 'status'
       ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
       : '';
-    const script = `${cacheStatusScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cachePermissionScript = payload.type === 'permission'
+      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(payload.permission)}; `
+      : '';
+    const script = `${cacheStatusScript}${cachePermissionScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -1692,13 +1617,53 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
+    const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
+      ? nativeBannerPosition
+      : 'top';
+    const effectiveTopInsetPx = activeBannerZone === 'list'
+      ? nativeTranscriptInsetPx
+      : 0;
+    const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
+      ? nativeBannerBottomInsetPx
+      : 0;
     emitUiToWeb({
       type: 'banner_layout',
-      position: nativeBannerPosition,
-      topInsetPx: nativeBannerTopInsetPx,
-      bottomInsetPx: nativeBannerBottomInsetPx,
+      position: effectiveBannerPosition,
+      topInsetPx: effectiveTopInsetPx,
+      bottomInsetPx: effectiveBottomInsetPx,
     });
-  }, [emitUiToWeb, nativeBannerBottomInsetPx, nativeBannerPosition, nativeBannerTopInsetPx, nativeBannerUnitId]);
+  }, [
+    activeBannerZone,
+    emitUiToWeb,
+    isNativeMenuOverlayOpen,
+    nativeBannerBottomInsetPx,
+    nativeBannerPosition,
+    nativeBannerUnitId,
+    nativeTranscriptInsetPx,
+  ]);
+
+  const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {
+    const inferredZone = resolveBannerZoneForUrl(typeof nextUrl === 'string' ? nextUrl : '');
+    if (!inferredZone) return;
+
+    const stableZone = stableBannerZoneRef.current;
+    if (inferredZone !== stableZone) {
+      pendingNavigationBannerZoneRef.current = inferredZone;
+      if (activeBannerZoneRef.current !== 'hidden') {
+        setActiveBannerZone('hidden');
+      }
+      return;
+    }
+
+    if (
+      activeBannerZoneRef.current === 'hidden'
+      && pendingNavigationBannerZoneRef.current
+      && inferredZone === stableZone
+    ) {
+      pendingNavigationBannerZoneRef.current = null;
+      setActiveBannerZone(stableZone);
+    }
+  }, []);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
     const serialized = JSON.stringify(payload);
@@ -1817,6 +1782,8 @@ function AppInner(): React.JSX.Element {
       ? payload.sttModel.trim()
       : 'soniox';
     const aecEnabled = payload?.aecEnabled === true;
+    const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
+    const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
     const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
       ? payload.sonioxLanguageHints
         .filter((language): language is string => typeof language === 'string')
@@ -1833,6 +1800,8 @@ function AppInner(): React.JSX.Element {
         wsUrl,
         sttModel,
         aecEnabled,
+        ...(apiNamespace ? { apiNamespace } : {}),
+        ...(behaviorProfile ? { behaviorProfile } : {}),
         sonioxLanguageHints,
         ...(typeof sonioxManualFinalizeSilenceMs === 'number'
           ? { sonioxManualFinalizeSilenceMs }
@@ -1844,7 +1813,14 @@ function AppInner(): React.JSX.Element {
       const code = typeof (error as { code?: unknown })?.code === 'string'
         ? (error as { code: string }).code.trim()
         : resolveNativeSttErrorCode(message);
-      nativeStatusRef.current = 'failed';
+      nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
+      if (code === 'mic_permission') {
+        emitToWeb({
+          type: 'permission',
+          permission: 'denied',
+          platform: Platform.OS,
+        });
+      }
       emitToWeb({
         type: 'error',
         message,
@@ -1978,6 +1954,13 @@ function AppInner(): React.JSX.Element {
     }
   }, [clearAuthDispatchRetryTimer, emitAuthToWeb, trustedNativeAuthOrigin]);
 
+  const handleDebugWebViewRemount = useCallback(() => {
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setIsNativeMenuOverlayOpen(false);
+    setWebViewMountToken((current) => current + 1);
+  }, []);
+
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
     let parsed: WebViewCommand | null = null;
     try {
@@ -1986,6 +1969,16 @@ function AppInner(): React.JSX.Element {
       return;
     }
     if (!parsed || typeof parsed !== 'object') return;
+
+    if (parsed.type === 'native_navigation_state') {
+      const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
+      if (typeof parsed.payload?.canGoBack === 'boolean') {
+        setCanWebViewGoBack(parsed.payload.canGoBack);
+      }
+      prepareBannerZoneTransition(url);
+      updateSafeAreaPalette(url);
+      return;
+    }
 
     if (parsed.type === 'native_open_update_store') {
       const requestedUrl = typeof parsed.payload?.updateUrl === 'string'
@@ -2023,6 +2016,18 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_set_bottom_bar_clearance') {
       setNativeBottomBarClearancePx(normalizeNativeBottomBarClearancePx(parsed.payload?.clearancePx));
+      return;
+    }
+
+    if (parsed.type === 'native_set_banner_zone') {
+      const zone = parsed.payload?.zone;
+      if (zone === 'list' || zone === 'conversation' || zone === 'hidden') {
+        if (zone === 'list' || zone === 'conversation') {
+          stableBannerZoneRef.current = zone;
+          pendingNavigationBannerZoneRef.current = null;
+        }
+        setActiveBannerZone(zone);
+      }
       return;
     }
 
@@ -2143,7 +2148,15 @@ function AppInner(): React.JSX.Element {
       }
       void handleNativeAuthStart(parsed.payload);
     }
-  }, [clearAuthDispatchRetryTimer, emitTtsToWeb, handleDebugWebViewRemount, handleNativeAuthStart, handleNativeStart, handleNativeStop]);
+  }, [
+    clearAuthDispatchRetryTimer,
+    emitTtsToWeb,
+    handleDebugWebViewRemount,
+    handleNativeAuthStart,
+    handleNativeStart,
+    handleNativeStop,
+    updateSafeAreaPalette,
+  ]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -2182,10 +2195,17 @@ function AppInner(): React.JSX.Element {
 
     const errorSub = addNativeSttListener('error', event => {
       if (__DEV__) console.log(`[NativeSTT] error: ${event.message}`);
-      nativeStatusRef.current = 'error';
       const code = typeof event.code === 'string' && event.code.trim()
         ? event.code.trim()
         : resolveNativeSttErrorCode(event.message);
+      nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'error';
+      if (code === 'mic_permission') {
+        emitToWeb({
+          type: 'permission',
+          permission: 'denied',
+          platform: Platform.OS,
+        });
+      }
       emitToWeb({
         type: 'error',
         message: event.message,
@@ -2267,13 +2287,6 @@ function AppInner(): React.JSX.Element {
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
 
-  const handleDebugWebViewRemount = useCallback(() => {
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setIsNativeMenuOverlayOpen(false);
-    setWebViewMountToken((current) => current + 1);
-  }, []);
-
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -2286,36 +2299,7 @@ function AppInner(): React.JSX.Element {
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     setCurrentWebPathname(parseWebPathname(navigationState.url));
     updateSafeAreaPalette(navigationState.url);
-    setWebViewCanGoBack(Boolean(navigationState.canGoBack));
-  }, [updateSafeAreaPalette]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (versionGate.status === 'force_update') {
-        return false;
-      }
-
-      if (isNativeMenuOverlayOpen && webViewRef.current) {
-        webViewRef.current.injectJavaScript(
-          '(function(){window.history.back();})(); true;',
-        );
-        return true;
-      }
-
-      if (webViewCanGoBack && webViewRef.current) {
-        webViewRef.current.goBack();
-        return true;
-      }
-
-      return false;
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [isNativeMenuOverlayOpen, versionGate.status, webViewCanGoBack]);
+  }, [prepareBannerZoneTransition, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
@@ -2354,9 +2338,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={webUrl
-              ? { uri: webUrl }
-              : { html: '<html><body style=\"margin:0;background:#fff;\"></body></html>' }}
+            source={webUrl ? { uri: webUrl } : { html: '<html><body style="margin:0;background:#fff;"></body></html>' }}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
@@ -2371,7 +2353,8 @@ function AppInner(): React.JSX.Element {
             hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && isNativeMenuOverlayOpen}
+            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && canWebViewGoBack}
+            injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}
@@ -2438,6 +2421,7 @@ function AppInner(): React.JSX.Element {
       {startupSplashVisible ? (
         <View style={styles.startupSplashOverlay}>
           <Image
+            alt=""
             source={STARTUP_SPLASH_LOGO}
             resizeMode="contain"
             fadeDuration={0}
@@ -2446,18 +2430,32 @@ function AppInner(): React.JSX.Element {
         </View>
       ) : null}
       {canRenderNativeBanner ? (
-        <NativeAdBanner
-          adModule={nativeAdModule}
-          position={nativeBannerPosition}
-          unitId={nativeBannerUnitId}
-          heightPx={nativeBannerHeightPx}
-          frameWidthPx={nativeBannerFrameWidthPx}
-          topOffsetPx={nativeBannerTopOffsetPx}
-          bottomOffsetPx={nativeBannerBottomOffsetPx}
-          ready={nativeAdsReady}
-          reloadToken={nativeBannerReloadToken}
-          hidden={isNativeMenuOverlayOpen}
-        />
+        <>
+          <NativeAdBanner
+            adModule={nativeAdModule}
+            position="top"
+            unitId={nativeBannerUnitId}
+            heightPx={nativeBannerHeightPx}
+            frameWidthPx={nativeBannerFrameWidthPx}
+            topOffsetPx={nativeConversationListBannerTopOffsetPx}
+            bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
+            ready={nativeAdsReady}
+            reloadToken={nativeBannerReloadToken}
+            hidden={activeBannerZone !== 'list'}
+          />
+          <NativeAdBanner
+            adModule={nativeAdModule}
+            position={nativeBannerPosition}
+            unitId={nativeBannerUnitId}
+            heightPx={nativeBannerHeightPx}
+            frameWidthPx={nativeBannerFrameWidthPx}
+            topOffsetPx={nativeConversationBannerTopOffsetPx}
+            bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
+            ready={nativeAdsReady}
+            reloadToken={nativeBannerReloadToken}
+            hidden={activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
+          />
+        </>
       ) : null}
     </View>
   );

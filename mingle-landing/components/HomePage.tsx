@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { logButtonClick, logVisit } from '@/components/sections/tracking'
 import NavBar from '@/components/sections/NavBar'
 import EmailModal from '@/components/sections/EmailModal'
@@ -28,10 +28,10 @@ export default function HomePage({ version, locale }: HomePageProps) {
   // Log page visit on mount (ref guard prevents Strict Mode double-fire)
   const visitLoggedRef = useRef(false)
   useEffect(() => {
-    if (visitLoggedRef.current) return
+    if (visitLoggedRef.current || !i18n.isReady) return
     visitLoggedRef.current = true
     logVisit(i18n.language)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [i18n.isReady, i18n.language])
 
   const openModal = (buttonType: string) => {
     logButtonClick(buttonType)
