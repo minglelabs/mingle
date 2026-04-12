@@ -12,7 +12,6 @@
         --body: rgba(45, 42, 30, 0.72);
         --accent: #fbbc32;
         --accent-strong: #f97316;
-        --slide-duration: 820ms;
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
       }
 
@@ -48,7 +47,7 @@
         display: flex;
         flex-direction: row;
         will-change: transform;
-        transition: transform var(--slide-duration) var(--slide-ease);
+        transition: transform 260ms var(--slide-ease);
       }
 
       .slide {
@@ -194,10 +193,13 @@
       track.append(lastClone, ...baseSlides, firstClone);
 
       const allSlides = Array.from(track.querySelectorAll(".slide"));
+      const TAP_DURATION_MS = 260;
+      const HOLD_DURATION_MS = 110;
       let activeIndex = 1;
       let isAnimating = false;
       let wheelLock = false;
       let restoreTransitionFrame = null;
+      let holdStep = null;
 
       function realSlideNumber(index) {
         if (index === 0) {
@@ -211,9 +213,13 @@
         return index;
       }
 
-      function syncPosition(useTransition) {
+      function currentTransitionValue(durationMs) {
+        return `transform ${durationMs}ms var(--slide-ease)`;
+      }
+
+      function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
         track.style.transition = useTransition
-          ? "transform var(--slide-duration) var(--slide-ease)"
+          ? currentTransitionValue(durationMs)
           : "none";
         track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
       }
@@ -232,8 +238,14 @@
         void track.offsetWidth;
 
         restoreTransitionFrame = window.requestAnimationFrame(() => {
-          track.style.transition = "transform var(--slide-duration) var(--slide-ease)";
+          track.style.transition = currentTransitionValue(
+            holdStep === null ? TAP_DURATION_MS : HOLD_DURATION_MS
+          );
           restoreTransitionFrame = null;
+
+          if (holdStep !== null && !isAnimating) {
+            move(holdStep, true);
+          }
         });
       }
 
@@ -250,24 +262,32 @@
       }
 
       function finishAnimation() {
+        let jumped = false;
+
         if (activeIndex === 0) {
+          jumped = true;
           jumpToIndex(slideCount);
         } else if (activeIndex === slideCount + 1) {
+          jumped = true;
           jumpToIndex(1);
         }
 
         updateUi();
         isAnimating = false;
+
+        if (!jumped && holdStep !== null) {
+          move(holdStep, true);
+        }
       }
 
-      function move(step) {
+      function move(step, isContinuous = false) {
         if (isAnimating) {
           return;
         }
 
         isAnimating = true;
         activeIndex += step;
-        syncPosition(true);
+        syncPosition(true, isContinuous ? HOLD_DURATION_MS : TAP_DURATION_MS);
         updateUi();
       }
 
@@ -292,20 +312,44 @@
       });
 
       window.addEventListener("keydown", (event) => {
-        if (
-          event.key === "ArrowRight" ||
-          event.key === "ArrowDown" ||
-          event.key === "PageDown" ||
-          event.key === " "
-        ) {
-          event.preventDefault();
-          next();
+        const isForwardKey =
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " ";
+        const isBackwardKey =
+          event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "PageUp";
+
+        if (!isForwardKey && !isBackwardKey) {
           return;
         }
 
-        if (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "PageUp") {
+        event.preventDefault();
+
+        const step = isForwardKey ? 1 : -1;
+        holdStep = step;
+
+        if (event.repeat) {
+          return;
+        }
+
+        if (!isAnimating) {
+          move(step, false);
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " "
+          || event.key === "ArrowLeft"
+          || event.key === "ArrowUp"
+          || event.key === "PageUp"
+        ) {
           event.preventDefault();
-          previous();
+          holdStep = null;
         }
       });
 

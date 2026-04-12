@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck still felt stepwise when holding navigation keys**
+  Problem: Even after the infinite-loop reset was fixed, holding an arrow key still advanced one slide at a time with noticeable pauses. The deck technically worked, but it did not feel like a fast, fluid carousel when the presenter wanted to move quickly through multiple pages.
+  Cause: Navigation was still effectively tied to discrete key presses and a long default transition duration, so it inherited OS key-repeat delay and idle gaps between slide completions.
+  Fix: Switched the deck to immediate hold-aware navigation. A held direction now persists across transition completions, repeats without waiting for native key-repeat delay, and uses a much shorter animation duration for continuous movement while single taps remain readable.
+  Status: Resolved in-thread.
+
 - **XR presentation deck background still read as scattered color spots instead of one calm field**
   Problem: The lightened deck removed the dark card treatment, but the remaining warm color accents still appeared as separate soft spots. That made the backdrop feel a bit patterned rather than like one clean presentation canvas.
   Cause: The page background still relied on multiple localized radial highlights with relatively noticeable opacity.
