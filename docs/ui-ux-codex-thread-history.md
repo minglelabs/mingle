@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck let the kicker and title start position drift by slide height**
+  Problem: Even after individual kicker spacing was improved, the visible top position of the kicker and the headline still drifted between slides because the whole text block was vertically centered based on its own height.
+  Cause: The slide copy container was anchored through content-height-dependent centering, so slides with more or fewer lines shifted upward or downward as a unit.
+  Fix: Re-anchored the deck content to a fixed top offset derived from the current page-2 composition. The kicker and headline now start from the same vertical coordinate across slides, while longer titles only grow downward from that shared origin.
+  Status: Resolved in-thread.
+
 - **XR presentation deck titles felt cramped once manual line breaks were introduced**
   Problem: As more slide titles started using manual line breaks inside the `h1`, the headline lines sat too tightly on top of each other and looked visually compressed.
   Cause: The deck used an aggressively tight headline line-height that worked for single-line titles but broke down when the presenter intentionally split titles across two lines.
