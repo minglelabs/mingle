@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { ChevronDown } from 'lucide-react'
 import Image from 'next/image'
 import { logButtonClick } from '@/components/sections/tracking'

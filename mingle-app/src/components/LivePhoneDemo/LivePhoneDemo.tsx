@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -11,6 +11,7 @@ import LanguageSelector from './LanguageSelector'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
@@ -18,21 +19,26 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
+  sanitizeSttLanguageSelection,
 } from '@/lib/stt-languages'
 import {
+  DEFAULT_INPUT_MODE,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
+  LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
+  type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
+  buildAccountPreferencesPatchBody,
   buildHydratedAccountPreferences,
   DEFAULT_ECHO_ALLOWED,
   DEFAULT_SPEAKER_ENABLED,
@@ -44,24 +50,23 @@ import {
 import {
   DEFAULT_SELECTABLE_TRANSLATION_MODEL,
   TRANSLATION_MODEL_OPTIONS,
+  type TranslationModelBadge,
   type UserSelectableTranslationModel,
 } from '@/lib/translation-models'
 import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-version'
+import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   createAutoScrollScheduler,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
-  isLikelyIOSNavigator,
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
-  isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
-  parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  resolveNativeBottomBarBannerClearancePx,
   shouldEnableNativeDebugWebViewRemount,
-  shouldEnableIosTopTapFallback,
   type NativeUiBannerLayoutEventDetail,
 } from './live-phone-demo.native-ui.logic'
 import {
@@ -79,11 +84,15 @@ import {
 } from './live-phone-demo.feedback-copy'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
+import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
+import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
+import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
+import { registerNativeBackHandler } from '@/lib/native-back-handler'
 
 const VOLUME_THRESHOLD = 0.05
-const ACCOUNT_PREFERENCES_API_PATH = '/api/account/preferences'
+const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
@@ -106,12 +115,46 @@ const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
+const MENU_HISTORY_SCREEN_STATE_KEY = '__mingle_live_phone_demo_menu_screen'
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
+const MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX = 28
+const MENU_IOS_HISTORY_SETTLE_WINDOW_MS = 300
+const CONVERSATION_SWIPE_BACK_MIN_START_X_PX = 24
+const CONVERSATION_SWIPE_BACK_DISTANCE_PX = 88
+const CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS = 0.45
+const MENU_PANEL_TRANSITION = {
+  duration: 0.28,
+  ease: [0.22, 1, 0.36, 1] as const,
+}
+const MENU_BACKDROP_TRANSITION = {
+  duration: 0.22,
+  ease: 'easeOut' as const,
+}
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
 const EMPTY_STATE_ARROW_HEAD_Y = 72
+const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
+const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
+const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
+const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
+const VOICE_MODE_TOP_MARGIN_PX = 8
+const VOICE_MODE_BOTTOM_MARGIN_PX = 0
+const COMPOSER_MODE_TOP_MARGIN_PX = 16
+const COMPOSER_MODE_BOTTOM_MARGIN_PX = 0
+const VOICE_MODE_STT_BUTTON_WIDTH_PX = 136
+const VOICE_MODE_STT_BUTTON_HEIGHT_PX = 45
+const VOICE_MODE_STT_ICON_SIZE_PX = 20
+const VOICE_MODE_STT_STOP_SIZE_PX = 14
+const VOICE_MODE_SIDE_BUTTON_SIZE_PX = 34
+const COMPOSER_MODE_CONTROL_SIZE_PX = 36
+const VOICE_MODE_STT_BUTTON_RADIUS_PX = 20
+// Intentionally not localized: review requested fixed English CTA labels for the voice-mode STT button.
+const VOICE_MODE_START_LABEL = 'Start'
+const VOICE_MODE_STOP_LABEL = 'Stop'
+const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
+const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -135,14 +178,46 @@ const TEXT_SIZE_CLASS_BY_LEVEL: Record<number, string> = {
 }
 const TEXT_SIZE_LEVEL_OPTIONS = [1, 2, 3, 4, 5] as const
 
+function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) {
+  const badgeClassName = badge === 'Best'
+    ? 'border border-amber-200/80 bg-gradient-to-r from-amber-100 via-amber-50 to-orange-50 text-amber-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]'
+    : 'border border-gray-200/90 bg-gray-100/95 text-gray-600'
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[0.66rem] font-semibold leading-none tracking-[0.01em] ${badgeClassName}`}
+    >
+      {badge}
+    </span>
+  )
+}
+
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
 }
 
+function isNativeIosAppRuntime(): boolean {
+  if (!isNativeApp()) return false
+
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+
+  return apiNamespace.startsWith('ios/')
+}
+
 function isLikelyIOSPlatform(): boolean {
-  if (typeof window === 'undefined') return false
-  return isLikelyIOSNavigator(window.navigator)
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+
+  const userAgent = navigator.userAgent || ''
+  if (/iPhone|iPad|iPod/i.test(userAgent)) {
+    return true
+  }
+
+  return /Mac/i.test(userAgent) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -201,8 +276,143 @@ function resolveEstimatedNativeBannerInsetPx(viewportWidthPx: number): number {
   return Math.max(0, Math.round(NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX / safeCanvasScale))
 }
 
+function resolveEffectiveNativeBannerInsetPx(explicitInsetPx: number, estimatedInsetPx: number): number {
+  return explicitInsetPx > 0 ? explicitInsetPx : estimatedInsetPx
+}
+
 function isLivePhoneDemoFeedbackCategory(value: unknown): value is LivePhoneDemoFeedbackCategory {
   return value === 'feedback' || value === 'suggestion' || value === 'inquiry'
+}
+
+export function resolveKeyboardViewportInsetPx(viewport: VisualViewport | null | undefined): number {
+  if (typeof window === 'undefined' || !viewport) return 0
+
+  const inset = window.innerHeight - viewport.height - viewport.offsetTop
+  if (!Number.isFinite(inset) || inset <= 0) return 0
+  return Math.round(inset)
+}
+
+export function resolveHydratedComposerOpenState(input: {
+  currentIsComposerOpen: boolean
+  persistedInputMode: LivePhoneDemoInputMode | null
+}): boolean {
+  if (input.persistedInputMode === null) {
+    return input.currentIsComposerOpen
+  }
+
+  return input.persistedInputMode === 'text'
+}
+
+export function resolveScrollToBottomButtonBottomPx(input: {
+  baseBottomPx: number
+  isNativeAppRuntime: boolean
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  bottomBannerInsetPx: number
+}): number {
+  const reservedPx = input.isNativeAppRuntime && input.displayedAdBannerPosition === 'bottom'
+    ? Math.max(0, Math.round(input.bottomBannerInsetPx))
+    : 0
+
+  return input.baseBottomPx + reservedPx
+}
+
+export function resolveNativeBottomBannerOverlayInsetPx(input: {
+  isNativeAppRuntime: boolean
+  displayedAdBannerPosition: LivePhoneDemoAdBannerPosition | null
+  reportedBottomInsetPx: number
+  bottomBarClearancePx: number | null
+  estimatedBottomBannerInsetPx: number
+}): number {
+  if (!input.isNativeAppRuntime || input.displayedAdBannerPosition !== 'bottom') return 0
+
+  const reportedBottomInsetPx = Number(input.reportedBottomInsetPx)
+  const safeReportedBottomInsetPx = Number.isFinite(reportedBottomInsetPx) && reportedBottomInsetPx > 0
+    ? Math.round(reportedBottomInsetPx)
+    : 0
+  const estimatedBottomBannerInsetPx = Number(input.estimatedBottomBannerInsetPx)
+  const safeEstimatedBottomBannerInsetPx = Number.isFinite(estimatedBottomBannerInsetPx) && estimatedBottomBannerInsetPx > 0
+    ? Math.round(estimatedBottomBannerInsetPx)
+    : 0
+  const bottomBarClearancePx = Number(input.bottomBarClearancePx)
+  const safeBottomBarClearancePx = Number.isFinite(bottomBarClearancePx) && bottomBarClearancePx > 0
+    ? Math.round(bottomBarClearancePx)
+    : 0
+
+  const fallbackInsetPx = safeReportedBottomInsetPx > 0 && safeEstimatedBottomBannerInsetPx > 0
+    ? Math.min(safeReportedBottomInsetPx, safeEstimatedBottomBannerInsetPx)
+    : Math.max(safeReportedBottomInsetPx, safeEstimatedBottomBannerInsetPx)
+
+  if (safeReportedBottomInsetPx <= 0 || safeBottomBarClearancePx <= 0) {
+    return fallbackInsetPx
+  }
+
+  const derivedOverlayInsetPx = safeReportedBottomInsetPx - safeBottomBarClearancePx
+  return derivedOverlayInsetPx > 0 ? derivedOverlayInsetPx : fallbackInsetPx
+}
+
+function readSafeAreaInsetBottomPx(): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 0
+
+  let probe = document.getElementById(SAFE_AREA_BOTTOM_ENV_MEASURER_ID) as HTMLDivElement | null
+  if (!probe) {
+    probe = document.createElement('div')
+    probe.id = SAFE_AREA_BOTTOM_ENV_MEASURER_ID
+    probe.setAttribute('aria-hidden', 'true')
+    probe.style.position = 'fixed'
+    probe.style.left = '0'
+    probe.style.bottom = '0'
+    probe.style.width = '0'
+    probe.style.height = '0'
+    probe.style.visibility = 'hidden'
+    probe.style.pointerEvents = 'none'
+    probe.style.paddingBottom = 'env(safe-area-inset-bottom)'
+    document.body.appendChild(probe)
+  }
+
+  const paddingBottomPx = Number.parseFloat(window.getComputedStyle(probe).paddingBottom || '')
+  return Number.isFinite(paddingBottomPx) && paddingBottomPx > 0
+    ? Math.round(paddingBottomPx)
+    : 0
+}
+
+export function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): number {
+  if (!textarea) return COMPOSER_TEXTAREA_MIN_HEIGHT_PX
+
+  textarea.style.height = 'auto'
+  textarea.style.lineHeight = `${COMPOSER_TEXTAREA_LINE_HEIGHT_PX}px`
+  textarea.style.overflowY = 'hidden'
+  const nextHeight = Math.max(
+    COMPOSER_TEXTAREA_MIN_HEIGHT_PX,
+    Math.min(COMPOSER_TEXTAREA_MAX_HEIGHT_PX, textarea.scrollHeight),
+  )
+  textarea.style.height = `${nextHeight}px`
+  textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
+  return nextHeight
+}
+
+function readPersistedComposerDraft(): string {
+  if (typeof window === 'undefined') return ''
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_COMPOSER_DRAFT)
+    return typeof rawValue === 'string' ? rawValue : ''
+  } catch {
+    return ''
+  }
+}
+
+function persistComposerDraft(nextDraft: string): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    if (nextDraft) {
+      window.localStorage.setItem(LS_KEY_COMPOSER_DRAFT, nextDraft)
+      return
+    }
+    window.localStorage.removeItem(LS_KEY_COMPOSER_DRAFT)
+  } catch {
+    // Ignore local persistence failures.
+  }
 }
 
 function readPersistedFeedbackDraft(): PersistedFeedbackDraft | null {
@@ -412,7 +622,16 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback'
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
+type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
+type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
+type LivePhoneDemoMenuMotionState = {
+  enterMode: LivePhoneDemoMenuTransitionMode
+  exitMode: LivePhoneDemoMenuTransitionMode
+  screenTransitionMode: LivePhoneDemoMenuTransitionMode
+  isDragging: boolean
+  dragOffsetX: number
+}
 
 type FeedbackPageTab = 'compose' | 'history'
 
@@ -432,19 +651,78 @@ function formatFeedbackTimestamp(createdAt: string, locale: string): string {
   }
 }
 
-function buildMenuHistoryState(depth: number): Record<string, unknown> {
+type LivePhoneDemoPanelHeaderProps = {
+  title: string
+  backLabel: string
+  onBack: () => void
+  className?: string
+}
+
+function LivePhoneDemoPanelHeader({
+  title,
+  backLabel,
+  onBack,
+  className = '',
+}: LivePhoneDemoPanelHeaderProps) {
+  return (
+    <div
+      className={`flex shrink-0 items-center border-b border-gray-200 px-4 ${className}`.trim()}
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        height: 'calc(55px + env(safe-area-inset-top, 0px))',
+      }}
+    >
+      <button
+        type="button"
+        aria-label={backLabel}
+        onClick={onBack}
+        className="inline-flex h-[38px] w-10 items-center justify-center text-gray-700 transition hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+      >
+        <ChevronLeft size={22} strokeWidth={2.2} />
+      </button>
+      <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
+        {title}
+      </div>
+      <div className="w-10" aria-hidden="true" />
+    </div>
+  )
+}
+
+function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuScreen {
+  return value === 'root' || value === 'feedback' || value === 'conversation-management'
+}
+
+function resolveMenuScreenForDepth(
+  depth: number,
+  preferredScreen?: LivePhoneDemoMenuScreen,
+): LivePhoneDemoMenuScreen {
+  if (depth <= 1) return 'root'
+  return preferredScreen === 'conversation-management' ? 'conversation-management' : 'feedback'
+}
+
+function buildMenuHistoryState(
+  depth: number,
+  screen: LivePhoneDemoMenuScreen = 'root',
+): Record<string, unknown> {
   if (typeof window === 'undefined') {
-    return { [MENU_HISTORY_STATE_KEY]: depth }
+    return {
+      [MENU_HISTORY_STATE_KEY]: depth,
+      [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
+    }
   }
 
   const currentState = window.history.state
   if (!currentState || typeof currentState !== 'object') {
-    return { [MENU_HISTORY_STATE_KEY]: depth }
+    return {
+      [MENU_HISTORY_STATE_KEY]: depth,
+      [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
+    }
   }
 
   return {
     ...(currentState as Record<string, unknown>),
     [MENU_HISTORY_STATE_KEY]: depth,
+    [MENU_HISTORY_SCREEN_STATE_KEY]: resolveMenuScreenForDepth(depth, screen),
   }
 }
 
@@ -457,8 +735,77 @@ function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
   )
 }
 
+function resolveMenuContentTransition(
+  transitionMode: LivePhoneDemoMenuTransitionMode,
+) {
+  return transitionMode === 'animate'
+    ? { duration: 0.32, ease: [0.22, 1, 0.36, 1] as const }
+    : { duration: 0 }
+}
+
+function isNextDevOverlayTarget(target: EventTarget | null, event?: Event): boolean {
+  if (target instanceof Element) {
+    if (
+      target.closest(
+        'nextjs-portal, [data-next-badge-root], [data-nextjs-dialog-overlay], [data-nextjs-toast]',
+      )
+    ) {
+      return true
+    }
+  }
+
+  if (typeof event?.composedPath !== 'function') return false
+
+  return event.composedPath().some((node) => (
+    node instanceof Element
+    && (
+      node.tagName.toLowerCase() === 'nextjs-portal'
+      || node.hasAttribute('data-next-badge-root')
+      || node.hasAttribute('data-nextjs-dialog-overlay')
+      || node.hasAttribute('data-nextjs-toast')
+    )
+  ))
+}
+
+const livePhoneDemoMenuBackdropVariants: Variants = {
+  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
+    opacity: motionState?.enterMode === 'instant' ? 1 : 0,
+  }),
+  active: { opacity: 1, transition: MENU_BACKDROP_TRANSITION },
+  exit: (motionState: LivePhoneDemoMenuMotionState) => ({
+    opacity: 0,
+    transition: motionState.exitMode === 'animate'
+      ? MENU_BACKDROP_TRANSITION
+      : { duration: 0 },
+  }),
+}
+
+const livePhoneDemoMenuPanelVariants: Variants = {
+  initial: (motionState: LivePhoneDemoMenuMotionState) => ({
+    x: motionState?.enterMode === 'instant' ? 0 : '100%',
+  }),
+  active: (motionState: LivePhoneDemoMenuMotionState) => ({
+    x: motionState.isDragging ? motionState.dragOffsetX : 0,
+    transition: motionState.isDragging
+      ? { duration: 0 }
+      : MENU_PANEL_TRANSITION,
+  }),
+  exit: (motionState: LivePhoneDemoMenuMotionState) => (
+    motionState.exitMode === 'animate'
+      ? { x: '100%', transition: MENU_PANEL_TRANSITION }
+      : { x: '100%', transition: { duration: 0 } }
+  ),
+}
+
 export interface LivePhoneDemoRef {
-  startRecording: () => void
+  startRecording: () => Promise<void>
+  stopRecording: (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => Promise<void>
+  prepareForDeletion: () => void
+  isSttSessionRunning: () => boolean
+}
+
+type LivePhoneDemoStartRecordingPreparation = {
+  switchedFromLiveConversation: boolean
 }
 
 interface LivePhoneDemoProps {
@@ -470,6 +817,7 @@ interface LivePhoneDemoProps {
   usageLimitRetryHintLabel: string
   connectingLabel: string
   connectionFailedLabel: string
+  switchLiveRoomToastLabel: string
   muteTtsLabel: string
   unmuteTtsLabel: string
   textSizeLabel: string
@@ -493,6 +841,29 @@ interface LivePhoneDemoProps {
   showMenuButton?: boolean
   showAccountActions?: boolean
   enableAccountPreferencesSync?: boolean
+  headerMode?: 'default' | 'conversation'
+  backButtonLabel?: string
+  onBack?: () => void
+  onConversationDeleted?: () => void
+  conversationTitle?: string
+  conversationId?: string
+  sessionKeyOverride?: string
+  storageNamespace?: string
+  initialSelectedLanguages?: string[]
+  autoStartOnMount?: boolean
+  onAutoStartHandled?: () => void
+  isVisible?: boolean
+  enableNativeBannerBridge?: boolean
+  onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
+  onSttSessionRunningChange?: (isRunning: boolean) => void
+  onLatestUtteranceChange?: (payload: {
+    preview: string
+    createdAt: string
+    speaker?: string
+    speakerAvatarSeed?: string
+    speakerAvatarIndex?: number
+  }) => void
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -536,6 +907,13 @@ type NativeSetAdBannerPositionCommand = {
   }
 }
 
+type NativeSetBottomBarClearanceCommand = {
+  type: 'native_set_bottom_bar_clearance'
+  payload?: {
+    clearancePx?: number
+  }
+}
+
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
 }
@@ -556,10 +934,12 @@ function buildTrackingRequestHeaders(args: {
   sessionKey: string
   trackingUserId: string
   nativeAppUpdate: NativeAppUpdateDetail | null
+  extraHeaders?: Record<string, string>
 }): Record<string, string> {
   const headers: Record<string, string> = {
     'x-mingle-session-key': args.sessionKey,
     'x-mingle-user-id': args.trackingUserId,
+    ...(args.extraHeaders || {}),
   }
 
   const apiNamespace = typeof window === 'undefined'
@@ -593,6 +973,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   usageLimitRetryHintLabel,
   connectingLabel,
   connectionFailedLabel,
+  switchLiveRoomToastLabel,
   textSizeLabel,
   silenceFinalizeLabel,
   translationModelLabel,
@@ -614,16 +995,45 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   showMenuButton = true,
   showAccountActions = true,
   enableAccountPreferencesSync = true,
+  headerMode = 'default',
+  backButtonLabel = 'Back',
+  onBack,
+  onConversationDeleted,
+  conversationTitle,
+  conversationId,
+  sessionKeyOverride,
+  storageNamespace,
+  initialSelectedLanguages,
+  isVisible = true,
+  enableNativeBannerBridge = true,
+  onStartRecordingRequested,
+  onSttSessionRunningChange,
+  onLatestUtteranceChange,
+  onSelectedLanguagesChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
+  const conversationSelectedLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
+    [fallbackLanguages, initialSelectedLanguages],
+  )
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
+    conversationId ? conversationSelectedLanguages : fallbackLanguages,
+  )
+  const resolveConversationSessionKey = useCallback(
+    () => getOrCreateSessionKey(storageNamespace, sessionKeyOverride),
+    [sessionKeyOverride, storageNamespace],
+  )
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
+  const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
+  const [menuScreenDirection, setMenuScreenDirection] = useState<LivePhoneDemoMenuScreenDirection>('forward')
   const [textSizeMenuOpen, setTextSizeMenuOpen] = useState(false)
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
@@ -632,6 +1042,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
+  const [deleteConversationDialogOpen, setDeleteConversationDialogOpen] = useState(false)
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false)
+  const [renameConversationDialogOpen, setRenameConversationDialogOpen] = useState(false)
+  const [renameConversationValue, setRenameConversationValue] = useState(conversationTitle ?? '')
+  const [isRenamingConversation, setIsRenamingConversation] = useState(false)
+  const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
@@ -646,8 +1062,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false)
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null)
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
+  const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
+  const [composerDraft, setComposerDraft] = useState('')
+  const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
+  const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
+  const [floatingToastMessage, setFloatingToastMessage] = useState('')
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
-  const { ttsEnabled: isSoundEnabled, aecEnabled } = useTtsSettings()
+  const floatingToastTimerRef = useRef<number | null>(null)
+  const {
+    ttsEnabled: isSoundEnabled,
+    aecEnabled,
+  } = useTtsSettings()
   const [speakingItem, setSpeakingItem] = useState<BubbleTtsTarget | null>(null)
   const [pendingManualTtsTarget, setPendingManualTtsTarget] = useState<BubbleTtsTarget | null>(null)
   const utterancesRef = useRef<Utterance[]>([])
@@ -677,17 +1103,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(0)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
+  const menuIosHistorySettleRef = useRef<{ depth: number, expiresAt: number } | null>(null)
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
     startedAt: number
   } | null>(null)
+  const conversationSwipeSessionRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startedAt: number
+  } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const bottomBarRef = useRef<HTMLDivElement | null>(null)
+  const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
+  const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
   const feedbackHistoryLoadedRef = useRef(false)
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
-  const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
+  const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
+  const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
+  const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
   const [isMenuDragging, setIsMenuDragging] = useState(false)
+  const [menuEnterMode, setMenuEnterMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
+  const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
+  const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
@@ -695,22 +1139,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
   const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
+
+  const showFloatingToast = useCallback((message: string) => {
+    const normalizedMessage = message.trim()
+    if (!normalizedMessage) return
+    if (floatingToastTimerRef.current) {
+      clearTimeout(floatingToastTimerRef.current)
+    }
+    setFloatingToastMessage(normalizedMessage)
+    floatingToastTimerRef.current = window.setTimeout(() => {
+      setFloatingToastMessage('')
+    }, 1500)
+  }, [])
+  const composerCopy = useMemo(() => resolveLivePhoneDemoComposerCopy(uiLocale), [uiLocale])
   const latestAccountPreferencesRef = useRef<LivePhoneDemoAccountPreferences>({
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     sonioxManualFinalizeSilenceMs: DEFAULT_SONIOX_SILENCE_MS,
     translationModel: DEFAULT_SELECTABLE_TRANSLATION_MODEL,
     adBannerPosition: null,
+    inputMode: DEFAULT_INPUT_MODE,
     speakerEnabled: DEFAULT_SPEAKER_ENABLED,
     echoAllowed: DEFAULT_ECHO_ALLOWED,
   })
-  const latestAccountPreferences = useMemo(() => ({
+  const latestAccountPreferences = useMemo<LivePhoneDemoAccountPreferences>(() => ({
     textSizeLevel,
     sonioxManualFinalizeSilenceMs,
     translationModel,
     adBannerPosition,
+    inputMode: isComposerOpen ? 'text' : 'voice',
     speakerEnabled: isSoundEnabled,
     echoAllowed: !aecEnabled,
-  }), [adBannerPosition, aecEnabled, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
+  }), [adBannerPosition, aecEnabled, isComposerOpen, isSoundEnabled, sonioxManualFinalizeSilenceMs, textSizeLevel, translationModel])
   const normalizedDefaultFeedbackEmail = defaultFeedbackEmail.trim()
   const displayedAdBannerPosition = resolveDisplayedLivePhoneDemoAdBannerPosition({
     preferredPosition: adBannerPosition,
@@ -721,7 +1180,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
-  const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
+  const isNativeMenuOverlayVisible = menuOpen || menuScreen !== 'root'
+  const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
+    enterMode: menuEnterMode,
+    exitMode: menuExitMode,
+    screenTransitionMode: menuScreenTransitionMode,
+    isDragging: isMenuDragging,
+    dragOffsetX: menuDragOffsetX,
+  }), [isMenuDragging, menuDragOffsetX, menuEnterMode, menuExitMode, menuScreenTransitionMode])
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -731,11 +1197,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     latestAccountPreferencesRef.current = latestAccountPreferences
   }, [latestAccountPreferences])
 
+  const syncComposerTextareaHeight = useCallback((textarea: HTMLTextAreaElement | null) => {
+    const nextHeight = resizeComposerTextarea(textarea)
+    setComposerTextareaHeightPx((current) => current === nextHeight ? current : nextHeight)
+    return nextHeight
+  }, [])
+
   useEffect(() => {
     if (!normalizedDefaultFeedbackEmail) return
     if (feedbackEmailEdited) return
     setFeedbackEmail(normalizedDefaultFeedbackEmail)
   }, [feedbackEmailEdited, normalizedDefaultFeedbackEmail])
+
+  useEffect(() => {
+    setRenameConversationValue(conversationTitle ?? '')
+  }, [conversationTitle])
+
+  useEffect(() => {
+    setDisplayConversationTitle(conversationTitle ?? '')
+  }, [conversationTitle])
 
   useLayoutEffect(() => {
     let cancelled = false
@@ -747,18 +1227,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const persistedDraft = readPersistedFeedbackDraft()
-      if (!persistedDraft) return
-
-      setFeedbackCategory(persistedDraft.category)
-      setFeedbackMessage(persistedDraft.message)
-      setFeedbackEmail(persistedDraft.email)
-      setFeedbackEmailEdited(
-        persistedDraft.emailEdited
-        || (
-          persistedDraft.email.trim().length > 0
-          && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
-        ),
-      )
+      if (persistedDraft) {
+        setFeedbackCategory(persistedDraft.category)
+        setFeedbackMessage(persistedDraft.message)
+        setFeedbackEmail(persistedDraft.email)
+        setFeedbackEmailEdited(
+          persistedDraft.emailEdited
+          || (
+            persistedDraft.email.trim().length > 0
+            && persistedDraft.email.trim() !== initialDefaultFeedbackEmailRef.current
+          ),
+        )
+      }
+      setHasHydratedFeedbackDraft(true)
     })
 
     return () => {
@@ -778,25 +1259,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       if (cancelled) return
 
       const next = readPersistedLivePhoneDemoPreferences(fallbackLanguages)
+      persistedInputModeRef.current = next.inputMode
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
-      setSelectedLanguages(next.selectedLanguages)
+      if (!conversationId) {
+        setSelectedLanguages(next.selectedLanguages)
+      }
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
       setAdBannerPosition(next.adBannerPosition)
-
-      const nativeUiBridgeEnabled = isNativeUiBridgeEnabledFromSearch(window.location.search || '')
-      setIsIosTopTapEnabled(shouldEnableIosTopTapFallback({
-        isLikelyIosPlatform: isLikelyIOSPlatform(),
-        isNativeApp: isNativeApp(),
-        isNativeUiBridgeEnabled: nativeUiBridgeEnabled,
+      setIsComposerOpen((current) => resolveHydratedComposerOpenState({
+        currentIsComposerOpen: current,
+        persistedInputMode: next.inputMode,
       }))
+      setComposerDraft(readPersistedComposerDraft())
+      setHasHydratedLocalUiPreferences(true)
+      setHasHydratedComposerDraft(true)
+
     })
 
     return () => {
       cancelled = true
     }
-  }, [fallbackLanguages])
+  }, [conversationId, fallbackLanguages])
+
+  useEffect(() => {
+    if (!conversationId) return
+
+    let cancelled = false
+    const schedule = typeof queueMicrotask === 'function'
+      ? queueMicrotask
+      : (callback: () => void) => { void Promise.resolve().then(callback) }
+
+    schedule(() => {
+      if (cancelled) return
+
+      setSelectedLanguages((current) => {
+        if (
+          current.length === conversationSelectedLanguages.length
+          && current.every((language, index) => language === conversationSelectedLanguages[index])
+        ) {
+          return current
+        }
+
+        return [...conversationSelectedLanguages]
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId, conversationSelectedLanguages])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -825,20 +1338,156 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    const syncKeyboardInset = () => {
+      setKeyboardViewportInsetPx(resolveKeyboardViewportInsetPx(viewport))
+    }
+
+    syncKeyboardInset()
+    viewport.addEventListener('resize', syncKeyboardInset)
+    viewport.addEventListener('scroll', syncKeyboardInset)
+
+    return () => {
+      viewport.removeEventListener('resize', syncKeyboardInset)
+      viewport.removeEventListener('scroll', syncKeyboardInset)
+    }
+  }, [])
+
+  const syncNativeBottomBarClearance = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!window.ReactNativeWebView?.postMessage) return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    const bottomBarRect = bottomBarNode.getBoundingClientRect()
+    const nextClearancePx = resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: bottomBarRect.top,
+      viewportHeightPx: window.innerHeight,
+      safeAreaInsetBottomPx: readSafeAreaInsetBottomPx(),
+    })
+
+    if (lastNativeBottomBarClearancePxRef.current === nextClearancePx) return
+    lastNativeBottomBarClearancePxRef.current = nextClearancePx
+    setNativeBottomBarClearancePx((current) => current === nextClearancePx ? current : nextClearancePx)
+
+    const command: NativeSetBottomBarClearanceCommand = {
+      type: 'native_set_bottom_bar_clearance',
+      payload: { clearancePx: nextClearancePx },
+    }
+    window.ReactNativeWebView.postMessage(JSON.stringify(command))
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const bottomBarNode = bottomBarRef.current
+    if (!bottomBarNode) return
+
+    let frameId = 0
+    const requestSync = () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = 0
+        syncNativeBottomBarClearance()
+      })
+    }
+
+    requestSync()
+
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          requestSync()
+        })
+    resizeObserver?.observe(bottomBarNode)
+
+    window.addEventListener('resize', requestSync)
+    const viewport = window.visualViewport
+    viewport?.addEventListener('resize', requestSync)
+    viewport?.addEventListener('scroll', requestSync)
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('resize', requestSync)
+      viewport?.removeEventListener('scroll', requestSync)
+    }
+  }, [syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const frameId = window.requestAnimationFrame(() => {
+      syncNativeBottomBarClearance()
+    })
+    const timeout180Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 180)
+    const timeout360Id = window.setTimeout(() => {
+      syncNativeBottomBarClearance()
+    }, 360)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      window.clearTimeout(timeout180Id)
+      window.clearTimeout(timeout360Id)
+    }
+  }, [isComposerOpen, keyboardViewportInsetPx, syncNativeBottomBarClearance])
+
+  useEffect(() => {
+    if (!isComposerOpen) return
+
+    const timerId = window.setTimeout(() => {
+      const textarea = composerTextareaRef.current
+      if (!textarea) return
+      syncComposerTextareaHeight(textarea)
+      textarea.focus({ preventScroll: true })
+      const cursor = textarea.value.length
+      textarea.setSelectionRange(cursor, cursor)
+    }, 40)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [isComposerOpen, syncComposerTextareaHeight])
+
+  useLayoutEffect(() => {
+    syncComposerTextareaHeight(composerTextareaRef.current)
+  }, [composerDraft, isComposerOpen, syncComposerTextareaHeight])
+
+  useEffect(() => {
+    if (isComposerOpen) return
+    setComposerTextareaHeightPx(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
+  }, [isComposerOpen])
+
   // Persist selected languages
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
-  }, [selectedLanguages])
+  }, [hasHydratedLocalUiPreferences, selectedLanguages])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       localStorage.setItem(LS_KEY_TEXT_SIZE_LEVEL, String(textSizeLevel))
     } catch { /* ignore */ }
-  }, [textSizeLevel])
+  }, [hasHydratedLocalUiPreferences, textSizeLevel])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
     try {
       if (adBannerPosition) {
         localStorage.setItem(LS_KEY_AD_BANNER_POSITION, adBannerPosition)
@@ -846,9 +1495,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
       }
     } catch { /* ignore */ }
-  }, [adBannerPosition])
+  }, [adBannerPosition, hasHydratedLocalUiPreferences])
 
   useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
+    try {
+      localStorage.setItem(LS_KEY_INPUT_MODE, isComposerOpen ? 'text' : 'voice')
+    } catch { /* ignore */ }
+  }, [hasHydratedLocalUiPreferences, isComposerOpen])
+
+  useEffect(() => {
+    if (!hasHydratedComposerDraft) return
+    persistComposerDraft(composerDraft)
+  }, [composerDraft, hasHydratedComposerDraft])
+
+  useEffect(() => {
+    if (!hasHydratedFeedbackDraft) return
     if (!feedbackMessage) {
       persistFeedbackDraft(null)
       return
@@ -860,7 +1522,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       email: feedbackEmail,
       emailEdited: feedbackEmailEdited,
     })
-  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage])
+  }, [feedbackCategory, feedbackEmail, feedbackEmailEdited, feedbackMessage, hasHydratedFeedbackDraft])
 
   const clearAccountPreferencesSyncTimer = useCallback(() => {
     if (accountPreferencesSyncTimerRef.current === null) return
@@ -869,6 +1531,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   useEffect(() => {
+    // Hydrate from the server only on lifecycle inputs. Re-fetching on live local
+    // preference changes would clobber in-progress edits with the last server snapshot.
     let cancelled = false
     clearAccountPreferencesSyncTimer()
 
@@ -881,10 +1545,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(accountPreferencesApiPath, {
       method: 'GET',
       cache: 'no-store',
       headers: buildTrackingRequestHeaders({
@@ -909,6 +1573,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setSonioxManualFinalizeSilenceMs(hydratedPreferences.sonioxManualFinalizeSilenceMs)
         setTranslationModel(hydratedPreferences.translationModel)
         setAdBannerPosition(hydratedPreferences.adBannerPosition)
+        if (persistedInputModeRef.current === null) {
+          setIsComposerOpen(hydratedPreferences.inputMode === 'text')
+        }
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
@@ -923,16 +1590,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, nativeAppUpdate])
+  }, [
+    accountPreferencesApiPath,
+    clearAccountPreferencesSyncTimer,
+    enableAccountPreferencesSync,
+    nativeAppUpdate,
+    resolveConversationSessionKey,
+  ])
 
   const syncAccountPreferences = useCallback(() => {
     if (!enableAccountPreferencesSync) return
     const currentPreferences = latestAccountPreferencesRef.current
     const currentSyncStateKey = serializeAccountPreferencesSyncState(currentPreferences)
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(accountPreferencesApiPath, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -942,12 +1615,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: currentPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: currentPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: currentPreferences.translationModel,
-        adBannerPosition: currentPreferences.adBannerPosition,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(currentPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
@@ -958,16 +1626,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync, nativeAppUpdate])
+  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const syncAccountPreferencesOverride = useCallback((nextPreferences: LivePhoneDemoAccountPreferences) => {
     if (!enableAccountPreferencesSync) return
     latestAccountPreferencesRef.current = nextPreferences
     const currentSyncStateKey = serializeAccountPreferencesSyncState(nextPreferences)
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
-    void fetch(ACCOUNT_PREFERENCES_API_PATH, {
+    void fetch(accountPreferencesApiPath, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -977,12 +1645,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           nativeAppUpdate,
         }),
       },
-      body: JSON.stringify({
-        textSizeLevel: nextPreferences.textSizeLevel,
-        sonioxManualFinalizeSilenceMs: nextPreferences.sonioxManualFinalizeSilenceMs,
-        translationModel: nextPreferences.translationModel,
-        adBannerPosition: nextPreferences.adBannerPosition,
-      }),
+      body: JSON.stringify(buildAccountPreferencesPatchBody(nextPreferences)),
     })
       .then((response) => {
         if (!response.ok) {
@@ -993,7 +1656,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       .catch(() => {
         // Keep the current in-memory state and retry on the next change.
       })
-  }, [enableAccountPreferencesSync, nativeAppUpdate])
+  }, [accountPreferencesApiPath, enableAccountPreferencesSync, nativeAppUpdate, resolveConversationSessionKey])
 
   const clearFeedbackSubmitState = useCallback(() => {
     setFeedbackSubmitError(null)
@@ -1007,7 +1670,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackHistoryError(null)
 
     try {
-      const sessionKey = getOrCreateSessionKey()
+      const sessionKey = resolveConversationSessionKey()
       const trackingUserId = getOrCreateTrackingUserId()
       const response = await fetch(FEEDBACK_API_PATH, {
         method: 'GET',
@@ -1031,7 +1694,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } finally {
       setIsFeedbackHistoryLoading(false)
     }
-  }, [feedbackCopy.historyErrorMessage, nativeAppUpdate])
+  }, [feedbackCopy.historyErrorMessage, nativeAppUpdate, resolveConversationSessionKey])
 
   const handleFeedbackSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1056,7 +1719,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setFeedbackSubmitSuccess(false)
 
     try {
-      const sessionKey = getOrCreateSessionKey()
+      const sessionKey = resolveConversationSessionKey()
       const trackingUserId = getOrCreateTrackingUserId()
       const response = await fetch(FEEDBACK_API_PATH, {
         method: 'POST',
@@ -1106,37 +1769,70 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } finally {
       setIsSubmittingFeedback(false)
     }
-  }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, nativeAppUpdate, uiLocale])
+  }, [feedbackCategory, feedbackCopy.errorMessage, feedbackCopy.invalidEmailMessage, feedbackCopy.messageTooShortMessage, feedbackEmail, feedbackMessage, loadFeedbackThreads, nativeAppUpdate, resolveConversationSessionKey, uiLocale])
 
-  const applyMenuNavigationDepth = useCallback((nextDepth: number) => {
+  const applyMenuNavigationDepth = useCallback((
+    nextDepth: number,
+    options?: {
+      enterMode?: LivePhoneDemoMenuTransitionMode
+      exitMode?: LivePhoneDemoMenuTransitionMode
+      screenTransitionMode?: LivePhoneDemoMenuTransitionMode
+      screen?: LivePhoneDemoMenuScreen
+    },
+  ) => {
+    const previousDepth = menuHistoryDepthRef.current
     const boundedDepth = Math.max(0, Math.min(2, nextDepth))
+    const nextEnterMode = options?.enterMode ?? 'animate'
+    const nextExitMode = options?.exitMode ?? 'animate'
+    const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
+    const nextScreen = resolveMenuScreenForDepth(boundedDepth, options?.screen)
+    const nextDirection: LivePhoneDemoMenuScreenDirection = boundedDepth < previousDepth ? 'back' : 'forward'
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
     setMenuDragOffsetX(0)
     setIsMenuDragging(false)
+    setMenuScreenTransitionMode(nextScreenTransitionMode)
+    setMenuScreenDirection(nextDirection)
 
     if (boundedDepth === 0) {
+      setMenuExitMode(nextExitMode)
       setDeleteAccountDialogOpen(false)
+      setDeleteConversationDialogOpen(false)
       setMenuScreen('root')
       setMenuOpen(false)
       return
     }
 
+    setMenuEnterMode(nextEnterMode)
+    setMenuExitMode('animate')
     setMenuOpen(true)
-    setMenuScreen(boundedDepth === 1 ? 'root' : 'feedback')
+    setMenuScreen(nextScreen)
   }, [])
 
-  const pushMenuHistoryEntry = useCallback((nextDepth: number) => {
-    applyMenuNavigationDepth(nextDepth)
+  const pushMenuHistoryEntry = useCallback((
+    nextDepth: number,
+    screen: LivePhoneDemoMenuScreen = 'root',
+    options?: {
+      screenTransitionMode?: LivePhoneDemoMenuTransitionMode
+    },
+  ) => {
+    applyMenuNavigationDepth(nextDepth, {
+      exitMode: 'animate',
+      screenTransitionMode: options?.screenTransitionMode ?? 'animate',
+      screen,
+    })
     if (typeof window === 'undefined') return
     menuHistoryTargetDepthRef.current = null
-    window.history.pushState(buildMenuHistoryState(nextDepth), '')
+    window.history.pushState(buildMenuHistoryState(nextDepth, screen), '')
   }, [applyMenuNavigationDepth])
 
   const closeMenuPanel = useCallback(() => {
     menuHistoryTargetDepthRef.current = null
-    applyMenuNavigationDepth(0)
+    applyMenuNavigationDepth(0, {
+      exitMode: 'animate',
+      screenTransitionMode: 'animate',
+    })
   }, [applyMenuNavigationDepth])
 
   const requestMenuBackStep = useCallback(() => {
@@ -1188,8 +1884,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!menuOpen || menuScreen === 'feedback') return
     clearFeedbackSubmitState()
     setFeedbackTab('compose')
-    pushMenuHistoryEntry(2)
+    pushMenuHistoryEntry(2, 'feedback')
   }, [clearFeedbackSubmitState, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleConversationManagementMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'conversation-management') return
+    pushMenuHistoryEntry(2, 'conversation-management')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleDeleteConversationMenuItemPress = useCallback(() => {
+    setDeleteConversationDialogOpen(true)
+  }, [])
 
   const handleTextSizeLevelSelect = useCallback((nextTextSizeLevel: number) => {
     setTextSizeMenuOpen(false)
@@ -1223,6 +1928,32 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
   useEffect(() => {
+    if (isVisible) return
+
+    const timerId = window.setTimeout(() => {
+      closeMenuPanel()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [closeMenuPanel, isVisible])
+
+  useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
+    if (!isNativeApp()) return
+
+    const timerId = window.setTimeout(() => {
+      postNativeBannerZone('conversation')
+    }, 280)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [enableNativeBannerBridge, isVisible])
+
+  useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
     const command: NativeUiOverlayStateCommand = {
@@ -1235,7 +1966,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner state unchanged.
     }
-  }, [isNativeMenuOverlayVisible])
+  }, [enableNativeBannerBridge, isNativeMenuOverlayVisible, isVisible])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -1250,9 +1981,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         // Ignore bridge errors during teardown.
       }
     }
-  }, [])
+  }, [enableNativeBannerBridge, isVisible])
 
   useEffect(() => {
+    if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
     const nextBannerPosition = adBannerPosition
@@ -1268,7 +2000,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner position unchanged.
     }
-  }, [adBannerPosition, nativeBannerPositionFromQuery])
+  }, [adBannerPosition, enableNativeBannerBridge, isVisible, nativeBannerPositionFromQuery])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -1305,17 +2037,85 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [accountPreferencesHydratedGeneration, clearAccountPreferencesSyncTimer, enableAccountPreferencesSync, latestAccountPreferences, syncAccountPreferences])
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       const requestedDepth = menuHistoryTargetDepthRef.current
       menuHistoryTargetDepthRef.current = null
+      const currentHistoryState = typeof window === 'undefined' ? null : window.history.state
+      const state = (
+        currentHistoryState && typeof currentHistoryState === 'object'
+          ? currentHistoryState
+          : event.state
+      ) as Record<string, unknown> | null
+      const hasMenuDepthState = Boolean(
+        state
+        && typeof state[MENU_HISTORY_STATE_KEY] === 'number'
+      )
+      const nextStateDepth = hasMenuDepthState
+        ? Math.max(0, Math.min(2, Number(state?.[MENU_HISTORY_STATE_KEY])))
+        : 0
+      const nextStateScreen = (
+        state
+        && typeof state === 'object'
+        && isLivePhoneDemoMenuScreen((state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY])
+      )
+        ? (state as Record<string, unknown>)[MENU_HISTORY_SCREEN_STATE_KEY] as LivePhoneDemoMenuScreen
+        : undefined
+      const isNativeIosHistoryGesture = requestedDepth === null && isNativeIosAppRuntime()
+      const settleState = menuIosHistorySettleRef.current
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+      if (settleState && nowMs > settleState.expiresAt) {
+        menuIosHistorySettleRef.current = null
+      }
+      const activeSettleState = menuIosHistorySettleRef.current
 
       if (requestedDepth !== null) {
-        applyMenuNavigationDepth(requestedDepth)
+        menuIosHistorySettleRef.current = null
+        applyMenuNavigationDepth(requestedDepth, {
+          exitMode: 'animate',
+          screenTransitionMode: 'animate',
+          screen: nextStateScreen,
+        })
         return
       }
 
-      if (menuHistoryDepthRef.current <= 0) return
-      applyMenuNavigationDepth(Math.max(0, menuHistoryDepthRef.current - 1))
+      if (menuHistoryDepthRef.current <= 0 && nextStateDepth <= 0) return
+      const nextDepth = nextStateDepth
+      const shouldIgnoreSettlingReplay = (
+        isNativeIosHistoryGesture
+        && activeSettleState !== null
+        && nowMs <= activeSettleState.expiresAt
+        && activeSettleState.depth !== nextDepth
+        && (activeSettleState.depth === 0 || nextDepth === 0)
+      )
+
+      if (shouldIgnoreSettlingReplay) {
+        // iOS already moved history, but we're treating this as a delayed replay.
+        // Correct browser history to match the settled JS state so they stay in sync.
+        const correctionDelta = activeSettleState!.depth - nextDepth
+        if (correctionDelta !== 0) {
+          menuHistoryTargetDepthRef.current = activeSettleState!.depth
+          window.history.go(correctionDelta)
+        }
+        return
+      }
+
+      applyMenuNavigationDepth(nextDepth, {
+        enterMode: isNativeIosHistoryGesture && nextDepth > 0 ? 'instant' : 'animate',
+        exitMode: isNativeIosHistoryGesture && nextDepth === 0 ? 'instant' : 'animate',
+        screenTransitionMode: isNativeIosHistoryGesture ? 'instant' : 'animate',
+        screen: nextStateScreen,
+      })
+
+      if (isNativeIosHistoryGesture) {
+        menuIosHistorySettleRef.current = {
+          depth: nextDepth,
+          expiresAt: nowMs + MENU_IOS_HISTORY_SETTLE_WINDOW_MS,
+        }
+        return
+      }
+
+      menuIosHistorySettleRef.current = null
     }
 
     window.addEventListener('popstate', handlePopState)
@@ -1330,6 +2130,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
+      if (renameConversationDialogOpen) {
+        if (!isRenamingConversation) {
+          setRenameConversationDialogOpen(false)
+          setRenameConversationValue(conversationTitle ?? '')
+        }
+        return
+      }
+      if (deleteConversationDialogOpen) {
+        if (!isDeletingConversation) {
+          setDeleteConversationDialogOpen(false)
+        }
+        return
+      }
       if (textSizeMenuOpen) {
         setTextSizeMenuOpen(false)
         try {
@@ -1355,7 +2168,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
+  }, [conversationTitle, deleteConversationDialogOpen, isDeletingConversation, isRenamingConversation, menuOpen, renameConversationDialogOpen, requestMenuBackStep, textSizeMenuOpen, translationModelMenuOpen])
 
   useEffect(() => {
     if (!textSizeMenuOpen) return
@@ -1413,6 +2226,67 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setDeleteAccountDialogOpen(false)
   }, [isAuthActionPending])
 
+  const closeDeleteConversationDialog = useCallback(() => {
+    if (isDeletingConversation) return
+    setDeleteConversationDialogOpen(false)
+  }, [isDeletingConversation])
+
+  const closeRenameConversationDialog = useCallback(() => {
+    if (isRenamingConversation) return
+    setRenameConversationDialogOpen(false)
+    setRenameConversationValue(conversationTitle ?? '')
+  }, [conversationTitle, isRenamingConversation])
+
+  const openRenameConversationDialog = useCallback(() => {
+    if (!conversationId || isRenamingConversation) return
+    setRenameConversationValue(conversationTitle ?? '')
+    setRenameConversationDialogOpen(true)
+  }, [conversationId, conversationTitle, isRenamingConversation])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (renameConversationDialogOpen) {
+      if (!isRenamingConversation) {
+        closeRenameConversationDialog()
+      }
+      return true
+    }
+
+    if (deleteConversationDialogOpen) {
+      if (!isDeletingConversation) {
+        closeDeleteConversationDialog()
+      }
+      return true
+    }
+
+    if (textSizeMenuOpen) {
+      setTextSizeMenuOpen(false)
+      return true
+    }
+
+    if (translationModelMenuOpen) {
+      setTranslationModelMenuOpen(false)
+      return true
+    }
+
+    if (menuHistoryDepthRef.current > 0 || menuOpen) {
+      requestMenuBackStep()
+      return true
+    }
+
+    return false
+  }, 10), [
+    closeDeleteConversationDialog,
+    closeRenameConversationDialog,
+    deleteConversationDialogOpen,
+    isDeletingConversation,
+    isRenamingConversation,
+    menuOpen,
+    renameConversationDialogOpen,
+    requestMenuBackStep,
+    textSizeMenuOpen,
+    translationModelMenuOpen,
+  ])
+
   const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
     const swipeSession = menuSwipeSessionRef.current
     if (!swipeSession || swipeSession.pointerId !== pointerId) return
@@ -1437,6 +2311,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return
+    if (isNativeIosAppRuntime() && event.clientX <= MENU_PANEL_IOS_NATIVE_EDGE_SWIPE_GUTTER_PX) return
     if (shouldIgnoreMenuSwipeTarget(event.target)) return
 
     menuSwipeSessionRef.current = {
@@ -1473,6 +2348,83 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     setMenuDragOffsetX(0)
   }, [])
 
+  const finishConversationSwipeBack = useCallback((pointerId: number, currentX: number, currentY: number) => {
+    const swipeSession = conversationSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== pointerId) return
+
+    conversationSwipeSessionRef.current = null
+
+    const deltaX = currentX - swipeSession.startX
+    const deltaY = currentY - swipeSession.startY
+    const elapsedMs = Math.max(1, performance.now() - swipeSession.startedAt)
+    const velocityPxPerMs = deltaX / elapsedMs
+
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return
+    if (
+      deltaX >= CONVERSATION_SWIPE_BACK_DISTANCE_PX
+      || velocityPxPerMs >= CONVERSATION_SWIPE_BACK_VELOCITY_PX_PER_MS
+    ) {
+      onBack?.()
+    }
+  }, [onBack])
+
+  const handleConversationPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isNativeIosAppRuntime()) return
+    if (headerMode !== 'conversation' || !onBack) return
+    if (menuOpen || langSelectorOpen) return
+    if (deleteAccountDialogOpen || deleteConversationDialogOpen) return
+    if (textSizeMenuOpen || translationModelMenuOpen) return
+    if (event.pointerType === 'mouse') return
+    if (isNextDevOverlayTarget(event.target, event.nativeEvent)) return
+    if (event.clientX <= CONVERSATION_SWIPE_BACK_MIN_START_X_PX) return
+    if (shouldIgnoreMenuSwipeTarget(event.target)) return
+
+    conversationSwipeSessionRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }, [
+    deleteAccountDialogOpen,
+    deleteConversationDialogOpen,
+    headerMode,
+    langSelectorOpen,
+    menuOpen,
+    onBack,
+    textSizeMenuOpen,
+    translationModelMenuOpen,
+  ])
+
+  const handleConversationPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const swipeSession = conversationSwipeSessionRef.current
+    if (!swipeSession || swipeSession.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - swipeSession.startX
+    const deltaY = event.clientY - swipeSession.startY
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 16) {
+      conversationSwipeSessionRef.current = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    }
+  }, [])
+
+  const handleConversationPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    finishConversationSwipeBack(event.pointerId, event.clientX, event.clientY)
+  }, [finishConversationSwipeBack])
+
+  const handleConversationPointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    conversationSwipeSessionRef.current = null
+  }, [])
+
   const handleDeleteAccountConfirm = useCallback(() => {
     if (isAuthActionPending) return
     setDeleteAccountDialogOpen(false)
@@ -1494,6 +2446,39 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [closeDeleteAccountDialog, deleteAccountDialogOpen])
+
+  useEffect(() => {
+    if (!deleteConversationDialogOpen) return
+    deleteConversationCancelButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeDeleteConversationDialog()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeDeleteConversationDialog, deleteConversationDialogOpen])
+
+  useEffect(() => {
+    if (!renameConversationDialogOpen) return
+    renameConversationInputRef.current?.focus()
+    renameConversationInputRef.current?.select()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      closeRenameConversationDialog()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeRenameConversationDialog, renameConversationDialogOpen])
 
   const ensureAudioPlayer = useCallback(() => {
     if (playerAudioRef.current) return playerAudioRef.current
@@ -1843,7 +2828,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const language = input.language.trim()
     if (!text || !language) return null
 
-    const sessionKey = getOrCreateSessionKey()
+    const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
     try {
@@ -1873,18 +2858,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       return null
     }
-  }, [nativeAppUpdate])
+  }, [nativeAppUpdate, resolveConversationSessionKey])
 
   const {
     utterances,
     liveUtterances,
     partialTranscript,
     volume,
-    toggleRecording,
+    startRecording,
+    stopRecording,
+    submitExternalUtterance,
+    clearConversationHistory,
+    prepareForDeletion,
     isActive,
     isReady,
     isConnecting,
     isError,
+    isNativeSttSessionOwner,
     usageSec,
     isLimitReached,
     usageLimitSec,
@@ -1905,9 +2895,40 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    conversationId,
+    sessionKeyOverride,
+    storageNamespace,
   })
-  const isSttSessionRunning = isConnecting || isReady || isActive
+  const isSttSessionRunning = isNativeAppRuntime
+    ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
+    : (isConnecting || isReady || isActive)
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+
+  useEffect(() => {
+    onSttSessionRunningChange?.(isSttSessionRunning)
+  }, [isSttSessionRunning, onSttSessionRunningChange])
+
+  const lastReportedUtteranceIdRef = useRef('')
+  useEffect(() => {
+    if (!onLatestUtteranceChange) return
+    const latestUtterance = utterances[utterances.length - 1]
+    if (!latestUtterance) return
+    if (!latestUtterance.originalText.trim()) return
+    if (lastReportedUtteranceIdRef.current === latestUtterance.id) return
+    lastReportedUtteranceIdRef.current = latestUtterance.id
+    const latestUtteranceCreatedAtMs = typeof latestUtterance.createdAtMs === 'number'
+      && Number.isFinite(latestUtterance.createdAtMs)
+      ? latestUtterance.createdAtMs
+      : Date.now()
+
+    onLatestUtteranceChange({
+      preview: latestUtterance.originalText,
+      createdAt: new Date(latestUtteranceCreatedAtMs).toISOString(),
+      speaker: latestUtterance.speaker,
+      speakerAvatarSeed: latestUtterance.speakerAvatarSeed,
+      speakerAvatarIndex: latestUtterance.speakerAvatarIndex,
+    })
+  }, [onLatestUtteranceChange, utterances])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = selectedLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
@@ -2068,6 +3089,114 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
     sendNativeTtsStopCommand(reason)
   }, [cleanupCurrentAudio, clearNativeTtsEventTimer, clearStopClickResumeTimers, clearTtsWaitTimer, sendNativeTtsStopCommand])
+
+  const handleDeleteConversationConfirm = useCallback(async () => {
+    if (isDeletingConversation || !conversationId) return
+    setIsDeletingConversation(true)
+
+    try {
+      if (isSttSessionRunning) {
+        try {
+          prepareForDeletion()
+          await stopRecording({ discardPendingFinalization: true })
+          scheduleTtsResumeAfterStopClick()
+        } catch {
+          // Continue deleting the room even if the native stop path races.
+        }
+      }
+
+      const trackingUserId = getOrCreateTrackingUserId()
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
+        method: 'DELETE',
+        headers: buildTrackingRequestHeaders({
+          sessionKey: resolveConversationSessionKey(),
+          trackingUserId,
+          nativeAppUpdate,
+        }),
+      })
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`conversation_delete_failed:${response.status}`)
+      }
+
+      manualTtsRequestSeqRef.current += 1
+      setPendingManualTtsTarget(null)
+      forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      clearConversationHistory()
+      setDeleteConversationDialogOpen(false)
+      requestCloseMenuPanel()
+      onConversationDeleted?.()
+      toast.success(deleteConversationCopy.successToastLabel)
+    } catch {
+      toast.error(deleteConversationCopy.errorToastLabel)
+    } finally {
+      setIsDeletingConversation(false)
+    }
+  }, [
+    clearConversationHistory,
+    conversationId,
+    deleteConversationCopy.errorToastLabel,
+    deleteConversationCopy.successToastLabel,
+    forceStopTtsPlayback,
+    isDeletingConversation,
+    isSttSessionRunning,
+    nativeAppUpdate,
+    onConversationDeleted,
+    prepareForDeletion,
+    resolveConversationSessionKey,
+    requestCloseMenuPanel,
+    scheduleTtsResumeAfterStopClick,
+    stopRecording,
+  ])
+
+  const handleRenameConversationConfirm = useCallback(async () => {
+    if (isRenamingConversation || !conversationId) return
+
+    const normalizedTitle = renameConversationValue.trim()
+    if (!normalizedTitle) {
+      toast.error(roomManagementCopy.renameEmptyMessage)
+      return
+    }
+
+    setIsRenamingConversation(true)
+
+    try {
+      const response = await fetch(buildClientApiPath(`/conversations/${conversationId}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildTrackingRequestHeaders({
+            sessionKey: resolveConversationSessionKey(),
+            trackingUserId: getOrCreateTrackingUserId(),
+            nativeAppUpdate,
+          }),
+        },
+        body: JSON.stringify({ title: normalizedTitle }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`conversation_rename_failed:${response.status}`)
+      }
+
+      setDisplayConversationTitle(normalizedTitle)
+      setRenameConversationValue(normalizedTitle)
+      setRenameConversationDialogOpen(false)
+      toast.success(roomManagementCopy.renameSuccessToastLabel)
+    } catch {
+      toast.error(roomManagementCopy.renameErrorToastLabel)
+    } finally {
+      setIsRenamingConversation(false)
+    }
+  }, [
+    conversationId,
+    isRenamingConversation,
+    nativeAppUpdate,
+    renameConversationValue,
+    resolveConversationSessionKey,
+    roomManagementCopy.renameEmptyMessage,
+    roomManagementCopy.renameErrorToastLabel,
+    roomManagementCopy.renameSuccessToastLabel,
+  ])
 
   // Stop current playback when sound is disabled.
   useEffect(() => {
@@ -2234,41 +3363,151 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
     setSelectedLanguages(prev => {
-      if (prev.includes(normalizedCode)) {
-        return prev.filter(c => c !== normalizedCode)
-      }
-      return [...prev, normalizedCode]
+      const nextSelectedLanguages = prev.includes(normalizedCode)
+        ? prev.filter(c => c !== normalizedCode)
+        : [...prev, normalizedCode]
+
+      onSelectedLanguagesChange?.(nextSelectedLanguages)
+      return nextSelectedLanguages
     })
-  }, [])
+  }, [onSelectedLanguagesChange])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
     void primeAudioPlayback()
   }, [enableAutoTTS, isActive, primeAudioPlayback])
 
-  const handleMicClick = useCallback(async () => {
+  const [isPreparingStart, setIsPreparingStart] = useState(false)
+  const showConnectingOverlay = isPreparingStart || isConnecting
+
+  const handleStartRecording = useCallback(async () => {
     if (isLimitReached) {
       onLimitReached?.()
       return
     }
-    const wasActive = isActive
-    // Mic button controls STT only.
-    // Prime audio player only when starting STT from idle, not when stopping.
-    if (enableAutoTTS && !wasActive) {
-      const ok = await primeAudioPlayback()
-      if (!ok) {
-        ttsNeedsUnlockRef.current = true
+    if (isSttSessionRunning || isPreparingStart) return
+
+    setIsPreparingStart(true)
+    try {
+      const startPreparation = await onStartRecordingRequested?.()
+      if (startPreparation?.switchedFromLiveConversation) {
+        showFloatingToast(switchLiveRoomToastLabel)
       }
+
+      let primeAudioPromise: Promise<boolean> | null = null
+      if (enableAutoTTS) {
+        // Do not block STT start on iOS/WebView audio priming.
+        // HTMLMediaElement.play() may stay pending until a later user gesture,
+        // which makes the room look "stuck" in connecting even though STT has
+        // not started yet. Prime in the background and let STT start first.
+        primeAudioPromise = primeAudioPlayback()
+      }
+      await startRecording()
+      if (primeAudioPromise) {
+        void primeAudioPromise.then((ok) => {
+          if (!ok) {
+            ttsNeedsUnlockRef.current = true
+          }
+        })
+      }
+    } finally {
+      setIsPreparingStart(false)
     }
-    toggleRecording()
-    if (wasActive) {
-      scheduleTtsResumeAfterStopClick()
+  }, [
+    enableAutoTTS,
+    isLimitReached,
+    isPreparingStart,
+    isSttSessionRunning,
+    onLimitReached,
+    onStartRecordingRequested,
+    primeAudioPlayback,
+    startRecording,
+    showFloatingToast,
+    switchLiveRoomToastLabel,
+  ])
+
+  const handleStopRecording = useCallback(async (options?: { deferRunningStateChange?: boolean, discardPendingFinalization?: boolean }) => {
+    if (!isSttSessionRunning) return
+    if (options?.deferRunningStateChange !== true) {
+      onSttSessionRunningChange?.(false)
     }
-  }, [enableAutoTTS, isActive, isLimitReached, onLimitReached, primeAudioPlayback, scheduleTtsResumeAfterStopClick, toggleRecording])
+    await stopRecording({ discardPendingFinalization: options?.discardPendingFinalization })
+    if (options?.deferRunningStateChange === true) {
+      onSttSessionRunningChange?.(false)
+    }
+    scheduleTtsResumeAfterStopClick()
+  }, [isSttSessionRunning, onSttSessionRunningChange, scheduleTtsResumeAfterStopClick, stopRecording])
+
+  const handleMicClick = useCallback(() => {
+    if (isSttSessionRunning) {
+      void handleStopRecording()
+      return
+    }
+    void handleStartRecording()
+  }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
+
+  const handleToggleComposer = useCallback(() => {
+    setIsComposerOpen((previous) => {
+      const next = !previous
+      persistedInputModeRef.current = next ? 'text' : 'voice'
+      try {
+        localStorage.setItem(LS_KEY_INPUT_MODE, next ? 'text' : 'voice')
+      } catch {
+        // Ignore local persistence failures and keep in-memory state.
+      }
+      if (previous) {
+        composerTextareaRef.current?.blur()
+      }
+      return next
+    })
+  }, [])
+
+  const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    const nextDraft = event.currentTarget.value
+    setComposerDraft(nextDraft)
+    persistComposerDraft(nextDraft)
+    syncComposerTextareaHeight(event.currentTarget)
+  }, [syncComposerTextareaHeight])
+
+  const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const nextText = composerDraft.trim()
+    if (!nextText) {
+      composerTextareaRef.current?.focus({ preventScroll: true })
+      return
+    }
+
+    const submittedUtteranceId = submitExternalUtterance({
+      text: nextText,
+      sourceLanguage: 'unknown',
+      speaker: composerCopy.manualSpeakerLabel,
+    })
+    if (!submittedUtteranceId) return
+    setComposerDraft('')
+    persistComposerDraft('')
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        syncComposerTextareaHeight(composerTextareaRef.current)
+      })
+    } else {
+      syncComposerTextareaHeight(composerTextareaRef.current)
+    }
+  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance, syncComposerTextareaHeight])
 
   useImperativeHandle(ref, () => ({
-    startRecording: handleMicClick,
-  }), [handleMicClick])
+    startRecording: async () => {
+      await handleStartRecording()
+    },
+    stopRecording: async (options) => {
+      if (options?.discardPendingFinalization) {
+        prepareForDeletion()
+      }
+      await handleStopRecording(options)
+    },
+    prepareForDeletion,
+    isSttSessionRunning: () => isSttSessionRunning,
+  }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion])
 
   const chatRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
@@ -2281,10 +3520,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
+  const openSmoothScrollTimerRef = useRef<number | null>(null)
+  const openSmoothScrollDeadlineRef = useRef(0)
+  const openSmoothScrollLastHeightRef = useRef(0)
+  const openSmoothScrollStableTicksRef = useRef(0)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
-  const [copyToastVisible, setCopyToastVisible] = useState(false)
-  const copyToastTimerRef = useRef<number | null>(null)
   const [scrollMetrics, setScrollMetrics] = useState({
     thumbTop: 0,
     thumbHeight: 0,
@@ -2315,6 +3556,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (scrollUiHideTimerRef.current) {
       window.clearTimeout(scrollUiHideTimerRef.current)
       scrollUiHideTimerRef.current = null
+    }
+  }, [])
+
+  const clearOpenSmoothScrollTimer = useCallback(() => {
+    if (openSmoothScrollTimerRef.current) {
+      window.clearTimeout(openSmoothScrollTimerRef.current)
+      openSmoothScrollTimerRef.current = null
     }
   }, [])
 
@@ -2415,16 +3663,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     updateScrollDerivedState({ fromUserScroll: true })
   }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
 
-  const handleTopSafeAreaTap = useCallback(() => {
-    if (!chatRef.current) return
-    markUserScrollIntent()
-    clearPendingAutoScrollTimer()
-    suppressAutoScrollRef.current = true
-    shouldAutoScroll.current = false
-    chatRef.current.scrollTo({ top: 0, behavior: 'smooth' })
-    updateScrollDerivedState({ fromUserScroll: true })
-  }, [clearPendingAutoScrollTimer, markUserScrollIntent, updateScrollDerivedState])
-
   const handleNativeAppUpdatePress = useCallback(() => {
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || ''
     if (!updateUrl) return
@@ -2459,21 +3697,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const handleNativeUiEvent = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail
       const bannerLayout = parseNativeUiBannerLayoutDetail(detail)
-      if (bannerLayout) {
-        setNativeBannerLayout(bannerLayout)
-        return
-      }
-
-      const scrollToTop = parseNativeUiScrollToTopDetail(detail)
-      if (!scrollToTop) return
-      handleTopSafeAreaTap()
+      if (!bannerLayout) return
+      setNativeBannerLayout(bannerLayout)
     }
 
     window.addEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener)
     return () => {
       window.removeEventListener(NATIVE_UI_EVENT, handleNativeUiEvent as EventListener)
     }
-  }, [handleTopSafeAreaTap])
+  }, [])
 
   const nativeAppUpdateStatus = nativeAppUpdate || DEFAULT_NATIVE_APP_UPDATE_DETAIL
   const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel
@@ -2507,6 +3739,104 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     return () => window.cancelAnimationFrame(rafId)
   }, [isStorageHydrated, updateScrollDerivedState, utterances.length])
+
+  useLayoutEffect(() => {
+    if (!isVisible || !chatRef.current) return
+
+    const node = chatRef.current
+    node.scrollTop = node.scrollHeight
+    shouldAutoScroll.current = true
+    suppressAutoScrollRef.current = false
+    autoScrollSchedulerRef.current.markPerformed()
+
+    const rafId = window.requestAnimationFrame(() => {
+      if (!chatRef.current) return
+      chatRef.current.scrollTop = chatRef.current.scrollHeight
+      updateScrollDerivedState()
+    })
+
+    return () => window.cancelAnimationFrame(rafId)
+  }, [isVisible, updateScrollDerivedState])
+
+  useEffect(() => {
+    clearOpenSmoothScrollTimer()
+    if (!isVisible) {
+      openSmoothScrollDeadlineRef.current = 0
+      openSmoothScrollLastHeightRef.current = 0
+      openSmoothScrollStableTicksRef.current = 0
+      return
+    }
+
+    openSmoothScrollDeadlineRef.current = Date.now() + 2500
+    openSmoothScrollLastHeightRef.current = 0
+    openSmoothScrollStableTicksRef.current = 0
+
+    return () => {
+      clearOpenSmoothScrollTimer()
+    }
+  }, [clearOpenSmoothScrollTimer, isVisible])
+
+  useEffect(() => {
+    if (
+      !isVisible
+      || !isStorageHydrated
+      || !chatRef.current
+      || Date.now() > openSmoothScrollDeadlineRef.current
+    ) {
+      return
+    }
+
+    openSmoothScrollDeadlineRef.current = Date.now() + 900
+    clearOpenSmoothScrollTimer()
+    const followToBottom = () => {
+      openSmoothScrollTimerRef.current = null
+      if (!chatRef.current || !isVisible) return
+
+      const nextScrollHeight = chatRef.current.scrollHeight
+      const distanceToBottom = Math.max(
+        0,
+        chatRef.current.scrollHeight - chatRef.current.scrollTop - chatRef.current.clientHeight,
+      )
+      const heightChanged = Math.abs(nextScrollHeight - openSmoothScrollLastHeightRef.current) > 1
+      openSmoothScrollLastHeightRef.current = nextScrollHeight
+
+      if (heightChanged) {
+        openSmoothScrollStableTicksRef.current = 0
+      } else {
+        openSmoothScrollStableTicksRef.current += 1
+      }
+
+      if (distanceToBottom > 1) {
+        suppressAutoScrollRef.current = false
+        shouldAutoScroll.current = true
+        chatRef.current.scrollTop = nextScrollHeight
+        autoScrollSchedulerRef.current.markPerformed()
+        updateScrollDerivedState()
+        openSmoothScrollStableTicksRef.current = 0
+      }
+
+      if (
+        Date.now() <= openSmoothScrollDeadlineRef.current
+        && (heightChanged || distanceToBottom > 1 || openSmoothScrollStableTicksRef.current < 3)
+      ) {
+        openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 120)
+      }
+    }
+
+    openSmoothScrollTimerRef.current = window.setTimeout(followToBottom, 180)
+
+    return () => {
+      clearOpenSmoothScrollTimer()
+    }
+  }, [
+    clearOpenSmoothScrollTimer,
+    demoTypingText,
+    isStorageHydrated,
+    isVisible,
+    liveUtterances.length,
+    utterances.length,
+    updateScrollDerivedState,
+  ])
 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
@@ -2555,8 +3885,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     return () => {
       clearPendingAutoScrollTimer()
+      clearOpenSmoothScrollTimer()
     }
   }, [
+    clearOpenSmoothScrollTimer,
     clearPendingAutoScrollTimer,
     demoTypingText,
     executeAutoScrollIfEligible,
@@ -2572,18 +3904,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     const handleCopySuccess = () => {
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
-      setCopyToastVisible(true)
-      copyToastTimerRef.current = window.setTimeout(() => {
-        setCopyToastVisible(false)
-      }, 1500)
+      showFloatingToast(copyActionCopy.copiedToastLabel)
     }
     window.addEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
     return () => {
       window.removeEventListener(COPY_SUCCESS_EVENT, handleCopySuccess)
-      if (copyToastTimerRef.current) clearTimeout(copyToastTimerRef.current)
+      if (floatingToastTimerRef.current) clearTimeout(floatingToastTimerRef.current)
     }
-  }, [])
+  }, [copyActionCopy.copiedToastLabel, showFloatingToast])
 
   useEffect(() => {
     return () => {
@@ -2633,18 +3961,28 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
-    ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
     : nativeTopInsetPx
   const effectiveNativeBottomContentInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? Math.max(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
+    ? resolveEffectiveNativeBannerInsetPx(nativeBottomInsetPx, estimatedNativeBannerInsetPx)
     : nativeBottomInsetPx
-  const scrollToBottomButtonReservedPx = isNativeAppRuntime && displayedAdBannerPosition === 'bottom'
-    ? effectiveNativeBottomContentInsetPx
-    : 0
-  const scrollToBottomButtonBottomPx = SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX + scrollToBottomButtonReservedPx
+  const effectiveNativeBottomBannerInsetPx = resolveNativeBottomBannerOverlayInsetPx({
+    isNativeAppRuntime,
+    displayedAdBannerPosition,
+    reportedBottomInsetPx: effectiveNativeBottomContentInsetPx,
+    bottomBarClearancePx: nativeBottomBarClearancePx,
+    estimatedBottomBannerInsetPx: estimatedNativeBannerInsetPx,
+  })
+  const activeKeyboardInsetPx = isComposerOpen ? keyboardViewportInsetPx : 0
+  const scrollToBottomButtonBottomPx = resolveScrollToBottomButtonBottomPx({
+    baseBottomPx: SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX,
+    isNativeAppRuntime,
+    displayedAdBannerPosition,
+    bottomBannerInsetPx: effectiveNativeBottomBannerInsetPx,
+  })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
   const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomContentInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomContentInsetPx}px)` : '0.625rem'
+  const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -2654,6 +3992,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
+  const bottomBarTopPaddingPx = isComposerOpen
+    ? COMPOSER_MODE_TOP_MARGIN_PX
+    : VOICE_MODE_TOP_MARGIN_PX
+  const bottomBarBottomMarginPx = isComposerOpen
+    ? COMPOSER_MODE_BOTTOM_MARGIN_PX
+    : VOICE_MODE_BOTTOM_MARGIN_PX
+  const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
+  const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
@@ -2665,30 +4011,48 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   return (
     <PhoneFrame>
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
+      <div
+        className="relative flex h-full min-h-0 flex-col overflow-hidden"
+        onPointerDown={handleConversationPointerDown}
+        onPointerMove={handleConversationPointerMove}
+        onPointerUp={handleConversationPointerUp}
+        onPointerCancel={handleConversationPointerCancel}
+        style={{ touchAction: 'pan-y' }}
+      >
 
         {/* Header */}
         <div
-          className={`relative z-40 shrink-0 flex items-center justify-between ${navSurfaceClassName}`}
+          className={`relative z-40 shrink-0 flex items-center justify-between border-b border-gray-100 px-4 ${navSurfaceClassName}`}
           style={{
-            paddingTop: "max(calc(env(safe-area-inset-top) + 20px), 24px)",
-            paddingBottom: "10px",
-            paddingLeft: "max(calc(env(safe-area-inset-left) + 14px), 18px)",
-            paddingRight: "max(calc(env(safe-area-inset-right) + 14px), 18px)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            height: "calc(54px + env(safe-area-inset-top, 0px))",
           }}
         >
-          {isIosTopTapEnabled && (
-            <button
-              type="button"
-              aria-label="Scroll to top"
-              onClick={handleTopSafeAreaTap}
-              className="absolute inset-x-0 top-0 z-10 bg-transparent"
-              style={{ height: "max(env(safe-area-inset-top), 20px)" }}
-            />
+          {headerMode === 'conversation' && onBack ? (
+            <div className="relative z-20 flex min-w-0 flex-1 items-center gap-2 pr-3">
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label={backButtonLabel}
+                className={`inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${navSurfaceClassName}`}
+              >
+                <ChevronLeft size={24} strokeWidth={2.4} />
+              </button>
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={openRenameConversationDialog}
+                  disabled={!conversationId || isRenamingConversation}
+                  aria-label={roomManagementCopy.renameButtonLabel}
+                  className="block w-full truncate text-left text-[0.98rem] font-semibold text-gray-950 outline-none transition-colors hover:text-gray-700 focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default disabled:opacity-100"
+                >
+                  {displayConversationTitle || ''}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <MingleWordmark className="relative z-20" />
           )}
-          <span className="relative z-20 text-[2.05rem] font-extrabold leading-[1.08] bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-            Mingle
-          </span>
           <div className="relative z-20 flex items-center gap-1">
             <div className="relative mr-1.5">
               <button
@@ -2700,7 +4064,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 }}
                 aria-haspopup="menu"
                 aria-expanded={langSelectorOpen}
-                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
+                className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
               >
                 {selectedLanguages.map((lang) => (
@@ -2736,7 +4100,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   type="button"
                   onClick={handleMenuButtonPress}
                   disabled={isAuthActionPending}
-                  className={`inline-flex h-11 min-w-[44px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
+                  className={`inline-flex h-[38px] min-w-[40px] items-center justify-center px-2 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${navSurfaceClassName}`}
                   aria-label={menuLabel}
                   aria-haspopup="dialog"
                   aria-expanded={menuOpen}
@@ -2749,10 +4113,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         </div>
 
         <AnimatePresence
+          custom={menuMotionState}
           onExitComplete={() => {
             setMenuDragOffsetX(0)
             setIsMenuDragging(false)
-            if (!deleteAccountDialogOpen) {
+            setMenuEnterMode('animate')
+            setMenuExitMode('animate')
+            setMenuScreenTransitionMode('animate')
+            if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {
               try {
                 menuButtonRef.current?.focus({ preventScroll: true })
               } catch {
@@ -2763,10 +4131,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         >
           {menuOpen && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
+              custom={menuMotionState}
+              variants={livePhoneDemoMenuBackdropVariants}
+              initial="initial"
+              animate="active"
+              exit="exit"
               className="absolute inset-0 z-50 overflow-hidden bg-black/42"
               onClick={requestCloseMenuPanel}
             >
@@ -2777,14 +4146,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   aria-modal="true"
                   aria-label={menuLabel}
                   tabIndex={-1}
-                  initial={{ x: '100%' }}
-                  animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
-                  exit={{ x: '100%' }}
-                  transition={
-                    isMenuDragging
-                      ? { duration: 0 }
-                      : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-                  }
+                  custom={menuMotionState}
+                  variants={livePhoneDemoMenuPanelVariants}
+                  initial="initial"
+                  animate="active"
+                  exit="exit"
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={handleMenuPanelPointerDown}
                   onPointerMove={handleMenuPanelPointerMove}
@@ -2798,33 +4164,25 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     touchAction: 'pan-y',
                   }}
                 >
-                  <motion.div
-                    initial={false}
-                    animate={{ x: menuScreen === 'feedback' ? '-50%' : '0%' }}
-                    transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex h-full w-[200%]"
-                  >
-                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
-                      <div
-                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
-                        style={{
-                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
-                          paddingBottom: '12px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          aria-label={feedbackCopy.closeButtonLabel}
-                          onClick={requestMenuBackStep}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                        >
-                          <ChevronLeft size={22} strokeWidth={2.2} />
-                        </button>
-                        <div className="flex-1 text-center text-[1rem] font-semibold text-gray-950">
-                          {menuLabel}
-                        </div>
-                        <div className="w-10" />
-                      </div>
+                  <div className="relative h-full overflow-hidden">
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'root' ? { x: '0%', opacity: 1 } : { x: '-8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'root'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'root' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'root'
+                          ? (menuScreenDirection === 'back' ? 2 : 3)
+                          : 1,
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={menuLabel}
+                        backLabel={feedbackCopy.closeButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
 
                       <div
                         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -3029,101 +4387,104 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-1.5 font-semibold">{translationModelLabel}</span>
-                                <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[220px] max-w-[68%] shrink-0 items-center">
-                                <button
-                                  ref={translationModelButtonRef}
-                                  type="button"
-                                  onClick={() => {
-                                    setTextSizeMenuOpen(false)
-                                    setTranslationModelMenuOpen((open) => !open)
-                                  }}
-                                  aria-label={translationModelLabel}
-                                  aria-haspopup="listbox"
-                                  aria-expanded={translationModelMenuOpen}
-                                  aria-controls={translationModelListboxId}
-                                  className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                                >
-                                  <div className="min-w-0 flex-1 text-center">
-                                    <div className="truncate text-[0.95rem] font-semibold text-gray-900">
-                                      {selectedTranslationModelOption.label}
-                                    </div>
-                                  </div>
-                                  <span
-                                    className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-                                      translationModelMenuOpen
-                                        ? 'bg-transparent text-amber-700'
-                                        : 'bg-transparent text-gray-500 group-hover:text-amber-600'
-                                    }`}
+                                <div ref={translationModelDropdownRef} className="relative flex h-10 min-w-[236px] max-w-[72%] shrink-0 items-center">
+                                  <button
+                                    ref={translationModelButtonRef}
+                                    type="button"
+                                    onClick={() => {
+                                      setTextSizeMenuOpen(false)
+                                      setTranslationModelMenuOpen((open) => !open)
+                                    }}
+                                    aria-label={translationModelLabel}
+                                    aria-haspopup="listbox"
+                                    aria-expanded={translationModelMenuOpen}
+                                    aria-controls={translationModelListboxId}
+                                    className="group relative flex h-full w-full items-center overflow-hidden rounded-[1.35rem] border border-[#E5E7EB] bg-gradient-to-r from-white via-white to-[#F8FAFC] px-3.5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)] transition duration-200 hover:border-[#D1D5DB] hover:shadow-[0_14px_30px_rgba(15,23,42,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
                                   >
-                                    <ChevronDown
-                                      size={16}
-                                      strokeWidth={2.3}
-                                      className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                                        translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                    <div className="min-w-0 flex-1 text-center">
+                                      <div className="truncate text-[0.95rem] font-semibold text-gray-900">
+                                        {selectedTranslationModelOption.label}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`ml-2 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
+                                        translationModelMenuOpen
+                                          ? 'bg-transparent text-amber-700'
+                                          : 'bg-transparent text-gray-500 group-hover:text-amber-600'
                                       }`}
-                                    />
-                                  </span>
-                                </button>
-                                <AnimatePresence initial={false}>
-                                  {translationModelMenuOpen && (
-                                    <motion.div
-                                      initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                                      exit={{ opacity: 0, y: -6, scale: 0.985 }}
-                                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                                      className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[240px] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                     >
+                                      <ChevronDown
+                                        size={16}
+                                        strokeWidth={2.3}
+                                        className={`transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                                          translationModelMenuOpen ? 'rotate-180' : 'rotate-0'
+                                        }`}
+                                      />
+                                    </span>
+                                  </button>
+                                  <AnimatePresence initial={false}>
+                                    {translationModelMenuOpen && (
                                       <motion.div
-                                        initial={{ opacity: 0, height: 0 }}
-                                        animate={{ opacity: 1, height: 'auto' }}
-                                        exit={{ opacity: 0, height: 0 }}
-                                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                                        className="overflow-hidden"
+                                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.985 }}
+                                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                                        className="absolute right-0 top-[calc(100%+0.6rem)] z-30 w-[272px] max-w-[calc(100vw-2.5rem)] overflow-hidden rounded-[1.35rem] border border-gray-200/90 bg-white/95 shadow-[0_22px_48px_rgba(15,23,42,0.16)] backdrop-blur-sm"
                                       >
-                                        <div
-                                          id={translationModelListboxId}
-                                          role="listbox"
-                                          aria-label={translationModelLabel}
-                                          className="space-y-1.5 p-2.5"
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: 'auto' }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                                          className="overflow-hidden"
                                         >
-                                          {TRANSLATION_MODEL_OPTIONS.map((option) => {
-                                            const isSelected = option.value === translationModel
+                                          <div
+                                            id={translationModelListboxId}
+                                            role="listbox"
+                                            aria-label={translationModelLabel}
+                                            className="space-y-1.5 p-2.5"
+                                          >
+                                            {TRANSLATION_MODEL_OPTIONS.map((option) => {
+                                              const isSelected = option.value === translationModel
 
-                                            return (
-                                              <button
-                                                key={option.value}
-                                                type="button"
-                                                role="option"
-                                                aria-selected={isSelected}
-                                                onClick={() => handleTranslationModelSelect(option.value)}
-                                                className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-                                                  isSelected
-                                                    ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
-                                                    : 'bg-white text-gray-800 hover:bg-gray-50'
-                                                }`}
-                                              >
-                                                <div className="min-w-0 flex-1 text-center">
-                                                  <div className="truncate text-[0.94rem] font-semibold">
-                                                    {option.label}
-                                                  </div>
-                                                </div>
-                                                <span
-                                                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                              return (
+                                                <button
+                                                  key={option.value}
+                                                  type="button"
+                                                  role="option"
+                                                  aria-selected={isSelected}
+                                                  onClick={() => handleTranslationModelSelect(option.value)}
+                                                  className={`group flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
                                                     isSelected
-                                                      ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
-                                                      : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                      ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 text-gray-950 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.35)]'
+                                                      : 'bg-white text-gray-800 hover:bg-gray-50'
                                                   }`}
                                                 >
-                                                  <Check size={14} strokeWidth={2.6} />
-                                                </span>
-                                              </button>
-                                            )
-                                          })}
-                                        </div>
+                                                  <div className="min-w-0 flex flex-1 items-center justify-center gap-2.5 text-center">
+                                                    <span className="truncate text-[0.94rem] font-semibold">
+                                                      {option.label}
+                                                    </span>
+                                                    {option.badge ? (
+                                                      <TranslationModelBadgeChip badge={option.badge} />
+                                                    ) : null}
+                                                  </div>
+                                                  <span
+                                                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                                                      isSelected
+                                                        ? 'scale-100 bg-amber-500 text-white shadow-[0_6px_14px_rgba(245,158,11,0.28)]'
+                                                        : 'scale-95 bg-gray-100 text-transparent group-hover:bg-amber-100 group-hover:text-amber-500'
+                                                    }`}
+                                                  >
+                                                    <Check size={14} strokeWidth={2.6} />
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        </motion.div>
                                       </motion.div>
-                                    </motion.div>
-                                  )}
-                                </AnimatePresence>
+                                    )}
+                                  </AnimatePresence>
                                 </div>
                               </div>
                             </div>
@@ -3161,6 +4522,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             )}
 
                           </div>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
+                            onClick={handleConversationManagementMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.menuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
                         </div>
 
                         <div className="px-4 pb-4">
@@ -3267,29 +4641,26 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         </div>
                       )}
-                    </section>
+                    </motion.section>
 
-                    <section className="flex h-full w-1/2 min-w-0 flex-col bg-white">
-                      <div
-                        className="flex shrink-0 items-center border-b border-gray-200 px-4"
-                        style={{
-                          paddingTop: 'max(calc(env(safe-area-inset-top) + 10px), 16px)',
-                          paddingBottom: '12px',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          aria-label={feedbackCopy.backButtonLabel}
-                          onClick={requestMenuBackStep}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                        >
-                          <ChevronLeft size={22} strokeWidth={2.2} />
-                        </button>
-                        <div className="flex-1 text-center text-[1.1rem] font-semibold text-gray-950">
-                          {feedbackCopy.pageTitle}
-                        </div>
-                        <div className="w-10" />
-                      </div>
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'feedback' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'feedback'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'feedback' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'feedback'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={feedbackCopy.pageTitle}
+                        backLabel={feedbackCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
 
                       <div className="flex shrink-0 border-b border-gray-100 px-4">
                         {([
@@ -3522,8 +4893,64 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </div>
                         )}
                       </div>
-                    </section>
-                  </motion.div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'conversation-management' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'conversation-management'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'conversation-management' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'conversation-management'
+                          ? 3
+                          : (menuScreen === 'root' && menuScreenDirection === 'back' ? 3 : 1),
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={roomManagementCopy.pageTitle}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                        }}
+                      >
+                        <div className="px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={openRenameConversationDialog}
+                            disabled={!conversationId || isRenamingConversation}
+                            className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="min-w-0 flex-1">{roomManagementCopy.renameButtonLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleDeleteConversationMenuItemPress}
+                            disabled={isDeletingConversation}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50/70 px-3.5 py-3 text-left text-[0.98rem] font-medium text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                              <Trash2 size={17} strokeWidth={2.2} />
+                              <span className="min-w-0 flex-1">{deleteConversationCopy.menuItemLabel}</span>
+                            </span>
+                            <span className="shrink-0 text-rose-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.section>
+                  </div>
                 </motion.div>
               </div>
             </motion.div>
@@ -3636,14 +5063,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </div>
               )}
 
-            {/* Connecting state */}
-              {isConnecting && (
-                <div className="flex items-center justify-center gap-2 py-4">
-                  <Loader2 size={20} className="animate-spin text-amber-400" />
-                  <p className="text-sm text-gray-400">{connectingLabel}</p>
-                </div>
-              )}
-
             {/* Error state */}
               {isError && (
                 <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
@@ -3708,7 +5127,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             </AnimatePresence>
 
             <AnimatePresence>
-              {copyToastVisible && (
+              {floatingToastMessage && (
                 <motion.div
                   key="copy-toast"
                   initial={{ opacity: 0, y: 6 }}
@@ -3723,7 +5142,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
                     <span className="text-[14px] font-medium text-gray-800">
-                      {copyActionCopy.copiedToastLabel}
+                      {floatingToastMessage}
                     </span>
                   </div>
                 </motion.div>
@@ -3762,9 +5181,143 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </div>
               </div>
             )}
+            <AnimatePresence>
+              {showConnectingOverlay && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className="pointer-events-none absolute inset-0 z-[15] bg-slate-950/18 backdrop-blur-[1px]"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center px-6">
+                    <div className="flex items-center gap-2 rounded-full bg-white/92 px-4 py-2.5 shadow-[0_6px_20px_rgba(15,23,42,0.14)]">
+                      <Loader2 size={18} className="animate-spin text-amber-500" />
+                      <p className="text-sm font-medium text-slate-700">{connectingLabel}</p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <AnimatePresence>
+            {renameConversationDialogOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute inset-0 z-[60] flex items-start justify-center bg-black/40 px-5 pb-8"
+                style={{
+                  paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)",
+                }}
+                onClick={closeRenameConversationDialog}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={roomManagementCopy.renameDialogTitle}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full max-w-[20rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    {roomManagementCopy.renameDialogTitle}
+                  </p>
+                  <label className="mt-3 block text-sm font-medium text-gray-700">
+                    {roomManagementCopy.renameFieldLabel}
+                  </label>
+                  <input
+                    ref={renameConversationInputRef}
+                    type="text"
+                    value={renameConversationValue}
+                    onChange={(event) => setRenameConversationValue(event.target.value)}
+                    placeholder={roomManagementCopy.renameFieldPlaceholder}
+                    disabled={isRenamingConversation}
+                    maxLength={120}
+                    className="mt-2 h-11 w-full rounded-xl border border-gray-300 px-3 text-[0.98rem] text-gray-900 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-200 disabled:cursor-not-allowed disabled:bg-gray-100"
+                  />
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={closeRenameConversationDialog}
+                      disabled={isRenamingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {roomManagementCopy.renameCancelLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleRenameConversationConfirm()
+                      }}
+                      disabled={isRenamingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
+                    >
+                      {isRenamingConversation
+                        ? roomManagementCopy.renamingLabel
+                        : roomManagementCopy.renameConfirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            {deleteConversationDialogOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: 'easeOut' }}
+                className="absolute inset-0 z-[60] flex items-center justify-center bg-black/40 px-5"
+                onClick={closeDeleteConversationDialog}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={deleteConversationCopy.dialogTitle}
+                  onClick={(event) => event.stopPropagation()}
+                  className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+                >
+                  <p className="text-sm font-semibold text-gray-900">
+                    {deleteConversationCopy.dialogTitle}
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                    {deleteConversationCopy.dialogMessage}
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <button
+                      ref={deleteConversationCancelButtonRef}
+                      type="button"
+                      onClick={closeDeleteConversationDialog}
+                      disabled={isDeletingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {deleteConversationCopy.cancelLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleDeleteConversationConfirm()
+                      }}
+                      disabled={isDeletingConversation}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-rose-600 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-400"
+                    >
+                      {isDeletingConversation
+                        ? deleteConversationCopy.deletingLabel
+                        : deleteConversationCopy.confirmLabel}
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
             {showAccountMenuItems && deleteAccountDialogOpen && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -3815,82 +5368,270 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             )}
           </AnimatePresence>
 
-          {/* Bottom Bar with Mic Button */}
-          <div
-            className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-gray-100 bg-white"
+          {/* Bottom Bar with STT / Text Composer Toggle */}
+          <motion.div
+            layout
+            layoutDependency={isComposerOpen}
+            onLayoutAnimationComplete={syncNativeBottomBarClearance}
+            ref={bottomBarRef}
+            className="relative shrink-0 border-t border-gray-100 bg-white"
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              paddingTop: "10px",
-              paddingBottom: "max(calc(env(safe-area-inset-bottom) + 16px), 20px)",
-              paddingLeft: "max(calc(env(safe-area-inset-left) + 10px), 14px)",
-              paddingRight: "max(calc(env(safe-area-inset-right) + 10px), 14px)",
+              paddingTop: `${bottomBarTopPaddingPx}px`,
+              paddingBottom: bottomBarPaddingBottom,
+              paddingLeft: 'max(calc(env(safe-area-inset-left) + 10px), 14px)',
+              paddingRight: 'max(calc(env(safe-area-inset-right) + 10px), 14px)',
             }}
           >
-            <div className="justify-self-start pl-2">
-              {/* Usage progress bar */}
-              <div className="flex items-center gap-1.5">
-                {isUsageLimited ? (
-                  <>
-                    <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                    <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                      {formatLivePhoneDemoUsageDuration(remainingSec)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-sm tabular-nums text-gray-400">
-                    {formatLivePhoneDemoUsageDuration(usageSec)}
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <button
-                onPointerDown={handleMicPointerDown}
-                onClick={handleMicClick}
-                disabled={isConnecting || isError}
-                className="relative flex h-[4rem] w-[4rem] items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-              >
-                {showRipple && (
-                  <span
-                    className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                    style={{ transform: `scale(${rippleScale})`, opacity: 0.25 }}
-                  />
-                )}
-
-                {isReady && (
-                  <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                )}
-
-                <span
-                  className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                    isLimitReached
-                      ? 'bg-gray-300'
-                      : isReady
-                        ? 'bg-red-500'
-                        : isConnecting
-                          ? 'bg-gray-300'
-                          : 'bg-gradient-to-br from-amber-400 to-orange-500'
-                  }`}
+            <AnimatePresence initial={false} mode="popLayout">
+              {isComposerOpen ? (
+                <motion.div
+                  key="composer-bottom-bar"
+                  layout
+                  layoutDependency={isComposerOpen}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.12, ease: [0.22, 1, 0.36, 1] }}
+                  className="flex items-end gap-1.5"
                 >
-                  {isConnecting ? (
-                    <Loader2 size={30} className="animate-spin text-white" />
-                  ) : isReady ? (
-                    <span
-                      aria-hidden
-                      className="h-5 w-5 rounded-[4px] bg-white"
-                    />
-                  ) : (
-                    <Mic size={28} className="text-white" />
-                  )}
-                </span>
-              </button>
-            </div>
-            <div className="justify-self-end" />
-          </div>
+                  <motion.div className="flex shrink-0 items-end justify-center self-end">
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={showConnectingOverlay}
+                      className="relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      style={{
+                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                      }}
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                          style={{ transform: `scale(${rippleScale})`, opacity: 0.22 }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : showConnectingOverlay
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                      >
+                        {showConnectingOverlay ? (
+                          <Loader2 size={16} className="animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="rounded-[3px] bg-white"
+                            style={{
+                              width: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
+                              height: `${Math.round(COMPOSER_MODE_CONTROL_SIZE_PX * 0.28)}px`,
+                            }}
+                          />
+                        ) : (
+                          <Mic size={16} className="text-white" />
+                        )}
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <motion.form
+                    onSubmit={handleComposerSubmit}
+                    className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
+                  >
+                    <div
+                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none transition-[height] duration-150 ease-out motion-reduce:transition-none"
+                      style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-end px-1">
+                        <textarea
+                          ref={composerTextareaRef}
+                          value={composerDraft}
+                          onChange={handleComposerDraftChange}
+                          rows={1}
+                          placeholder={composerCopy.composerPlaceholder}
+                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
+                          style={{ height: `${composerTextareaHeightPx}px` }}
+                        />
+                      </div>
+
+                      <motion.button
+                        type="button"
+                        onClick={handleToggleComposer}
+                        aria-label={composerCopy.closeKeyboardLabel}
+                        className="inline-flex shrink-0 items-center justify-center self-end rounded-full text-gray-500 transition-colors hover:bg-gray-50 active:scale-95"
+                        style={{
+                          width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                          height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        }}
+                      >
+                        <Keyboard size={18} strokeWidth={2.2} />
+                      </motion.button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!composerCanSend}
+                      aria-label={composerCopy.sendMessageLabel}
+                      className={`inline-flex shrink-0 items-center justify-center self-end rounded-full transition-all duration-200 active:scale-95 ${
+                        composerCanSend
+                          ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
+                          : 'bg-transparent text-gray-300'
+                      }`}
+                      style={{
+                        width: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                        height: `${COMPOSER_MODE_CONTROL_SIZE_PX}px`,
+                      }}
+                    >
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 18.5V6.5" />
+                        <path d="M7.75 10.75L12 6.5l4.25 4.25" />
+                      </svg>
+                    </button>
+                  </motion.form>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="default-bottom-bar"
+                  layout
+                  layoutDependency={isComposerOpen}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  transition={{ duration: 0.11, ease: [0.22, 1, 0.36, 1] }}
+                  className="grid items-end"
+                  style={{ gridTemplateColumns: '1fr auto 1fr' }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -12 }}
+                    transition={{ duration: 0.09, ease: 'easeOut' }}
+                    className="self-end justify-self-start pl-2"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      {isUsageLimited ? (
+                        <>
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                              style={{ width: `${usagePercent}%` }}
+                            />
+                          </div>
+                          <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-sm tabular-nums text-gray-400">
+                          {formatLivePhoneDemoUsageDuration(usageSec)}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  <motion.div className="flex self-end justify-center">
+                    <button
+                      onPointerDown={handleMicPointerDown}
+                      onClick={handleMicClick}
+                      disabled={showConnectingOverlay}
+                      aria-label={isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
+                      className="relative flex items-center justify-center px-[18px] transition-all duration-200 active:scale-95 disabled:opacity-50"
+                      style={{
+                        width: `${VOICE_MODE_STT_BUTTON_WIDTH_PX}px`,
+                        height: `${VOICE_MODE_STT_BUTTON_HEIGHT_PX}px`,
+                        borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
+                      }}
+                    >
+                      {showRipple && (
+                        <span
+                          className="absolute inset-0 bg-red-400 transition-transform duration-150"
+                          style={{
+                            transform: `scale(${rippleScale})`,
+                            opacity: 0.25,
+                            borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px`,
+                          }}
+                        />
+                      )}
+
+                      {isReady && (
+                        <span
+                          className="absolute inset-0 bg-red-500 opacity-20 animate-ping"
+                          style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
+                        />
+                      )}
+
+                      <span
+                        className={`relative flex h-full w-full items-center justify-center gap-3 px-[18px] shadow-lg ${
+                          isLimitReached
+                            ? 'bg-gray-300'
+                            : isReady
+                              ? 'bg-red-500'
+                              : showConnectingOverlay
+                                ? 'bg-gray-300'
+                                : 'bg-gradient-to-br from-amber-400 to-orange-500'
+                        }`}
+                        style={{ borderRadius: `${VOICE_MODE_STT_BUTTON_RADIUS_PX}px` }}
+                      >
+                        {showConnectingOverlay ? (
+                          <Loader2 size={VOICE_MODE_STT_ICON_SIZE_PX} className="shrink-0 animate-spin text-white" />
+                        ) : isReady ? (
+                          <span
+                            aria-hidden
+                            className="shrink-0 rounded-[4px] bg-white"
+                            style={{
+                              width: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
+                              height: `${VOICE_MODE_STT_STOP_SIZE_PX}px`,
+                            }}
+                          />
+                        ) : (
+                          <Mic size={VOICE_MODE_STT_ICON_SIZE_PX} className="shrink-0 text-white" />
+                        )}
+                        <span className="text-[0.98rem] font-semibold tracking-[0.01em] text-white">
+                          {isReady ? VOICE_MODE_STOP_LABEL : VOICE_MODE_START_LABEL}
+                        </span>
+                      </span>
+                    </button>
+                  </motion.div>
+
+                  <div className="self-end justify-self-end">
+                    <motion.button
+                      type="button"
+                      onClick={handleToggleComposer}
+                      aria-label={composerCopy.openKeyboardLabel}
+                      className="inline-flex items-center justify-center text-gray-500 transition-all duration-200 hover:text-gray-700 active:scale-95"
+                      style={{
+                        width: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                        height: `${VOICE_MODE_SIDE_BUTTON_SIZE_PX}px`,
+                      }}
+                    >
+                      <Keyboard size={18} strokeWidth={2.15} />
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
     </PhoneFrame>

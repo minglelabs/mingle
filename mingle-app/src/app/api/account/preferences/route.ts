@@ -21,7 +21,9 @@ const DEFAULT_SILENCE_MS = 500;
 const DEFAULT_SPEAKER_ENABLED = false;
 const DEFAULT_ECHO_ALLOWED = true;
 const DEFAULT_AD_BANNER_POSITION = "bottom";
+const DEFAULT_INPUT_MODE = "voice";
 const AD_BANNER_POSITIONS = new Set(["top", "bottom"]);
+const INPUT_MODES = new Set(["voice", "text"]);
 const ENABLE_ACCOUNT_PREFERENCES_DEBUG_LOGS = process.env.NODE_ENV !== "production";
 
 type PreferencesBody = {
@@ -29,6 +31,7 @@ type PreferencesBody = {
   sonioxManualFinalizeSilenceMs?: unknown;
   translationModel?: unknown;
   adBannerPosition?: unknown;
+  inputMode?: unknown;
   speakerEnabled?: unknown;
   echoAllowed?: unknown;
 };
@@ -46,6 +49,7 @@ type UserPreferencesRecord = {
   demoSilenceFinalizeMs: number | null;
   translationModel: string | null;
   adBannerPosition: string | null;
+  demoInputMode: string | null;
   demoSpeakerEnabled: boolean | null;
   demoEchoAllowed: boolean | null;
 };
@@ -88,6 +92,14 @@ function normalizeAdBannerPosition(value: unknown): "top" | "bottom" | null {
 
 function normalizeBooleanPreference(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
+}
+
+function normalizeInputMode(value: unknown): "voice" | "text" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return INPUT_MODES.has(normalized)
+    ? (normalized as "voice" | "text")
+    : null;
 }
 
 function normalizeSessionUserIdentity(session: { user?: { id?: unknown; email?: unknown } } | null): SessionUserIdentity {
@@ -225,6 +237,7 @@ async function findUserPreferences(identity: SessionUserIdentity): Promise<UserP
     demoSilenceFinalizeMs: true,
     translationModel: true,
     adBannerPosition: true,
+    demoInputMode: true,
     demoSpeakerEnabled: true,
     demoEchoAllowed: true,
   } as const;
@@ -325,6 +338,7 @@ export async function GET(request: Request) {
     translationModel: normalizeSelectableTranslationModel(preferences?.translationModel)
       ?? resolveDefaultSelectableTranslationModel(),
     adBannerPosition: normalizeAdBannerPosition(preferences?.adBannerPosition) ?? DEFAULT_AD_BANNER_POSITION,
+    inputMode: normalizeInputMode(preferences?.demoInputMode) ?? DEFAULT_INPUT_MODE,
     speakerEnabled: preferences?.demoSpeakerEnabled ?? DEFAULT_SPEAKER_ENABLED,
     echoAllowed: preferences?.demoEchoAllowed ?? DEFAULT_ECHO_ALLOWED,
   });
@@ -371,6 +385,7 @@ export async function PATCH(request: Request) {
   const nextSilenceMs = asClampedInteger(body.sonioxManualFinalizeSilenceMs, MIN_SILENCE_MS, MAX_SILENCE_MS);
   const nextTranslationModel = normalizeSelectableTranslationModel(body.translationModel);
   const nextAdBannerPosition = normalizeAdBannerPosition(body.adBannerPosition);
+  const nextInputMode = normalizeInputMode(body.inputMode);
   const nextSpeakerEnabled = normalizeBooleanPreference(body.speakerEnabled);
   const nextEchoAllowed = normalizeBooleanPreference(body.echoAllowed);
   if (
@@ -378,6 +393,7 @@ export async function PATCH(request: Request) {
     && nextSilenceMs === null
     && nextTranslationModel === null
     && nextAdBannerPosition === null
+    && nextInputMode === null
     && nextSpeakerEnabled === null
     && nextEchoAllowed === null
   ) {
@@ -389,6 +405,7 @@ export async function PATCH(request: Request) {
     ...(nextSilenceMs !== null ? { demoSilenceFinalizeMs: nextSilenceMs } : {}),
     ...(nextTranslationModel !== null ? { translationModel: nextTranslationModel } : {}),
     ...(nextAdBannerPosition !== null ? { adBannerPosition: nextAdBannerPosition } : {}),
+    ...(nextInputMode !== null ? { demoInputMode: nextInputMode } : {}),
     ...(nextSpeakerEnabled !== null ? { demoSpeakerEnabled: nextSpeakerEnabled } : {}),
     ...(nextEchoAllowed !== null ? { demoEchoAllowed: nextEchoAllowed } : {}),
   };

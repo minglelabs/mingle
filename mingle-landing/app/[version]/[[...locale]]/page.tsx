@@ -1,16 +1,22 @@
-'use client'
-
-import { useParams } from 'next/navigation'
 import HomePage from '@/components/HomePage'
 import { notFound } from 'next/navigation'
+import { Providers } from '@/app/providers'
+import { PRIMARY_UI_LOCALES } from '../../../../shared/i18n/mingle-locales'
 
 const versions = ['normal', 'flirting', 'working', 'gaming']
-const locales = ['en', 'ko', 'ja', 'zh-CN', 'zh-TW', 'fr', 'de', 'es', 'pt', 'it', 'ru', 'ar', 'hi', 'th', 'vi']
+const localeSet = new Set(PRIMARY_UI_LOCALES)
 
-export default function VersionPage() {
-  const params = useParams()
-  const version = params.version as string
-  const localeSegments = params.locale as string[] | undefined
+type VersionPageProps = {
+  params: Promise<{
+    version: string
+    locale?: string[]
+  }>
+}
+
+export default async function VersionPage({ params }: VersionPageProps) {
+  const resolvedParams = await params
+  const version = resolvedParams.version
+  const localeSegments = resolvedParams.locale
   const locale = localeSegments?.[0]
 
   // 유효하지 않은 버전이면 404
@@ -19,10 +25,14 @@ export default function VersionPage() {
   }
 
   // locale이 있는데 유효하지 않으면 404
-  if (locale && !locales.includes(locale)) {
+  if (locale && !localeSet.has(locale as (typeof PRIMARY_UI_LOCALES)[number])) {
     notFound()
   }
 
   // version과 locale을 HomePage에 전달
-  return <HomePage version={version} locale={locale} />
+  return (
+    <Providers routeLocale={locale}>
+      <HomePage version={version} locale={locale} />
+    </Providers>
+  )
 }

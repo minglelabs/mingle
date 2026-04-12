@@ -1,6 +1,6 @@
-import type { AppDictionary } from "@/i18n/types";
+import type { BaseAppDictionarySource } from "@/i18n/types";
 
-export const jaDictionary: AppDictionary = {
+export const jaDictionary: BaseAppDictionarySource = {
   demo: {
     tapPlayToStart: "再生ボタンをタップして開始",
     usageLimitReached: "使用制限に達しました",

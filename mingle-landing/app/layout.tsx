@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Providers } from './providers'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -38,7 +38,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Providers>{children}</Providers>
+        {children}
+        <Analytics />
       </body>
     </html>
   )
