@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed per-image position tuning from explicit screen-relative offsets**
+  Problem: The collage still needed finer control after several visual passes, because the intended movement for each image was now being specified in exact screen-relative deltas rather than broad compositional feedback.
+  Cause: The overall stack was close, but the final polish depended on moving each reference by precise `vw` offsets from its current top-left placement.
+  Fix: Shifted `JotMe` and `Utell AI` 5vw to the right, and moved `JOIN GUILD` 5vw to the left plus 10vw downward, preserving size and z-order while matching the requested placement model.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed the guild card to drop lower without drifting farther right**
   Problem: After spreading the collage, the guild image started protruding too far to the right while still not feeling low enough in the overall stack.
   Cause: Widening the collage by moving its container rightward solved overlap, but it also pulled the front-most guild card toward the edge instead of using the extra space to the left.
