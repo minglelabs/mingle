@@ -4,6 +4,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import {
+  buildFileMediaSnapshot,
+  buildScreenshotMediaSnapshot,
+  mediaSnapshotsEqual,
+  normalizeMediaSnapshots,
+} from "./google-play-console-media-snapshots.mjs";
+import { buildUpdatedMediaSnapshots } from "./google-play-console-sync.logic.mjs";
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -139,6 +146,10 @@ function parseArgs(argv) {
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function writeJson(filePath, value) {
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function isNonEmptyString(value) {
@@ -366,9 +377,11 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
   const storeListing = googlePlay.storeListing ?? {};
   const appDetails = googlePlay.appDetails ?? {};
   const assets = googlePlay.assets ?? {};
+  const storedMediaSnapshots = normalizeMediaSnapshots(googlePlay.mediaSnapshots);
   const fallbackLocale = storeListing.defaultMetadataLocale ?? "en";
   const uploadRoot = resolveWorkspacePath(workspaceRoot, assets.phoneScreenshotsDir || "upload");
-  const localeDirectories = listLocaleDirectories(uploadRoot).filter((locale) => {
+  const allUploadLocales = listLocaleDirectories(uploadRoot);
+  const localeDirectories = allUploadLocales.filter((locale) => {
     return languageFilter.length === 0 || languageFilter.includes(locale);
   });
 
@@ -377,6 +390,13 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
     workspaceRoot,
     assets.featureGraphicPath ?? "",
   );
+  const currentIconSnapshot = isNonEmptyString(iconPath) && fs.existsSync(iconPath)
+    ? buildFileMediaSnapshot(iconPath, workspaceRoot)
+    : null;
+  const currentFeatureGraphicSnapshot =
+    isNonEmptyString(featureGraphicPath) && fs.existsSync(featureGraphicPath)
+      ? buildFileMediaSnapshot(featureGraphicPath, workspaceRoot)
+      : null;
   const videoMap =
     storeListing.video && typeof storeListing.video === "object" ? storeListing.video : {};
 
@@ -387,6 +407,8 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
     const screenshots = listImageFiles(localeDir).map((fileName) =>
       path.join(localeDir, fileName),
     );
+    const currentScreenshotSnapshots = buildScreenshotMediaSnapshot(screenshots, workspaceRoot);
+    const storedScreenshotSnapshots = storedMediaSnapshots.phoneScreenshots[playLocale] ?? [];
 
     return {
       playLocale: playListingLocale,
@@ -412,6 +434,14 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
       iconPath,
       featureGraphicPath,
       releaseCopy: release.screenshots?.[copyLocale] ?? [],
+      mediaSnapshots: {
+        iconCurrent: currentIconSnapshot,
+        iconStored: storedMediaSnapshots.icon,
+        featureGraphicCurrent: currentFeatureGraphicSnapshot,
+        featureGraphicStored: storedMediaSnapshots.featureGraphic,
+        screenshotsCurrent: currentScreenshotSnapshots,
+        screenshotsStored: storedScreenshotSnapshots,
+      },
     };
   });
 
@@ -420,8 +450,28 @@ function buildLocalePlans(config, workspaceRoot, languageFilter) {
     appDetails,
     assets,
     fallbackLocale,
+    allUploadLocales,
     plans,
+    mediaSnapshots: {
+      stored: storedMediaSnapshots,
+      current: {
+        icon: currentIconSnapshot,
+        featureGraphic: currentFeatureGraphicSnapshot,
+      },
+    },
   };
+}
+
+function shouldUploadSharedAsset(currentSnapshot, storedSnapshot) {
+  if (!currentSnapshot) {
+    return false;
+  }
+
+  return !mediaSnapshotsEqual(currentSnapshot, storedSnapshot ?? null);
+}
+
+function shouldUploadScreenshotSet(currentSnapshots, storedSnapshots) {
+  return !mediaSnapshotsEqual(currentSnapshots, storedSnapshots ?? []);
 }
 
 function validateAutomatableConfig(configJsonPath, config, planBundle, packageName) {
@@ -481,10 +531,13 @@ function printPlan(packageName, planBundle, manualOnly, validateOnly) {
   console.log(`Default language: ${planBundle.appDetails.defaultLanguage}`);
   console.log(`Mode: ${validateOnly ? "validate edit" : "commit edit"}`);
   console.log(`Locales: ${planBundle.plans.length}`);
+  console.log(
+    `Shared media: icon=${shouldUploadSharedAsset(planBundle.mediaSnapshots.current.icon, planBundle.mediaSnapshots.stored.icon) ? "upload" : "skip"}, featureGraphic=${shouldUploadSharedAsset(planBundle.mediaSnapshots.current.featureGraphic, planBundle.mediaSnapshots.stored.featureGraphic) ? "upload" : "skip"}`,
+  );
 
   for (const localePlan of planBundle.plans) {
     console.log(
-      `- ${localePlan.playLocale} <- ${localePlan.uploadLocale} <- ${localePlan.copyLocale} | screenshots=${localePlan.screenshots.length} | title="${localePlan.listing.title}"`,
+      `- ${localePlan.playLocale} <- ${localePlan.uploadLocale} <- ${localePlan.copyLocale} | screenshots=${localePlan.screenshots.length} (${shouldUploadScreenshotSet(localePlan.mediaSnapshots.screenshotsCurrent, localePlan.mediaSnapshots.screenshotsStored) ? "upload" : "skip"}) | title="${localePlan.listing.title}"`,
     );
   }
 
@@ -625,6 +678,14 @@ async function main() {
   const serviceAccount = loadServiceAccount(options);
   const accessToken = await getAccessToken(serviceAccount);
   const editId = await createEdit(accessToken, packageName);
+  const shouldUploadIcon = shouldUploadSharedAsset(
+    planBundle.mediaSnapshots.current.icon,
+    planBundle.mediaSnapshots.stored.icon,
+  );
+  const shouldUploadFeatureGraphic = shouldUploadSharedAsset(
+    planBundle.mediaSnapshots.current.featureGraphic,
+    planBundle.mediaSnapshots.stored.featureGraphic,
+  );
 
   try {
     if (!options.skipDetails) {
@@ -640,66 +701,82 @@ async function main() {
 
       if (!options.skipImages) {
         if (!options.skipIcon) {
-          assertFileExists(localePlan.iconPath, "Play icon asset");
-          await deleteAllImages(
-            accessToken,
-            packageName,
-            editId,
-            localePlan.playLocale,
-            "icon",
-          );
-          await uploadImage(
-            accessToken,
-            packageName,
-            editId,
-            localePlan.playLocale,
-            "icon",
-            localePlan.iconPath,
-          );
-          console.log(`[ok] Uploaded icon: ${localePlan.playLocale}`);
-        }
-
-        if (!options.skipFeatureGraphic && isNonEmptyString(localePlan.featureGraphicPath)) {
-          assertFileExists(localePlan.featureGraphicPath, "Play feature graphic asset");
-          await deleteAllImages(
-            accessToken,
-            packageName,
-            editId,
-            localePlan.playLocale,
-            "featureGraphic",
-          );
-          await uploadImage(
-            accessToken,
-            packageName,
-            editId,
-            localePlan.playLocale,
-            "featureGraphic",
-            localePlan.featureGraphicPath,
-          );
-          console.log(`[ok] Uploaded feature graphic: ${localePlan.playLocale}`);
-        }
-
-        if (!options.skipScreenshots) {
-          await deleteAllImages(
-            accessToken,
-            packageName,
-            editId,
-            localePlan.playLocale,
-            "phoneScreenshots",
-          );
-          for (const screenshotPath of localePlan.screenshots) {
+          if (shouldUploadIcon) {
+            assertFileExists(localePlan.iconPath, "Play icon asset");
+            await deleteAllImages(
+              accessToken,
+              packageName,
+              editId,
+              localePlan.playLocale,
+              "icon",
+            );
             await uploadImage(
               accessToken,
               packageName,
               editId,
               localePlan.playLocale,
-              "phoneScreenshots",
-              screenshotPath,
+              "icon",
+              localePlan.iconPath,
             );
+            console.log(`[ok] Uploaded icon: ${localePlan.playLocale}`);
+          } else {
+            console.log(`[skip] Icon unchanged: ${localePlan.playLocale}`);
           }
-          console.log(
-            `[ok] Uploaded phone screenshots: ${localePlan.playLocale} (${localePlan.screenshots.length})`,
+        }
+
+        if (!options.skipFeatureGraphic && isNonEmptyString(localePlan.featureGraphicPath)) {
+          if (shouldUploadFeatureGraphic) {
+            assertFileExists(localePlan.featureGraphicPath, "Play feature graphic asset");
+            await deleteAllImages(
+              accessToken,
+              packageName,
+              editId,
+              localePlan.playLocale,
+              "featureGraphic",
+            );
+            await uploadImage(
+              accessToken,
+              packageName,
+              editId,
+              localePlan.playLocale,
+              "featureGraphic",
+              localePlan.featureGraphicPath,
+            );
+            console.log(`[ok] Uploaded feature graphic: ${localePlan.playLocale}`);
+          } else {
+            console.log(`[skip] Feature graphic unchanged: ${localePlan.playLocale}`);
+          }
+        }
+
+        if (!options.skipScreenshots) {
+          const shouldUploadLocaleScreenshots = shouldUploadScreenshotSet(
+            localePlan.mediaSnapshots.screenshotsCurrent,
+            localePlan.mediaSnapshots.screenshotsStored,
           );
+          if (shouldUploadLocaleScreenshots) {
+            await deleteAllImages(
+              accessToken,
+              packageName,
+              editId,
+              localePlan.playLocale,
+              "phoneScreenshots",
+            );
+            for (const screenshotPath of localePlan.screenshots) {
+              await uploadImage(
+                accessToken,
+                packageName,
+                editId,
+                localePlan.playLocale,
+                "phoneScreenshots",
+                screenshotPath,
+              );
+            }
+            console.log(
+              `[ok] Uploaded phone screenshots: ${localePlan.playLocale} (${localePlan.screenshots.length})`,
+            );
+          } else {
+            console.log(`[skip] Phone screenshots unchanged: ${localePlan.playLocale}`);
+          }
         }
       }
     }
@@ -712,6 +789,20 @@ async function main() {
       Boolean(options.changesNotSentForReview),
     );
     console.log(options.validateOnly ? "[ok] Validated edit" : "[ok] Committed edit");
+
+    if (!options.validateOnly && !options.skipImages) {
+      const nextMediaSnapshots = buildUpdatedMediaSnapshots(
+        config.googlePlay?.mediaSnapshots,
+        planBundle,
+        options,
+      );
+      if (!mediaSnapshotsEqual(nextMediaSnapshots, config.googlePlay?.mediaSnapshots ?? null)) {
+        config.googlePlay = config.googlePlay ?? {};
+        config.googlePlay.mediaSnapshots = nextMediaSnapshots;
+        writeJson(configJsonPath, config);
+        console.log("[ok] Updated media snapshot metadata");
+      }
+    }
   } catch (error) {
     await googleApiRequest(
       accessToken,

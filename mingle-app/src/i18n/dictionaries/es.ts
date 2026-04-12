@@ -1,6 +1,6 @@
-import type { AppDictionary } from "@/i18n/types";
+import type { BaseAppDictionarySource } from "@/i18n/types";
 
-export const esDictionary: AppDictionary = {
+export const esDictionary: BaseAppDictionarySource = {
   demo: {
     tapPlayToStart: "Pulse reproducir para empezar",
     usageLimitReached: "Se alcanzó el límite de uso",

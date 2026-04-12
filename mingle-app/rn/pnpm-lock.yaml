@@ -72,6 +72,9 @@ importers:
       '@types/react-test-renderer':
         specifier: ^19.1.0
         version: 19.1.0
+      babel-jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@babel/core@7.29.0)
       eslint:
         specifier: ^8.19.0
         version: 8.57.1
