@@ -71,13 +71,14 @@
         gap: clamp(18px, 2vw, 28px);
         max-width: min(980px, 100%);
         position: relative;
-        padding-top: clamp(26px, 2.4vw, 34px);
-        transform: translateY(-14px);
+        --kicker-slot: clamp(36px, 3vw, 44px);
+        padding-top: var(--kicker-slot);
+        transform: translateY(-18px);
       }
 
       .slide-kicker {
         position: absolute;
-        top: 0;
+        top: calc(var(--kicker-slot) * -0.32);
         left: 0;
         margin: 0;
         display: inline-grid;
@@ -141,8 +142,9 @@
         }
 
         .slide-copy {
-          padding-top: 24px;
-          transform: translateY(-10px);
+          --kicker-slot: 34px;
+          padding-top: var(--kicker-slot);
+          transform: translateY(-12px);
         }
 
         .slide-title {

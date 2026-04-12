@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck still placed the kicker too close to the title**
+  Problem: Even after title alignment was stabilized, the kicker still sat too close to the headline and felt attached to it instead of reading like a separate higher-level attribute.
+  Cause: The reserved kicker slot kept the title stable, but the kicker itself still started too low within that slot.
+  Fix: Raised the kicker within its reserved slot and slightly adjusted the copy block offset so the kicker sits visibly higher while the title baseline remains stable across slides.
+  Status: Resolved in-thread.
+
 - **XR presentation deck needed a stable title baseline whether a kicker exists or not**
   Problem: Once the optional kicker was introduced, slides with a kicker pushed the title lower than slides without one, and the whole text block also sat a bit too low on the page.
   Cause: The kicker still occupied normal layout space above the title, so title placement changed depending on whether that element existed.
