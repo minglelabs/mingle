@@ -59,6 +59,10 @@ import {
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import {
+  readNativeQaBridgeAuthority,
+  shouldExposeNativeQaBridge,
+} from "@/lib/native-qa-bridge";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -202,20 +206,6 @@ type LegacySingleRoomSnapshot = {
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
-}
-
-function shouldExposeConversationListQaBridge(params: {
-  search: string;
-  isNativeAppRuntime: boolean;
-}): boolean {
-  if (!params.isNativeAppRuntime) return false;
-  const search = new URLSearchParams(params.search || "");
-  return (
-    search.get("qa") === "1"
-    && search.get("nativeQa") === "1"
-    && search.get("sttDebug") === "1"
-    && search.get("ttsDebug") === "1"
-  );
 }
 
 function shouldSkipCreateConversationMicWarmup(): boolean {
@@ -2101,9 +2091,10 @@ export default function ConversationList({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    if (!shouldExposeConversationListQaBridge({
+    if (!shouldExposeNativeQaBridge({
       search: window.location.search,
       isNativeAppRuntime: isNativeRuntime,
+      runtimeQaBridgeAuthorized: readNativeQaBridgeAuthority(window),
     })) {
       delete window.__MINGLE_CONVERSATION_LIST_QA__;
       return;
@@ -2390,14 +2381,14 @@ export default function ConversationList({
         onTouchCancel={resetPullRefresh}
       >
         <div
-          className="pointer-events-none sticky top-0 z-10 flex h-0 justify-center overflow-visible"
+          className="pointer-events-none sticky top-0 z-10 h-0 overflow-visible"
           aria-hidden
         >
           <div
-            className="mt-3 flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
+            className="absolute left-1/2 top-3 flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
             style={{
               opacity: pullRefreshProgress,
-              transform: `translateY(${Math.max(0, effectivePullRefreshOffsetPx - 56)}px) scale(${0.92 + pullRefreshProgress * 0.08})`,
+              transform: `translate(-50%, ${effectivePullRefreshOffsetPx - 56}px) scale(${0.92 + pullRefreshProgress * 0.08})`,
               transition: pullRefreshTrackingRef.current
                 ? "none"
                 : "transform 180ms ease, opacity 180ms ease",

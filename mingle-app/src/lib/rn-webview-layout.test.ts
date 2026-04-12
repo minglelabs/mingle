@@ -77,20 +77,29 @@ describe('RN WebView layout helpers', () => {
     })).toBe(false)
   })
 
-  it('enables iOS back-forward gestures only when the WebView can go back', () => {
+  it('keeps iOS back-forward gestures enabled when either back or forward history exists', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,
       canGoBack: true,
+      canGoForward: false,
     })).toBe(true)
 
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,
       canGoBack: false,
+      canGoForward: true,
+    })).toBe(true)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: false,
     })).toBe(false)
 
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: false,
       canGoBack: true,
+      canGoForward: true,
     })).toBe(false)
   })
 

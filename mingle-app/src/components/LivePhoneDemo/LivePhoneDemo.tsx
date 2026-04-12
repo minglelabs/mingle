@@ -101,6 +101,7 @@ import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
+import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
@@ -1029,20 +1030,6 @@ function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetS
   } catch {
     return false
   }
-}
-
-function shouldExposeLiveDemoQaBridge(params: {
-  search: string
-  isNativeAppRuntime: boolean
-}): boolean {
-  if (!params.isNativeAppRuntime) return false
-  const search = new URLSearchParams(params.search || '')
-  return (
-    search.get('qa') === '1'
-    && search.get('nativeQa') === '1'
-    && search.get('sttDebug') === '1'
-    && search.get('ttsDebug') === '1'
-  )
 }
 
 function buildTrackingRequestHeaders(args: {
@@ -4126,9 +4113,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    if (!shouldExposeLiveDemoQaBridge({
+    if (!shouldExposeNativeQaBridge({
       search: window.location.search || '',
       isNativeAppRuntime,
+      runtimeQaBridgeAuthorized: readNativeQaBridgeAuthority(window),
     })) {
       delete window.__MINGLE_QA__
       return

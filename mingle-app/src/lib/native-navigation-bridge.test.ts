@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildNativeQaBridgeBootstrapScript,
   buildNativeNavigationBridgeScript,
+  NATIVE_QA_BRIDGE_WINDOW_FLAG,
   NATIVE_NAV_INDEX_KEY,
   NATIVE_NAV_RAW_STATE_KEY,
   readNativeNavigationHistoryIndex,
   resolveNativeNavigationCanGoBack,
+  resolveNativeNavigationCanGoForward,
   resolveNextNativeNavigationHistoryIndex,
   stampNativeNavigationHistoryState,
 } from "../../rn/src/nativeNavigationBridge";
@@ -28,7 +31,7 @@ describe("native navigation bridge helpers", () => {
     });
   });
 
-  it("reads only finite stamped indices and derives canGoBack from the current entry", () => {
+  it("reads only finite stamped indices and derives back/forward availability from the current entry", () => {
     expect(readNativeNavigationHistoryIndex({
       [NATIVE_NAV_INDEX_KEY]: 3.9,
     })).toBe(3);
@@ -38,6 +41,14 @@ describe("native navigation bridge helpers", () => {
 
     expect(resolveNativeNavigationCanGoBack(0)).toBe(false);
     expect(resolveNativeNavigationCanGoBack(1)).toBe(true);
+    expect(resolveNativeNavigationCanGoForward({
+      currentHistoryIndex: 0,
+      historyLength: 2,
+    })).toBe(true);
+    expect(resolveNativeNavigationCanGoForward({
+      currentHistoryIndex: 1,
+      historyLength: 2,
+    })).toBe(false);
   });
 
   it("increments only pushState while replaceState preserves the current index", () => {
@@ -50,7 +61,18 @@ describe("native navigation bridge helpers", () => {
 
     expect(script).toContain(NATIVE_NAV_INDEX_KEY);
     expect(script).toContain("canGoBack: currentHistoryIndex > 0");
+    expect(script).toContain("canGoForward: historyLength > currentHistoryIndex + 1");
     expect(script).toContain("wrapHistoryMethod('pushState')");
     expect(script).toContain("wrapHistoryMethod('replaceState')");
+  });
+
+  it("writes the QA authority flag through a native bootstrap script", () => {
+    const enabledScript = buildNativeQaBridgeBootstrapScript(true);
+    const disabledScript = buildNativeQaBridgeBootstrapScript(false);
+
+    expect(enabledScript).toContain(NATIVE_QA_BRIDGE_WINDOW_FLAG);
+    expect(enabledScript).toContain("Object.defineProperty");
+    expect(enabledScript).toContain("value: true");
+    expect(disabledScript).toContain("value: false");
   });
 });

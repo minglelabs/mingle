@@ -1,5 +1,6 @@
 export const NATIVE_NAV_INDEX_KEY = "__MINGLE_NATIVE_NAV_INDEX__";
 export const NATIVE_NAV_RAW_STATE_KEY = "__MINGLE_NATIVE_NAV_RAW_STATE__";
+export const NATIVE_QA_BRIDGE_WINDOW_FLAG = "__MINGLE_NATIVE_QA_BRIDGE_ENABLED__";
 
 export function isMergeableNavigationState(state: unknown): state is Record<string, unknown> {
   return state !== null && typeof state === "object" && !Array.isArray(state);
@@ -39,6 +40,13 @@ export function resolveNativeNavigationCanGoBack(currentHistoryIndex: number): b
   return currentHistoryIndex > 0;
 }
 
+export function resolveNativeNavigationCanGoForward(params: {
+  currentHistoryIndex: number;
+  historyLength: number;
+}): boolean {
+  return params.historyLength > params.currentHistoryIndex + 1;
+}
+
 export function resolveNextNativeNavigationHistoryIndex(
   currentHistoryIndex: number,
   methodName: "pushState" | "replaceState",
@@ -46,6 +54,30 @@ export function resolveNextNativeNavigationHistoryIndex(
   return methodName === "pushState"
     ? currentHistoryIndex + 1
     : currentHistoryIndex;
+}
+
+export function buildNativeQaBridgeBootstrapScript(enabled: boolean): string {
+  const serializedEnabled = enabled ? "true" : "false";
+
+  return `
+  (function () {
+    try {
+      Object.defineProperty(window, '${NATIVE_QA_BRIDGE_WINDOW_FLAG}', {
+        value: ${serializedEnabled},
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      });
+    } catch (error) {
+      try {
+        window['${NATIVE_QA_BRIDGE_WINDOW_FLAG}'] = ${serializedEnabled};
+      } catch (assignmentError) {
+        // Ignore QA bridge flag bootstrap failures.
+      }
+    }
+    return true;
+  })();
+`;
 }
 
 export function buildNativeNavigationBridgeScript(): string {
@@ -111,12 +143,16 @@ export function buildNativeNavigationBridgeScript(): string {
       if (!bridge || typeof bridge.postMessage !== 'function') {
         return;
       }
+      var historyLength = typeof window.history.length === 'number'
+        ? Math.max(0, Math.floor(window.history.length))
+        : 0;
       try {
         bridge.postMessage(JSON.stringify({
           type: 'native_navigation_state',
           payload: {
             url: window.location.href,
             canGoBack: currentHistoryIndex > 0,
+            canGoForward: historyLength > currentHistoryIndex + 1,
           }
         }));
       } catch (error) {

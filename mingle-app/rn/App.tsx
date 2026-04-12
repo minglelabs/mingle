@@ -36,7 +36,10 @@ import {
   type NativeAuthProvider,
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
-import { WEBVIEW_NAVIGATION_BRIDGE_SCRIPT } from './src/nativeNavigationBridge';
+import {
+  buildNativeQaBridgeBootstrapScript,
+  WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
+} from './src/nativeNavigationBridge';
 import {
   normalizeNativeBottomBarClearancePx,
   parseWebPathname,
@@ -534,6 +537,7 @@ type NativeNavigationStateCommand = {
   type: 'native_navigation_state';
   payload?: {
     canGoBack?: boolean;
+    canGoForward?: boolean;
     url?: string;
   };
 };
@@ -1075,6 +1079,10 @@ function AppInner(): React.JSX.Element {
       );
     }
   }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const nativeQaBridgeBootstrapScript = useMemo(
+    () => buildNativeQaBridgeBootstrapScript(__DEV__ && RUNTIME_QA_BRIDGE_ENABLED),
+    [],
+  );
   const webViewSource = useMemo(() => {
     if (!webUrl) {
       return { html: '<html><body style="margin:0;background:#fff;"></body></html>' };
@@ -1196,6 +1204,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
+  const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
@@ -1559,10 +1568,11 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
+    const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
     const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
       ? nativeBannerPosition
       : 'top';
-    const effectiveTopInsetPx = activeBannerZone === 'list'
+    const effectiveTopInsetPx = shouldReserveListTopInset
       ? nativeTranscriptInsetPx
       : 0;
     const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
@@ -1580,8 +1590,10 @@ function AppInner(): React.JSX.Element {
     });
   }, [
     activeBannerZone,
+    canRenderNativeBanner,
     emitUiToWeb,
     isNativeMenuOverlayOpen,
+    nativeAdsReady,
     nativeBannerBottomInsetPx,
     nativeBannerPosition,
     nativeBannerUnitId,
@@ -1921,6 +1933,9 @@ function AppInner(): React.JSX.Element {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
+      }
+      if (typeof parsed.payload?.canGoForward === 'boolean') {
+        setCanWebViewGoForward(parsed.payload.canGoForward);
       }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
@@ -2316,9 +2331,11 @@ function AppInner(): React.JSX.Element {
             })}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
+            injectedJavaScriptBeforeContentLoaded={nativeQaBridgeBootstrapScript}
             allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
+              canGoForward: canWebViewGoForward,
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
