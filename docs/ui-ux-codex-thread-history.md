@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck still sat too low even after position anchoring was fixed**
+  Problem: After the deck switched to fixed top anchoring, the relative positions stopped drifting, but the whole content block still felt too low on the page. The kicker, title, and body all needed to come up together.
+  Cause: The new anchor preserved consistency but kept a conservative top padding and copy offset that still placed the reading block lower than the intended presentation rhythm.
+  Fix: Pulled the entire content system upward by reducing the shell's top padding and tightening the copy block's top offset on both desktop and mobile. This keeps the same internal spacing while moving the whole composition higher.
+  Status: Resolved in-thread.
+
 - **XR presentation deck needed slide-level alignment control once the cover and inner slides diverged**
   Problem: The deck started needing two different horizontal compositions at once: a centered cover-style treatment for select slides and the existing left-aligned reading layout for the main body slides.
   Cause: Alignment was effectively hardcoded into one shared copy block style, so changing the cover also changed every interior slide.

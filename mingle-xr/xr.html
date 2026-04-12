@@ -62,7 +62,7 @@
         height: 100%;
         display: flex;
         align-items: flex-start;
-        padding: clamp(40px, 7vw, 96px);
+        padding: clamp(24px, 3.4vw, 56px) clamp(40px, 7vw, 96px) clamp(40px, 7vw, 96px);
         background: transparent;
       }
 
@@ -74,7 +74,7 @@
         position: relative;
         --kicker-slot: clamp(36px, 3vw, 44px);
         padding-top: var(--kicker-slot);
-        margin-top: clamp(188px, calc(37vh - 140px), 264px);
+        margin-top: clamp(124px, calc(30vh - 112px), 196px);
         text-align: left;
       }
 
@@ -156,13 +156,13 @@
 
       @media (max-width: 900px) {
         .slide-shell {
-          padding: 28px;
+          padding: 20px 28px 28px;
         }
 
         .slide-copy {
           --kicker-slot: 34px;
           padding-top: var(--kicker-slot);
-          margin-top: clamp(104px, calc(28vh - 52px), 164px);
+          margin-top: clamp(68px, calc(20vh - 12px), 116px);
         }
 
         .slide-title {
