@@ -1925,6 +1925,8 @@ export default function useRealtimeSTT({
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
   const conversationClearSequenceRef = useRef(0)
+  const clientEventSeqRef = useRef(0)
+  const clientEventSeqSessionRef = useRef('')
   const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
