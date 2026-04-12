@@ -77,13 +77,20 @@ describe('RN WebView layout helpers', () => {
     })).toBe(false)
   })
 
-  it('keeps iOS back-forward gestures enabled even when unrelated overlays change', () => {
+  it('enables iOS back-forward gestures only when the WebView can go back', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,
+      canGoBack: true,
     })).toBe(true)
 
     expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+    })).toBe(false)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: false,
+      canGoBack: true,
     })).toBe(false)
   })
 

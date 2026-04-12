@@ -90,7 +90,7 @@
 
 3. **The top gap above the list was over-expanded by fallback spacer math**
    Problem: Even after the header size was corrected, the page was still pushed down because a fallback banner estimate and a header-adjacent spacer were both being applied.
-   Attempted fix: The explicit native inset was trusted when present, the guessed `50px` fallback was demoted to old cases only, and the header-front spacer was removed.
+   Attempted fix: The explicit native inset was trusted when present, the guessed `50px` fallback was demoted to old cases only, and the header-front spacer was removed. During later QA-automation work, the same symptom briefly reappeared only in the QA branch because failed test runs could leave the QA-only banner-position override persisted in local storage; the harness was then changed to reset QA demo state after every case instead of touching product layout again.
    Status: Resolved in-thread.
 
 4. **Android hardware back initially did not return from a room to the list**
@@ -290,7 +290,7 @@
 
 43. **iOS swipe-back regressed again later because gesture enablement became tied to menu-open state**
    Problem: After later merges, swipe-back silently became available only when the native menu overlay was open.
-   Attempted fix: `allowsBackForwardNavigationGestures` was restored to unconditional iOS enablement instead of `isNativeMenuOverlayOpen`.
+   Attempted fix: `allowsBackForwardNavigationGestures` was first restored to unconditional iOS enablement instead of `isNativeMenuOverlayOpen`, but later validation showed that QA-automation work must still preserve the original `canGoBack` gating so iOS forward-history behavior matches `main`.
    Status: Resolved in-thread.
 
 44. **A later room-state pass hit an `isLikelyIOSPlatform` runtime error**

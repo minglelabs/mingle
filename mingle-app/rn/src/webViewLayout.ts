@@ -50,8 +50,9 @@ export function shouldHideIosKeyboardAccessoryView(params: {
 
 export function shouldEnableIosWebViewBackForwardNavigation(params: {
   isIosPlatform: boolean;
+  canGoBack: boolean;
 }): boolean {
-  return params.isIosPlatform;
+  return params.isIosPlatform && params.canGoBack;
 }
 
 export function shouldEnableNativeWebViewDebugging(params: {

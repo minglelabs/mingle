@@ -1181,6 +1181,19 @@ async function resetQaDemoState(driver) {
   }
 }
 
+async function safeResetQaDemoState(driver) {
+  try {
+    const hasQaReset = await driver.execute(() => {
+      return Boolean(window.__MINGLE_QA__?.resetUiState);
+    });
+
+    if (!hasQaReset) return;
+    await resetQaDemoState(driver);
+  } catch {
+    // Best-effort cleanup only. The primary test result should still win.
+  }
+}
+
 async function reloadCurrentPage(driver) {
   await driver.execute(() => {
     window.location.reload();
@@ -1210,9 +1223,10 @@ async function waitForSeededHistoryHydration(driver, timeoutMs = 20000) {
 
 async function runCase({ driver, reportDir, platform, caseId, runner }) {
   const screenshotPath = path.join(reportDir, `${platform}-${caseId}.png`);
+  let result;
   try {
     const details = await runner();
-    return {
+    result = {
       id: caseId,
       status: 'passed',
       details,
@@ -1223,14 +1237,18 @@ async function runCase({ driver, reportDir, platform, caseId, runner }) {
     } catch {
       // Ignore screenshot failures because the primary result is still the assertion.
     }
-    return {
+    result = {
       id: caseId,
       status: 'failed',
       error: error.message,
       details: error.details || null,
       screenshotPath,
     };
+  } finally {
+    await safeResetQaDemoState(driver);
   }
+
+  return result;
 }
 
 async function runSharedLiveDemoCases({ driver, reportDir, platform }) {

@@ -2318,6 +2318,7 @@ function AppInner(): React.JSX.Element {
             contentInsetAdjustmentBehavior="never"
             allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
               isIosPlatform: Platform.OS === 'ios',
+              canGoBack: canWebViewGoBack,
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
