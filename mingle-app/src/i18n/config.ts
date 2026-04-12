@@ -7,7 +7,7 @@ import {
   resolvePrimaryUiLocale,
   type AppSupportedLocale,
   type PrimaryUiLocale,
-} from "../../../shared/i18n/mingle-locales";
+} from "@/i18n/mingle-locales";
 
 export const SUPPORTED_LOCALES = APP_SUPPORTED_LOCALES;
 
