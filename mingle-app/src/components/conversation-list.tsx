@@ -2415,7 +2415,12 @@ export default function ConversationList({
               <Loader2 size={28} className="animate-spin" />
             </div>
           ) : conversationItems.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-16 text-center text-gray-400">
+            <div
+              className="flex flex-col items-center px-6 py-16 text-center text-gray-400"
+              style={{
+                paddingTop: effectiveNativeTopInsetPx > 0 ? "84px" : undefined,
+              }}
+            >
               <span className="mb-3 text-5xl">💬</span>
               <p className="text-[15px] font-semibold text-slate-700">
                 {copy.emptyTitle}

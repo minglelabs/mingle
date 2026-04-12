@@ -135,7 +135,7 @@
 
 12. **The list top banner sat too low below the header**
    Problem: The top ad/banner spacing for the list screen had too much clearance and did not visually lock to the header.
-   Attempted fix: The list banner offset was tightened separately from the in-room banner offsets.
+   Attempted fix: The list banner offset was tightened separately from the in-room banner offsets. Later QA-branch validation on real devices found two extra contributors: the pull-to-refresh chip was still rendered as a sticky flex child with `opacity: 0`, so it occupied about `50px` between the native top banner and the first conversation row even while idle, and RN was reserving the list top inset as soon as the list zone became active instead of waiting until the native banner was actually render-ready. The follow-up fixes moved the pull chip to an absolutely positioned overlay, gated the list inset reservation on banner readiness, and added a small empty-state-only top cushion so the placeholder does not kiss the banner edge.
    Status: Resolved in-thread.
 
 13. **The in-room top banner sat too far below the room header**
@@ -165,7 +165,7 @@
 
 18. **iOS forward-swipe failed to restore the room cleanly**
    Problem: After swiping back to the list, swiping forward could leave the list visible or replay a new room-open instead of restoring the prior room state.
-   Attempted fix: Route sync was made to subscribe directly to the `conversation` query and reopen through the history-specific path.
+   Attempted fix: Route sync was made to subscribe directly to the `conversation` query and reopen through the history-specific path. Later QA-branch validation found that RN still turned off `allowsBackForwardNavigationGestures` as soon as the current stamped history index hit `0`, even though a forward target still existed. The follow-up fix now keeps iOS back/forward gestures enabled whenever stamped history still has either a backward or forward entry.
    Status: Resolved in-thread.
 
 19. **The drawer had its own swipe-back flicker on iOS**
