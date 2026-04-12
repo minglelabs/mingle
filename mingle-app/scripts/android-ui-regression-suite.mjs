@@ -327,6 +327,23 @@ async function runAndroidAppiumTargets(androidSerial) {
     });
   }
 
+  if (result.code !== 0 && results.length === 0) {
+    const combinedOutput = [stderr, stdout].filter(Boolean).join('\n').trim();
+    results.push({
+      kind: 'real-device',
+      id: 'android-real-device-session',
+      title: 'Android real-device QA session',
+      issueAtoms: [],
+      status: 'failed',
+      error: combinedOutput || 'Android real-device QA exited before producing a platform report.',
+      details: {
+        reportJsonPath,
+        reportMarkdownPath: reportMarkdownMatch?.[1] || '',
+      },
+      screenshotPath: '',
+    });
+  }
+
   return {
     results,
     runExitCode: result.code,

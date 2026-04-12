@@ -342,6 +342,70 @@ async function prepareAndroidDevice(serial) {
   await ensureAdbReverse(serial, DEFAULT_ANDROID_WEB_PORT, webHostPort);
 }
 
+async function getAndroidTopActivity(serial) {
+  try {
+    const result = await runCommand('adb', ['-s', serial, 'shell', 'dumpsys', 'activity', 'top']);
+    const lines = result.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+    const activityLine = lines.find((line) => line.startsWith('ACTIVITY '));
+    return activityLine || '';
+  } catch {
+    return '';
+  }
+}
+
+async function getAndroidKeyguardState(serial) {
+  try {
+    const result = await runCommand('adb', ['-s', serial, 'shell', 'dumpsys', 'window', 'policy']);
+    const showingMatch = result.stdout.match(/showing=(true|false)/);
+    const occludedMatch = result.stdout.match(/showingAndNotOccluded=(true|false)/);
+    return {
+      showing: showingMatch?.[1] === 'true',
+      showingAndNotOccluded: occludedMatch?.[1] === 'true',
+    };
+  } catch {
+    return {
+      showing: false,
+      showingAndNotOccluded: false,
+    };
+  }
+}
+
+async function collectAndroidWebViewDiagnostics(serial) {
+  const [topActivity, keyguardState] = await Promise.all([
+    getAndroidTopActivity(serial),
+    getAndroidKeyguardState(serial),
+  ]);
+
+  const lines = [];
+
+  if (keyguardState.showingAndNotOccluded || keyguardState.showing) {
+    lines.push('The Android device is currently locked. Unlock the phone and keep the app in the foreground before rerunning QA.');
+  }
+
+  if (topActivity && !topActivity.includes(APP_PACKAGE)) {
+    lines.push(`Top activity is not the app under test: ${topActivity}`);
+  }
+
+  return lines;
+}
+
+async function collectAndroidSessionDiagnostics(serial) {
+  const lines = await collectAndroidWebViewDiagnostics(serial);
+  return {
+    serial,
+    issues: lines,
+  };
+}
+
+async function safeDeleteSession(driver) {
+  if (!driver) return;
+  try {
+    await driver.deleteSession();
+  } catch {
+    // Ignore teardown failures so the original Android session error still gets reported.
+  }
+}
+
 async function createAndroidSession(options) {
   const serial = options.androidSerial || await findInstalledAndroidSerial();
   assert(serial, 'No Android device was detected for the mobile UI QA run.');
@@ -721,78 +785,97 @@ function formatIosRealDeviceSessionError(error, diagnostics) {
 async function switchToWebView(driver) {
   const platformName = String(driver.capabilities.platformName || '').toLowerCase();
   const isAndroid = platformName === 'android';
+  const androidSerial = typeof driver.capabilities['appium:udid'] === 'string'
+    ? driver.capabilities['appium:udid']
+    : typeof driver.capabilities.udid === 'string'
+      ? driver.capabilities.udid
+      : '';
   const qaBridgeHint = 'QA bridge URL markers were not found. Reinstall the debug app with `scripts/devbox mobile ... --qa-bridge` or `scripts/devbox up ... --qa-bridge`.';
 
-  return await waitFor(async () => {
-    const contexts = await driver.getContexts({
-      returnDetailedContexts: true,
-      ...(isAndroid
-        ? {
-            filterByCurrentAndroidApp: true,
-            returnAndroidDescriptionData: true,
-            waitForWebviewMs: 5000,
-            androidWebviewConnectTimeout: 15000,
-            androidWebviewConnectionRetryTime: 1000,
-          }
-        : {}),
-    });
-
-    const exactTarget = contexts.find((context) => {
-      if (!context || typeof context !== 'object') return false;
-      if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
-        return false;
-      }
-      if (!('url' in context) || typeof context.url !== 'string') return false;
-      if (!/qa=1/.test(context.url)) return false;
-      if (!isAndroid) return true;
-      return context.packageName === APP_PACKAGE;
-    });
-
-    const fallbackIosTarget = !isAndroid
-      ? contexts.find((context) => {
-          if (!context || typeof context !== 'object') return false;
-          if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
-            return false;
-          }
-          if (!('bundleId' in context) || typeof context.bundleId !== 'string') return false;
-          if (context.bundleId !== IOS_BUNDLE_ID) return false;
-          if ('url' in context && typeof context.url === 'string' && context.url.trim()) return false;
-          return true;
-        })
-      : null;
-
-    const nonQaTarget = contexts.find((context) => {
-      if (!context || typeof context !== 'object') return false;
-      if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
-        return false;
-      }
-      if (isAndroid) {
-        return context.packageName === APP_PACKAGE;
-      }
-      return context.bundleId === IOS_BUNDLE_ID;
-    });
-
-    const target = exactTarget ?? fallbackIosTarget;
-    if (!target) {
-      if (nonQaTarget) {
-        throw new Error(qaBridgeHint);
-      }
-      return null;
-    }
-
-    if (isAndroid) {
-      await driver.switchContext({
-        appIdentifier: APP_PACKAGE,
-        url: /qa=1/,
-        androidWebviewConnectTimeout: 15000,
-        androidWebviewConnectionRetryTime: 1000,
+  try {
+    return await waitFor(async () => {
+      const contexts = await driver.getContexts({
+        returnDetailedContexts: true,
+        ...(isAndroid
+          ? {
+              filterByCurrentAndroidApp: true,
+              returnAndroidDescriptionData: true,
+              waitForWebviewMs: 5000,
+              androidWebviewConnectTimeout: 15000,
+              androidWebviewConnectionRetryTime: 1000,
+            }
+          : {}),
       });
-    } else {
-      await driver.switchContext({ url: /qa=1/ });
+
+      const exactTarget = contexts.find((context) => {
+        if (!context || typeof context !== 'object') return false;
+        if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
+          return false;
+        }
+        if (!('url' in context) || typeof context.url !== 'string') return false;
+        if (!/qa=1/.test(context.url)) return false;
+        if (!isAndroid) return true;
+        return context.packageName === APP_PACKAGE;
+      });
+
+      const fallbackIosTarget = !isAndroid
+        ? contexts.find((context) => {
+            if (!context || typeof context !== 'object') return false;
+            if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
+              return false;
+            }
+            if (!('bundleId' in context) || typeof context.bundleId !== 'string') return false;
+            if (context.bundleId !== IOS_BUNDLE_ID) return false;
+            if ('url' in context && typeof context.url === 'string' && context.url.trim()) return false;
+            return true;
+          })
+        : null;
+
+      const nonQaTarget = contexts.find((context) => {
+        if (!context || typeof context !== 'object') return false;
+        if (!('id' in context) || typeof context.id !== 'string' || !context.id.startsWith('WEBVIEW')) {
+          return false;
+        }
+        if (isAndroid) {
+          return context.packageName === APP_PACKAGE;
+        }
+        return context.bundleId === IOS_BUNDLE_ID;
+      });
+
+      const target = exactTarget ?? fallbackIosTarget;
+      if (!target) {
+        if (nonQaTarget) {
+          throw new Error(qaBridgeHint);
+        }
+        return null;
+      }
+
+      if (isAndroid) {
+        await driver.switchContext({
+          appIdentifier: APP_PACKAGE,
+          url: /qa=1/,
+          androidWebviewConnectTimeout: 15000,
+          androidWebviewConnectionRetryTime: 1000,
+        });
+      } else {
+        await driver.switchContext({ url: /qa=1/ });
+      }
+
+      return target.id;
+    }, 'a QA WebView context', 60000, 1000);
+  } catch (error) {
+    if (!isAndroid || !androidSerial) {
+      throw error;
     }
 
-    return target.id;
-  }, 'a QA WebView context', 60000, 1000);
+    const diagnostics = await collectAndroidWebViewDiagnostics(androidSerial);
+    if (diagnostics.length === 0) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}\n${diagnostics.map((line) => `- ${line}`).join('\n')}`);
+  }
 }
 
 async function switchToNative(driver) {
@@ -1660,8 +1743,9 @@ async function main() {
 
   try {
     if (options.platform === 'all' || options.platform === 'android') {
-      const androidSession = await createAndroidSession(options);
+      let androidSession = null;
       try {
+        androidSession = await createAndroidSession(options);
         const results = await runAndroidCases(androidSession.driver, reportDir);
         report.platforms.push({
           platform: 'android',
@@ -1670,8 +1754,33 @@ async function main() {
           summary: summarizeResults(results),
           results,
         });
+      } catch (error) {
+        const serial = options.androidSerial
+          || androidSession?.driver?.capabilities?.['appium:udid']
+          || androidSession?.driver?.capabilities?.udid
+          || 'unknown';
+        const diagnostics = await collectAndroidSessionDiagnostics(serial);
+        report.platforms.push({
+          platform: 'android',
+          deviceLabel: androidSession?.deviceLabel || `android:${serial}`,
+          status: 'failed',
+          summary: summarizeResults([
+            {
+              id: 'session-start',
+              status: 'failed',
+            },
+          ]),
+          results: [
+            {
+              id: 'session-start',
+              status: 'failed',
+              error: error instanceof Error ? error.message : String(error),
+              details: diagnostics,
+            },
+          ],
+        });
       } finally {
-        await androidSession.driver.deleteSession();
+        await safeDeleteSession(androidSession?.driver);
       }
     }
 
@@ -1717,7 +1826,7 @@ async function main() {
         });
       } finally {
         if (iosSession) {
-          await iosSession.driver.deleteSession();
+          await safeDeleteSession(iosSession.driver);
         }
       }
     }
