@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR kicker tracking was too wide once labels became longer and more sentence-like**
+  Problem: As the deck started using longer Korean kicker labels, the existing tracking made them feel too stretched and visually brittle compared with the calmer title/body rhythm.
+  Cause: The earlier wider letter spacing worked for short badge-like tags, but it did not scale as well once the kicker text became more descriptive.
+  Fix: Reduced the global kicker letter spacing slightly so the labels still read as distinct metadata while feeling tighter and more deliberate.
+  Status: Resolved in-thread.
+
 - **XR target slide screenshot still sat too far right and slightly low for the deck rhythm**
   Problem: After switching to the exact user-selected Voiceroom screenshot, the image itself was correct, but its placement still felt too far toward the right edge and slightly lower than the intended presentation balance.
   Cause: The existing side-media offsets were inherited from the earlier placeholder treatment and were not retuned after the screenshot changed to a taller, more visually dominant phone image.
