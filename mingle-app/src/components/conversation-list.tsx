@@ -8,6 +8,7 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
   forwardRef,
+  type CSSProperties,
   type FormEvent,
   useCallback,
   useEffect,
@@ -38,6 +39,11 @@ import {
   parseNativeUiBannerLayoutDetail,
   type NativeUiBannerLayoutEventDetail,
 } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
+
+const conversationAvatarImageStyle: CSSProperties & { WebkitUserDrag: string } = {
+  WebkitUserDrag: "none",
+  pointerEvents: "none",
+};
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
@@ -930,7 +936,7 @@ function ConversationRow({
           width={56}
           height={56}
           draggable={false}
-          style={{ WebkitUserDrag: "none", pointerEvents: "none" }}
+          style={conversationAvatarImageStyle}
           unoptimized
         />
       </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client/index";
 import { getAuthOptions } from "@/lib/auth-options";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import {
@@ -11,13 +12,13 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-function buildVisibleMessageWhere() {
+function buildVisibleMessageWhere(): Prisma.AppMessageWhereInput {
   return {
     OR: [
       { isDeleted: false },
       { isDeleted: null },
     ],
-  } as const;
+  };
 }
 
 type SessionUserIdentity = {

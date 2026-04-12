@@ -4,11 +4,11 @@ import {
   resolvePrimaryUiLocaleTag,
   type AppSupportedLocale,
   type PrimaryUiLocale,
-} from "../../../shared/i18n/mingle-locales";
+} from "../../src/i18n/mingle-locales";
 import {
   getMingleVersionPolicyFallbackCopy,
   type MingleVersionPolicyCopy,
-} from "../../../shared/i18n/mingle-version-policy";
+} from "../../src/i18n/mingle-version-policy";
 
 export type RnUiLocale = AppSupportedLocale;
 export type VersionPolicyLocale = PrimaryUiLocale;
