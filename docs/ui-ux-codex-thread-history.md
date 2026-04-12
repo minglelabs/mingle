@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR target slide needed a fuller product reference than an icon alone**
+  Problem: The HelloTalk target-customer slide gained an app icon, but that still did not communicate what the Voiceroom product actually looks like in use.
+  Cause: A single square icon identifies the brand quickly, but it does not convey the live-room experience the slide is specifically discussing.
+  Fix: Added an official HelloTalk Voiceroom interface image from the HelloTalk Creator Portal and paired it with the app icon in a dedicated right-side media stack. The slide text width is constrained only on that page so the visuals do not collide with the copy.
+  Status: Resolved in-thread.
+
 - **XR target-customer slide needed a recognizable product cue without disturbing text alignment**
   Problem: The HelloTalk target-customer slide described the product in text only, which made the reference feel abstract at presentation speed.
   Cause: The slide had no visual brand anchor, and adding one inside normal flow risked shifting the text coordinates that were already being tuned carefully.

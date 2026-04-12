@@ -188,11 +188,23 @@
           font-size: clamp(1rem, 4.4vw, 1.2rem);
         }
 
-        .slide-app-icon {
-          top: 24px;
+        .slide-copy--with-side-media {
+          max-width: 100%;
+        }
+
+        .slide-side-media {
+          top: 20px;
           right: 28px;
+          gap: 12px;
+        }
+
+        .slide-app-icon {
           width: 72px;
           height: 72px;
+        }
+
+        .slide-preview-image {
+          display: none;
         }
       }
 
@@ -253,7 +265,7 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--with-side-media">
               <p class="slide-kicker">타겟 고객 1</p>
               <h1 class="slide-title">헬로톡 보이스룸</h1>
               <p class="slide-body">
@@ -263,11 +275,18 @@
                 친구를 사귀기 어렵고, 쉽게 이탈합니다.
               </p>
             </div>
-            <img
-              class="slide-app-icon"
-              src="./assets/hellotalk-icon.jpg"
-              alt="HelloTalk app icon"
-            />
+            <div class="slide-side-media" aria-hidden="true">
+              <img
+                class="slide-app-icon"
+                src="./assets/hellotalk-icon.jpg"
+                alt="HelloTalk app icon"
+              />
+              <img
+                class="slide-preview-image"
+                src="./assets/hellotalk-voiceroom.svg"
+                alt="HelloTalk Voiceroom interface"
+              />
+            </div>
           </article>
         </section>
 
