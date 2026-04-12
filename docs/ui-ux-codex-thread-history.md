@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed the guild visual to sit lower in the stack**
+  Problem: After the guild image was promoted to the top layer and enlarged, it still sat a bit too high and crowded the upper part of the collage.
+  Cause: The previous top offset preserved the original stack balance, but the larger guild card shifted too much weight into the top-right corner.
+  Fix: Lowered the guild image noticeably while preserving its larger scale and highest z-layer so the collage feels more grounded.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed a clearer visual hierarchy between the three references**
   Problem: The first collage pass placed the three images together, but the tall Utell AI reference was too small to read, while the Discord guild image did not yet dominate the stack as the main ecosystem cue.
   Cause: The initial sizing treated all three references too evenly, which weakened the intended hierarchy between secondary tool examples and the primary Discord-community anchor.
