@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR deck needed a clearer narrative bridge before the target-customer slides**
+  Problem: The deck was moving from the generic solution statement straight into customer examples, which made the "why existing translators fail" logic feel under-explained.
+  Cause: The narrative jump was too abrupt, so the audience could see the vertical examples before fully understanding that the core issue is context-specific product experience rather than raw translation accuracy.
+  Fix: Inserted three framing slides between the solution overview and the target-customer sequence: a centered question slide, a left-aligned reason slide, and a centered conclusion slide that reframes the product as tailored translation UX for each scenario.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed another round of relative offset tuning**
   Problem: After the previous pass, the three reference images were still not sitting on the intended diagonals, so the user specified a second round of per-image movements from the current positions.
   Cause: The collage composition was being refined incrementally, and the remaining mismatch was about exact relative offsets rather than size or hierarchy.
