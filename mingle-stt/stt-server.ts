@@ -87,6 +87,7 @@ wss.on('connection', (clientWs) => {
     let releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
     let selectedLanguages: string[] = [];
     let finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null = null;
+    let finalizeAllPendingTurnsFromProvider: (() => Promise<MingleSttFinalTurnPayload[]>) | null = null;
     let sonioxStopRequested = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
@@ -749,6 +750,7 @@ wss.on('connection', (clientWs) => {
                 language: string,
                 isFinal: boolean,
                 speaker?: string,
+                turnId?: string,
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
                 const cleanedLang = (language || '').trim() || 'unknown';
@@ -774,7 +776,7 @@ wss.on('connection', (clientWs) => {
                     text: cleanedText,
                     language: cleanedLang,
                     speaker: cleanedSpeaker,
-                    ...(turnId ? { turnId } : {}),
+                    ...(turnId ? { turn_id: turnId } : {}),
                 };
             };
 
@@ -821,8 +823,8 @@ wss.on('connection', (clientWs) => {
                 return payload;
             };
 
-            const flushAllSpeakerTurns = (): MingleSttFinalTurnPayload => {
-                let lastPayload: MingleSttFinalTurnPayload = null;
+            const flushAllSpeakerTurns = (): MingleSttFinalTurnPayload[] => {
+                const payloads: MingleSttFinalTurnPayload[] = [];
                 for (const speaker of Array.from(speakerStates.keys())) {
                     const payload = finalizeSpeakerTurn(speaker);
                     if (payload) {
@@ -1371,6 +1373,7 @@ wss.on('connection', (clientWs) => {
             sonioxStopRequested = nextValue;
         },
         finalizePendingTurnFromProvider,
+        finalizeAllPendingTurnsFromProvider,
         sendForcedFinalTurn,
         closeProviderSocket: () => {
             if (sttWs && (sttWs.readyState === WebSocket.OPEN || sttWs.readyState === WebSocket.CONNECTING)) {

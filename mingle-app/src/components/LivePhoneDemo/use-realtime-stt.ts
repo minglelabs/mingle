@@ -29,6 +29,7 @@ export const getWsUrl = (): string => {
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
+const STOP_ACK_CLOSE_GRACE_MS = 150
 const NATIVE_STOP_ACK_TIMEOUT_MS = 1_500
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'

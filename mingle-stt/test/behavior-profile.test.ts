@@ -50,13 +50,14 @@ test('release runtimes stay pinned to the resolved release variant', () => {
     const modernRuntime = resolveMingleSttReleaseRuntime('android_v1_1_0');
     assert.deepEqual(
         modernRuntime.buildStopRecordingAckData({
-            finalizedTurn: { text: 'hello', language: 'en' },
+            finalizedTurns: [{ text: 'hello', language: 'en' }],
         }),
         {
             release_variant: 'android_v1_1_0',
             behavior_profile: 'v1_1_0',
             finalized: true,
             final_turn: { text: 'hello', language: 'en' },
+            final_turns: [{ text: 'hello', language: 'en' }],
         },
     );
 
@@ -105,6 +106,7 @@ test('release runtime owns non-soniox stop lifecycle handling', () => {
                 sonioxStopRequested = nextValue;
             },
             finalizePendingTurnFromProvider: null,
+            finalizeAllPendingTurnsFromProvider: null,
             sendForcedFinalTurn: (rawText, rawLanguage) => ({
                 text: rawText.trim(),
                 language: rawLanguage,
@@ -133,6 +135,7 @@ test('release runtime owns non-soniox stop lifecycle handling', () => {
         behavior_profile: 'legacy_1_0_11',
         finalized: true,
         final_turn: { text: 'hello', language: 'en' },
+        final_turns: [{ text: 'hello', language: 'en' }],
     });
 });
 
@@ -153,8 +156,11 @@ test('release runtime owns soniox stop lifecycle handling', async () => {
                 sonioxStopRequested = nextValue;
             },
             finalizePendingTurnFromProvider: async () => {
+                throw new Error('unexpected single finalize call');
+            },
+            finalizeAllPendingTurnsFromProvider: async () => {
                 finalizeCalls += 1;
-                return null;
+                return [];
             },
             sendForcedFinalTurn: () => null,
             closeProviderSocket: () => {
@@ -181,5 +187,6 @@ test('release runtime owns soniox stop lifecycle handling', async () => {
         behavior_profile: 'v1_1_0',
         finalized: false,
         final_turn: null,
+        final_turns: [],
     });
 });

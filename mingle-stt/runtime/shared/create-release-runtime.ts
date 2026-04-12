@@ -27,6 +27,7 @@ export type MingleSttFinalTurnPayload = {
     text: string;
     language: string;
     speaker?: string;
+    turn_id?: string;
 } | null;
 
 type ReadyPayloadInput = {
@@ -34,7 +35,7 @@ type ReadyPayloadInput = {
 };
 
 type StopRecordingAckInput = {
-    finalizedTurn: MingleSttFinalTurnPayload;
+    finalizedTurns: MingleSttFinalTurnPayload[];
 };
 
 export type MingleSttReadyPayload = {
@@ -49,6 +50,7 @@ export type MingleSttStopRecordingAckData = {
     behavior_profile: MingleSttBehaviorProfile;
     finalized: boolean;
     final_turn: MingleSttFinalTurnPayload;
+    final_turns: MingleSttFinalTurnPayload[];
 };
 
 export type MingleSttConnectionStarters = {
@@ -62,6 +64,7 @@ export type MingleSttConnectionStarters = {
 export type MingleSttStopRecordingLifecycle = {
     setSonioxStopRequested: (nextValue: boolean) => void;
     finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null;
+    finalizeAllPendingTurnsFromProvider: (() => Promise<MingleSttFinalTurnPayload[]>) | null;
     sendForcedFinalTurn: (
         rawText: string,
         rawLanguage: string,
@@ -101,12 +104,19 @@ export function createReleaseRuntime(
         soniox_language_hints_enabled: sonioxLanguageHintsEnabled,
     });
 
-    const buildStopRecordingAckData = ({ finalizedTurn }: StopRecordingAckInput): MingleSttStopRecordingAckData => ({
-        release_variant: releaseVariant,
-        behavior_profile: behaviorLine,
-        finalized: Boolean(finalizedTurn),
-        final_turn: finalizedTurn,
-    });
+    const buildStopRecordingAckData = ({ finalizedTurns }: StopRecordingAckInput): MingleSttStopRecordingAckData => {
+        const normalizedTurns = finalizedTurns.filter(
+            (turn): turn is Exclude<MingleSttFinalTurnPayload, null> => Boolean(turn),
+        );
+
+        return {
+            release_variant: releaseVariant,
+            behavior_profile: behaviorLine,
+            finalized: normalizedTurns.length > 0,
+            final_turn: normalizedTurns[normalizedTurns.length - 1] || null,
+            final_turns: normalizedTurns,
+        };
+    };
 
     return {
         releaseVariant,
@@ -144,24 +154,28 @@ export function createReleaseRuntime(
             const cleanedPendingText = pendingText.trim();
             lifecycle.setSonioxStopRequested(currentModel === 'soniox');
 
-            let finalizedTurn: MingleSttFinalTurnPayload = null;
+            void (async () => {
+                let finalizedTurns: MingleSttFinalTurnPayload[] = [];
 
-            if (currentModel === 'soniox' && lifecycle.finalizePendingTurnFromProvider) {
-                void lifecycle.finalizePendingTurnFromProvider();
-            } else if (cleanedPendingText) {
-                finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
-            } else if (lifecycle.finalizePendingTurnFromProvider) {
-                void lifecycle.finalizePendingTurnFromProvider();
-            }
+                if (currentModel === 'soniox' && lifecycle.finalizeAllPendingTurnsFromProvider) {
+                    finalizedTurns = await lifecycle.finalizeAllPendingTurnsFromProvider();
+                } else if (cleanedPendingText) {
+                    const finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                    finalizedTurns = finalizedTurn ? [finalizedTurn] : [];
+                } else if (lifecycle.finalizePendingTurnFromProvider) {
+                    const finalizedTurn = await lifecycle.finalizePendingTurnFromProvider();
+                    finalizedTurns = finalizedTurn ? [finalizedTurn] : [];
+                }
 
-            lifecycle.closeProviderSocket();
-            lifecycle.sendStopRecordingAck(
-                buildStopRecordingAckData({ finalizedTurn }),
-            );
-            lifecycle.scheduleClientCloseAfterAck();
-            if (currentModel !== 'soniox') {
-                lifecycle.disposeSpeakerStates();
-            }
+                lifecycle.closeProviderSocket();
+                lifecycle.sendStopRecordingAck(
+                    buildStopRecordingAckData({ finalizedTurns }),
+                );
+                lifecycle.scheduleClientCloseAfterAck();
+                if (currentModel !== 'soniox') {
+                    lifecycle.disposeSpeakerStates();
+                }
+            })();
         },
     };
 }
