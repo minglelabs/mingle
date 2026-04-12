@@ -51,11 +51,13 @@
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
-- Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 125.
+- Sessions with standalone UI/UX issues: 33.
+- Total standalone UI/UX issue atoms documented under standalone session headings in this file: 127.
+- Additional ongoing validation-note UI/UX atoms documented in this file: 4.
+- Total documented UI/UX issue atoms in this file: 131.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
-- Sessions with no UI/UX issue found: 224.
+- Sessions with no UI/UX issue found: 221.
 - `019d4cae-5142-7be2-9c74-30f95bfb5787` is listed first, exactly as requested.
 - If a session had no UI/UX issue, the entry says only `No UI/UX issue found.`
 

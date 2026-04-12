@@ -17,6 +17,49 @@ const VITEST_TARGETS = [
     files: ['src/components/LivePhoneDemo/live-phone-demo.native-ui.logic.test.ts'],
   },
   {
+    id: 'android-native-navigation-history-contracts',
+    title: 'Android native navigation bridge keeps back availability on the current history entry',
+    issueAtoms: ['2026-dev-validation#3'],
+    files: ['src/lib/native-navigation-bridge.test.ts'],
+  },
+  {
+    id: 'android-conversation-list-history-contracts',
+    title: 'Conversation-list search history stays in sync with native back expectations',
+    issueAtoms: ['2026-dev-validation#4'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'android-conversation-list-summary-contracts',
+    title: 'Conversation-list preview, ordering, and active badge summaries stay stable',
+    issueAtoms: ['019d4cae#27', '019d4cae#28', '019d4cae#34', '019d4cae#35', '019d4cae#36', '019d4cae#54'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'android-conversation-row-action-contracts',
+    title: 'Conversation-row long-press actions stay touch-safe and position correctly',
+    issueAtoms: ['019d4cae#58', '019d4cae#59', '019d4cae#67'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'android-conversation-route-contracts',
+    title: 'Conversation routes keep previews, hydration, delete, and soft-delete visibility aligned',
+    issueAtoms: ['019d4cae#27', '019d4cae#28', '019d4cae#32', '019d4cae#60', '019d4cae#61'],
+    files: [
+      'src/app/api/conversations/route.test.ts',
+      'src/app/api/conversations/[conversationId]/route.test.ts',
+      'src/lib/app-conversations.test.ts',
+    ],
+  },
+  {
+    id: 'android-versioned-mobile-route-contracts',
+    title: 'Versioned conversation and feedback route aliases stay wired for the shipping mobile lines',
+    issueAtoms: ['019d4cae#60', '019d4cae#69'],
+    files: [
+      'src/app/api/namespace-routing.contract.test.ts',
+      'src/app/api/feedback.namespace-routing.test.ts',
+    ],
+  },
+  {
     id: 'android-scroll-platform-contracts',
     title: 'Android live-demo scroll contracts',
     issueAtoms: ['019c6f40#1', '019c6f40#2', '019c756e#1', '019d18f2#1'],
@@ -106,13 +149,13 @@ const VITEST_TARGETS = [
   {
     id: 'android-shared-stt-restore-contracts',
     title: 'Android shared STT restore contracts',
-    issueAtoms: ['019c992c#2', '019d19a3#1', '019d4eba#1', '019d4f37#1'],
+    issueAtoms: ['019c992c#2', '019d19a3#1', '019d4cae#50', '019d4cae#51', '019d4cae#52', '019d4cae#53', '019d4cae#55', '019d4cae#78', '019d4eba#1', '019d4f37#1'],
     files: ['src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts'],
   },
   {
     id: 'android-native-stt-reconcile-contracts',
     title: 'Android native STT reconcile contracts',
-    issueAtoms: ['019d19a3#1', '019d4eba#1', '019d4f37#1'],
+    issueAtoms: ['2026-android-real-device#1', '019d19a3#1', '019d4cae#52', '019d4cae#54', '019d4cae#55', '019d4eba#1', '019d4f37#1'],
     files: ['src/components/LivePhoneDemo/live-phone-demo.android-stt-reconcile.test.ts'],
   },
 ];
@@ -144,7 +187,7 @@ const APPIUM_CASE_METADATA = {
   },
   'native-remount-restores-running-mic-state': {
     title: 'Android native/WebView remount restores the running mic state',
-    issueAtoms: ['019d4eba#1', '019d4f37#1'],
+    issueAtoms: ['2026-android-real-device#1', '019d4eba#1', '019d4f37#1'],
   },
 };
 

@@ -17,6 +17,43 @@ const VITEST_TARGETS = [
     files: ['src/lib/rn-webview-layout.test.ts'],
   },
   {
+    id: 'ios-conversation-list-history-contracts',
+    title: 'Conversation-list search history stays in sync with native back expectations',
+    issueAtoms: ['2026-dev-validation#4'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'ios-conversation-list-summary-contracts',
+    title: 'Conversation-list preview, ordering, and active badge summaries stay stable',
+    issueAtoms: ['019d4cae#27', '019d4cae#28', '019d4cae#34', '019d4cae#35', '019d4cae#36', '019d4cae#54'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'ios-conversation-row-action-contracts',
+    title: 'Conversation-row long-press actions stay touch-safe and position correctly',
+    issueAtoms: ['019d4cae#58', '019d4cae#59', '019d4cae#67'],
+    files: ['src/components/conversation-list.logic.test.ts'],
+  },
+  {
+    id: 'ios-conversation-route-contracts',
+    title: 'Conversation routes keep previews, hydration, delete, and soft-delete visibility aligned',
+    issueAtoms: ['019d4cae#27', '019d4cae#28', '019d4cae#32', '019d4cae#60', '019d4cae#61'],
+    files: [
+      'src/app/api/conversations/route.test.ts',
+      'src/app/api/conversations/[conversationId]/route.test.ts',
+      'src/lib/app-conversations.test.ts',
+    ],
+  },
+  {
+    id: 'ios-versioned-mobile-route-contracts',
+    title: 'Versioned conversation and feedback route aliases stay wired for the shipping mobile lines',
+    issueAtoms: ['019d4cae#60', '019d4cae#69'],
+    files: [
+      'src/app/api/namespace-routing.contract.test.ts',
+      'src/app/api/feedback.namespace-routing.test.ts',
+    ],
+  },
+  {
     id: 'ios-native-ui-bridge-contracts',
     title: 'iOS native UI bridge and top-tap contracts',
     issueAtoms: ['019d4cae#8', '019d4cae#11', '019d4cae#12', '019d4cae#13', '019d4cae#14', '019d4cae#15', '019d4cae#45'],
@@ -37,7 +74,7 @@ const VITEST_TARGETS = [
   {
     id: 'ios-preference-hydration-contracts',
     title: 'Hydrated preference and account state contracts',
-    issueAtoms: ['019d4cae#23', '019d4cae#32'],
+    issueAtoms: ['019d4cae#23', '019d4cae#32', '019d2a13#1', '019d2a3f#1'],
     files: [
       'src/components/LivePhoneDemo/live-phone-demo.preferences.test.ts',
       'src/components/LivePhoneDemo/live-phone-demo.account-preferences.test.ts',
@@ -121,7 +158,7 @@ const VITEST_TARGETS = [
   {
     id: 'ios-native-mic-recovery-contracts',
     title: 'Speaker-isolated STT finalization and native mic recovery stay retryable',
-    issueAtoms: ['019c992c#2', '019d4cae#41', '019d4cae#42', '019d4caf#1'],
+    issueAtoms: ['019c992c#2', '019d4cae#41', '019d4cae#42', '019d4cae#48', '019d4cae#49', '019d4cae#50', '019d4cae#51', '019d4cae#52', '019d4cae#53', '019d4cae#55', '019d4caf#1'],
     files: [
       'src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts',
     ],
