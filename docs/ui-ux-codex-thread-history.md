@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed a clearer visual hierarchy between the three references**
+  Problem: The first collage pass placed the three images together, but the tall Utell AI reference was too small to read, while the Discord guild image did not yet dominate the stack as the main ecosystem cue.
+  Cause: The initial sizing treated all three references too evenly, which weakened the intended hierarchy between secondary tool examples and the primary Discord-community anchor.
+  Fix: Scaled the Utell AI image up substantially, enlarged the guild image as well, and made the guild visual the highest z-layer so the collage reads with a stronger focal order.
+  Status: Resolved in-thread.
+
 - **XR second target-customer slide needed a denser visual cue than text alone**
   Problem: Once the deck introduced global gaming Discord communities as a distinct target segment, the slide still read too abstractly because it had only a headline and no concrete visual texture.
   Cause: The gaming-community concept spans creators, Discord growth, and AI voice tools, so a single plain label did not communicate the ecosystem quickly enough at presentation speed.
