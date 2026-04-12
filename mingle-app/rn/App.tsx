@@ -42,6 +42,7 @@ import {
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
   resolveNativeBottomBannerWebInsetPx,
+  shouldEnableIosWebViewBackForwardNavigation,
   shouldEnableNativeWebViewDebugging,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
@@ -2436,7 +2437,9 @@ function AppInner(): React.JSX.Element {
             })}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && canWebViewGoBack}
+            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+              isIosPlatform: Platform.OS === 'ios',
+            })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}
