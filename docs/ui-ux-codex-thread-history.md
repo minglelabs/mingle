@@ -719,6 +719,14 @@
    Attempted fix: unify clearance/composer settling so the layout drops in one smooth pass.
    Status: resolved.
 
+### `2026-04-12-android-bottom-banner-safe-area` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: in-room transcript content on Android could still be covered by the bottom native banner even though the same bottom-banner path was correct on iOS and the top-banner path was correct on both platforms.
+   Root cause: the web layer measured bottom-bar clearance using CSS `env(safe-area-inset-bottom)`, while RN positioned the native bottom banner using `safeAreaInsets.bottom + clearance`. On Android, WebView CSS safe-area often resolved to `0` while RN still had a non-zero native bottom inset, so the banner was rendered higher than the web transcript padding expected.
+   Attempted fix: make the native bottom-banner offset platform-aware so iOS still includes native bottom safe-area, but Android uses the synchronized clearance directly without double-counting the native bottom inset.
+   Status: resolved.
+
 ## Feature Or Mention-Only Sessions
 
 ### `019c52c6-0c6b-7ba0-b8fd-a566d5a6f8b0` | UI/UX feature/polish request only

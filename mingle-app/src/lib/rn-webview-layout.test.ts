@@ -5,6 +5,7 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
+  resolveNativeBottomBannerOffsetPx,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from '../../rn/src/webViewLayout'
@@ -102,5 +103,21 @@ describe('RN WebView layout helpers', () => {
       canvasScale: 1,
       bottomBannerClearancePx: 94,
     })).toBe(0)
+  })
+
+  it('keeps iOS bottom banner offset inclusive of the native safe-area inset', () => {
+    expect(resolveNativeBottomBannerOffsetPx({
+      isIosPlatform: true,
+      safeAreaInsetBottomPx: 34,
+      bottomBannerClearancePx: 60,
+    })).toBe(94)
+  })
+
+  it('does not double-count Android bottom safe-area in the banner offset', () => {
+    expect(resolveNativeBottomBannerOffsetPx({
+      isIosPlatform: false,
+      safeAreaInsetBottomPx: 16,
+      bottomBannerClearancePx: 60,
+    })).toBe(60)
   })
 })

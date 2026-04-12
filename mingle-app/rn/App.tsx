@@ -41,6 +41,7 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
+  resolveNativeBottomBannerOffsetPx,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
@@ -1227,10 +1228,11 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(0, baseOffsetPx - IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX);
   }, [nativeBottomBarClearancePx, nativeCanvasScale]);
-  const nativeBannerBottomOffsetPx = useMemo(
-    () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
-    [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
-  );
+  const nativeBannerBottomOffsetPx = useMemo(() => resolveNativeBottomBannerOffsetPx({
+    isIosPlatform: Platform.OS === 'ios',
+    safeAreaInsetBottomPx: safeAreaInsets.bottom,
+    bottomBannerClearancePx: nativeBottomBannerClearancePx,
+  }), [nativeBottomBannerClearancePx, safeAreaInsets.bottom]);
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeBannerContentHeightPx({
       bannerHeightPx: nativeBannerHeightPx,
