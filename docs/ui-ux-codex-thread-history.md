@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR intro slide needed to return to the deck's left-aligned reading rhythm**
+  Problem: Once the second slide reused the intro content, keeping it centered made it feel too much like a second cover instead of the first proper body slide in the sequence.
+  Cause: The shared center-alignment variant had been applied to both the cover and the duplicated intro slide, even though they serve different presentation roles.
+  Fix: Restored the second slide to the standard left-aligned layout and added a `소개` kicker so it reads as the opening body page rather than another title card.
+  Status: Resolved in-thread.
+
 - **XR presentation deck still sat too low even after position anchoring was fixed**
   Problem: After the deck switched to fixed top anchoring, the relative positions stopped drifting, but the whole content block still felt too low on the page. The kicker, title, and body all needed to come up together.
   Cause: The new anchor preserved consistency but kept a conservative top padding and copy offset that still placed the reading block lower than the intended presentation rhythm.
