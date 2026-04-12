@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck needed an optional slide attribute label above selected titles**
+  Problem: Some slides needed a small semantic marker above the main title, such as labeling slide 2 as `문제`, while most slides should remain untouched. Without that slot, the meaning either had to be buried in the title itself or dropped entirely.
+  Cause: The deck grammar only had title and body, with no lightweight presentation layer for selective slide metadata.
+  Fix: Added an optional top label style distinct from body text and applied it only to the requested slide. The structure now supports selective labels without forcing them across the whole deck.
+  Status: Resolved in-thread.
+
 - **XR presentation deck still felt stepwise when holding navigation keys**
   Problem: Even after the infinite-loop reset was fixed, holding an arrow key still advanced one slide at a time with noticeable pauses. The deck technically worked, but it did not feel like a fast, fluid carousel when the presenter wanted to move quickly through multiple pages.
   Cause: Navigation was still effectively tied to discrete key presses and a long default transition duration, so it inherited OS key-repeat delay and idle gaps between slide completions.
