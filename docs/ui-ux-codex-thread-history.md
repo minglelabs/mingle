@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR target-customer slide needed a recognizable product cue without disturbing text alignment**
+  Problem: The HelloTalk target-customer slide described the product in text only, which made the reference feel abstract at presentation speed.
+  Cause: The slide had no visual brand anchor, and adding one inside normal flow risked shifting the text coordinates that were already being tuned carefully.
+  Fix: Added the current HelloTalk app icon as a local asset and placed it as an absolutely positioned slide-side marker on that page only, so the reference reads instantly without moving the text block.
+  Status: Resolved in-thread.
+
 - **XR intro slide needed to return to the deck's left-aligned reading rhythm**
   Problem: Once the second slide reused the intro content, keeping it centered made it feel too much like a second cover instead of the first proper body slide in the sequence.
   Cause: The shared center-alignment variant had been applied to both the cover and the duplicated intro slide, even though they serve different presentation roles.
