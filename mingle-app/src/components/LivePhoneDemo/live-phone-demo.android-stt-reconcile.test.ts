@@ -6,15 +6,20 @@ import {
 } from './use-realtime-stt'
 
 describe('Android native STT reconcile contracts', () => {
-  it('maps restored Android native bridge statuses back into the running UI state', () => {
+  it('maps restored Android native bridge statuses back into reconnecting state before transcript activity promotes ready', () => {
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'running',
       previousConnectionStatus: 'idle',
-    })).toBe('ready')
+    })).toBe('connecting')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'silenced',
       previousConnectionStatus: 'idle',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'ready',
     })).toBe('ready')
   })
 
