@@ -95,14 +95,30 @@
         margin-inline: auto;
       }
 
-      .slide-app-icon {
+      .slide-copy--with-side-media {
+        max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
+      }
+
+      .slide-side-media {
         position: absolute;
-        top: clamp(108px, 15vh, 164px);
+        top: clamp(92px, 13vh, 148px);
         right: clamp(40px, 6vw, 88px);
+        display: grid;
+        justify-items: end;
+        gap: 16px;
+      }
+
+      .slide-app-icon {
         width: clamp(96px, 9vw, 132px);
         height: clamp(96px, 9vw, 132px);
         border-radius: 28%;
         object-fit: cover;
+      }
+
+      .slide-preview-image {
+        width: clamp(212px, 21vw, 304px);
+        border-radius: 26px;
+        display: block;
       }
 
       .slide-kicker {
@@ -231,11 +247,11 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">소개</p>
-              <h1 class="slide-title">소셜 번역기 Mingle</h1>
+              <h1 class="slide-title">외국인 친구를 사귀고 싶을 때<br/>사용하는 앱입니다</h1>
               <p class="slide-body">
-                Mingle은 단순 번역기가 아니라 <br/>
-                외국인과 만나고, 대화하고, 관계를 이어가기 위한 <br/>
-                실시간 통번역 소셜 미디어 입니다.
+                Mingle은 단순한 번역기가 아니라<br/>
+                외국인과 만나고, 대화하고, 관계를 이어갈 때 생기는<br/>
+                모든 문제를 해결하는 서비스가 되고 싶습니다.
               </p>
             </div>
           </article>
@@ -245,10 +261,10 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">외국인과 친해지고 싶어도 언어 장벽을 넘기 어렵다.</h1>
+              <h1 class="slide-title">외국인과 친해지고 싶어도<br/>언어 장벽을 넘기 어렵다.</h1>
               <p class="slide-body">
-                AI 기술이 빠르게 발전하고 있지만 여전히 언어 장벽은 남아 있습니다. 
-                실제 대화가 끊기지 않게 이어지는 경험은 아직 전무합니다.
+                AI 기술이 빠르게 발전하고 있지만 여전히 언어 장벽은 남아 있습니다. <br/>
+                실제 대화가 끊기지 않고 통번역되는 경험은 아직 전무합니다.
               </p>
             </div>
           </article>
@@ -258,7 +274,7 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">어떤 상황에서도 쓸 수 있는 통번역 서비스를 만든다</h1>
+              <h1 class="slide-title">어떤 상황에서도 쓸 수 있는 <br /> 통번역 서비스를 만든다</h1>
             </div>
           </article>
         </section>
@@ -267,12 +283,11 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
               <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">헬로톡 보이스룸</h1>
+              <h1 class="slide-title">헬로톡 보이스룸 유저들</h1>
               <p class="slide-body">
-                헬로톡 보이스룸 서비스는 빠르게 성장중이지만, 언어교환이 목적인 서비스라서
-                통번역을 몹시 제한적으로만 지원합니다. 헬로톡 앱 전체가 외국어 교육에만
-                초점이 맞춰져 있습니다. 그래서 외국어를 어느정도 하는 유저가 아니라면
-                친구를 사귀기 어렵고, 쉽게 이탈합니다.
+                헬로톡 보이스룸 서비스는 빠르게 성장중이지만,<br/>
+                언어교환이 목적인 서비스라서 통번역을 몹시 제한적으로만 지원합니다.<br/>
+                그래서 대부분의 유저는 쉽게 이탈합니다.
               </p>
             </div>
             <div class="slide-side-media" aria-hidden="true">
