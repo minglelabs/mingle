@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck always snapped back to slide 1 on refresh**
+  Problem: While editing or presenting deeper in the deck, a browser refresh always reopened the file on slide 1. That made iteration clumsy and broke continuity during rehearsal or live deck review.
+  Cause: The deck tracked the active slide only in in-memory carousel state, with no URL representation of the current page.
+  Fix: Added URL-backed slide persistence using `#<page>` as the primary state and `?page=<n>` as a compatible fallback on load. The deck now rewrites the hash as navigation changes, restores the requested slide on refresh, and responds to manual hash changes without touching slide copy.
+  Status: Resolved in-thread.
+
 - **XR presentation deck still placed the kicker too close to the title**
   Problem: Even after title alignment was stabilized, the kicker still sat too close to the headline and felt attached to it instead of reading like a separate higher-level attribute.
   Cause: The reserved kicker slot kept the title stable, but the kicker itself still started too low within that slot.

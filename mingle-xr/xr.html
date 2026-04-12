@@ -427,6 +427,42 @@
       let restoreTransitionFrame = null;
       let holdStep = null;
 
+      function parseSlideNumber(rawValue) {
+        const parsedValue = Number.parseInt(rawValue ?? "", 10);
+
+        if (!Number.isFinite(parsedValue) || parsedValue < 1 || parsedValue > slideCount) {
+          return null;
+        }
+
+        return parsedValue;
+      }
+
+      function requestedSlideNumber() {
+        const hashSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (hashSlideNumber !== null) {
+          return hashSlideNumber;
+        }
+
+        const pageParam = new URLSearchParams(window.location.search).get("page");
+        return parseSlideNumber(pageParam) ?? 1;
+      }
+
+      function syncUrl() {
+        const slideNumber = realSlideNumber(activeIndex);
+        const nextHash = `#${slideNumber}`;
+
+        if (window.location.hash === nextHash) {
+          return;
+        }
+
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${window.location.search}${nextHash}`
+        );
+      }
+
       function realSlideNumber(index) {
         if (index === 0) {
           return slideCount;
@@ -485,6 +521,7 @@
         const currentNumber = String(realSlideNumber(activeIndex)).padStart(2, "0");
         const totalNumber = String(slideCount).padStart(2, "0");
         pageCounter.textContent = `${currentNumber} / ${totalNumber}`;
+        syncUrl();
       }
 
       function finishAnimation() {
@@ -535,6 +572,19 @@
 
       window.addEventListener("resize", () => {
         syncPosition(false);
+      });
+
+      window.addEventListener("hashchange", () => {
+        const targetSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (targetSlideNumber === null || targetSlideNumber === realSlideNumber(activeIndex)) {
+          return;
+        }
+
+        holdStep = null;
+        isAnimating = false;
+        jumpToIndex(targetSlideNumber);
+        updateUi();
       });
 
       window.addEventListener("keydown", (event) => {
@@ -603,6 +653,7 @@
         { passive: true }
       );
 
+      activeIndex = requestedSlideNumber();
       syncPosition(false);
       updateUi();
     </script>
