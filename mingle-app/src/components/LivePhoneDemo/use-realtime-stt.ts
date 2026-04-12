@@ -3927,20 +3927,7 @@ export default function useRealtimeSTT({
         if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
         }
-        logSttDebug('native.status', { status: detail.status })
-        const nextConnectionStatus = resolveConnectionStatusFromNativeBridgeStatus({
-          nativeStatus: detail.status,
-          previousConnectionStatus: connectionStatusRef.current,
-        })
-        if (nextConnectionStatus === 'connecting' || nextConnectionStatus === 'ready') {
-          nativeMicPermissionRecoveryActionRef.current = 'none'
-        }
-        if (nextConnectionStatus === 'ready') {
-          hasActiveSessionRef.current = true
-        }
-        if (nextConnectionStatus) {
-          setConnectionStatus(nextConnectionStatus)
-        }
+        applyNativeStatus(detail.status)
         return
       }
 

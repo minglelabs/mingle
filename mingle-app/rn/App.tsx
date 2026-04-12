@@ -617,6 +617,20 @@ type NativeAuthResetCommand = {
   type: 'native_auth_reset';
 };
 
+type NativeDiagProbeAckCommand = {
+  type: 'native_diag_probe_ack';
+  payload?: {
+    probeId?: number;
+    href?: string;
+    readyState?: string;
+    visibilityState?: string;
+    hasReactNativeWebView?: boolean;
+    pageHidden?: boolean;
+    ts?: number;
+    error?: string;
+  };
+};
+
 type NativeNavigationStateCommand = {
   type: 'native_navigation_state';
   payload?: {
@@ -672,6 +686,7 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
+  | NativeDiagProbeAckCommand
   | NativeNavigationStateCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
@@ -2137,6 +2152,40 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    if (parsed.type === 'native_diag_probe_ack') {
+      const payload = parsed.payload ?? {};
+      const probeId = typeof payload.probeId === 'number' ? payload.probeId : null;
+      const pending = resumeDiagPendingProbeRef.current;
+
+      if (!pending || probeId === null || probeId !== pending.id) {
+        logWebViewLifecycle('resume_probe_ack_unmatched', {
+          probeId,
+          pendingProbeId: pending?.id ?? null,
+          href: payload.href ?? null,
+          readyState: payload.readyState ?? null,
+          visibilityState: payload.visibilityState ?? null,
+          pageHidden: payload.pageHidden ?? null,
+          hasReactNativeWebView: payload.hasReactNativeWebView ?? null,
+          error: payload.error ?? null,
+        });
+        return;
+      }
+
+      resumeDiagPendingProbeRef.current = null;
+      clearResumeDiagProbeTimeout();
+      logWebViewLifecycle('resume_probe_ack', {
+        probeId,
+        elapsedMs: Date.now() - pending.startedAt,
+        href: payload.href ?? null,
+        readyState: payload.readyState ?? null,
+        visibilityState: payload.visibilityState ?? null,
+        pageHidden: payload.pageHidden ?? null,
+        hasReactNativeWebView: payload.hasReactNativeWebView ?? null,
+        error: payload.error ?? null,
+      });
+      return;
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       if (typeof parsed.payload?.canGoBack === 'boolean') {
@@ -2316,13 +2365,21 @@ function AppInner(): React.JSX.Element {
       void handleNativeAuthStart(parsed.payload);
       return;
     }
+
+    if (__DEV__) {
+      const messageType = (parsed as { type?: string }).type ?? 'unknown';
+      console.log(`[Web→Native] unhandled command type=${String(messageType)}`);
+    }
   }, [
     clearAuthDispatchRetryTimer,
+    clearResumeDiagProbeTimeout,
     emitTtsToWeb,
     handleDebugWebViewRemount,
     handleNativeAuthStart,
     handleNativeStart,
     handleNativeStop,
+    logWebViewLifecycle,
+    prepareBannerZoneTransition,
     updateSafeAreaPalette,
   ]);
 
@@ -2441,7 +2498,7 @@ function AppInner(): React.JSX.Element {
     }
     setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
     updateSafeAreaPalette(event?.nativeEvent?.url);
-  }, [updateSafeAreaPalette, webUrl]);
+  }, [logWebViewLifecycle, updateSafeAreaPalette, webUrl]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     const loadDurationMs = webViewLoadStartedAtRef.current
@@ -2468,7 +2525,7 @@ function AppInner(): React.JSX.Element {
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, logWebViewLifecycle, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     const loadDurationMs = webViewLoadStartedAtRef.current
@@ -2490,9 +2547,28 @@ function AppInner(): React.JSX.Element {
   }, [logWebViewLifecycle, webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
+    if (navigationState.url !== webUrl) {
+      logWebViewLifecycle('navigation_change', {
+        navigationUrl: navigationState.url,
+      });
+    }
     setCurrentWebPathname(parseWebPathname(navigationState.url));
+    prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
-  }, [prepareBannerZoneTransition, updateSafeAreaPalette]);
+    if (typeof navigationState.canGoBack === 'boolean') {
+      setCanWebViewGoBack(navigationState.canGoBack);
+    }
+  }, [logWebViewLifecycle, prepareBannerZoneTransition, updateSafeAreaPalette, webUrl]);
+
+  const handleRenderProcessGone = useCallback((event?: unknown) => {
+    const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)?.nativeEvent;
+    logWebViewLifecycle('render_process_gone', pickWebViewDiagnosticFields(nativeEvent));
+  }, [logWebViewLifecycle]);
+
+  const handleContentProcessDidTerminate = useCallback((event?: unknown) => {
+    const nativeEvent = (event as { nativeEvent?: Record<string, unknown> } | undefined)?.nativeEvent;
+    logWebViewLifecycle('content_process_did_terminate', pickWebViewDiagnosticFields(nativeEvent));
+  }, [logWebViewLifecycle]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {
