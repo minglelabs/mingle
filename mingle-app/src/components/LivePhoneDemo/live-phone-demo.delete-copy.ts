@@ -28,7 +28,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
     errorToastLabel: '대화방 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.',
   },
   en: {
-    menuItemLabel: 'Delete conversation room',
+    menuItemLabel: 'Delete',
     dialogTitle: 'Delete conversation room',
     dialogMessage: 'Delete this conversation room?',
     cancelLabel: 'Cancel',

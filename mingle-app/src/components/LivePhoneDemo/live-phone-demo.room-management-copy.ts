@@ -41,7 +41,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     menuItemLabel: 'Conversation management',
     pageTitle: 'Conversation management',
     backButtonLabel: 'Go back',
-    renameButtonLabel: 'Rename conversation',
+    renameButtonLabel: 'Rename',
     renameDialogTitle: 'Rename conversation',
     renameFieldLabel: 'Conversation name',
     renameFieldPlaceholder: 'Enter a conversation name.',

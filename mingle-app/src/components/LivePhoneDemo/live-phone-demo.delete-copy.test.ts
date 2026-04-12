@@ -18,7 +18,7 @@ describe('live-phone-demo.delete-copy', () => {
 
   it('falls back to English for unsupported translated locales', () => {
     const copy = resolveLivePhoneDemoConversationDeleteCopy('sv-SE')
-    expect(copy.menuItemLabel).toBe('Delete conversation room')
+    expect(copy.menuItemLabel).toBe('Delete')
     expect(copy.confirmLabel).toBe('Delete')
   })
 
