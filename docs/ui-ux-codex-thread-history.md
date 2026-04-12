@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR deck needed tighter kicker rhythm and explicit target-customer sequencing**
+  Problem: The kicker labels still felt slightly too loose, and the target-customer section needed two more dedicated slides so the audience progression could unfold one segment at a time.
+  Cause: The recent Korean kicker labels became longer than the original badge-style metadata, and the deck had only one target-customer page despite the presentation now naming multiple distinct entry markets.
+  Fix: Tightened the global kicker tracking one step further and inserted two new target-customer slides for global gaming Discord communities and business owners serving foreign travelers, pushing the remaining deck back in sequence.
+  Status: Resolved in-thread.
+
 - **XR kicker tracking was too wide once labels became longer and more sentence-like**
   Problem: As the deck started using longer Korean kicker labels, the existing tracking made them feel too stretched and visually brittle compared with the calmer title/body rhythm.
   Cause: The earlier wider letter spacing worked for short badge-like tags, but it did not scale as well once the kicker text became more descriptive.
