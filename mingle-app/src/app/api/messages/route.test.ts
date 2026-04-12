@@ -137,11 +137,20 @@ describe("/api/messages route", () => {
     });
     expect(mockAppMessageFindMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { userId: { in: ["tracked_user_row"] } },
-          { sessionKey: "sess_123" },
+        AND: [
+          {
+            OR: [
+              { userId: { in: ["tracked_user_row"] } },
+              { sessionKey: "sess_123" },
+            ],
+          },
+          {
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+            ],
+          },
         ],
-        isDeleted: { not: true },
       },
       select: {
         id: true,
@@ -165,7 +174,9 @@ describe("/api/messages route", () => {
     });
     expect(mockAppEventLogCreate).toHaveBeenCalledWith({
       data: {
-        userId: "tracked_user_row",
+        user: {
+          connect: { id: "tracked_user_row" },
+        },
         sessionKey: "sess_123",
         eventType: "conversation_history_cleared",
         metadata: {
@@ -211,11 +222,20 @@ describe("/api/messages route", () => {
     expect(response.status).toBe(200);
     expect(mockAppMessageFindMany).toHaveBeenCalledWith({
       where: {
-        OR: [
-          { userId: { in: ["auth_user_123", "anon_user_row"] } },
-          { sessionKey: "sess_123" },
+        AND: [
+          {
+            OR: [
+              { userId: { in: ["auth_user_123", "anon_user_row"] } },
+              { sessionKey: "sess_123" },
+            ],
+          },
+          {
+            OR: [
+              { isDeleted: false },
+              { isDeleted: null },
+            ],
+          },
         ],
-        isDeleted: { not: true },
       },
       select: {
         id: true,
@@ -223,7 +243,9 @@ describe("/api/messages route", () => {
     });
     expect(mockAppEventLogCreate).toHaveBeenCalledWith({
       data: {
-        userId: "auth_user_123",
+        user: {
+          connect: { id: "auth_user_123" },
+        },
         sessionKey: "sess_123",
         eventType: "conversation_history_cleared",
         metadata: {

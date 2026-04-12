@@ -22,6 +22,7 @@ import {
   parsePositiveIntWithFallback,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
@@ -307,7 +308,19 @@ describe('use-realtime-stt pure logic', () => {
     })).toBe('none')
   })
 
-  it('opens native mic settings only for idle native iOS denial recovery', () => {
+  it('keeps cached Android microphone denials on the in-app retry path', () => {
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'android/v1.1.0',
+      permission: 'denied',
+    })).toBe('none')
+
+    expect(resolveCachedNativeMicPermissionRecoveryAction({
+      apiNamespace: 'ios/v1.1.0',
+      permission: 'denied',
+    })).toBe('open_ios_settings')
+  })
+
+  it('opens native mic settings only after iOS denial recovery returns to idle', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'idle',
@@ -325,6 +338,13 @@ describe('use-realtime-stt pure logic', () => {
     expect(shouldOpenNativeMicSettingsOnRetry({
       useNativeStt: true,
       connectionStatus: 'connecting',
+      recoveryAction: 'open_ios_settings',
+      supportsNativeOpenAppSettingsCommand: true,
+    })).toBe(false)
+
+    expect(shouldOpenNativeMicSettingsOnRetry({
+      useNativeStt: true,
+      connectionStatus: 'error',
       recoveryAction: 'open_ios_settings',
       supportsNativeOpenAppSettingsCommand: true,
     })).toBe(false)
@@ -367,11 +387,21 @@ describe('use-realtime-stt pure logic', () => {
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'running',
       previousConnectionStatus: 'idle',
-    })).toBe('ready')
+    })).toBe('connecting')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({
       nativeStatus: 'silenced',
       previousConnectionStatus: 'idle',
+    })).toBe('connecting')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'running',
+      previousConnectionStatus: 'ready',
+    })).toBe('ready')
+
+    expect(resolveConnectionStatusFromNativeBridgeStatus({
+      nativeStatus: 'silenced',
+      previousConnectionStatus: 'ready',
     })).toBe('ready')
 
     expect(resolveConnectionStatusFromNativeBridgeStatus({

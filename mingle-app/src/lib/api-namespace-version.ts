@@ -9,7 +9,7 @@ function normalizeApiNamespace(raw: string): string {
   return raw.trim().replace(/^\/+/, '').replace(/\/+$/, '')
 }
 
-function compareVersionTuples(
+export function compareApiNamespaceVersions(
   left: readonly [number, number, number],
   right: readonly [number, number, number],
 ): number {
@@ -43,5 +43,5 @@ export function isLegacySonioxSilenceSliderNamespace(rawNamespace: string): bool
   const parsed = parseApiNamespaceVersion(rawNamespace)
   if (!parsed) return false
 
-  return compareVersionTuples(parsed.version, SILENCE_SLIDER_LOCK_THRESHOLD) <= 0
+  return compareApiNamespaceVersions(parsed.version, SILENCE_SLIDER_LOCK_THRESHOLD) <= 0
 }

@@ -1,4 +1,4 @@
-import { canonicalizeSttLanguageCode } from '@/lib/stt-languages'
+import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
@@ -34,21 +34,6 @@ export function readPersistedIntegerPreference(
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback
 
   return Math.max(min, Math.min(max, Math.floor(parsed)))
-}
-
-function sanitizeSelectedLanguages(rawValue: unknown, fallbackLanguages: string[]): string[] {
-  if (!Array.isArray(rawValue)) return [...fallbackLanguages]
-
-  const deduped: string[] = []
-  for (const item of rawValue) {
-    if (typeof item !== 'string') continue
-    const normalized = canonicalizeSttLanguageCode(item)
-    if (!normalized || deduped.includes(normalized)) continue
-    deduped.push(normalized)
-    if (deduped.length >= 5) break
-  }
-
-  return deduped.length > 0 ? deduped : [...fallbackLanguages]
 }
 
 export function normalizeLivePhoneDemoAdBannerPosition(value: unknown): LivePhoneDemoAdBannerPosition | null {
@@ -94,7 +79,7 @@ export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[
   try {
     const storedLanguages = storage.getItem(LS_KEY_LANGUAGES)
     if (storedLanguages) {
-      next.selectedLanguages = sanitizeSelectedLanguages(JSON.parse(storedLanguages), fallbackLanguages)
+      next.selectedLanguages = sanitizeSttLanguageSelection(JSON.parse(storedLanguages), fallbackLanguages)
     }
   } catch {
     next.selectedLanguages = [...fallbackLanguages]

@@ -1,4 +1,22 @@
-export type AppDictionary = {
+export type BaseAppDictionarySource = {
+  conversations?: {
+    searchPlaceholder: string;
+    cancelAction: string;
+    recentSearchesTitle: string;
+    clearRecentSearchesAction: string;
+    noRecentSearches: string;
+    noSearchResults: string;
+    searchButtonLabel: string;
+    newConversationButtonLabel: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    activeStatusLabel: string;
+    pausedStatusLabel: string;
+    switchLiveRoomToastLabel: string;
+    createErrorMessage: string;
+    openErrorMessage: string;
+    pauseErrorMessage: string;
+  };
   demo: {
     tapPlayToStart: string;
     usageLimitReached: string;
@@ -150,4 +168,106 @@ export type AppDictionary = {
     ready: string;
     webLimited: string;
   };
+};
+
+export type LivePhoneDemoFeedbackCategory = "feedback" | "suggestion" | "inquiry";
+
+export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
+  demo: {
+    tapPlayToStart: string;
+    usageLimitReached: string;
+    usageLimitRetryHint: string;
+    connecting: string;
+    connectionFailed: string;
+    muteTts: string;
+    unmuteTts: string;
+    textSizeLabel: string;
+    silenceFinalizeLabel: string;
+    translationModelLabel: string;
+    adBannerPositionLabel: string;
+    adBannerPositionTopLabel: string;
+    adBannerPositionBottomLabel: string;
+  };
+  livePhoneDemo: {
+    composer: {
+      manualSpeakerLabel: string;
+      openKeyboardLabel: string;
+      closeKeyboardLabel: string;
+      composerPlaceholder: string;
+      sendMessageLabel: string;
+    };
+    copyActions: {
+      copyBubbleLabel: string;
+      copyAllBubblesLabel: string;
+      copiedToastLabel: string;
+    };
+    feedback: {
+      pageTitle: string;
+      feedbackMenuItemLabel: string;
+      composeTabLabel: string;
+      historyTabLabel: string;
+      backButtonLabel: string;
+      closeButtonLabel: string;
+      historyTitle: string;
+      historyDescription: string;
+      historyLoadingLabel: string;
+      historyEmptyLabel: string;
+      historyErrorMessage: string;
+      pendingReplyLabel: string;
+      meLabel: string;
+      teamLabel: string;
+      categoryLabel: string;
+      messageLabel: string;
+      messagePlaceholder: string;
+      emailLabel: string;
+      emailPlaceholder: string;
+      sendButtonLabel: string;
+      sendingButtonLabel: string;
+      successMessage: string;
+      errorMessage: string;
+      invalidEmailMessage: string;
+      messageTooShortMessage: string;
+      categoryLabels: Record<LivePhoneDemoFeedbackCategory, string>;
+    };
+    ttsAction: {
+      playPronunciationLabel: string;
+      playbackFailedLabel: string;
+    };
+    nativeAppUpdate: {
+      sectionLabel: string;
+      installedLabel: string;
+      latestLabel: string;
+      unknownVersionLabel: string;
+      checkingMessage: string;
+      availableMessage: string;
+      currentMessage: string;
+      unknownMessage: string;
+      updateButtonLabel: string;
+    };
+    silenceSliderUpgrade: {
+      message: string;
+      buttonLabel: string;
+    };
+  };
+  versionPolicy: {
+    checkingTitle: string;
+    checkingMessage: string;
+    forceMessage: string;
+    recommendMessage: string;
+    forceTitle: string;
+    recommendTitle: string;
+    updateButtonLabel: string;
+    laterButtonLabel: string;
+    updateNowA11y: string;
+    webViewLoadFailedTitle: string;
+    unknownVersionLabel: string;
+  };
+};
+
+export type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends Array<infer U>
+    ? U[]
+    : T[K] extends Record<string, unknown>
+      ? DeepPartial<T[K]>
+      : T[K];
 };

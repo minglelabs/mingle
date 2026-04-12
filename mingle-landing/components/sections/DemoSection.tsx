@@ -2,7 +2,7 @@
 
 import { useRef } from 'react'
 import { motion } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 import { Mic } from 'lucide-react'
 import LivePhoneDemo from '@/components/LivePhoneDemo/LivePhoneDemo'
 import type { LivePhoneDemoRef } from '@/components/LivePhoneDemo/LivePhoneDemo'

@@ -1,5 +1,5 @@
 import type { AppLocale } from "@/i18n/config";
-import type { AppDictionary } from "@/i18n/types";
+import type { BaseAppDictionarySource } from "@/i18n/types";
 
 // This file is generated to keep the large locale catalog in sync.
 export const generatedLocaleDictionaries = {
@@ -7815,4 +7815,4 @@ export const generatedLocaleDictionaries = {
       "webLimited": "gwe-gyfyngedig",
     },
   },
-} satisfies Partial<Record<AppLocale, AppDictionary>>;
+} satisfies Partial<Record<AppLocale, BaseAppDictionarySource>>;

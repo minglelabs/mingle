@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ORIGINAL_API_NAMESPACE = process.env.NEXT_PUBLIC_API_NAMESPACE
+const ORIGINAL_RELEASE_TARGET = process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET
 
-function stubWindowSearch(search: string): void {
+function stubBrowserRuntime(input: {
+  search: string
+  userAgent?: string
+  platform?: string
+  maxTouchPoints?: number
+}): void {
   vi.stubGlobal('window', {
-    location: { search },
+    location: { search: input.search },
   } as unknown as Window & typeof globalThis)
+  vi.stubGlobal('navigator', {
+    userAgent: input.userAgent || '',
+    platform: input.platform || '',
+    maxTouchPoints: input.maxTouchPoints ?? 0,
+  } as unknown as Navigator)
 }
 
 async function loadApiContractModule() {
@@ -17,6 +28,7 @@ describe('api-contract namespace guard', () => {
   beforeEach(() => {
     vi.unstubAllGlobals()
     delete process.env.NEXT_PUBLIC_API_NAMESPACE
+    delete process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET
   })
 
   afterEach(() => {
@@ -25,6 +37,11 @@ describe('api-contract namespace guard', () => {
       process.env.NEXT_PUBLIC_API_NAMESPACE = ORIGINAL_API_NAMESPACE
     } else {
       delete process.env.NEXT_PUBLIC_API_NAMESPACE
+    }
+    if (typeof ORIGINAL_RELEASE_TARGET === 'string') {
+      process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = ORIGINAL_RELEASE_TARGET
+    } else {
+      delete process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET
     }
   })
 
@@ -36,16 +53,16 @@ describe('api-contract namespace guard', () => {
   })
 
   it('accepts only allowed env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.11'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.11')
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.0')
   })
 
   it('accepts Android env namespace values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v1.0.11'
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'android/v1.1.0'
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('android/v1.0.11')
-    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.0.11/translate/finalize')
+    expect(contract.clientApiNamespace).toBe('android/v1.1.0')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/android/v1.1.0/translate/finalize')
   })
 
   it('keeps v1.0.10 namespaces allow-listed for older installed apps', async () => {
@@ -63,6 +80,7 @@ describe('api-contract namespace guard', () => {
     '/api/android/v1.0.8/translate/finalize',
     '/api/android/v1.0.9/translate/finalize',
     '/api/android/v1.0.11/translate/finalize',
+    '/api/android/v1.1.0/translate/finalize',
     '/api/ios/v1.0.4/translate/finalize',
     '/api/ios/v1.0.5/translate/finalize',
     '/api/ios/v1.0.6/translate/finalize',
@@ -70,6 +88,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.0.8/translate/finalize',
     '/api/ios/v1.0.9/translate/finalize',
     '/api/ios/v1.0.11/translate/finalize',
+    '/api/ios/v1.1.0/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)
@@ -94,30 +113,57 @@ describe('api-contract namespace guard', () => {
 
   it('allows query override only when value is allow-listed', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
-    stubWindowSearch('?apiNamespace=ios%2Fv1.0.6')
+    stubBrowserRuntime({ search: '?apiNamespace=ios%2Fv1.0.6' })
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('ios/v1.0.6')
   })
 
   it('allows Android query override when value is allow-listed', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
-    stubWindowSearch('?apiNs=android%2Fv1.0.6')
+    stubBrowserRuntime({ search: '?apiNs=android%2Fv1.0.6' })
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('android/v1.0.6')
   })
 
   it('allows query override for older allow-listed namespaces', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
-    stubWindowSearch('?apiNamespace=android%2Fv1.0.10')
+    stubBrowserRuntime({ search: '?apiNamespace=android%2Fv1.0.10' })
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('android/v1.0.10')
     expect(contract.buildClientApiPath('/tts/inworld')).toBe('/api/android/v1.0.10/tts/inworld')
   })
 
   it('ignores invalid query override values', async () => {
-    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.11'
-    stubWindowSearch('?apiNs=unknown%2Fnamespace')
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.0'
+    stubBrowserRuntime({ search: '?apiNs=unknown%2Fnamespace' })
     const contract = await loadApiContractModule()
-    expect(contract.clientApiNamespace).toBe('ios/v1.0.11')
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.0')
+  })
+
+  it('defaults query-less dedicated 1.1.0 Android hosts to Android v1.1.0 APIs', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_0'
+    stubBrowserRuntime({
+      search: '',
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/123.0.0.0 Mobile Safari/537.36',
+      platform: 'Linux armv8l',
+    })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('android/v1.1.0')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/android/v1.1.0/conversations')
+  })
+
+  it('defaults query-less dedicated 1.1.0 iOS hosts to iOS v1.1.0 APIs', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_0'
+    stubBrowserRuntime({
+      search: '',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      maxTouchPoints: 5,
+    })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.0')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/ios/v1.1.0/translate/finalize')
   })
 })
