@@ -7,12 +7,12 @@
     <style>
       :root {
         color-scheme: dark;
-        --bg: #050b12;
-        --panel: #0b1420;
-        --line: rgba(255, 255, 255, 0.08);
-        --title: #f6fbff;
-        --body: rgba(246, 251, 255, 0.74);
-        --accent: #7fe7ff;
+        --panel: #1c1c1e;
+        --line: rgba(251, 188, 50, 0.2);
+        --title: #fffdf7;
+        --body: rgba(255, 243, 217, 0.82);
+        --accent: #fbbc32;
+        --accent-strong: #f97316;
         --slide-duration: 820ms;
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
       }
@@ -28,9 +28,9 @@
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(circle at 18% 18%, rgba(127, 231, 255, 0.15), transparent 24%),
-          radial-gradient(circle at 82% 86%, rgba(127, 231, 255, 0.1), transparent 28%),
-          linear-gradient(160deg, #02060a 0%, #07111b 48%, #03070d 100%);
+          radial-gradient(circle at 18% 18%, rgba(255, 253, 247, 0.2), transparent 22%),
+          radial-gradient(circle at 78% 82%, rgba(249, 115, 22, 0.18), transparent 28%),
+          linear-gradient(160deg, #fbbc32 0%, #f59e0b 42%, #f97316 100%);
         color: var(--title);
         font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
       }
@@ -67,9 +67,10 @@
         border: 1px solid var(--line);
         border-radius: 32px;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+          radial-gradient(circle at top left, rgba(251, 188, 50, 0.13), transparent 36%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
           var(--panel);
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+        box-shadow: 0 24px 80px rgba(107, 45, 0, 0.26);
       }
 
       .slide-copy {
@@ -83,6 +84,7 @@
         font-size: clamp(3.2rem, 6.4vw, 7rem);
         line-height: 0.94;
         letter-spacing: -0.05em;
+        text-wrap: balance;
       }
 
       .slide-body {
@@ -91,10 +93,11 @@
         font-size: clamp(1.12rem, 1.8vw, 1.7rem);
         line-height: 1.65;
         color: var(--body);
+        text-wrap: pretty;
       }
 
       .slide.is-active .slide-shell {
-        border-color: rgba(127, 231, 255, 0.22);
+        border-color: rgba(251, 188, 50, 0.52);
       }
 
       @media (max-width: 900px) {

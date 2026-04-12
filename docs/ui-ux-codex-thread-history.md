@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck initially ignored the main Mingle service palette**
+  Problem: After the structure was simplified, the shared `mingle-xr/xr.html` deck still used a cool dark-blue palette that did not visually connect to the live `mingle-app` experience. That made the relations deck feel like a separate product instead of an extension of the service.
+  Cause: The template styling was reduced for clarity first, but its color system was not yet realigned to the app's established brand tones.
+  Fix: Rebased the deck onto the Mingle palette already used in `mingle-app`, especially the warm gradient family around `#FBBC32`, `#F59E0B`, and `#F97316`, while keeping the slide content model minimal with only title and body.
+  Status: Resolved in-thread.
+
 - **XR presentation deck initially carried too many decorative content blocks for a format-first draft**
   Problem: The first shared `mingle-xr/xr.html` template included headers, counters, buttons, tag clusters, orbital visuals, and multi-card layouts. For a deck that was still at the format-definition stage, that made each slide feel overdesigned and distracted from the intended core structure.
   Cause: The template was built like a polished showcase deck before the content model had been reduced, so presentation chrome grew faster than the actual slide grammar.
