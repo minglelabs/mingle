@@ -9,6 +9,10 @@ import {
   upsertTrackedUser,
 } from '@/lib/app-analytics'
 import {
+  CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+  parseConversationMessageCreatedAtMs,
+} from '@/lib/conversation-history-clear'
+import {
   normalizeLang,
   sanitizeJsonObject,
   sanitizeText,
@@ -26,6 +30,43 @@ const ALLOWED_EVENT_TYPES = new Set([
 
 function stripEndpointMarkers(text: string): string {
   return text.replace(/<\/?(?:end|fin)>/giu, '')
+}
+
+async function shouldSkipFinalizedTurnPersistence(args: {
+  clientMessageId: string
+  sessionKey: string
+}): Promise<boolean> {
+  const { clientMessageId, sessionKey } = args
+  if (!sessionKey) return false
+
+  const latestConversationClearEvent = await prisma.appEventLog.findFirst({
+    where: {
+      sessionKey,
+      eventType: CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
+    },
+    orderBy: { createdAt: 'desc' },
+    select: {
+      createdAt: true,
+      metadata: true,
+    },
+  })
+  if (!latestConversationClearEvent) return false
+
+  const metadata = (
+    latestConversationClearEvent.metadata
+    && typeof latestConversationClearEvent.metadata === 'object'
+    && !Array.isArray(latestConversationClearEvent.metadata)
+  ) ? latestConversationClearEvent.metadata as Record<string, unknown> : null
+
+  const clearCutoffMs = sanitizeNonNegativeInt(metadata?.clientClearedAtMs)
+    ?? latestConversationClearEvent.createdAt.getTime()
+  const messageCreatedAtMs = parseConversationMessageCreatedAtMs(clientMessageId)
+
+  if (messageCreatedAtMs === null) {
+    return false
+  }
+
+  return messageCreatedAtMs <= clearCutoffMs
 }
 
 export async function handleLogClientEventV1(request: NextRequest) {
@@ -75,6 +116,11 @@ export async function handleLogClientEventV1(request: NextRequest) {
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {
+      const shouldIgnoreDueToConversationClear = await shouldSkipFinalizedTurnPersistence({
+        clientMessageId,
+        sessionKey: tracking.sessionKey,
+      })
+
       const messageMetadata: Prisma.JsonObject = {
         clientMessageId,
         sourceLanguage,
@@ -87,91 +133,103 @@ export async function handleLogClientEventV1(request: NextRequest) {
         messageMetadata.clientMetadata = clientMetadata
       }
 
-      const message = await prisma.appMessage.upsert({
-        where: {
-          sessionKey_clientMessageId: {
+      if (!shouldIgnoreDueToConversationClear) {
+        const message = await prisma.appMessage.upsert({
+          where: {
+            sessionKey_clientMessageId: {
+              sessionKey: tracking.sessionKey,
+              clientMessageId,
+            },
+          },
+          create: {
+            user: {
+              connect: { id: userId },
+            },
             sessionKey: tracking.sessionKey,
             clientMessageId,
+            isDeleted: false,
+            sourceLanguage,
+            translationProvider: infrastructureProvider ?? provider ?? undefined,
+            translationModel: model ?? undefined,
+            translationPromptTokens: translationPromptTokens ?? undefined,
+            translationCompletionTokens: translationCompletionTokens ?? undefined,
+            translationTotalTokens: translationTotalTokens ?? undefined,
+            sttDurationMs: sttDurationMs ?? undefined,
+            totalDurationMs: totalDurationMs ?? undefined,
+            metadata: messageMetadata,
           },
-        },
-        create: {
-          userId,
-          sessionKey: tracking.sessionKey,
-          clientMessageId,
-          sourceLanguage,
-          translationProvider: infrastructureProvider ?? provider ?? undefined,
-          translationModel: model ?? undefined,
-          translationPromptTokens: translationPromptTokens ?? undefined,
-          translationCompletionTokens: translationCompletionTokens ?? undefined,
-          translationTotalTokens: translationTotalTokens ?? undefined,
-          sttDurationMs: sttDurationMs ?? undefined,
-          totalDurationMs: totalDurationMs ?? undefined,
-          metadata: messageMetadata,
-        },
-        update: {
-          userId,
-          sourceLanguage,
-          translationProvider: infrastructureProvider ?? provider ?? undefined,
-          translationModel: model ?? undefined,
-          translationPromptTokens: translationPromptTokens ?? undefined,
-          translationCompletionTokens: translationCompletionTokens ?? undefined,
-          translationTotalTokens: translationTotalTokens ?? undefined,
-          sttDurationMs: sttDurationMs ?? undefined,
-          totalDurationMs: totalDurationMs ?? undefined,
-          metadata: messageMetadata,
-        },
-        select: {
-          id: true,
-        },
-      })
-      messageId = message.id
-
-      await prisma.appMessageContent.upsert({
-        where: {
-          messageId_contentType_language: {
-            messageId: message.id,
-            contentType: 'SOURCE',
-            language: sourceLanguage,
+          update: {
+            user: {
+              connect: { id: userId },
+            },
+            isDeleted: false,
+            sourceLanguage,
+            translationProvider: infrastructureProvider ?? provider ?? undefined,
+            translationModel: model ?? undefined,
+            translationPromptTokens: translationPromptTokens ?? undefined,
+            translationCompletionTokens: translationCompletionTokens ?? undefined,
+            translationTotalTokens: translationTotalTokens ?? undefined,
+            sttDurationMs: sttDurationMs ?? undefined,
+            totalDurationMs: totalDurationMs ?? undefined,
+            metadata: messageMetadata,
           },
-        },
-        create: {
-          messageId: message.id,
-          contentType: 'SOURCE',
-          language: sourceLanguage,
-          text: sourceText,
-          provider: infrastructureProvider ?? provider ?? undefined,
-          model: model ?? undefined,
-        },
-        update: {
-          text: sourceText,
-          provider: infrastructureProvider ?? provider ?? undefined,
-          model: model ?? undefined,
-        },
-      })
+          select: {
+            id: true,
+          },
+        })
+        messageId = message.id
 
-      for (const [language, translatedText] of Object.entries(translations)) {
         await prisma.appMessageContent.upsert({
           where: {
             messageId_contentType_language: {
               messageId: message.id,
-              contentType: 'TRANSLATION_FINAL',
-              language,
+              contentType: 'SOURCE',
+              language: sourceLanguage,
             },
           },
           create: {
             messageId: message.id,
-            contentType: 'TRANSLATION_FINAL',
-            language,
-            text: translatedText,
+            contentType: 'SOURCE',
+            language: sourceLanguage,
+            isDeleted: false,
+            text: sourceText,
             provider: infrastructureProvider ?? provider ?? undefined,
             model: model ?? undefined,
           },
           update: {
-            text: translatedText,
+            isDeleted: false,
+            text: sourceText,
             provider: infrastructureProvider ?? provider ?? undefined,
             model: model ?? undefined,
           },
         })
+
+        for (const [language, translatedText] of Object.entries(translations)) {
+          await prisma.appMessageContent.upsert({
+            where: {
+              messageId_contentType_language: {
+                messageId: message.id,
+                contentType: 'TRANSLATION_FINAL',
+                language,
+              },
+            },
+            create: {
+              messageId: message.id,
+              contentType: 'TRANSLATION_FINAL',
+              language,
+              isDeleted: false,
+              text: translatedText,
+              provider: infrastructureProvider ?? provider ?? undefined,
+              model: model ?? undefined,
+            },
+            update: {
+              isDeleted: false,
+              text: translatedText,
+              provider: infrastructureProvider ?? provider ?? undefined,
+              model: model ?? undefined,
+            },
+          })
+        }
       }
     }
 

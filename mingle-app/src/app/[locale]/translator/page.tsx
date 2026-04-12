@@ -1,27 +1,49 @@
-import MingleHome from "@/components/mingle-home";
-import { getDictionary, isSupportedLocale } from "@/i18n";
-import { isAppleOAuthConfigured, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import { isSupportedLocale } from "@/i18n";
+import {
+  resolveDefaultMingleClientReleaseVariant,
+  readRequestedApiNamespaceFromSearchParams,
+  resolveMingleClientReleaseVariant,
+} from "@/lib/client-behavior-profile";
+import DefaultV110HomeEntry from "@/web/default/v1.1.0/home-entry";
+import LegacyHomeEntry from "@/web/legacy/v1.0.11/home-entry";
+import AndroidV1011HomeEntry from "@/web/android/v1.0.11/home-entry";
+import AndroidV110HomeEntry from "@/web/android/v1.1.0/home-entry";
+import IosV1011HomeEntry from "@/web/ios/v1.0.11/home-entry";
+import IosV110HomeEntry from "@/web/ios/v1.1.0/home-entry";
 import { notFound } from "next/navigation";
 
 type TranslatorPageProps = {
   params: Promise<{
     locale: string;
   }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function TranslatorPage({ params }: TranslatorPageProps) {
+export default async function TranslatorPage({ params, searchParams }: TranslatorPageProps) {
   const { locale } = await params;
+  const resolvedSearchParams = await searchParams;
 
   if (!isSupportedLocale(locale)) {
     notFound();
   }
 
-  return (
-    <MingleHome
-      dictionary={getDictionary(locale)}
-      appleOAuthEnabled={isAppleOAuthConfigured()}
-      googleOAuthEnabled={isGoogleOAuthConfigured()}
-      locale={locale}
-    />
-  );
+  const requestedApiNamespace = readRequestedApiNamespaceFromSearchParams(resolvedSearchParams);
+  const releaseVariant = requestedApiNamespace
+    ? resolveMingleClientReleaseVariant(requestedApiNamespace)
+    : resolveDefaultMingleClientReleaseVariant();
+
+  switch (releaseVariant) {
+    case "legacy_default_v1_0_11":
+      return LegacyHomeEntry({ locale });
+    case "default_v1_1_0":
+      return DefaultV110HomeEntry({ locale, searchParams: resolvedSearchParams });
+    case "ios_v1_0_11":
+      return IosV1011HomeEntry({ locale });
+    case "android_v1_0_11":
+      return AndroidV1011HomeEntry({ locale });
+    case "ios_v1_1_0":
+      return IosV110HomeEntry({ locale, searchParams: resolvedSearchParams });
+    case "android_v1_1_0":
+      return AndroidV110HomeEntry({ locale, searchParams: resolvedSearchParams });
+  }
 }

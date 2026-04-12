@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-const EXPECTED_NAMESPACE = 'android/v1.0.10';
+import {
+  EXPECTED_RN_API_NAMESPACE_BY_OS,
+  normalizeNamespace,
+} from './rn-api-namespaces.mjs';
 
-function normalizeNamespace(raw) {
-  if (typeof raw !== 'string') return '';
-  return raw.trim().replace(/^\/+/, '').replace(/\/+$/, '');
-}
+const EXPECTED_NAMESPACE = EXPECTED_RN_API_NAMESPACE_BY_OS.android;
 
 const configured = normalizeNamespace(
   process.env.NEXT_PUBLIC_API_NAMESPACE || process.env.RN_API_NAMESPACE || '',

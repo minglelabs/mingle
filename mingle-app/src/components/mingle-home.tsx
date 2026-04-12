@@ -1,11 +1,21 @@
 "use client";
 
 import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-import LivePhoneDemo from "@/components/LivePhoneDemo/LivePhoneDemo";
+import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
 type MingleHomeProps = {
@@ -13,6 +23,39 @@ type MingleHomeProps = {
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
   locale: AppLocale;
+  headerMode?: "default" | "conversation";
+  onBack?: () => void;
+  onConversationDeleted?: () => void;
+  conversationTitle?: string;
+  conversationId?: string;
+  sessionKeyOverride?: string;
+  storageNamespace?: string;
+  initialSelectedLanguages?: string[];
+  autoStartOnMount?: boolean;
+  onAutoStartHandled?: () => void;
+  isVisible?: boolean;
+  enableNativeBannerBridge?: boolean;
+  onStartRecordingRequested?: () => Promise<{
+    switchedFromLiveConversation: boolean;
+  } | void> | {
+    switchedFromLiveConversation: boolean;
+  } | void;
+  onSttSessionRunningChange?: (isRunning: boolean) => void;
+  onLatestUtteranceChange?: (payload: {
+    preview: string;
+    createdAt: string;
+    speaker?: string;
+    speakerAvatarSeed?: string;
+    speakerAvatarIndex?: number;
+  }) => void;
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
+};
+
+export type MingleHomeRef = {
+  startRecording: () => Promise<void>;
+  stopRecording: (options?: { deferRunningStateChange?: boolean; discardPendingFinalization?: boolean }) => Promise<void>;
+  prepareForDeletion: () => void;
+  isSttSessionRunning: () => boolean;
 };
 
 // Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
@@ -193,8 +236,13 @@ function GoogleMark() {
   );
 }
 
-export default function MingleHome(props: MingleHomeProps) {
+const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHome(props, ref) {
   const { data: session, status } = useSession();
+  const { autoStartOnMount, onAutoStartHandled } = props;
+  const livePhoneDemoRef = useRef<LivePhoneDemoRef | null>(null);
+  const autoStartTriggeredRef = useRef(false);
+  const onAutoStartHandledRef = useRef(onAutoStartHandled);
+  onAutoStartHandledRef.current = onAutoStartHandled;
   const silenceSliderUpgradeCopy = useMemo(
     () => getSilenceSliderUpgradeCopy(props.locale),
     [props.locale],
@@ -223,6 +271,94 @@ export default function MingleHome(props: MingleHomeProps) {
   useEffect(() => {
     setIsLiveDemoMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!autoStartOnMount) {
+      autoStartTriggeredRef.current = false;
+      return;
+    }
+    if (!isLiveDemoMounted) {
+      return;
+    }
+    if (autoStartTriggeredRef.current) return;
+    autoStartTriggeredRef.current = true;
+
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const clearTimer = () => {
+      if (timerId === null) return;
+      window.clearTimeout(timerId);
+      timerId = null;
+    };
+
+    const pollUntilRunning = (remainingAttempts: number) => {
+      if (cancelled) return;
+      const room = livePhoneDemoRef.current;
+      if (!room) {
+        if (remainingAttempts <= 0) {
+          autoStartTriggeredRef.current = false;
+          return;
+        }
+        timerId = window.setTimeout(() => {
+          pollUntilRunning(remainingAttempts - 1);
+        }, 120);
+        return;
+      }
+      if (room.isSttSessionRunning()) {
+        onAutoStartHandledRef.current?.();
+        return;
+      }
+      if (remainingAttempts <= 0) {
+        autoStartTriggeredRef.current = false;
+        return;
+      }
+      timerId = window.setTimeout(() => {
+        pollUntilRunning(remainingAttempts - 1);
+      }, 120);
+    };
+
+    const tryAutoStart = (remainingAttempts: number) => {
+      if (cancelled) return;
+      const room = livePhoneDemoRef.current;
+      if (!room) {
+        if (remainingAttempts <= 0) {
+          autoStartTriggeredRef.current = false;
+          return;
+        }
+        timerId = window.setTimeout(() => {
+          tryAutoStart(remainingAttempts - 1);
+        }, 120);
+        return;
+      }
+      if (room.isSttSessionRunning()) {
+        onAutoStartHandledRef.current?.();
+        return;
+      }
+
+      void (async () => {
+        try {
+          await room.startRecording();
+          pollUntilRunning(24);
+        } catch {
+          autoStartTriggeredRef.current = false;
+        }
+      })();
+    };
+
+    // Wait for the conversation overlay slide-in animation (280ms) to settle
+    // before requesting mic permission. iOS defers permission dialogs during
+    // view transitions, so requesting too early causes the prompt to be
+    // delayed or suppressed until a later user interaction.
+    timerId = window.setTimeout(() => {
+      tryAutoStart(20);
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      clearTimer();
+    };
+  }, [autoStartOnMount, isLiveDemoMounted]);
   const [loginPassword, setLoginPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupName, setSignupName] = useState("");
@@ -246,10 +382,8 @@ export default function MingleHome(props: MingleHomeProps) {
   const nativeAuthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const callbackUrl = useMemo(
-    () => `/${props.locale}/translator`,
-    [props.locale],
-  );
+  const callbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}/conversations`);
+  const signedOutCallbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}`);
   const localeSegment = useMemo(
     () => resolveLegalDocumentPathSegment(props.locale),
     [props.locale],
@@ -938,10 +1072,23 @@ export default function MingleHome(props: MingleHomeProps) {
     clearNativeAuthTimeout,
   ]);
 
+  useImperativeHandle(ref, () => ({
+    startRecording: async () => {
+      await livePhoneDemoRef.current?.startRecording();
+    },
+    stopRecording: async (options) => {
+      await livePhoneDemoRef.current?.stopRecording(options);
+    },
+    prepareForDeletion: () => {
+      livePhoneDemoRef.current?.prepareForDeletion();
+    },
+    isSttSessionRunning: () => livePhoneDemoRef.current?.isSttSessionRunning() ?? false,
+  }), []);
+
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
-    void signOut({ callbackUrl: `/${props.locale}` });
-  }, [isDeletingAccount, props.locale]);
+    void signOut({ callbackUrl: signedOutCallbackUrl });
+  }, [isDeletingAccount, signedOutCallbackUrl]);
 
   const handleDeleteAccount = useCallback(async () => {
     if (isDeletingAccount) return;
@@ -953,7 +1100,7 @@ export default function MingleHome(props: MingleHomeProps) {
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
-      await signOut({ callbackUrl: `/${props.locale}` });
+      await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);
     } finally {
@@ -962,7 +1109,7 @@ export default function MingleHome(props: MingleHomeProps) {
   }, [
     isDeletingAccount,
     props.dictionary.profile.deleteAccountFailed,
-    props.locale,
+    signedOutCallbackUrl,
   ]);
 
   // Keep loading and unauthenticated states within one stable layout.
@@ -1577,6 +1724,7 @@ export default function MingleHome(props: MingleHomeProps) {
     <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
       {isLiveDemoMounted ? (
         <LivePhoneDemo
+          ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
           tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
@@ -1584,14 +1732,18 @@ export default function MingleHome(props: MingleHomeProps) {
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}
           connectionFailedLabel={props.dictionary.demo.connectionFailed}
+          switchLiveRoomToastLabel={
+            props.dictionary.conversations?.switchLiveRoomToastLabel
+            ?? "Stopped the live room and started STT here."
+          }
           muteTtsLabel={props.dictionary.demo.muteTts}
           unmuteTtsLabel={props.dictionary.demo.unmuteTts}
-          textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
-          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
-          translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
-          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
-          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
-          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+          textSizeLabel={props.dictionary.demo.textSizeLabel}
+          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel}
+          translationModelLabel={props.dictionary.demo.translationModelLabel}
+          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel}
+          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel}
+          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel}
           silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
           silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
           menuLabel={props.dictionary.profile.menuLabel}
@@ -1606,6 +1758,21 @@ export default function MingleHome(props: MingleHomeProps) {
           isAuthActionPending={isDeletingAccount}
           showMenuButton
           showAccountActions={status === "authenticated"}
+          headerMode={props.headerMode}
+          backButtonLabel={props.dictionary.profile.emailBackLabel}
+          onBack={props.onBack}
+          onConversationDeleted={props.onConversationDeleted}
+          conversationTitle={props.conversationTitle}
+          conversationId={props.conversationId}
+          sessionKeyOverride={props.sessionKeyOverride}
+          storageNamespace={props.storageNamespace}
+          initialSelectedLanguages={props.initialSelectedLanguages}
+          isVisible={props.isVisible}
+          enableNativeBannerBridge={props.enableNativeBannerBridge}
+          onStartRecordingRequested={props.onStartRecordingRequested}
+          onSttSessionRunningChange={props.onSttSessionRunningChange}
+          onLatestUtteranceChange={props.onLatestUtteranceChange}
+          onSelectedLanguagesChange={props.onSelectedLanguagesChange}
         />
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
@@ -1614,4 +1781,6 @@ export default function MingleHome(props: MingleHomeProps) {
       )}
     </main>
   );
-}
+});
+
+export default MingleHome;

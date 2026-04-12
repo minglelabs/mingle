@@ -7,6 +7,8 @@ import {
   parseNativeUiBannerLayoutDetail,
   parseNativeUiScrollToTopDetail,
   readCachedNativeUiBannerLayout,
+  resolveNativeBottomBarBannerClearancePx,
+  shouldEnableNativeDebugWebViewRemount,
   shouldEnableIosTopTapFallback,
 } from './live-phone-demo.native-ui.logic'
 
@@ -111,6 +113,54 @@ describe('live-phone-demo native ui bridge logic', () => {
     expect(isNativeUiBridgeEnabledFromSearch('')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('?foo=bar')).toBe(false)
     expect(isNativeUiBridgeEnabledFromSearch('%')).toBe(false)
+  })
+
+  it('derives bottom banner clearance from the live bottom bar position and safe area', () => {
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 706,
+      viewportHeightPx: 844,
+      safeAreaInsetBottomPx: 34,
+    })).toBe(104)
+  })
+
+  it('clamps invalid bottom banner clearance inputs to zero', () => {
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 120,
+      viewportHeightPx: 100,
+      safeAreaInsetBottomPx: 10,
+    })).toBe(0)
+    expect(resolveNativeBottomBarBannerClearancePx({
+      bottomBarTopPx: 20,
+      viewportHeightPx: Number.NaN,
+      safeAreaInsetBottomPx: 0,
+    })).toBe(0)
+  })
+
+  describe('shouldEnableNativeDebugWebViewRemount', () => {
+    it('enables the action in development mode', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle.app/ko',
+        isDevelopmentMode: true,
+      })).toBe(true)
+    })
+
+    it('enables the action for loopback and devbox cloudflare hosts', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'http://localhost:3000/ko',
+        isDevelopmentMode: false,
+      })).toBe(true)
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle-app-devbox.photo-for-passport.com/ko',
+        isDevelopmentMode: false,
+      })).toBe(true)
+    })
+
+    it('disables the action for regular production hosts', () => {
+      expect(shouldEnableNativeDebugWebViewRemount({
+        rawUrl: 'https://mingle.photo-for-passport.com/ko',
+        isDevelopmentMode: false,
+      })).toBe(false)
+    })
   })
 
   describe('shouldEnableIosTopTapFallback', () => {

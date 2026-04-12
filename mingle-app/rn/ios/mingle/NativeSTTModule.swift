@@ -240,7 +240,7 @@ class NativeSTTModule: RCTEventEmitter {
         false
     }
 
-    private static func readRuntimeConfigValue(_ key: String) -> String {
+    fileprivate static func readRuntimeConfigValue(_ key: String) -> String {
         guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
             return ""
         }
@@ -257,7 +257,7 @@ class NativeSTTModule: RCTEventEmitter {
         return value
     }
 
-    private static func readRuntimeConfigURL(
+    fileprivate static func readRuntimeConfigURL(
         schemeKey: String,
         hostKey: String,
         legacyKey: String
@@ -288,7 +288,7 @@ class NativeSTTModule: RCTEventEmitter {
         return ""
     }
 
-    private static func readDevicePreferredLanguages() -> [String] {
+    fileprivate static func readDevicePreferredLanguages() -> [String] {
         var output: [String] = []
         for raw in Locale.preferredLanguages {
             let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -303,7 +303,7 @@ class NativeSTTModule: RCTEventEmitter {
         return output
     }
 
-    private static func readDeviceLocaleTag() -> String {
+    fileprivate static func readDeviceLocaleTag() -> String {
         for language in Self.readDevicePreferredLanguages() {
             return language
         }
@@ -336,6 +336,8 @@ class NativeSTTModule: RCTEventEmitter {
                     hostKey: "MingleDefaultWsHost",
                     legacyKey: "MingleDefaultWsURL"
                 ),
+                "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
+                "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
                 "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
                 "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
                 "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -364,6 +366,8 @@ class NativeSTTModule: RCTEventEmitter {
                 hostKey: "MingleDefaultWsHost",
                 legacyKey: "MingleDefaultWsURL"
             ),
+            "legacyWebAppBaseUrl": Self.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
+            "legacyDefaultWsUrl": Self.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
             "apiNamespace": Self.readRuntimeConfigValue("MingleApiNamespace"),
             "clientVersion": Self.readRuntimeConfigValue("CFBundleShortVersionString"),
             "clientBuild": Self.readRuntimeConfigValue("CFBundleVersion"),
@@ -776,6 +780,9 @@ class NativeSTTModule: RCTEventEmitter {
         sttModel: String?,
         languages: [String],
         aecEnabled: Bool,
+        apiNamespace: String,
+        releaseVariant: String,
+        behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
@@ -860,6 +867,15 @@ class NativeSTTModule: RCTEventEmitter {
             "sample_rate": sampleRate,
             "languages": languages,
         ]
+        if !apiNamespace.isEmpty {
+            configPayload["api_namespace"] = apiNamespace
+        }
+        if !releaseVariant.isEmpty {
+            configPayload["release_variant"] = releaseVariant
+        }
+        if !behaviorProfile.isEmpty {
+            configPayload["behavior_profile"] = behaviorProfile
+        }
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
@@ -904,6 +920,9 @@ class NativeSTTModule: RCTEventEmitter {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         let aecEnabled = options["aecEnabled"] as? Bool ?? false
+        let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -920,6 +939,9 @@ class NativeSTTModule: RCTEventEmitter {
                 sttModel: sttModel,
                 languages: languages,
                 aecEnabled: aecEnabled,
+                apiNamespace: apiNamespace,
+                releaseVariant: releaseVariant,
+                behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 resolve: resolve,
@@ -939,6 +961,9 @@ class NativeSTTModule: RCTEventEmitter {
                             sttModel: sttModel,
                             languages: languages,
                             aecEnabled: aecEnabled,
+                            apiNamespace: apiNamespace,
+                            releaseVariant: releaseVariant,
+                            behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             resolve: resolve,
@@ -1037,5 +1062,53 @@ class NativeSTTModule: RCTEventEmitter {
             NSLog("[NativeSTTModule] audioEngine restart after AEC toggle FAILED: %@", error.localizedDescription)
             reject("audio_engine", "Failed to restart after AEC toggle", error)
         }
+    }
+}
+
+@objc(NativeRuntimeConfigModule)
+class NativeRuntimeConfigModule: NSObject {
+    @objc
+    static func requiresMainQueueSetup() -> Bool {
+        false
+    }
+
+    private static func runtimeConfigPayload() -> [String: Any] {
+        [
+            "webAppBaseUrl": NativeSTTModule.readRuntimeConfigURL(
+                schemeKey: "MingleWebAppScheme",
+                hostKey: "MingleWebAppHost",
+                legacyKey: "MingleWebAppBaseURL"
+            ),
+            "defaultWsUrl": NativeSTTModule.readRuntimeConfigURL(
+                schemeKey: "MingleDefaultWsScheme",
+                hostKey: "MingleDefaultWsHost",
+                legacyKey: "MingleDefaultWsURL"
+            ),
+            "legacyWebAppBaseUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyWebAppBaseURL"),
+            "legacyDefaultWsUrl": NativeSTTModule.readRuntimeConfigValue("MingleLegacyDefaultWsURL"),
+            "apiNamespace": NativeSTTModule.readRuntimeConfigValue("MingleApiNamespace"),
+            "clientVersion": NativeSTTModule.readRuntimeConfigValue("CFBundleShortVersionString"),
+            "clientBuild": NativeSTTModule.readRuntimeConfigValue("CFBundleVersion"),
+            "adBannerPosition": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerPosition"),
+            "adBannerHeightPx": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerHeightPx"),
+            "adBannerUnitIdIos": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
+            "deviceLocaleTag": NativeSTTModule.readDeviceLocaleTag(),
+            "devicePreferredLanguages": NativeSTTModule.readDevicePreferredLanguages(),
+        ]
+    }
+
+    @objc
+    func constantsToExport() -> [AnyHashable: Any]! {
+        [
+            "runtimeConfig": Self.runtimeConfigPayload(),
+        ]
+    }
+
+    @objc(getRuntimeConfig:rejecter:)
+    func getRuntimeConfig(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        resolve(Self.runtimeConfigPayload())
     }
 }

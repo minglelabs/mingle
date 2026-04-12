@@ -1,0 +1,1616 @@
+"use client";
+
+import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
+import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
+import type { AppDictionary } from "@/i18n/types";
+import LivePhoneDemoLegacy from "@/components/LivePhoneDemo/LivePhoneDemoLegacy";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
+
+type MingleHomeProps = {
+  dictionary: AppDictionary;
+  appleOAuthEnabled: boolean;
+  googleOAuthEnabled: boolean;
+  locale: AppLocale;
+};
+
+// Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
+const REQUIRE_AUTH_FOR_TRANSLATOR = false;
+
+const NATIVE_AUTH_EVENT = "mingle:native-auth";
+const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
+type NativeAuthProvider = "apple" | "google";
+type NativeAuthStartCommand = {
+  type: "native_auth_start";
+  payload: {
+    provider: NativeAuthProvider;
+    callbackUrl: string;
+    startUrl: string;
+  };
+};
+type NativeAuthBridgeEvent =
+  | {
+      type: "status";
+      provider: NativeAuthProvider;
+      status: "opening";
+    }
+  | {
+      type: "success";
+      provider: NativeAuthProvider;
+      callbackUrl: string;
+      bridgeToken: string;
+    }
+  | {
+      type: "error";
+      provider: NativeAuthProvider;
+      message: string;
+    };
+type NativeAuthAckCommand = {
+  type: "native_auth_ack";
+  payload: {
+    provider: NativeAuthProvider;
+    outcome: "success" | "error";
+    bridgeToken?: string;
+  };
+};
+type NativeAuthResetCommand = {
+  type: "native_auth_reset";
+};
+type NativeAuthPendingResponse =
+  | {
+      status: "pending";
+    }
+  | {
+      status: "success";
+      provider: NativeAuthProvider;
+      callbackUrl: string;
+      bridgeToken: string;
+    }
+  | {
+      status: "error";
+      provider?: NativeAuthProvider;
+      callbackUrl: string;
+      message: string;
+    };
+
+type AuthPanelStep = "provider" | "terms";
+type AuthProvider = NativeAuthProvider | "email";
+type LegalSheetKind = "privacy" | "terms";
+type EmailAuthSheetMode = "login" | "signup" | "forgot";
+type EmailAuthErrorCode = "required" | "invalid_email" | "password_mismatch";
+const LEGAL_SHEET_EXIT_MS = 240;
+const EMAIL_SHEET_EXIT_MS = 240;
+
+type MingleWindowWithNativeAuthCache = Window & {
+  __MINGLE_LAST_NATIVE_AUTH_EVENT?: NativeAuthBridgeEvent;
+};
+
+function isNativeAuthBridgeEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.ReactNativeWebView?.postMessage !== "function")
+    return false;
+  return true;
+}
+
+function getWindowWithNativeAuthCache(): MingleWindowWithNativeAuthCache | null {
+  if (typeof window === "undefined") return null;
+  return window as MingleWindowWithNativeAuthCache;
+}
+
+function postNativeAuthAck(detail: NativeAuthBridgeEvent): void {
+  if (typeof window === "undefined") return;
+  if (!isNativeAuthBridgeEnabled()) return;
+  if (detail.type === "status") return;
+
+  const command: NativeAuthAckCommand = {
+    type: "native_auth_ack",
+    payload: {
+      provider: detail.provider,
+      outcome: detail.type,
+      bridgeToken: detail.type === "success" ? detail.bridgeToken : undefined,
+    },
+  };
+
+  try {
+    window.ReactNativeWebView?.postMessage(JSON.stringify(command));
+  } catch {
+    // no-op
+  }
+}
+
+// Helper for the polling path where only provider/outcome is available for the RN ACK.
+// Without this ACK after a polling success, RN keeps pendingAuthEventRef alive and
+// scheduleAuthDispatchRetry can replay a stale auth event on the next login attempt.
+function postNativeAuthAckForPolling(
+  provider: NativeAuthProvider,
+  outcome: "success" | "error",
+  bridgeToken?: string,
+): void {
+  if (typeof window === "undefined") return;
+  if (!isNativeAuthBridgeEnabled()) return;
+
+  const command: NativeAuthAckCommand = {
+    type: "native_auth_ack",
+    payload: { provider, outcome, bridgeToken },
+  };
+
+  try {
+    window.ReactNativeWebView?.postMessage(JSON.stringify(command));
+  } catch {
+    // no-op
+  }
+}
+
+function createNativeAuthRequestId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return `rq_${crypto.randomUUID().replaceAll("-", "")}`;
+  }
+  const fallback = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
+  return `rq_${fallback}`;
+}
+
+function isValidEmailAddress(rawValue: string): boolean {
+  const normalized = rawValue.trim();
+  if (!normalized) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-8 w-8" aria-hidden>
+      <path
+        fill="#FFFFFF"
+        d="M16.52 12.6c.02 2.1 1.85 2.8 1.87 2.81-.02.05-.29 1-.96 1.98-.58.86-1.2 1.72-2.15 1.74-.92.02-1.22-.55-2.28-.55-1.07 0-1.4.53-2.26.57-.92.03-1.62-.93-2.2-1.78-1.2-1.73-2.1-4.9-.88-7.02.6-1.05 1.66-1.72 2.81-1.74.88-.02 1.71.6 2.28.6.57 0 1.62-.74 2.73-.63.47.02 1.8.19 2.65 1.43-.07.04-1.58.92-1.57 2.59Zm-2.16-5.04c.48-.58.8-1.39.71-2.2-.69.03-1.53.46-2.03 1.04-.44.5-.82 1.32-.72 2.1.77.06 1.56-.39 2.04-.94Z"
+      />
+    </svg>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden>
+      <path
+        fill="#EA4335"
+        d="M12.25 10.2v4.18h5.83c-.26 1.34-1.67 3.94-5.83 3.94-3.5 0-6.35-2.9-6.35-6.47 0-3.58 2.85-6.48 6.35-6.48 2 0 3.34.85 4.1 1.58l2.79-2.7C17.36 2.58 15 1.5 12.25 1.5 6.72 1.5 2.25 6 2.25 11.55c0 5.54 4.47 10.05 10 10.05 5.77 0 9.6-4.04 9.6-9.73 0-.65-.08-1.13-.16-1.67h-9.44Z"
+      />
+      <path
+        fill="#34A853"
+        d="M3.4 6.88 6.66 9.3c.88-1.74 2.7-2.95 5.6-2.95 2 0 3.34.85 4.1 1.58l2.79-2.7C17.36 2.58 15 1.5 12.25 1.5c-3.85 0-7.2 2.2-8.85 5.38Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M2.25 11.55c0 1.73.44 3.36 1.22 4.78l3.54-2.74c-.2-.58-.31-1.2-.31-1.84 0-.66.11-1.29.31-1.88L3.47 7.1a9.93 9.93 0 0 0-1.22 4.45Z"
+      />
+      <path
+        fill="#4285F4"
+        d="M12.25 21.6c2.7 0 4.97-.9 6.63-2.44l-3.23-2.65c-.9.63-2.06 1.06-3.4 1.06-2.9 0-4.72-1.96-5.51-4.58L3.4 15.33C5.05 18.98 8.4 21.6 12.25 21.6Z"
+      />
+    </svg>
+  );
+}
+
+export default function MingleHomeLegacy(props: MingleHomeProps) {
+  const { data: session, status } = useSession();
+  const silenceSliderUpgradeCopy = useMemo(
+    () => getSilenceSliderUpgradeCopy(props.locale),
+    [props.locale],
+  );
+  const [isLiveDemoMounted, setIsLiveDemoMounted] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [signingInProvider, setSigningInProvider] =
+    useState<NativeAuthProvider | null>(null);
+  const [authPanelStep, setAuthPanelStep] = useState<AuthPanelStep>("provider");
+  const [selectedProvider, setSelectedProvider] =
+    useState<AuthProvider | null>(null);
+  const [agreedPrivacy, setAgreedPrivacy] = useState(false);
+  const [agreedTerms, setAgreedTerms] = useState(false);
+  const [legalSheetKind, setLegalSheetKind] = useState<LegalSheetKind | null>(
+    null,
+  );
+  const [isLegalSheetClosing, setIsLegalSheetClosing] = useState(false);
+  const [isEmailSheetOpen, setIsEmailSheetOpen] = useState(false);
+  const [isEmailSheetClosing, setIsEmailSheetClosing] = useState(false);
+  const [emailSheetMode, setEmailSheetMode] = useState<EmailAuthSheetMode>("login");
+  const [emailAuthErrorCode, setEmailAuthErrorCode] =
+    useState<EmailAuthErrorCode | null>(null);
+  const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+
+  useEffect(() => {
+    setIsLiveDemoMounted(true);
+  }, []);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [signupEmail, setSignupEmail] = useState("");
+  const [signupName, setSignupName] = useState("");
+  const [signupPassword, setSignupPassword] = useState("");
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const pendingNativeProviderRef = useRef<NativeAuthProvider | null>(null);
+  const lastHandledBridgeTokenRef = useRef("");
+  const pendingNativeRequestIdRef = useRef<string | null>(null);
+  const nativeAuthPollTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const legalSheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const emailSheetCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const nativeAuthPollInFlightRef = useRef(false);
+  const nativeAuthTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const callbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}/translator`);
+  const signedOutCallbackUrl = buildPathWithCurrentSearchParams(`/${props.locale}`);
+  const localeSegment = useMemo(
+    () => resolveLegalDocumentPathSegment(props.locale),
+    [props.locale],
+  );
+  const privacyPolicyUrl = useMemo(
+    () => `/legal/${localeSegment}/privacy-policy.html`,
+    [localeSegment],
+  );
+  const termsOfUseUrl = useMemo(
+    () => `/legal/${localeSegment}/terms-of-use.html`,
+    [localeSegment],
+  );
+  const hasAgreedAllRequiredTerms = agreedPrivacy && agreedTerms;
+  const emailSheetSlideIndex = emailSheetMode === "signup"
+    ? 1
+    : emailSheetMode === "forgot"
+      ? 2
+      : 0;
+  const emailAuthErrorMessage = emailAuthErrorCode === "required"
+    ? props.dictionary.profile.emailRequiredFieldsMessage
+    : emailAuthErrorCode === "invalid_email"
+      ? props.dictionary.profile.emailInvalidFormatMessage
+      : emailAuthErrorCode === "password_mismatch"
+        ? props.dictionary.profile.emailPasswordMismatchMessage
+        : "";
+  const legalSheetUrl = legalSheetKind === "privacy"
+    ? privacyPolicyUrl
+    : legalSheetKind === "terms"
+      ? termsOfUseUrl
+      : "";
+  const legalSheetTitle = legalSheetKind === "privacy"
+    ? props.dictionary.profile.privacyPolicyTitle
+    : legalSheetKind === "terms"
+      ? props.dictionary.profile.termsOfUseTitle
+      : "";
+  const clearLegalSheetCloseTimer = useCallback(() => {
+    if (legalSheetCloseTimerRef.current) {
+      clearTimeout(legalSheetCloseTimerRef.current);
+      legalSheetCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const clearEmailSheetCloseTimer = useCallback(() => {
+    if (emailSheetCloseTimerRef.current) {
+      clearTimeout(emailSheetCloseTimerRef.current);
+      emailSheetCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const clearNativeAuthTimeout = useCallback(() => {
+    if (nativeAuthTimeoutRef.current) {
+      clearTimeout(nativeAuthTimeoutRef.current);
+      nativeAuthTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearNativeAuthPoller = useCallback(() => {
+    if (nativeAuthPollTimerRef.current) {
+      clearInterval(nativeAuthPollTimerRef.current);
+      nativeAuthPollTimerRef.current = null;
+    }
+    nativeAuthPollInFlightRef.current = false;
+  }, []);
+
+  const pollNativeAuthResult = useCallback(
+    async (requestId: string, provider: NativeAuthProvider) => {
+      if (pendingNativeRequestIdRef.current !== requestId) return;
+
+      const response = await fetch(
+        `/api/native-auth/pending?requestId=${encodeURIComponent(requestId)}`,
+        {
+          cache: "no-store",
+        },
+      );
+      if (!response.ok) return;
+
+      const payload = (await response.json()) as NativeAuthPendingResponse;
+      if (pendingNativeRequestIdRef.current !== requestId) return;
+      if (payload.status === "pending") return;
+
+      clearNativeAuthPoller();
+      clearNativeAuthTimeout();
+      pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
+
+      if (payload.status === "error") {
+        // Polling-path error: ACK RN so pendingAuthEventRef is cleared.
+        postNativeAuthAckForPolling(provider, "error");
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        const normalizedMessage = (payload.message || "").trim().toLowerCase();
+        if (normalizedMessage === "native_auth_cancelled") {
+          return;
+        }
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+        return;
+      }
+
+      if (payload.provider !== provider) {
+        return;
+      }
+      const bridgeToken = (payload.bridgeToken || "").trim();
+      if (!bridgeToken) {
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+        return;
+      }
+      if (bridgeToken === lastHandledBridgeTokenRef.current) {
+        // Token already handled through the bridge path; avoid duplicate signIn.
+        // The ACK is still required so RN clears pendingAuthEventRef.
+        postNativeAuthAckForPolling(provider, "success", bridgeToken);
+        return;
+      }
+      lastHandledBridgeTokenRef.current = bridgeToken;
+      // Polling-path success: notify RN with an ACK.
+      postNativeAuthAckForPolling(provider, "success", bridgeToken);
+
+      const nextCallbackUrl = (payload.callbackUrl || "").trim() || callbackUrl;
+      void signIn("native-bridge", {
+        token: bridgeToken,
+        callbackUrl: nextCallbackUrl,
+      }).catch(() => {
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+      });
+    },
+    [
+      callbackUrl,
+      clearNativeAuthPoller,
+      clearNativeAuthTimeout,
+      props.dictionary.profile.nativeSignInFailed,
+    ],
+  );
+
+  const startNativeAuthPoller = useCallback(
+    (requestId: string, provider: NativeAuthProvider) => {
+      clearNativeAuthPoller();
+      nativeAuthPollInFlightRef.current = false;
+
+      const run = () => {
+        if (pendingNativeRequestIdRef.current !== requestId) return;
+        if (nativeAuthPollInFlightRef.current) return;
+        nativeAuthPollInFlightRef.current = true;
+        void pollNativeAuthResult(requestId, provider)
+          .catch(() => {
+            // no-op
+          })
+          .finally(() => {
+            nativeAuthPollInFlightRef.current = false;
+          });
+      };
+
+      run();
+      nativeAuthPollTimerRef.current = setInterval(run, 1200);
+    },
+    [clearNativeAuthPoller, pollNativeAuthResult],
+  );
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = props.locale;
+    }
+  }, [props.locale]);
+
+  useEffect(() => {
+    if (status !== "loading") {
+      // Shared reset for both completed auth (authenticated) and logout (unauthenticated).
+      // Do not clear pendingNativeProviderRef/requestId while a native auth flow is active.
+      // Clearing them too early can cause the ASWebAuthSession callback to be ignored,
+      // which prevents signIn from running and leaves the UI stuck on the login screen.
+      const hasActiveFlow = pendingNativeProviderRef.current !== null;
+
+      clearNativeAuthTimeout();
+      clearNativeAuthPoller();
+      setIsSigningIn(false);
+      setSigningInProvider(null);
+      setAuthPanelStep("provider");
+      setSelectedProvider(null);
+      setAgreedPrivacy(false);
+      setAgreedTerms(false);
+      setLegalSheetKind(null);
+      setIsLegalSheetClosing(false);
+      clearEmailSheetCloseTimer();
+      setIsEmailSheetOpen(false);
+      setIsEmailSheetClosing(false);
+      setEmailSheetMode("login");
+      setEmailAuthErrorCode(null);
+      setIsEmailSubmitting(false);
+      setLoginEmail("");
+      setLoginPassword("");
+      setSignupEmail("");
+      setSignupName("");
+      setSignupPassword("");
+      setSignupPasswordConfirm("");
+      setForgotPasswordEmail("");
+
+      if (!hasActiveFlow) {
+        // Reset refs only when no flow is active. Active flows reset them after completion.
+        pendingNativeRequestIdRef.current = null;
+        pendingNativeProviderRef.current = null;
+      }
+
+      // Tell the RN layer to reset auth state.
+      // On logout/session expiry this clears pendingAuthEventRef and retry timers so
+      // auth events from a previous session are not replayed. Skip this while a flow is active.
+      if (!hasActiveFlow && isNativeAuthBridgeEnabled()) {
+        try {
+          const resetCommand: NativeAuthResetCommand = { type: "native_auth_reset" };
+          window.ReactNativeWebView?.postMessage(JSON.stringify(resetCommand));
+        } catch {
+          // no-op
+        }
+      }
+    }
+  }, [clearEmailSheetCloseTimer, clearNativeAuthPoller, clearNativeAuthTimeout, status]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isNativeAuthBridgeEnabled()) return;
+
+    const processNativeAuthDetail = (
+      detail: NativeAuthBridgeEvent | null | undefined,
+    ) => {
+      if (!detail || typeof detail !== "object") return;
+      const cachedWindow = getWindowWithNativeAuthCache();
+      if (cachedWindow) {
+        delete cachedWindow.__MINGLE_LAST_NATIVE_AUTH_EVENT;
+      }
+
+      if (detail.type === "status") {
+        return;
+      }
+
+      clearNativeAuthTimeout();
+
+      const pendingProvider = pendingNativeProviderRef.current;
+      if (!pendingProvider) {
+        // Ignore late/stale native auth events when no auth flow is in progress.
+        // Still ack so the RN layer can stop retrying this payload.
+        postNativeAuthAck(detail);
+        return;
+      }
+      if (pendingProvider && detail.provider !== pendingProvider) {
+        return;
+      }
+      postNativeAuthAck(detail);
+
+      if (detail.type === "error") {
+        clearNativeAuthPoller();
+        pendingNativeRequestIdRef.current = null;
+        pendingNativeProviderRef.current = null;
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        const normalizedMessage = (detail.message || "").trim().toLowerCase();
+        if (normalizedMessage === "native_auth_cancelled") {
+          return;
+        }
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+        return;
+      }
+
+      clearNativeAuthPoller();
+      pendingNativeRequestIdRef.current = null;
+      pendingNativeProviderRef.current = null;
+      const bridgeToken = (detail.bridgeToken || "").trim();
+      if (!bridgeToken) {
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+        return;
+      }
+      if (bridgeToken === lastHandledBridgeTokenRef.current) {
+        // Token already handled through polling; only ACK RN and avoid duplicate signIn.
+        postNativeAuthAck(detail);
+        return;
+      }
+      lastHandledBridgeTokenRef.current = bridgeToken;
+
+      const nextCallbackUrl = (detail.callbackUrl || "").trim() || callbackUrl;
+      void signIn("native-bridge", {
+        token: bridgeToken,
+        callbackUrl: nextCallbackUrl,
+      }).catch(() => {
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+        window.alert(props.dictionary.profile.nativeSignInFailed);
+      });
+    };
+
+    const handleNativeAuthEvent = (event: Event) => {
+      processNativeAuthDetail(
+        (event as CustomEvent<NativeAuthBridgeEvent>).detail,
+      );
+    };
+
+    window.addEventListener(
+      NATIVE_AUTH_EVENT,
+      handleNativeAuthEvent as EventListener,
+    );
+    const pendingDetail =
+      getWindowWithNativeAuthCache()?.__MINGLE_LAST_NATIVE_AUTH_EVENT;
+    if (pendingDetail) {
+      processNativeAuthDetail(pendingDetail);
+    }
+    return () => {
+      window.removeEventListener(
+        NATIVE_AUTH_EVENT,
+        handleNativeAuthEvent as EventListener,
+      );
+    };
+  }, [
+    callbackUrl,
+    clearNativeAuthPoller,
+    clearNativeAuthTimeout,
+    props.dictionary.profile.nativeSignInFailed,
+  ]);
+
+  const handleSocialSignIn = useCallback(
+    (provider: "apple" | "google") => {
+      setIsSigningIn(true);
+      setSigningInProvider(provider);
+      const nativeBridgeEnabled =
+        typeof window !== "undefined" && isNativeAuthBridgeEnabled();
+      if (nativeBridgeEnabled) {
+        try {
+          const requestId = createNativeAuthRequestId();
+          const completeUrl = new URL(
+            "/api/native-auth/complete",
+            window.location.origin,
+          );
+          completeUrl.searchParams.set("provider", provider);
+          completeUrl.searchParams.set("callbackUrl", callbackUrl);
+          completeUrl.searchParams.set("requestId", requestId);
+          completeUrl.searchParams.set("ngrok-skip-browser-warning", "1");
+          const startUrl = new URL(
+            `/${props.locale}/auth/native`,
+            window.location.origin,
+          );
+          startUrl.searchParams.set("provider", provider);
+          startUrl.searchParams.set("callbackUrl", completeUrl.toString());
+          startUrl.searchParams.set("requestId", requestId);
+          startUrl.searchParams.set("ngrok-skip-browser-warning", "1");
+          const command: NativeAuthStartCommand = {
+            type: "native_auth_start",
+            payload: {
+              provider,
+              callbackUrl,
+              startUrl: startUrl.toString(),
+            },
+          };
+          pendingNativeRequestIdRef.current = requestId;
+          pendingNativeProviderRef.current = provider;
+          clearNativeAuthTimeout();
+          startNativeAuthPoller(requestId, provider);
+          nativeAuthTimeoutRef.current = setTimeout(() => {
+            if (pendingNativeProviderRef.current !== provider) return;
+            clearNativeAuthPoller();
+            pendingNativeRequestIdRef.current = null;
+            pendingNativeProviderRef.current = null;
+            setIsSigningIn(false);
+            setSigningInProvider(null);
+            window.alert(props.dictionary.profile.nativeSignInFailed);
+          }, NATIVE_AUTH_FLOW_TIMEOUT_MS);
+          window.ReactNativeWebView?.postMessage(JSON.stringify(command));
+          return;
+        } catch {
+          clearNativeAuthPoller();
+          clearNativeAuthTimeout();
+          pendingNativeRequestIdRef.current = null;
+          pendingNativeProviderRef.current = null;
+          setIsSigningIn(false);
+          setSigningInProvider(null);
+          window.alert(props.dictionary.profile.nativeSignInFailed);
+          return;
+        }
+      }
+
+      void signIn(provider, { callbackUrl }).catch(() => {
+        setIsSigningIn(false);
+        setSigningInProvider(null);
+      });
+    },
+    [
+      callbackUrl,
+      clearNativeAuthPoller,
+      clearNativeAuthTimeout,
+      props.dictionary.profile.nativeSignInFailed,
+      props.locale,
+      startNativeAuthPoller,
+    ],
+  );
+
+  const handleProviderSelect = useCallback(
+    (provider: AuthProvider) => {
+      if (isSigningIn) return;
+      clearEmailSheetCloseTimer();
+      setIsEmailSheetOpen(false);
+      setIsEmailSheetClosing(false);
+      setEmailSheetMode("login");
+      setEmailAuthErrorCode(null);
+      setIsEmailSubmitting(false);
+      setSelectedProvider(provider);
+      // Start with the required agreements checked by default; users can still opt out manually.
+      setAgreedPrivacy(true);
+      setAgreedTerms(true);
+      setAuthPanelStep("terms");
+    },
+    [clearEmailSheetCloseTimer, isSigningIn],
+  );
+
+  const handleBackToProviderSelect = useCallback(() => {
+    if (isSigningIn) return;
+    clearEmailSheetCloseTimer();
+    setIsEmailSheetOpen(false);
+    setIsEmailSheetClosing(false);
+    setEmailSheetMode("login");
+    setEmailAuthErrorCode(null);
+    setIsEmailSubmitting(false);
+    setAuthPanelStep("provider");
+    setSelectedProvider(null);
+    setAgreedPrivacy(false);
+    setAgreedTerms(false);
+  }, [clearEmailSheetCloseTimer, isSigningIn]);
+
+  const handleAgreeAllRequiredTerms = useCallback(() => {
+    const next = !hasAgreedAllRequiredTerms;
+    setAgreedPrivacy(next);
+    setAgreedTerms(next);
+  }, [hasAgreedAllRequiredTerms]);
+
+  const handleOpenLegalSheet = useCallback((kind: LegalSheetKind) => {
+    clearLegalSheetCloseTimer();
+    setIsLegalSheetClosing(false);
+    setLegalSheetKind(kind);
+  }, [clearLegalSheetCloseTimer]);
+
+  const handleCloseLegalSheet = useCallback(() => {
+    if (!legalSheetKind || isLegalSheetClosing) return;
+    setIsLegalSheetClosing(true);
+    clearLegalSheetCloseTimer();
+    legalSheetCloseTimerRef.current = setTimeout(() => {
+      setLegalSheetKind(null);
+      setIsLegalSheetClosing(false);
+      legalSheetCloseTimerRef.current = null;
+    }, LEGAL_SHEET_EXIT_MS);
+  }, [clearLegalSheetCloseTimer, isLegalSheetClosing, legalSheetKind]);
+
+  const handleSwitchEmailSheetMode = useCallback(
+    (nextMode: EmailAuthSheetMode) => {
+      if (isEmailSubmitting) return;
+      setEmailAuthErrorCode(null);
+      setEmailSheetMode(nextMode);
+    },
+    [isEmailSubmitting],
+  );
+
+  const handleOpenEmailSheet = useCallback(() => {
+    clearEmailSheetCloseTimer();
+    setIsEmailSheetClosing(false);
+    setIsEmailSheetOpen(true);
+    setEmailSheetMode("login");
+    setEmailAuthErrorCode(null);
+    setIsEmailSubmitting(false);
+  }, [clearEmailSheetCloseTimer]);
+
+  const handleCloseEmailSheet = useCallback(() => {
+    if (isEmailSubmitting) return;
+    if (!isEmailSheetOpen || isEmailSheetClosing) return;
+    setIsEmailSheetClosing(true);
+    clearEmailSheetCloseTimer();
+    emailSheetCloseTimerRef.current = setTimeout(() => {
+      setIsEmailSheetOpen(false);
+      setIsEmailSheetClosing(false);
+      setEmailSheetMode("login");
+      setEmailAuthErrorCode(null);
+      setIsEmailSubmitting(false);
+      emailSheetCloseTimerRef.current = null;
+    }, EMAIL_SHEET_EXIT_MS);
+  }, [
+    clearEmailSheetCloseTimer,
+    isEmailSheetClosing,
+    isEmailSheetOpen,
+    isEmailSubmitting,
+  ]);
+
+  const handleEmailSignInSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isEmailSubmitting) return;
+
+    const email = loginEmail.trim().toLowerCase();
+    const password = loginPassword.trim();
+    if (!email || !password) {
+      setEmailAuthErrorCode("required");
+      return;
+    }
+    if (!isValidEmailAddress(email)) {
+      setEmailAuthErrorCode("invalid_email");
+      return;
+    }
+
+    setEmailAuthErrorCode(null);
+    setIsEmailSubmitting(true);
+
+    try {
+      const result = await signIn("email-password", {
+        email,
+        password,
+        callbackUrl,
+        redirect: false,
+      });
+      if (!result?.ok || result.error) {
+        setIsEmailSubmitting(false);
+        window.alert(props.dictionary.profile.emailAuthFailedMessage);
+        return;
+      }
+
+      const nextUrl = typeof result.url === "string" && result.url
+        ? result.url
+        : callbackUrl;
+      window.location.assign(nextUrl);
+    } catch {
+      setIsEmailSubmitting(false);
+      window.alert(props.dictionary.profile.emailAuthFailedMessage);
+    }
+  }, [
+    callbackUrl,
+    isEmailSubmitting,
+    loginEmail,
+    loginPassword,
+    props.dictionary.profile.emailAuthFailedMessage,
+  ]);
+
+  const handleEmailSignUpSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isEmailSubmitting) return;
+
+    const email = signupEmail.trim().toLowerCase();
+    const name = signupName.trim();
+    const password = signupPassword.trim();
+    const passwordConfirm = signupPasswordConfirm.trim();
+    if (!email || !name || !password || !passwordConfirm) {
+      setEmailAuthErrorCode("required");
+      return;
+    }
+    if (!isValidEmailAddress(email)) {
+      setEmailAuthErrorCode("invalid_email");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setEmailAuthErrorCode("password_mismatch");
+      return;
+    }
+
+    setEmailAuthErrorCode(null);
+    setIsEmailSubmitting(true);
+
+    try {
+      const signupResponse = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name,
+          password,
+        }),
+      });
+      if (!signupResponse.ok && signupResponse.status !== 409) {
+        setIsEmailSubmitting(false);
+        window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
+        return;
+      }
+
+      const signInResponse = await signIn("email-password", {
+        email,
+        password,
+        callbackUrl,
+        redirect: false,
+      });
+      if (!signInResponse?.ok || signInResponse.error) {
+        setIsEmailSubmitting(false);
+        setLoginEmail(email);
+        setLoginPassword("");
+        handleSwitchEmailSheetMode("login");
+        window.alert(props.dictionary.profile.emailAuthFailedMessage);
+        return;
+      }
+
+      const nextUrl = typeof signInResponse.url === "string" && signInResponse.url
+        ? signInResponse.url
+        : callbackUrl;
+      window.location.assign(nextUrl);
+    } catch {
+      setIsEmailSubmitting(false);
+      window.alert(props.dictionary.profile.emailAuthFailedMessage);
+    }
+  }, [
+    callbackUrl,
+    handleSwitchEmailSheetMode,
+    isEmailSubmitting,
+    props.dictionary.profile.emailAuthFailedMessage,
+    props.dictionary.profile.emailAuthNotReadyMessage,
+    signupEmail,
+    signupName,
+    signupPassword,
+    signupPasswordConfirm,
+  ]);
+
+  const handleEmailForgotPasswordSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isEmailSubmitting) return;
+
+    const email = forgotPasswordEmail.trim().toLowerCase();
+    if (!email) {
+      setEmailAuthErrorCode("required");
+      return;
+    }
+    if (!isValidEmailAddress(email)) {
+      setEmailAuthErrorCode("invalid_email");
+      return;
+    }
+
+    setEmailAuthErrorCode(null);
+    setIsEmailSubmitting(true);
+
+    try {
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          locale: props.locale,
+        }),
+      });
+      setIsEmailSubmitting(false);
+      if (!response.ok) {
+        window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
+        return;
+      }
+
+      setLoginEmail(email);
+      setForgotPasswordEmail("");
+      window.alert(props.dictionary.profile.emailResetRequestedMessage);
+      handleSwitchEmailSheetMode("login");
+    } catch {
+      setIsEmailSubmitting(false);
+      window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
+    }
+  }, [
+    forgotPasswordEmail,
+    handleSwitchEmailSheetMode,
+    isEmailSubmitting,
+    props.dictionary.profile.emailAuthNotReadyMessage,
+    props.dictionary.profile.emailResetRequestedMessage,
+    props.locale,
+  ]);
+
+  const handleAgreeAndStart = useCallback(() => {
+    if (!selectedProvider) return;
+    if (!hasAgreedAllRequiredTerms) return;
+    if (selectedProvider === "email") {
+      handleOpenEmailSheet();
+      return;
+    }
+    handleSocialSignIn(selectedProvider);
+  }, [
+    handleOpenEmailSheet,
+    handleSocialSignIn,
+    hasAgreedAllRequiredTerms,
+    selectedProvider,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearNativeAuthPoller();
+      clearNativeAuthTimeout();
+      clearLegalSheetCloseTimer();
+      clearEmailSheetCloseTimer();
+      pendingNativeRequestIdRef.current = null;
+    };
+  }, [
+    clearEmailSheetCloseTimer,
+    clearLegalSheetCloseTimer,
+    clearNativeAuthPoller,
+    clearNativeAuthTimeout,
+  ]);
+
+  const handleSignOut = useCallback(() => {
+    if (isDeletingAccount) return;
+    void signOut({ callbackUrl: signedOutCallbackUrl });
+  }, [isDeletingAccount, signedOutCallbackUrl]);
+
+  const handleDeleteAccount = useCallback(async () => {
+    if (isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    try {
+      const response = await fetch("/api/account/delete", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error("account_delete_failed");
+      }
+      await signOut({ callbackUrl: signedOutCallbackUrl });
+    } catch {
+      window.alert(props.dictionary.profile.deleteAccountFailed);
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  }, [
+    isDeletingAccount,
+    props.dictionary.profile.deleteAccountFailed,
+    signedOutCallbackUrl,
+  ]);
+
+  // Keep loading and unauthenticated states within one stable layout.
+  // The panel always stays mounted and only its inner content changes to avoid pop-in.
+  const shouldShowAuthGate =
+    REQUIRE_AUTH_FOR_TRANSLATOR &&
+    (status === "loading" || status !== "authenticated");
+  if (shouldShowAuthGate) {
+    const isLoading = status === "loading";
+    const disabled = isSigningIn || isLoading;
+    const emailSheetDisabled = isEmailSubmitting || isLoading;
+
+    return (
+      // 1) Use a full-background gradient so the outer edges never flash white.
+      <main
+        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
+        style={{ background: "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)" }}
+      >
+        <style>{`@keyframes fade-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+          @keyframes legal-overlay-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+          @keyframes legal-overlay-out {
+            from { opacity: 1; }
+            to   { opacity: 0; }
+          }
+          @keyframes legal-sheet-in {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+          }
+          @keyframes legal-sheet-out {
+            from { transform: translateY(0); }
+            to   { transform: translateY(100%); }
+          }
+          @keyframes email-overlay-in {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+          @keyframes email-overlay-out {
+            from { opacity: 1; }
+            to   { opacity: 0; }
+          }
+          @keyframes email-sheet-in {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+          }
+          @keyframes email-sheet-out {
+            from { transform: translateY(0); }
+            to   { transform: translateY(100%); }
+          }`}</style>
+
+        {/* Screen-reader loading status announcement */}
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {isLoading || signingInProvider !== null
+            ? props.dictionary.profile.loginLoading
+            : ""}
+        </div>
+
+        {/* Top Mingle text logo area */}
+        <div className="flex flex-1 items-center justify-center">
+          <span className="text-[2.8rem] font-extrabold leading-[1.08] text-[#2D2A1E]">
+            Mingle
+          </span>
+        </div>
+
+        {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
+        <section
+          aria-busy={isLoading || disabled}
+          className="rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4"
+        >
+          {isLoading ? (
+            /* Loading state: spinner only */
+            <div className="flex items-center justify-center gap-3 py-3 text-sm text-white/60">
+              <Loader2 size={18} className="animate-spin" aria-hidden />
+              <span>{props.dictionary.profile.loginLoading}</span>
+            </div>
+          ) : (
+            /* Sliding area for buttons and legal-agreement content */
+            <div
+              className="overflow-hidden"
+              style={{ animation: "fade-in 0.25s ease both" }}
+            >
+              <div
+                className={`flex w-[200%] transition-transform duration-300 ease-out ${
+                  authPanelStep === "terms" ? "-translate-x-1/2" : "translate-x-0"
+                }`}
+              >
+                <div className="w-1/2 shrink-0">
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      aria-label={
+                        signingInProvider === "apple"
+                          ? props.dictionary.profile.loginLoading
+                          : props.dictionary.profile.loginApple
+                      }
+                      onClick={() => handleProviderSelect("apple")}
+                      disabled={!props.appleOAuthEnabled || disabled}
+                      className="relative inline-flex w-full items-center justify-center rounded-2xl bg-black py-[0.92rem] text-[0.95rem] font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="absolute left-5">
+                        <AppleMark />
+                      </span>
+                      {props.dictionary.profile.loginApple}
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-label={
+                        signingInProvider === "google"
+                          ? props.dictionary.profile.loginLoading
+                          : props.dictionary.profile.loginGoogle
+                      }
+                      onClick={() => handleProviderSelect("google")}
+                      disabled={!props.googleOAuthEnabled || disabled}
+                      className="relative inline-flex w-full items-center justify-center rounded-2xl bg-white py-[0.92rem] text-[0.95rem] font-semibold text-slate-800 transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="absolute left-5">
+                        <GoogleMark />
+                      </span>
+                      {props.dictionary.profile.loginGoogle}
+                    </button>
+
+                    <button
+                      type="button"
+                      aria-label={props.dictionary.profile.loginEmail}
+                      onClick={() => handleProviderSelect("email")}
+                      disabled={disabled}
+                      className="relative inline-flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/10 py-[0.92rem] text-[0.95rem] font-semibold text-white transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="absolute left-5">
+                        <Mail className="h-5 w-5" aria-hidden />
+                      </span>
+                      {props.dictionary.profile.loginEmail}
+                    </button>
+
+                    {!props.appleOAuthEnabled ? (
+                      <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
+                        {props.dictionary.profile.appleNotConfigured}
+                      </p>
+                    ) : null}
+                    {!props.googleOAuthEnabled ? (
+                      <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-300">
+                        {props.dictionary.profile.googleNotConfigured}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="w-1/2 shrink-0 pl-4">
+                  <div className="text-white">
+                    <h2 className="text-[1.22rem] font-semibold leading-tight">
+                      {props.dictionary.profile.serviceTermsTitle}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={handleAgreeAllRequiredTerms}
+                      disabled={disabled}
+                      className="mt-4 flex h-10 w-full items-center gap-2.5 rounded-xl bg-white/8 px-3.5 text-left text-[0.9rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span
+                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.62rem] ${
+                          hasAgreedAllRequiredTerms
+                            ? "border-rose-400 bg-rose-500 text-white"
+                            : "border-white/25 text-transparent"
+                        }`}
+                      >
+                        ✓
+                      </span>
+                      <span className="inline-flex h-full items-center leading-none">
+                        {props.dictionary.profile.agreeToAll}
+                      </span>
+                    </button>
+
+                    <div className="mt-1.5 space-y-0.5">
+                      <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
+                        <input
+                          type="checkbox"
+                          checked={agreedPrivacy}
+                          onChange={(event) => setAgreedPrivacy(event.target.checked)}
+                          disabled={disabled}
+                          className="h-4 w-4 accent-rose-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLegalSheet("privacy")}
+                          className="flex-1 text-left underline underline-offset-4"
+                        >
+                          {props.dictionary.profile.privacyPolicyRequired}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
+                        <input
+                          type="checkbox"
+                          checked={agreedTerms}
+                          onChange={(event) => setAgreedTerms(event.target.checked)}
+                          disabled={disabled}
+                          className="h-4 w-4 accent-rose-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLegalSheet("terms")}
+                          className="flex-1 text-left underline underline-offset-4"
+                        >
+                          {props.dictionary.profile.termsOfUseRequired}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAgreeAndStart}
+                      disabled={!selectedProvider || !hasAgreedAllRequiredTerms || disabled}
+                      className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-xl bg-white/20 px-3 text-[0.96rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/45"
+                    >
+                      {isSigningIn ? (
+                        <Loader2 size={18} className="animate-spin" aria-hidden />
+                      ) : (
+                        <span className="inline-flex h-full items-center leading-none">
+                          {props.dictionary.profile.agreeAndContinue}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBackToProviderSelect}
+                      disabled={disabled}
+                      className="mt-3 inline-flex w-full items-center justify-center py-1 text-center text-[0.9rem] text-white/70 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {props.dictionary.profile.signInWithAnotherMethod}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+        {legalSheetKind ? (
+          <div
+            className="absolute inset-0 z-40 flex items-end bg-black/55"
+            style={{
+              animation: isLegalSheetClosing
+                ? "legal-overlay-out 0.22s ease both"
+                : "legal-overlay-in 0.2s ease both",
+            }}
+            onClick={handleCloseLegalSheet}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={legalSheetTitle}
+              onClick={(event) => event.stopPropagation()}
+              className="flex h-[75vh] max-h-[75vh] w-full flex-col overflow-hidden rounded-t-[1.1rem] bg-[#111214] pb-[env(safe-area-inset-bottom)]"
+              style={{
+                animation: isLegalSheetClosing
+                  ? "legal-sheet-out 0.24s cubic-bezier(0.4, 0, 0.2, 1) both"
+                  : "legal-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both",
+              }}
+            >
+              <div className="relative flex items-center justify-center border-b border-white/10 px-4 py-4">
+                <button
+                  type="button"
+                  onClick={handleCloseLegalSheet}
+                  aria-label={props.dictionary.profile.closeLegalSheet}
+                  className="absolute left-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/90 transition hover:bg-white/20"
+                >
+                  <X size={24} strokeWidth={2.35} />
+                </button>
+                <p className="text-[0.9rem] font-semibold text-white/90">
+                  {legalSheetTitle}
+                </p>
+              </div>
+              <iframe
+                title={legalSheetTitle}
+                src={legalSheetUrl}
+                className="min-h-0 w-full flex-1 bg-white"
+              />
+            </section>
+          </div>
+        ) : null}
+        {isEmailSheetOpen ? (
+          <div
+            className="absolute inset-0 z-50 flex items-end bg-black/55"
+            style={{
+              animation: isEmailSheetClosing
+                ? "email-overlay-out 0.22s ease both"
+                : "email-overlay-in 0.2s ease both",
+            }}
+            onClick={handleCloseEmailSheet}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={props.dictionary.profile.loginEmail}
+              onClick={(event) => event.stopPropagation()}
+              className="max-h-[88vh] w-full overflow-hidden rounded-t-[1.15rem] bg-white text-slate-900 shadow-2xl"
+              style={{
+                animation: isEmailSheetClosing
+                  ? "email-sheet-out 0.24s cubic-bezier(0.4, 0, 0.2, 1) both"
+                  : "email-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both",
+              }}
+            >
+              <div className="overflow-hidden">
+                <div
+                  className="flex w-[300%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  style={{ transform: `translateX(-${(emailSheetSlideIndex * 100) / 3}%)` }}
+                >
+                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                    <div className="relative">
+                      <h2 className="text-[2rem] font-bold leading-tight">
+                        {props.dictionary.profile.emailAuthLoginTitle}
+                      </h2>
+                      <p className="mt-2 text-[1.1rem] text-slate-500">
+                        {props.dictionary.profile.emailAuthLoginSubtitle}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleCloseEmailSheet}
+                        disabled={emailSheetDisabled}
+                        aria-label={props.dictionary.profile.closeEmailAuthSheet}
+                        className="absolute -right-1 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <X size={26} strokeWidth={2.2} />
+                      </button>
+                    </div>
+
+                    <form className="mt-6" onSubmit={handleEmailSignInSubmit}>
+                      <label className="text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.emailFieldLabel}
+                      </label>
+                      <input
+                        value={loginEmail}
+                        onChange={(event) => {
+                          setLoginEmail(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="email"
+                        inputMode="email"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.emailFieldPlaceholder}
+                      />
+
+                      <div className="mt-5 flex items-center justify-between gap-3">
+                        <label className="text-[0.82rem] font-semibold text-slate-800">
+                          {props.dictionary.profile.passwordFieldLabel}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchEmailSheetMode("forgot")}
+                          disabled={emailSheetDisabled}
+                          className="text-[0.82rem] font-medium text-slate-500 underline underline-offset-4 transition hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {props.dictionary.profile.emailForgotPasswordLink}
+                        </button>
+                      </div>
+                      <input
+                        value={loginPassword}
+                        onChange={(event) => {
+                          setLoginPassword(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="current-password"
+                        type="password"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.passwordFieldPlaceholder}
+                      />
+
+                      {emailAuthErrorCode ? (
+                        <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
+                      ) : null}
+
+                      <button
+                        type="submit"
+                        disabled={emailSheetDisabled}
+                        className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {isEmailSubmitting ? (
+                          <Loader2 size={18} className="animate-spin" aria-hidden />
+                        ) : (
+                          props.dictionary.profile.emailSignInAction
+                        )}
+                      </button>
+
+                      <div className="mt-6 flex items-center gap-3 text-[0.9rem] text-slate-500">
+                        <span className="h-px flex-1 bg-slate-200" />
+                        <span>{props.dictionary.profile.orLabel}</span>
+                        <span className="h-px flex-1 bg-slate-200" />
+                      </div>
+
+                      <p className="mt-5 text-center text-[1rem] text-slate-500">
+                        {props.dictionary.profile.emailNoAccountPrompt}{" "}
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchEmailSheetMode("signup")}
+                          disabled={emailSheetDisabled}
+                          className="font-semibold text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {props.dictionary.profile.emailCreateAccountLink}
+                        </button>
+                      </p>
+                    </form>
+                  </div>
+
+                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                    <div className="relative">
+                      <h2 className="text-[2rem] font-bold leading-tight">
+                        {props.dictionary.profile.emailAuthSignupTitle}
+                      </h2>
+                      <p className="mt-2 text-[1.1rem] text-slate-500">
+                        {props.dictionary.profile.emailAuthSignupSubtitle}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleCloseEmailSheet}
+                        disabled={emailSheetDisabled}
+                        aria-label={props.dictionary.profile.closeEmailAuthSheet}
+                        className="absolute -right-1 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <X size={26} strokeWidth={2.2} />
+                      </button>
+                    </div>
+
+                    <form className="mt-6" onSubmit={handleEmailSignUpSubmit}>
+                      <label className="text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.emailFieldLabel}
+                      </label>
+                      <input
+                        value={signupEmail}
+                        onChange={(event) => {
+                          setSignupEmail(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="email"
+                        inputMode="email"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.emailFieldPlaceholder}
+                      />
+
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.nameFieldLabel}
+                      </label>
+                      <input
+                        value={signupName}
+                        onChange={(event) => {
+                          setSignupName(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="name"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.nameFieldPlaceholder}
+                      />
+
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.passwordFieldLabel}
+                      </label>
+                      <input
+                        value={signupPassword}
+                        onChange={(event) => {
+                          setSignupPassword(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="new-password"
+                        type="password"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.passwordFieldPlaceholder}
+                      />
+
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.passwordConfirmFieldLabel}
+                      </label>
+                      <input
+                        value={signupPasswordConfirm}
+                        onChange={(event) => {
+                          setSignupPasswordConfirm(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="new-password"
+                        type="password"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.passwordConfirmFieldPlaceholder}
+                      />
+
+                      {emailAuthErrorCode ? (
+                        <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
+                      ) : null}
+
+                      <button
+                        type="submit"
+                        disabled={emailSheetDisabled}
+                        className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {isEmailSubmitting ? (
+                          <Loader2 size={18} className="animate-spin" aria-hidden />
+                        ) : (
+                          props.dictionary.profile.emailSignUpAction
+                        )}
+                      </button>
+
+                      <div className="mt-6 flex items-center gap-3 text-[0.9rem] text-slate-500">
+                        <span className="h-px flex-1 bg-slate-200" />
+                        <span>{props.dictionary.profile.orLabel}</span>
+                        <span className="h-px flex-1 bg-slate-200" />
+                      </div>
+
+                      <p className="mt-5 text-center text-[1rem] text-slate-500">
+                        {props.dictionary.profile.emailAlreadyAccountPrompt}{" "}
+                        <button
+                          type="button"
+                          onClick={() => handleSwitchEmailSheetMode("login")}
+                          disabled={emailSheetDisabled}
+                          className="font-semibold text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {props.dictionary.profile.emailBackToLoginLink}
+                        </button>
+                      </p>
+                    </form>
+                  </div>
+
+                  <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
+                    <div className="relative flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchEmailSheetMode("login")}
+                        disabled={emailSheetDisabled}
+                        aria-label={props.dictionary.profile.emailBackLabel}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ArrowLeft size={24} strokeWidth={2.2} />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="text-[2rem] font-bold leading-tight">
+                          {props.dictionary.profile.emailAuthForgotTitle}
+                        </h2>
+                        <p className="mt-2 text-[1.1rem] text-slate-500">
+                          {props.dictionary.profile.emailAuthForgotSubtitle}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCloseEmailSheet}
+                        disabled={emailSheetDisabled}
+                        aria-label={props.dictionary.profile.closeEmailAuthSheet}
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <X size={26} strokeWidth={2.2} />
+                      </button>
+                    </div>
+
+                    <form className="mt-6" onSubmit={handleEmailForgotPasswordSubmit}>
+                      <label className="text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.emailFieldLabel}
+                      </label>
+                      <input
+                        value={forgotPasswordEmail}
+                        onChange={(event) => {
+                          setForgotPasswordEmail(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="email"
+                        inputMode="email"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.emailFieldPlaceholder}
+                      />
+
+                      {emailAuthErrorCode ? (
+                        <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
+                      ) : null}
+
+                      <button
+                        type="submit"
+                        disabled={emailSheetDisabled}
+                        className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {isEmailSubmitting ? (
+                          <Loader2 size={18} className="animate-spin" aria-hidden />
+                        ) : (
+                          props.dictionary.profile.emailSendResetAction
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchEmailSheetMode("login")}
+                        disabled={emailSheetDisabled}
+                        className="mt-5 inline-flex w-full items-center justify-center text-[1rem] font-medium text-slate-600 underline underline-offset-4 transition hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {props.dictionary.profile.emailBackToLoginLink}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
+      </main>
+    );
+  }
+
+  return (
+    <main className="h-full min-h-0 w-full overflow-hidden bg-white text-slate-900">
+      {isLiveDemoMounted ? (
+        <LivePhoneDemoLegacy
+          enableAutoTTS
+          uiLocale={props.locale}
+          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
+          usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
+          usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
+          connectingLabel={props.dictionary.demo.connecting}
+          connectionFailedLabel={props.dictionary.demo.connectionFailed}
+          muteTtsLabel={props.dictionary.demo.muteTts}
+          unmuteTtsLabel={props.dictionary.demo.unmuteTts}
+          textSizeLabel={props.dictionary.demo.textSizeLabel ?? "Text Size"}
+          silenceFinalizeLabel={props.dictionary.demo.silenceFinalizeLabel ?? "Silence Finalize"}
+          translationModelLabel={props.dictionary.demo.translationModelLabel ?? "Translation Model"}
+          adBannerPositionLabel={props.dictionary.demo.adBannerPositionLabel ?? "Ad Position"}
+          adBannerPositionTopLabel={props.dictionary.demo.adBannerPositionTopLabel ?? "Top"}
+          adBannerPositionBottomLabel={props.dictionary.demo.adBannerPositionBottomLabel ?? "Bottom"}
+          silenceFinalizeLockedMessage={silenceSliderUpgradeCopy.message}
+          silenceFinalizeLockedButtonLabel={silenceSliderUpgradeCopy.buttonLabel}
+          menuLabel={props.dictionary.profile.menuLabel}
+          logoutLabel={props.dictionary.profile.logout}
+          deleteAccountLabel={props.dictionary.profile.deleteAccount}
+          deleteAccountConfirmMessage={props.dictionary.profile.deleteAccountConfirm}
+          deleteAccountConfirmLabel={props.dictionary.profile.deleteAccountConfirmAction}
+          deleteAccountCancelLabel={props.dictionary.profile.deleteAccountCancel}
+          onLogout={handleSignOut}
+          onDeleteAccount={handleDeleteAccount}
+          defaultFeedbackEmail={typeof session?.user?.email === "string" ? session.user.email : ""}
+          isAuthActionPending={isDeletingAccount}
+          showMenuButton
+          showAccountActions={status === "authenticated"}
+        />
+      ) : (
+        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+          <Loader2 size={24} className="animate-spin" aria-hidden />
+        </div>
+      )}
+    </main>
+  );
+}

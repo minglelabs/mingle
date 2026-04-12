@@ -13,6 +13,8 @@ class NativeRuntimeConfigModule(
     "runtimeConfig" to hashMapOf(
       "webAppBaseUrl" to BuildConfig.MINGLE_WEB_APP_BASE_URL,
       "defaultWsUrl" to BuildConfig.MINGLE_DEFAULT_WS_URL,
+      "legacyWebAppBaseUrl" to BuildConfig.MINGLE_LEGACY_WEB_APP_BASE_URL,
+      "legacyDefaultWsUrl" to BuildConfig.MINGLE_LEGACY_DEFAULT_WS_URL,
       "apiNamespace" to BuildConfig.MINGLE_API_NAMESPACE,
       "clientVersion" to BuildConfig.MINGLE_CLIENT_VERSION,
       "clientBuild" to BuildConfig.MINGLE_CLIENT_BUILD,

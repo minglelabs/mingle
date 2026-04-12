@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
-import { useTranslation } from 'react-i18next'
+import { useTranslation } from '@/lib/i18n'
 
 // --- 슬롯머신 숫자 카운터 ---
 function SlotCounter({
