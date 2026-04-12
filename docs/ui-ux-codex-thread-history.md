@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck motion originally moved vertically, which conflicted with deck-reading expectations**
+  Problem: The first `mingle-xr/xr.html` template advanced slides with an up/down full-page translation. Even though arrow keys worked, the motion language felt closer to section scrolling than to a presentation deck, which made the format read less like a polished keynote-style relations asset.
+  Cause: The deck track was implemented as a vertical flex column with `translate3d` based on `window.innerHeight`, so every transition reinforced vertical page movement.
+  Fix: Switched the slide track to a horizontal row, changed each slide to a `100vw` panel, updated the transform math to use `window.innerWidth`, and normalized wheel navigation so either dominant scroll axis still drives the same previous/next controls while the animation moves left/right.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
