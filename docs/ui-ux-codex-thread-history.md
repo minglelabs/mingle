@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed another round of relative offset tuning**
+  Problem: After the previous pass, the three reference images were still not sitting on the intended diagonals, so the user specified a second round of per-image movements from the current positions.
+  Cause: The collage composition was being refined incrementally, and the remaining mismatch was about exact relative offsets rather than size or hierarchy.
+  Fix: Moved `JOIN GUILD` 10vw upward, dropped `JotMe` 10vw downward, and nudged `Utell AI` an additional 3vw to the right while keeping the rest of the stack intact.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed per-image position tuning from explicit screen-relative offsets**
   Problem: The collage still needed finer control after several visual passes, because the intended movement for each image was now being specified in exact screen-relative deltas rather than broad compositional feedback.
   Cause: The overall stack was close, but the final polish depended on moving each reference by precise `vw` offsets from its current top-left placement.
