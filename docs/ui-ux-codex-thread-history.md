@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck titles felt cramped once manual line breaks were introduced**
+  Problem: As more slide titles started using manual line breaks inside the `h1`, the headline lines sat too tightly on top of each other and looked visually compressed.
+  Cause: The deck used an aggressively tight headline line-height that worked for single-line titles but broke down when the presenter intentionally split titles across two lines.
+  Fix: Increased the title line-height to a visibly looser setting while keeping it distinctly tighter than body copy. The cover title was adjusted too so multi-line hero headlines follow the same rhythm.
+  Status: Resolved in-thread.
+
 - **XR presentation deck always snapped back to slide 1 on refresh**
   Problem: While editing or presenting deeper in the deck, a browser refresh always reopened the file on slide 1. That made iteration clumsy and broke continuity during rehearsal or live deck review.
   Cause: The deck tracked the active slide only in in-memory carousel state, with no URL representation of the current page.
