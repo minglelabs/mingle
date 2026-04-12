@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR target slide needed the exact user-picked product screenshot instead of a generic preview**
+  Problem: Even after simplifying the right side to one Voiceroom image, the slide was still using a generic official visual rather than the specific phone-framed screenshot the user wanted to present.
+  Cause: The earlier asset came from a public HelloTalk reference source and matched the product category, but not the exact image treatment the user selected for the deck.
+  Fix: Extracted the user-supplied screenshot from the current thread input, saved it as a local PNG asset, and updated the target-customer slide to render that exact image instead of the previous placeholder visual.
+  Status: Resolved in-thread.
+
 - **XR target slide felt busier than needed once both the logo and product preview were present**
   Problem: The HelloTalk target-customer slide started showing both a square app logo and a Voiceroom product image, which made the right side feel stacked and more decorative than presentational.
   Cause: The earlier iteration solved recognizability by adding more cues, but the user only needed a single clear Voiceroom reference rather than a brand-plus-product composition.
