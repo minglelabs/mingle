@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR second target-customer slide needed a denser visual cue than text alone**
+  Problem: Once the deck introduced global gaming Discord communities as a distinct target segment, the slide still read too abstractly because it had only a headline and no concrete visual texture.
+  Cause: The gaming-community concept spans creators, Discord growth, and AI voice tools, so a single plain label did not communicate the ecosystem quickly enough at presentation speed.
+  Fix: Added a dedicated right-side overlapping collage built from three user-provided reference images, and narrowed the text column on that slide only so the media cluster reads clearly without colliding with the title.
+  Status: Resolved in-thread.
+
 - **XR deck needed tighter kicker rhythm and explicit target-customer sequencing**
   Problem: The kicker labels still felt slightly too loose, and the target-customer section needed two more dedicated slides so the audience progression could unfold one segment at a time.
   Cause: The recent Korean kicker labels became longer than the original badge-style metadata, and the deck had only one target-customer page despite the presentation now naming multiple distinct entry markets.

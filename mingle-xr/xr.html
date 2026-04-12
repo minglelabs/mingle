@@ -99,6 +99,10 @@
         max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
       }
 
+      .slide-copy--with-wide-side-media {
+        max-width: min(48rem, calc(100% - clamp(340px, 38vw, 520px)));
+      }
+
       .slide-side-media {
         position: absolute;
         top: clamp(48px, 8vh, 108px);
@@ -109,6 +113,44 @@
       .slide-preview-image {
         width: clamp(232px, 23vw, 340px);
         display: block;
+      }
+
+      .slide-side-media--collage {
+        top: clamp(72px, 10vh, 128px);
+        right: clamp(36px, 4vw, 76px);
+        width: clamp(320px, 33vw, 500px);
+        height: clamp(280px, 31vw, 430px);
+      }
+
+      .slide-collage-image {
+        position: absolute;
+        display: block;
+        border-radius: 26px;
+        box-shadow: 0 24px 50px rgba(52, 43, 16, 0.16);
+      }
+
+      .slide-collage-image--jotme {
+        top: 0;
+        right: clamp(36px, 3vw, 64px);
+        width: clamp(220px, 22vw, 330px);
+        transform: rotate(-6deg);
+        z-index: 1;
+      }
+
+      .slide-collage-image--guild {
+        top: clamp(128px, 14vw, 182px);
+        right: 0;
+        width: clamp(250px, 25vw, 372px);
+        transform: rotate(4deg);
+        z-index: 2;
+      }
+
+      .slide-collage-image--utell {
+        top: clamp(58px, 7vw, 94px);
+        right: clamp(6px, 0.8vw, 16px);
+        width: clamp(106px, 10vw, 148px);
+        transform: rotate(8deg);
+        z-index: 3;
       }
 
       .slide-kicker {
@@ -198,12 +240,20 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-wide-side-media {
+          max-width: 100%;
+        }
+
         .slide-side-media {
           top: 20px;
           right: 28px;
         }
 
         .slide-preview-image {
+          display: none;
+        }
+
+        .slide-side-media--collage {
           display: none;
         }
       }
@@ -294,9 +344,26 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--with-wide-side-media">
               <p class="slide-kicker">타겟 고객 2</p>
               <h1 class="slide-title">두 번째는 글로벌 게임의<br/>디스코드 커뮤니티들입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--collage" aria-hidden="true">
+              <img
+                class="slide-collage-image slide-collage-image--jotme"
+                src="./assets/discord-target-jotme.png"
+                alt="JotMe update thumbnail"
+              />
+              <img
+                class="slide-collage-image slide-collage-image--guild"
+                src="./assets/discord-target-guild.png"
+                alt="Discord guild thumbnail"
+              />
+              <img
+                class="slide-collage-image slide-collage-image--utell"
+                src="./assets/discord-target-utell.png"
+                alt="Utell AI voice translator thumbnail"
+              />
             </div>
           </article>
         </section>
