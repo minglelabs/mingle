@@ -719,6 +719,14 @@
    Attempted fix: unify clearance/composer settling so the layout drops in one smooth pass.
    Status: resolved.
 
+### `2026-04-12-android-bottom-banner-safe-area` | UI/UX issues found
+
+1. **Thread-level UI/UX issue**
+   Problem: in-room transcript content on Android could still be covered by the bottom native banner even though the same bottom-banner path was correct on iOS and the top-banner path was correct on both platforms.
+   Root cause: the banner position itself was acceptable, but Android WebView still reported a smaller bottom inset to the web transcript than the banner effectively covered. RN added Android native bottom safe-area to the physical banner placement, while the web transcript only reserved the banner content height. That mismatch left the transcript under-padded only on Android bottom-banner rooms.
+   Attempted fix: keep the native banner placement unchanged, but report `banner height + Android native bottom safe-area` back to web content as the effective bottom inset. iOS continues to report just the banner content height.
+   Status: resolved.
+
 ## Feature Or Mention-Only Sessions
 
 ### `019c52c6-0c6b-7ba0-b8fd-a566d5a6f8b0` | UI/UX feature/polish request only
