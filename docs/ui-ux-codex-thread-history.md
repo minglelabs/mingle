@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR target slide screenshot still sat too far right and slightly low for the deck rhythm**
+  Problem: After switching to the exact user-selected Voiceroom screenshot, the image itself was correct, but its placement still felt too far toward the right edge and slightly lower than the intended presentation balance.
+  Cause: The existing side-media offsets were inherited from the earlier placeholder treatment and were not retuned after the screenshot changed to a taller, more visually dominant phone image.
+  Fix: Moved the HelloTalk screenshot further left and raised it higher on the page so the phone image sits closer to the deck's visual center without affecting the text block coordinates.
+  Status: Resolved in-thread.
+
 - **XR target slide needed the exact user-picked product screenshot instead of a generic preview**
   Problem: Even after simplifying the right side to one Voiceroom image, the slide was still using a generic official visual rather than the specific phone-framed screenshot the user wanted to present.
   Cause: The earlier asset came from a public HelloTalk reference source and matched the product category, but not the exact image treatment the user selected for the deck.
