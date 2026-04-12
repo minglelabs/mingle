@@ -69,7 +69,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   fr: {
     menuItemLabel: 'Supprimer la salle de conversation',
-    dialogTitle: 'Supprimer la salle de conversation',
+    dialogTitle: 'Supprimer',
     dialogMessage: 'Voulez-vous supprimer ?',
     cancelLabel: 'Annuler',
     confirmLabel: 'Supprimer',
@@ -79,7 +79,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   de: {
     menuItemLabel: 'Gesprächsraum löschen',
-    dialogTitle: 'Gesprächsraum löschen',
+    dialogTitle: 'Löschen',
     dialogMessage: 'Mochten Sie loschen?',
     cancelLabel: 'Abbrechen',
     confirmLabel: 'Loschen',
@@ -89,7 +89,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   es: {
     menuItemLabel: 'Eliminar sala de conversacion',
-    dialogTitle: 'Eliminar sala de conversacion',
+    dialogTitle: 'Eliminar',
     dialogMessage: '¿Desea eliminarla?',
     cancelLabel: 'Cancelar',
     confirmLabel: 'Eliminar',
@@ -99,7 +99,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   pt: {
     menuItemLabel: 'Excluir sala de conversa',
-    dialogTitle: 'Excluir sala de conversa',
+    dialogTitle: 'Excluir',
     dialogMessage: 'Deseja excluir?',
     cancelLabel: 'Cancelar',
     confirmLabel: 'Excluir',
@@ -109,7 +109,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   it: {
     menuItemLabel: 'Elimina la stanza della conversazione',
-    dialogTitle: 'Elimina la stanza della conversazione',
+    dialogTitle: 'Elimina',
     dialogMessage: 'Vuoi eliminarla?',
     cancelLabel: 'Annulla',
     confirmLabel: 'Elimina',
@@ -119,7 +119,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   ru: {
     menuItemLabel: 'Удалить комнату разговора',
-    dialogTitle: 'Удалить комнату разговора',
+    dialogTitle: 'Удалить',
     dialogMessage: 'Удалить?',
     cancelLabel: 'Отмена',
     confirmLabel: 'Удалить',
@@ -129,7 +129,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   ar: {
     menuItemLabel: 'حذف غرفة المحادثة',
-    dialogTitle: 'حذف غرفة المحادثة',
+    dialogTitle: 'حذف',
     dialogMessage: 'هل تريد الحذف؟',
     cancelLabel: 'إلغاء',
     confirmLabel: 'حذف',
@@ -139,7 +139,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   hi: {
     menuItemLabel: 'बातचीत कक्ष हटाएं',
-    dialogTitle: 'बातचीत कक्ष हटाएं',
+    dialogTitle: 'हटाएं',
     dialogMessage: 'क्या आप हटाना चाहते हैं?',
     cancelLabel: 'रद्द करें',
     confirmLabel: 'हटाएं',
@@ -159,7 +159,7 @@ const DELETE_CONVERSATION_COPY_BY_LOCALE = {
   },
   vi: {
     menuItemLabel: 'Xoa phong tro chuyen',
-    dialogTitle: 'Xoa phong tro chuyen',
+    dialogTitle: 'Xoa',
     dialogMessage: 'Ban co muon xoa khong?',
     cancelLabel: 'Huy',
     confirmLabel: 'Xoa',
