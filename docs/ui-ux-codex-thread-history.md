@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck needed stronger visual weight for the optional kicker label**
+  Problem: After the optional slide label was added, it was still too quiet relative to the title. The semantic cue existed, but it did not read strongly enough as a slide attribute at presentation distance.
+  Cause: The kicker used a small subdued text treatment with no structural emphasis beyond spacing.
+  Fix: Increased the kicker size and weight and added a Mingle key-color underline so the label reads as an intentional metadata layer without touching the manually edited slide titles or body copy.
+  Status: Resolved in-thread.
+
 - **XR presentation deck needed an optional slide attribute label above selected titles**
   Problem: Some slides needed a small semantic marker above the main title, such as labeling slide 2 as `문제`, while most slides should remain untouched. Without that slot, the meaning either had to be buried in the title itself or dropped entirely.
   Cause: The deck grammar only had title and body, with no lightweight presentation layer for selective slide metadata.
