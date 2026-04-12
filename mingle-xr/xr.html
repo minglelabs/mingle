@@ -103,21 +103,11 @@
         position: absolute;
         top: clamp(92px, 13vh, 148px);
         right: clamp(40px, 6vw, 88px);
-        display: grid;
-        justify-items: end;
-        gap: 16px;
-      }
-
-      .slide-app-icon {
-        width: clamp(96px, 9vw, 132px);
-        height: clamp(96px, 9vw, 132px);
-        border-radius: 28%;
-        object-fit: cover;
+        display: block;
       }
 
       .slide-preview-image {
-        width: clamp(212px, 21vw, 304px);
-        border-radius: 26px;
+        width: clamp(232px, 23vw, 340px);
         display: block;
       }
 
@@ -211,12 +201,6 @@
         .slide-side-media {
           top: 20px;
           right: 28px;
-          gap: 12px;
-        }
-
-        .slide-app-icon {
-          width: 72px;
-          height: 72px;
         }
 
         .slide-preview-image {
@@ -291,11 +275,6 @@
               </p>
             </div>
             <div class="slide-side-media" aria-hidden="true">
-              <img
-                class="slide-app-icon"
-                src="./assets/hellotalk-icon.jpg"
-                alt="HelloTalk app icon"
-              />
               <img
                 class="slide-preview-image"
                 src="./assets/hellotalk-voiceroom.svg"
