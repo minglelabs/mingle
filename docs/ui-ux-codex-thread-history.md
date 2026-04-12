@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR cover title became too heavy after the hierarchy split**
+  Problem: The larger first-slide title gained enough scale, but its heavier weight made the cover feel denser than intended.
+  Cause: The hero title inherited an extra-bold weight in the hierarchy pass instead of only separating itself through size.
+  Fix: Kept the enlarged cover title size but restored its weight to the lighter title setting so the first page feels bigger without becoming visually too thick.
+  Status: Resolved in-thread.
+
 - **XR presentation deck needed title hierarchy between the cover slide and the rest**
   Problem: Once the main deck content was filled in, the first slide no longer stood apart strongly enough from the interior slides, while the body slides still felt too headline-heavy for sustained reading.
   Cause: A single title size and weight scale was being applied uniformly across the entire deck.
