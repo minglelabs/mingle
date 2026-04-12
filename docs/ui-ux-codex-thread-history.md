@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck initially carried too many decorative content blocks for a format-first draft**
+  Problem: The first shared `mingle-xr/xr.html` template included headers, counters, buttons, tag clusters, orbital visuals, and multi-card layouts. For a deck that was still at the format-definition stage, that made each slide feel overdesigned and distracted from the intended core structure.
+  Cause: The template was built like a polished showcase deck before the content model had been reduced, so presentation chrome grew faster than the actual slide grammar.
+  Fix: Rebuilt the shared XR deck into a minimal structure where each slide contains only two content elements: a title and a body. Navigation logic, horizontal motion, and looping behavior remain, but the visible slide system is now intentionally stripped down.
+  Status: Resolved in-thread.
+
 - **XR presentation deck motion originally moved vertically, which conflicted with deck-reading expectations**
   Problem: The first `mingle-xr/xr.html` template advanced slides with an up/down full-page translation. Even though arrow keys worked, the motion language felt closer to section scrolling than to a presentation deck, which made the format read less like a polished keynote-style relations asset.
   Cause: The deck track was implemented as a vertical flex column with `translate3d` based on `window.innerHeight`, so every transition reinforced vertical page movement.

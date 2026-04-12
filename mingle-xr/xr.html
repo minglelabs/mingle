@@ -7,16 +7,14 @@
     <style>
       :root {
         color-scheme: dark;
-        --page-bg: #07111a;
-        --panel-bg: rgba(7, 16, 27, 0.8);
-        --panel-border: rgba(255, 255, 255, 0.1);
-        --panel-shadow: 0 30px 90px rgba(0, 0, 0, 0.34);
-        --text-strong: #f5fbff;
-        --text-muted: rgba(245, 251, 255, 0.7);
-        --text-faint: rgba(245, 251, 255, 0.48);
+        --bg: #050b12;
+        --panel: #0b1420;
+        --line: rgba(255, 255, 255, 0.08);
+        --title: #f6fbff;
+        --body: rgba(246, 251, 255, 0.74);
         --accent: #7fe7ff;
-        --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
-        --slide-duration: 880ms;
+        --slide-duration: 820ms;
+        --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       * {
@@ -30,28 +28,11 @@
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(circle at 15% 18%, rgba(104, 231, 255, 0.18), transparent 26%),
-          radial-gradient(circle at 84% 12%, rgba(119, 255, 194, 0.12), transparent 24%),
-          radial-gradient(circle at 48% 92%, rgba(87, 131, 255, 0.16), transparent 28%),
-          linear-gradient(150deg, #02060b 0%, #081420 48%, #040a11 100%);
-        color: var(--text-strong);
+          radial-gradient(circle at 18% 18%, rgba(127, 231, 255, 0.15), transparent 24%),
+          radial-gradient(circle at 82% 86%, rgba(127, 231, 255, 0.1), transparent 28%),
+          linear-gradient(160deg, #02060a 0%, #07111b 48%, #03070d 100%);
+        color: var(--title);
         font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
-      }
-
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background-image:
-          linear-gradient(rgba(255, 255, 255, 0.032) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.032) 1px, transparent 1px);
-        background-size: 72px 72px;
-        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.88), transparent 94%);
-        pointer-events: none;
-      }
-
-      button {
-        font: inherit;
       }
 
       .deck {
@@ -59,7 +40,6 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
-        isolation: isolate;
       }
 
       .track {
@@ -68,457 +48,76 @@
         display: flex;
         flex-direction: row;
         will-change: transform;
-        transition: transform var(--slide-duration) var(--ease-smooth);
+        transition: transform var(--slide-duration) var(--slide-ease);
       }
 
       .slide {
-        position: relative;
         flex: 0 0 100vw;
         width: 100vw;
         height: 100vh;
-        padding: clamp(24px, 3vw, 48px);
+        padding: clamp(20px, 3vw, 40px);
       }
 
       .slide-shell {
-        position: relative;
         width: 100%;
         height: 100%;
-        padding: clamp(26px, 3vw, 48px);
         display: grid;
-        grid-template-rows: auto 1fr auto;
-        gap: clamp(22px, 2vw, 32px);
-        overflow: hidden;
-        border: 1px solid var(--panel-border);
-        border-radius: 34px;
+        align-items: center;
+        padding: clamp(32px, 6vw, 88px);
+        border: 1px solid var(--line);
+        border-radius: 32px;
         background:
-          linear-gradient(140deg, rgba(10, 20, 32, 0.94), rgba(7, 14, 24, 0.8)),
-          var(--slide-tint, transparent);
-        box-shadow: var(--panel-shadow);
-        backdrop-filter: blur(18px);
-        transform: scale(0.965);
-        opacity: 0.72;
-        transition:
-          transform var(--slide-duration) var(--ease-smooth),
-          opacity var(--slide-duration) ease,
-          box-shadow var(--slide-duration) var(--ease-smooth);
+          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+          var(--panel);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
       }
 
-      .slide-shell::before,
-      .slide-shell::after {
-        content: "";
-        position: absolute;
-        pointer-events: none;
+      .slide-copy {
+        display: grid;
+        gap: clamp(18px, 2vw, 28px);
+        max-width: min(980px, 100%);
       }
 
-      .slide-shell::before {
-        inset: -18% -10% 48% 44%;
-        background: radial-gradient(circle, var(--accent-glow, rgba(127, 231, 255, 0.18)), transparent 72%);
-        filter: blur(18px);
-      }
-
-      .slide-shell::after {
-        inset: 58% 62% -16% -12%;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.07), transparent 74%);
-        filter: blur(24px);
-      }
-
-      .slide.is-active .slide-shell {
-        transform: scale(1);
-        opacity: 1;
-        box-shadow: 0 32px 100px rgba(0, 0, 0, 0.42);
-      }
-
-      .slide-header,
-      .slide-footer {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.82rem;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--text-faint);
-      }
-
-      .eyebrow::before {
-        content: "";
-        width: 32px;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, var(--accent), transparent);
-      }
-
-      .slide-id {
-        padding: 10px 14px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        font-size: 0.8rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--text-faint);
-        background: rgba(255, 255, 255, 0.03);
+      .slide-title {
+        margin: 0;
+        font-size: clamp(3.2rem, 6.4vw, 7rem);
+        line-height: 0.94;
+        letter-spacing: -0.05em;
       }
 
       .slide-body {
-        position: relative;
-        z-index: 1;
-        display: grid;
-        gap: clamp(24px, 2vw, 34px);
-        min-height: 0;
-      }
-
-      .cover-layout {
-        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-        align-items: center;
-      }
-
-      .section-layout {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        align-items: stretch;
-      }
-
-      .story-layout {
-        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-        align-items: stretch;
-      }
-
-      .closing-layout {
-        align-items: center;
-        justify-items: center;
-        text-align: center;
-      }
-
-      .headline {
         margin: 0;
-        max-width: 9ch;
-        font-size: clamp(3.6rem, 7vw, 7.4rem);
-        line-height: 0.92;
-        letter-spacing: -0.05em;
-      }
-
-      .subhead {
-        margin: 0;
-        max-width: 58ch;
-        font-size: clamp(1rem, 1.4vw, 1.3rem);
+        max-width: 44rem;
+        font-size: clamp(1.12rem, 1.8vw, 1.7rem);
         line-height: 1.65;
-        color: var(--text-muted);
+        color: var(--body);
       }
 
-      .cover-copy {
-        display: grid;
-        gap: 18px;
-        align-content: center;
+      .slide.is-active .slide-shell {
+        border-color: rgba(127, 231, 255, 0.22);
       }
 
-      .tag-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-
-      .tag {
-        padding: 10px 14px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        color: var(--text-muted);
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .orbital-panel,
-      .detail-card,
-      .story-card,
-      .closing-card {
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 28px;
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .orbital-panel {
-        min-height: 100%;
-        padding: 30px;
-        display: grid;
-        place-items: center;
-      }
-
-      .orbital-core {
-        position: relative;
-        width: min(100%, 380px);
-        aspect-ratio: 1;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        background:
-          radial-gradient(circle at center, rgba(127, 231, 255, 0.14), transparent 48%),
-          rgba(255, 255, 255, 0.02);
-      }
-
-      .orbital-core::before,
-      .orbital-core::after {
-        content: "";
-        position: absolute;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 50%;
-        inset: 12%;
-      }
-
-      .orbital-core::after {
-        inset: 26%;
-      }
-
-      .orbital-center {
-        width: 34%;
-        aspect-ratio: 1;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        background: linear-gradient(145deg, rgba(127, 231, 255, 0.2), rgba(127, 231, 255, 0.05));
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        font-size: clamp(1.2rem, 1.8vw, 1.5rem);
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-      }
-
-      .orbit-label {
-        position: absolute;
-        padding: 10px 14px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 999px;
-        background: rgba(8, 15, 24, 0.84);
-        font-size: 0.9rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-muted);
-      }
-
-      .orbit-label.ir {
-        top: 14%;
-        right: 10%;
-      }
-
-      .orbit-label.pr {
-        bottom: 14%;
-        right: 16%;
-      }
-
-      .orbit-label.hr {
-        bottom: 24%;
-        left: 8%;
-      }
-
-      .detail-card,
-      .story-card {
-        padding: 28px;
-        display: grid;
-        gap: 18px;
-      }
-
-      .detail-card h2,
-      .story-card h2,
-      .closing-card h2 {
-        margin: 0;
-        font-size: clamp(1.4rem, 2vw, 1.9rem);
-        letter-spacing: -0.03em;
-      }
-
-      .detail-card p,
-      .story-card p,
-      .closing-card p {
-        margin: 0;
-        color: var(--text-muted);
-        line-height: 1.65;
-      }
-
-      .detail-list,
-      .story-list {
-        display: grid;
-        gap: 12px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .detail-list li,
-      .story-list li {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 12px;
-        align-items: start;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        color: var(--text-muted);
-      }
-
-      .detail-list li strong,
-      .story-list li strong {
-        color: var(--text-strong);
-      }
-
-      .story-metric-row {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .metric {
-        padding: 18px;
-        border-radius: 22px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-      }
-
-      .metric strong {
-        display: block;
-        font-size: clamp(1.4rem, 2vw, 2.2rem);
-        letter-spacing: -0.05em;
-      }
-
-      .metric span {
-        display: block;
-        margin-top: 8px;
-        color: var(--text-faint);
-        font-size: 0.92rem;
-      }
-
-      .story-card.secondary {
-        align-content: center;
-      }
-
-      .closing-card {
-        width: min(860px, 100%);
-        padding: clamp(32px, 4vw, 56px);
-        display: grid;
-        gap: 18px;
-        background:
-          radial-gradient(circle at top, rgba(127, 231, 255, 0.12), transparent 58%),
-          rgba(255, 255, 255, 0.04);
-      }
-
-      .closing-mark {
-        font-size: 0.88rem;
-        letter-spacing: 0.2em;
-        text-transform: uppercase;
-        color: var(--text-faint);
-      }
-
-      .closing-title {
-        margin: 0;
-        font-size: clamp(2.8rem, 5.4vw, 5.5rem);
-        line-height: 0.96;
-        letter-spacing: -0.05em;
-      }
-
-      .footer-hint {
-        color: var(--text-faint);
-        font-size: 0.92rem;
-      }
-
-      .deck-ui {
-        position: fixed;
-        right: clamp(20px, 2.6vw, 40px);
-        bottom: clamp(20px, 2.6vw, 40px);
-        z-index: 5;
-        display: grid;
-        gap: 12px;
-        justify-items: end;
-      }
-
-      .counter {
-        padding: 12px 16px;
-        border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(6, 11, 19, 0.76);
-        color: var(--text-muted);
-        font-size: 0.9rem;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        backdrop-filter: blur(14px);
-      }
-
-      .control-row {
-        display: flex;
-        gap: 10px;
-      }
-
-      .control-button {
-        min-width: 96px;
-        padding: 12px 18px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 999px;
-        background: rgba(6, 11, 19, 0.76);
-        color: var(--text-strong);
-        cursor: pointer;
-        transition:
-          transform 220ms ease,
-          background 220ms ease,
-          border-color 220ms ease;
-        backdrop-filter: blur(14px);
-      }
-
-      .control-button:hover {
-        transform: translateY(-1px);
-        background: rgba(12, 21, 34, 0.92);
-        border-color: rgba(127, 231, 255, 0.34);
-      }
-
-      .control-button:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 2px;
-      }
-
-      @media (max-width: 980px) {
+      @media (max-width: 900px) {
         .slide {
-          padding: 16px;
+          padding: 14px;
         }
 
         .slide-shell {
-          border-radius: 26px;
+          padding: 28px;
+          border-radius: 24px;
         }
 
-        .cover-layout,
-        .section-layout,
-        .story-layout {
-          grid-template-columns: 1fr;
+        .slide-title {
+          font-size: clamp(2.4rem, 12vw, 4rem);
         }
 
-        .headline,
-        .closing-title {
-          max-width: none;
-        }
-
-        .story-metric-row {
-          grid-template-columns: 1fr;
-        }
-
-        .deck-ui {
-          right: 16px;
-          left: 16px;
-          justify-items: stretch;
-        }
-
-        .counter,
-        .control-row {
-          justify-content: space-between;
-        }
-
-        .control-button {
-          flex: 1;
+        .slide-body {
+          font-size: clamp(1rem, 4.4vw, 1.2rem);
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .track,
-        .slide-shell,
-        .control-button {
+        .track {
           transition: none;
         }
       }
@@ -527,186 +126,59 @@
   <body>
     <main class="deck" aria-label="External relations presentation deck">
       <div class="track" id="deck-track">
-        <section
-          class="slide"
-          data-accent="#7fe7ff"
-          style="--accent-glow: rgba(127, 231, 255, 0.2);"
-        >
-          <div class="slide-shell">
-            <header class="slide-header">
-              <span class="eyebrow">Mingle XR Template</span>
-              <span class="slide-id">Slide 01</span>
-            </header>
-            <div class="slide-body cover-layout">
-              <div class="cover-copy">
-                <p class="eyebrow">External Relations Presentation</p>
-                <h1 class="headline">One deck for IR, PR, and HR.</h1>
-                <p class="subhead">
-                  This file is the full-screen slide format before content. Each slide fills the
-                  viewport, transitions smoothly, and loops back to the beginning from the final
-                  page.
-                </p>
-                <div class="tag-row">
-                  <span class="tag">Investor Relations</span>
-                  <span class="tag">Public Relations</span>
-                  <span class="tag">Hiring Relations</span>
-                </div>
-              </div>
-              <aside class="orbital-panel" aria-hidden="true">
-                <div class="orbital-core">
-                  <div class="orbital-center">XR</div>
-                  <span class="orbit-label ir">IR</span>
-                  <span class="orbit-label pr">PR</span>
-                  <span class="orbit-label hr">HR</span>
-                </div>
-              </aside>
+        <section class="slide" data-accent="#7fe7ff">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <h1 class="slide-title">Mingle External Relations</h1>
+              <p class="slide-body">
+                Shared presentation format for IR, PR, and HR conversations. Each slide keeps only
+                a title and a body so the deck stays clean before content is filled in.
+              </p>
             </div>
-            <footer class="slide-footer">
-              <span class="footer-hint">Use any arrow key to move between slides.</span>
-              <span class="footer-hint">Slides move sideways. Right and Down: next. Left and Up: previous.</span>
-            </footer>
-          </div>
+          </article>
         </section>
 
-        <section
-          class="slide"
-          data-accent="#9cffcf"
-          style="--accent-glow: rgba(156, 255, 207, 0.18);"
-        >
-          <div class="slide-shell">
-            <header class="slide-header">
-              <span class="eyebrow">Narrative Structure</span>
-              <span class="slide-id">Slide 02</span>
-            </header>
-            <div class="slide-body section-layout">
-              <article class="detail-card">
-                <h2>IR Frame</h2>
-                <p>Placeholder format for market story, traction, and future confidence.</p>
-                <ul class="detail-list">
-                  <li><strong>Lead:</strong> One sentence headline that sets the investment case.</li>
-                  <li><strong>Proof:</strong> Metrics, retention, growth, or operating leverage.</li>
-                  <li><strong>Close:</strong> What the audience should believe next.</li>
-                </ul>
-              </article>
-              <article class="detail-card">
-                <h2>PR Frame</h2>
-                <p>Placeholder format for public narrative, product signal, and timing.</p>
-                <ul class="detail-list">
-                  <li><strong>Lead:</strong> Story angle that is clear in one editorial line.</li>
-                  <li><strong>Proof:</strong> Product moment, customer outcome, or cultural signal.</li>
-                  <li><strong>Close:</strong> Why this matters now and who it is for.</li>
-                </ul>
-              </article>
-              <article class="detail-card">
-                <h2>HR Frame</h2>
-                <p>Placeholder format for mission, team density, and role attraction.</p>
-                <ul class="detail-list">
-                  <li><strong>Lead:</strong> Why the company and why this stage is unusual.</li>
-                  <li><strong>Proof:</strong> Team quality, speed, craft, and operating principles.</li>
-                  <li><strong>Close:</strong> What kind of person should lean in.</li>
-                </ul>
-              </article>
+        <section class="slide" data-accent="#9cffcf">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <h1 class="slide-title">Title</h1>
+              <p class="slide-body">
+                Use this area for the one message that the audience needs to understand on this
+                slide. Keep the body concise and let the title carry the primary emphasis.
+              </p>
             </div>
-            <footer class="slide-footer">
-              <span class="footer-hint">Keep each page to one idea and one visual rhythm.</span>
-              <span class="footer-hint">Replace these blocks with actual narrative later.</span>
-            </footer>
-          </div>
+          </article>
         </section>
 
-        <section
-          class="slide"
-          data-accent="#89a5ff"
-          style="--accent-glow: rgba(137, 165, 255, 0.2);"
-        >
-          <div class="slide-shell">
-            <header class="slide-header">
-              <span class="eyebrow">Page Composition</span>
-              <span class="slide-id">Slide 03</span>
-            </header>
-            <div class="slide-body story-layout">
-              <article class="story-card">
-                <h2>Suggested content rhythm</h2>
-                <p>
-                  Build each deck around a simple sequence: signal, context, proof, and forward
-                  motion. This keeps the presentation adaptable across investor, press, and hiring
-                  conversations without changing the overall structure.
-                </p>
-                <div class="story-metric-row">
-                  <div class="metric">
-                    <strong>01</strong>
-                    <span>Signal: a clean opening statement</span>
-                  </div>
-                  <div class="metric">
-                    <strong>02</strong>
-                    <span>Context: why this matters now</span>
-                  </div>
-                  <div class="metric">
-                    <strong>03</strong>
-                    <span>Proof: evidence and confidence</span>
-                  </div>
-                </div>
-              </article>
-              <article class="story-card secondary">
-                <h2>What to keep consistent</h2>
-                <ul class="story-list">
-                  <li><strong>Cadence:</strong> One primary headline per page, minimal supporting text.</li>
-                  <li><strong>Visuals:</strong> Strong margins, one focal element, one supporting cluster.</li>
-                  <li><strong>Motion:</strong> Slides should glide, not snap or hard-cut.</li>
-                  <li><strong>Reuse:</strong> Same format can flex across IR, PR, and HR conversations.</li>
-                </ul>
-              </article>
+        <section class="slide" data-accent="#89a5ff">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <h1 class="slide-title">Body</h1>
+              <p class="slide-body">
+                This template keeps the structure deliberately minimal. Navigation still loops, the
+                slide motion stays horizontal, and the layout leaves room for narrative decisions
+                later.
+              </p>
             </div>
-            <footer class="slide-footer">
-              <span class="footer-hint">This file is intended as the shared master format.</span>
-              <span class="footer-hint">The deck loops seamlessly when you move past the last slide.</span>
-            </footer>
-          </div>
+          </article>
         </section>
 
-        <section
-          class="slide"
-          data-accent="#ffd48b"
-          style="--accent-glow: rgba(255, 212, 139, 0.18);"
-        >
-          <div class="slide-shell">
-            <header class="slide-header">
-              <span class="eyebrow">Loop Check</span>
-              <span class="slide-id">Slide 04</span>
-            </header>
-            <div class="slide-body closing-layout">
-              <article class="closing-card">
-                <span class="closing-mark">Last Slide</span>
-                <h2 class="closing-title">Move one more time and return to slide one.</h2>
-                <p>
-                  This final page exists to verify the circular presentation flow. The next advance
-                  wraps to the opening slide, and the previous action from the first slide wraps back
-                  here.
-                </p>
-              </article>
+        <section class="slide" data-accent="#ffd48b">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <h1 class="slide-title">Loop</h1>
+              <p class="slide-body">
+                The last slide returns to the first slide, and moving backward from the first slide
+                returns here. Arrow keys and wheel input both follow the same cycle.
+              </p>
             </div>
-            <footer class="slide-footer">
-              <span class="footer-hint">Loop enabled in both directions.</span>
-              <span class="footer-hint">Buttons and keyboard controls stay in sync.</span>
-            </footer>
-          </div>
+          </article>
         </section>
-      </div>
-
-      <div class="deck-ui">
-        <div class="counter" id="deck-counter">01 / 04</div>
-        <div class="control-row" aria-label="Slide controls">
-          <button class="control-button" id="prev-button" type="button">Previous</button>
-          <button class="control-button" id="next-button" type="button">Next</button>
-        </div>
       </div>
     </main>
 
     <script>
       const track = document.getElementById("deck-track");
-      const counter = document.getElementById("deck-counter");
-      const prevButton = document.getElementById("prev-button");
-      const nextButton = document.getElementById("next-button");
       const baseSlides = Array.from(track.querySelectorAll(".slide"));
       const slideCount = baseSlides.length;
 
@@ -723,41 +195,22 @@
       let isAnimating = false;
       let wheelLock = false;
 
-      function realSlideNumber(index) {
-        if (index === 0) {
-          return slideCount;
-        }
-
-        if (index === slideCount + 1) {
-          return 1;
-        }
-
-        return index;
+      function syncPosition(useTransition) {
+        track.style.transition = useTransition
+          ? "transform var(--slide-duration) var(--slide-ease)"
+          : "none";
+        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
       }
 
       function updateUi() {
-        const currentNumber = realSlideNumber(activeIndex);
-        const paddedCurrent = String(currentNumber).padStart(2, "0");
-        const paddedTotal = String(slideCount).padStart(2, "0");
-
-        counter.textContent = `${paddedCurrent} / ${paddedTotal}`;
-
         allSlides.forEach((slide, index) => {
           const isActive = index === activeIndex;
           slide.classList.toggle("is-active", isActive);
           slide.setAttribute("aria-hidden", String(!isActive));
         });
 
-        const activeSlide = allSlides[activeIndex];
-        const accent = activeSlide?.dataset.accent || "#7fe7ff";
+        const accent = allSlides[activeIndex]?.dataset.accent || "#7fe7ff";
         document.documentElement.style.setProperty("--accent", accent);
-      }
-
-      function syncPosition(useTransition) {
-        track.style.transition = useTransition
-          ? "transform var(--slide-duration) var(--ease-smooth)"
-          : "none";
-        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
       }
 
       function finishAnimation() {
@@ -773,7 +226,7 @@
         isAnimating = false;
 
         requestAnimationFrame(() => {
-          track.style.transition = "transform var(--slide-duration) var(--ease-smooth)";
+          track.style.transition = "transform var(--slide-duration) var(--slide-ease)";
         });
       }
 
@@ -843,9 +296,6 @@
         },
         { passive: true }
       );
-
-      prevButton.addEventListener("click", previous);
-      nextButton.addEventListener("click", next);
 
       syncPosition(false);
       updateUi();
