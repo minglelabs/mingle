@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR gaming collage needed the guild card to drop lower without drifting farther right**
+  Problem: After spreading the collage, the guild image started protruding too far to the right while still not feeling low enough in the overall stack.
+  Cause: Widening the collage by moving its container rightward solved overlap, but it also pulled the front-most guild card toward the edge instead of using the extra space to the left.
+  Fix: Restored the collage's previous right boundary and lowered the guild card further within the wider container so the group expands leftward while the front image sits lower.
+  Status: Resolved in-thread.
+
 - **XR gaming collage needed to use spare horizontal space without squeezing the text block**
   Problem: The collage still felt too tightly stacked even after the hierarchy was improved, because the three images were overlapping more than necessary while visible space remained to the left of the media cluster.
   Cause: The slide was still reserving too much width for the collage as a dense stack and too little of the surrounding whitespace as usable composition space.
