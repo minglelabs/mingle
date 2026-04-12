@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck needed title hierarchy between the cover slide and the rest**
+  Problem: Once the main deck content was filled in, the first slide no longer stood apart strongly enough from the interior slides, while the body slides still felt too headline-heavy for sustained reading.
+  Cause: A single title size and weight scale was being applied uniformly across the entire deck.
+  Fix: Introduced a dedicated hero treatment for slide 1 and reduced the default title size and weight for slides 2 onward, without changing the manually edited copy.
+  Status: Resolved in-thread.
+
 - **XR presentation deck needed stronger visual weight for the optional kicker label**
   Problem: After the optional slide label was added, it was still too quiet relative to the title. The semantic cue existed, but it did not read strongly enough as a slide attribute at presentation distance.
   Cause: The kicker used a small subdued text treatment with no structural emphasis beyond spacing.
