@@ -2,6 +2,12 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **XR presentation deck still felt too dark and card-like after adopting the Mingle palette**
+  Problem: Even after the deck picked up Mingle's warm key colors, it still rendered as a dark card floating over a separate outer background. That contradicted the requested direction for a lighter, cleaner relations deck built from white space plus brand color, with dark tones used only for text.
+  Cause: The prior pass only swapped palette values and kept the card container, inner panel fill, border, and shadow structure intact.
+  Fix: Removed the card treatment entirely, unified the slide surface with the page background, switched the deck to a light color scheme, and kept the visual system to white space plus Mingle key colors while moving dark emphasis into typography only.
+  Status: Resolved in-thread.
+
 - **XR presentation deck initially ignored the main Mingle service palette**
   Problem: After the structure was simplified, the shared `mingle-xr/xr.html` deck still used a cool dark-blue palette that did not visually connect to the live `mingle-app` experience. That made the relations deck feel like a separate product instead of an extension of the service.
   Cause: The template styling was reduced for clarity first, but its color system was not yet realigned to the app's established brand tones.

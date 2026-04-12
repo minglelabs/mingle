@@ -6,11 +6,10 @@
     <title>Mingle XR Deck</title>
     <style>
       :root {
-        color-scheme: dark;
-        --panel: #1c1c1e;
-        --line: rgba(251, 188, 50, 0.2);
-        --title: #fffdf7;
-        --body: rgba(255, 243, 217, 0.82);
+        color-scheme: light;
+        --page: #fffdf7;
+        --title: #2d2a1e;
+        --body: rgba(45, 42, 30, 0.72);
         --accent: #fbbc32;
         --accent-strong: #f97316;
         --slide-duration: 820ms;
@@ -28,9 +27,11 @@
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(circle at 18% 18%, rgba(255, 253, 247, 0.2), transparent 22%),
-          radial-gradient(circle at 78% 82%, rgba(249, 115, 22, 0.18), transparent 28%),
-          linear-gradient(160deg, #fbbc32 0%, #f59e0b 42%, #f97316 100%);
+          radial-gradient(circle at 14% 18%, rgba(251, 188, 50, 0.24), transparent 24%),
+          radial-gradient(circle at 84% 20%, rgba(249, 115, 22, 0.16), transparent 20%),
+          radial-gradient(circle at 76% 82%, rgba(245, 158, 11, 0.12), transparent 24%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.92)),
+          var(--page);
         color: var(--title);
         font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
       }
@@ -55,7 +56,7 @@
         flex: 0 0 100vw;
         width: 100vw;
         height: 100vh;
-        padding: clamp(20px, 3vw, 40px);
+        padding: 0;
       }
 
       .slide-shell {
@@ -63,14 +64,8 @@
         height: 100%;
         display: grid;
         align-items: center;
-        padding: clamp(32px, 6vw, 88px);
-        border: 1px solid var(--line);
-        border-radius: 32px;
-        background:
-          radial-gradient(circle at top left, rgba(251, 188, 50, 0.13), transparent 36%),
-          linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
-          var(--panel);
-        box-shadow: 0 24px 80px rgba(107, 45, 0, 0.26);
+        padding: clamp(40px, 7vw, 96px);
+        background: transparent;
       }
 
       .slide-copy {
@@ -96,18 +91,9 @@
         text-wrap: pretty;
       }
 
-      .slide.is-active .slide-shell {
-        border-color: rgba(251, 188, 50, 0.52);
-      }
-
       @media (max-width: 900px) {
-        .slide {
-          padding: 14px;
-        }
-
         .slide-shell {
           padding: 28px;
-          border-radius: 24px;
         }
 
         .slide-title {
@@ -129,7 +115,7 @@
   <body>
     <main class="deck" aria-label="External relations presentation deck">
       <div class="track" id="deck-track">
-        <section class="slide" data-accent="#7fe7ff">
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy">
               <h1 class="slide-title">Mingle External Relations</h1>
@@ -141,7 +127,7 @@
           </article>
         </section>
 
-        <section class="slide" data-accent="#9cffcf">
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy">
               <h1 class="slide-title">Title</h1>
@@ -153,7 +139,7 @@
           </article>
         </section>
 
-        <section class="slide" data-accent="#89a5ff">
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy">
               <h1 class="slide-title">Body</h1>
@@ -166,7 +152,7 @@
           </article>
         </section>
 
-        <section class="slide" data-accent="#ffd48b">
+        <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy">
               <h1 class="slide-title">Loop</h1>
@@ -211,9 +197,6 @@
           slide.classList.toggle("is-active", isActive);
           slide.setAttribute("aria-hidden", String(!isActive));
         });
-
-        const accent = allSlides[activeIndex]?.dataset.accent || "#7fe7ff";
-        document.documentElement.style.setProperty("--accent", accent);
       }
 
       function finishAnimation() {
