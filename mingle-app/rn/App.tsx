@@ -41,7 +41,7 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
-  resolveNativeBottomBannerOffsetPx,
+  resolveNativeBottomBannerWebInsetPx,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
@@ -1228,11 +1228,10 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(0, baseOffsetPx - IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX);
   }, [nativeBottomBarClearancePx, nativeCanvasScale]);
-  const nativeBannerBottomOffsetPx = useMemo(() => resolveNativeBottomBannerOffsetPx({
-    isIosPlatform: Platform.OS === 'ios',
-    safeAreaInsetBottomPx: safeAreaInsets.bottom,
-    bottomBannerClearancePx: nativeBottomBannerClearancePx,
-  }), [nativeBottomBannerClearancePx, safeAreaInsets.bottom]);
+  const nativeBannerBottomOffsetPx = useMemo(
+    () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
+    [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
+  );
   const nativeTranscriptInsetPx = useMemo(
     () => resolveNativeBannerContentHeightPx({
       bannerHeightPx: nativeBannerHeightPx,
@@ -1626,7 +1625,11 @@ function AppInner(): React.JSX.Element {
       ? nativeTranscriptInsetPx
       : 0;
     const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
-      ? nativeBannerBottomInsetPx
+      ? resolveNativeBottomBannerWebInsetPx({
+          isIosPlatform: Platform.OS === 'ios',
+          bannerContentInsetPx: nativeBannerBottomInsetPx,
+          safeAreaInsetBottomPx: safeAreaInsets.bottom,
+        })
       : 0;
     emitUiToWeb({
       type: 'banner_layout',
@@ -1642,6 +1645,7 @@ function AppInner(): React.JSX.Element {
     nativeBannerPosition,
     nativeBannerUnitId,
     nativeTranscriptInsetPx,
+    safeAreaInsets.bottom,
   ]);
 
   const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {

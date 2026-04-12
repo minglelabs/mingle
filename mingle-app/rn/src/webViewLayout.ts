@@ -85,15 +85,15 @@ export function resolveNativeBottomBannerContentInsetPx(params: {
   return bannerContentHeightPx;
 }
 
-export function resolveNativeBottomBannerOffsetPx(params: {
+export function resolveNativeBottomBannerWebInsetPx(params: {
   isIosPlatform: boolean;
+  bannerContentInsetPx: number;
   safeAreaInsetBottomPx: number;
-  bottomBannerClearancePx: number;
 }): number {
-  const clearancePx = normalizeNativeBottomBarClearancePx(params.bottomBannerClearancePx);
+  const bannerContentInsetPx = normalizeNativeBottomBarClearancePx(params.bannerContentInsetPx);
   const safeAreaInsetBottomPx = normalizeNativeBottomBarClearancePx(params.safeAreaInsetBottomPx);
 
   return params.isIosPlatform
-    ? safeAreaInsetBottomPx + clearancePx
-    : clearancePx;
+    ? bannerContentInsetPx
+    : bannerContentInsetPx + safeAreaInsetBottomPx;
 }
