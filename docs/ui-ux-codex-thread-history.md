@@ -1300,3 +1300,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Increased the vertical gap between the XR table-of-contents kicker block and the numbered title list so the two layers read as clearly separated elements.
 - 2026-04-14: Further increased the XR table-of-contents kicker-to-list spacing so the large kicker block and the numbered agenda read as two clearly separated tiers.
 - 2026-04-14: Rebuilt the XR table-of-contents agenda as a two-column layout so the numeric indices align cleanly on the right while the labels begin from a consistent left edge.
+- 2026-04-14: Increased the deck-wide XR kicker size to a body-adjacent scale so section labels feel more legible and intentional across the presentation.
