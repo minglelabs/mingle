@@ -167,12 +167,37 @@
         z-index: 1;
       }
 
-      .slide-preview-image--gaming-front {
+      .slide-phone-frame {
         position: absolute;
+        padding: clamp(10px, 0.8vw, 12px);
+        border-radius: clamp(28px, 2.6vw, 38px);
+        background: linear-gradient(180deg, #1f2937 0%, #0f172a 100%);
+        box-shadow: 0 26px 52px rgba(15, 23, 42, 0.28);
+      }
+
+      .slide-phone-frame::before {
+        content: "";
+        position: absolute;
+        top: clamp(8px, 0.8vw, 12px);
+        left: 50%;
+        width: 32%;
+        height: clamp(12px, 1vw, 16px);
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.96);
+      }
+
+      .slide-phone-frame--gaming-front {
         right: 0;
         top: 0;
-        width: clamp(240px, 23vw, 350px);
+        width: clamp(220px, 21vw, 320px);
         z-index: 2;
+      }
+
+      .slide-preview-image--gaming-front {
+        display: block;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
       }
 
       .slide-preview-image--hellotalk1 {
@@ -541,6 +566,35 @@
                 src="./assets/gaming.jpg"
                 alt="Gaming community visual"
               />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">초기에는 헬로톡 보이스룸의<br/>
+                익스텐션으로 포지셔닝합니다
+              </h1>
+              <p class="slide-body">
+                한 일본인 유저는 2주간 밍글을 매일 2.5시간씩 사용했습니다.<br/>
+                헬로톡은 백그라운드로 돌리고 화면에는 밍글을 띄워서 사용합니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
             </div>
           </article>
         </section>
