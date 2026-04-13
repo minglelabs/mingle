@@ -1281,3 +1281,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-13: Swapped the XR HelloTalk slide imagery to the user-supplied `hellotalk.jpg` asset so the current HelloTalk target sequence stays visually consistent even as slide ordering changes.
 - 2026-04-13: Increased the XR HelloTalk target-slide image scale substantially on desktop so the updated `hellotalk.jpg` asset reads as a primary visual instead of a small side reference.
 - 2026-04-13: Split the two XR HelloTalk visuals into separate image modifier classes so each slide's HelloTalk asset can be repositioned independently without affecting the other.
+- 2026-04-13: Restored the first HelloTalk target slide to the original Voiceroom image and split each HelloTalk media wrapper into dedicated position classes so their top/right coordinates can be adjusted independently.
