@@ -1277,3 +1277,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
 - 2026-04-13: Restored the HelloTalk single-image layout on XR slide 8 after a page-numbering mix-up briefly replaced that media with the wrong two-panel comparison visual.
 - 2026-04-13: Replaced the XR reason-slide comparison visuals with the user-supplied slide7 assets, keeping the front-left / back-right overlap hierarchy while preserving the existing copy layout.
+- 2026-04-13: Expanded the XR reason-slide visual from a two-card overlap into a three-card stack by inserting a centered middle reference image while preserving equal-height treatment and the existing left/front emphasis.
