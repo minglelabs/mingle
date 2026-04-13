@@ -1294,4 +1294,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-13: Updated the XR dependency-proof slide to use the same HelloTalk-plus-Mingle overlap as the extension-positioning slide, leaving the absorption-plan slide as the only page that uses the RedditTalk-plus-Clubhouse vertical stack.
 - 2026-04-13: Removed the two side reference images from the XR target-customer-4 slide and restored its copy block to the standard full-width text layout.
 - 2026-04-14: Gave the XR table-of-contents slide its own typography treatment so the kicker reads like a large section heading while the numbered list sits below as a lighter, smaller subhead distinct from regular slide titles.
-- 2026-04-14: Raised the XR deck's shared text anchor by tightening the global `slide-copy` top margin so slides begin higher on the canvas instead of feeling bottom-heavy.
+- 2026-04-14: Kept the XR deck's global text anchor at its previous position and raised only the table-of-contents slide by giving `slide-copy--toc` its own tighter top margin.
