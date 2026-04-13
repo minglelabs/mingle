@@ -107,8 +107,25 @@
       }
 
       .slide-copy--toc .slide-title {
+        display: grid;
+        gap: 10px;
         font-size: clamp(2rem, 2.8vw, 3rem);
         font-weight: 560;
+      }
+
+      .slide-toc-item {
+        display: grid;
+        grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
+        column-gap: clamp(16px, 1.4vw, 24px);
+        align-items: baseline;
+      }
+
+      .slide-toc-index {
+        text-align: right;
+      }
+
+      .slide-toc-text {
+        text-align: left;
       }
 
       .slide-copy--with-side-media {
@@ -513,12 +530,12 @@
             <div class="slide-copy slide-copy--toc">
               <p class="slide-kicker">목차</p>
               <h1 class="slide-title">
-                1. 개요<br/>
-                2. 시장<br/>
-                3. 경과<br/>
-                4. 전략<br/>
-                5. 팀<br/>
-                6. 부록
+                <span class="slide-toc-item"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">2.</span><span class="slide-toc-text">시장</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">3.</span><span class="slide-toc-text">경과</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">4.</span><span class="slide-toc-text">전략</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">5.</span><span class="slide-toc-text">팀</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">6.</span><span class="slide-toc-text">부록</span></span>
               </h1>
             </div>
           </article>
