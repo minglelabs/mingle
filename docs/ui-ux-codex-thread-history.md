@@ -1279,3 +1279,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-13: Replaced the XR reason-slide comparison visuals with the user-supplied slide7 assets, keeping the front-left / back-right overlap hierarchy while preserving the existing copy layout.
 - 2026-04-13: Expanded the XR reason-slide visual from a two-card overlap into a three-card stack by inserting a centered middle reference image while preserving equal-height treatment and the existing left/front emphasis.
 - 2026-04-13: Swapped the XR HelloTalk slide imagery to the user-supplied `hellotalk.jpg` asset so the current HelloTalk target sequence stays visually consistent even as slide ordering changes.
+- 2026-04-13: Increased the XR HelloTalk target-slide image scale substantially on desktop so the updated `hellotalk.jpg` asset reads as a primary visual instead of a small side reference.
