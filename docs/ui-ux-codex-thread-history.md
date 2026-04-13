@@ -1297,3 +1297,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Kept the XR deck's global text anchor at its previous position and raised only the table-of-contents slide by giving `slide-copy--toc` its own tighter top margin.
 - 2026-04-14: Refined the XR table-of-contents typography so the kicker keeps the normal kicker styling and underline while only scaling up its size and weight, and the numbered title list keeps the normal title voice with just a modest reduction in size and weight.
 - 2026-04-14: Increased the XR table-of-contents kicker size again and tightened the kicker-to-underline gap so the heading reads more assertively without changing the rest of the deck.
+- 2026-04-14: Increased the vertical gap between the XR table-of-contents kicker block and the numbered title list so the two layers read as clearly separated elements.
