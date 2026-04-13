@@ -149,6 +149,13 @@
         height: clamp(320px, 32vw, 470px);
       }
 
+      .slide-side-media--community-stack {
+        top: clamp(32px, 7vh, 88px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(360px, 36vw, 540px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
       .slide-preview-image {
         width: clamp(340px, 33vw, 520px);
         display: block;
@@ -168,6 +175,20 @@
 
       .slide-preview-image--reddittalk {
         width: clamp(300px, 32vw, 420px);
+      }
+
+      .slide-preview-image--reddittalk-top {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: clamp(260px, 28vw, 380px);
+      }
+
+      .slide-preview-image--clubhouse-bottom {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: clamp(260px, 28vw, 380px);
       }
 
       .slide-preview-image--gaming-back {
@@ -594,19 +615,17 @@
                 헬로톡에서 나온 음성이 밍글에서 실시간으로 번역됩니다.<br/>
               </p>
             </div>
-            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+            <div class="slide-side-media slide-side-media--community-stack" aria-hidden="true">
               <img
-                class="slide-preview-image slide-preview-image--gaming-back"
-                src="./assets/hellotalk-voiceroom2.png"
-                alt="HelloTalk Voiceroom interface"
+                class="slide-preview-image slide-preview-image--reddittalk-top"
+                src="./assets/reddittalk.jpg"
+                alt="Reddit talk reference"
               />
-              <div class="slide-phone-frame slide-phone-frame--gaming-front">
-                <img
-                  class="slide-preview-image slide-preview-image--gaming-front"
-                  src="./assets/mingle.png"
-                  alt="Mingle interface"
-                />
-              </div>
+              <img
+                class="slide-preview-image slide-preview-image--clubhouse-bottom"
+                src="./assets/clubhouse.jpg"
+                alt="Clubhouse voice room reference"
+              />
             </div>
           </article>
         </section>
@@ -641,8 +660,9 @@
                 자연스럽게 흡수할 계획입니다
               </h1>
               <p class="slide-body">
-                통번역이 필요한 유저간에 바이럴 루프 형성이 기대됩니다.<br/>
-                이외에도 몇몇 유저가 헬로톡을 사용할 때 항상 밍글을 대동합니다.<br/>
+                서로 통번역에 의존적인 유저간에는 밍글이 보이스룸 환경을 제공해준다면,<br/>
+                굳이 헬로톡에서 남아 있을 이유가 없습니다.<br/>
+                그래서 바이럴 루프 형성이 기대됩니다.
               </p>
             </div>
             <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
