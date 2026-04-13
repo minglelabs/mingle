@@ -1284,3 +1284,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-13: Restored the first HelloTalk target slide to the original Voiceroom image and split each HelloTalk media wrapper into dedicated position classes so their top/right coordinates can be adjusted independently.
 - 2026-04-13: Added explicit `top`, `right`, and `width` defaults to the two HelloTalk-specific media classes so slide-level positioning can be tuned directly without tracing shared base styles.
 - 2026-04-13: Moved the two-card HelloTalk overlap onto the second HelloTalk slide, restoring the first HelloTalk slide to a single Voiceroom image and keeping `hellotalk1.jpg` front-left with `hellotalk2.jpg` back-right on the following page.
+- 2026-04-13: Split the newly added XR `gaming.jpg` slide visual onto its own `slide-side-media--gaming` and `slide-preview-image--gaming` classes so that page can be repositioned independently from the HelloTalk slides.
