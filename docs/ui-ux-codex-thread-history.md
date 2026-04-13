@@ -1302,3 +1302,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Rebuilt the XR table-of-contents agenda as a two-column layout so the numeric indices align cleanly on the right while the labels begin from a consistent left edge.
 - 2026-04-14: Switched the XR table-of-contents numeric column to left alignment as well, so both the `1.` through `6.` markers and the section labels now start from fixed left edges.
 - 2026-04-14: Increased the deck-wide XR kicker size to a body-adjacent scale so section labels feel more legible and intentional across the presentation.
+- 2026-04-14: Added an explicit top margin to the XR table-of-contents title block because the kicker is absolutely positioned there, restoring visible separation between the large `목차` kicker and the numbered agenda list.
