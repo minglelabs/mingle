@@ -925,6 +925,22 @@ async function getConversationListQaSnapshot(driver) {
   });
 }
 
+async function getConversationListLayoutMetrics(driver) {
+  return await driver.execute(() => {
+    const scroll = document.querySelector('main > div.min-h-0.flex-1.overflow-y-auto');
+    const header = document.querySelector('header');
+    const firstRow = document.querySelector('main > div.min-h-0.flex-1.overflow-y-auto button');
+
+    return {
+      headerRect: header?.getBoundingClientRect?.() ?? null,
+      scrollRect: scroll?.getBoundingClientRect?.() ?? null,
+      firstRowRect: firstRow?.getBoundingClientRect?.() ?? null,
+      scrollPaddingTop: scroll instanceof HTMLElement ? getComputedStyle(scroll).paddingTop : null,
+      scrollPaddingBottom: scroll instanceof HTMLElement ? getComputedStyle(scroll).paddingBottom : null,
+    };
+  });
+}
+
 async function invokeQaMethod(driver, methodName, ...args) {
   return await driver.execute((nextMethodName, nextArgs) => {
     const qaWindow = window.__MINGLE_QA__;
@@ -1029,6 +1045,78 @@ async function ensureConversationRoom(driver) {
 
     return await waitForQaBridge(driver, 45000);
   }
+}
+
+async function ensureConversationListRoute(driver) {
+  const listSnapshot = await waitForConversationListQaBridge(driver, 30000);
+  if (!listSnapshot?.activeConversationId) {
+    return listSnapshot;
+  }
+
+  await driver.execute(() => {
+    if (window.location.search.includes('conversation=')) {
+      window.history.back();
+      return true;
+    }
+    return false;
+  });
+
+  try {
+    return await waitFor(async () => {
+      const snapshot = await getConversationListQaSnapshot(driver);
+      return snapshot && !snapshot.activeConversationId ? snapshot : null;
+    }, 'the conversation list route to become active', 15000, 500);
+  } catch {
+    return await resetConversationListRouteForQa(driver);
+  }
+}
+
+async function resetConversationListRouteForQa(driver) {
+  const listSnapshot = await waitForConversationListQaBridge(driver, 30000);
+  if (!listSnapshot?.activeConversationId) {
+    return listSnapshot;
+  }
+
+  await driver.execute(() => {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('conversation');
+    window.history.replaceState(window.history.state, '', nextUrl.toString());
+    window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+    return true;
+  });
+
+  return await waitFor(async () => {
+    const snapshot = await getConversationListQaSnapshot(driver);
+    return snapshot && !snapshot.activeConversationId ? snapshot : null;
+  }, 'the conversation list route to reset before opening a room', 15000, 500);
+}
+
+async function performIosEdgeSwipe(driver, direction) {
+  await switchToNative(driver);
+  const rect = await driver.getWindowRect();
+  const midY = Math.round(rect.height * 0.55);
+  const startX = direction === 'back'
+    ? Math.max(4, Math.round(rect.width * 0.02))
+    : Math.max(4, rect.width - Math.round(rect.width * 0.02));
+  const endX = direction === 'back'
+    ? Math.round(rect.width * 0.72)
+    : Math.round(rect.width * 0.28);
+
+  await driver.performActions([{
+    type: 'pointer',
+    id: 'finger1',
+    parameters: { pointerType: 'touch' },
+    actions: [
+      { type: 'pointerMove', duration: 0, x: startX, y: midY },
+      { type: 'pointerDown', button: 0 },
+      { type: 'pause', duration: 100 },
+      { type: 'pointerMove', duration: 350, x: endX, y: midY },
+      { type: 'pointerUp', button: 0 },
+    ],
+  }]);
+  await driver.releaseActions();
+  await delay(1000);
+  await switchToWebView(driver);
 }
 
 async function ensureMenuOpen(driver) {
@@ -1441,11 +1529,42 @@ async function runAndroidCases(driver, reportDir) {
   await switchToWebView(driver);
   await ensureConversationRoom(driver);
 
-  const results = await runSharedLiveDemoCases({
+  const results = [];
+
+  results.push(await runCase({
+    driver,
+    platform: 'android',
+    reportDir,
+    caseId: 'conversation-list-top-gap-stays-aligned-with-banner',
+    runner: async () => {
+      const listSnapshot = await ensureConversationListRoute(driver);
+      const metrics = await getConversationListLayoutMetrics(driver);
+      const actualGapPx = Math.round((metrics.firstRowRect?.top ?? 0) - (metrics.scrollRect?.top ?? 0));
+      const expectedGapPx = Math.round(listSnapshot?.effectiveNativeTopInsetPx ?? 0);
+
+      assert(actualGapPx <= expectedGapPx + 12, 'Conversation list left extra blank gap below the header/banner stack.', {
+        listSnapshot,
+        metrics,
+        actualGapPx,
+        expectedGapPx,
+      });
+
+      await ensureConversationRoom(driver);
+
+      return {
+        listSnapshot,
+        metrics,
+        actualGapPx,
+        expectedGapPx,
+      };
+    },
+  }));
+
+  results.push(...await runSharedLiveDemoCases({
     driver,
     reportDir,
     platform: 'android',
-  });
+  }));
 
   results.push(await runCase({
     driver,
@@ -1527,6 +1646,35 @@ async function runIosCases(driver, reportDir, options) {
 
   const iosSimulator = await isIosSimulator(options.iosUdid);
   const results = [];
+
+  results.push(await runCase({
+    driver,
+    platform: 'ios',
+    reportDir,
+    caseId: 'conversation-list-top-gap-stays-aligned-with-banner',
+    runner: async () => {
+      const listSnapshot = await ensureConversationListRoute(driver);
+      const metrics = await getConversationListLayoutMetrics(driver);
+      const actualGapPx = Math.round((metrics.firstRowRect?.top ?? 0) - (metrics.scrollRect?.top ?? 0));
+      const expectedGapPx = Math.round(listSnapshot?.effectiveNativeTopInsetPx ?? 0);
+
+      assert(actualGapPx <= expectedGapPx + 12, 'Conversation list left extra blank gap below the header/banner stack.', {
+        listSnapshot,
+        metrics,
+        actualGapPx,
+        expectedGapPx,
+      });
+
+      await ensureConversationRoom(driver);
+
+      return {
+        listSnapshot,
+        metrics,
+        actualGapPx,
+        expectedGapPx,
+      };
+    },
+  }));
 
   if (!iosSimulator) {
     results.push(...await runSharedLiveDemoCases({
@@ -1667,6 +1815,64 @@ async function runIosCases(driver, reportDir, options) {
           after,
           deltaX,
           deltaY,
+        };
+      }),
+    }));
+
+    results.push(await runCase({
+      driver,
+      platform: 'ios',
+      reportDir,
+      caseId: 'edge-swipe-forward-restores-room-after-history-back',
+      runner: async () => await withQaFailureDetails(driver, async () => {
+        await resetQaDemoState(driver);
+        const resetList = await resetConversationListRouteForQa(driver);
+        assert(resetList?.activeConversationId === null, 'The iOS QA flow could not reset back to the conversation list before opening a room.', resetList);
+
+        const before = await ensureConversationRoom(driver);
+        assert(before?.routePathname === '/ko/conversations', 'The iOS room was not active before the edge-swipe navigation test.', before);
+        const historyStateBeforeBack = await waitFor(async () => {
+          const state = await driver.execute(() => ({
+            href: window.location.href,
+            historyLength: window.history.length,
+          }));
+          return state?.href?.includes('conversation=') && state.historyLength > 1 ? state : null;
+        }, 'the iOS room history entry to settle before navigating back', 15000, 250);
+
+        const historyBackTriggered = await driver.execute(() => {
+          if (!window.location.search.includes('conversation=')) {
+            return false;
+          }
+          window.history.back();
+          return true;
+        });
+        assert(historyBackTriggered === true, 'The iOS QA room did not have a conversation history entry to navigate back from.', {
+          before,
+          historyBackTriggered,
+        });
+        const afterBack = await ensureConversationListRoute(driver);
+        assert(afterBack.activeConversationId === null, 'The iOS history back navigation did not return to the conversation list.', afterBack);
+
+        await performIosEdgeSwipe(driver, 'forward');
+        const afterForward = await waitFor(async () => {
+          const snapshot = await getQaSnapshot(driver);
+          return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
+        }, 'the iOS forward edge-swipe to restore the room', 15000, 500);
+
+        assert(afterForward?.menuOpen === false, 'The iOS forward edge-swipe restored an overlay instead of the room.', {
+          resetList,
+          before,
+          historyStateBeforeBack,
+          afterBack,
+          afterForward,
+        });
+
+        return {
+          resetList,
+          before,
+          historyStateBeforeBack,
+          afterBack,
+          afterForward,
         };
       }),
     }));
