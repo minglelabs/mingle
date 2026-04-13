@@ -129,10 +129,17 @@
       }
 
       .slide-side-media--gaming {
-        top: clamp(48px, 8vh, 108px);
-        right: clamp(0px, 0vw, 0px);
+        top: clamp(48px, 12vh, 108px);
+        right: clamp(30px, 5vw, 0px);
         width: clamp(360px, 34vw, 520px);
         height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--gaming-stack {
+        top: clamp(44px, 9vh, 100px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(320px, 32vw, 470px);
       }
 
       .slide-preview-image {
@@ -149,7 +156,23 @@
       }
 
       .slide-preview-image--gaming {
-        width: clamp(300px, 24vw, 400px);
+        width: clamp(300px, 32vw, 400px);
+      }
+
+      .slide-preview-image--gaming-back {
+        position: absolute;
+        left: 0;
+        top: clamp(34px, 4vw, 58px);
+        width: clamp(220px, 21vw, 320px);
+        z-index: 1;
+      }
+
+      .slide-preview-image--gaming-front {
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: clamp(240px, 23vw, 350px);
+        z-index: 2;
       }
 
       .slide-preview-image--hellotalk1 {
@@ -480,8 +503,8 @@
               </h1>
               <p class="slide-body">
                 언어 교육이 핵심 BM이라 통번역을 제한적으로만 제공합니다.<br/>
-                하지만 유저가 정말로 원하는 것은 외국인 친구를 사귀는 것이어서,<br/>
-                외국어는 사실 허들에 불과합니다.
+                그래서 외국어 학습에 시간을 많이 쓸 수 있는 유저만 살아 남습니다.<br/>
+                대부분의 유저는 초보 단계를 벗어나지 못하고 이탈합니다.
               </p>
             </div>
             <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
@@ -507,9 +530,36 @@
                 소셜링 그 자체를 목표로 합니다
               </h1>
               <p class="slide-body">
-                헬로톡은 7천만 이상이 가입한 언어 교환 플랫폼입니다.<br/>
-                중국인 창업자가 2012년 창업했으며,<br/>
-                최근에도 3년만에 2배 이상 성장한 것으로 추정됩니다.
+                유저가 정말로 원하는 것은 외국인 친구를 사귀는 것이고<br/>
+                외국어는 사실 허들에 불과하다는 생각입니다.<br/>
+                그래서 밍글은 언어가 통하지 않아도 수다할 수 있게 만듭니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--gaming-front"
+                src="./assets/mingle.png"
+                alt="Mingle interface"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">헬로톡 보이스룸 유저 중 일부는<br/>
+                벌써 밍글에 의존합니다
+              </h1>
+              <p class="slide-body">
+                한 일본인 유저는 2주간 밍글을 매일 2.5시간씩 사용했습니다.<br/>
+                헬로톡은 백그라운드로 돌리고 화면에는 밍글을 띄워서 사용합니다.<br/>
               </p>
             </div>
             <div class="slide-side-media slide-side-media--gaming" aria-hidden="true">
