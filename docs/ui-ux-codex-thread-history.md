@@ -1295,3 +1295,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-13: Removed the two side reference images from the XR target-customer-4 slide and restored its copy block to the standard full-width text layout.
 - 2026-04-14: Gave the XR table-of-contents slide its own typography treatment so the kicker reads like a large section heading while the numbered list sits below as a lighter, smaller subhead distinct from regular slide titles.
 - 2026-04-14: Kept the XR deck's global text anchor at its previous position and raised only the table-of-contents slide by giving `slide-copy--toc` its own tighter top margin.
+- 2026-04-14: Refined the XR table-of-contents typography so the kicker keeps the normal kicker styling and underline while only scaling up its size and weight, and the numbered title list keeps the normal title voice with just a modest reduction in size and weight.
