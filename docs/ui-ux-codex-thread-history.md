@@ -1276,3 +1276,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `019d6f80-a10d-7b10-ac88-4dd9ad89e780` | No UI/UX issue found.
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
 - 2026-04-13: Added the existing two-panel translation comparison visual to XR slide 8 so the fourth target-customer slide carries the same side-by-side UI evidence pattern without changing the user-edited copy.
+- 2026-04-13: Corrected the XR deck page targeting so slide 8 now uses the two-panel translation comparison visual in place of the previous HelloTalk single-image layout.
