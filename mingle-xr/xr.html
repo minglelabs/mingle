@@ -116,12 +116,14 @@
 
       .slide-side-media--hellotalk-primary {
         top: clamp(48px, 8vh, 108px);
-        right: clamp(76px, 10vw, 156px);
+        right: clamp(128px, 7vw, 156px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(280px, 28vw, 420px);
       }
 
       .slide-side-media--hellotalk-secondary {
-        top: clamp(48px, 8vh, 108px);
-        right: clamp(76px, 10vw, 156px);
+        top: clamp(48px, 10vh, 108px);
+        right: clamp(40px, 0vw, 128px);
       }
 
       .slide-preview-image {
@@ -130,11 +132,27 @@
       }
 
       .slide-preview-image--hellotalk-primary {
-        width: clamp(340px, 33vw, 520px);
+        width: clamp(300px, 24vw, 400px);
       }
 
       .slide-preview-image--hellotalk-secondary {
-        width: clamp(340px, 33vw, 520px);
+        width: clamp(400px, 37vw, 600px);
+      }
+
+      .slide-preview-image--hellotalk1 {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: clamp(200px, 18vw, 290px);
+        z-index: 2;
+      }
+
+      .slide-preview-image--hellotalk2 {
+        position: absolute;
+        top: clamp(28px, 3vw, 46px);
+        right: 0;
+        width: clamp(220px, 20vw, 320px);
+        z-index: 1;
       }
 
       .slide-side-media--collage {
@@ -432,9 +450,14 @@
             </div>
             <div class="slide-side-media slide-side-media--hellotalk-primary" aria-hidden="true">
               <img
-                class="slide-preview-image slide-preview-image--hellotalk-primary"
-                src="./assets/hellotalk-voiceroom.png"
+                class="slide-preview-image slide-preview-image--hellotalk1"
+                src="./assets/hellotalk1.jpg"
                 alt="HelloTalk Voiceroom interface"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk2"
+                src="./assets/hellotalk2.jpg"
+                alt="HelloTalk language exchange interface"
               />
             </div>
           </article>
@@ -444,8 +467,8 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
               <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">헬로톡은 언어 학습이 목표입니다<br/>
-                제공하다보니 대부분 쉽게 이탈합니다
+              <h1 class="slide-title">헬로톡은 학습을 목표로합니다<br/>
+                그래서 유저는 쉽게 이탈합니다
               </h1>
               <p class="slide-body">
                 언어 교육이 핵심 BM이기 때문에<br/>
@@ -455,7 +478,7 @@
             <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
               <img
                 class="slide-preview-image slide-preview-image--hellotalk-secondary"
-                src="./assets/hellotalk.jpg"
+                src="./assets/hellotalk2.jpg"
                 alt="HelloTalk Voiceroom interface"
               />
             </div>
