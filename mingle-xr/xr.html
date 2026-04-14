@@ -281,14 +281,14 @@
         height: 100%;
       }
 
-      .slide-travel-post-image {
+      .slide-travel-post-card {
         position: absolute;
-        display: block;
+        overflow: hidden;
         border-radius: 24px;
         box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
       }
 
-      .slide-travel-post-image--top {
+      .slide-travel-post-card--top {
         top: 0;
         right: 0;
         width: 68%;
@@ -296,12 +296,28 @@
         transform: rotate(-4deg);
       }
 
-      .slide-travel-post-image--bottom {
+      .slide-travel-post-card--bottom {
         left: 0;
         bottom: 8%;
         width: 98%;
         z-index: 2;
         transform: rotate(3deg);
+      }
+
+      .slide-travel-post-image {
+        display: block;
+        width: 100%;
+      }
+
+      .slide-travel-post-mask {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 22%;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
       }
 
       .slide-networking-collage {
@@ -336,35 +352,8 @@
       .slide-networking-image {
         display: block;
         width: 100%;
-      }
-
-      .slide-networking-mask {
-        position: absolute;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.12);
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-      }
-
-      .slide-networking-mask--top-name {
-        top: 4%;
-        left: 8%;
-        width: 80%;
-        height: 15%;
-      }
-
-      .slide-networking-mask--top-photo {
-        top: 24%;
-        left: 12%;
-        width: 74%;
-        height: 56%;
-      }
-
-      .slide-networking-mask--bottom-photo {
-        top: 5%;
-        left: 4%;
-        width: 92%;
-        height: 58%;
+        filter: blur(5px);
+        transform: scale(1.02);
       }
 
       .slide-hurdles-stack {
@@ -1674,8 +1663,6 @@
                     src="./assets/networking-event-top.jpeg"
                     alt="Networking event poster"
                   />
-                  <div class="slide-networking-mask slide-networking-mask--top-name"></div>
-                  <div class="slide-networking-mask slide-networking-mask--top-photo"></div>
                 </div>
                 <div class="slide-networking-card slide-networking-card--bottom">
                   <img
@@ -1683,7 +1670,6 @@
                     src="./assets/networking-event-bottom.jpeg"
                     alt="Networking meetup group photo"
                   />
-                  <div class="slide-networking-mask slide-networking-mask--bottom-photo"></div>
                 </div>
               </div>
             </div>
@@ -1703,16 +1689,22 @@
             </div>
             <div class="slide-side-media slide-side-media--travel-post-stack" aria-hidden="true">
               <div class="slide-travel-post-stack">
-                <img
-                  class="slide-travel-post-image slide-travel-post-image--top"
-                  src="./assets/travel-post-bottom.jpg"
-                  alt="Travel meetup post screenshot"
-                />
-                <img
-                  class="slide-travel-post-image slide-travel-post-image--bottom"
-                  src="./assets/travel-post-top.png"
-                  alt="Travel community post screenshot"
-                />
+                <div class="slide-travel-post-card slide-travel-post-card--top">
+                  <img
+                    class="slide-travel-post-image"
+                    src="./assets/travel-post-bottom.jpg"
+                    alt="Travel meetup post screenshot"
+                  />
+                  <div class="slide-travel-post-mask"></div>
+                </div>
+                <div class="slide-travel-post-card slide-travel-post-card--bottom">
+                  <img
+                    class="slide-travel-post-image"
+                    src="./assets/travel-post-top.png"
+                    alt="Travel community post screenshot"
+                  />
+                  <div class="slide-travel-post-mask"></div>
+                </div>
               </div>
             </div>
           </article>
