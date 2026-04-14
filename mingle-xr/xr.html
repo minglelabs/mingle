@@ -214,7 +214,7 @@
       }
 
       .slide-side-media--solution-stack {
-        top: clamp(132px, 16vh, 214px);
+        top: clamp(154px, 18vh, 238px);
         right: clamp(72px, 7vw, 118px);
         width: clamp(420px, 34vw, 520px);
       }
@@ -315,6 +315,7 @@
       .slide-solution-points {
         display: grid;
         gap: clamp(10px, 1.2vh, 14px);
+        grid-auto-rows: minmax(clamp(78px, 7.2vw, 98px), auto);
       }
 
       .slide-solution-points--tail {
@@ -323,6 +324,8 @@
 
       .slide-solution-point {
         position: relative;
+        display: flex;
+        align-items: center;
         padding: clamp(14px, 1.35vw, 18px) clamp(4px, 0.5vw, 8px) clamp(14px, 1.35vw, 18px)
           clamp(28px, 2.2vw, 36px);
         border-radius: 18px;
@@ -348,7 +351,6 @@
 
       .slide-solution-more {
         margin: 0;
-        min-height: clamp(78px, 7.2vw, 98px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1130,7 +1132,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-tool-list">
               <p class="slide-kicker">원인</p>
-              <h1 class="slide-title">게다가 가격과 AI의<br/>성능 문제도 있었습니다</h1>
+              <h1 class="slide-title">게다가 AI의 가격과<br/>성능 문제도 있습니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--tool-list" aria-hidden="true">
               <div class="slide-tool-items">
