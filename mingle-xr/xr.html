@@ -222,6 +222,13 @@
         height: clamp(420px, 39vw, 560px);
       }
 
+      .slide-side-media--networking-collage {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(24px, 3vw, 68px);
+        width: clamp(360px, 34vw, 500px);
+        height: clamp(340px, 31vw, 460px);
+      }
+
       .slide-side-media--customer-hurdles {
         top: clamp(150px, 18vh, 224px);
         right: clamp(72px, 10vw, 132px);
@@ -293,6 +300,36 @@
         bottom: 0;
         width: 92%;
         z-index: 1;
+      }
+
+      .slide-networking-collage {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-networking-image {
+        position: absolute;
+        display: block;
+        border-radius: 28px;
+        box-shadow: 0 28px 56px rgba(72, 57, 18, 0.16);
+        filter: blur(5px);
+      }
+
+      .slide-networking-image--top {
+        top: 0;
+        left: 2%;
+        width: 54%;
+        z-index: 2;
+        transform: rotate(-6deg);
+      }
+
+      .slide-networking-image--bottom {
+        right: 0;
+        bottom: 0;
+        width: 90%;
+        z-index: 1;
+        transform: rotate(4deg);
       }
 
       .slide-hurdles-stack {
@@ -1596,7 +1633,7 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--with-side-media">
               <p class="slide-kicker">타겟 고객 2</p>
               <h1 class="slide-title">두 번째<br/>다국적 네트워킹 모임</h1>
               <p class="slide-body">
@@ -1604,6 +1641,20 @@
                 이들의 대부분은 영어나 한국어를 아직 잘 하지 못합니다.<br/>
                 이들을 위한 오프라인 통번역 경험을 제공합니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--networking-collage" aria-hidden="true">
+              <div class="slide-networking-collage">
+                <img
+                  class="slide-networking-image slide-networking-image--top"
+                  src="./assets/networking-event-top.jpeg"
+                  alt="Networking event poster"
+                />
+                <img
+                  class="slide-networking-image slide-networking-image--bottom"
+                  src="./assets/networking-event-bottom.jpeg"
+                  alt="Networking meetup group photo"
+                />
+              </div>
             </div>
           </article>
         </section>
