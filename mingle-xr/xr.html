@@ -262,7 +262,7 @@
 
       .slide-side-media--experience-list-proof {
         top: clamp(152px, 18vh, 226px);
-        right: clamp(44px, 5vw, 96px);
+        right: clamp(88px, 10vw, 96px);
         width: clamp(268px, 22vw, 324px);
       }
 
@@ -310,15 +310,14 @@
         height: 100%;
       }
 
-      .slide-networking-image {
+      .slide-networking-card {
         position: absolute;
-        display: block;
+        overflow: hidden;
         border-radius: 28px;
         box-shadow: 0 28px 56px rgba(72, 57, 18, 0.16);
-        filter: blur(5px);
       }
 
-      .slide-networking-image--top {
+      .slide-networking-card--top {
         top: 0;
         left: 2%;
         width: 54%;
@@ -326,12 +325,46 @@
         transform: rotate(-6deg);
       }
 
-      .slide-networking-image--bottom {
+      .slide-networking-card--bottom {
         right: 0;
         bottom: 0;
         width: 90%;
         z-index: 1;
         transform: rotate(4deg);
+      }
+
+      .slide-networking-image {
+        display: block;
+        width: 100%;
+      }
+
+      .slide-networking-mask {
+        position: absolute;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+
+      .slide-networking-mask--top-name {
+        top: 4%;
+        left: 8%;
+        width: 80%;
+        height: 15%;
+      }
+
+      .slide-networking-mask--top-photo {
+        top: 24%;
+        left: 12%;
+        width: 74%;
+        height: 56%;
+      }
+
+      .slide-networking-mask--bottom-photo {
+        top: 5%;
+        left: 4%;
+        width: 92%;
+        height: 58%;
       }
 
       .slide-hurdles-stack {
@@ -1057,11 +1090,10 @@
               <p class="slide-kicker">목차</p>
               <h1 class="slide-title">
                 <span class="slide-toc-item"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">2.</span><span class="slide-toc-text">가치 제안</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">3.</span><span class="slide-toc-text">고객</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">4.</span><span class="slide-toc-text">전략</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">5.</span><span class="slide-toc-text">팀</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">6.</span><span class="slide-toc-text">부록</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">4.</span><span class="slide-toc-text">팀</span></span>
+                <span class="slide-toc-item"><span class="slide-toc-index">5.</span><span class="slide-toc-text">부록</span></span>
               </h1>
             </div>
           </article>
@@ -1124,16 +1156,6 @@
                 외국인과 만나고, 대화하고, 관계를 이어갈 때 발생하는<br/>
                 모든 문제를 해결하는 서비스가 되고 싶습니다.
               </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">
-                <span class="slide-title-text"><br/>2. 가치 제안</span>
-              </h1>
             </div>
           </article>
         </section>
@@ -1330,7 +1352,7 @@
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">UI/UX의 유연함</h2>
                   </div>
-                  <p class="slide-tool-description">언어 자동 감지 및 발화 분리 가능</p>
+                  <p class="slide-tool-description">언어 자동 감지 및 발화 분리</p>
                 </section>
               </div>
             </div>
@@ -1379,7 +1401,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <h1 class="slide-title">
-                <span class="slide-title-text"><br/>3. 고객</span>
+                <span class="slide-title-text"><br/>2. 고객</span>
               </h1>
             </div>
           </article>
@@ -1646,16 +1668,23 @@
             </div>
             <div class="slide-side-media slide-side-media--networking-collage" aria-hidden="true">
               <div class="slide-networking-collage">
-                <img
-                  class="slide-networking-image slide-networking-image--top"
-                  src="./assets/networking-event-top.jpeg"
-                  alt="Networking event poster"
-                />
-                <img
-                  class="slide-networking-image slide-networking-image--bottom"
-                  src="./assets/networking-event-bottom.jpeg"
-                  alt="Networking meetup group photo"
-                />
+                <div class="slide-networking-card slide-networking-card--top">
+                  <img
+                    class="slide-networking-image"
+                    src="./assets/networking-event-top.jpeg"
+                    alt="Networking event poster"
+                  />
+                  <div class="slide-networking-mask slide-networking-mask--top-name"></div>
+                  <div class="slide-networking-mask slide-networking-mask--top-photo"></div>
+                </div>
+                <div class="slide-networking-card slide-networking-card--bottom">
+                  <img
+                    class="slide-networking-image"
+                    src="./assets/networking-event-bottom.jpeg"
+                    alt="Networking meetup group photo"
+                  />
+                  <div class="slide-networking-mask slide-networking-mask--bottom-photo"></div>
+                </div>
               </div>
             </div>
           </article>
@@ -1693,8 +1722,8 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-wide-side-media">
               <p class="slide-kicker">타겟 고객 4</p>
-              <h1 class="slide-title">네 번째<br/>
-                디스코드 글로벌 게임 길드</h1>
+              <h1 class="slide-title">네 번째, 글로벌 게임들의<br/>
+                디스코드 커뮤니티</h1>
               <p class="slide-body">
                 글로벌 서버 운영이 흔해지면서 통번역에 대한 수요도 늘었습니다.<br/>
                 하지만 디스코드엔 통번역 기능이 없어 써드파티를 써야합니다.<br/>
@@ -1755,7 +1784,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <h1 class="slide-title">
-                <span class="slide-title-text"><br/>4. 전략</span>
+                <span class="slide-title-text"><br/>3. 전략</span>
               </h1>
             </div>
           </article>
