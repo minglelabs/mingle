@@ -1342,3 +1342,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Split the XR conversation-experience slide into its own layout variant, keeping the same compact card language while removing the numeric badges, adding a trailing `등등등...`, and shifting the module slightly right so the heading has more room.
 - 2026-04-14: Dropped the XR conversation-experience card list slightly lower because the right-side stack was still sitting too high relative to the slide title block.
 - 2026-04-14: Matched the XR experience-card description color to the kicker color exactly, because the shared body style was still reading a little darker than the intended muted eyebrow tone on those right-side cards.
+- 2026-04-14: Extended that same kicker-matched description color treatment to the XR hurdle stack and tool-limitation list, so the muted support copy on pages using those right-side cards no longer reads darker than adjacent kickers.
