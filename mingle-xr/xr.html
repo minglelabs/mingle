@@ -214,8 +214,8 @@
       }
 
       .slide-side-media--solution-stack {
-        top: clamp(104px, 13vh, 176px);
-        right: clamp(8px, 1.2vw, 20px);
+        top: clamp(132px, 16vh, 214px);
+        right: clamp(72px, 7vw, 118px);
         width: clamp(420px, 34vw, 520px);
       }
 
@@ -317,6 +317,10 @@
         gap: clamp(10px, 1.2vh, 14px);
       }
 
+      .slide-solution-points--tail {
+        align-content: start;
+      }
+
       .slide-solution-point {
         position: relative;
         padding: clamp(14px, 1.35vw, 18px) clamp(4px, 0.5vw, 8px) clamp(14px, 1.35vw, 18px)
@@ -343,12 +347,17 @@
       }
 
       .slide-solution-more {
-        margin: clamp(10px, 1vh, 14px) 0 0 clamp(14px, 1.2vw, 18px);
+        margin: 0;
+        min-height: clamp(78px, 7.2vw, 98px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: clamp(1rem, 1.08vw, 1.1rem);
         font-weight: 600;
         line-height: 1.35;
         letter-spacing: -0.02em;
         color: rgba(45, 42, 30, 0.56);
+        text-align: center;
       }
 
       .slide-brand-cloud {
@@ -1097,7 +1106,7 @@
                   <div class="slide-solution-point">발화 및 발화자 분리</div>
                   <div class="slide-solution-point">3개국어 동시 스위칭</div>
                 </div>
-                <div class="slide-solution-points">
+                <div class="slide-solution-points slide-solution-points--tail">
                   <div class="slide-solution-point">푸쉬앤톡 번역</div>
                   <div class="slide-solution-point">선택적 음성 출력</div>
                   <div class="slide-solution-point">백그라운드 실행</div>
