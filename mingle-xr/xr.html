@@ -226,6 +226,33 @@
         background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
       }
 
+      .slide-hurdle-item--muted {
+        background: linear-gradient(180deg, rgba(247, 245, 241, 0.78) 0%, rgba(239, 236, 229, 0.52) 100%);
+        box-shadow: 0 12px 26px rgba(72, 57, 18, 0.04);
+      }
+
+      .slide-hurdle-item--muted::before {
+        background: rgba(88, 82, 69, 0.22);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-title {
+        color: rgba(27, 24, 17, 0.52);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-description {
+        color: rgba(45, 42, 30, 0.46);
+      }
+
+      .slide-hurdle-item--focused {
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.92) 0%, rgba(255, 233, 181, 0.72) 100%);
+        box-shadow: 0 24px 48px rgba(245, 158, 11, 0.18);
+      }
+
+      .slide-hurdle-item--focused::before {
+        width: 5px;
+        background: linear-gradient(180deg, #f59e0b 0%, #f97316 100%);
+      }
+
       .slide-hurdle-title {
         margin: 0;
         font-size: clamp(1.52rem, 2vw, 2.08rem);
@@ -626,10 +653,6 @@
                 언어 장벽을 넘기 어렵다</span>
                 <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
               </h1>
-              <!-- <p class="slide-body">
-                AI 기술이 빠르게 발전하고 있지만 여전히 언어 장벽은 남아 있습니다. <br/>
-                실제 대화가 끊기지 않고 통번역되는 경험은 아직 전무합니다.
-              </p> -->
             </div>
           </article>
         </section>
@@ -644,10 +667,6 @@
                 실시간 통번역 서비스를 만들자</span>
                 <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
               </h1>
-              <!-- <p class="slide-body">
-                AI 기술이 빠르게 발전하고 있지만 여전히 언어 장벽은 남아 있습니다. <br/>
-                실제 대화가 끊기지 않고 통번역되는 경험은 아직 전무합니다.
-              </p> -->
             </div>
           </article>
         </section>
@@ -689,6 +708,27 @@
                   <p class="slide-hurdle-description">매칭(디스커버리), 물리적 만남 모두 어려움</p>
                 </section>
                 <section class="slide-hurdle-item">
+                  <h2 class="slide-hurdle-title">둘째, 의사소통이 어렵다</h2>
+                  <p class="slide-hurdle-description">언어 장벽, 문화적 장벽 모두 존재</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-hurdles">
+              <p class="slide-kicker">고객</p>
+              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다.</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--customer-hurdles">
+              <div class="slide-hurdles-stack">
+                <section class="slide-hurdle-item slide-hurdle-item--muted">
+                  <h2 class="slide-hurdle-title">첫째, 외국인을 만나기 어렵다</h2>
+                  <p class="slide-hurdle-description">매칭(디스커버리), 물리적 만남 모두 어려움</p>
+                </section>
+                <section class="slide-hurdle-item slide-hurdle-item--focused">
                   <h2 class="slide-hurdle-title">둘째, 의사소통이 어렵다</h2>
                   <p class="slide-hurdle-description">언어 장벽, 문화적 장벽 모두 존재</p>
                 </section>
@@ -1264,7 +1304,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 42</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 43</div>
     </main>
 
     <script>
