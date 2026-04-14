@@ -215,7 +215,7 @@
 
       .slide-side-media--solution-stack {
         top: clamp(104px, 13vh, 176px);
-        right: clamp(156px, 16vw, 252px);
+        right: clamp(8px, 1.2vw, 20px);
         width: clamp(420px, 34vw, 520px);
       }
 
@@ -342,8 +342,12 @@
         background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
       }
 
-      .slide-solution-point--more {
-        text-align: center;
+      .slide-solution-more {
+        margin: clamp(10px, 1vh, 14px) 0 0 clamp(14px, 1.2vw, 18px);
+        font-size: clamp(1rem, 1.08vw, 1.1rem);
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
         color: rgba(45, 42, 30, 0.56);
       }
 
@@ -1097,7 +1101,7 @@
                   <div class="slide-solution-point">푸쉬앤톡 번역</div>
                   <div class="slide-solution-point">선택적 음성 출력</div>
                   <div class="slide-solution-point">백그라운드 실행</div>
-                  <div class="slide-solution-point slide-solution-point--more">등등등...</div>
+                  <p class="slide-solution-more">등등등...</p>
                 </div>
               </div>
             </div>
