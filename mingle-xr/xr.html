@@ -207,8 +207,8 @@
 
       .slide-side-media--solution-stack {
         top: clamp(104px, 13vh, 176px);
-        right: clamp(24px, 3.8vw, 64px);
-        width: clamp(360px, 34vw, 480px);
+        right: clamp(56px, 7vw, 112px);
+        width: clamp(300px, 28vw, 400px);
       }
 
       .slide-hurdles-stack {
@@ -291,8 +291,8 @@
 
       .slide-solution-point {
         position: relative;
-        padding: clamp(14px, 1.35vw, 18px) clamp(16px, 1.5vw, 22px) clamp(14px, 1.35vw, 18px)
-          clamp(24px, 2vw, 30px);
+        padding: clamp(14px, 1.35vw, 18px) clamp(10px, 1vw, 14px) clamp(14px, 1.35vw, 18px)
+          clamp(28px, 2.2vw, 36px);
         border-radius: 18px;
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 252, 246, 0.42) 100%);
         box-shadow: 0 14px 28px rgba(72, 57, 18, 0.06);
@@ -306,14 +306,22 @@
       .slide-solution-point::before {
         content: "";
         position: absolute;
-        top: 50%;
-        left: clamp(10px, 1vw, 14px);
-        width: 8px;
-        height: 8px;
-        transform: translateY(-50%);
+        top: clamp(12px, 1.1vw, 16px);
+        bottom: clamp(12px, 1.1vw, 16px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
         border-radius: 999px;
         background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
-        box-shadow: 0 0 0 4px rgba(251, 188, 50, 0.16);
+      }
+
+      .slide-solution-more {
+        margin: clamp(4px, 0.8vh, 8px) 0 0;
+        padding-left: clamp(30px, 2.4vw, 40px);
+        font-size: clamp(1rem, 1.14vw, 1.16rem);
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.56);
       }
 
       .slide-preview-image {
@@ -766,7 +774,7 @@
                 </section>
                 <section class="slide-hurdle-item">
                   <h2 class="slide-hurdle-title">둘째, 의사소통이 어렵다</h2>
-                  <p class="slide-hurdle-description">언어 장벽 존재<br/>문화적 장벽 존재</p>
+                  <p class="slide-hurdle-description">언어 장벽 존재<br/>대화 소재의 부재</p>
                 </section>
               </div>
             </div>
@@ -836,6 +844,7 @@
                 <div class="slide-solution-point">선택적 음성 출력</div>
                 <div class="slide-solution-point">백그라운드 노트테이킹</div>
               </div>
+              <p class="slide-solution-more">등등등...</p>
             </div>
           </article>
         </section>
