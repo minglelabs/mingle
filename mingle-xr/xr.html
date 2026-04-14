@@ -150,6 +150,10 @@
         max-width: min(44rem, calc(100% - clamp(360px, 34vw, 500px)));
       }
 
+      .slide-copy--with-brand-collage {
+        max-width: min(44rem, calc(100% - clamp(380px, 36vw, 560px)));
+      }
+
       .slide-side-media {
         position: absolute;
         top: clamp(48px, 8vh, 108px);
@@ -200,8 +204,8 @@
       }
 
       .slide-side-media--customer-hurdles {
-        top: clamp(124px, 16vh, 204px);
-        right: clamp(72px, 7vw, 132px);
+        top: clamp(124px, vh, 204px);
+        right: clamp(72px, 10vw, 132px);
         width: clamp(290px, 26vw, 380px);
       }
 
@@ -209,6 +213,13 @@
         top: clamp(104px, 13vh, 176px);
         right: clamp(56px, 7vw, 112px);
         width: clamp(300px, 28vw, 400px);
+      }
+
+      .slide-side-media--brand-collage {
+        top: clamp(98px, 12vh, 164px);
+        right: clamp(28px, 3.8vw, 72px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(300px, 32vw, 440px);
       }
 
       .slide-hurdles-stack {
@@ -322,6 +333,130 @@
         line-height: 1.3;
         letter-spacing: -0.02em;
         color: rgba(45, 42, 30, 0.56);
+      }
+
+      .slide-brand-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-brand-chip {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: clamp(10px, 1vw, 14px);
+        padding: clamp(14px, 1.4vw, 20px) clamp(18px, 1.8vw, 24px);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 18px 38px rgba(66, 49, 15, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-brand-chip::before {
+        display: inline-grid;
+        place-items: center;
+        width: clamp(28px, 2vw, 36px);
+        height: clamp(28px, 2vw, 36px);
+        border-radius: 999px;
+        font-size: clamp(0.8rem, 0.9vw, 0.95rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #fff;
+      }
+
+      .slide-brand-label {
+        font-size: clamp(1rem, 1.2vw, 1.34rem);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+        white-space: nowrap;
+      }
+
+      .slide-brand-chip--chatgpt {
+        top: 2%;
+        left: 10%;
+        transform: rotate(-10deg);
+      }
+
+      .slide-brand-chip--chatgpt::before {
+        content: "AI";
+        background: #10a37f;
+      }
+
+      .slide-brand-chip--google {
+        top: 21%;
+        right: 6%;
+        transform: rotate(7deg);
+      }
+
+      .slide-brand-chip--google::before {
+        content: "G";
+        background: #4285f4;
+      }
+
+      .slide-brand-chip--apple {
+        top: 41%;
+        left: 0;
+        transform: rotate(-6deg);
+      }
+
+      .slide-brand-chip--apple::before {
+        content: "A";
+        background: #111827;
+      }
+
+      .slide-brand-chip--transync {
+        bottom: 16%;
+        right: 12%;
+        transform: rotate(11deg);
+      }
+
+      .slide-brand-chip--transync::before {
+        content: "T";
+        background: #ef4444;
+      }
+
+      .slide-brand-chip--felo {
+        bottom: 0;
+        left: 14%;
+        transform: rotate(-8deg);
+      }
+
+      .slide-brand-chip--felo::before {
+        content: "F";
+        background: #7c3aed;
+      }
+
+      .slide-cross-mark {
+        position: absolute;
+        inset: 6% 0 0 0;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .slide-cross-mark::before,
+      .slide-cross-mark::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 108%;
+        height: clamp(10px, 0.9vw, 14px);
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(220, 38, 38, 0.9) 0%, rgba(239, 68, 68, 0.96) 100%);
+        box-shadow: 0 10px 26px rgba(220, 38, 38, 0.22);
+        transform-origin: center;
+      }
+
+      .slide-cross-mark::before {
+        transform: translate(-50%, -50%) rotate(29deg);
+      }
+
+      .slide-cross-mark::after {
+        transform: translate(-50%, -50%) rotate(-29deg);
       }
 
       .slide-preview-image {
@@ -631,6 +766,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-brand-collage {
+          max-width: 100%;
+        }
+
         .slide-side-media {
           top: 20px;
           right: 28px;
@@ -659,6 +798,14 @@
           position: relative;
           inset: auto;
           width: 100%;
+          margin-top: 28px;
+        }
+
+        .slide-side-media--brand-collage {
+          position: relative;
+          inset: auto;
+          width: 100%;
+          height: clamp(280px, 56vw, 360px);
           margin-top: 28px;
         }
       }
@@ -805,13 +952,33 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy">
+            <div class="slide-copy slide-copy--with-brand-collage">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">기존의 통번역 서비스들은<br/>소셜링에는 별 도움이 안됩니다</h1>
               <p class="slide-body">
                 업무 툴로는 쓸 수 있으나,<br/>
                 외국인과 친해지고 싶은 상황에선 크게 도움받기 어렵습니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--brand-collage" aria-hidden="true">
+              <div class="slide-brand-cloud">
+                <div class="slide-brand-chip slide-brand-chip--chatgpt">
+                  <span class="slide-brand-label">ChatGPT</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--google">
+                  <span class="slide-brand-label">구글번역기</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--apple">
+                  <span class="slide-brand-label">애플번역기</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--transync">
+                  <span class="slide-brand-label">Transync</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--felo">
+                  <span class="slide-brand-label">FeloTranslator</span>
+                </div>
+                <div class="slide-cross-mark"></div>
+              </div>
             </div>
           </article>
         </section>
