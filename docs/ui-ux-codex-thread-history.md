@@ -1319,5 +1319,6 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Reframed the XR solution-UI slide as a cause slide by renaming the kicker to `원인` and adding a short explanatory body sentence so the deck more clearly states that social translation only works when the full required UI/UX set is satisfied.
 - 2026-04-14: Dropped the XR customer-hurdles side stack lower on both slides and updated the focused second-hurdle subline from `문화적 장벽 존재` to the more concrete `대화 소재의 부재`.
 - 2026-04-14: Renamed both XR customer-hurdles slide kickers from `고객` to `문제` so those pages frame the barriers explicitly as problem-definition slides instead of audience slides.
+- 2026-04-14: Refined the customer-hurdles wording on both XR problem slides by changing `언어 장벽 존재` to `언어 장벽의 존재`, matching the more noun-phrase style used elsewhere in the deck.
 - 2026-04-14: Shifted the XR solution-UI side stack much further left by substantially increasing its `right` offset, so the narrow module column no longer sits awkwardly against the viewport edge.
 - 2026-04-14: Reduced the XR translation-tool collage footprint by shrinking both the side module width and the corresponding text-width subtraction, so the problem-slide title gets more breathing room and avoids an extra wrap on its second line.
