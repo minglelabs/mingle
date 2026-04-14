@@ -509,6 +509,23 @@
         gap: clamp(12px, 1vw, 14px);
       }
 
+      .slide-tool-badge {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        font-size: clamp(0.92rem, 1vw, 1.02rem);
+        font-weight: 750;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.82);
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.94) 0%, rgba(255, 233, 181, 0.7) 100%);
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
       .slide-tool-logo {
         width: clamp(36px, 2.8vw, 44px);
         height: clamp(36px, 2.8vw, 44px);
@@ -988,7 +1005,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">비전</p>
-              <h1 class="slide-title"><br/>향후에는 외국인을 사귀고 싶을 때<br/>가장 먼저 찾는 서비스가 되고 싶습니다</h1>
+              <h1 class="slide-title">향후에는 외국인을 사귀고 싶을 때<br/>가장 먼저 찾는 서비스가 되고 싶습니다</h1>
               <p class="slide-body">
                 처음에는 날카롭게 번역기로만 시작하지만<br/>
                 외국인과 만나고, 대화하고, 관계를 이어갈 때 발생하는<br/>
@@ -1181,6 +1198,47 @@
                 과거에는 기술적, 비용적 한계로 인해 해결이 어려웠습니다.<br/>
                 하지만 최근 1~2년 사이 AI 기술의 발전으로 전부 해결이 가능해졌습니다.
               </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-tool-list">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">그래서 모든 소셜링 상황에<br/>맞춤식 통번역 경험을 만듭니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--tool-list">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <div class="slide-tool-badge">01</div>
+                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저</h2>
+                  </div>
+                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <div class="slide-tool-badge">02</div>
+                    <h2 class="slide-tool-title">관광 업종 사장님</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <div class="slide-tool-badge">03</div>
+                    <h2 class="slide-tool-title">해외여행 현지 만남 주선</h2>
+                  </div>
+                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <div class="slide-tool-badge">04</div>
+                    <h2 class="slide-tool-title">디스코드 글로벌 게임 커뮤니티</h2>
+                  </div>
+                  <p class="slide-tool-description">길드원간 온라인 대화 경험</p>
+                </section>
+              </div>
             </div>
           </article>
         </section>
@@ -1752,7 +1810,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 49</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
     </main>
 
     <script>
