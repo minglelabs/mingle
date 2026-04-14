@@ -215,6 +215,12 @@
         height: clamp(420px, 42vw, 620px);
       }
 
+      .slide-side-media--travel-post-stack {
+        top: clamp(76px, 11vh, 136px);
+        right: clamp(28px, 4vw, 72px);
+        width: clamp(320px, 29vw, 420px);
+      }
+
       .slide-side-media--customer-hurdles {
         top: clamp(150px, 18vh, 224px);
         right: clamp(72px, 10vw, 132px);
@@ -259,6 +265,19 @@
       .slide-side-media--tool-list .slide-tool-description,
       .slide-side-media--experience-list .slide-tool-description {
         color: rgba(45, 42, 30, 0.62);
+      }
+
+      .slide-travel-post-stack {
+        display: grid;
+        gap: clamp(18px, 2vh, 24px);
+        justify-items: stretch;
+      }
+
+      .slide-travel-post-image {
+        width: 100%;
+        display: block;
+        border-radius: 24px;
+        box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
       }
 
       .slide-hurdles-stack {
@@ -1348,17 +1367,19 @@
                 대부분의 유저는 초보 단계를 벗어나지 못하고 이탈합니다.
               </p>
             </div>
-            <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--hellotalk1"
-                src="./assets/hellotalk1.jpg"
-                alt="HelloTalk Voiceroom interface"
-              />
-              <img
-                class="slide-preview-image slide-preview-image--hellotalk2"
-                src="./assets/hellotalk2.jpg"
-                alt="HelloTalk language exchange interface"
-              />
+            <div class="slide-side-media slide-side-media--travel-post-stack" aria-hidden="true">
+              <div class="slide-travel-post-stack">
+                <img
+                  class="slide-travel-post-image"
+                  src="./assets/travel-post-top.png"
+                  alt="Travel community post screenshot"
+                />
+                <img
+                  class="slide-travel-post-image"
+                  src="./assets/travel-post-bottom.jpg"
+                  alt="Travel meetup post screenshot"
+                />
+              </div>
             </div>
           </article>
         </section>
@@ -1526,16 +1547,10 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-experience-list">
               <p class="slide-kicker">타겟 고객</p>
-              <h1 class="slide-title">이외에도 여럿 타객<br/>맞춤식 통번역 경험을 만듭니다</h1>
+              <h1 class="slide-title">이외에도 여럿 타겟 버티컬을<br/>개별로 공략할 계획입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--experience-list">
               <div class="slide-tool-items">
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
-                  </div>
-                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
-                </section>
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
@@ -1553,6 +1568,12 @@
                     <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
                   </div>
                   <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">관광 서비스 업종 사장님들</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
                 </section>
                 <p class="slide-solution-more">등등등...</p>
               </div>
@@ -1593,7 +1614,7 @@
             <div class="slide-copy slide-copy--with-wide-side-media">
               <p class="slide-kicker">타겟 고객 4</p>
               <h1 class="slide-title">네 번째<br/>
-                다국적 디스코드 커뮤니티</h1>
+                디스코드 글로벌 게임 길드</h1>
               <p class="slide-body">
                 글로벌 서버 운영이 흔해지면서 통번역에 대한 수요도 늘었습니다.<br/>
                 하지만 디스코드엔 통번역 기능이 없어 써드파티를 써야합니다.<br/>
