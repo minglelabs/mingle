@@ -446,7 +446,11 @@
 
       .slide-cross-mark {
         position: absolute;
-        inset: 6% 0 0 0;
+        top: 50%;
+        left: 50%;
+        width: min(82%, clamp(240px, 24vw, 360px));
+        aspect-ratio: 1;
+        transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 10;
       }
@@ -457,7 +461,7 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 108%;
+        width: 100%;
         height: clamp(10px, 0.9vw, 14px);
         border-radius: 999px;
         background: linear-gradient(90deg, rgba(220, 38, 38, 0.9) 0%, rgba(239, 68, 68, 0.96) 100%);
@@ -1008,7 +1012,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-hurdles">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다.</h1>
+              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--customer-hurdles">
               <div class="slide-hurdles-stack">
@@ -1029,7 +1033,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-hurdles">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다.</h1>
+              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다</h1>
               <p class="slide-body">모두 큰 문제지만 우선 저희는 언어 장벽 해소에 집중합니다.</p>
             </div>
             <div class="slide-side-media slide-side-media--customer-hurdles">
@@ -1093,7 +1097,7 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">원인</p>
-              <h1 class="slide-title">그 이유는 소셜링에 필요한 UI/UX를<br/>충분히 제공해주지 못하기 때문입니다.</h1>
+              <h1 class="slide-title">그 이유는 소셜링에 필요한 UI/UX를<br/>충분히 제공해주지 못하기 때문입니다</h1>
               <p class="slide-body">
                 단순한 질의응답형 LLM이나 파파고 같은 푸쉬앤톡 번역기로는<br/>
                 복잡한 상황에 유연하게 대응하기 어렵습니다.
