@@ -154,6 +154,10 @@
         max-width: min(44rem, calc(100% - clamp(360px, 34vw, 520px)));
       }
 
+      .slide-copy--with-tool-list {
+        max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
+      }
+
       .slide-side-media {
         position: absolute;
         top: clamp(48px, 8vh, 108px);
@@ -220,6 +224,12 @@
         right: clamp(18px, 2.4vw, 48px);
         width: clamp(360px, 34vw, 520px);
         height: clamp(300px, 30vw, 420px);
+      }
+
+      .slide-side-media--tool-list {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(46px, 5vw, 96px);
+        width: clamp(340px, 30vw, 430px);
       }
 
       .slide-hurdles-stack {
@@ -439,6 +449,64 @@
 
       .slide-cross-mark::after {
         transform: translate(-50%, -50%) rotate(-29deg);
+      }
+
+      .slide-tool-items {
+        display: grid;
+        gap: clamp(14px, 1.6vh, 18px);
+      }
+
+      .slide-tool-item {
+        position: relative;
+        padding: clamp(16px, 1.45vw, 20px) clamp(18px, 1.6vw, 22px) clamp(16px, 1.45vw, 20px)
+          clamp(24px, 2vw, 28px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 252, 246, 0.58) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-tool-item::before {
+        content: "";
+        position: absolute;
+        top: clamp(14px, 1.1vw, 18px);
+        bottom: clamp(14px, 1.1vw, 18px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-tool-heading {
+        display: flex;
+        align-items: center;
+        gap: clamp(12px, 1vw, 14px);
+      }
+
+      .slide-tool-logo {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        flex: 0 0 auto;
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-tool-title {
+        margin: 0;
+        font-size: clamp(1.08rem, 1.28vw, 1.28rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-tool-description {
+        margin: clamp(10px, 0.9vw, 12px) 0 0;
+        font-size: clamp(1rem, 1.08vw, 1.1rem);
+        font-weight: 600;
+        line-height: 1.4;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.76);
       }
 
       .slide-preview-image {
@@ -752,6 +820,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-tool-list {
+          max-width: 100%;
+        }
+
         .slide-side-media {
           top: 20px;
           right: 28px;
@@ -793,6 +865,13 @@
           inset: auto;
           width: 100%;
           height: clamp(280px, 56vw, 360px);
+          margin-top: 28px;
+        }
+
+        .slide-side-media--tool-list {
+          position: relative;
+          inset: auto;
+          width: 100%;
           margin-top: 28px;
         }
       }
@@ -943,8 +1022,8 @@
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">기존의 통번역 서비스들은<br/>소셜링에는 별 도움이 안됩니다</h1>
               <p class="slide-body">
-                업무 툴로는 쓸 수 있으나,<br/>
-                외국인과 친해지고 싶은 상황에선 크게 도움받기 어렵습니다.
+                업무 툴로는 쓸 수 있고, 여행시 간헐적으로는 쓸 수 있지만<br/>
+                외국인과 친해지고 싶은 상황에선 크게 도움을 받기 어렵습니다.
               </p>
             </div>
             <div class="slide-side-media slide-side-media--brand-collage" aria-hidden="true">
@@ -1006,9 +1085,50 @@
                 <div class="slide-solution-points">
                   <div class="slide-solution-point">푸쉬앤톡 번역</div>
                   <div class="slide-solution-point">선택적 음성 출력</div>
-                  <div class="slide-solution-point">백그라운드 노트테이킹</div>
+                  <div class="slide-solution-point">백그라운드 실행</div>
                   <div class="slide-solution-point slide-solution-point--more">등등등...</div>
                 </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-tool-list">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title">게다가 가격과 AI의<br/>성능 문제도 있었습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--tool-list" aria-hidden="true">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-felo.jpg" alt="" />
+                    <h2 class="slide-tool-title">Felo Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">시간당 무려 5500원</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-google-translate.jpg" alt="" />
+                    <h2 class="slide-tool-title">Google Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">여전히 한국어 지원 안함</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-apple-translate.jpg" alt="" />
+                    <h2 class="slide-tool-title">Apple Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">기본적인 말도 못알아들음</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-papago.jpg" alt="" />
+                    <h2 class="slide-tool-title">Papago</h2>
+                  </div>
+                  <p class="slide-tool-description">큰 언어팩을 여러개 다운 받아야 됨</p>
+                </section>
               </div>
             </div>
           </article>
