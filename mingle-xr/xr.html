@@ -158,6 +158,10 @@
         max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
       }
 
+      .slide-copy--with-experience-list {
+        max-width: min(46rem, calc(100% - clamp(360px, 31vw, 470px)));
+      }
+
       .slide-side-media {
         position: absolute;
         top: clamp(48px, 8vh, 108px);
@@ -229,6 +233,12 @@
       .slide-side-media--tool-list {
         top: clamp(92px, 12vh, 152px);
         right: clamp(156px, 14vw, 236px);
+        width: clamp(292px, 25vw, 348px);
+      }
+
+      .slide-side-media--experience-list {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(96px, 9vw, 156px);
         width: clamp(292px, 25vw, 348px);
       }
 
@@ -867,6 +877,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-experience-list {
+          max-width: 100%;
+        }
+
         .slide-side-media {
           top: 20px;
           right: 28px;
@@ -912,6 +926,13 @@
         }
 
         .slide-side-media--tool-list {
+          position: relative;
+          inset: auto;
+          width: 100%;
+          margin-top: 28px;
+        }
+
+        .slide-side-media--experience-list {
           position: relative;
           inset: auto;
           width: 100%;
@@ -1204,40 +1225,37 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-tool-list">
+            <div class="slide-copy slide-copy--with-experience-list">
               <p class="slide-kicker">해결책</p>
               <h1 class="slide-title">그래서 모든 소셜링 상황에<br/>맞춤식 통번역 경험을 만듭니다</h1>
             </div>
-            <div class="slide-side-media slide-side-media--tool-list">
+            <div class="slide-side-media slide-side-media--experience-list">
               <div class="slide-tool-items">
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
-                    <div class="slide-tool-badge">01</div>
-                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저</h2>
+                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
                   </div>
                   <p class="slide-tool-description">모바일 보이스 챗 경험</p>
                 </section>
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
-                    <div class="slide-tool-badge">02</div>
-                    <h2 class="slide-tool-title">관광 업종 사장님</h2>
+                    <h2 class="slide-tool-title">외국인 관광객 대하는 사장님들</h2>
                   </div>
                   <p class="slide-tool-description">오프라인 대화 경험</p>
                 </section>
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
-                    <div class="slide-tool-badge">03</div>
-                    <h2 class="slide-tool-title">해외여행 현지 만남 주선</h2>
+                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
                   </div>
                   <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
                 </section>
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
-                    <div class="slide-tool-badge">04</div>
-                    <h2 class="slide-tool-title">디스코드 글로벌 게임 커뮤니티</h2>
+                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
                   </div>
-                  <p class="slide-tool-description">길드원간 온라인 대화 경험</p>
+                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
                 </section>
+                <p class="slide-solution-more">등등등...</p>
               </div>
             </div>
           </article>
