@@ -218,7 +218,8 @@
       .slide-side-media--travel-post-stack {
         top: clamp(76px, 11vh, 136px);
         right: clamp(28px, 4vw, 72px);
-        width: clamp(320px, 29vw, 420px);
+        width: clamp(360px, 31vw, 468px);
+        height: clamp(420px, 39vw, 560px);
       }
 
       .slide-side-media--customer-hurdles {
@@ -268,16 +269,30 @@
       }
 
       .slide-travel-post-stack {
-        display: grid;
-        gap: clamp(18px, 2vh, 24px);
-        justify-items: stretch;
+        position: relative;
+        width: 100%;
+        height: 100%;
       }
 
       .slide-travel-post-image {
-        width: 100%;
+        position: absolute;
         display: block;
         border-radius: 24px;
         box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
+      }
+
+      .slide-travel-post-image--top {
+        top: 0;
+        right: 0;
+        width: 72%;
+        z-index: 2;
+      }
+
+      .slide-travel-post-image--bottom {
+        left: 0;
+        bottom: 0;
+        width: 92%;
+        z-index: 1;
       }
 
       .slide-hurdles-stack {
@@ -1607,14 +1622,14 @@
             <div class="slide-side-media slide-side-media--travel-post-stack" aria-hidden="true">
               <div class="slide-travel-post-stack">
                 <img
-                  class="slide-travel-post-image"
-                  src="./assets/travel-post-top.png"
-                  alt="Travel community post screenshot"
-                />
-                <img
-                  class="slide-travel-post-image"
+                  class="slide-travel-post-image slide-travel-post-image--top"
                   src="./assets/travel-post-bottom.jpg"
                   alt="Travel meetup post screenshot"
+                />
+                <img
+                  class="slide-travel-post-image slide-travel-post-image--bottom"
+                  src="./assets/travel-post-top.png"
+                  alt="Travel community post screenshot"
                 />
               </div>
             </div>
@@ -1669,13 +1684,13 @@
                 <div class="slide-solution-points">
                   <div class="slide-solution-point">택시 기사 아저씨</div>
                   <div class="slide-solution-point">숙박 업소 사장님</div>
-                  <div class="slide-solution-point">발화 및 발화자 분리</div>
-                  <div class="slide-solution-point">3개국어 동시 스위칭</div>
+                  <div class="slide-solution-point">음식점 사장님</div>
+                  <div class="slide-solution-point">미용실 사장님</div>
                 </div>
                 <div class="slide-solution-points slide-solution-points--tail">
-                  <div class="slide-solution-point">푸쉬앤톡 번역</div>
-                  <div class="slide-solution-point">선택적 음성 출력</div>
-                  <div class="slide-solution-point">백그라운드 실행</div>
+                  <div class="slide-solution-point">공항 데스크 직원</div>
+                  <div class="slide-solution-point">미용 병원 원장님</div>
+                  <div class="slide-solution-point">관광 가이드</div>
                   <p class="slide-solution-more">등등등...</p>
                 </div>
               </div>
