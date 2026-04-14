@@ -147,7 +147,7 @@
       }
 
       .slide-copy--with-solution-stack {
-        max-width: min(44rem, calc(100% - clamp(360px, 34vw, 500px)));
+        max-width: min(40rem, calc(100% - clamp(520px, 42vw, 640px)));
       }
 
       .slide-copy--with-brand-collage {
@@ -212,7 +212,7 @@
       .slide-side-media--solution-stack {
         top: clamp(104px, 13vh, 176px);
         right: clamp(156px, 16vw, 252px);
-        width: clamp(190px, 17vw, 240px);
+        width: clamp(420px, 34vw, 520px);
       }
 
       .slide-side-media--brand-collage {
@@ -295,6 +295,13 @@
         color: rgba(45, 42, 30, 0.42);
       }
 
+      .slide-solution-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: clamp(12px, 1.4vw, 20px);
+        align-items: start;
+      }
+
       .slide-solution-points {
         display: grid;
         gap: clamp(10px, 1.2vh, 14px);
@@ -325,15 +332,9 @@
         background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
       }
 
-      .slide-solution-more {
-        margin: clamp(18px, 2.2vh, 28px) 0 0;
-        padding-left: 0;
-        font-size: clamp(1rem, 1.14vw, 1.16rem);
-        font-weight: 600;
-        line-height: 1.3;
-        letter-spacing: -0.02em;
-        color: rgba(45, 42, 30, 0.56);
+      .slide-solution-point--more {
         text-align: center;
+        color: rgba(45, 42, 30, 0.56);
       }
 
       .slide-brand-cloud {
@@ -782,6 +783,11 @@
           margin-top: 28px;
         }
 
+        .slide-solution-columns {
+          grid-template-columns: 1fr;
+          row-gap: 12px;
+        }
+
         .slide-side-media--brand-collage {
           position: relative;
           inset: auto;
@@ -990,16 +996,20 @@
               <p class="slide-body">제대로 도움이 되려면 모든 UI/UX를 충족시켜야만 합니다.</p>
             </div>
             <div class="slide-side-media slide-side-media--solution-stack">
-              <div class="slide-solution-points">
-                <div class="slide-solution-point">끊기지 않는 지속 번역</div>
-                <div class="slide-solution-point">실시간 동시 통번역</div>
-                <div class="slide-solution-point">발화 및 발화자 분리</div>
-                <div class="slide-solution-point">3개국어 동시 스위칭</div>
-                <div class="slide-solution-point">푸쉬앤톡 번역</div>
-                <div class="slide-solution-point">선택적 음성 출력</div>
-                <div class="slide-solution-point">백그라운드 노트테이킹</div>
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">끊기지 않는 지속 번역</div>
+                  <div class="slide-solution-point">실시간 동시 통번역</div>
+                  <div class="slide-solution-point">발화 및 발화자 분리</div>
+                  <div class="slide-solution-point">3개국어 동시 스위칭</div>
+                </div>
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">푸쉬앤톡 번역</div>
+                  <div class="slide-solution-point">선택적 음성 출력</div>
+                  <div class="slide-solution-point">백그라운드 노트테이킹</div>
+                  <div class="slide-solution-point slide-solution-point--more">등등등...</div>
+                </div>
               </div>
-              <p class="slide-solution-more">등등등...</p>
             </div>
           </article>
         </section>

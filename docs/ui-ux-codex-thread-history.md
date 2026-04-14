@@ -1322,3 +1322,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Refined the customer-hurdles wording on both XR problem slides by changing `언어 장벽 존재` to `언어 장벽의 존재`, matching the more noun-phrase style used elsewhere in the deck.
 - 2026-04-14: Shifted the XR solution-UI side stack much further left by substantially increasing its `right` offset, so the narrow module column no longer sits awkwardly against the viewport edge.
 - 2026-04-14: Reduced the XR translation-tool collage footprint by shrinking both the side module width and the corresponding text-width subtraction, so the problem-slide title gets more breathing room and avoids an extra wrap on its second line.
+- 2026-04-14: Split the XR solution-UI side stack into two columns so the lower four capabilities (`푸쉬앤톡 번역`, `선택적 음성 출력`, `백그라운드 노트테이킹`, `등등등...`) can rise into a right-hand column instead of extending the single vertical list too far downward.
