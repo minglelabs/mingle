@@ -27,6 +27,7 @@ import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
+const ANDROID_DUPLICATE_TOGGLE_GUARD_MS = 200;
 const RECENT_LANGUAGE_CODES_STORAGE_KEY =
   "mingle_live_phone_demo_recent_language_selector_codes_v1";
 
@@ -66,6 +67,7 @@ export default function LanguageSelector({
   const titleId = useId();
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const lastAndroidToggleRef = useRef<{ code: string; at: number } | null>(null);
   const [query, setQuery] = useState("");
   const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(),
@@ -75,6 +77,10 @@ export default function LanguageSelector({
     () => resolveDefaultLanguageSelectorSortMode(localeInfo.source),
     [localeInfo.source],
   );
+  const isLikelyAndroid = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return /android/i.test(navigator.userAgent || "");
+  }, []);
   const showSortToggle = copy.languageSelectorSortLocaleLabel !== "A-Z";
   const [sortMode, setSortMode] = useState<LanguageSelectorSortMode>(defaultSortMode);
   const languageItems = useMemo(
@@ -170,6 +176,19 @@ export default function LanguageSelector({
   }, [isOpen, requestClose]);
 
   const handleToggleRequest = useCallback((code: string) => {
+    if (isLikelyAndroid) {
+      const now = Date.now();
+      const lastToggle = lastAndroidToggleRef.current;
+      if (
+        lastToggle
+        && lastToggle.code === code
+        && now - lastToggle.at < ANDROID_DUPLICATE_TOGGLE_GUARD_MS
+      ) {
+        return;
+      }
+      lastAndroidToggleRef.current = { code, at: now };
+    }
+
     const isSelected = selectedLanguages.includes(code);
     const isDisabled =
       disabled || (!isSelected && atMax) || (isSelected && atMin);
@@ -182,7 +201,7 @@ export default function LanguageSelector({
     }
 
     onToggleLanguage(code);
-  }, [atMax, atMin, disabled, onToggleLanguage, selectedLanguages]);
+  }, [atMax, atMin, disabled, isLikelyAndroid, onToggleLanguage, selectedLanguages]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -268,7 +287,9 @@ export default function LanguageSelector({
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
-                            : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
+                            : isLikelyAndroid
+                              ? ""
+                              : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
                         }`}
                       >
                         <span
@@ -377,9 +398,11 @@ export default function LanguageSelector({
                     } ${
                       isDisabled && !isSelected
                         ? "cursor-not-allowed opacity-45"
-                        : isDisabled && isSelected
-                          ? "cursor-not-allowed opacity-80"
-                          : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+                      : isDisabled && isSelected
+                        ? "cursor-not-allowed opacity-80"
+                          : isLikelyAndroid
+                            ? ""
+                            : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
                     }`}
                   >
                     <span

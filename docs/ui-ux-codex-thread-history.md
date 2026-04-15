@@ -97,6 +97,11 @@
   Fix: The selector now blurs the search input as soon as a pointer interaction begins outside the search field, so starting a scroll gesture on the recent chips or the language list dismisses the keyboard immediately.
   Status: Resolved in-thread.
 
+- **Android could leave selected language chips/cards with gray borders and could occasionally drop a recent chip after rapid retoggles**
+  Problem: In the Android WebView only, selected items in both the recent-chip strip and the full language list could sometimes keep a gray border even after the selection state updated. Repeatedly toggling a recently deselected language could also occasionally flip the same code twice in quick succession, causing the chip to disappear from the recent strip entirely.
+  Fix: Added Android-only protection in the shared language selector: hover-border effects are suppressed on Android so sticky hover no longer overrides the selected amber border, and same-code retoggles within a very short time window are ignored to block duplicate Android tap delivery from undoing the intended selection state. iPhone behavior was left unchanged.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
