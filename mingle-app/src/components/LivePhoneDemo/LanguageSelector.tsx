@@ -220,7 +220,7 @@ export default function LanguageSelector({
             <div className="w-10 shrink-0" aria-hidden="true" />
           </div>
 
-          <div className="space-y-4 px-4 pb-4">
+          <div className="space-y-5 px-4 pb-5 pt-1">
             {recentLanguageItems.length > 0 ? (
               <div className="-mx-1 overflow-x-auto pb-1">
                 <div className="flex min-w-max items-center gap-2 px-1">
@@ -264,7 +264,7 @@ export default function LanguageSelector({
 
             <div className="flex items-stretch gap-3">
               <div
-                className="flex h-[52px] min-w-0 items-center gap-3 rounded-[1.15rem] border border-[#e6dfd2] bg-white px-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+                className="flex h-14 min-w-0 items-center gap-3 rounded-[26px] border border-[#e6dfd2] bg-white px-4 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
                 style={{ flex: "3 1 0" }}
               >
                 <Search size={18} className="shrink-0 text-slate-400" />
@@ -282,20 +282,20 @@ export default function LanguageSelector({
               </div>
 
               <div
-                className="min-w-0 overflow-hidden rounded-[1.15rem] border border-[#e6dfd2] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
+                className="min-w-0 rounded-[26px] border border-[#e6dfd2] bg-[#f3eee4] p-1.5 shadow-[0_10px_28px_rgba(15,23,42,0.05)]"
                 style={{ flex: "2 1 0" }}
               >
-                <div className="flex h-[52px] items-stretch">
+                <div className="flex h-full items-stretch gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
                       setSortMode("locale");
                     }}
-                    className="flex-1 border-b-2 border-r border-[#ece6db] px-2 text-[0.78rem] font-semibold transition sm:text-[0.84rem]"
-                    style={{
-                      borderBottomColor: sortMode === "locale" ? "#111827" : "transparent",
-                      color: sortMode === "locale" ? "#111827" : "#9CA3AF",
-                    }}
+                    className={`flex-1 rounded-[20px] px-2.5 text-[0.8rem] font-semibold transition sm:text-[0.86rem] ${
+                      sortMode === "locale"
+                        ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                        : "text-slate-500 hover:text-slate-900"
+                    }`}
                     aria-pressed={sortMode === "locale"}
                   >
                     {copy.languageSelectorSortLocaleLabel}
@@ -305,12 +305,11 @@ export default function LanguageSelector({
                     onClick={() => {
                       setSortMode("alphabetical");
                     }}
-                    className="flex-1 border-b-2 px-2 text-[0.78rem] font-semibold transition sm:text-[0.84rem]"
-                    style={{
-                      borderBottomColor:
-                        sortMode === "alphabetical" ? "#111827" : "transparent",
-                      color: sortMode === "alphabetical" ? "#111827" : "#9CA3AF",
-                    }}
+                    className={`flex-1 rounded-[20px] px-2.5 text-[0.8rem] font-semibold transition sm:text-[0.86rem] ${
+                      sortMode === "alphabetical"
+                        ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                        : "text-slate-500 hover:text-slate-900"
+                    }`}
                     aria-pressed={sortMode === "alphabetical"}
                   >
                     {copy.languageSelectorSortAlphabeticalLabel}

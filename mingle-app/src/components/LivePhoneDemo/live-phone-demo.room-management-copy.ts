@@ -36,7 +36,7 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     languageSelectorCloseLabel: '닫기',
     languageSelectorSearchPlaceholder: '언어 검색',
     languageSelectorSortLocaleLabel: '가나다순',
-    languageSelectorSortAlphabeticalLabel: 'EN A-Z',
+    languageSelectorSortAlphabeticalLabel: 'A-Z',
     languageSelectorNoResultsLabel: '검색 결과가 없어요.',
     renameButtonLabel: '대화방 이름 변경',
     renameDialogTitle: '대화방 이름 변경',

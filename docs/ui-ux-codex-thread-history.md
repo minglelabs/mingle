@@ -42,6 +42,11 @@
   Fix: Kept the local language toggle synchronous, but deferred the parent callback into a follow-up effect that runs after `selectedLanguages` commits. That preserves the same UI behavior without issuing parent state updates from the child render path.
   Status: Resolved in-thread.
 
+- **The search field and sort toggle row regressed into a boxy, cramped treatment**
+  Problem: The 60/40 search-and-sort row met the structural requirement, but the controls lost the softer rounded treatment and inner padding from the original design language. The row read too angular, too short, and the Korean alphabetical label surfaced as `EN A-Z`, which felt unnecessarily technical in UI copy.
+  Fix: Restored a taller rounded search field, converted the sort control back into a padded pill-style segmented toggle with rounded inner buttons, increased header-body spacing, and simplified the Korean alphabetical label to `A-Z`.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
