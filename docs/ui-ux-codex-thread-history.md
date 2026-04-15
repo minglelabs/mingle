@@ -57,6 +57,11 @@
   Fix: Softened the inactive chip back toward the normal surface by using a lighter gray background and border and by dropping the full grayscale filter on the flag, leaving only a gentler opacity reduction similar to other disabled controls in the room UI.
   Status: Resolved in-thread.
 
+- **The language-selector title sat too high instead of sharing the back button's row**
+  Problem: The `언어 선택` title was absolutely centered inside a container that also mixed the safe-area inset into the same box. That made the title read like it was pinned toward the ceiling instead of sitting on the same visual baseline as the left chevron button.
+  Fix: Split the safe-area inset into its own spacer and rebuilt the header as a normal 56px row, so the title and back button are vertically aligned within the same chrome line.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
