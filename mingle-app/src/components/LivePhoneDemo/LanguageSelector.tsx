@@ -220,7 +220,7 @@ export default function LanguageSelector({
 
           <div className="space-y-5 px-4 pb-5 pt-1">
             {recentLanguageItems.length > 0 ? (
-              <div className="-mx-1 overflow-x-auto pb-1">
+              <div className="-mx-1 overflow-x-auto pb-1 no-scrollbar">
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
                     const isSelected = selectedLanguages.includes(lang.code);
