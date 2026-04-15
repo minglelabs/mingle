@@ -67,6 +67,11 @@
   Fix: Reused the app's existing `no-scrollbar` utility on the recent-language strip so horizontal swipe scrolling still works while the visible scrollbar stays hidden.
   Status: Resolved in-thread.
 
+- **The language search and sort controls drifted into oversized pill shapes**
+  Problem: After the earlier control pass, the search field and sort toggle became taller than intended, looked like full pills instead of lightly rounded rectangles, and still gave the search side more width than the sort side. The Korean locale-order label was also longer than necessary for the available space.
+  Fix: Reduced both controls to a shorter rounded-rectangle treatment, changed the row split from 60/40 to 50/50, matched the inner sort buttons to the same smaller-corner shape, and shortened the Korean/Japanese/Chinese locale-order labels to `가나다`, `あいう`, `拼音`, and `注音`.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
