@@ -19,6 +19,7 @@ import {
   sanitizeRecentLanguageCodes,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
+  resolveLanguageSelectorShowsSortToggle,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
@@ -79,7 +80,10 @@ export default function LanguageSelector({
     () => resolveDefaultLanguageSelectorSortMode(localeInfo.source),
     [localeInfo.source],
   );
-  const showSortToggle = copy.languageSelectorSortLocaleLabel !== "A-Z";
+  const showSortToggle = useMemo(
+    () => resolveLanguageSelectorShowsSortToggle(localeInfo.locale),
+    [localeInfo.locale],
+  );
   const [sortMode, setSortMode] = useState<LanguageSelectorSortMode>(defaultSortMode);
   const languageItems = useMemo(
     () => buildLanguageSelectorItems(localeInfo.locale),

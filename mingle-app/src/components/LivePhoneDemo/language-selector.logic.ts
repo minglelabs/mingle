@@ -1,4 +1,10 @@
 import {
+  DEFAULT_LOCALE as APP_DEFAULT_LOCALE,
+  resolveLegalDocumentLocale,
+  resolveSupportedLocaleTag,
+  type LegalDocumentLocale,
+} from "@/i18n/config";
+import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   type SttLanguageCode,
@@ -19,6 +25,15 @@ type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 const FALLBACK_LOCALE = "en";
 export const LANGUAGE_SELECTOR_HISTORY_STATE_KEY = "__mingle_live_phone_demo_lang_selector";
 export const LANGUAGE_SELECTOR_RECENT_CODES_LIMIT = 12;
+const LANGUAGE_SELECTOR_HIDE_SORT_TOGGLE_LOCALES = new Set<LegalDocumentLocale>([
+  "en",
+  "fr",
+  "de",
+  "es",
+  "pt",
+  "it",
+  "vi",
+]);
 const SELF_NAME_LOCALE_OVERRIDES: Partial<Record<string, string>> = {
   no: "nb-NO",
   zh: "zh-CN",
@@ -103,6 +118,12 @@ export function resolveDefaultLanguageSelectorSortMode(
   source: LanguageSelectorLocaleSource,
 ): LanguageSelectorSortMode {
   return source === "fallback" ? "alphabetical" : "locale";
+}
+
+export function resolveLanguageSelectorShowsSortToggle(rawLocale: string): boolean {
+  const supportedLocale = resolveSupportedLocaleTag(rawLocale) ?? APP_DEFAULT_LOCALE;
+  const legalLocale = resolveLegalDocumentLocale(supportedLocale);
+  return !LANGUAGE_SELECTOR_HIDE_SORT_TOGGLE_LOCALES.has(legalLocale);
 }
 
 export function buildLanguageSelectorItems(

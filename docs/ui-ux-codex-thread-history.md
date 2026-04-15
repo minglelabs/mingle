@@ -102,6 +102,11 @@
   Fix: The selector now keeps selected hover styling separate from unselected hover styling so a selected item never reverts to the neutral gray hover border. It also tracks the latest intended selected-language set locally while processing taps, so rapid reselect/deselect sequences use the up-to-date state instead of a stale prop snapshot, and it preserves visibility of the just-toggled recent chip by scrolling the horizontal strip enough to keep that chip in view after each reorder.
   Status: Resolved in-thread.
 
+- **Chinese locale sort labels overstated the actual sort implementation, and sort-toggle visibility depended on copy text**
+  Problem: The selector labeled the locale-order option as `拼音` / `注音`, but the actual implementation only used locale-aware string comparison on localized names rather than explicit pinyin/zhuyin sort keys. Separately, the decision to hide the sort toggle for Latin-script locales was keyed off whether the translated label literally equaled `A-Z`, so a copy-only change could silently change layout behavior.
+  Fix: Lowered the Chinese locale labels to the more neutral `中文顺序` / `中文順序`, and moved sort-toggle visibility into explicit locale metadata inside the selector logic so UI behavior no longer depends on translated strings.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.

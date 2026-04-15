@@ -9,6 +9,7 @@ import {
   isLanguageSelectorHistoryOpen,
   registerDeselectedLanguageCode,
   resolveDefaultLanguageSelectorSortMode,
+  resolveLanguageSelectorShowsSortToggle,
   sanitizeRecentLanguageCodes,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
@@ -110,6 +111,13 @@ describe("language-selector.logic", () => {
     expect(resolveDefaultLanguageSelectorSortMode("fallback")).toBe("alphabetical");
     expect(resolveDefaultLanguageSelectorSortMode("ui")).toBe("locale");
     expect(resolveDefaultLanguageSelectorSortMode("browser")).toBe("locale");
+  });
+
+  it("decides sort-toggle visibility from locale metadata instead of translated labels", () => {
+    expect(resolveLanguageSelectorShowsSortToggle("ko-KR")).toBe(true);
+    expect(resolveLanguageSelectorShowsSortToggle("zh-CN")).toBe(true);
+    expect(resolveLanguageSelectorShowsSortToggle("fr-FR")).toBe(false);
+    expect(resolveLanguageSelectorShowsSortToggle("vi-VN")).toBe(false);
   });
 
   it("marks and clears the language selector history state without dropping other keys", () => {
