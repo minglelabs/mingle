@@ -2244,6 +2244,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [conversationId, conversationTitle, isRenamingConversation])
 
   useEffect(() => registerNativeBackHandler(() => {
+    if (langSelectorOpen) {
+      setLangSelectorOpen(false)
+      return true
+    }
+
     if (renameConversationDialogOpen) {
       if (!isRenamingConversation) {
         closeRenameConversationDialog()
@@ -2280,6 +2285,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     deleteConversationDialogOpen,
     isDeletingConversation,
     isRenamingConversation,
+    langSelectorOpen,
     menuOpen,
     renameConversationDialogOpen,
     requestMenuBackStep,
@@ -4062,7 +4068,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   closeMenuPanel()
                   setLangSelectorOpen(o => !o)
                 }}
-                aria-haspopup="menu"
+                aria-label={roomManagementCopy.languageSelectorTitle}
+                aria-haspopup="dialog"
                 aria-expanded={langSelectorOpen}
                 className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
@@ -4084,14 +4091,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 />
               </button>
-              <LanguageSelector
-                isOpen={langSelectorOpen}
-                onClose={() => setLangSelectorOpen(false)}
-                selectedLanguages={selectedLanguages}
-                onToggleLanguage={handleToggleLanguage}
-                uiLocale={uiLocale}
-                triggerRef={langSelectorButtonRef}
-              />
+              {langSelectorOpen ? (
+                <LanguageSelector
+                  isOpen={langSelectorOpen}
+                  onClose={() => setLangSelectorOpen(false)}
+                  selectedLanguages={selectedLanguages}
+                  onToggleLanguage={handleToggleLanguage}
+                  uiLocale={uiLocale}
+                  copy={roomManagementCopy}
+                  triggerRef={langSelectorButtonRef}
+                />
+              ) : null}
             </div>
             {showMenuButton ? (
               <div className="relative">

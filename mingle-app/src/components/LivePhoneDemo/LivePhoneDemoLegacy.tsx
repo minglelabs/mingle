@@ -13,6 +13,7 @@ import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt-legacy'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
+import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -87,6 +88,7 @@ import {
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
+import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 
@@ -828,6 +830,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
@@ -1793,6 +1796,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (langSelectorOpen) {
+      setLangSelectorOpen(false)
+      return true
+    }
+
+    return false
+  }, 10), [langSelectorOpen])
 
   useEffect(() => {
     if (showMenuButton) return
@@ -3226,7 +3238,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   closeMenuPanel()
                   setLangSelectorOpen(o => !o)
                 }}
-                aria-haspopup="menu"
+                aria-label={roomManagementCopy.languageSelectorTitle}
+                aria-haspopup="dialog"
                 aria-expanded={langSelectorOpen}
                 className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
@@ -3248,14 +3261,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 />
               </button>
-              <LanguageSelector
-                isOpen={langSelectorOpen}
-                onClose={() => setLangSelectorOpen(false)}
-                selectedLanguages={selectedLanguages}
-                onToggleLanguage={handleToggleLanguage}
-                uiLocale={uiLocale}
-                triggerRef={langSelectorButtonRef}
-              />
+              {langSelectorOpen ? (
+                <LanguageSelector
+                  isOpen={langSelectorOpen}
+                  onClose={() => setLangSelectorOpen(false)}
+                  selectedLanguages={selectedLanguages}
+                  onToggleLanguage={handleToggleLanguage}
+                  uiLocale={uiLocale}
+                  copy={roomManagementCopy}
+                  triggerRef={langSelectorButtonRef}
+                />
+              ) : null}
             </div>
             {showMenuButton ? (
               <div className="relative">

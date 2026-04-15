@@ -2,6 +2,11 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **In-room language selection was too cramped to scan or control across the full language catalog**
+  Problem: The room header still opened a tiny tooltip-style selector. Flags were much smaller than the conversation-list avatar reference, there was no search, names only reflected the current UI locale, and users had no way to switch between locale-sorted and alphabetical browsing.
+  Fix: The room language selector was promoted to a full-screen overlay with avatar-sized flags, language search, dual-language labels (`localized / English / native` as needed), and a visible sort toggle for user-locale order vs. alphabetical order.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
