@@ -69,6 +69,7 @@ export default function LanguageSelector({
   const pendingRecentChipVisibilityCodeRef = useRef<string | null>(null);
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
   const [query, setQuery] = useState("");
   const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(),
@@ -139,6 +140,10 @@ export default function LanguageSelector({
   }, []);
   const atMax = selectedLanguages.length >= MAX_LANGS;
   const atMin = selectedLanguages.length <= MIN_LANGS;
+
+  useEffect(() => {
+    selectedLanguagesRef.current = selectedLanguages;
+  }, [selectedLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -214,19 +219,31 @@ export default function LanguageSelector({
 
   const handleToggleRequest = useCallback((code: string) => {
     pendingRecentChipVisibilityCodeRef.current = code;
-    const isSelected = selectedLanguages.includes(code);
+    const currentSelectedLanguages = selectedLanguagesRef.current;
+    const isSelected = currentSelectedLanguages.includes(code);
     const isDisabled =
-      disabled || (!isSelected && atMax) || (isSelected && atMin);
+      disabled
+      || (!isSelected && currentSelectedLanguages.length >= MAX_LANGS)
+      || (isSelected && currentSelectedLanguages.length <= MIN_LANGS);
     if (isDisabled) return;
+
+    const nextSelectedLanguages = isSelected
+      ? currentSelectedLanguages.filter((languageCode) => languageCode !== code)
+      : [...currentSelectedLanguages, code];
+    selectedLanguagesRef.current = nextSelectedLanguages;
 
     if (isSelected) {
       setRecentLanguageCodes((currentCodes) =>
         registerDeselectedLanguageCode(code, currentCodes),
       );
+    } else {
+      setRecentLanguageCodes((currentCodes) =>
+        syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
+      );
     }
 
     onToggleLanguage(code);
-  }, [atMax, atMin, disabled, onToggleLanguage, selectedLanguages]);
+  }, [disabled, onToggleLanguage]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
