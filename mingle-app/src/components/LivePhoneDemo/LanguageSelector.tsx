@@ -204,10 +204,10 @@ export default function LanguageSelector({
             <button
               type="button"
               onClick={requestClose}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-gray-100 hover:text-slate-950"
+              className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               aria-label={copy.backButtonLabel}
             >
-              <ChevronLeft size={22} strokeWidth={2.4} />
+              <ChevronLeft size={24} strokeWidth={2.4} />
             </button>
             <p
               id={titleId}
@@ -215,7 +215,7 @@ export default function LanguageSelector({
             >
               {copy.languageSelectorTitle}
             </p>
-            <div className="w-10 shrink-0" aria-hidden="true" />
+            <div className="min-w-[40px] shrink-0" aria-hidden="true" />
           </div>
 
           <div className="space-y-5 px-4 pb-5 pt-1">
