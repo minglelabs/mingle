@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import {
   hasRenderableChatBubbleTimestamp,
@@ -82,6 +83,16 @@ function normalizeLanguageCode(rawLanguage: string): string {
   return (rawLanguage || '').trim().replace('_', '-').toLowerCase().split('-')[0] || ''
 }
 
+function normalizeTranslationLanguageCode(rawLanguage: string): string {
+  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
+  if (canonical) return canonical
+  return (rawLanguage || '').trim().replace(/_/g, '-')
+}
+
+function normalizeTranslationLanguageKey(rawLanguage: string): string {
+  return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
+}
+
 function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
   const normalized = normalizeLanguageCode(rawLanguage)
   if (!normalized || normalized === 'unknown') {
@@ -91,7 +102,7 @@ function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
 }
 
 function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
-  const sourceLanguage = normalizeLanguageCode(utterance.originalLang)
+  const sourceLanguage = normalizeTranslationLanguageKey(utterance.originalLang)
   const keepSourceLanguageBubble = (
     utterance.sourceLanguagesMixed === true
     || utterance.sourceTextHasForeignScript === true
@@ -102,7 +113,7 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   const pushLanguage = (rawLanguage: string) => {
     const language = (rawLanguage || '').trim()
     if (!language) return
-    const normalized = normalizeLanguageCode(language)
+    const normalized = normalizeTranslationLanguageKey(language)
     if (!keepSourceLanguageBubble && sourceLanguage && normalized === sourceLanguage) return
     const key = normalized || language.toLowerCase()
     if (seen.has(key)) return

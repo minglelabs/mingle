@@ -2,6 +2,111 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
+- **In-room language selection was too cramped to scan or control across the full language catalog**
+  Problem: The room header still opened a tiny tooltip-style selector. Flags were much smaller than the conversation-list avatar reference, there was no search, names only reflected the current UI locale, and users had no way to switch between locale-sorted and alphabetical browsing.
+  Fix: The room language selector was promoted to a full-screen overlay with avatar-sized flags, language search, dual-language labels (`localized / English / native` as needed), and a visible sort toggle for user-locale order vs. alphabetical order.
+  Status: Resolved in-thread.
+
+- **The full-screen in-room language selector could render invisibly behind the room overlay**
+  Problem: The selector itself was portaled to `document.body`, but the active room is also rendered as a full-screen body portal from the conversation list. The selector shipped with a lower stacking order than the room container, and the follow-up `z-[140]` Tailwind utility still resolved to `z-index: auto` at runtime, so tapping the language button updated state but the overlay stayed hidden underneath the room.
+  Fix: Raised the language-selector overlay above the room container and pinned the `z-index` with an inline style instead of relying on the missing utility class, so the full-screen selector reliably appears on top in both current and legacy room runtimes.
+  Status: Resolved in-thread.
+
+- **The full-screen language selector still behaved like a detached modal instead of a first-class room subpage**
+  Problem: Even after the selector became visible, its top controls did not match the app's existing top-tab pattern, the selected-language area had no fast re-toggle strip, and closing it relied on local state only. That meant iOS edge-swipe / browser back could not dismiss it like a real screen, Android/native banner behavior did not mirror the hamburger drawer, and history replay risked a brief reopen flash right after a back gesture.
+  Fix: Rebuilt the selector header around the app's standard 56px top chrome and tab-style sort toggles, added a horizontal recent-language flag strip with active/inactive re-selection states, pushed a dedicated selector history entry for real back navigation, and hid the native banner while the selector is open so it behaves like the room drawer instead of a floating modal.
+  Status: Resolved in-thread.
+
+- **Opening the full-screen language selector immediately forced the search field and mobile keyboard open**
+  Problem: The selector auto-focused the search input on mount with repeated timers. On mobile this meant the keyboard jumped up every time the screen opened, even when the user only wanted to scan or tap recent flags first.
+  Fix: Removed the automatic search focus path so the selector opens in a neutral browsing state and only raises the keyboard when the user explicitly taps search.
+  Status: Resolved in-thread.
+
+- **The full-screen language selector header still looked like a modal instead of the app's normal top tab**
+  Problem: The selector header kept a right-side close affordance and left-aligned title, so it read like a dismissible popup instead of a room subpage. The expected chrome was a left chevron with the `언어 선택` title visually centered.
+  Fix: Replaced the close icon with a left chevron back button and centered the selector title within the 56px top bar, keeping the right side as spacing only so the title stays visually centered.
+  Status: Resolved in-thread.
+
+- **Deselected recent-language flags did not look inactive enough**
+  Problem: In the horizontal recent-language strip, deselected flags only lost some saturation on the emoji itself. The circular chip still read too close to the active state, so users could miss that the language was currently off.
+  Fix: Shifted the entire deselected chip into a stronger gray treatment by darkening the chip background and border and lowering the flag opacity further, so the whole circular control reads as clearly inactive.
+  Status: Resolved in-thread.
+
+- **Recent-language chips were ordered by raw recency instead of by active state**
+  Problem: The horizontal chip strip mixed active and inactive languages together based on the last interaction. That made it harder to scan the currently enabled set, because a recently deselected chip could sit ahead of still-active languages.
+  Fix: Reordered the chip strip into two groups: active languages always render first in their original selection order (oldest selected on the left, newest selected on the right), and deselected languages render after them in deselection-recency order (most recently turned off first).
+  Status: Resolved in-thread.
+
+- **Changing room languages could trigger a cross-component React update warning**
+  Problem: The room runtime notified `ConversationList` about selected-language changes from inside the `setSelectedLanguages` updater function. React can execute that updater while reconciling `LivePhoneDemo`, which produced the warning about updating `ConversationList` while rendering a different component.
+  Fix: Kept the local language toggle synchronous, but deferred the parent callback into a follow-up effect that runs after `selectedLanguages` commits. That preserves the same UI behavior without issuing parent state updates from the child render path.
+  Status: Resolved in-thread.
+
+- **The search field and sort toggle row regressed into a boxy, cramped treatment**
+  Problem: The 60/40 search-and-sort row met the structural requirement, but the controls lost the softer rounded treatment and inner padding from the original design language. The row read too angular, too short, and the Korean alphabetical label surfaced as `EN A-Z`, which felt unnecessarily technical in UI copy.
+  Fix: Restored a taller rounded search field, converted the sort control back into a padded pill-style segmented toggle with rounded inner buttons, increased header-body spacing, and simplified the Korean alphabetical label to `A-Z`.
+  Status: Resolved in-thread.
+
+- **Language-card secondary labels sat too far below the localized title and read too small**
+  Problem: In the language list cards, the gap between the localized language name and the `English / native` secondary label was slightly too loose, and the secondary line read smaller than intended for quick scanning.
+  Fix: Tightened the vertical gap between the two lines and increased the secondary-label font size while keeping its weight unchanged.
+  Status: Resolved in-thread.
+
+- **Inactive recent-language chips became so gray that the underlying flag was hard to recognize**
+  Problem: The first inactive-chip pass pushed the whole circular chip too far into gray, to the point where the flag identity was harder to read than the intended lightweight disabled treatment.
+  Fix: Softened the inactive chip back toward the normal surface by using a lighter gray background and border and by dropping the full grayscale filter on the flag, leaving only a gentler opacity reduction similar to other disabled controls in the room UI.
+  Status: Resolved in-thread.
+
+- **The language-selector title sat too high instead of sharing the back button's row**
+  Problem: The `언어 선택` title was absolutely centered inside a container that also mixed the safe-area inset into the same box. That made the title read like it was pinned toward the ceiling instead of sitting on the same visual baseline as the left chevron button.
+  Fix: Split the safe-area inset into its own spacer and rebuilt the header as a normal 56px row, so the title and back button are vertically aligned within the same chrome line.
+  Status: Resolved in-thread.
+
+- **The recent-language horizontal strip showed a visible scrollbar under the flags**
+  Problem: On mobile especially, horizontally scrolling the recent-language flag strip exposed a long native scrollbar under the chips, which made the compact selector header feel noisier than intended.
+  Fix: Reused the app's existing `no-scrollbar` utility on the recent-language strip so horizontal swipe scrolling still works while the visible scrollbar stays hidden.
+  Status: Resolved in-thread.
+
+- **The language search and sort controls drifted into oversized pill shapes**
+  Problem: After the earlier control pass, the search field and sort toggle became taller than intended, looked like full pills instead of lightly rounded rectangles, and still gave the search side more width than the sort side. The Korean locale-order label was also longer than necessary for the available space.
+  Fix: Reduced both controls to a shorter rounded-rectangle treatment, changed the row split from 60/40 to 50/50, matched the inner sort buttons to the same smaller-corner shape, and shortened the Korean/Japanese/Chinese locale-order labels to `가나다`, `あいう`, `拼音`, and `注音`.
+  Status: Resolved in-thread.
+
+- **The language-selector back chevron still did not match the room header exactly**
+  Problem: Even after the header row alignment was fixed, the selector's back button still used a different hit box, icon size, and hover treatment from the main conversation header chevron, so the mismatch was visible side by side.
+  Fix: Reused the same `38px/40px` button box, `24px` chevron icon sizing, and focus/interaction treatment as the room header back button so the selector chrome now matches it exactly.
+  Status: Resolved in-thread.
+
+- **The selected-language count disappeared from the language-selector top bar**
+  Problem: The header no longer showed the active selection count like `2/5`, so users lost the quick confirmation of how many languages were currently enabled while browsing the selector.
+  Fix: Restored the count in the top-right header slot and aligned it to the same row as the back chevron and centered title, keeping the title visually centered while the count remains visible.
+  Status: Resolved in-thread.
+
+- **Alphabet-script locales still showed a redundant sort toggle beside search**
+  Problem: For locales whose native ordering label was already `A-Z`, the selector still rendered a second `EN A-Z` toggle even though the UI cost outweighed the value for these users, making the search row feel cramped for little gain.
+  Fix: When the locale-order label is `A-Z`, the sort toggle is hidden entirely and the search field expands to the full row width. In that state the selector also resets to its default sort mode so a previously chosen alternate mode does not leak into the hidden-toggle layout.
+  Status: Resolved in-thread.
+
+- **Selected languages still blended in slightly too much against nearby unselected items**
+  Problem: The selected recent-language chips and selected list cards already used amber accents, but the emphasis was still a touch too subtle when scanning quickly. The user specifically wanted the selected state to read a little more clearly without becoming heavy-handed.
+  Fix: Strengthened the selected treatment one small step by thickening the recent-chip amber border to `2px`, nudging the amber tone slightly deeper, and giving both the recent chips and selected cards a slightly stronger warm shadow while keeping the overall palette the same.
+  Status: Resolved in-thread.
+
+- **Scrolling the language list did not dismiss the focused search field or mobile keyboard**
+  Problem: Once the search field was focused, users could start scrolling the language selector without making a selection, but the input stayed focused and the mobile keyboard remained open. That made simple browsing after a search feel cramped.
+  Fix: The selector now blurs the search input as soon as a pointer interaction begins outside the search field, so starting a scroll gesture on the recent chips or the language list dismisses the keyboard immediately.
+  Status: Resolved in-thread.
+
+- **Touch selection styling and recent-strip visibility were fighting each other in the language selector**
+  Problem: The shared selector applied the same neutral hover border to both selected and unselected buttons. On touch WebViews, a sticky `:hover` state could survive a tap and override the selected amber border, which made selected chips/cards look gray even though their other selected styles updated correctly. Separately, the selector was deciding whether a tap meant “select” or “deselect” from the last rendered `selectedLanguages` prop. During quick retoggles, that prop could be one render behind the user's latest tap, so deselecting a just-reselected language could miss re-registering it in the recent list and make the chip appear to disappear. The recent-language strip also intentionally reorders chips between the active-left and inactive-right groups, but it did not preserve visibility for the chip that had just moved, so the toggled flag could appear to “disappear” when it simply jumped outside the current horizontal scroll window.
+  Fix: The selector now keeps selected hover styling separate from unselected hover styling so a selected item never reverts to the neutral gray hover border. It also tracks the latest intended selected-language set locally while processing taps, so rapid reselect/deselect sequences use the up-to-date state instead of a stale prop snapshot, and it preserves visibility of the just-toggled recent chip by scrolling the horizontal strip enough to keep that chip in view after each reorder.
+  Status: Resolved in-thread.
+
+- **Chinese locale sort labels overstated the actual sort implementation, and sort-toggle visibility depended on copy text**
+  Problem: The selector labeled the locale-order option as `拼音` / `注音`, but the actual implementation only used locale-aware string comparison on localized names rather than explicit pinyin/zhuyin sort keys. Separately, the decision to hide the sort toggle for Latin-script locales was keyed off whether the translated label literally equaled `A-Z`, so a copy-only change could silently change layout behavior.
+  Fix: Lowered the Chinese locale labels to the more neutral `中文顺序` / `中文順序`, and moved sort-toggle visibility into explicit locale metadata inside the selector logic so UI behavior no longer depends on translated strings.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
@@ -1047,3 +1152,6 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `019d6dbd-f288-74e1-9afa-f98dbd8c74fa` | No UI/UX issue found.
 - `019d6f80-a10d-7b10-ac88-4dd9ad89e780` | No UI/UX issue found.
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
+- `2026-04-15-zh-cn-zh-tw-selector-split` | Language selector now presents `zh-CN` and `zh-TW` as separate user-facing targets with distinct flags (`🇨🇳` Simplified, `🇹🇼` Traditional) while preserving Soniox STT hints as generic `zh`. This avoids misleading the user into thinking the translation target is a single generic Chinese option and keeps script-variant intent intact through translation, chip history, and bubble rendering.
+- `2026-04-15-soniox-zh-source-normalization` | Incoming generic Soniox `zh` source-language tags are normalized to `zh-CN` at the client STT boundary unless the transcript text clearly contains traditional-only Han characters. This prevents `zh-CN` from remaining in the target list for the same utterance, which previously made a single Chinese utterance render an unnecessary extra translation bubble and visually thicken the chat row.
+- `2026-04-15-soniox-zh-cn-default-source` | Chinese source-language normalization was simplified so every generic Soniox `zh` transcript is rendered as `zh-CN` without script heuristics, while explicit `zh-TW` inputs remain `zh-TW`. Matching and manual-input paths were aligned to the same rule so a Chinese utterance never grows an extra same-language `zh-CN` bubble just because some code paths kept generic `zh` and others promoted it differently.
