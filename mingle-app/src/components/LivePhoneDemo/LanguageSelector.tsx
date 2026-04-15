@@ -241,7 +241,7 @@ export default function LanguageSelector({
                         className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border transition ${
                           isSelected
                             ? "border-amber-300 bg-white shadow-[0_12px_24px_rgba(245,158,11,0.10)]"
-                            : "border-[#d0cbc2] bg-[#ddd8cf] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+                            : "border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
@@ -250,7 +250,7 @@ export default function LanguageSelector({
                       >
                         <span
                           className={`text-[2rem] leading-none ${
-                            isSelected ? "" : "grayscale opacity-35"
+                            isSelected ? "" : "opacity-70"
                           }`}
                         >
                           {lang.flag}

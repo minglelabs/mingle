@@ -52,6 +52,11 @@
   Fix: Tightened the vertical gap between the two lines and increased the secondary-label font size while keeping its weight unchanged.
   Status: Resolved in-thread.
 
+- **Inactive recent-language chips became so gray that the underlying flag was hard to recognize**
+  Problem: The first inactive-chip pass pushed the whole circular chip too far into gray, to the point where the flag identity was harder to read than the intended lightweight disabled treatment.
+  Fix: Softened the inactive chip back toward the normal surface by using a lighter gray background and border and by dropping the full grayscale filter on the flag, leaving only a gentler opacity reduction similar to other disabled controls in the room UI.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
