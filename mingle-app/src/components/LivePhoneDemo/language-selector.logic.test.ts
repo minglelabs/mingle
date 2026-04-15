@@ -2,14 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildLanguageSelectorHistoryState,
+  buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
-  bumpRecentLanguageCode,
   clearLanguageSelectorHistoryState,
   filterLanguageSelectorItems,
-  hydrateRecentLanguageCodes,
   isLanguageSelectorHistoryOpen,
+  registerDeselectedLanguageCode,
   resolveDefaultLanguageSelectorSortMode,
   sanitizeRecentLanguageCodes,
+  syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorItem,
 } from "@/components/LivePhoneDemo/language-selector.logic";
@@ -122,19 +123,27 @@ describe("language-selector.logic", () => {
     expect(clearedState.keep).toBe(1);
   });
 
-  it("sanitizes and hydrates recent language flags", () => {
+  it("sanitizes deselected language history", () => {
     expect(
       sanitizeRecentLanguageCodes(["en", "ko", "bogus", "ko", "ja"]),
     ).toEqual(["en", "ko", "ja"]);
-
-    expect(
-      hydrateRecentLanguageCodes(["en", "ja"], ["ko", "en"]),
-    ).toEqual(["ja", "ko", "en"]);
   });
 
-  it("bumps reselected languages to the front of the recent strip", () => {
+  it("keeps selected chips first and deselected chips after them", () => {
     expect(
-      bumpRecentLanguageCode("ja", ["ko", "en", "ja"]),
+      buildRecentLanguageChipCodes(["en", "ja"], ["ko", "en", "fr"]),
+    ).toEqual(["en", "ja", "ko", "fr"]);
+  });
+
+  it("drops active languages from deselected history", () => {
+    expect(
+      syncDeselectedLanguageCodes(["en", "ja"], ["ko", "en", "fr", "ja"]),
+    ).toEqual(["ko", "fr"]);
+  });
+
+  it("keeps the most recently deselected languages first", () => {
+    expect(
+      registerDeselectedLanguageCode("ja", ["ko", "en", "ja"]),
     ).toEqual(["ja", "ko", "en"]);
   });
 });

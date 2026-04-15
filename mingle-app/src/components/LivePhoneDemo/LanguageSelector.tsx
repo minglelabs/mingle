@@ -11,13 +11,14 @@ import {
   type RefObject,
 } from "react";
 import {
+  buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
-  bumpRecentLanguageCode,
   filterLanguageSelectorItems,
-  hydrateRecentLanguageCodes,
+  registerDeselectedLanguageCode,
   sanitizeRecentLanguageCodes,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
+  syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
 } from "@/components/LivePhoneDemo/language-selector.logic";
@@ -84,10 +85,10 @@ export default function LanguageSelector({
     const itemMap = new Map<string, (typeof languageItems)[number]>(
       languageItems.map((item) => [item.code, item]),
     );
-    return recentLanguageCodes
+    return buildRecentLanguageChipCodes(selectedLanguages, recentLanguageCodes)
       .map((code) => itemMap.get(code))
       .filter((item): item is (typeof languageItems)[number] => Boolean(item));
-  }, [languageItems, recentLanguageCodes]);
+  }, [languageItems, recentLanguageCodes, selectedLanguages]);
 
   const focusTrigger = useCallback(() => {
     window.setTimeout(() => {
@@ -126,7 +127,7 @@ export default function LanguageSelector({
 
   useEffect(() => {
     setRecentLanguageCodes((currentCodes) =>
-      hydrateRecentLanguageCodes(selectedLanguages, currentCodes),
+      syncDeselectedLanguageCodes(selectedLanguages, currentCodes),
     );
   }, [selectedLanguages]);
 
@@ -164,9 +165,9 @@ export default function LanguageSelector({
       disabled || (!isSelected && atMax) || (isSelected && atMin);
     if (isDisabled) return;
 
-    if (!isSelected) {
+    if (isSelected) {
       setRecentLanguageCodes((currentCodes) =>
-        bumpRecentLanguageCode(code, currentCodes),
+        registerDeselectedLanguageCode(code, currentCodes),
       );
     }
 

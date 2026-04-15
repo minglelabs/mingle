@@ -227,37 +227,43 @@ export function sanitizeRecentLanguageCodes(
   return sanitizeLanguageCodes(rawValue, limit);
 }
 
-export function hydrateRecentLanguageCodes(
+export function syncDeselectedLanguageCodes(
   selectedLanguages: readonly string[],
-  recentCodes: readonly string[],
+  deselectedCodes: readonly string[],
   limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
 ): SttLanguageCode[] {
-  const nextRecentCodes = sanitizeLanguageCodes(recentCodes, limit);
-  const selectedCodes = sanitizeLanguageCodes([...selectedLanguages].reverse(), limit);
-
-  for (const selectedCode of [...selectedCodes].reverse()) {
-    if (nextRecentCodes.includes(selectedCode)) continue;
-    nextRecentCodes.unshift(selectedCode);
-    if (nextRecentCodes.length > limit) {
-      nextRecentCodes.pop();
-    }
-  }
-
-  return nextRecentCodes;
+  const selectedCodeSet = new Set(sanitizeLanguageCodes(selectedLanguages, limit));
+  return sanitizeLanguageCodes(deselectedCodes, limit).filter(
+    (code) => !selectedCodeSet.has(code),
+  );
 }
 
-export function bumpRecentLanguageCode(
+export function registerDeselectedLanguageCode(
   rawCode: string,
-  recentCodes: readonly string[],
+  deselectedCodes: readonly string[],
   limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
 ): SttLanguageCode[] {
   const normalizedCode = canonicalizeSttLanguageCode(rawCode);
   if (!normalizedCode) {
-    return sanitizeLanguageCodes(recentCodes, limit);
+    return sanitizeLanguageCodes(deselectedCodes, limit);
   }
 
   return [
     normalizedCode,
-    ...sanitizeLanguageCodes(recentCodes, limit).filter((code) => code !== normalizedCode),
+    ...sanitizeLanguageCodes(deselectedCodes, limit).filter((code) => code !== normalizedCode),
   ].slice(0, limit);
+}
+
+export function buildRecentLanguageChipCodes(
+  selectedLanguages: readonly string[],
+  deselectedCodes: readonly string[],
+  limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
+): SttLanguageCode[] {
+  const selectedCodes = sanitizeLanguageCodes(selectedLanguages, limit);
+  const selectedCodeSet = new Set(selectedCodes);
+  const inactiveCodes = sanitizeLanguageCodes(deselectedCodes, limit).filter(
+    (code) => !selectedCodeSet.has(code),
+  );
+
+  return [...selectedCodes, ...inactiveCodes].slice(0, limit);
 }
