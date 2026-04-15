@@ -97,9 +97,9 @@
   Fix: The selector now blurs the search input as soon as a pointer interaction begins outside the search field, so starting a scroll gesture on the recent chips or the language list dismisses the keyboard immediately.
   Status: Resolved in-thread.
 
-- **Android could leave selected language chips/cards with gray borders and could occasionally drop a recent chip after rapid retoggles**
-  Problem: In the Android WebView only, selected items in both the recent-chip strip and the full language list could sometimes keep a gray border even after the selection state updated. Repeatedly toggling a recently deselected language could also occasionally flip the same code twice in quick succession, causing the chip to disappear from the recent strip entirely.
-  Fix: Added Android-only protection in the shared language selector: hover-border effects are suppressed on Android so sticky hover no longer overrides the selected amber border, and same-code retoggles within a very short time window are ignored to block duplicate Android tap delivery from undoing the intended selection state. iPhone behavior was left unchanged.
+- **Touch selection styling and recent-strip visibility were fighting each other in the language selector**
+  Problem: The shared selector applied the same neutral hover border to both selected and unselected buttons. On Android touch WebView, a sticky `:hover` state could survive a tap and override the selected amber border, which made selected chips/cards look gray even though their other selected styles updated correctly. Separately, the recent-language strip intentionally reorders chips between the active-left and inactive-right groups, but it did not preserve visibility for the chip that had just moved, so the toggled flag could appear to “disappear” when it simply jumped outside the current horizontal scroll window.
+  Fix: The selector now keeps selected hover styling separate from unselected hover styling so a selected item never reverts to the neutral gray hover border, and it preserves visibility of the just-toggled recent chip by scrolling the horizontal strip enough to keep that chip in view after each reorder.
   Status: Resolved in-thread.
 
 - **Legacy bottom mic could render in the tiny composer size after hydration**

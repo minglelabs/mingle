@@ -27,7 +27,6 @@ import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
-const ANDROID_DUPLICATE_TOGGLE_GUARD_MS = 200;
 const RECENT_LANGUAGE_CODES_STORAGE_KEY =
   "mingle_live_phone_demo_recent_language_selector_codes_v1";
 
@@ -65,9 +64,11 @@ export default function LanguageSelector({
   triggerRef,
 }: LanguageSelectorProps) {
   const titleId = useId();
+  const recentStripRef = useRef<HTMLDivElement | null>(null);
+  const recentChipRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingRecentChipVisibilityCodeRef = useRef<string | null>(null);
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const lastAndroidToggleRef = useRef<{ code: string; at: number } | null>(null);
   const [query, setQuery] = useState("");
   const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(),
@@ -77,10 +78,6 @@ export default function LanguageSelector({
     () => resolveDefaultLanguageSelectorSortMode(localeInfo.source),
     [localeInfo.source],
   );
-  const isLikelyAndroid = useMemo(() => {
-    if (typeof navigator === "undefined") return false;
-    return /android/i.test(navigator.userAgent || "");
-  }, []);
   const showSortToggle = copy.languageSelectorSortLocaleLabel !== "A-Z";
   const [sortMode, setSortMode] = useState<LanguageSelectorSortMode>(defaultSortMode);
   const languageItems = useMemo(
@@ -114,6 +111,32 @@ export default function LanguageSelector({
     onClose();
     focusTrigger();
   }, [focusTrigger, onClose]);
+  const setRecentChipRef = useCallback((code: string, node: HTMLButtonElement | null) => {
+    if (!node) {
+      recentChipRefs.current.delete(code);
+      return;
+    }
+
+    recentChipRefs.current.set(code, node);
+  }, []);
+  const keepRecentChipVisible = useCallback((code: string) => {
+    const strip = recentStripRef.current;
+    const chip = recentChipRefs.current.get(code);
+    if (!strip || !chip) return;
+
+    const stripRect = strip.getBoundingClientRect();
+    const chipRect = chip.getBoundingClientRect();
+    const edgePadding = 12;
+
+    if (chipRect.left < stripRect.left + edgePadding) {
+      strip.scrollLeft -= (stripRect.left + edgePadding) - chipRect.left;
+      return;
+    }
+
+    if (chipRect.right > stripRect.right - edgePadding) {
+      strip.scrollLeft += chipRect.right - (stripRect.right - edgePadding);
+    }
+  }, []);
   const atMax = selectedLanguages.length >= MAX_LANGS;
   const atMin = selectedLanguages.length <= MIN_LANGS;
 
@@ -161,6 +184,20 @@ export default function LanguageSelector({
   }, [recentLanguageCodes]);
 
   useEffect(() => {
+    const pendingCode = pendingRecentChipVisibilityCodeRef.current;
+    if (!pendingCode || typeof window === "undefined") return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      keepRecentChipVisible(pendingCode);
+      pendingRecentChipVisibilityCodeRef.current = null;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [keepRecentChipVisible, recentLanguageItems, selectedLanguages]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -176,19 +213,7 @@ export default function LanguageSelector({
   }, [isOpen, requestClose]);
 
   const handleToggleRequest = useCallback((code: string) => {
-    if (isLikelyAndroid) {
-      const now = Date.now();
-      const lastToggle = lastAndroidToggleRef.current;
-      if (
-        lastToggle
-        && lastToggle.code === code
-        && now - lastToggle.at < ANDROID_DUPLICATE_TOGGLE_GUARD_MS
-      ) {
-        return;
-      }
-      lastAndroidToggleRef.current = { code, at: now };
-    }
-
+    pendingRecentChipVisibilityCodeRef.current = code;
     const isSelected = selectedLanguages.includes(code);
     const isDisabled =
       disabled || (!isSelected && atMax) || (isSelected && atMin);
@@ -201,7 +226,7 @@ export default function LanguageSelector({
     }
 
     onToggleLanguage(code);
-  }, [atMax, atMin, disabled, isLikelyAndroid, onToggleLanguage, selectedLanguages]);
+  }, [atMax, atMin, disabled, onToggleLanguage, selectedLanguages]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -264,7 +289,10 @@ export default function LanguageSelector({
 
           <div className="space-y-5 px-4 pb-5 pt-1">
             {recentLanguageItems.length > 0 ? (
-              <div className="-mx-1 overflow-x-auto pb-1 no-scrollbar">
+              <div
+                ref={recentStripRef}
+                className="-mx-1 overflow-x-auto pb-1 no-scrollbar"
+              >
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
                     const isSelected = selectedLanguages.includes(lang.code);
@@ -273,6 +301,9 @@ export default function LanguageSelector({
 
                     return (
                       <button
+                        ref={(node) => {
+                          setRecentChipRef(lang.code, node);
+                        }}
                         key={lang.code}
                         type="button"
                         onClick={() => handleToggleRequest(lang.code)}
@@ -287,8 +318,8 @@ export default function LanguageSelector({
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
-                            : isLikelyAndroid
-                              ? ""
+                            : isSelected
+                              ? "hover:-translate-y-[1px] hover:shadow-[0_16px_30px_rgba(245,158,11,0.18)]"
                               : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
                         }`}
                       >
@@ -400,8 +431,8 @@ export default function LanguageSelector({
                         ? "cursor-not-allowed opacity-45"
                       : isDisabled && isSelected
                         ? "cursor-not-allowed opacity-80"
-                          : isLikelyAndroid
-                            ? ""
+                          : isSelected
+                            ? "hover:-translate-y-[1px] hover:shadow-[0_18px_38px_rgba(245,158,11,0.14)]"
                             : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
                     }`}
                   >
