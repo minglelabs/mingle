@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildLanguageSelectorHistoryState,
   buildLanguageSelectorItems,
+  bumpRecentLanguageCode,
+  clearLanguageSelectorHistoryState,
   filterLanguageSelectorItems,
+  hydrateRecentLanguageCodes,
+  isLanguageSelectorHistoryOpen,
   resolveDefaultLanguageSelectorSortMode,
+  sanitizeRecentLanguageCodes,
   sortLanguageSelectorItems,
   type LanguageSelectorItem,
 } from "@/components/LivePhoneDemo/language-selector.logic";
@@ -103,5 +109,32 @@ describe("language-selector.logic", () => {
     expect(resolveDefaultLanguageSelectorSortMode("fallback")).toBe("alphabetical");
     expect(resolveDefaultLanguageSelectorSortMode("ui")).toBe("locale");
     expect(resolveDefaultLanguageSelectorSortMode("browser")).toBe("locale");
+  });
+
+  it("marks and clears the language selector history state without dropping other keys", () => {
+    const state = buildLanguageSelectorHistoryState({ keep: 1 });
+
+    expect(isLanguageSelectorHistoryOpen(state)).toBe(true);
+    expect(state.keep).toBe(1);
+
+    const clearedState = clearLanguageSelectorHistoryState(state);
+    expect(isLanguageSelectorHistoryOpen(clearedState)).toBe(false);
+    expect(clearedState.keep).toBe(1);
+  });
+
+  it("sanitizes and hydrates recent language flags", () => {
+    expect(
+      sanitizeRecentLanguageCodes(["en", "ko", "bogus", "ko", "ja"]),
+    ).toEqual(["en", "ko", "ja"]);
+
+    expect(
+      hydrateRecentLanguageCodes(["en", "ja"], ["ko", "en"]),
+    ).toEqual(["ja", "ko", "en"]);
+  });
+
+  it("bumps reselected languages to the front of the recent strip", () => {
+    expect(
+      bumpRecentLanguageCode("ja", ["ko", "en", "ja"]),
+    ).toEqual(["ja", "ko", "en"]);
   });
 });

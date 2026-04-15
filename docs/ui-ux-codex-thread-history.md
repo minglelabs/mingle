@@ -12,6 +12,11 @@
   Fix: Raised the language-selector overlay above the room container and pinned the `z-index` with an inline style instead of relying on the missing utility class, so the full-screen selector reliably appears on top in both current and legacy room runtimes.
   Status: Resolved in-thread.
 
+- **The full-screen language selector still behaved like a detached modal instead of a first-class room subpage**
+  Problem: Even after the selector became visible, its top controls did not match the app's existing top-tab pattern, the selected-language area had no fast re-toggle strip, and closing it relied on local state only. That meant iOS edge-swipe / browser back could not dismiss it like a real screen, Android/native banner behavior did not mirror the hamburger drawer, and history replay risked a brief reopen flash right after a back gesture.
+  Fix: Rebuilt the selector header around the app's standard 56px top chrome and tab-style sort toggles, added a horizontal recent-language flag strip with active/inactive re-selection states, pushed a dedicated selector history entry for real back navigation, and hid the native banner while the selector is open so it behaves like the room drawer instead of a floating modal.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.

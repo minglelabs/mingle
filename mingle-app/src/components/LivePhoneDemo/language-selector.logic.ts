@@ -1,5 +1,7 @@
 import {
   STT_LANGUAGE_OPTIONS,
+  canonicalizeSttLanguageCode,
+  type SttLanguageCode,
   type SttLanguageOption,
 } from "@/lib/stt-languages";
 
@@ -15,6 +17,8 @@ export type LanguageSelectorItem = SttLanguageOption & {
 type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 
 const FALLBACK_LOCALE = "en";
+export const LANGUAGE_SELECTOR_HISTORY_STATE_KEY = "__mingle_live_phone_demo_lang_selector";
+export const LANGUAGE_SELECTOR_RECENT_CODES_LIMIT = 12;
 const SELF_NAME_LOCALE_OVERRIDES: Partial<Record<string, string>> = {
   no: "nb-NO",
   zh: "zh-CN",
@@ -54,6 +58,21 @@ function areLabelsEquivalent(left: string, right: string): boolean {
 
 function resolveSelfNameLocale(languageCode: string): string {
   return SELF_NAME_LOCALE_OVERRIDES[languageCode] ?? languageCode;
+}
+
+function sanitizeLanguageCodes(
+  rawCodes: readonly string[],
+  limit: number,
+): SttLanguageCode[] {
+  const deduped: SttLanguageCode[] = [];
+  for (const rawCode of rawCodes) {
+    const normalizedCode = canonicalizeSttLanguageCode(rawCode);
+    if (!normalizedCode || deduped.includes(normalizedCode)) continue;
+    deduped.push(normalizedCode);
+    if (deduped.length >= limit) break;
+  }
+
+  return deduped;
 }
 
 export function resolveLanguageSelectorLocale(
@@ -166,4 +185,79 @@ export function sortLanguageSelectorItems(
   });
 
   return sorted;
+}
+
+export function isLanguageSelectorHistoryOpen(state: unknown): boolean {
+  return Boolean(
+    state
+    && typeof state === "object"
+    && (state as Record<string, unknown>)[LANGUAGE_SELECTOR_HISTORY_STATE_KEY] === true,
+  );
+}
+
+export function buildLanguageSelectorHistoryState(
+  currentState: unknown,
+): Record<string, unknown> {
+  const nextState = (
+    currentState && typeof currentState === "object"
+      ? { ...(currentState as Record<string, unknown>) }
+      : {}
+  );
+  nextState[LANGUAGE_SELECTOR_HISTORY_STATE_KEY] = true;
+  return nextState;
+}
+
+export function clearLanguageSelectorHistoryState(
+  currentState: unknown,
+): Record<string, unknown> {
+  const nextState = (
+    currentState && typeof currentState === "object"
+      ? { ...(currentState as Record<string, unknown>) }
+      : {}
+  );
+  delete nextState[LANGUAGE_SELECTOR_HISTORY_STATE_KEY];
+  return nextState;
+}
+
+export function sanitizeRecentLanguageCodes(
+  rawValue: unknown,
+  limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
+): SttLanguageCode[] {
+  if (!Array.isArray(rawValue)) return [];
+  return sanitizeLanguageCodes(rawValue, limit);
+}
+
+export function hydrateRecentLanguageCodes(
+  selectedLanguages: readonly string[],
+  recentCodes: readonly string[],
+  limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
+): SttLanguageCode[] {
+  const nextRecentCodes = sanitizeLanguageCodes(recentCodes, limit);
+  const selectedCodes = sanitizeLanguageCodes([...selectedLanguages].reverse(), limit);
+
+  for (const selectedCode of [...selectedCodes].reverse()) {
+    if (nextRecentCodes.includes(selectedCode)) continue;
+    nextRecentCodes.unshift(selectedCode);
+    if (nextRecentCodes.length > limit) {
+      nextRecentCodes.pop();
+    }
+  }
+
+  return nextRecentCodes;
+}
+
+export function bumpRecentLanguageCode(
+  rawCode: string,
+  recentCodes: readonly string[],
+  limit = LANGUAGE_SELECTOR_RECENT_CODES_LIMIT,
+): SttLanguageCode[] {
+  const normalizedCode = canonicalizeSttLanguageCode(rawCode);
+  if (!normalizedCode) {
+    return sanitizeLanguageCodes(recentCodes, limit);
+  }
+
+  return [
+    normalizedCode,
+    ...sanitizeLanguageCodes(recentCodes, limit).filter((code) => code !== normalizedCode),
+  ].slice(0, limit);
 }
