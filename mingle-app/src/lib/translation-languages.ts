@@ -78,7 +78,7 @@ type SelectableTranslationLanguage = Exclude<
 function isSelectableTranslationLanguage(
   language: (typeof TRANSLATION_LANGUAGES)[number],
 ): language is SelectableTranslationLanguage {
-  return language.selectable !== false;
+  return !("selectable" in language) || language.selectable !== false;
 }
 
 export const SELECTABLE_TRANSLATION_LANGUAGES = TRANSLATION_LANGUAGES.filter(
