@@ -17,7 +17,9 @@ describe('translate/finalize utils', () => {
     expect(normalizeLang('en_US')).toBe('en')
     expect(normalizeLang('fil-PH')).toBe('tl')
     expect(normalizeLang('iw-IL')).toBe('he')
-    expect(normalizeLang('zh-Hant-TW')).toBe('zh')
+    expect(normalizeLang('zh')).toBe('zh')
+    expect(normalizeLang('zh-Hant-TW')).toBe('zh-TW')
+    expect(normalizeLang('zh-Hans-CN')).toBe('zh-CN')
     expect(normalizeLang('')).toBe('')
   })
 
@@ -26,13 +28,13 @@ describe('translate/finalize utils', () => {
       ['ko', 'KO', 'en-US', 'ja', 'fil-PH', 'iw-IL', 'zh-TW', 123, '', 'en'] as unknown[],
       'en',
     )
-    expect(normalized).toEqual(['ko', 'ja', 'tl', 'he', 'zh'])
+    expect(normalized).toEqual(['ko', 'ja', 'tl', 'he', 'zh-TW'])
   })
 
   it('normalizes selected languages without excluding any hint language', () => {
     expect(normalizeSelectedLanguages(
       ['ko', 'KO', 'en-US', 'ja', 'fil-PH', 'iw-IL', 'zh-TW', 123, '', 'en'] as unknown[],
-    )).toEqual(['ko', 'en', 'ja', 'tl', 'he', 'zh'])
+    )).toEqual(['ko', 'en', 'ja', 'tl', 'he', 'zh-TW'])
   })
 
   it('parses translation JSON and strips marker tokens', () => {
@@ -57,11 +59,12 @@ describe('translate/finalize utils', () => {
   })
 
   it('canonicalizes translation payload keys from known aliases', () => {
-    const raw = '{"fil":" kamusta ","iw":" שלום ","zh-cn":"你好"}'
+    const raw = '{"fil":" kamusta ","iw":" שלום ","zh-cn":"简体","zh-hant":"繁體"}'
     expect(parseTranslations(raw)).toEqual({
       tl: 'kamusta',
       he: 'שלום',
-      zh: '你好',
+      'zh-CN': '简体',
+      'zh-TW': '繁體',
     })
   })
 

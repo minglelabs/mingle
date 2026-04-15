@@ -253,7 +253,19 @@ describe('use-realtime-stt pure logic', () => {
   })
 
   it('normalizes Soniox language hints without blanks or duplicates', () => {
-    expect(buildSonioxLanguageHints([' en ', '', 'ko', 'EN', 'ja '])).toEqual(['en', 'ko', 'ja'])
+    expect(buildSonioxLanguageHints([' en ', '', 'ko', 'EN', 'zh-CN', 'zh-TW', 'ja ']))
+      .toEqual(['en', 'ko', 'zh', 'ja'])
+  })
+
+  it('keeps Chinese translation variants distinct in target-language filtering', () => {
+    expect(filterTranslationsToTargetLanguages({
+      'zh-CN': '简体中文',
+      'zh-TW': '繁體中文',
+      en: 'English',
+    }, ['zh-CN', 'zh-TW'])).toEqual({
+      'zh-CN': '简体中文',
+      'zh-TW': '繁體中文',
+    })
   })
 
   it('restarts STT on language change only when Soniox hints are enabled and ready', () => {

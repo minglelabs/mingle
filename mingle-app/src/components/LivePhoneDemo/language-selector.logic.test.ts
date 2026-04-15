@@ -28,6 +28,16 @@ describe("language-selector.logic", () => {
     expect(japanese?.secondaryLabel).toContain("日本語");
   });
 
+  it("shows separate Simplified and Traditional Chinese rows", () => {
+    const items = buildLanguageSelectorItems("en-US");
+
+    expect(items.find((item) => item.code === "zh-CN")?.secondaryLabel)
+      .toContain("Chinese Simplified");
+    expect(items.find((item) => item.code === "zh-TW")?.secondaryLabel)
+      .toContain("Chinese Traditional");
+    expect(items.some((item) => item.code === "zh")).toBe(false);
+  });
+
   it("filters by English and native language names", () => {
     const items = buildLanguageSelectorItems("en-US");
 

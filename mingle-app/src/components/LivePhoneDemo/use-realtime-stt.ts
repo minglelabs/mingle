@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import type { Utterance } from './ChatBubble'
 import { buildClientApiPath, clientApiNamespace, shouldRedetectFinalizeSourceLanguage } from '@/lib/api-contract'
 import type { ConversationHydrationUtterance } from '@/lib/app-conversations'
+import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
+import { canonicalizeSonioxLanguageHintCode } from '@/lib/stt-languages'
 import {
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
@@ -197,7 +199,7 @@ export function buildSonioxLanguageHints(languages: string[]): string[] {
   const hints: string[] = []
   const seen = new Set<string>()
   for (const languageRaw of languages) {
-    const language = languageRaw.trim()
+    const language = canonicalizeSonioxLanguageHintCode(languageRaw)
     if (!language) continue
     const key = language.toLowerCase()
     if (seen.has(key)) continue
@@ -448,6 +450,16 @@ export function normalizeLangForCompare(rawLanguage: string): string {
   return (rawLanguage || '').trim().replace('_', '-').toLowerCase().split('-')[0] || ''
 }
 
+function normalizeTranslationLanguageCode(rawLanguage: string): string {
+  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
+  if (canonical) return canonical
+  return (rawLanguage || '').trim().replace(/_/g, '-')
+}
+
+function normalizeTranslationLanguageKey(rawLanguage: string): string {
+  return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
+}
+
 function shouldKeepSourceLanguageBubble(options?: {
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
@@ -462,11 +474,11 @@ export function stripSourceLanguageFromTranslations(
     keepSourceLanguage?: boolean
   },
 ): Record<string, string> {
-  const sourceLanguage = normalizeLangForCompare(sourceLanguageRaw)
+  const sourceLanguage = normalizeTranslationLanguageKey(sourceLanguageRaw)
   const translations: Record<string, string> = {}
   for (const [language, translatedText] of Object.entries(translationsRaw)) {
     const normalizedLanguage = (language || '').trim()
-    const normalizedLanguageForCompare = normalizeLangForCompare(normalizedLanguage)
+    const normalizedLanguageForCompare = normalizeTranslationLanguageKey(normalizedLanguage)
     const cleaned = translatedText.trim()
     if (!normalizedLanguage || !cleaned) continue
     if (!options?.keepSourceLanguage && sourceLanguage && normalizedLanguageForCompare === sourceLanguage) continue
@@ -482,13 +494,13 @@ export function buildTurnTargetLanguagesSnapshot(
     includeSourceLanguage?: boolean
   },
 ): string[] {
-  const sourceLanguage = normalizeLangForCompare(sourceLanguageRaw)
+  const sourceLanguage = normalizeTranslationLanguageKey(sourceLanguageRaw)
   const targetLanguages: string[] = []
   const seen = new Set<string>()
   for (const languageRaw of languagesRaw) {
     const language = (languageRaw || '').trim()
     if (!language) continue
-    const normalizedLanguage = normalizeLangForCompare(language)
+    const normalizedLanguage = normalizeTranslationLanguageKey(language)
     if (!options?.includeSourceLanguage && sourceLanguage && normalizedLanguage === sourceLanguage) continue
     const key = normalizedLanguage || language.toLowerCase()
     if (seen.has(key)) continue
@@ -504,7 +516,7 @@ export function filterTranslationsToTargetLanguages(
 ): Record<string, string> {
   const allowedLanguages = new Set(
     targetLanguagesRaw
-      .map((language) => normalizeLangForCompare(language))
+      .map((language) => normalizeTranslationLanguageKey(language))
       .filter(Boolean),
   )
   if (allowedLanguages.size === 0) return {}
@@ -514,7 +526,7 @@ export function filterTranslationsToTargetLanguages(
     const language = (languageRaw || '').trim()
     const cleaned = translatedText.trim()
     if (!language || !cleaned) continue
-    if (!allowedLanguages.has(normalizeLangForCompare(language))) continue
+    if (!allowedLanguages.has(normalizeTranslationLanguageKey(language))) continue
     translations[language] = cleaned
   }
   return translations
@@ -1200,7 +1212,7 @@ function reconcileUtteranceTranslationBase(input: {
   selectedLanguages?: string[]
   sourceText?: string
 }): { utterance: Utterance, priorities: Map<string, TranslationPriority> } {
-  const normalizedDetectedSourceLanguage = normalizeLangForCompare(input.detectedSourceLanguage || '')
+  const normalizedDetectedSourceLanguage = normalizeTranslationLanguageCode(input.detectedSourceLanguage || '')
   const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
     sourceLanguagesMixed: input.sourceLanguagesMixed,
     sourceTextHasForeignScript: input.sourceTextHasForeignScript,
@@ -1563,7 +1575,7 @@ function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
   Utterance,
   'originalLang' | 'targetLanguages' | 'translations' | 'translationFinalized' | 'sourceLanguagesMixed' | 'sourceTextHasForeignScript'
 >): string[] {
-  const sourceLanguage = normalizeLangForCompare(utterance.originalLang)
+  const sourceLanguage = normalizeTranslationLanguageKey(utterance.originalLang)
   const candidates: string[] = []
   const seen = new Set<string>()
   const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
@@ -1574,7 +1586,7 @@ function buildRenderableTargetLanguagesForUtterance(utterance: Pick<
   const pushCandidate = (rawLanguage: string | undefined) => {
     const language = (rawLanguage || '').trim()
     if (!language) return
-    const key = normalizeLangForCompare(language) || language.toLowerCase()
+    const key = normalizeTranslationLanguageKey(language) || language.toLowerCase()
     if (!keepSourceLanguageBubble && sourceLanguage && key === sourceLanguage) return
     if (seen.has(key)) return
     seen.add(key)
@@ -2935,8 +2947,8 @@ export default function useRealtimeSTT({
 
     // 단일 언어 모드: 선택 언어가 1개인 경우
     const isSingleLanguageMode = targetLanguages.length === 1
-    const detectedLangNorm = normalizeLangForCompare(lang)
-    const selectedLangNorm = normalizeLangForCompare(targetLanguages[0] || '')
+    const detectedLangNorm = normalizeTranslationLanguageKey(lang)
+    const selectedLangNorm = normalizeTranslationLanguageKey(targetLanguages[0] || '')
 
     if (isSingleLanguageMode && detectedLangNorm === selectedLangNorm) {
       // 감지 언어 = 선택 언어 → 번역/TTS 없이 transcript만 (로깅만)
@@ -4186,7 +4198,7 @@ export default function useRealtimeSTT({
 
       if (
         targetLanguages.length === 1
-        && normalizeLangForCompare(currentLang) === normalizeLangForCompare(targetLanguages[0] || '')
+        && normalizeTranslationLanguageKey(currentLang) === normalizeTranslationLanguageKey(targetLanguages[0] || '')
       ) {
         continue
       }

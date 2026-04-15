@@ -1,10 +1,10 @@
 import {
-  TRANSLATION_LANGUAGES,
+  SELECTABLE_TRANSLATION_LANGUAGES,
   canonicalizeTranslationLanguageCode,
   type TranslationLanguageCode,
 } from '@/lib/translation-languages'
 
-export type SttLanguageCode = TranslationLanguageCode
+export type SttLanguageCode = (typeof SELECTABLE_TRANSLATION_LANGUAGES)[number]['code']
 export type SttLanguageOption = {
   code: SttLanguageCode
   englishName: string
@@ -14,7 +14,7 @@ export type SttLanguageOption = {
 export const DEFAULT_STT_LANGUAGES = ['en', 'ko', 'ja'] as const satisfies readonly SttLanguageCode[]
 const DEFAULT_STT_LANGUAGE_SET = new Set<SttLanguageCode>(DEFAULT_STT_LANGUAGES)
 
-const STT_LANGUAGE_FLAG_MAP: Record<SttLanguageCode, string> = {
+const STT_LANGUAGE_FLAG_MAP: Record<TranslationLanguageCode, string> = {
   af: '🇿🇦',
   sq: '🇦🇱',
   ar: '🇸🇦',
@@ -26,6 +26,8 @@ const STT_LANGUAGE_FLAG_MAP: Record<SttLanguageCode, string> = {
   bg: '🇧🇬',
   ca: '🇪🇸',
   zh: '🇨🇳',
+  'zh-CN': '🇨🇳',
+  'zh-TW': '🇹🇼',
   hr: '🇭🇷',
   cs: '🇨🇿',
   da: '🇩🇰',
@@ -77,19 +79,35 @@ const STT_LANGUAGE_FLAG_MAP: Record<SttLanguageCode, string> = {
   cy: '🇬🇧',
 }
 
-export const STT_LANGUAGE_OPTIONS: SttLanguageOption[] = TRANSLATION_LANGUAGES.map((language) => ({
+export const STT_LANGUAGE_OPTIONS: SttLanguageOption[] = SELECTABLE_TRANSLATION_LANGUAGES.map((language) => ({
   ...language,
   flag: STT_LANGUAGE_FLAG_MAP[language.code],
 }))
 
 export const STT_LANGUAGE_CODES = STT_LANGUAGE_OPTIONS.map(({ code }) => code)
+const STT_LANGUAGE_CODE_SET = new Set<SttLanguageCode>(STT_LANGUAGE_CODES)
 
 export const STT_LANGUAGE_NAME_MAP: Record<SttLanguageCode, string> = Object.fromEntries(
   STT_LANGUAGE_OPTIONS.map(({ code, englishName }) => [code, englishName]),
 ) as Record<SttLanguageCode, string>
 
+function isSupportedSttLanguageCode(value: string): value is SttLanguageCode {
+  return STT_LANGUAGE_CODE_SET.has(value as SttLanguageCode)
+}
+
 export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode | '' {
-  return canonicalizeTranslationLanguageCode(rawValue)
+  const canonical = canonicalizeTranslationLanguageCode(rawValue)
+  if (!canonical) return ''
+
+  const selectableCode = canonical === 'zh' ? 'zh-CN' : canonical
+  return isSupportedSttLanguageCode(selectableCode) ? selectableCode : ''
+}
+
+export function canonicalizeSonioxLanguageHintCode(rawValue: string): string {
+  const canonical = canonicalizeTranslationLanguageCode(rawValue)
+  if (!canonical) return ''
+  if (canonical === 'zh-CN' || canonical === 'zh-TW') return 'zh'
+  return canonical
 }
 
 export function sanitizeSttLanguageSelection(
@@ -139,7 +157,7 @@ export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | un
 }
 
 export function getSttLanguageFlag(rawValue: string): string {
-  const canonical = canonicalizeSttLanguageCode(rawValue)
+  const canonical = canonicalizeTranslationLanguageCode(rawValue)
   if (!canonical) return '🌐'
   return STT_LANGUAGE_FLAG_MAP[canonical] || '🌐'
 }

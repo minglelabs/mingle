@@ -1152,3 +1152,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `019d6dbd-f288-74e1-9afa-f98dbd8c74fa` | No UI/UX issue found.
 - `019d6f80-a10d-7b10-ac88-4dd9ad89e780` | No UI/UX issue found.
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
+- `2026-04-15-zh-cn-zh-tw-selector-split` | Language selector now presents `zh-CN` and `zh-TW` as separate user-facing targets with distinct flags (`🇨🇳` Simplified, `🇹🇼` Traditional) while preserving Soniox STT hints as generic `zh`. This avoids misleading the user into thinking the translation target is a single generic Chinese option and keeps script-variant intent intact through translation, chip history, and bubble rendering.
