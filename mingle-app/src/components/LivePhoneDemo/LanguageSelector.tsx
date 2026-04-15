@@ -240,7 +240,7 @@ export default function LanguageSelector({
                         className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border transition ${
                           isSelected
                             ? "border-amber-300 bg-white shadow-[0_12px_24px_rgba(245,158,11,0.10)]"
-                            : "border-[#e5dfd5] bg-[#f1ede6]"
+                            : "border-[#d0cbc2] bg-[#ddd8cf] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
@@ -249,7 +249,7 @@ export default function LanguageSelector({
                       >
                         <span
                           className={`text-[2rem] leading-none ${
-                            isSelected ? "" : "grayscale opacity-55"
+                            isSelected ? "" : "grayscale opacity-35"
                           }`}
                         >
                           {lang.flag}

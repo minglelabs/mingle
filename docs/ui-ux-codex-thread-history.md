@@ -27,6 +27,11 @@
   Fix: Replaced the close icon with a left chevron back button and centered the selector title within the 56px top bar, keeping the right side as spacing only so the title stays visually centered.
   Status: Resolved in-thread.
 
+- **Deselected recent-language flags did not look inactive enough**
+  Problem: In the horizontal recent-language strip, deselected flags only lost some saturation on the emoji itself. The circular chip still read too close to the active state, so users could miss that the language was currently off.
+  Fix: Shifted the entire deselected chip into a stronger gray treatment by darkening the chip background and border and lowering the flag opacity further, so the whole circular control reads as clearly inactive.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
