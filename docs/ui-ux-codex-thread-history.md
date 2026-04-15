@@ -47,6 +47,11 @@
   Fix: Restored a taller rounded search field, converted the sort control back into a padded pill-style segmented toggle with rounded inner buttons, increased header-body spacing, and simplified the Korean alphabetical label to `A-Z`.
   Status: Resolved in-thread.
 
+- **Language-card secondary labels sat too far below the localized title and read too small**
+  Problem: In the language list cards, the gap between the localized language name and the `English / native` secondary label was slightly too loose, and the secondary line read smaller than intended for quick scanning.
+  Fix: Tightened the vertical gap between the two lines and increased the secondary-label font size while keeping its weight unchanged.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.

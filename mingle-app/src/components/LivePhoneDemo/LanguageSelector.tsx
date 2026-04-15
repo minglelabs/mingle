@@ -368,7 +368,7 @@ export default function LanguageSelector({
                       <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
                         {lang.localizedName}
                       </span>
-                      <span className="mt-1 block truncate text-[0.82rem] text-slate-500">
+                      <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
                         {lang.secondaryLabel}
                       </span>
                     </span>
