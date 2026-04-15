@@ -7,6 +7,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type RefObject,
 } from "react";
@@ -63,6 +64,8 @@ export default function LanguageSelector({
   triggerRef,
 }: LanguageSelectorProps) {
   const titleId = useId();
+  const searchFieldRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
   const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(),
@@ -181,6 +184,13 @@ export default function LanguageSelector({
     onToggleLanguage(code);
   }, [atMax, atMin, disabled, onToggleLanguage, selectedLanguages]);
 
+  const dismissSearchFocus = useCallback((target: EventTarget | null) => {
+    const activeElement = document.activeElement;
+    if (!searchInputRef.current || activeElement !== searchInputRef.current) return;
+    if (target instanceof Node && searchFieldRef.current?.contains(target)) return;
+    searchInputRef.current.blur();
+  }, []);
+
   if (!isOpen || typeof document === "undefined") return null;
 
   // The active room itself is portaled above the conversation list, so this
@@ -201,6 +211,12 @@ export default function LanguageSelector({
       <div
         className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
         onClick={(event) => event.stopPropagation()}
+        onPointerDownCapture={(event) => {
+          dismissSearchFocus(event.target);
+        }}
+        onTouchStartCapture={(event) => {
+          dismissSearchFocus(event.target);
+        }}
       >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
@@ -271,11 +287,13 @@ export default function LanguageSelector({
 
             <div className="flex items-stretch gap-3">
               <div
+                ref={searchFieldRef}
                 className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
                 style={{ flex: showSortToggle ? "1 1 0" : "1 1 100%" }}
               >
                 <Search size={18} className="shrink-0 text-slate-400" />
                 <input
+                  ref={searchInputRef}
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
