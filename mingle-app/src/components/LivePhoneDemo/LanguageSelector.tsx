@@ -7,7 +7,6 @@ import {
   useEffect,
   useId,
   useMemo,
-  useRef,
   useState,
   type RefObject,
 } from "react";
@@ -63,7 +62,6 @@ export default function LanguageSelector({
   triggerRef,
 }: LanguageSelectorProps) {
   const titleId = useId();
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(),
@@ -107,36 +105,6 @@ export default function LanguageSelector({
   }, [focusTrigger, onClose]);
   const atMax = selectedLanguages.length >= MAX_LANGS;
   const atMin = selectedLanguages.length <= MIN_LANGS;
-
-  const focusSearchInput = useCallback(() => {
-    const input = searchInputRef.current;
-    if (!input) return;
-
-    input.focus({ preventScroll: true });
-    const cursorPosition = input.value.length;
-    try {
-      input.setSelectionRange(cursorPosition, cursorPosition);
-    } catch {
-      // Ignore selection failures on unsupported inputs.
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    focusSearchInput();
-    const animationFrameId = window.requestAnimationFrame(() => {
-      focusSearchInput();
-    });
-    const timeoutId = window.setTimeout(() => {
-      focusSearchInput();
-    }, 220);
-
-    return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [focusSearchInput, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -307,7 +275,6 @@ export default function LanguageSelector({
               >
                 <Search size={18} className="shrink-0 text-slate-400" />
                 <input
-                  ref={searchInputRef}
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
