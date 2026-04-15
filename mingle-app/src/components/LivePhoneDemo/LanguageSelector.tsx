@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { ChevronLeft, Search } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   useCallback,
@@ -196,34 +196,27 @@ export default function LanguageSelector({
       >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div
-            className="flex items-center justify-between gap-3 px-4"
+            className="relative flex items-center justify-between gap-3 px-4"
             style={{
               paddingTop: "env(safe-area-inset-top, 0px)",
               height: "calc(56px + env(safe-area-inset-top, 0px))",
             }}
           >
-            <div className="min-w-0 flex-1">
-              <p
-                id={titleId}
-                className="truncate text-[1rem] font-semibold tracking-[-0.02em] text-slate-950"
-              >
-                {copy.languageSelectorTitle}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-[#f3eee4] px-2.5 py-1 text-[0.76rem] font-semibold text-slate-600">
-                {selectedLanguages.length}/{MAX_LANGS}
-              </span>
-              <button
-                type="button"
-                onClick={requestClose}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-gray-100 hover:text-slate-950"
-                aria-label={copy.languageSelectorCloseLabel}
-              >
-                <span className="sr-only">{copy.languageSelectorCloseLabel}</span>
-                <X size={20} strokeWidth={2.2} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={requestClose}
+              className="relative z-10 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-700 transition hover:bg-gray-100 hover:text-slate-950"
+              aria-label={copy.backButtonLabel}
+            >
+              <ChevronLeft size={22} strokeWidth={2.4} />
+            </button>
+            <p
+              id={titleId}
+              className="pointer-events-none absolute left-1/2 top-1/2 w-[calc(100%-112px)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[1rem] font-semibold tracking-[-0.02em] text-slate-950"
+            >
+              {copy.languageSelectorTitle}
+            </p>
+            <div className="w-10 shrink-0" aria-hidden="true" />
           </div>
 
           <div className="space-y-4 px-4 pb-4">

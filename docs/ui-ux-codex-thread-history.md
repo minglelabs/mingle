@@ -22,6 +22,11 @@
   Fix: Removed the automatic search focus path so the selector opens in a neutral browsing state and only raises the keyboard when the user explicitly taps search.
   Status: Resolved in-thread.
 
+- **The full-screen language selector header still looked like a modal instead of the app's normal top tab**
+  Problem: The selector header kept a right-side close affordance and left-aligned title, so it read like a dismissible popup instead of a room subpage. The expected chrome was a left chevron with the `언어 선택` title visually centered.
+  Fix: Replaced the close icon with a left chevron back button and centered the selector title within the 56px top bar, keeping the right side as spacing only so the title stays visually centered.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
