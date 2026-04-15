@@ -1099,6 +1099,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const stopClickResumeTimerIdsRef = useRef<number[]>([])
   const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
+  const selectedLanguagesChangePendingRef = useRef(false)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
@@ -1322,6 +1323,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       cancelled = true
     }
   }, [conversationId, conversationSelectedLanguages])
+
+  useEffect(() => {
+    if (!selectedLanguagesChangePendingRef.current) return
+
+    selectedLanguagesChangePendingRef.current = false
+    onSelectedLanguagesChange?.(selectedLanguages)
+  }, [onSelectedLanguagesChange, selectedLanguages])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -3520,15 +3528,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleToggleLanguage = useCallback((code: string) => {
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
+    selectedLanguagesChangePendingRef.current = true
     setSelectedLanguages(prev => {
-      const nextSelectedLanguages = prev.includes(normalizedCode)
+      return prev.includes(normalizedCode)
         ? prev.filter(c => c !== normalizedCode)
         : [...prev, normalizedCode]
-
-      onSelectedLanguagesChange?.(nextSelectedLanguages)
-      return nextSelectedLanguages
     })
-  }, [onSelectedLanguagesChange])
+  }, [])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return

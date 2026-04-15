@@ -37,6 +37,11 @@
   Fix: Reordered the chip strip into two groups: active languages always render first in their original selection order (oldest selected on the left, newest selected on the right), and deselected languages render after them in deselection-recency order (most recently turned off first).
   Status: Resolved in-thread.
 
+- **Changing room languages could trigger a cross-component React update warning**
+  Problem: The room runtime notified `ConversationList` about selected-language changes from inside the `setSelectedLanguages` updater function. React can execute that updater while reconciling `LivePhoneDemo`, which produced the warning about updating `ConversationList` while rendering a different component.
+  Fix: Kept the local language toggle synchronous, but deferred the parent callback into a follow-up effect that runs after `selectedLanguages` commits. That preserves the same UI behavior without issuing parent state updates from the child render path.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
