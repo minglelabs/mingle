@@ -467,19 +467,20 @@ function normalizeTranslationLanguageKey(rawLanguage: string): string {
   return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
 }
 
-const TRADITIONAL_ONLY_CHARS = /[體臺萬與專業東為樂書買雲兒兩個們來嗎國圖聲對後會發這邊還過]/u
-const SIMPLIFIED_ONLY_CHARS = /[体台万与专业东为乐书买云儿两个人们来吗国图声对后会发这边还过]/u
-
-function resolveGenericChineseSourceVariant(rawText: string): 'zh-CN' | 'zh-TW' {
-  if (TRADITIONAL_ONLY_CHARS.test(rawText)) return 'zh-TW'
-  if (SIMPLIFIED_ONLY_CHARS.test(rawText)) return 'zh-CN'
-  return 'zh-CN'
+function normalizeSourceLanguageMatchKey(rawLanguage: string): string {
+  const normalizedTranslationKey = normalizeTranslationLanguageKey(rawLanguage)
+  if (normalizedTranslationKey === 'zh') return 'zh-cn'
+  if (normalizedTranslationKey === 'zh-cn' || normalizedTranslationKey === 'zh-tw') {
+    return normalizedTranslationKey
+  }
+  return normalizeLangForCompare(rawLanguage)
 }
 
 function normalizeIncomingSourceLanguage(rawLanguage: string, rawText = ''): string {
+  void rawText
   const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
   if (canonical === 'zh') {
-    return resolveGenericChineseSourceVariant(rawText)
+    return 'zh-CN'
   }
   if (canonical === 'zh-CN' || canonical === 'zh-TW') return canonical
   return (rawLanguage || '').trim().replace(/_/g, '-')
@@ -1061,7 +1062,7 @@ export function classifyRecentFinalizedUtteranceMatch(input: {
   if (normalizeFinalizeReuseText(recentFinalizedUtterance.text) !== normalizeFinalizeReuseText(input.text)) {
     return { kind: 'none' }
   }
-  if (normalizeLangForCompare(recentFinalizedUtterance.language) !== normalizeLangForCompare(input.language)) {
+  if (normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language) !== normalizeSourceLanguageMatchKey(input.language)) {
     return { kind: 'none' }
   }
   if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return { kind: 'none' }
@@ -1135,13 +1136,13 @@ export function findRecentMatchingUtteranceIndex(input: {
   sourceLanguage: string
 }): number {
   const normalizedText = normalizeSttTurnText(input.sourceText)
-  const normalizedLanguage = normalizeLangForCompare(input.sourceLanguage)
+  const normalizedLanguage = normalizeSourceLanguageMatchKey(input.sourceLanguage)
   if (!normalizedText || !normalizedLanguage) return -1
 
   for (let index = input.utterances.length - 1; index >= 0; index -= 1) {
     const utterance = input.utterances[index]
     if (normalizeSttTurnText(utterance.originalText) !== normalizedText) continue
-    if (normalizeLangForCompare(utterance.originalLang) !== normalizedLanguage) continue
+    if (normalizeSourceLanguageMatchKey(utterance.originalLang) !== normalizedLanguage) continue
     return index
   }
 
@@ -3114,7 +3115,7 @@ export default function useRealtimeSTT({
     if (!text) return null
 
     const speaker = (input.speaker || '').trim() || 'manual'
-    const sourceLanguage = normalizeLangForCompare(input.sourceLanguage || '') || 'unknown'
+    const sourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage || '', text) || 'unknown'
     const speakerAvatar = ensureSpeakerAvatarAssignment(speaker)
     const localFinalizeResult = finalizePendingLocally(text, sourceLanguage, {
       speaker,
