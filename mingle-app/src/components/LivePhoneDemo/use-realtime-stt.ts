@@ -432,9 +432,16 @@ function inferUtteranceCreatedAtMs(utterance: Pick<Utterance, 'id' | 'createdAtM
 
 function normalizeStoredUtterance(utterance: Utterance): Utterance {
   const createdAtMs = inferUtteranceCreatedAtMs(utterance)
-  if (createdAtMs === null) return utterance
-  if (utterance.createdAtMs === createdAtMs) return utterance
-  return { ...utterance, createdAtMs }
+  const normalizedOriginalLang = normalizeIncomingSourceLanguage(
+    utterance.originalLang,
+    utterance.originalText,
+  )
+  if (createdAtMs === null && normalizedOriginalLang === utterance.originalLang) return utterance
+  return {
+    ...utterance,
+    ...(createdAtMs !== null ? { createdAtMs } : {}),
+    originalLang: normalizedOriginalLang,
+  }
 }
 
 export function normalizeSttTurnText(rawText: string): string {
@@ -458,6 +465,24 @@ function normalizeTranslationLanguageCode(rawLanguage: string): string {
 
 function normalizeTranslationLanguageKey(rawLanguage: string): string {
   return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
+}
+
+const TRADITIONAL_ONLY_CHARS = /[體臺萬與專業東為樂書買雲兒兩個們來嗎國圖聲對後會發這邊還過]/u
+const SIMPLIFIED_ONLY_CHARS = /[体台万与专业东为乐书买云儿两个人们来吗国图声对后会发这边还过]/u
+
+function resolveGenericChineseSourceVariant(rawText: string): 'zh-CN' | 'zh-TW' {
+  if (TRADITIONAL_ONLY_CHARS.test(rawText)) return 'zh-TW'
+  if (SIMPLIFIED_ONLY_CHARS.test(rawText)) return 'zh-CN'
+  return 'zh-CN'
+}
+
+function normalizeIncomingSourceLanguage(rawLanguage: string, rawText = ''): string {
+  const canonical = canonicalizeTranslationLanguageCode(rawLanguage)
+  if (canonical === 'zh') {
+    return resolveGenericChineseSourceVariant(rawText)
+  }
+  if (canonical === 'zh-CN' || canonical === 'zh-TW') return canonical
+  return (rawLanguage || '').trim().replace(/_/g, '-')
 }
 
 function shouldKeepSourceLanguageBubble(options?: {
@@ -604,9 +629,9 @@ export function buildCurrentTurnPreviousStatePayload(
   sourceTextRaw: string,
   translationsRaw: Record<string, string>,
 ): CurrentTurnPreviousStatePayload | null {
-  const sourceLanguage = (sourceLanguageRaw || 'unknown').trim() || 'unknown'
   const sourceText = normalizeSttTurnText(sourceTextRaw)
   if (!sourceText) return null
+  const sourceLanguage = normalizeIncomingSourceLanguage(sourceLanguageRaw, sourceText) || 'unknown'
 
   const translations = stripSourceLanguageFromTranslations(translationsRaw, sourceLanguage)
 
@@ -637,7 +662,10 @@ export function parseSttTranscriptMessage(
   const utterance = data.utterance as Record<string, unknown>
   const rawText = typeof utterance.text === 'string' ? utterance.text : ''
   const text = normalizeSttTurnText(rawText)
-  const language = typeof utterance.language === 'string' ? utterance.language : 'unknown'
+  const language = normalizeIncomingSourceLanguage(
+    typeof utterance.language === 'string' ? utterance.language : 'unknown',
+    text || rawText,
+  ) || 'unknown'
   const isFinal = data.is_final === true
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
@@ -683,7 +711,7 @@ export function buildFinalizedUtterancePayload(
   input: BuildFinalizedUtterancePayloadInput,
 ): BuildFinalizedUtterancePayloadResult | null {
   const text = normalizeSttTurnText(input.rawText)
-  const language = (input.rawLanguage || 'unknown').trim() || 'unknown'
+  const language = normalizeIncomingSourceLanguage(input.rawLanguage, text) || 'unknown'
   if (!text) return null
 
   const createdAtMs = typeof input.createdAtMs === 'number' && Number.isFinite(input.createdAtMs)
@@ -872,7 +900,10 @@ export function buildLiveUtterance(input: {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
 
-  const sourceLanguage = input.partialLang || input.pendingTurn.language || 'unknown'
+  const sourceLanguage = normalizeIncomingSourceLanguage(
+    input.partialLang || input.pendingTurn.language || 'unknown',
+    transcript,
+  ) || 'unknown'
   const targetLanguages = buildTurnTargetLanguagesSnapshot(
     input.languages,
     sourceLanguage,
@@ -1442,7 +1473,10 @@ export function applyTranslationToUtteranceStoreState(input: {
   selectedLanguages?: string[]
   sourceText?: string
 }): UtteranceStoreState {
-  const normalizedDetectedSourceLanguage = normalizeLangForCompare(input.detectedSourceLanguage || '')
+  const normalizedDetectedSourceLanguage = normalizeIncomingSourceLanguage(
+    input.detectedSourceLanguage || '',
+    input.sourceText || '',
+  )
   const keepSourceLanguageBubble = shouldKeepSourceLanguageBubble({
     sourceLanguagesMixed: input.sourceLanguagesMixed,
     sourceTextHasForeignScript: input.sourceTextHasForeignScript,
@@ -2615,7 +2649,9 @@ export default function useRealtimeSTT({
       const ttsAudioBase64 = typeof data.ttsAudioBase64 === 'string' ? data.ttsAudioBase64 : undefined
       return {
         translations: (data.translations || {}) as Record<string, string>,
-        sourceLanguage: typeof data.sourceLanguage === 'string' ? data.sourceLanguage : undefined,
+        sourceLanguage: typeof data.sourceLanguage === 'string'
+          ? normalizeIncomingSourceLanguage(data.sourceLanguage, text)
+          : undefined,
         sourceLanguagesMixed: data.sourceLanguagesMixed === true,
         sourceTextHasForeignScript: data.sourceTextHasForeignScript === true,
         ttsLanguage: typeof data.ttsLanguage === 'string' ? data.ttsLanguage : undefined,

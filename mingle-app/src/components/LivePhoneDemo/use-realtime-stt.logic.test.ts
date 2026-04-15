@@ -188,6 +188,22 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('promotes generic Chinese transcript language to zh-CN by default', () => {
+    const parsed = parseSttTranscriptMessage({
+      type: 'transcript',
+      data: {
+        is_final: true,
+        utterance: {
+          text: '这是简体中文',
+          language: 'zh',
+          speaker: 'speaker-1',
+        },
+      },
+    })
+
+    expect(parsed?.language).toBe('zh-CN')
+  })
+
   it('returns null for malformed non-transcript payloads', () => {
     expect(parseSttTranscriptMessage({ type: 'ready' })).toBeNull()
     expect(parseSttTranscriptMessage({ type: 'transcript', data: null })).toBeNull()
@@ -237,6 +253,30 @@ describe('use-realtime-stt pure logic', () => {
         ko: '안녕하세요',
         ja: 'こんにちは',
       },
+    })
+  })
+
+  it('treats generic Chinese source as zh-CN so zh-CN target bubbles do not duplicate', () => {
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
+      rawText: '这是简体中文',
+      rawLanguage: 'zh',
+      languages: ['zh-CN', 'zh-TW', 'en'],
+      partialTranslations: {
+        'zh-CN': '不应保留',
+        'zh-TW': '這是繁體中文',
+        en: 'This is simplified Chinese',
+      },
+      utteranceSerial: 8,
+      nowMs: 1700000000001,
+    })
+
+    expect(built?.language).toBe('zh-CN')
+    expect(built?.utterance.originalLang).toBe('zh-CN')
+    expect(built?.utterance.targetLanguages).toEqual(['zh-TW', 'en'])
+    expect(built?.utterance.translations).toEqual({
+      'zh-TW': '這是繁體中文',
+      en: 'This is simplified Chinese',
     })
   })
 
