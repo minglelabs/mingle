@@ -245,10 +245,10 @@ export default function LanguageSelector({
                         aria-pressed={isSelected}
                         aria-label={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         title={`${lang.localizedName} · ${lang.secondaryLabel}`}
-                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border transition ${
+                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition ${
                           isSelected
-                            ? "border-amber-300 bg-white shadow-[0_12px_24px_rgba(245,158,11,0.10)]"
-                            : "border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+                            ? "border-2 border-amber-400 bg-white shadow-[0_14px_28px_rgba(245,158,11,0.14)]"
+                            : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
@@ -354,7 +354,7 @@ export default function LanguageSelector({
                     disabled={isDisabled}
                     className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
                       isSelected
-                        ? "border-amber-300 bg-amber-50/90 shadow-[0_14px_30px_rgba(245,158,11,0.10)]"
+                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
                         : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
                     } ${
                       isDisabled && !isSelected
@@ -367,7 +367,7 @@ export default function LanguageSelector({
                     <span
                       className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
                         isSelected
-                          ? "border-amber-200 bg-white"
+                          ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
                           : "border-[#e5dfd5] bg-[#faf7f1]"
                       }`}
                     >

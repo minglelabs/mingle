@@ -87,6 +87,11 @@
   Fix: When the locale-order label is `A-Z`, the sort toggle is hidden entirely and the search field expands to the full row width. In that state the selector also resets to its default sort mode so a previously chosen alternate mode does not leak into the hidden-toggle layout.
   Status: Resolved in-thread.
 
+- **Selected languages still blended in slightly too much against nearby unselected items**
+  Problem: The selected recent-language chips and selected list cards already used amber accents, but the emphasis was still a touch too subtle when scanning quickly. The user specifically wanted the selected state to read a little more clearly without becoming heavy-handed.
+  Fix: Strengthened the selected treatment one small step by thickening the recent-chip amber border to `2px`, nudging the amber tone slightly deeper, and giving both the recent chips and selected cards a slightly stronger warm shadow while keeping the overall palette the same.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
