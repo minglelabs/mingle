@@ -413,13 +413,28 @@ export default function LanguageSelector({
                       </span>
                     </span>
                     <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
                         isSelected
                           ? "border-amber-500 bg-amber-500 text-white"
                           : "border-slate-300 text-transparent"
                       }`}
                     >
-                      ✓
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        className={`h-4 w-4 ${
+                          isSelected ? "text-white" : "text-transparent"
+                        }`}
+                        fill="none"
+                      >
+                        <path
+                          d="M5.5 12.5L10 17L18.5 8.5"
+                          stroke="currentColor"
+                          strokeWidth="3.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </span>
                   </button>
                 );
