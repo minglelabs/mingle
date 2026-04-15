@@ -143,10 +143,11 @@ export default function LanguageSelector({
   // selector must sit above that body-level room overlay as well.
   const overlay = (
     <div
-      className="fixed inset-0 z-[140] bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      className="fixed inset-0 bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={copy.languageSelectorTitle}
+      style={{ zIndex: 140 }}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           requestClose();

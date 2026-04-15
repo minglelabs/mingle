@@ -8,8 +8,8 @@
   Status: Resolved in-thread.
 
 - **The full-screen in-room language selector could render invisibly behind the room overlay**
-  Problem: The selector itself was portaled to `document.body`, but the active room is also rendered as a full-screen body portal from the conversation list. The selector shipped with `z-[80]` while the room container sits at `z-[100]`, so tapping the language button updated state but the overlay stayed hidden underneath the room.
-  Fix: Raised the language-selector overlay stacking order above the room container so the full-screen selector reliably appears on top in both current and legacy room runtimes.
+  Problem: The selector itself was portaled to `document.body`, but the active room is also rendered as a full-screen body portal from the conversation list. The selector shipped with a lower stacking order than the room container, and the follow-up `z-[140]` Tailwind utility still resolved to `z-index: auto` at runtime, so tapping the language button updated state but the overlay stayed hidden underneath the room.
+  Fix: Raised the language-selector overlay above the room container and pinned the `z-index` with an inline style instead of relying on the missing utility class, so the full-screen selector reliably appears on top in both current and legacy room runtimes.
   Status: Resolved in-thread.
 
 - **Legacy bottom mic could render in the tiny composer size after hydration**
