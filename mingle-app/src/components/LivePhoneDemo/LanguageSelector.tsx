@@ -72,6 +72,7 @@ export default function LanguageSelector({
     () => resolveDefaultLanguageSelectorSortMode(localeInfo.source),
     [localeInfo.source],
   );
+  const showSortToggle = copy.languageSelectorSortLocaleLabel !== "A-Z";
   const [sortMode, setSortMode] = useState<LanguageSelectorSortMode>(defaultSortMode);
   const languageItems = useMemo(
     () => buildLanguageSelectorItems(localeInfo.locale),
@@ -124,6 +125,12 @@ export default function LanguageSelector({
   useEffect(() => {
     setSortMode(defaultSortMode);
   }, [defaultSortMode]);
+
+  useEffect(() => {
+    if (!showSortToggle) {
+      setSortMode(defaultSortMode);
+    }
+  }, [defaultSortMode, showSortToggle]);
 
   useEffect(() => {
     setRecentLanguageCodes((currentCodes) =>
@@ -265,7 +272,7 @@ export default function LanguageSelector({
             <div className="flex items-stretch gap-3">
               <div
                 className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
-                style={{ flex: "1 1 0" }}
+                style={{ flex: showSortToggle ? "1 1 0" : "1 1 100%" }}
               >
                 <Search size={18} className="shrink-0 text-slate-400" />
                 <input
@@ -281,41 +288,43 @@ export default function LanguageSelector({
                 />
               </div>
 
-              <div
-                className="min-w-0 rounded-[16px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
-                style={{ flex: "1 1 0" }}
-              >
-                <div className="flex h-full items-stretch gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortMode("locale");
-                    }}
-                    className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${
-                      sortMode === "locale"
-                        ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                    aria-pressed={sortMode === "locale"}
-                  >
-                    {copy.languageSelectorSortLocaleLabel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortMode("alphabetical");
-                    }}
-                    className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${
-                      sortMode === "alphabetical"
-                        ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                        : "text-slate-500 hover:text-slate-900"
-                    }`}
-                    aria-pressed={sortMode === "alphabetical"}
-                  >
-                    {copy.languageSelectorSortAlphabeticalLabel}
-                  </button>
+              {showSortToggle ? (
+                <div
+                  className="min-w-0 rounded-[16px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+                  style={{ flex: "1 1 0" }}
+                >
+                  <div className="flex h-full items-stretch gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMode("locale");
+                      }}
+                      className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${
+                        sortMode === "locale"
+                          ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                          : "text-slate-500 hover:text-slate-900"
+                      }`}
+                      aria-pressed={sortMode === "locale"}
+                    >
+                      {copy.languageSelectorSortLocaleLabel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortMode("alphabetical");
+                      }}
+                      className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${
+                        sortMode === "alphabetical"
+                          ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                          : "text-slate-500 hover:text-slate-900"
+                      }`}
+                      aria-pressed={sortMode === "alphabetical"}
+                    >
+                      {copy.languageSelectorSortAlphabeticalLabel}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         </header>

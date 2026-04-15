@@ -82,6 +82,11 @@
   Fix: Restored the count in the top-right header slot and aligned it to the same row as the back chevron and centered title, keeping the title visually centered while the count remains visible.
   Status: Resolved in-thread.
 
+- **Alphabet-script locales still showed a redundant sort toggle beside search**
+  Problem: For locales whose native ordering label was already `A-Z`, the selector still rendered a second `EN A-Z` toggle even though the UI cost outweighed the value for these users, making the search row feel cramped for little gain.
+  Fix: When the locale-order label is `A-Z`, the sort toggle is hidden entirely and the search field expands to the full row width. In that state the selector also resets to its default sort mode so a previously chosen alternate mode does not leak into the hidden-toggle layout.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
