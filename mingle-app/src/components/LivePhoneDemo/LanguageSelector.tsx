@@ -200,7 +200,7 @@ export default function LanguageSelector({
             aria-hidden="true"
             style={{ height: "env(safe-area-inset-top, 0px)" }}
           />
-          <div className="flex h-14 items-center justify-between gap-3 px-4">
+          <div className="relative flex h-14 items-center justify-between gap-3 px-4">
             <button
               type="button"
               onClick={requestClose}
@@ -211,11 +211,13 @@ export default function LanguageSelector({
             </button>
             <p
               id={titleId}
-              className="min-w-0 flex-1 truncate text-center text-[1rem] font-semibold tracking-[-0.02em] text-slate-950"
+              className="pointer-events-none absolute left-1/2 top-1/2 w-[calc(100%-136px)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[1rem] font-semibold tracking-[-0.02em] text-slate-950"
             >
               {copy.languageSelectorTitle}
             </p>
-            <div className="min-w-[40px] shrink-0" aria-hidden="true" />
+            <div className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-end text-[0.92rem] font-semibold tracking-[-0.01em] text-slate-500">
+              {selectedLanguages.length}/{MAX_LANGS}
+            </div>
           </div>
 
           <div className="space-y-5 px-4 pb-5 pt-1">

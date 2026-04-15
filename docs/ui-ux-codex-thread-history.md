@@ -77,6 +77,11 @@
   Fix: Reused the same `38px/40px` button box, `24px` chevron icon sizing, and focus/interaction treatment as the room header back button so the selector chrome now matches it exactly.
   Status: Resolved in-thread.
 
+- **The selected-language count disappeared from the language-selector top bar**
+  Problem: The header no longer showed the active selection count like `2/5`, so users lost the quick confirmation of how many languages were currently enabled while browsing the selector.
+  Fix: Restored the count in the top-right header slot and aligned it to the same row as the back chevron and centered title, keeping the title visually centered while the count remains visible.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
