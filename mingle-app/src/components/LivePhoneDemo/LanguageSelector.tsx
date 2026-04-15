@@ -139,9 +139,11 @@ export default function LanguageSelector({
 
   const atMax = selectedLanguages.length >= MAX_LANGS;
   const atMin = selectedLanguages.length <= MIN_LANGS;
+  // The active room itself is portaled above the conversation list, so this
+  // selector must sit above that body-level room overlay as well.
   const overlay = (
     <div
-      className="fixed inset-0 z-[80] bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
+      className="fixed inset-0 z-[140] bg-[rgba(248,245,239,0.94)] backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={copy.languageSelectorTitle}

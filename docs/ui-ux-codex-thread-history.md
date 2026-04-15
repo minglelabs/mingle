@@ -7,6 +7,11 @@
   Fix: The room language selector was promoted to a full-screen overlay with avatar-sized flags, language search, dual-language labels (`localized / English / native` as needed), and a visible sort toggle for user-locale order vs. alphabetical order.
   Status: Resolved in-thread.
 
+- **The full-screen in-room language selector could render invisibly behind the room overlay**
+  Problem: The selector itself was portaled to `document.body`, but the active room is also rendered as a full-screen body portal from the conversation list. The selector shipped with `z-[80]` while the room container sits at `z-[100]`, so tapping the language button updated state but the overlay stayed hidden underneath the room.
+  Fix: Raised the language-selector overlay stacking order above the room container so the full-screen selector reliably appears on top in both current and legacy room runtimes.
+  Status: Resolved in-thread.
+
 - **Legacy bottom mic could render in the tiny composer size after hydration**
   Problem: On Android `1.0.11` WebView validation, the legacy translator occasionally rendered the default bottom bar with the composer-sized microphone. This was not a simple viewport scale issue; the actual mic shell was collapsing into the `2.3rem` composer layout while the rest of the bar stayed on the default layout.
   Cause: `LivePhoneDemoLegacy.tsx` and the `1.1.0` room runtime both reused the same Framer Motion `layoutId` values for the composer mic shell and the default bottom-bar mic shell. `isComposerOpen` hydrates from persisted input-mode state after first render, so the shared-layout transition could mix the two subtrees during hydration.
