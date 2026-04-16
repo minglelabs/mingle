@@ -47,6 +47,8 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
       }
 
       .track {
@@ -2874,6 +2876,12 @@
       let wheelLock = false;
       let restoreTransitionFrame = null;
       let holdStep = null;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchMoved = false;
+      let touchNavigationTriggered = false;
+      const TOUCH_INTENT_THRESHOLD = 12;
+      const TOUCH_NAVIGATION_THRESHOLD = 52;
 
       function parseSlideNumber(rawValue) {
         const parsedValue = Number.parseInt(rawValue ?? "", 10);
@@ -3097,6 +3105,90 @@
           } else {
             previous();
           }
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          touchMoved = false;
+          touchNavigationTriggered = false;
+          holdStep = null;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches.length !== 1 || touchNavigationTriggered) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+          const primaryDistance = Math.max(absX, absY);
+
+          if (primaryDistance < TOUCH_INTENT_THRESHOLD) {
+            return;
+          }
+
+          touchMoved = true;
+          event.preventDefault();
+
+          if (primaryDistance < TOUCH_NAVIGATION_THRESHOLD) {
+            return;
+          }
+
+          touchNavigationTriggered = true;
+
+          if (primaryDelta < 0) {
+            next();
+          } else {
+            previous();
+          }
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchend",
+        (event) => {
+          if (!touchMoved || touchNavigationTriggered || event.changedTouches.length !== 1) {
+            touchMoved = false;
+            touchNavigationTriggered = false;
+            return;
+          }
+
+          const touch = event.changedTouches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+
+          if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
+            if (primaryDelta < 0) {
+              next();
+            } else {
+              previous();
+            }
+          }
+
+          touchMoved = false;
+          touchNavigationTriggered = false;
         },
         { passive: true }
       );
