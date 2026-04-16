@@ -183,6 +183,10 @@
         max-width: min(50rem, calc(100% - clamp(380px, 34vw, 500px)));
       }
 
+      .slide-copy--with-musk-exception {
+        max-width: min(50rem, calc(100% - clamp(400px, 35vw, 520px)));
+      }
+
       .slide-copy--with-tool-list {
         max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
       }
@@ -302,6 +306,12 @@
         top: clamp(138px, 17vh, 218px);
         right: clamp(96px, 10vw, 156px);
         width: clamp(310px, 28vw, 420px);
+      }
+
+      .slide-side-media--musk-exception {
+        top: clamp(72px, 9vh, 124px);
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
       }
 
       .slide-side-media--tool-list {
@@ -803,6 +813,34 @@
         color: rgba(24, 22, 18, 0.96);
       }
 
+      .slide-musk-stack {
+        display: grid;
+        gap: clamp(16px, 1.8vh, 24px);
+      }
+
+      .slide-musk-photo {
+        width: 100%;
+        height: clamp(230px, 23vw, 330px);
+        border-radius: 32px;
+        object-fit: cover;
+        object-position: center 27%;
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-musk-service-list {
+        display: grid;
+        gap: clamp(12px, 1.4vh, 18px);
+      }
+
+      .slide-musk-service-item {
+        padding: clamp(18px, 1.55vw, 24px) clamp(20px, 1.8vw, 28px);
+      }
+
+      .slide-musk-service-item .slide-ai-native-logo {
+        background: #ffffff;
+        padding: clamp(10px, 0.9vw, 14px);
+      }
+
       .slide-cross-mark {
         position: absolute;
         top: 50%;
@@ -1238,6 +1276,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-musk-exception {
+          max-width: 100%;
+        }
+
         .slide-copy--with-tool-list {
           max-width: 100%;
         }
@@ -1307,6 +1349,13 @@
         }
 
         .slide-side-media--ai-native-stack {
+          position: relative;
+          inset: auto;
+          width: 100%;
+          margin-top: 28px;
+        }
+
+        .slide-side-media--musk-exception {
           position: relative;
           inset: auto;
           width: 100%;
@@ -2360,6 +2409,35 @@
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 40%; --y: 70%; --s: clamp(68px, 5.4vw, 92px); --r: 6deg" src="./assets/logo-line.png" alt="LINE" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 61%; --y: 67%; --s: clamp(66px, 5.2vw, 88px); --r: -7deg" src="./assets/logo-facebook.png" alt="Facebook" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 82%; --y: 70%; --s: clamp(70px, 5.6vw, 94px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception">
+              <p class="slide-kicker">경쟁자 3</p>
+              <h1 class="slide-title">일론 머스크만이 예외입니다</h1>
+              <p class="slide-body">
+                X가 자동번역과 알고리즘 글로벌화를 하니까 세상이 뒤집어졌습니다.<br/>
+                Cursor의 출시로 바이브 코딩이 대두된 것과 같은 원리입니다.<br/>
+                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--musk-exception">
+              <div class="slide-musk-stack">
+                <img class="slide-musk-photo" src="./assets/elon-musk-2024.jpg" alt="Elon Musk" />
+                <div class="slide-musk-service-list">
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
+                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
+                  </section>
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
+                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
+                  </section>
+                </div>
               </div>
             </div>
           </article>
