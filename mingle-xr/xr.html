@@ -275,25 +275,43 @@
       }
 
       .slide-tool-item--numbered {
-        padding-left: clamp(78px, 5.8vw, 94px);
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: clamp(14px, 1.25vw, 20px);
+        align-items: start;
+        padding: clamp(18px, 1.55vw, 22px) clamp(16px, 1.35vw, 20px) clamp(18px, 1.55vw, 22px)
+          clamp(30px, 2.45vw, 38px);
       }
 
       .slide-tool-step-number {
-        position: absolute;
-        top: clamp(16px, 1.45vw, 20px);
-        left: clamp(18px, 1.6vw, 24px);
-        width: clamp(40px, 3.2vw, 50px);
-        height: clamp(40px, 3.2vw, 50px);
-        display: grid;
+        position: relative;
+        grid-column: 1;
+        grid-row: 1;
+        min-width: clamp(72px, 5.7vw, 92px);
+        min-height: clamp(38px, 3vw, 46px);
+        display: inline-grid;
         place-items: center;
-        border-radius: 16px;
-        font-size: clamp(1rem, 1.2vw, 1.18rem);
-        font-weight: 850;
-        line-height: 1;
+        padding: 0 0.62em;
+        border: 1px solid rgba(245, 158, 11, 0.24);
+        border-radius: 15px;
+        font-size: clamp(1.22rem, 1.52vw, 1.56rem);
+        font-weight: 700;
+        line-height: 1.2;
         letter-spacing: -0.04em;
         color: rgba(24, 22, 18, 0.88);
-        background: linear-gradient(180deg, rgba(255, 244, 215, 0.96) 0%, rgba(255, 233, 181, 0.76) 100%);
+        background: linear-gradient(135deg, rgba(255, 247, 225, 0.98) 0%, rgba(255, 230, 171, 0.78) 100%);
         box-shadow: 0 12px 24px rgba(245, 158, 11, 0.16);
+      }
+
+      .slide-tool-item--numbered .slide-tool-heading {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        padding-top: clamp(2px, 0.22vw, 4px);
+      }
+
+      .slide-tool-item--numbered .slide-tool-description {
+        grid-column: 1 / -1;
       }
 
       .slide-step-transition {
@@ -1991,21 +2009,21 @@
             <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
               <div class="slide-tool-items">
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">1</span>
+                  <span class="slide-tool-step-number">1단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
                   </div>
                   <p class="slide-tool-description">초기 타겟 고객이 사용</p>
                 </section>
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2</span>
+                  <span class="slide-tool-step-number">2단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
                   </div>
                   <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
                 </section>
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">3</span>
+                  <span class="slide-tool-step-number">3단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
                   </div>
@@ -2025,7 +2043,7 @@
             <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
               <div class="slide-tool-items slide-tool-items--viral-loop">
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">1</span>
+                  <span class="slide-tool-step-number">1단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
                   </div>
@@ -2043,7 +2061,7 @@
                   <span class="slide-step-transition-label">유저가 대화 상대 초대</span>
                 </div>
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2</span>
+                  <span class="slide-tool-step-number">2단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
                   </div>
@@ -2061,7 +2079,7 @@
                   <span class="slide-step-transition-label">UGC 바이럴로 추가 유저 유입</span>
                 </div>
                 <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">3</span>
+                  <span class="slide-tool-step-number">3단계</span>
                   <div class="slide-tool-heading">
                     <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
                   </div>
