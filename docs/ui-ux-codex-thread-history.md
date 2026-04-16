@@ -1366,3 +1366,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Converted the newly inserted XR business-diagram slide into an image-only page that centers `business-venndiagram.png` and lets it fill the viewport within a narrow outer margin.
 - 2026-04-16: Added a second image-only XR business slide immediately after the Venn diagram page, using the same full-viewport treatment for `business-matrix.png`.
 - 2026-04-16: Added an XR competitor slide for translation and note-taking services, using a logo-only scatter cloud of ten translation tools and ten note-taking tools to show that the adjacent markets are growing without directly targeting socializing.
+- 2026-04-16: Added a second XR competitor slide for AI-native companies, pairing the cold-start argument with a simple vertical logo-and-name stack for ChatGPT, Claude, and Gemini instead of another scattered logo cloud.
