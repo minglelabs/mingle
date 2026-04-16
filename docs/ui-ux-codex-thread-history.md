@@ -1358,3 +1358,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-14: Lifted that same secondary blur patch a bit further upward without changing its height, because the coverage size was already sufficient and only the vertical placement still felt slightly low.
 - 2026-04-14: Softened the multilingual-networking collage blur very slightly by dropping the full-image blur from five pixels to four, because the previous treatment was muting the social atmosphere a bit more than necessary.
 - 2026-04-14: Reduced only the top strip blur height on the upper travel-post card, because that header mask had grown too thick after the page reorder while the lower card's coverage was still appropriate.
+- 2026-04-16: Widened the right-side goal-step cards on the two XR goal slides and added prominent numbered badges for steps one through three, making the staged progression easier to scan while preserving the existing card language.

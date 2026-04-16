@@ -266,6 +266,32 @@
         width: clamp(268px, 22vw, 324px);
       }
 
+      .slide-side-media--goal-steps {
+        width: clamp(360px, 31vw, 460px);
+      }
+
+      .slide-tool-item--numbered {
+        padding-left: clamp(78px, 5.8vw, 94px);
+      }
+
+      .slide-tool-step-number {
+        position: absolute;
+        top: clamp(16px, 1.45vw, 20px);
+        left: clamp(18px, 1.6vw, 24px);
+        width: clamp(40px, 3.2vw, 50px);
+        height: clamp(40px, 3.2vw, 50px);
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        font-size: clamp(1rem, 1.2vw, 1.18rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.88);
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.96) 0%, rgba(255, 233, 181, 0.76) 100%);
+        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.16);
+      }
+
       .slide-side-media--customer-hurdles .slide-hurdle-description {
         color: rgba(45, 42, 30, 0.62);
       }
@@ -1841,8 +1867,8 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-hurdles">
-              <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">그래서 밍글의 두 번째 일은,<br/>외국인을 찾아주는 것입니다</h1>
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title">그래서 연결의 어려움 또한<br/>저희가 해소해야 할 장벽입니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--customer-hurdles">
               <div class="slide-hurdles-stack">
@@ -1863,11 +1889,107 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">비전</p>
-              <h1 class="slide-title">초기에는 번역기로 시작하고<br/>AI 네이티브 메신저로 진화를 꾀합니다</h1>
+              <h1 class="slide-title">이를 위해 번역기에서<br/>AI 네이티브 메신저로 진화를 꾀합니다</h1>
               <p class="slide-body">
                 소셜 기능을 붙이고, 여러 AI 기능을 추가해갈 계획입니다.<br/>
                 결국 최종적인 목표는 AI 네이티브 메신저이자 소셜 미디어입니다.
               </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title">혼자 쓰는 번역기가 아니라<br/>
+                실시간 통번역 중심 메신저로
+              </h1>
+              <p class="slide-body">
+                저희가 보이스룸과 메신저 등 유사 기능만 잘 제공해준다면,<br/>
+                통번역에 의존적인 유저가 굳이 헬로톡에 남아 있을 이유가 없습니다.<br/>
+                게다가 자신의 대화상대를 밍글로 초대하는 바이럴 루프도 기대됩니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--community-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--reddittalk-top"
+                src="./assets/reddittalk.jpg"
+                alt="Reddit talk reference"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--clubhouse-bottom"
+                src="./assets/clubhouse.jpg"
+                alt="Clubhouse voice room reference"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">목표</p>
+              <h1 class="slide-title">연결 문제에 대한 접근은<br/>세 단계로 나뉩니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 고객이 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드 대신 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 미디어</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">목표</p>
+              <h1 class="slide-title">바이럴 루프를 만들어<br/>진화를 꾀합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 고객이 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드 대신 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 미디어</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡 대신 사용</p>
+                </section>
+              </div>
             </div>
           </article>
         </section>
