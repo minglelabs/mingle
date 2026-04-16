@@ -1405,3 +1405,5 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Cropped the XR final slide's Google Play badge asset to remove its built-in transparent outer padding, making it visually match the App Store badge without an extra wrapper-looking frame.
 - 2026-04-16: Added the new offline conversation photo to the XR viral-target-two slide as a right-side standalone image, using a dedicated layout class so its position and size can be tuned independently from phone-frame slides.
 - 2026-04-16: Preserved the user's XR customer-hurdle priority edit, moving communication difficulty ahead of meeting difficulty and updating the focused follow-up slides to match the new first-priority order.
+- 2026-04-16: Preserved the user's XR viral-loop arrow label edit, changing the later-stage acquisition wording from `UGC 바이럴` to the broader `매칭 및 바이럴` phrasing.
+- 2026-04-16: Preserved the user's newly added XR solution slide that repeats the viral-loop structure to show matching features becoming possible once enough users exist, with the first transition muted and the matching/viral transition emphasized.
