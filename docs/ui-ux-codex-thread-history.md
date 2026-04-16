@@ -1394,3 +1394,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Restored the XR deck's final resource slide CTA buttons after the later plain-URL conflict resolution had removed them, keeping the user's centered Q&A copy while returning the Mingle, GitHub, App Store, and Google Play button row.
 - 2026-04-16: Replaced the XR Elon Musk exception slide portrait with the user-provided bust-style image so the visual lands between the earlier too-distant shot and the later overly tight face crop.
 - 2026-04-16: Preserved the user's latest XR deck reorder that moves the two customer-hurdle slides out of the early intro sequence and places them later in the strategy flow.
+- 2026-04-16: Preserved the user's follow-up XR viral-target slide edit, moving the HelloTalk-to-Mingle two-image slide later in the flow and reframing its copy from a case example to the first viral target.
