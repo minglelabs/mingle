@@ -1391,3 +1391,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Preserved follow-up XR deck edits that tightened the social-platform competitor copy and moved the blitzscaling slide ahead of the timing and team section sequence.
 - 2026-04-16: Preserved a follow-up XR differentiation title edit that reframes sharp vertical entry as the answer to cold-start problems.
 - 2026-04-16: Added an XR viral-case slide after the connection-difficulty page, reusing the HelloTalk-plus-Mingle two-image stack to frame a testable invite-and-chat hypothesis for friends first met on HelloTalk.
+- 2026-04-16: Restored the XR deck's final resource slide CTA buttons after the later plain-URL conflict resolution had removed them, keeping the user's centered Q&A copy while returning the Mingle, GitHub, App Store, and Google Play button row.
