@@ -938,7 +938,7 @@ function resolveNativeCanvasScale(windowWidthPx: number): number {
   return Math.min(1, windowWidthPx / WEB_CANVAS_BASE_WIDTH_PX);
 }
 
-function NativeAdBanner(props: {
+export function NativeAdBanner(props: {
   position: NativeBannerPosition;
   unitId: string;
   heightPx: number;
@@ -975,6 +975,9 @@ function NativeAdBanner(props: {
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
   const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
+  const shouldShowFallbackPlaceholder = Platform.OS === 'android'
+    ? adLoadState !== 'loaded'
+    : shouldShowDebugPlaceholder && adLoadState !== 'loaded';
 
   /* eslint-disable react-hooks/set-state-in-effect */
   // Reset banner state when a new slot/unit configuration is mounted.
@@ -1020,18 +1023,6 @@ function NativeAdBanner(props: {
   return (
     <View pointerEvents="box-none" style={containerStyle}>
       <View style={[styles.nativeBannerSlot, { width: bannerSlotWidthPx, height: renderHeightPx }]}>
-        {shouldShowDebugPlaceholder && adLoadState !== 'loaded' ? (
-          <View style={styles.nativeBannerDebugPlaceholder}>
-            <Text style={styles.nativeBannerDebugTitle}>
-              {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
-            </Text>
-            <Text style={styles.nativeBannerDebugBody} numberOfLines={2}>
-              {adLoadState === 'failed'
-                ? (lastErrorMessage || 'Unknown banner load error')
-                : `slot=${position} width=${bannerSlotWidthPx} unit=test-ios-banner`}
-            </Text>
-          </View>
-        ) : null}
         <BannerAd
           key={`${unitId}:${reloadToken}`}
           unitId={unitId}
@@ -1042,6 +1033,33 @@ function NativeAdBanner(props: {
           onSizeChange={applyBannerDimensions}
           onAdFailedToLoad={handleAdFailedToLoad}
         />
+        {shouldShowFallbackPlaceholder ? (
+          <View
+            testID="native-banner-fallback"
+            style={[
+              styles.nativeBannerFallbackSurface,
+              shouldShowDebugPlaceholder ? styles.nativeBannerDebugPlaceholder : null,
+            ]}
+          >
+            {Platform.OS === 'android' ? (
+              <View style={styles.nativeBannerFallbackBadge}>
+                <Text style={styles.nativeBannerFallbackBadgeText}>AD</Text>
+              </View>
+            ) : null}
+            {shouldShowDebugPlaceholder ? (
+              <>
+                <Text style={styles.nativeBannerDebugTitle}>
+                  {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
+                </Text>
+                <Text style={styles.nativeBannerDebugBody} numberOfLines={2}>
+                  {adLoadState === 'failed'
+                    ? (lastErrorMessage || 'Unknown banner load error')
+                    : `slot=${position} width=${bannerSlotWidthPx} unit=test-ios-banner`}
+                </Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -1321,7 +1339,7 @@ function AppInner(): React.JSX.Element {
   }, [nativeAdModule, nativeBannerUnitId]);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
     if (!nativeBannerUnitId) return;
 
     let previousState = AppState.currentState;
@@ -2603,6 +2621,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     paddingHorizontal: 12,
+  },
+  nativeBannerFallbackSurface: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderColor: '#e5e7eb',
+    borderWidth: 1,
+  },
+  nativeBannerFallbackBadge: {
+    minWidth: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#f3f4f6',
+    borderColor: '#d1d5db',
+    borderWidth: 1,
+  },
+  nativeBannerFallbackBadgeText: {
+    color: '#6b7280',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
   nativeBannerDebugTitle: {
     color: '#111827',
