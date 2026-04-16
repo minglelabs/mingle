@@ -1390,3 +1390,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Duplicated the XR viral-loop growth slide and added a focused version that emphasizes inviting friends first, visually dimming the second viral arrow and the third-stage social-platform card.
 - 2026-04-16: Preserved follow-up XR deck edits that tightened the social-platform competitor copy and moved the blitzscaling slide ahead of the timing and team section sequence.
 - 2026-04-16: Preserved a follow-up XR differentiation title edit that reframes sharp vertical entry as the answer to cold-start problems.
+- 2026-04-16: Added an XR viral-case slide after the connection-difficulty page, reusing the HelloTalk-plus-Mingle two-image stack to frame a testable invite-and-chat hypothesis for friends first met on HelloTalk.
