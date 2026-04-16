@@ -10,6 +10,7 @@ import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import {
   buildLanguageSelectorHistoryState,
+  buildLanguageSelectorButtonCodes,
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
 } from './language-selector.logic'
@@ -1105,6 +1106,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const effectiveTranslationLanguages = useMemo(
     () => (translationLanguagesLinked ? speechLanguages : selectedLanguages),
     [selectedLanguages, speechLanguages, translationLanguagesLinked],
+  )
+  const languageSelectorButtonLanguages = useMemo(
+    () => buildLanguageSelectorButtonCodes(speechLanguages, effectiveTranslationLanguages),
+    [effectiveTranslationLanguages, speechLanguages],
   )
 
   const {
@@ -4336,7 +4341,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
               >
-                {effectiveTranslationLanguages.map((lang) => (
+                {languageSelectorButtonLanguages.map((lang) => (
                   <span
                     key={lang}
                     className="text-[1.35rem]"
