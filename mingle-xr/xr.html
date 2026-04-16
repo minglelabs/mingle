@@ -27,6 +27,8 @@
         --accent: #fbbc32;
         --accent-strong: #f97316;
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --deck-width: 100vw;
+        --deck-height: 100vh;
       }
 
       * {
@@ -50,8 +52,8 @@
 
       .deck {
         position: relative;
-        width: 100vw;
-        height: 100vh;
+        width: var(--deck-width);
+        height: var(--deck-height);
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: none;
@@ -67,9 +69,9 @@
       }
 
       .slide {
-        flex: 0 0 100vw;
-        width: 100vw;
-        height: 100vh;
+        flex: 0 0 var(--deck-width);
+        width: var(--deck-width);
+        height: var(--deck-height);
         padding: 0;
       }
 
@@ -1401,174 +1403,35 @@
       }
 
       @media (max-width: 900px) {
-        .slide-shell {
-          padding: 20px 28px 28px;
+        :root {
+          --deck-width: min(calc(100vw - 24px), calc((100dvh - 24px) * 16 / 9));
+          --deck-height: calc(var(--deck-width) * 9 / 16);
         }
 
-        .slide-copy {
-          --kicker-slot: 34px;
-          padding-top: var(--kicker-slot);
-          margin-top: clamp(68px, calc(20vh - 12px), 116px);
+        html,
+        body {
+          height: 100dvh;
+          min-height: 100dvh;
         }
 
-        .slide-title {
-          font-size: clamp(2rem, 8vw, 3.2rem);
+        body {
+          display: grid;
+          place-items: center;
+          background:
+            radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
+            linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
+            var(--page);
         }
 
-        .slide-title--quoted {
-          gap: 0;
+        .deck {
+          box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
         }
 
-        .slide-title-quote {
-          font-size: clamp(3.6rem, 10vw, 4.8rem);
-        }
-
-        .slide--hero .slide-title {
-          font-size: clamp(3.1rem, 12vw, 4.8rem);
-        }
-
-        .slide-body {
-          font-size: clamp(1rem, 4.4vw, 1.2rem);
-        }
-
-        .slide-copy--with-side-media {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-reason-media {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-wide-side-media {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-hurdles {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-solution-stack {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-brand-collage {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-competitor-cloud {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-competitor-tool-cloud {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-social-cloud {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-ai-native-stack {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-musk-exception {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-tool-list {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-experience-list {
-          max-width: 100%;
-        }
-
-        .slide-side-media {
-          top: 20px;
-          right: 28px;
-        }
-
-        .slide-preview-image {
-          display: none;
-        }
-
-        .slide-side-media--collage {
-          display: none;
-        }
-
-        .slide-side-media--reason {
-          display: none;
-        }
-
-        .slide-side-media--customer-hurdles {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--solution-stack {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-solution-columns {
-          grid-template-columns: 1fr;
-          row-gap: 12px;
-        }
-
-        .slide-side-media--brand-collage {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          height: clamp(280px, 56vw, 360px);
-          margin-top: 28px;
-        }
-
-        .slide-side-media--competitor-cloud {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          height: clamp(340px, 74vw, 460px);
-          margin-top: 28px;
-        }
-
-        .slide-side-media--competitor-tool-cloud {
-          height: clamp(300px, 66vw, 420px);
-        }
-
-        .slide-side-media--social-cloud {
-          height: clamp(280px, 62vw, 380px);
-        }
-
-        .slide-side-media--ai-native-stack {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--musk-exception {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--tool-list {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--experience-list {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
+        .page-counter {
+          position: absolute;
+          right: clamp(14px, 3vw, 28px);
+          bottom: clamp(12px, 2.4vw, 24px);
+          font-size: clamp(0.55rem, 2vw, 0.82rem);
         }
 
         .slide-final-links {
@@ -3004,11 +2867,15 @@
         return `transform ${durationMs}ms var(--slide-ease)`;
       }
 
+      function deckWidth() {
+        return track.getBoundingClientRect().width;
+      }
+
       function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
         track.style.transition = useTransition
           ? currentTransitionValue(durationMs)
           : "none";
-        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
       }
 
       function jumpToIndex(index) {
@@ -3019,7 +2886,7 @@
 
         activeIndex = index;
         track.style.transition = "none";
-        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
 
         // Force layout so the browser commits the jump before transition is restored.
         void track.offsetWidth;
