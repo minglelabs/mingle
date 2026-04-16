@@ -248,6 +248,12 @@
         height: clamp(420px, 42vw, 620px);
       }
 
+      .slide-side-media--offline-conversation {
+        top: clamp(54px, 8vh, 104px);
+        right: clamp(72px, 8vw, 132px);
+        width: clamp(280px, 28vw, 400px);
+      }
+
       .slide-side-media--travel-post-stack {
         top: clamp(76px, 11vh, 136px);
         right: clamp(56px, 7vw, 112px);
@@ -1050,6 +1056,12 @@
 
       .slide-preview-image--gaming {
         width: clamp(300px, 32vw, 400px);
+      }
+
+      .slide-preview-image--offline-conversation {
+        width: 100%;
+        border-radius: clamp(26px, 2.4vw, 36px);
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
       }
 
       .slide-preview-image--reddittalk {
@@ -2486,6 +2498,13 @@
                 오프라인 모임에서 만난 외국인 친구들과 헤어지고 나서도<br/>
                 밍글에 초대해 대화를 이어갈 수 있습니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--offline-conversation" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--offline-conversation"
+                src="./assets/offline-conversation.png"
+                alt=""
+              />
             </div>
           </article>
         </section>
