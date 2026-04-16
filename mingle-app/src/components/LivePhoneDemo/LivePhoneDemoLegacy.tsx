@@ -8,11 +8,17 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import {
+  buildLanguageSelectorHistoryState,
+  clearLanguageSelectorHistoryState,
+  isLanguageSelectorHistoryOpen,
+} from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt-legacy'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { CONVERSATION_CLEAR_CUTOFF_HEADER } from '@/lib/conversation-history-clear'
+import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
@@ -87,6 +93,7 @@ import {
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
+import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
 import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
 
@@ -115,6 +122,7 @@ const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
 const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
+const LANG_SELECTOR_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
 const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
@@ -175,6 +183,16 @@ function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) 
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
+function isNativeIosAppRuntime(): boolean {
+  if (!isNativeApp()) return false
+
+  const apiNamespace = typeof window === 'undefined'
+    ? clientApiNamespace
+    : readRequestedApiNamespaceFromSearch(window.location.search || '') || clientApiNamespace
+
+  return apiNamespace.startsWith('ios/')
 }
 
 function isLikelyIOSPlatform(): boolean {
@@ -828,6 +846,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(fallbackLanguages)
@@ -894,6 +913,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const translationModelButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuHistoryDepthRef = useRef(0)
   const menuHistoryTargetDepthRef = useRef<number | null>(null)
+  const langSelectorHistoryTargetOpenRef = useRef<boolean | null>(null)
+  const langSelectorIosHistorySettleRef = useRef<{ open: boolean, expiresAt: number } | null>(null)
+  const langSelectorOpenRef = useRef(false)
   const menuSwipeSessionRef = useRef<{
     pointerId: number
     startX: number
@@ -949,7 +971,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
-  const isNativeMenuOverlayVisible = menuOpen || menuScreen === 'feedback'
+  const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen === 'feedback'
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
     isDevelopmentMode: process.env.NODE_ENV !== 'production',
@@ -958,6 +980,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     latestAccountPreferencesRef.current = latestAccountPreferences
   }, [latestAccountPreferences])
+
+  useEffect(() => {
+    langSelectorOpenRef.current = langSelectorOpen
+  }, [langSelectorOpen])
 
   const syncComposerTextareaHeight = useCallback((textarea: HTMLTextAreaElement | null) => {
     const nextHeight = resizeComposerTextarea(textarea)
@@ -1547,6 +1573,68 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     window.history.go(-currentDepth)
   }, [applyMenuNavigationDepth])
 
+  const applyLanguageSelectorOpen = useCallback((nextOpen: boolean) => {
+    setLangSelectorOpen(nextOpen)
+  }, [])
+
+  const closeLanguageSelector = useCallback((options?: {
+    syncHistory?: 'back' | 'replace' | 'none'
+  }) => {
+    const syncHistory = options?.syncHistory ?? 'none'
+    langSelectorIosHistorySettleRef.current = null
+
+    if (
+      syncHistory === 'back'
+      && typeof window !== 'undefined'
+      && isLanguageSelectorHistoryOpen(window.history.state)
+    ) {
+      langSelectorHistoryTargetOpenRef.current = false
+      applyLanguageSelectorOpen(false)
+      window.history.back()
+      return
+    }
+
+    langSelectorHistoryTargetOpenRef.current = null
+    applyLanguageSelectorOpen(false)
+
+    if (syncHistory === 'replace' && typeof window !== 'undefined') {
+      window.history.replaceState(
+        clearLanguageSelectorHistoryState(window.history.state),
+        '',
+      )
+    }
+  }, [applyLanguageSelectorOpen])
+
+  const openLanguageSelector = useCallback((options?: {
+    syncHistory?: 'push' | 'none'
+  }) => {
+    const syncHistory = options?.syncHistory ?? 'none'
+    closeMenuPanel()
+    langSelectorHistoryTargetOpenRef.current = null
+    langSelectorIosHistorySettleRef.current = null
+    applyLanguageSelectorOpen(true)
+
+    if (
+      syncHistory === 'push'
+      && typeof window !== 'undefined'
+      && !isLanguageSelectorHistoryOpen(window.history.state)
+    ) {
+      window.history.pushState(
+        buildLanguageSelectorHistoryState(window.history.state),
+        '',
+      )
+    }
+  }, [applyLanguageSelectorOpen, closeMenuPanel])
+
+  const handleLanguageSelectorButtonPress = useCallback(() => {
+    if (langSelectorOpenRef.current) {
+      closeLanguageSelector({ syncHistory: 'back' })
+      return
+    }
+
+    openLanguageSelector({ syncHistory: 'push' })
+  }, [closeLanguageSelector, openLanguageSelector])
+
   const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
     if (!isNativeApp()) return
 
@@ -1560,7 +1648,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const handleMenuButtonPress = useCallback(() => {
-    setLangSelectorOpen(false)
+    closeLanguageSelector({ syncHistory: 'replace' })
 
     if (menuOpen) {
       requestCloseMenuPanel()
@@ -1570,7 +1658,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     clearFeedbackSubmitState()
     setFeedbackTab('compose')
     pushMenuHistoryEntry(1)
-  }, [clearFeedbackSubmitState, menuOpen, pushMenuHistoryEntry, requestCloseMenuPanel])
+  }, [clearFeedbackSubmitState, closeLanguageSelector, menuOpen, pushMenuHistoryEntry, requestCloseMenuPanel])
 
   const handleFeedbackMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'feedback') return
@@ -1717,6 +1805,77 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [applyMenuNavigationDepth])
 
   useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const requestedOpen = langSelectorHistoryTargetOpenRef.current
+      langSelectorHistoryTargetOpenRef.current = null
+      const nextStateOpen = isLanguageSelectorHistoryOpen(event.state ?? window.history.state)
+      const isNativeIosHistoryGesture = requestedOpen === null && isNativeIosAppRuntime()
+      const nowMs = typeof performance !== 'undefined' ? performance.now() : Date.now()
+
+      if (
+        langSelectorIosHistorySettleRef.current
+        && nowMs > langSelectorIosHistorySettleRef.current.expiresAt
+      ) {
+        langSelectorIosHistorySettleRef.current = null
+      }
+      const activeSettleState = langSelectorIosHistorySettleRef.current
+
+      if (requestedOpen !== null) {
+        langSelectorIosHistorySettleRef.current = null
+        applyLanguageSelectorOpen(nextStateOpen)
+        return
+      }
+
+      if (langSelectorOpenRef.current === nextStateOpen) return
+
+      const shouldIgnoreSettlingReplay = (
+        isNativeIosHistoryGesture
+        && activeSettleState !== null
+        && nowMs <= activeSettleState.expiresAt
+        && activeSettleState.open !== nextStateOpen
+        && (!activeSettleState.open || !nextStateOpen)
+      )
+
+      if (shouldIgnoreSettlingReplay) {
+        const correctionDelta = Number(activeSettleState!.open) - Number(nextStateOpen)
+        if (correctionDelta !== 0) {
+          langSelectorHistoryTargetOpenRef.current = activeSettleState!.open
+          window.history.go(correctionDelta)
+        }
+        return
+      }
+
+      applyLanguageSelectorOpen(nextStateOpen)
+
+      if (isNativeIosHistoryGesture) {
+        langSelectorIosHistorySettleRef.current = {
+          open: nextStateOpen,
+          expiresAt: nowMs + LANG_SELECTOR_IOS_HISTORY_SETTLE_WINDOW_MS,
+        }
+        return
+      }
+
+      langSelectorIosHistorySettleRef.current = null
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [applyLanguageSelectorOpen])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window === 'undefined') return
+      if (!isLanguageSelectorHistoryOpen(window.history.state)) return
+      window.history.replaceState(
+        clearLanguageSelectorHistoryState(window.history.state),
+        '',
+      )
+    }
+  }, [])
+
+  useEffect(() => {
     if (!menuOpen) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1793,6 +1952,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       window.removeEventListener('pointerdown', handlePointerDown)
     }
   }, [translationModelMenuOpen])
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (langSelectorOpen) {
+      closeLanguageSelector({ syncHistory: 'back' })
+      return true
+    }
+
+    return false
+  }, 10), [closeLanguageSelector, langSelectorOpen])
 
   useEffect(() => {
     if (showMenuButton) return
@@ -3222,11 +3390,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               <button
                 ref={langSelectorButtonRef}
                 type="button"
-                onClick={() => {
-                  closeMenuPanel()
-                  setLangSelectorOpen(o => !o)
-                }}
-                aria-haspopup="menu"
+                onClick={handleLanguageSelectorButtonPress}
+                aria-label={roomManagementCopy.languageSelectorTitle}
+                aria-haspopup="dialog"
                 aria-expanded={langSelectorOpen}
                 className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors"
                 style={{ backgroundColor: '#ffffff' }}
@@ -3248,14 +3414,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   }`}
                 />
               </button>
-              <LanguageSelector
-                isOpen={langSelectorOpen}
-                onClose={() => setLangSelectorOpen(false)}
-                selectedLanguages={selectedLanguages}
-                onToggleLanguage={handleToggleLanguage}
-                uiLocale={uiLocale}
-                triggerRef={langSelectorButtonRef}
-              />
+              {langSelectorOpen ? (
+                <LanguageSelector
+                  isOpen={langSelectorOpen}
+                  onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
+                  selectedLanguages={selectedLanguages}
+                  onToggleLanguage={handleToggleLanguage}
+                  uiLocale={uiLocale}
+                  copy={roomManagementCopy}
+                  triggerRef={langSelectorButtonRef}
+                />
+              ) : null}
             </div>
             {showMenuButton ? (
               <div className="relative">

@@ -1268,7 +1268,7 @@ describe('/api/translate/finalize route', () => {
   it('accepts canonicalized target language aliases in requests and model responses', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
-        text: () => '{"fil":"Kamusta","iw":"שלום","zh-cn":"你好"}',
+        text: () => '{"fil":"Kamusta","iw":"שלום","zh-tw":"你好"}',
         usageMetadata: {},
       },
     })
@@ -1288,13 +1288,13 @@ describe('/api/translate/finalize route', () => {
     expect(json.translations).toEqual({
       tl: 'Kamusta',
       he: 'שלום',
-      zh: '你好',
+      'zh-TW': '你好',
     })
 
     const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as {
       generationConfig?: { responseSchema?: { required?: string[] } }
     }
-    expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['tl', 'he', 'zh'])
+    expect(modelConfig.generationConfig?.responseSchema?.required).toEqual(['tl', 'he', 'zh-TW'])
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
