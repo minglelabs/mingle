@@ -270,6 +270,10 @@
         width: clamp(360px, 31vw, 460px);
       }
 
+      .slide-tool-items--viral-loop {
+        position: relative;
+      }
+
       .slide-tool-item--numbered {
         padding-left: clamp(78px, 5.8vw, 94px);
       }
@@ -290,6 +294,58 @@
         color: rgba(24, 22, 18, 0.88);
         background: linear-gradient(180deg, rgba(255, 244, 215, 0.96) 0%, rgba(255, 233, 181, 0.76) 100%);
         box-shadow: 0 12px 24px rgba(245, 158, 11, 0.16);
+      }
+
+      .slide-step-transition {
+        position: absolute;
+        left: clamp(-180px, -12vw, -132px);
+        width: clamp(156px, 11.2vw, 194px);
+        height: clamp(82px, 7.4vw, 112px);
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .slide-step-transition--first {
+        top: clamp(78px, 7.2vw, 104px);
+      }
+
+      .slide-step-transition--second {
+        top: clamp(198px, 17.2vw, 256px);
+      }
+
+      .slide-step-transition svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .slide-step-transition path {
+        fill: none;
+        stroke: rgba(245, 158, 11, 0.82);
+        stroke-width: 6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
+      }
+
+      .slide-step-transition-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: clamp(136px, 10vw, 170px);
+        padding: 8px 12px 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.08);
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(0.82rem, 0.86vw, 0.98rem);
+        font-weight: 800;
+        line-height: 1.25;
+        letter-spacing: -0.045em;
+        text-align: center;
+        transform: translate(-50%, -50%) rotate(-3deg);
       }
 
       .slide-side-media--customer-hurdles .slide-hurdle-description {
@@ -1966,8 +2022,8 @@
               <p class="slide-kicker">목표</p>
               <h1 class="slide-title">바이럴 루프를 만들어<br/>진화를 꾀합니다</h1>
             </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
-              <div class="slide-tool-items">
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
                 <section class="slide-tool-item slide-tool-item--numbered">
                   <span class="slide-tool-step-number">1</span>
                   <div class="slide-tool-heading">
@@ -1975,6 +2031,17 @@
                   </div>
                   <p class="slide-tool-description">초기 타겟 고객이 사용</p>
                 </section>
+                <div class="slide-step-transition slide-step-transition--first">
+                  <svg viewBox="0 0 190 112" aria-hidden="true" focusable="false">
+                    <defs>
+                      <marker id="viral-arrow-head-1" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto">
+                        <path d="M2 2 L11 7 L2 12" fill="none" stroke="rgba(245, 158, 11, 0.82)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                      </marker>
+                    </defs>
+                    <path d="M148 12 C54 18 42 78 132 94" marker-end="url(#viral-arrow-head-1)" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 대화 상대 초대</span>
+                </div>
                 <section class="slide-tool-item slide-tool-item--numbered">
                   <span class="slide-tool-step-number">2</span>
                   <div class="slide-tool-heading">
@@ -1982,6 +2049,17 @@
                   </div>
                   <p class="slide-tool-description">디스코드 대신 사용</p>
                 </section>
+                <div class="slide-step-transition slide-step-transition--second">
+                  <svg viewBox="0 0 190 112" aria-hidden="true" focusable="false">
+                    <defs>
+                      <marker id="viral-arrow-head-2" markerWidth="14" markerHeight="14" refX="10" refY="7" orient="auto">
+                        <path d="M2 2 L11 7 L2 12" fill="none" stroke="rgba(245, 158, 11, 0.82)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                      </marker>
+                    </defs>
+                    <path d="M148 12 C54 18 42 78 132 94" marker-end="url(#viral-arrow-head-2)" />
+                  </svg>
+                  <span class="slide-step-transition-label">UGC 바이럴로 추가 유저 유입</span>
+                </div>
                 <section class="slide-tool-item slide-tool-item--numbered">
                   <span class="slide-tool-step-number">3</span>
                   <div class="slide-tool-heading">
