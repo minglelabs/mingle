@@ -1397,3 +1397,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Preserved the user's follow-up XR viral-target slide edit, moving the HelloTalk-to-Mingle two-image slide later in the flow and reframing its copy from a case example to the first viral target.
 - 2026-04-16: Preserved the user's newly inserted XR viral-target slide that reframes the product direction as building a messenger experience after the initial HelloTalk friend-invite target.
 - 2026-04-16: Preserved the user's XR messenger-experience copy edit that narrows the slide body to messaging, group chat, invitation, and sharing capabilities, and saved the newly added conversation screenshot assets for follow-up slide work.
+- 2026-04-16: Updated the XR messenger-experience slide imagery to use the new Mingle conversation-list and conversation-room screenshots inside the existing overlapping phone-frame treatment.
