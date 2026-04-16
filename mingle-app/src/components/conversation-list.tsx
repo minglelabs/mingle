@@ -25,6 +25,8 @@ import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePho
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import {
   LS_KEY_LANGUAGES,
+  LS_KEY_SPEECH_LANGUAGES,
+  LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
@@ -138,6 +140,8 @@ interface ConversationItem {
   updatedAt: string;
   pausedAt: string | null;
   selectedLanguages: string[];
+  speechLanguages: string[];
+  translationLanguagesLinked: boolean;
   languageFlags: string;
 }
 
@@ -167,6 +171,8 @@ type LegacySingleRoomSnapshot = {
   usageRaw: string | null;
   sessionKey: string;
   selectedLanguages: string[];
+  speechLanguages: string[];
+  translationLanguagesLinked: boolean;
 };
 
 function isNativeAppRuntime(): boolean {
@@ -231,13 +237,36 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
     const usageRaw = window.localStorage.getItem(LEGACY_SINGLE_ROOM_USAGE_KEY);
     const sessionKey = (window.localStorage.getItem(LEGACY_SINGLE_ROOM_SESSION_KEY) || "").trim();
     let selectedLanguages = [...defaultSelectedLanguages];
+    let speechLanguages = [...defaultSelectedLanguages];
+    let translationLanguagesLinked = true;
     try {
       selectedLanguages = sanitizeSttLanguageSelection(
         JSON.parse(window.localStorage.getItem(LS_KEY_LANGUAGES) || "null"),
         defaultSelectedLanguages,
       );
+      speechLanguages = [...selectedLanguages];
     } catch {
       selectedLanguages = [...defaultSelectedLanguages];
+      speechLanguages = [...defaultSelectedLanguages];
+    }
+    try {
+      speechLanguages = sanitizeSttLanguageSelection(
+        JSON.parse(window.localStorage.getItem(LS_KEY_SPEECH_LANGUAGES) || "null"),
+        selectedLanguages,
+      );
+    } catch {
+      speechLanguages = [...selectedLanguages];
+    }
+    try {
+      const rawLinked = window.localStorage.getItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED);
+      translationLanguagesLinked = rawLinked === null
+        ? true
+        : rawLinked.trim().toLowerCase() !== "0" && rawLinked.trim().toLowerCase() !== "false";
+    } catch {
+      translationLanguagesLinked = true;
+    }
+    if (translationLanguagesLinked) {
+      selectedLanguages = [...speechLanguages];
     }
 
     const hasUtterances = typeof utterancesRaw === "string" && utterancesRaw.trim().length > 0;
@@ -263,6 +292,8 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
       usageRaw: hasUsage ? usageRaw : null,
       sessionKey,
       selectedLanguages,
+      speechLanguages,
+      translationLanguagesLinked,
     };
   } catch {
     return null;
@@ -634,7 +665,13 @@ function mapConversationSummaryToItem(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
   );
-  const languageFlags = selectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
+  const speechLanguages = sanitizeSttLanguageSelection(
+    conversation.speechLanguages,
+    selectedLanguages,
+  );
+  const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
+  const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
+  const languageFlags = effectiveSelectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
   const avatar = getSpeakerAvatar(
     conversation.latestSpeaker || conversation.sessionKey,
     conversation.latestSpeakerAvatarSeed || conversation.id,
@@ -658,7 +695,9 @@ function mapConversationSummaryToItem(
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     pausedAt: conversation.pausedAt,
-    selectedLanguages,
+    selectedLanguages: effectiveSelectedLanguages,
+    speechLanguages,
+    translationLanguagesLinked,
     languageFlags,
   };
 }
@@ -1293,7 +1332,9 @@ export default function ConversationList({
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
-  const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
+  // Speech, translation, and link PATCHes all mutate one language setting surface.
+  // Share a version counter so stale responses from any one kind cannot clobber another.
+  const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
@@ -1494,7 +1535,7 @@ export default function ConversationList({
     setLiveConversationId((current) => (
       current === conversationId ? null : current
     ));
-    selectedLanguagesSyncVersionRef.current.delete(conversationId);
+    languageSettingsSyncVersionRef.current.delete(conversationId);
     conversationRunningStateRef.current.delete(conversationId);
     conversationRoomRefs.current.delete(conversationId);
     setActiveConversation((current) => (
@@ -1714,13 +1755,18 @@ export default function ConversationList({
       previousConversation.selectedLanguages,
       defaultSelectedLanguages,
     );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
-    const nextVersion = (selectedLanguagesSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    selectedLanguagesSyncVersionRef.current.set(conversationId, nextVersion);
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
-        ? { ...conversation, selectedLanguages: [...normalizedSelectedLanguages] }
+        ? {
+            ...conversation,
+            selectedLanguages: [...normalizedSelectedLanguages],
+            translationLanguagesLinked: false,
+          }
         : conversation
     )));
 
@@ -1734,14 +1780,154 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (selectedLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
       .catch(() => {
-        if (selectedLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
-            ? { ...conversation, selectedLanguages: [...previousSelectedLanguages] }
+            ? {
+                ...conversation,
+                selectedLanguages: [...previousSelectedLanguages],
+                translationLanguagesLinked: previousTranslationLanguagesLinked,
+              }
+            : conversation
+        )));
+        window.alert(copy.openErrorMessage);
+      });
+  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+
+  const handleConversationSpeechLanguagesChange = useCallback((
+    conversationId: string,
+    nextSpeechLanguages: string[],
+  ) => {
+    const normalizedSpeechLanguages = sanitizeSttLanguageSelection(
+      nextSpeechLanguages,
+      defaultSelectedLanguages,
+    );
+    if (normalizedSpeechLanguages.length === 0) {
+      return;
+    }
+
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const previousSpeechLanguages = sanitizeSttLanguageSelection(
+      previousConversation.speechLanguages,
+      previousConversation.selectedLanguages,
+    );
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
+
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            speechLanguages: [...normalizedSpeechLanguages],
+            ...(previousTranslationLanguagesLinked
+              ? { selectedLanguages: [...normalizedSpeechLanguages] }
+              : {}),
+          }
+        : conversation
+    )));
+
+    void fetch(buildConversationApiPath(`/${conversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(),
+      },
+      body: JSON.stringify({ speechLanguages: normalizedSpeechLanguages }),
+    })
+      .then(readConversationResponse)
+      .then((nextConversation) => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch(() => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                speechLanguages: [...previousSpeechLanguages],
+                ...(previousTranslationLanguagesLinked
+                  ? { selectedLanguages: [...previousSelectedLanguages] }
+                  : {}),
+              }
+            : conversation
+        )));
+        window.alert(copy.openErrorMessage);
+      });
+  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+
+  const handleConversationTranslationLanguagesLinkedChange = useCallback((
+    conversationId: string,
+    nextTranslationLanguagesLinked: boolean,
+  ) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
+    const speechLanguages = sanitizeSttLanguageSelection(
+      previousConversation.speechLanguages,
+      previousSelectedLanguages,
+    );
+    const nextSelectedLanguages =
+      nextTranslationLanguagesLinked || previousTranslationLanguagesLinked
+        ? speechLanguages
+        : previousSelectedLanguages;
+
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            selectedLanguages: [...nextSelectedLanguages],
+            translationLanguagesLinked: nextTranslationLanguagesLinked,
+          }
+        : conversation
+    )));
+
+    void fetch(buildConversationApiPath(`/${conversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(),
+      },
+      body: JSON.stringify({ translationLanguagesLinked: nextTranslationLanguagesLinked }),
+    })
+      .then(readConversationResponse)
+      .then((nextConversation) => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch(() => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                selectedLanguages: [...previousSelectedLanguages],
+                translationLanguagesLinked: previousTranslationLanguagesLinked,
+              }
             : conversation
         )));
         window.alert(copy.openErrorMessage);
@@ -1964,6 +2150,8 @@ export default function ConversationList({
             locale,
             legacySessionKey: legacySnapshot.sessionKey || undefined,
             selectedLanguages: legacySnapshot.selectedLanguages,
+            speechLanguages: legacySnapshot.speechLanguages,
+            translationLanguagesLinked: legacySnapshot.translationLanguagesLinked,
           }),
         });
         const importedConversation = await readConversationResponse(response);
@@ -2096,6 +2284,8 @@ export default function ConversationList({
         body: JSON.stringify({
           locale,
           selectedLanguages: defaultSelectedLanguages,
+          speechLanguages: defaultSelectedLanguages,
+          translationLanguagesLinked: true,
         }),
       });
       const nextConversation = await readConversationResponse(response);
@@ -2600,6 +2790,8 @@ export default function ConversationList({
                       sessionKeyOverride={conversation.sessionKey}
                       storageNamespace={conversation.id}
                       initialSelectedLanguages={conversation.selectedLanguages}
+                      initialSpeechLanguages={conversation.speechLanguages}
+                      initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
                       autoStartOnMount={conversation.id === autoStartConversationId}
                       onAutoStartHandled={() => {
                         setAutoStartConversationId((current) => (
@@ -2617,6 +2809,12 @@ export default function ConversationList({
                       }}
                       onSelectedLanguagesChange={(selectedLanguages) => {
                         handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
+                      }}
+                      onSpeechLanguagesChange={(speechLanguages) => {
+                        handleConversationSpeechLanguagesChange(conversation.id, speechLanguages);
+                      }}
+                      onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
+                        handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
                       }}
                     />
                   </motion.div>
