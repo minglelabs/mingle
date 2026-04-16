@@ -4363,6 +4363,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   onToggleLanguage={handleToggleSelectedLanguage}
                   onToggleSpeechLanguage={handleToggleSpeechLanguage}
                   onTranslationLanguagesLinkedChange={handleTranslationLanguagesLinkedChange}
+                  sttControl={{
+                    isReady,
+                    isConnecting: showConnectingOverlay,
+                    isLimitReached,
+                    showRipple,
+                    rippleScale,
+                    startLabel: VOICE_MODE_START_LABEL,
+                    stopLabel: VOICE_MODE_STOP_LABEL,
+                    onToggle: handleMicClick,
+                    onPointerDown: handleMicPointerDown,
+                  }}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}

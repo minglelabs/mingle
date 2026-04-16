@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, Loader2, Mic, Search } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   useCallback,
@@ -60,6 +60,17 @@ interface LanguageSelectorProps {
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
   triggerRef?: RefObject<HTMLElement | null>;
+  sttControl?: {
+    isReady: boolean;
+    isConnecting: boolean;
+    isLimitReached: boolean;
+    showRipple: boolean;
+    rippleScale: number;
+    startLabel: string;
+    stopLabel: string;
+    onToggle: () => void;
+    onPointerDown?: () => void;
+  };
 }
 
 export default function LanguageSelector({
@@ -75,6 +86,7 @@ export default function LanguageSelector({
   copy,
   disabled,
   triggerRef,
+  sttControl,
 }: LanguageSelectorProps) {
   const titleId = useId();
   const recentStripRef = useRef<HTMLDivElement | null>(null);
@@ -462,7 +474,57 @@ export default function LanguageSelector({
               </div>
             </div>
 
-            {activeTab === "translation" ? (
+            {activeTab === "speech" && sttControl ? (
+              <div className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <button
+                  type="button"
+                  onPointerDown={sttControl.onPointerDown}
+                  onClick={sttControl.onToggle}
+                  disabled={sttControl.isConnecting}
+                  aria-label={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
+                  title={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
+                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
+                >
+                  {sttControl.showRipple ? (
+                    <span
+                      className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
+                      style={{ transform: `scale(${sttControl.rippleScale})`, opacity: 0.22 }}
+                    />
+                  ) : null}
+
+                  {sttControl.isReady ? (
+                    <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
+                  ) : null}
+
+                  <span
+                    className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
+                      sttControl.isLimitReached
+                        ? "bg-gray-300"
+                        : sttControl.isReady
+                          ? "bg-red-500"
+                          : sttControl.isConnecting
+                            ? "bg-gray-300"
+                            : "bg-gradient-to-br from-amber-400 to-orange-500"
+                    }`}
+                  >
+                    {sttControl.isConnecting ? (
+                      <Loader2 size={16} className="animate-spin text-white" />
+                    ) : sttControl.isReady ? (
+                      <span
+                        aria-hidden
+                        className="rounded-[3px] bg-white"
+                        style={{ width: "10px", height: "10px" }}
+                      />
+                    ) : (
+                      <Mic size={16} className="text-white" />
+                    )}
+                  </span>
+                </button>
+                <span className="min-w-0 flex-1 text-[0.83rem] font-semibold leading-snug tracking-[-0.01em] text-slate-700">
+                  {copy.languageSelectorSpeechRestartHintLabel}
+                </span>
+              </div>
+            ) : activeTab === "translation" ? (
               <label className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-[0.88rem] font-semibold tracking-[-0.01em] text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
                 <input
                   type="checkbox"
