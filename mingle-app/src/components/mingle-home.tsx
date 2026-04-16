@@ -31,6 +31,7 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
+  initialSpeechLanguages?: string[];
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
@@ -49,6 +50,7 @@ type MingleHomeProps = {
     speakerAvatarIndex?: number;
   }) => void;
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void;
 };
 
 export type MingleHomeRef = {
@@ -1767,12 +1769,14 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          initialSpeechLanguages={props.initialSpeechLanguages}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
+          onSpeechLanguagesChange={props.onSpeechLanguagesChange}
         />
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">

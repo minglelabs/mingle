@@ -30,12 +30,16 @@ const MAX_LANGS = 5;
 const MIN_LANGS = 1;
 const RECENT_LANGUAGE_CODES_STORAGE_KEY =
   "mingle_live_phone_demo_recent_language_selector_codes_v1";
+const RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY =
+  "mingle_live_phone_demo_recent_speech_language_selector_codes_v1";
 
-function readRecentLanguageCodes(): string[] {
+type LanguageSelectorTab = "speech" | "translation";
+
+function readRecentLanguageCodes(storageKey: string): string[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const rawValue = window.localStorage.getItem(RECENT_LANGUAGE_CODES_STORAGE_KEY);
+    const rawValue = window.localStorage.getItem(storageKey);
     if (!rawValue) return [];
     return sanitizeRecentLanguageCodes(JSON.parse(rawValue));
   } catch {
@@ -47,7 +51,9 @@ interface LanguageSelectorProps {
   isOpen: boolean;
   onClose: () => void;
   selectedLanguages: string[];
+  speechLanguages: string[];
   onToggleLanguage: (code: string) => void;
+  onToggleSpeechLanguage: (code: string) => void;
   uiLocale?: string;
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
@@ -58,7 +64,9 @@ export default function LanguageSelector({
   isOpen,
   onClose,
   selectedLanguages,
+  speechLanguages,
   onToggleLanguage,
+  onToggleSpeechLanguage,
   uiLocale,
   copy,
   disabled,
@@ -71,9 +79,14 @@ export default function LanguageSelector({
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
+  const speechLanguagesRef = useRef<string[]>(speechLanguages);
   const [query, setQuery] = useState("");
-  const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
-    readRecentLanguageCodes(),
+  const [activeTab, setActiveTab] = useState<LanguageSelectorTab>("translation");
+  const [recentTranslationLanguageCodes, setRecentTranslationLanguageCodes] = useState<string[]>(() =>
+    readRecentLanguageCodes(RECENT_LANGUAGE_CODES_STORAGE_KEY),
+  );
+  const [recentSpeechLanguageCodes, setRecentSpeechLanguageCodes] = useState<string[]>(() =>
+    readRecentLanguageCodes(RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY),
   );
   const localeInfo = useMemo(() => resolveLanguageSelectorLocale(uiLocale), [uiLocale]);
   const defaultSortMode = useMemo(
@@ -93,14 +106,18 @@ export default function LanguageSelector({
     const visibleItems = filterLanguageSelectorItems(languageItems, query);
     return sortLanguageSelectorItems(visibleItems, sortMode, localeInfo.locale);
   }, [languageItems, localeInfo.locale, query, sortMode]);
+  const activeSelectedLanguages = activeTab === "speech" ? speechLanguages : selectedLanguages;
+  const recentLanguageCodes = activeTab === "speech"
+    ? recentSpeechLanguageCodes
+    : recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
     const itemMap = new Map<string, (typeof languageItems)[number]>(
       languageItems.map((item) => [item.code, item]),
     );
-    return buildRecentLanguageChipCodes(selectedLanguages, recentLanguageCodes)
+    return buildRecentLanguageChipCodes(activeSelectedLanguages, recentLanguageCodes)
       .map((code) => itemMap.get(code))
       .filter((item): item is (typeof languageItems)[number] => Boolean(item));
-  }, [languageItems, recentLanguageCodes, selectedLanguages]);
+  }, [activeSelectedLanguages, languageItems, recentLanguageCodes]);
 
   const focusTrigger = useCallback(() => {
     window.setTimeout(() => {
@@ -142,12 +159,16 @@ export default function LanguageSelector({
       strip.scrollLeft += chipRect.right - (stripRect.right - edgePadding);
     }
   }, []);
-  const atMax = selectedLanguages.length >= MAX_LANGS;
-  const atMin = selectedLanguages.length <= MIN_LANGS;
+  const atMax = activeSelectedLanguages.length >= MAX_LANGS;
+  const atMin = activeSelectedLanguages.length <= MIN_LANGS;
 
   useEffect(() => {
     selectedLanguagesRef.current = selectedLanguages;
   }, [selectedLanguages]);
+
+  useEffect(() => {
+    speechLanguagesRef.current = speechLanguages;
+  }, [speechLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -174,10 +195,16 @@ export default function LanguageSelector({
   }, [defaultSortMode, showSortToggle]);
 
   useEffect(() => {
-    setRecentLanguageCodes((currentCodes) =>
+    setRecentTranslationLanguageCodes((currentCodes) =>
       syncDeselectedLanguageCodes(selectedLanguages, currentCodes),
     );
   }, [selectedLanguages]);
+
+  useEffect(() => {
+    setRecentSpeechLanguageCodes((currentCodes) =>
+      syncDeselectedLanguageCodes(speechLanguages, currentCodes),
+    );
+  }, [speechLanguages]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -185,12 +212,25 @@ export default function LanguageSelector({
     try {
       window.localStorage.setItem(
         RECENT_LANGUAGE_CODES_STORAGE_KEY,
-        JSON.stringify(recentLanguageCodes),
+        JSON.stringify(recentTranslationLanguageCodes),
       );
     } catch {
       // Ignore storage failures for the recent-language chip strip.
     }
-  }, [recentLanguageCodes]);
+  }, [recentTranslationLanguageCodes]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      window.localStorage.setItem(
+        RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY,
+        JSON.stringify(recentSpeechLanguageCodes),
+      );
+    } catch {
+      // Ignore storage failures for the recent-language chip strip.
+    }
+  }, [recentSpeechLanguageCodes]);
 
   useEffect(() => {
     const pendingCode = pendingRecentChipVisibilityCodeRef.current;
@@ -204,7 +244,7 @@ export default function LanguageSelector({
     return () => {
       window.cancelAnimationFrame(rafId);
     };
-  }, [keepRecentChipVisible, recentLanguageItems, selectedLanguages]);
+  }, [activeSelectedLanguages, keepRecentChipVisible, recentLanguageItems]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -223,7 +263,10 @@ export default function LanguageSelector({
 
   const handleToggleRequest = useCallback((code: string) => {
     pendingRecentChipVisibilityCodeRef.current = code;
-    const currentSelectedLanguages = selectedLanguagesRef.current;
+    const tab = activeTab;
+    const currentSelectedLanguages = tab === "speech"
+      ? speechLanguagesRef.current
+      : selectedLanguagesRef.current;
     const isSelected = currentSelectedLanguages.includes(code);
     const isDisabled =
       disabled
@@ -234,20 +277,40 @@ export default function LanguageSelector({
     const nextSelectedLanguages = isSelected
       ? currentSelectedLanguages.filter((languageCode) => languageCode !== code)
       : [...currentSelectedLanguages, code];
-    selectedLanguagesRef.current = nextSelectedLanguages;
-
-    if (isSelected) {
-      setRecentLanguageCodes((currentCodes) =>
-        registerDeselectedLanguageCode(code, currentCodes),
-      );
+    if (tab === "speech") {
+      speechLanguagesRef.current = nextSelectedLanguages;
     } else {
-      setRecentLanguageCodes((currentCodes) =>
-        syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
-      );
+      selectedLanguagesRef.current = nextSelectedLanguages;
     }
 
-    onToggleLanguage(code);
-  }, [disabled, onToggleLanguage]);
+    if (isSelected) {
+      if (tab === "speech") {
+        setRecentSpeechLanguageCodes((currentCodes) =>
+          registerDeselectedLanguageCode(code, currentCodes),
+        );
+      } else {
+        setRecentTranslationLanguageCodes((currentCodes) =>
+          registerDeselectedLanguageCode(code, currentCodes),
+        );
+      }
+    } else {
+      if (tab === "speech") {
+        setRecentSpeechLanguageCodes((currentCodes) =>
+          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
+        );
+      } else {
+        setRecentTranslationLanguageCodes((currentCodes) =>
+          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
+        );
+      }
+    }
+
+    if (tab === "speech") {
+      onToggleSpeechLanguage(code);
+    } else {
+      onToggleLanguage(code);
+    }
+  }, [activeTab, disabled, onToggleLanguage, onToggleSpeechLanguage]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -304,7 +367,7 @@ export default function LanguageSelector({
               {copy.languageSelectorTitle}
             </p>
             <div className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-end text-[0.92rem] font-semibold tracking-[-0.01em] text-slate-500">
-              {selectedLanguages.length}/{MAX_LANGS}
+              {activeSelectedLanguages.length}/{MAX_LANGS}
             </div>
           </div>
 
@@ -316,7 +379,7 @@ export default function LanguageSelector({
               >
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
-                    const isSelected = selectedLanguages.includes(lang.code);
+                    const isSelected = activeSelectedLanguages.includes(lang.code);
                     const isDisabled =
                       disabled || (!isSelected && atMax) || (isSelected && atMin);
 
@@ -357,6 +420,35 @@ export default function LanguageSelector({
                 </div>
               </div>
             ) : null}
+
+            <div className="rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("speech")}
+                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
+                    activeTab === "speech"
+                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                  aria-pressed={activeTab === "speech"}
+                >
+                  {copy.languageSelectorSpeechTabLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("translation")}
+                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
+                    activeTab === "translation"
+                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                  aria-pressed={activeTab === "translation"}
+                >
+                  {copy.languageSelectorTranslationTabLabel}
+                </button>
+              </div>
+            </div>
 
             <div className="flex items-stretch gap-3">
               <div
@@ -433,7 +525,7 @@ export default function LanguageSelector({
           ) : (
             <div className="space-y-3 py-4">
               {filteredItems.map((lang) => {
-                const isSelected = selectedLanguages.includes(lang.code);
+                const isSelected = activeSelectedLanguages.includes(lang.code);
                 const isDisabled =
                   disabled || (!isSelected && atMax) || (isSelected && atMin);
 

@@ -33,6 +33,7 @@ import {
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
+  LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
@@ -855,6 +856,7 @@ interface LivePhoneDemoProps {
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
+  initialSpeechLanguages?: string[]
   autoStartOnMount?: boolean
   onAutoStartHandled?: () => void
   isVisible?: boolean
@@ -869,6 +871,7 @@ interface LivePhoneDemoProps {
     speakerAvatarIndex?: number
   }) => void
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1009,21 +1012,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
+  initialSpeechLanguages,
   isVisible = true,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
   onSttSessionRunningChange,
   onLatestUtteranceChange,
   onSelectedLanguagesChange,
+  onSpeechLanguagesChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
     [fallbackLanguages, initialSelectedLanguages],
   )
+  const conversationSpeechLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(initialSpeechLanguages, conversationSelectedLanguages),
+    [conversationSelectedLanguages, initialSpeechLanguages],
+  )
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId ? conversationSelectedLanguages : fallbackLanguages,
+  )
+  const [speechLanguages, setSpeechLanguages] = useState<string[]>(
+    conversationId ? conversationSpeechLanguages : fallbackLanguages,
   )
   const resolveConversationSessionKey = useCallback(
     () => getOrCreateSessionKey(storageNamespace, sessionKeyOverride),
@@ -1100,6 +1112,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const manualTtsRequestSeqRef = useRef(0)
   const accountPreferencesSyncTimerRef = useRef<number | null>(null)
   const selectedLanguagesChangePendingRef = useRef(false)
+  const speechLanguagesChangePendingRef = useRef(false)
   const langSelectorButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuButtonRef = useRef<HTMLButtonElement | null>(null)
   const menuPanelRef = useRef<HTMLDivElement | null>(null)
@@ -1277,6 +1290,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       if (!conversationId) {
         setSelectedLanguages(next.selectedLanguages)
+        setSpeechLanguages(next.speechLanguages)
       }
       setTextSizeLevel(next.textSizeLevel)
       setSonioxManualFinalizeSilenceMs(DEFAULT_SONIOX_SILENCE_MS)
@@ -1317,12 +1331,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         return [...conversationSelectedLanguages]
       })
+      setSpeechLanguages((current) => {
+        if (
+          current.length === conversationSpeechLanguages.length
+          && current.every((language, index) => language === conversationSpeechLanguages[index])
+        ) {
+          return current
+        }
+
+        return [...conversationSpeechLanguages]
+      })
     })
 
     return () => {
       cancelled = true
     }
-  }, [conversationId, conversationSelectedLanguages])
+  }, [conversationId, conversationSelectedLanguages, conversationSpeechLanguages])
 
   useEffect(() => {
     if (!selectedLanguagesChangePendingRef.current) return
@@ -1330,6 +1354,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     selectedLanguagesChangePendingRef.current = false
     onSelectedLanguagesChange?.(selectedLanguages)
   }, [onSelectedLanguagesChange, selectedLanguages])
+
+  useEffect(() => {
+    if (!speechLanguagesChangePendingRef.current) return
+
+    speechLanguagesChangePendingRef.current = false
+    onSpeechLanguagesChange?.(speechLanguages)
+  }, [onSpeechLanguagesChange, speechLanguages])
 
   useEffect(() => {
     if (!isNativeApp()) return
@@ -1498,6 +1529,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(selectedLanguages))
     } catch { /* ignore */ }
   }, [hasHydratedLocalUiPreferences, selectedLanguages])
+
+  useEffect(() => {
+    if (!hasHydratedLocalUiPreferences) return
+    try {
+      localStorage.setItem(LS_KEY_SPEECH_LANGUAGES, JSON.stringify(speechLanguages))
+    } catch { /* ignore */ }
+  }, [hasHydratedLocalUiPreferences, speechLanguages])
 
   useEffect(() => {
     if (!hasHydratedLocalUiPreferences) return
@@ -3053,7 +3091,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     demoTypingLang,
     demoTypingTranslations,
   } = useRealtimeSTT({
-    languages: selectedLanguages,
+    targetLanguages: selectedLanguages,
+    speechLanguages,
     onLimitReached,
     onTtsRequested: handleTtsRequested,
     onTtsAudio: handleTtsAudio,
@@ -3525,11 +3564,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [forceStopTtsPlayback])
 
-  const handleToggleLanguage = useCallback((code: string) => {
+  const handleToggleSelectedLanguage = useCallback((code: string) => {
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
     selectedLanguagesChangePendingRef.current = true
     setSelectedLanguages(prev => {
+      return prev.includes(normalizedCode)
+        ? prev.filter(c => c !== normalizedCode)
+        : [...prev, normalizedCode]
+    })
+  }, [])
+
+  const handleToggleSpeechLanguage = useCallback((code: string) => {
+    const normalizedCode = canonicalizeSttLanguageCode(code)
+    if (!normalizedCode) return
+    speechLanguagesChangePendingRef.current = true
+    setSpeechLanguages(prev => {
       return prev.includes(normalizedCode)
         ? prev.filter(c => c !== normalizedCode)
         : [...prev, normalizedCode]
@@ -4251,7 +4301,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isOpen={langSelectorOpen}
                   onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
                   selectedLanguages={selectedLanguages}
-                  onToggleLanguage={handleToggleLanguage}
+                  speechLanguages={speechLanguages}
+                  onToggleLanguage={handleToggleSelectedLanguage}
+                  onToggleSpeechLanguage={handleToggleSpeechLanguage}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}

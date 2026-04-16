@@ -1,6 +1,7 @@
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
+export const LS_KEY_SPEECH_LANGUAGES = 'mingle_demo_speech_languages'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
 export const LS_KEY_INPUT_MODE = 'mingle_demo_input_mode'
@@ -14,6 +15,7 @@ export const DEFAULT_INPUT_MODE: LivePhoneDemoInputMode = 'voice'
 
 export interface LivePhoneDemoPersistedPreferences {
   selectedLanguages: string[]
+  speechLanguages: string[]
   textSizeLevel: number
   adBannerPosition: LivePhoneDemoAdBannerPosition | null
   inputMode: LivePhoneDemoInputMode | null
@@ -68,6 +70,7 @@ export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
 export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[]): LivePhoneDemoPersistedPreferences {
   const next: LivePhoneDemoPersistedPreferences = {
     selectedLanguages: [...fallbackLanguages],
+    speechLanguages: [...fallbackLanguages],
     textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
     adBannerPosition: null,
     inputMode: null,
@@ -80,9 +83,20 @@ export function readPersistedLivePhoneDemoPreferences(fallbackLanguages: string[
     const storedLanguages = storage.getItem(LS_KEY_LANGUAGES)
     if (storedLanguages) {
       next.selectedLanguages = sanitizeSttLanguageSelection(JSON.parse(storedLanguages), fallbackLanguages)
+      next.speechLanguages = [...next.selectedLanguages]
     }
   } catch {
     next.selectedLanguages = [...fallbackLanguages]
+    next.speechLanguages = [...fallbackLanguages]
+  }
+
+  try {
+    const storedSpeechLanguages = storage.getItem(LS_KEY_SPEECH_LANGUAGES)
+    if (storedSpeechLanguages) {
+      next.speechLanguages = sanitizeSttLanguageSelection(JSON.parse(storedSpeechLanguages), fallbackLanguages)
+    }
+  } catch {
+    next.speechLanguages = [...fallbackLanguages]
   }
 
   try {

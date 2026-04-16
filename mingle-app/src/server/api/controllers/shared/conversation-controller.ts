@@ -9,6 +9,7 @@ import {
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
+  updateConversationChannelSpeechLanguages,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
@@ -49,7 +50,7 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { status?: unknown; selectedLanguages?: unknown; title?: unknown };
+  let body: { status?: unknown; selectedLanguages?: unknown; speechLanguages?: unknown; title?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -58,9 +59,10 @@ export async function patchConversationResponse(
 
   const hasStatus = typeof body.status === "string";
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
+  const hasSpeechLanguages = body.speechLanguages !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasStatus && !hasSelectedLanguages && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTitle) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
   }
 
@@ -69,6 +71,12 @@ export async function patchConversationResponse(
     : null;
   if (hasSelectedLanguages && (!selectedLanguages || selectedLanguages.length === 0)) {
     return NextResponse.json({ error: "invalid_selected_languages" }, { status: 400 });
+  }
+  const speechLanguages = hasSpeechLanguages
+    ? sanitizeSttLanguageSelection(body.speechLanguages)
+    : null;
+  if (hasSpeechLanguages && (!speechLanguages || speechLanguages.length === 0)) {
+    return NextResponse.json({ error: "invalid_speech_languages" }, { status: 400 });
   }
 
   const requestedStatus = hasStatus && typeof body.status === "string"
@@ -96,6 +104,14 @@ export async function patchConversationResponse(
       conversationId,
       userId: resolvedUser.userId,
       selectedLanguages: selectedLanguages!,
+    });
+  }
+
+  if (hasSpeechLanguages) {
+    conversation = await updateConversationChannelSpeechLanguages({
+      conversationId,
+      userId: resolvedUser.userId,
+      speechLanguages: speechLanguages!,
     });
   }
 
