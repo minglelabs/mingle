@@ -162,8 +162,6 @@ describe("/api/conversations route", () => {
       locale: "en",
       preferredSessionKey: undefined,
       selectedLanguages: [],
-      speechLanguages: [],
-      translationLanguagesLinked: true,
     });
   });
 
@@ -208,15 +206,11 @@ describe("/api/conversations route", () => {
       locale: "en",
       preferredSessionKey: "sess_legacy_room",
       selectedLanguages: [],
-      speechLanguages: [],
-      translationLanguagesLinked: true,
     });
   });
 
-  it("creates a new conversation seeded with selected and speech languages", async () => {
-    mockSanitizeSttLanguageSelection
-      .mockReturnValueOnce(["en", "fr"])
-      .mockReturnValueOnce(["ko", "ja"]);
+  it("creates a new conversation seeded with selected languages", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["en", "fr"]);
     mockCreateConversationChannelForUser.mockResolvedValue({
       id: "conv_3",
       sequenceNumber: 3,
@@ -224,7 +218,6 @@ describe("/api/conversations route", () => {
       status: "paused",
       sessionKey: "conv_session_3",
       selectedLanguages: ["en", "fr"],
-      speechLanguages: ["ko", "ja"],
       createdAt: "2026-04-02T00:02:00.000Z",
       updatedAt: "2026-04-02T00:02:00.000Z",
       pausedAt: "2026-04-02T00:02:00.000Z",
@@ -236,12 +229,7 @@ describe("/api/conversations route", () => {
         "Content-Type": "application/json",
         "x-mingle-user-id": "anon_local_storage_user",
       },
-      body: JSON.stringify({
-        locale: "ko",
-        selectedLanguages: ["en", "fr"],
-        speechLanguages: ["ko", "ja"],
-        translationLanguagesLinked: false,
-      }),
+      body: JSON.stringify({ locale: "ko", selectedLanguages: ["en", "fr"] }),
     }));
 
     expect(response.status).toBe(201);
@@ -249,8 +237,6 @@ describe("/api/conversations route", () => {
       locale: "ko",
       preferredSessionKey: undefined,
       selectedLanguages: ["en", "fr"],
-      speechLanguages: ["ko", "ja"],
-      translationLanguagesLinked: false,
     });
   });
 

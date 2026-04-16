@@ -17,8 +17,6 @@ export type ConversationChannelSummary = {
   status: AppConversationChannelStatus;
   sessionKey: string;
   selectedLanguages?: string[];
-  speechLanguages?: string[];
-  translationLanguagesLinked?: boolean;
   latestMessagePreview?: string;
   latestMessageAt?: string | null;
   latestSpeaker?: string | null;
@@ -52,8 +50,6 @@ type ConversationChannelRecord = {
   status: string;
   sessionKey: string;
   selectedLanguages: string[];
-  speechLanguages: string[];
-  translationLanguagesLinked: boolean;
   createdAt: Date;
   updatedAt: Date;
   pausedAt: Date | null;
@@ -66,8 +62,6 @@ const conversationChannelSelect = {
   status: true,
   sessionKey: true,
   selectedLanguages: true,
-  speechLanguages: true,
-  translationLanguagesLinked: true,
   createdAt: true,
   updatedAt: true,
   pausedAt: true,
@@ -113,24 +107,13 @@ function serializeConversationChannel(
   latestSpeakerAvatarSeed?: string | null,
   latestSpeakerAvatarIndex?: number | null,
 ): ConversationChannelSummary {
-  const selectedLanguages = [...record.selectedLanguages];
-  const speechLanguages = record.speechLanguages.length > 0
-    ? [...record.speechLanguages]
-    : [...selectedLanguages];
-  const translationLanguagesLinked = record.translationLanguagesLinked !== false;
-  const effectiveSelectedLanguages = translationLanguagesLinked
-    ? [...speechLanguages]
-    : selectedLanguages;
-
   return {
     id: record.id,
     sequenceNumber: record.sequenceNumber,
     title: record.title,
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
-    selectedLanguages: effectiveSelectedLanguages,
-    speechLanguages,
-    translationLanguagesLinked,
+    selectedLanguages: [...record.selectedLanguages],
     latestMessagePreview,
     latestMessageAt: latestMessageAt || null,
     latestSpeaker: latestSpeaker || null,
@@ -299,21 +282,11 @@ export async function createConversationChannelForUser(
     locale?: string;
     preferredSessionKey?: string;
     selectedLanguages?: string[];
-    speechLanguages?: string[];
-    translationLanguagesLinked?: boolean;
   },
 ): Promise<ConversationChannelSummary> {
   const normalizedLocale = (options?.locale || "en").trim() || "en";
   const normalizedPreferredSessionKey = (options?.preferredSessionKey || "").trim();
   const normalizedSelectedLanguages = sanitizeSttLanguageSelection(options?.selectedLanguages);
-  const normalizedSpeechLanguages = sanitizeSttLanguageSelection(options?.speechLanguages);
-  const translationLanguagesLinked = options?.translationLanguagesLinked !== false;
-  const resolvedSpeechLanguages = normalizedSpeechLanguages.length > 0
-    ? normalizedSpeechLanguages
-    : [...normalizedSelectedLanguages];
-  const resolvedSelectedLanguages = translationLanguagesLinked
-    ? [...resolvedSpeechLanguages]
-    : normalizedSelectedLanguages;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -331,9 +304,7 @@ export async function createConversationChannelForUser(
             title: formatConversationChannelTitle(sequenceNumber, normalizedLocale),
             status: APP_CONVERSATION_STATUS_PAUSED,
             sessionKey: normalizedPreferredSessionKey || createConversationSessionKey(),
-            selectedLanguages: resolvedSelectedLanguages,
-            speechLanguages: resolvedSpeechLanguages,
-            translationLanguagesLinked,
+            selectedLanguages: normalizedSelectedLanguages,
             pausedAt: new Date(),
           },
           select: conversationChannelSelect,
@@ -430,87 +401,6 @@ export async function updateConversationChannelSelectedLanguages(args: {
     where: { id: args.conversationId },
     data: {
       selectedLanguages: normalizedSelectedLanguages,
-      translationLanguagesLinked: false,
-    },
-    select: conversationChannelSelect,
-  });
-
-  return serializeConversationChannelWithPreview(record);
-}
-
-export async function updateConversationChannelSpeechLanguages(args: {
-  conversationId: string;
-  userId: string;
-  speechLanguages: string[];
-}): Promise<ConversationChannelSummary | null> {
-  const normalizedSpeechLanguages = sanitizeSttLanguageSelection(args.speechLanguages);
-  if (normalizedSpeechLanguages.length === 0) {
-    throw new Error("invalid_speech_languages");
-  }
-
-  const existing = await prisma.appConversationChannel.findFirst({
-    where: {
-      id: args.conversationId,
-      ownerUserId: args.userId,
-      ...buildVisibleConversationWhere(),
-    },
-    select: { id: true, translationLanguagesLinked: true },
-  });
-
-  if (!existing) {
-    return null;
-  }
-
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      speechLanguages: normalizedSpeechLanguages,
-      ...(existing.translationLanguagesLinked !== false
-        ? { selectedLanguages: normalizedSpeechLanguages }
-        : {}),
-    },
-    select: conversationChannelSelect,
-  });
-
-  return serializeConversationChannelWithPreview(record);
-}
-
-export async function updateConversationChannelTranslationLanguagesLinked(args: {
-  conversationId: string;
-  userId: string;
-  translationLanguagesLinked: boolean;
-}): Promise<ConversationChannelSummary | null> {
-  const existing = await prisma.appConversationChannel.findFirst({
-    where: {
-      id: args.conversationId,
-      ownerUserId: args.userId,
-      ...buildVisibleConversationWhere(),
-    },
-    select: {
-      id: true,
-      selectedLanguages: true,
-      speechLanguages: true,
-      translationLanguagesLinked: true,
-    },
-  });
-
-  if (!existing) {
-    return null;
-  }
-
-  const speechLanguages = existing.speechLanguages.length > 0
-    ? existing.speechLanguages
-    : existing.selectedLanguages;
-  const shouldSyncSelectedLanguages =
-    args.translationLanguagesLinked || existing.translationLanguagesLinked !== false;
-
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      translationLanguagesLinked: args.translationLanguagesLinked,
-      ...(shouldSyncSelectedLanguages
-        ? { selectedLanguages: speechLanguages }
-        : {}),
     },
     select: conversationChannelSelect,
   });

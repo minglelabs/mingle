@@ -9,8 +9,6 @@ import {
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
-  updateConversationChannelSpeechLanguages,
-  updateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
@@ -51,13 +49,7 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: {
-    status?: unknown;
-    selectedLanguages?: unknown;
-    speechLanguages?: unknown;
-    translationLanguagesLinked?: unknown;
-    title?: unknown;
-  };
+  let body: { status?: unknown; selectedLanguages?: unknown; title?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -66,16 +58,10 @@ export async function patchConversationResponse(
 
   const hasStatus = typeof body.status === "string";
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
-  const hasSpeechLanguages = body.speechLanguages !== undefined;
-  const hasTranslationLanguagesLinked = body.translationLanguagesLinked !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasTitle) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
-  }
-
-  if (hasTranslationLanguagesLinked && typeof body.translationLanguagesLinked !== "boolean") {
-    return NextResponse.json({ error: "invalid_translation_languages_linked" }, { status: 400 });
   }
 
   const selectedLanguages = hasSelectedLanguages
@@ -83,12 +69,6 @@ export async function patchConversationResponse(
     : null;
   if (hasSelectedLanguages && (!selectedLanguages || selectedLanguages.length === 0)) {
     return NextResponse.json({ error: "invalid_selected_languages" }, { status: 400 });
-  }
-  const speechLanguages = hasSpeechLanguages
-    ? sanitizeSttLanguageSelection(body.speechLanguages)
-    : null;
-  if (hasSpeechLanguages && (!speechLanguages || speechLanguages.length === 0)) {
-    return NextResponse.json({ error: "invalid_speech_languages" }, { status: 400 });
   }
 
   const requestedStatus = hasStatus && typeof body.status === "string"
@@ -116,22 +96,6 @@ export async function patchConversationResponse(
       conversationId,
       userId: resolvedUser.userId,
       selectedLanguages: selectedLanguages!,
-    });
-  }
-
-  if (hasSpeechLanguages) {
-    conversation = await updateConversationChannelSpeechLanguages({
-      conversationId,
-      userId: resolvedUser.userId,
-      speechLanguages: speechLanguages!,
-    });
-  }
-
-  if (hasTranslationLanguagesLinked) {
-    conversation = await updateConversationChannelTranslationLanguagesLinked({
-      conversationId,
-      userId: resolvedUser.userId,
-      translationLanguagesLinked: body.translationLanguagesLinked as boolean,
     });
   }
 

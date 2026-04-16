@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildLanguageSelectorHistoryState,
-  buildLanguageSelectorButtonCodes,
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
   clearLanguageSelectorHistoryState,
@@ -164,17 +163,5 @@ describe("language-selector.logic", () => {
     expect(
       registerDeselectedLanguageCode("ja", ["ko", "en", "ja"]),
     ).toEqual(["ja", "ko", "en"]);
-  });
-
-  it("builds the header button language flags from speech first, then translation", () => {
-    expect(
-      buildLanguageSelectorButtonCodes(["en", "ko", "zh-CN"], ["en", "ja"]),
-    ).toEqual(["en", "ko", "zh-CN", "ja"]);
-  });
-
-  it("limits the header button language flags to five codes", () => {
-    expect(
-      buildLanguageSelectorButtonCodes(["en", "ko", "zh-CN", "ja"], ["fr", "de", "es"]),
-    ).toEqual(["en", "ko", "zh-CN", "ja", "fr"]);
   });
 });

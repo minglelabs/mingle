@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Loader2, Mic, Search } from "lucide-react";
+import { ChevronLeft, Search } from "lucide-react";
 import { createPortal } from "react-dom";
 import {
   useCallback,
@@ -30,16 +30,12 @@ const MAX_LANGS = 5;
 const MIN_LANGS = 1;
 const RECENT_LANGUAGE_CODES_STORAGE_KEY =
   "mingle_live_phone_demo_recent_language_selector_codes_v1";
-const RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY =
-  "mingle_live_phone_demo_recent_speech_language_selector_codes_v1";
 
-type LanguageSelectorTab = "speech" | "translation";
-
-function readRecentLanguageCodes(storageKey: string): string[] {
+function readRecentLanguageCodes(): string[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const rawValue = window.localStorage.getItem(storageKey);
+    const rawValue = window.localStorage.getItem(RECENT_LANGUAGE_CODES_STORAGE_KEY);
     if (!rawValue) return [];
     return sanitizeRecentLanguageCodes(JSON.parse(rawValue));
   } catch {
@@ -51,42 +47,22 @@ interface LanguageSelectorProps {
   isOpen: boolean;
   onClose: () => void;
   selectedLanguages: string[];
-  speechLanguages: string[];
-  translationLanguagesLinked: boolean;
   onToggleLanguage: (code: string) => void;
-  onToggleSpeechLanguage: (code: string) => void;
-  onTranslationLanguagesLinkedChange: (translationLanguagesLinked: boolean) => void;
   uiLocale?: string;
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
   triggerRef?: RefObject<HTMLElement | null>;
-  sttControl?: {
-    isReady: boolean;
-    isConnecting: boolean;
-    isLimitReached: boolean;
-    showRipple: boolean;
-    rippleScale: number;
-    startLabel: string;
-    stopLabel: string;
-    onToggle: () => void;
-    onPointerDown?: () => void;
-  };
 }
 
 export default function LanguageSelector({
   isOpen,
   onClose,
   selectedLanguages,
-  speechLanguages,
-  translationLanguagesLinked,
   onToggleLanguage,
-  onToggleSpeechLanguage,
-  onTranslationLanguagesLinkedChange,
   uiLocale,
   copy,
   disabled,
   triggerRef,
-  sttControl,
 }: LanguageSelectorProps) {
   const titleId = useId();
   const recentStripRef = useRef<HTMLDivElement | null>(null);
@@ -95,14 +71,9 @@ export default function LanguageSelector({
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
-  const speechLanguagesRef = useRef<string[]>(speechLanguages);
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<LanguageSelectorTab>("speech");
-  const [recentTranslationLanguageCodes, setRecentTranslationLanguageCodes] = useState<string[]>(() =>
-    readRecentLanguageCodes(RECENT_LANGUAGE_CODES_STORAGE_KEY),
-  );
-  const [recentSpeechLanguageCodes, setRecentSpeechLanguageCodes] = useState<string[]>(() =>
-    readRecentLanguageCodes(RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY),
+  const [recentLanguageCodes, setRecentLanguageCodes] = useState<string[]>(() =>
+    readRecentLanguageCodes(),
   );
   const localeInfo = useMemo(() => resolveLanguageSelectorLocale(uiLocale), [uiLocale]);
   const defaultSortMode = useMemo(
@@ -122,21 +93,14 @@ export default function LanguageSelector({
     const visibleItems = filterLanguageSelectorItems(languageItems, query);
     return sortLanguageSelectorItems(visibleItems, sortMode, localeInfo.locale);
   }, [languageItems, localeInfo.locale, query, sortMode]);
-  const isTranslationSelectionLinked = activeTab === "translation" && translationLanguagesLinked;
-  const activeSelectedLanguages = activeTab === "speech" || translationLanguagesLinked
-    ? speechLanguages
-    : selectedLanguages;
-  const recentLanguageCodes = activeTab === "speech" || translationLanguagesLinked
-    ? recentSpeechLanguageCodes
-    : recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
     const itemMap = new Map<string, (typeof languageItems)[number]>(
       languageItems.map((item) => [item.code, item]),
     );
-    return buildRecentLanguageChipCodes(activeSelectedLanguages, recentLanguageCodes)
+    return buildRecentLanguageChipCodes(selectedLanguages, recentLanguageCodes)
       .map((code) => itemMap.get(code))
       .filter((item): item is (typeof languageItems)[number] => Boolean(item));
-  }, [activeSelectedLanguages, languageItems, recentLanguageCodes]);
+  }, [languageItems, recentLanguageCodes, selectedLanguages]);
 
   const focusTrigger = useCallback(() => {
     window.setTimeout(() => {
@@ -178,16 +142,12 @@ export default function LanguageSelector({
       strip.scrollLeft += chipRect.right - (stripRect.right - edgePadding);
     }
   }, []);
-  const atMax = activeSelectedLanguages.length >= MAX_LANGS;
-  const atMin = activeSelectedLanguages.length <= MIN_LANGS;
+  const atMax = selectedLanguages.length >= MAX_LANGS;
+  const atMin = selectedLanguages.length <= MIN_LANGS;
 
   useEffect(() => {
     selectedLanguagesRef.current = selectedLanguages;
   }, [selectedLanguages]);
-
-  useEffect(() => {
-    speechLanguagesRef.current = speechLanguages;
-  }, [speechLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -214,16 +174,10 @@ export default function LanguageSelector({
   }, [defaultSortMode, showSortToggle]);
 
   useEffect(() => {
-    setRecentTranslationLanguageCodes((currentCodes) =>
+    setRecentLanguageCodes((currentCodes) =>
       syncDeselectedLanguageCodes(selectedLanguages, currentCodes),
     );
   }, [selectedLanguages]);
-
-  useEffect(() => {
-    setRecentSpeechLanguageCodes((currentCodes) =>
-      syncDeselectedLanguageCodes(speechLanguages, currentCodes),
-    );
-  }, [speechLanguages]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -231,25 +185,12 @@ export default function LanguageSelector({
     try {
       window.localStorage.setItem(
         RECENT_LANGUAGE_CODES_STORAGE_KEY,
-        JSON.stringify(recentTranslationLanguageCodes),
+        JSON.stringify(recentLanguageCodes),
       );
     } catch {
       // Ignore storage failures for the recent-language chip strip.
     }
-  }, [recentTranslationLanguageCodes]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    try {
-      window.localStorage.setItem(
-        RECENT_SPEECH_LANGUAGE_CODES_STORAGE_KEY,
-        JSON.stringify(recentSpeechLanguageCodes),
-      );
-    } catch {
-      // Ignore storage failures for the recent-language chip strip.
-    }
-  }, [recentSpeechLanguageCodes]);
+  }, [recentLanguageCodes]);
 
   useEffect(() => {
     const pendingCode = pendingRecentChipVisibilityCodeRef.current;
@@ -263,7 +204,7 @@ export default function LanguageSelector({
     return () => {
       window.cancelAnimationFrame(rafId);
     };
-  }, [activeSelectedLanguages, keepRecentChipVisible, recentLanguageItems]);
+  }, [keepRecentChipVisible, recentLanguageItems, selectedLanguages]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -281,13 +222,8 @@ export default function LanguageSelector({
   }, [isOpen, requestClose]);
 
   const handleToggleRequest = useCallback((code: string) => {
-    if (activeTab === "translation" && translationLanguagesLinked) return;
-
     pendingRecentChipVisibilityCodeRef.current = code;
-    const tab = activeTab;
-    const currentSelectedLanguages = tab === "speech"
-      ? speechLanguagesRef.current
-      : selectedLanguagesRef.current;
+    const currentSelectedLanguages = selectedLanguagesRef.current;
     const isSelected = currentSelectedLanguages.includes(code);
     const isDisabled =
       disabled
@@ -298,40 +234,20 @@ export default function LanguageSelector({
     const nextSelectedLanguages = isSelected
       ? currentSelectedLanguages.filter((languageCode) => languageCode !== code)
       : [...currentSelectedLanguages, code];
-    if (tab === "speech") {
-      speechLanguagesRef.current = nextSelectedLanguages;
-    } else {
-      selectedLanguagesRef.current = nextSelectedLanguages;
-    }
+    selectedLanguagesRef.current = nextSelectedLanguages;
 
     if (isSelected) {
-      if (tab === "speech") {
-        setRecentSpeechLanguageCodes((currentCodes) =>
-          registerDeselectedLanguageCode(code, currentCodes),
-        );
-      } else {
-        setRecentTranslationLanguageCodes((currentCodes) =>
-          registerDeselectedLanguageCode(code, currentCodes),
-        );
-      }
+      setRecentLanguageCodes((currentCodes) =>
+        registerDeselectedLanguageCode(code, currentCodes),
+      );
     } else {
-      if (tab === "speech") {
-        setRecentSpeechLanguageCodes((currentCodes) =>
-          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
-        );
-      } else {
-        setRecentTranslationLanguageCodes((currentCodes) =>
-          syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
-        );
-      }
+      setRecentLanguageCodes((currentCodes) =>
+        syncDeselectedLanguageCodes(nextSelectedLanguages, currentCodes),
+      );
     }
 
-    if (tab === "speech") {
-      onToggleSpeechLanguage(code);
-    } else {
-      onToggleLanguage(code);
-    }
-  }, [activeTab, disabled, onToggleLanguage, onToggleSpeechLanguage, translationLanguagesLinked]);
+    onToggleLanguage(code);
+  }, [disabled, onToggleLanguage]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -388,7 +304,7 @@ export default function LanguageSelector({
               {copy.languageSelectorTitle}
             </p>
             <div className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-end text-[0.92rem] font-semibold tracking-[-0.01em] text-slate-500">
-              {activeSelectedLanguages.length}/{MAX_LANGS}
+              {selectedLanguages.length}/{MAX_LANGS}
             </div>
           </div>
 
@@ -400,12 +316,9 @@ export default function LanguageSelector({
               >
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
-                    const isSelected = activeSelectedLanguages.includes(lang.code);
+                    const isSelected = selectedLanguages.includes(lang.code);
                     const isDisabled =
-                      disabled
-                      || isTranslationSelectionLinked
-                      || (!isSelected && atMax)
-                      || (isSelected && atMin);
+                      disabled || (!isSelected && atMax) || (isSelected && atMin);
 
                     return (
                       <button
@@ -425,7 +338,7 @@ export default function LanguageSelector({
                             : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
-                            ? `cursor-not-allowed ${isTranslationSelectionLinked ? "opacity-80" : "opacity-50"}`
+                            ? "cursor-not-allowed opacity-50"
                             : isSelected
                               ? "hover:-translate-y-[1px] hover:shadow-[0_16px_30px_rgba(245,158,11,0.18)]"
                               : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
@@ -443,99 +356,6 @@ export default function LanguageSelector({
                   })}
                 </div>
               </div>
-            ) : null}
-
-            <div className="rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("speech")}
-                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
-                    activeTab === "speech"
-                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  aria-pressed={activeTab === "speech"}
-                >
-                  {copy.languageSelectorSpeechTabLabel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("translation")}
-                  className={`rounded-[14px] px-3 py-2.5 text-[0.85rem] font-semibold tracking-[-0.01em] transition-all duration-200 ${
-                    activeTab === "translation"
-                      ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                  aria-pressed={activeTab === "translation"}
-                >
-                  {copy.languageSelectorTranslationTabLabel}
-                </button>
-              </div>
-            </div>
-
-            {activeTab === "speech" && sttControl ? (
-              <div className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                <button
-                  type="button"
-                  onPointerDown={sttControl.onPointerDown}
-                  onClick={sttControl.onToggle}
-                  disabled={sttControl.isConnecting}
-                  aria-label={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
-                  title={sttControl.isReady ? sttControl.stopLabel : sttControl.startLabel}
-                  className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 disabled:opacity-50"
-                >
-                  {sttControl.showRipple ? (
-                    <span
-                      className="absolute inset-0 rounded-full bg-red-400 transition-transform duration-150"
-                      style={{ transform: `scale(${sttControl.rippleScale})`, opacity: 0.22 }}
-                    />
-                  ) : null}
-
-                  {sttControl.isReady ? (
-                    <span className="absolute inset-0 rounded-full bg-red-500 opacity-20 animate-ping" />
-                  ) : null}
-
-                  <span
-                    className={`relative flex h-full w-full items-center justify-center rounded-full shadow-lg ${
-                      sttControl.isLimitReached
-                        ? "bg-gray-300"
-                        : sttControl.isReady
-                          ? "bg-red-500"
-                          : sttControl.isConnecting
-                            ? "bg-gray-300"
-                            : "bg-gradient-to-br from-amber-400 to-orange-500"
-                    }`}
-                  >
-                    {sttControl.isConnecting ? (
-                      <Loader2 size={16} className="animate-spin text-white" />
-                    ) : sttControl.isReady ? (
-                      <span
-                        aria-hidden
-                        className="rounded-[3px] bg-white"
-                        style={{ width: "10px", height: "10px" }}
-                      />
-                    ) : (
-                      <Mic size={16} className="text-white" />
-                    )}
-                  </span>
-                </button>
-                <span className="min-w-0 flex-1 text-[0.83rem] font-semibold leading-snug tracking-[-0.01em] text-slate-700">
-                  {copy.languageSelectorSpeechRestartHintLabel}
-                </span>
-              </div>
-            ) : activeTab === "translation" ? (
-              <label className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-[0.88rem] font-semibold tracking-[-0.01em] text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                <input
-                  type="checkbox"
-                  checked={translationLanguagesLinked}
-                  onChange={(event) => {
-                    onTranslationLanguagesLinkedChange(event.currentTarget.checked);
-                  }}
-                  className="h-5 w-5 rounded border-[#cfc7b9] text-amber-500 accent-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-                />
-                <span>{copy.languageSelectorTranslationSameLanguagesLabel}</span>
-              </label>
             ) : null}
 
             <div className="flex items-stretch gap-3">
@@ -613,12 +433,9 @@ export default function LanguageSelector({
           ) : (
             <div className="space-y-3 py-4">
               {filteredItems.map((lang) => {
-                const isSelected = activeSelectedLanguages.includes(lang.code);
+                const isSelected = selectedLanguages.includes(lang.code);
                 const isDisabled =
-                  disabled
-                  || isTranslationSelectionLinked
-                  || (!isSelected && atMax)
-                  || (isSelected && atMin);
+                  disabled || (!isSelected && atMax) || (isSelected && atMin);
 
                 return (
                   <button
