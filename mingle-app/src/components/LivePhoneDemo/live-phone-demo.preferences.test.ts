@@ -3,13 +3,16 @@ import {
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
   LS_KEY_LANGUAGES,
+  LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
+  LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   DEFAULT_SONIOX_SILENCE_MS,
   DEFAULT_TEXT_SIZE_LEVEL,
   MAX_SONIOX_SILENCE_MS,
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   normalizeLivePhoneDemoInputMode,
+  readPersistedBooleanPreference,
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
@@ -66,6 +69,17 @@ describe('normalizeLivePhoneDemoInputMode', () => {
   })
 })
 
+describe('readPersistedBooleanPreference', () => {
+  it('normalizes persisted boolean values', () => {
+    expect(readPersistedBooleanPreference(null, true)).toBe(true)
+    expect(readPersistedBooleanPreference('1', false)).toBe(true)
+    expect(readPersistedBooleanPreference(' TRUE ', false)).toBe(true)
+    expect(readPersistedBooleanPreference('0', true)).toBe(false)
+    expect(readPersistedBooleanPreference(' false ', true)).toBe(false)
+    expect(readPersistedBooleanPreference('invalid', true)).toBe(true)
+  })
+})
+
 describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
   it('prefers hydrated user preference over native layout and query fallback', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
@@ -104,6 +118,8 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
   it('returns fallback values when localStorage is unavailable', () => {
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko', 'ja'])).toEqual({
       selectedLanguages: ['en', 'ko', 'ja'],
+      speechLanguages: ['en', 'ko', 'ja'],
+      translationLanguagesLinked: true,
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
       adBannerPosition: null,
       inputMode: null,
@@ -114,6 +130,8 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US', 'en', 'bad'])
+        if (key === LS_KEY_SPEECH_LANGUAGES) return JSON.stringify(['ko-KR', 'ja-JP', 'bogus'])
+        if (key === LS_KEY_TRANSLATION_LANGUAGES_LINKED) return '0'
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '5'
         if (key === LS_KEY_AD_BANNER_POSITION) return 'bottom'
         if (key === LS_KEY_INPUT_MODE) return 'text'
@@ -123,6 +141,8 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
 
     expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
       selectedLanguages: ['ja', 'en'],
+      speechLanguages: ['ko', 'ja'],
+      translationLanguagesLinked: false,
       textSizeLevel: 5,
       adBannerPosition: 'bottom',
       inputMode: 'text',
@@ -133,6 +153,7 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
     vi.stubGlobal('localStorage', {
       getItem: vi.fn((key: string) => {
         if (key === LS_KEY_LANGUAGES) return '{not-json}'
+        if (key === LS_KEY_SPEECH_LANGUAGES) return '{not-json}'
         if (key === LS_KEY_TEXT_SIZE_LEVEL) return '0'
         if (key === LS_KEY_AD_BANNER_POSITION) return 'off'
         if (key === LS_KEY_INPUT_MODE) return 'unsupported'
@@ -142,6 +163,45 @@ describe('readPersistedLivePhoneDemoPreferences', () => {
 
     expect(readPersistedLivePhoneDemoPreferences(['en', 'ko'])).toEqual({
       selectedLanguages: ['en', 'ko'],
+      speechLanguages: ['en', 'ko'],
+      translationLanguagesLinked: true,
+      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      adBannerPosition: null,
+      inputMode: null,
+    })
+  })
+
+  it('uses stored translation languages as the speech fallback for legacy clients', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => {
+        if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US'])
+        return null
+      }),
+    } as unknown as Storage)
+
+    expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
+      selectedLanguages: ['ja', 'en'],
+      speechLanguages: ['ja', 'en'],
+      translationLanguagesLinked: true,
+      textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
+      adBannerPosition: null,
+      inputMode: null,
+    })
+  })
+
+  it('links stored translation languages to speech languages by default', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => {
+        if (key === LS_KEY_LANGUAGES) return JSON.stringify(['ja-JP', 'en-US'])
+        if (key === LS_KEY_SPEECH_LANGUAGES) return JSON.stringify(['ko-KR', 'ja-JP'])
+        return null
+      }),
+    } as unknown as Storage)
+
+    expect(readPersistedLivePhoneDemoPreferences(['ko', 'en'])).toEqual({
+      selectedLanguages: ['ko', 'ja'],
+      speechLanguages: ['ko', 'ja'],
+      translationLanguagesLinked: true,
       textSizeLevel: DEFAULT_TEXT_SIZE_LEVEL,
       adBannerPosition: null,
       inputMode: null,
