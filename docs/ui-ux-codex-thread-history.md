@@ -1386,3 +1386,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Inserted a hero-style XR recruiting slide after the `3. 팀` divider, asking for teammates regardless of product orientation, major, or background.
 - 2026-04-16: Restored the previously removed XR vision slide after the `외국인을 만나고 싶을 때 가장 먼저 찾는 서비스` page, reframing Mingle's broader challenge as removing every barrier encountered in cross-cultural connection.
 - 2026-04-16: Updated the XR Elon Musk exception slide with the actual XChat App Store icon and a tighter face/upper-body Elon Musk portrait so the right-side visual reads less distant.
+- 2026-04-16: Inserted copies of the early two customer-hurdle slides at pages 34 and 35, preserving the original 6 and 7 slides so the existing page 34 and everything after it shifts back by two pages as requested.
