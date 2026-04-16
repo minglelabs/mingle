@@ -29,6 +29,7 @@
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
         --deck-width: 100vw;
         --deck-height: 100vh;
+        --deck-scale: 1;
       }
 
       * {
@@ -57,6 +58,8 @@
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: none;
+        transform: scale(var(--deck-scale));
+        transform-origin: center center;
       }
 
       .track {
@@ -1404,8 +1407,8 @@
 
       @media (max-width: 900px) {
         :root {
-          --deck-width: min(calc(100vw - 24px), calc((100dvh - 24px) * 16 / 9));
-          --deck-height: calc(var(--deck-width) * 9 / 16);
+          --deck-width: 1600px;
+          --deck-height: 900px;
         }
 
         html,
@@ -1426,22 +1429,6 @@
         .deck {
           box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
         }
-
-        .page-counter {
-          position: absolute;
-          right: clamp(14px, 3vw, 28px);
-          bottom: clamp(12px, 2.4vw, 24px);
-          font-size: clamp(0.55rem, 2vw, 0.82rem);
-        }
-
-        .slide-final-links {
-          width: 100%;
-        }
-
-        .slide-final-link-row {
-          flex-wrap: wrap;
-        }
-
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -2867,8 +2854,21 @@
         return `transform ${durationMs}ms var(--slide-ease)`;
       }
 
+      function syncMobileDeckScale() {
+        const isMobileViewport = window.matchMedia("(max-width: 900px)").matches;
+
+        if (!isMobileViewport) {
+          document.documentElement.style.setProperty("--deck-scale", "1");
+          return;
+        }
+
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        const nextScale = Math.max(0.1, viewportWidth / 1600);
+        document.documentElement.style.setProperty("--deck-scale", String(nextScale));
+      }
+
       function deckWidth() {
-        return track.getBoundingClientRect().width;
+        return track.clientWidth || track.getBoundingClientRect().width;
       }
 
       function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
@@ -2963,6 +2963,12 @@
       });
 
       window.addEventListener("resize", () => {
+        syncMobileDeckScale();
+        syncPosition(false);
+      });
+
+      window.visualViewport?.addEventListener("resize", () => {
+        syncMobileDeckScale();
         syncPosition(false);
       });
 
@@ -3129,6 +3135,7 @@
         { passive: true }
       );
 
+      syncMobileDeckScale();
       activeIndex = requestedSlideNumber();
       syncPosition(false);
       updateUi();
