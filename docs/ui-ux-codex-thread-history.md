@@ -1398,3 +1398,5 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Preserved the user's newly inserted XR viral-target slide that reframes the product direction as building a messenger experience after the initial HelloTalk friend-invite target.
 - 2026-04-16: Preserved the user's XR messenger-experience copy edit that narrows the slide body to messaging, group chat, invitation, and sharing capabilities, and saved the newly added conversation screenshot assets for follow-up slide work.
 - 2026-04-16: Updated the XR messenger-experience slide imagery to use the new Mingle conversation-list and conversation-room screenshots inside the existing overlapping phone-frame treatment.
+- 2026-04-16: Fixed the XR messenger-experience slide's rear conversation-list screenshot by adding a page-specific conversation stack layout, so the rear image no longer inherits the raw gaming screenshot absolute positioning inside a phone frame.
+- 2026-04-16: Preserved the user's final Q&A slide simplification that removes the extra `소셜 번역기 밍글` heading and keeps the closing page focused on `감사합니다. Q & A` plus the resource button row.

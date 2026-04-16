@@ -1099,6 +1099,33 @@
         z-index: 2;
       }
 
+      .slide-side-media--conversation-stack {
+        top: clamp(46px, 8vh, 92px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-back {
+        left: clamp(8px, 1.2vw, 22px);
+        top: clamp(74px, 7.5vw, 116px);
+        width: clamp(188px, 18vw, 270px);
+        z-index: 1;
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-front {
+        right: clamp(12px, 1.8vw, 30px);
+        top: 0;
+        width: clamp(226px, 22vw, 330px);
+        z-index: 2;
+      }
+
+      .slide-side-media--conversation-stack .slide-preview-image--gaming-back {
+        position: static;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
+      }
+
       .slide-preview-image--gaming-front {
         display: block;
         width: 100%;
@@ -2425,7 +2452,36 @@
                 음성 통번역뿐 아니라 메시징, 그룹챗, 초대, 공유까지 가능하게 합니다.<br/>
               </p>
             </div>
-            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+            <div class="slide-side-media slide-side-media--gaming-stack slide-side-media--conversation-stack" aria-hidden="true">
+              <div class="slide-phone-frame slide-phone-frame--gaming-back">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-back"
+                  src="./assets/conversation-list.png"
+                  alt="Mingle interface"
+                />
+              </div>
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/conversation-room.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 1</p>
+              <h1 class="slide-title">그래서 저희는 보이스 챗 등<br/>메신저 경험을 만듭니다</h1>
+              <p class="slide-body">
+                저희는 대화록을 단순 번역 화면이 아니라 대화방으로 만들고 있습니다.<br/>
+                음성 통번역뿐 아니라 메시징, 그룹챗, 초대, 공유까지 가능하게 합니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack slide-side-media--conversation-stack" aria-hidden="true">
               <div class="slide-phone-frame slide-phone-frame--gaming-back">
                 <img
                   class="slide-preview-image slide-preview-image--gaming-back"
@@ -2701,8 +2757,7 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
-              <h1 class="slide-title">소셜 번역기 밍글</h1>
-              <h3 class="slide-title slide-title--final-qa">감사합니다.<br/>Q & A</h3>
+              <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <nav class="slide-final-links" aria-label="Mingle links">
                 <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
                   <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
