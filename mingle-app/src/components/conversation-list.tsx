@@ -1332,9 +1332,9 @@ export default function ConversationList({
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
-  const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
-  const speechLanguagesSyncVersionRef = useRef(new Map<string, number>());
-  const translationLanguagesLinkedSyncVersionRef = useRef(new Map<string, number>());
+  // Speech, translation, and link PATCHes all mutate one language setting surface.
+  // Share a version counter so stale responses from any one kind cannot clobber another.
+  const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
@@ -1535,9 +1535,7 @@ export default function ConversationList({
     setLiveConversationId((current) => (
       current === conversationId ? null : current
     ));
-    selectedLanguagesSyncVersionRef.current.delete(conversationId);
-    speechLanguagesSyncVersionRef.current.delete(conversationId);
-    translationLanguagesLinkedSyncVersionRef.current.delete(conversationId);
+    languageSettingsSyncVersionRef.current.delete(conversationId);
     conversationRunningStateRef.current.delete(conversationId);
     conversationRoomRefs.current.delete(conversationId);
     setActiveConversation((current) => (
@@ -1759,8 +1757,8 @@ export default function ConversationList({
     );
     const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
-    const nextVersion = (selectedLanguagesSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    selectedLanguagesSyncVersionRef.current.set(conversationId, nextVersion);
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
@@ -1782,11 +1780,11 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (selectedLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
       .catch(() => {
-        if (selectedLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1827,8 +1825,8 @@ export default function ConversationList({
     );
     const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
-    const nextVersion = (speechLanguagesSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    speechLanguagesSyncVersionRef.current.set(conversationId, nextVersion);
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
@@ -1852,11 +1850,11 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (speechLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
       .catch(() => {
-        if (speechLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1895,9 +1893,8 @@ export default function ConversationList({
         ? speechLanguages
         : previousSelectedLanguages;
 
-    const nextVersion =
-      (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    translationLanguagesLinkedSyncVersionRef.current.set(conversationId, nextVersion);
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
@@ -1919,11 +1916,11 @@ export default function ConversationList({
     })
       .then(readConversationResponse)
       .then((nextConversation) => {
-        if (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
       .catch(() => {
-        if (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
