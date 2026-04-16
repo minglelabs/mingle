@@ -1400,3 +1400,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Updated the XR messenger-experience slide imagery to use the new Mingle conversation-list and conversation-room screenshots inside the existing overlapping phone-frame treatment.
 - 2026-04-16: Fixed the XR messenger-experience slide's rear conversation-list screenshot by adding a page-specific conversation stack layout, so the rear image no longer inherits the raw gaming screenshot absolute positioning inside a phone frame.
 - 2026-04-16: Preserved the user's final Q&A slide simplification that removes the extra `소셜 번역기 밍글` heading and keeps the closing page focused on `감사합니다. Q & A` plus the resource button row.
+- 2026-04-16: Preserved the user's follow-up XR viral-target split, converting the duplicated messenger-experience slide into a second viral-target slide about continuing offline conversations online.
