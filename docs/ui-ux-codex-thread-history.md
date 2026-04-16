@@ -1408,3 +1408,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Preserved the user's XR viral-loop arrow label edit, changing the later-stage acquisition wording from `UGC 바이럴` to the broader `매칭 및 바이럴` phrasing.
 - 2026-04-16: Preserved the user's newly added XR solution slide that repeats the viral-loop structure to show matching features becoming possible once enough users exist, with the first transition muted and the matching/viral transition emphasized.
 - 2026-04-16: Preserved the user's follow-up XR viral-loop label refinement, reframing the later-stage acquisition copy as additional users entering because they are looking for new relationships.
+- 2026-04-16: Preserved the user's XR matching-loop state edit, muting the first translation-only step and emphasizing the third social-platform step on the matching-feature slide.
