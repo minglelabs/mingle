@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mingle AI Deck</title>
+    <title>Mingle 소셜 번역기</title>
+    <meta name="description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta property="og:title" content="Mingle 소셜 번역기" />
+    <meta property="og:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://translator.minglelabs.xyz/xr" />
+    <meta property="og:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta property="og:image:alt" content="Mingle 소셜 번역기" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mingle 소셜 번역기" />
+    <meta name="twitter:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta name="twitter:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
     <style>
       :root {
         color-scheme: light;
@@ -39,6 +53,8 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
       }
 
       .track {
@@ -133,6 +149,21 @@
         grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
         column-gap: clamp(16px, 1.4vw, 24px);
         align-items: baseline;
+        width: fit-content;
+        color: inherit;
+        text-decoration: none;
+        border-radius: 14px;
+        cursor: pointer;
+        transition:
+          color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .slide-toc-item:hover,
+      .slide-toc-item:focus-visible {
+        color: var(--accent-strong);
+        outline: none;
+        transform: translateX(0.3rem);
       }
 
       .slide-toc-index {
@@ -1536,10 +1567,10 @@
             <div class="slide-copy slide-copy--toc">
               <p class="slide-kicker">목차</p>
               <h1 class="slide-title">
-                <span class="slide-toc-item"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></span>
-                <span class="slide-toc-item"><span class="slide-toc-index">4.</span><span class="slide-toc-text">팀</span></span>
+                <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></a>
+                <a class="slide-toc-item" href="#13"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
+                <a class="slide-toc-item" href="#29"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
+                <a class="slide-toc-item" href="#53"><span class="slide-toc-index">4.</span><span class="slide-toc-text">팀</span></a>
               </h1>
             </div>
           </article>
@@ -2598,7 +2629,8 @@
               <h1 class="slide-title">통번역,노트테이킹 서비스들은<br/>소셜링에 관심이 없습니다</h1>
               <p class="slide-body">
                 업무 영역 중심으로 빠르게 성장하고 있지만 경쟁이 너무나도 치열합니다.<br/>
-                이 경쟁에 참여한다면 매출은 낼 수 있을지라도 영업이익은 내기 어렵습니다.
+                이들이 매출은 낼 수 있을지라도 영업이익까지 낼 수 있을지는 의문입니다.<br/>
+                다행히도 이들은 소셜링에는 별 관심이 없는듯 합니다.
               </p>
             </div>
             <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--competitor-tool-cloud">
@@ -2677,7 +2709,7 @@
               <p class="slide-kicker">차별화점</p>
               <h1 class="slide-title">저희는 날카롭게 시작해서<br/>콜드스타트 문제를 해결합니다</h1>
               <p class="slide-body">
-                소셜링 중에서도 통번역이라는 아주 날카로운 문제에만 집중합니다.<br/>
+                각 소셜링 버티컬의 통번역 문제에만 집중합니다.<br/>
                 AI 네이티브 메신저로의 변화는 그 다음 단계입니다.
               </p>
             </div>
@@ -2731,6 +2763,7 @@
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 73%; --y: 22%; --s: clamp(70px, 5.6vw, 94px); --r: 6deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 85%; --y: 45%; --s: clamp(72px, 5.7vw, 98px); --r: -8deg" src="./assets/logo-tinder.png" alt="Tinder" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 28%; --y: 50%; --s: clamp(78px, 6.2vw, 106px); --r: 11deg" src="./assets/logo-discord.png" alt="Discord" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 53%; --y: 51%; --s: clamp(74px, 5.9vw, 100px); --r: -4deg" src="./assets/logo-wechat.jpg" alt="WeChat" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
@@ -2745,8 +2778,8 @@
               <p class="slide-kicker">경쟁자 3</p>
               <h1 class="slide-title">일론 머스크만이 예외입니다</h1>
               <p class="slide-body">
-                X가 자동번역과 알고리즘 글로벌화를 하니까 세상이 뒤집어졌습니다.<br/>
-                Cursor의 출시로 바이브 코딩이 대두된 것과 같은 원리입니다.<br/>
+                X가 자동번역과 알고리즘 글로벌화를 하자 세상이 뒤집어졌습니다.<br/>
+                Cursor의 출시로 바이브 코딩 쓰나미가 시작된 것과 같은 원리입니다.<br/>
                 저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
               </p>
             </div>
@@ -2772,11 +2805,11 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">차별화점</p>
-              <h1 class="slide-title">저희의 전략은<br/>블리츠 스케일링입니다</h1>
+              <h1 class="slide-title">저희의 생존 전략은<br/>블리츠 스케일링입니다</h1>
               <p class="slide-body">
                 다행히도 아직은 일론 머스크 뿐이고 그마저도 단순 번역에 그칩니다.<br/>
                 저희와 버티컬이 아예 다르기도 하고, 비용 문제도 심할 거라 추측합니다.<br/>
-                모두가 바벨탑 건설을 시도하기 전에 빠르게 성장해야만 합니다.
+                모두가 바벨탑 건설을 시도하기 전에 저희가 제일 먼저 선점해야만 합니다.
               </p>
             </div>
           </article>
@@ -2866,6 +2899,12 @@
       let wheelLock = false;
       let restoreTransitionFrame = null;
       let holdStep = null;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchMoved = false;
+      let touchNavigationTriggered = false;
+      const TOUCH_INTENT_THRESHOLD = 12;
+      const TOUCH_NAVIGATION_THRESHOLD = 52;
 
       function parseSlideNumber(rawValue) {
         const parsedValue = Number.parseInt(rawValue ?? "", 10);
@@ -3089,6 +3128,90 @@
           } else {
             previous();
           }
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          touchMoved = false;
+          touchNavigationTriggered = false;
+          holdStep = null;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches.length !== 1 || touchNavigationTriggered) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+          const primaryDistance = Math.max(absX, absY);
+
+          if (primaryDistance < TOUCH_INTENT_THRESHOLD) {
+            return;
+          }
+
+          touchMoved = true;
+          event.preventDefault();
+
+          if (primaryDistance < TOUCH_NAVIGATION_THRESHOLD) {
+            return;
+          }
+
+          touchNavigationTriggered = true;
+
+          if (primaryDelta < 0) {
+            next();
+          } else {
+            previous();
+          }
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchend",
+        (event) => {
+          if (!touchMoved || touchNavigationTriggered || event.changedTouches.length !== 1) {
+            touchMoved = false;
+            touchNavigationTriggered = false;
+            return;
+          }
+
+          const touch = event.changedTouches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+
+          if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
+            if (primaryDelta < 0) {
+              next();
+            } else {
+              previous();
+            }
+          }
+
+          touchMoved = false;
+          touchNavigationTriggered = false;
         },
         { passive: true }
       );
