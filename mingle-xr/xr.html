@@ -2,7 +2,42 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        var DESIGN_WIDTH = 1600;
+        var MOBILE_BREAKPOINT = 900;
+        var meta = document.getElementById("viewport-meta");
+
+        function applyViewport() {
+          var screenWidth = Math.min(
+            window.screen ? window.screen.width : window.innerWidth,
+            window.innerWidth || Infinity
+          );
+          var isMobile = screenWidth <= MOBILE_BREAKPOINT;
+
+          if (isMobile) {
+            var scale = screenWidth / DESIGN_WIDTH;
+            meta.setAttribute(
+              "content",
+              "width=" + DESIGN_WIDTH +
+                ", initial-scale=" + scale +
+                ", minimum-scale=" + scale +
+                ", maximum-scale=" + scale +
+                ", user-scalable=no"
+            );
+            document.documentElement.classList.add("is-mobile-viewport");
+          } else {
+            meta.setAttribute("content", "width=device-width, initial-scale=1.0");
+            document.documentElement.classList.remove("is-mobile-viewport");
+          }
+        }
+
+        applyViewport();
+        window.addEventListener("resize", applyViewport);
+        window.addEventListener("orientationchange", applyViewport);
+      })();
+    </script>
     <title>Mingle 소셜 번역기</title>
     <meta name="description" content="세상에서 제일 편한 번역기를 만듭니다." />
     <meta property="og:title" content="Mingle 소셜 번역기" />
@@ -29,9 +64,6 @@
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
         --deck-width: 100vw;
         --deck-height: 100vh;
-        --deck-frame-width: 100vw;
-        --deck-frame-height: 100vh;
-        --deck-scale: 1;
       }
 
       * {
@@ -53,23 +85,13 @@
         font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
       }
 
-      .deck-frame {
-        position: relative;
-        width: var(--deck-frame-width);
-        height: var(--deck-frame-height);
-        overflow: hidden;
-      }
-
       .deck {
-        position: absolute;
-        inset: 0 auto auto 0;
+        position: relative;
         width: var(--deck-width);
         height: var(--deck-height);
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: none;
-        transform: scale(var(--deck-scale));
-        transform-origin: top left;
       }
 
       .track {
@@ -1415,93 +1437,28 @@
         user-select: none;
       }
 
-      @media (max-width: 900px) {
-        :root {
-          --deck-width: 1600px;
-          --deck-height: 900px;
-          --deck-frame-width: 100vw;
-          --deck-frame-height: 56.25vw;
-          --deck-scale: 0.5625;
-        }
-
-        html,
-        body {
-          height: 100dvh;
-          min-height: 100dvh;
-        }
-
-        body {
-          display: grid;
-          place-items: center;
-          background:
-            radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
-            linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
-            var(--page);
-        }
-
-        .deck-frame {
-          box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
-        }
+      html.is-mobile-viewport {
+        --deck-width: 1600px;
+        --deck-height: 900px;
       }
 
-      @media (max-width: 800px) {
-        :root {
-          --deck-scale: 0.5;
-        }
+      html.is-mobile-viewport,
+      html.is-mobile-viewport body {
+        height: 100dvh;
+        min-height: 100dvh;
       }
 
-      @media (max-width: 700px) {
-        :root {
-          --deck-scale: 0.4375;
-        }
+      html.is-mobile-viewport body {
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
+          var(--page);
       }
 
-      @media (max-width: 600px) {
-        :root {
-          --deck-scale: 0.375;
-        }
-      }
-
-      @media (max-width: 500px) {
-        :root {
-          --deck-scale: 0.3125;
-        }
-      }
-
-      @media (max-width: 430px) {
-        :root {
-          --deck-scale: 0.26875;
-        }
-      }
-
-      @media (max-width: 414px) {
-        :root {
-          --deck-scale: 0.25875;
-        }
-      }
-
-      @media (max-width: 393px) {
-        :root {
-          --deck-scale: 0.245625;
-        }
-      }
-
-      @media (max-width: 390px) {
-        :root {
-          --deck-scale: 0.24375;
-        }
-      }
-
-      @media (max-width: 375px) {
-        :root {
-          --deck-scale: 0.234375;
-        }
-      }
-
-      @media (max-width: 360px) {
-        :root {
-          --deck-scale: 0.225;
-        }
+      html.is-mobile-viewport .deck {
+        box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -1512,9 +1469,8 @@
     </style>
   </head>
   <body>
-    <div class="deck-frame" id="deck-frame">
-      <main class="deck" aria-label="External relations presentation deck">
-        <div class="track" id="deck-track">
+    <main class="deck" aria-label="External relations presentation deck">
+      <div class="track" id="deck-track">
         <section class="slide slide--hero">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
@@ -2843,10 +2799,9 @@
             </div>
           </article>
         </section>
-        </div>
-        <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
-      </main>
-    </div>
+      </div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
+    </main>
 
     <script>
       const track = document.getElementById("deck-track");
@@ -2927,50 +2882,6 @@
 
       function currentTransitionValue(durationMs) {
         return `transform ${durationMs}ms var(--slide-ease)`;
-      }
-
-      function syncMobileDeckScale() {
-        const viewportWidth = Math.min(
-          window.visualViewport?.width ?? window.innerWidth,
-          window.innerWidth
-        );
-        const viewportHeight = Math.min(
-          window.visualViewport?.height ?? window.innerHeight,
-          window.innerHeight
-        );
-        const cssDeckWidth = Number.parseFloat(
-          window.getComputedStyle(document.documentElement).getPropertyValue("--deck-width")
-        );
-        const cssDeckHeight = Number.parseFloat(
-          window.getComputedStyle(document.documentElement).getPropertyValue("--deck-height")
-        );
-        const isScaledDeck =
-          Number.isFinite(cssDeckWidth)
-          && Number.isFinite(cssDeckHeight)
-          && cssDeckWidth >= 1599
-          && cssDeckHeight >= 899;
-        const isMobileViewport = viewportWidth <= 900;
-
-        if (!isMobileViewport || !isScaledDeck) {
-          document.documentElement.style.setProperty("--deck-scale", "1");
-          document.documentElement.style.setProperty("--deck-frame-width", "100vw");
-          document.documentElement.style.setProperty("--deck-frame-height", "100vh");
-          return;
-        }
-
-        const nextScale = Math.max(
-          0.1,
-          Math.min(viewportWidth / cssDeckWidth, viewportHeight / cssDeckHeight)
-        );
-        document.documentElement.style.setProperty("--deck-scale", String(nextScale));
-        document.documentElement.style.setProperty(
-          "--deck-frame-width",
-          `${cssDeckWidth * nextScale}px`
-        );
-        document.documentElement.style.setProperty(
-          "--deck-frame-height",
-          `${cssDeckHeight * nextScale}px`
-        );
       }
 
       function deckWidth() {
@@ -3069,12 +2980,10 @@
       });
 
       window.addEventListener("resize", () => {
-        syncMobileDeckScale();
         syncPosition(false);
       });
 
       window.visualViewport?.addEventListener("resize", () => {
-        syncMobileDeckScale();
         syncPosition(false);
       });
 
@@ -3241,7 +3150,6 @@
         { passive: true }
       );
 
-      syncMobileDeckScale();
       activeIndex = requestedSlideNumber();
       syncPosition(false);
       updateUi();
