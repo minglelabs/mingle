@@ -1382,3 +1382,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Reworked the XR messenger/social-media competitor logo cloud into a taller, rounded scattered cluster and widened the left copy area so the page no longer reads as a rigid two-row logo grid.
 - 2026-04-16: Updated the XR blitzscaling differentiation slide copy to emphasize that Elon Musk's current exception is still limited to simple text translation, and that Mingle needs to grow before everyone attempts a Babel-tower strategy.
 - 2026-04-16: Inserted a centered XR timing slide before the blitzscaling page, framing the Babel-tower moment as historically new and positioning Mingle as the team to build before others are ready.
+- 2026-04-16: Inserted a centered XR section-divider slide for `3. 팀` before the blitzscaling page so the strategy close now transitions into the team section.
