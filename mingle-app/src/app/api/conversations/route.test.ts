@@ -163,6 +163,7 @@ describe("/api/conversations route", () => {
       preferredSessionKey: undefined,
       selectedLanguages: [],
       speechLanguages: [],
+      translationLanguagesLinked: true,
     });
   });
 
@@ -208,6 +209,7 @@ describe("/api/conversations route", () => {
       preferredSessionKey: "sess_legacy_room",
       selectedLanguages: [],
       speechLanguages: [],
+      translationLanguagesLinked: true,
     });
   });
 
@@ -238,6 +240,7 @@ describe("/api/conversations route", () => {
         locale: "ko",
         selectedLanguages: ["en", "fr"],
         speechLanguages: ["ko", "ja"],
+        translationLanguagesLinked: false,
       }),
     }));
 
@@ -247,6 +250,7 @@ describe("/api/conversations route", () => {
       preferredSessionKey: undefined,
       selectedLanguages: ["en", "fr"],
       speechLanguages: ["ko", "ja"],
+      translationLanguagesLinked: false,
     });
   });
 

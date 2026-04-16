@@ -26,6 +26,7 @@ import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePho
 import {
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
+  LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
@@ -140,6 +141,7 @@ interface ConversationItem {
   pausedAt: string | null;
   selectedLanguages: string[];
   speechLanguages: string[];
+  translationLanguagesLinked: boolean;
   languageFlags: string;
 }
 
@@ -170,6 +172,7 @@ type LegacySingleRoomSnapshot = {
   sessionKey: string;
   selectedLanguages: string[];
   speechLanguages: string[];
+  translationLanguagesLinked: boolean;
 };
 
 function isNativeAppRuntime(): boolean {
@@ -235,6 +238,7 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
     const sessionKey = (window.localStorage.getItem(LEGACY_SINGLE_ROOM_SESSION_KEY) || "").trim();
     let selectedLanguages = [...defaultSelectedLanguages];
     let speechLanguages = [...defaultSelectedLanguages];
+    let translationLanguagesLinked = true;
     try {
       selectedLanguages = sanitizeSttLanguageSelection(
         JSON.parse(window.localStorage.getItem(LS_KEY_LANGUAGES) || "null"),
@@ -252,6 +256,17 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
       );
     } catch {
       speechLanguages = [...selectedLanguages];
+    }
+    try {
+      const rawLinked = window.localStorage.getItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED);
+      translationLanguagesLinked = rawLinked === null
+        ? true
+        : rawLinked.trim().toLowerCase() !== "0" && rawLinked.trim().toLowerCase() !== "false";
+    } catch {
+      translationLanguagesLinked = true;
+    }
+    if (translationLanguagesLinked) {
+      selectedLanguages = [...speechLanguages];
     }
 
     const hasUtterances = typeof utterancesRaw === "string" && utterancesRaw.trim().length > 0;
@@ -278,6 +293,7 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
       sessionKey,
       selectedLanguages,
       speechLanguages,
+      translationLanguagesLinked,
     };
   } catch {
     return null;
@@ -653,7 +669,9 @@ function mapConversationSummaryToItem(
     conversation.speechLanguages,
     selectedLanguages,
   );
-  const languageFlags = selectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
+  const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
+  const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
+  const languageFlags = effectiveSelectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
   const avatar = getSpeakerAvatar(
     conversation.latestSpeaker || conversation.sessionKey,
     conversation.latestSpeakerAvatarSeed || conversation.id,
@@ -677,8 +695,9 @@ function mapConversationSummaryToItem(
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     pausedAt: conversation.pausedAt,
-    selectedLanguages,
+    selectedLanguages: effectiveSelectedLanguages,
     speechLanguages,
+    translationLanguagesLinked,
     languageFlags,
   };
 }
@@ -1315,6 +1334,7 @@ export default function ConversationList({
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
   const selectedLanguagesSyncVersionRef = useRef(new Map<string, number>());
   const speechLanguagesSyncVersionRef = useRef(new Map<string, number>());
+  const translationLanguagesLinkedSyncVersionRef = useRef(new Map<string, number>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
@@ -1517,6 +1537,7 @@ export default function ConversationList({
     ));
     selectedLanguagesSyncVersionRef.current.delete(conversationId);
     speechLanguagesSyncVersionRef.current.delete(conversationId);
+    translationLanguagesLinkedSyncVersionRef.current.delete(conversationId);
     conversationRunningStateRef.current.delete(conversationId);
     conversationRoomRefs.current.delete(conversationId);
     setActiveConversation((current) => (
@@ -1736,13 +1757,18 @@ export default function ConversationList({
       previousConversation.selectedLanguages,
       defaultSelectedLanguages,
     );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
     const nextVersion = (selectedLanguagesSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     selectedLanguagesSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
-        ? { ...conversation, selectedLanguages: [...normalizedSelectedLanguages] }
+        ? {
+            ...conversation,
+            selectedLanguages: [...normalizedSelectedLanguages],
+            translationLanguagesLinked: false,
+          }
         : conversation
     )));
 
@@ -1763,7 +1789,11 @@ export default function ConversationList({
         if (selectedLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
-            ? { ...conversation, selectedLanguages: [...previousSelectedLanguages] }
+            ? {
+                ...conversation,
+                selectedLanguages: [...previousSelectedLanguages],
+                translationLanguagesLinked: previousTranslationLanguagesLinked,
+              }
             : conversation
         )));
         window.alert(copy.openErrorMessage);
@@ -1791,13 +1821,24 @@ export default function ConversationList({
       previousConversation.speechLanguages,
       previousConversation.selectedLanguages,
     );
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
 
     const nextVersion = (speechLanguagesSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     speechLanguagesSyncVersionRef.current.set(conversationId, nextVersion);
 
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId
-        ? { ...conversation, speechLanguages: [...normalizedSpeechLanguages] }
+        ? {
+            ...conversation,
+            speechLanguages: [...normalizedSpeechLanguages],
+            ...(previousTranslationLanguagesLinked
+              ? { selectedLanguages: [...normalizedSpeechLanguages] }
+              : {}),
+          }
         : conversation
     )));
 
@@ -1818,7 +1859,78 @@ export default function ConversationList({
         if (speechLanguagesSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
-            ? { ...conversation, speechLanguages: [...previousSpeechLanguages] }
+            ? {
+                ...conversation,
+                speechLanguages: [...previousSpeechLanguages],
+                ...(previousTranslationLanguagesLinked
+                  ? { selectedLanguages: [...previousSelectedLanguages] }
+                  : {}),
+              }
+            : conversation
+        )));
+        window.alert(copy.openErrorMessage);
+      });
+  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+
+  const handleConversationTranslationLanguagesLinkedChange = useCallback((
+    conversationId: string,
+    nextTranslationLanguagesLinked: boolean,
+  ) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
+    const speechLanguages = sanitizeSttLanguageSelection(
+      previousConversation.speechLanguages,
+      previousSelectedLanguages,
+    );
+    const nextSelectedLanguages =
+      nextTranslationLanguagesLinked || previousTranslationLanguagesLinked
+        ? speechLanguages
+        : previousSelectedLanguages;
+
+    const nextVersion =
+      (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    translationLanguagesLinkedSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            selectedLanguages: [...nextSelectedLanguages],
+            translationLanguagesLinked: nextTranslationLanguagesLinked,
+          }
+        : conversation
+    )));
+
+    void fetch(buildConversationApiPath(`/${conversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(),
+      },
+      body: JSON.stringify({ translationLanguagesLinked: nextTranslationLanguagesLinked }),
+    })
+      .then(readConversationResponse)
+      .then((nextConversation) => {
+        if (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch(() => {
+        if (translationLanguagesLinkedSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                selectedLanguages: [...previousSelectedLanguages],
+                translationLanguagesLinked: previousTranslationLanguagesLinked,
+              }
             : conversation
         )));
         window.alert(copy.openErrorMessage);
@@ -2042,6 +2154,7 @@ export default function ConversationList({
             legacySessionKey: legacySnapshot.sessionKey || undefined,
             selectedLanguages: legacySnapshot.selectedLanguages,
             speechLanguages: legacySnapshot.speechLanguages,
+            translationLanguagesLinked: legacySnapshot.translationLanguagesLinked,
           }),
         });
         const importedConversation = await readConversationResponse(response);
@@ -2175,6 +2288,7 @@ export default function ConversationList({
           locale,
           selectedLanguages: defaultSelectedLanguages,
           speechLanguages: defaultSelectedLanguages,
+          translationLanguagesLinked: true,
         }),
       });
       const nextConversation = await readConversationResponse(response);
@@ -2680,6 +2794,7 @@ export default function ConversationList({
                       storageNamespace={conversation.id}
                       initialSelectedLanguages={conversation.selectedLanguages}
                       initialSpeechLanguages={conversation.speechLanguages}
+                      initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
                       autoStartOnMount={conversation.id === autoStartConversationId}
                       onAutoStartHandled={() => {
                         setAutoStartConversationId((current) => (
@@ -2700,6 +2815,9 @@ export default function ConversationList({
                       }}
                       onSpeechLanguagesChange={(speechLanguages) => {
                         handleConversationSpeechLanguagesChange(conversation.id, speechLanguages);
+                      }}
+                      onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
+                        handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
                       }}
                     />
                   </motion.div>

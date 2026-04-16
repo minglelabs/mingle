@@ -3420,8 +3420,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
                   selectedLanguages={selectedLanguages}
                   speechLanguages={selectedLanguages}
+                  translationLanguagesLinked={true}
                   onToggleLanguage={handleToggleLanguage}
                   onToggleSpeechLanguage={handleToggleLanguage}
+                  onTranslationLanguagesLinkedChange={() => {}}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}

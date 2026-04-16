@@ -52,8 +52,10 @@ interface LanguageSelectorProps {
   onClose: () => void;
   selectedLanguages: string[];
   speechLanguages: string[];
+  translationLanguagesLinked: boolean;
   onToggleLanguage: (code: string) => void;
   onToggleSpeechLanguage: (code: string) => void;
+  onTranslationLanguagesLinkedChange: (translationLanguagesLinked: boolean) => void;
   uiLocale?: string;
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
@@ -65,8 +67,10 @@ export default function LanguageSelector({
   onClose,
   selectedLanguages,
   speechLanguages,
+  translationLanguagesLinked,
   onToggleLanguage,
   onToggleSpeechLanguage,
+  onTranslationLanguagesLinkedChange,
   uiLocale,
   copy,
   disabled,
@@ -106,8 +110,11 @@ export default function LanguageSelector({
     const visibleItems = filterLanguageSelectorItems(languageItems, query);
     return sortLanguageSelectorItems(visibleItems, sortMode, localeInfo.locale);
   }, [languageItems, localeInfo.locale, query, sortMode]);
-  const activeSelectedLanguages = activeTab === "speech" ? speechLanguages : selectedLanguages;
-  const recentLanguageCodes = activeTab === "speech"
+  const isTranslationSelectionLinked = activeTab === "translation" && translationLanguagesLinked;
+  const activeSelectedLanguages = activeTab === "speech" || translationLanguagesLinked
+    ? speechLanguages
+    : selectedLanguages;
+  const recentLanguageCodes = activeTab === "speech" || translationLanguagesLinked
     ? recentSpeechLanguageCodes
     : recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
@@ -262,6 +269,8 @@ export default function LanguageSelector({
   }, [isOpen, requestClose]);
 
   const handleToggleRequest = useCallback((code: string) => {
+    if (activeTab === "translation" && translationLanguagesLinked) return;
+
     pendingRecentChipVisibilityCodeRef.current = code;
     const tab = activeTab;
     const currentSelectedLanguages = tab === "speech"
@@ -310,7 +319,7 @@ export default function LanguageSelector({
     } else {
       onToggleLanguage(code);
     }
-  }, [activeTab, disabled, onToggleLanguage, onToggleSpeechLanguage]);
+  }, [activeTab, disabled, onToggleLanguage, onToggleSpeechLanguage, translationLanguagesLinked]);
 
   const dismissSearchFocus = useCallback((target: EventTarget | null) => {
     const activeElement = document.activeElement;
@@ -381,7 +390,10 @@ export default function LanguageSelector({
                   {recentLanguageItems.map((lang) => {
                     const isSelected = activeSelectedLanguages.includes(lang.code);
                     const isDisabled =
-                      disabled || (!isSelected && atMax) || (isSelected && atMin);
+                      disabled
+                      || isTranslationSelectionLinked
+                      || (!isSelected && atMax)
+                      || (isSelected && atMin);
 
                     return (
                       <button
@@ -401,7 +413,7 @@ export default function LanguageSelector({
                             : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
-                            ? "cursor-not-allowed opacity-50"
+                            ? `cursor-not-allowed ${isTranslationSelectionLinked ? "opacity-80" : "opacity-50"}`
                             : isSelected
                               ? "hover:-translate-y-[1px] hover:shadow-[0_16px_30px_rgba(245,158,11,0.18)]"
                               : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
@@ -449,6 +461,20 @@ export default function LanguageSelector({
                 </button>
               </div>
             </div>
+
+            {activeTab === "translation" ? (
+              <label className="flex min-h-12 items-center gap-3 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 py-3 text-[0.88rem] font-semibold tracking-[-0.01em] text-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <input
+                  type="checkbox"
+                  checked={translationLanguagesLinked}
+                  onChange={(event) => {
+                    onTranslationLanguagesLinkedChange(event.currentTarget.checked);
+                  }}
+                  className="h-5 w-5 rounded border-[#cfc7b9] text-amber-500 accent-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                />
+                <span>{copy.languageSelectorTranslationSameLanguagesLabel}</span>
+              </label>
+            ) : null}
 
             <div className="flex items-stretch gap-3">
               <div
@@ -527,7 +553,10 @@ export default function LanguageSelector({
               {filteredItems.map((lang) => {
                 const isSelected = activeSelectedLanguages.includes(lang.code);
                 const isDisabled =
-                  disabled || (!isSelected && atMax) || (isSelected && atMin);
+                  disabled
+                  || isTranslationSelectionLinked
+                  || (!isSelected && atMax)
+                  || (isSelected && atMin);
 
                 return (
                   <button

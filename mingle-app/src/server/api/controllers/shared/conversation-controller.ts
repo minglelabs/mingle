@@ -10,6 +10,7 @@ import {
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
   updateConversationChannelSpeechLanguages,
+  updateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
@@ -50,7 +51,13 @@ export async function patchConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { status?: unknown; selectedLanguages?: unknown; speechLanguages?: unknown; title?: unknown };
+  let body: {
+    status?: unknown;
+    selectedLanguages?: unknown;
+    speechLanguages?: unknown;
+    translationLanguagesLinked?: unknown;
+    title?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -60,10 +67,15 @@ export async function patchConversationResponse(
   const hasStatus = typeof body.status === "string";
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
   const hasSpeechLanguages = body.speechLanguages !== undefined;
+  const hasTranslationLanguagesLinked = body.translationLanguagesLinked !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasTitle) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
+  }
+
+  if (hasTranslationLanguagesLinked && typeof body.translationLanguagesLinked !== "boolean") {
+    return NextResponse.json({ error: "invalid_translation_languages_linked" }, { status: 400 });
   }
 
   const selectedLanguages = hasSelectedLanguages
@@ -112,6 +124,14 @@ export async function patchConversationResponse(
       conversationId,
       userId: resolvedUser.userId,
       speechLanguages: speechLanguages!,
+    });
+  }
+
+  if (hasTranslationLanguagesLinked) {
+    conversation = await updateConversationChannelTranslationLanguagesLinked({
+      conversationId,
+      userId: resolvedUser.userId,
+      translationLanguagesLinked: body.translationLanguagesLinked as boolean,
     });
   }
 
