@@ -1378,3 +1378,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Added an XR Elon Musk exception slide immediately after the social-platform competitor page, pairing a portrait with two X/XChat service cards to frame X's automatic translation and upcoming chat launch as the key exception.
 - 2026-04-16: Converted the XR deck's final resource links into a horizontal CTA row, using the Mingle logo, GitHub mark, App Store badge, and Google Play badge instead of plain text URLs.
 - 2026-04-16: Restored the XR deck's final resource slide to the user's simpler centered title, Q&A subtitle, and plain URL body markup after the CTA version conflicted with the intended manual edit.
+- 2026-04-16: Rebalanced the XR competitor-one logo cloud by widening the left copy area, increasing the logo sizes, and moving the tool logos back into a denser but irregular scattered layout instead of a strict row-and-column grid.
