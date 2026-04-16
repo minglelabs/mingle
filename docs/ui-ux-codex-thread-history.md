@@ -1371,3 +1371,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Added a centered XR differentiation slide arguing that Mingle's viable path is blitzscaling before existing social platforms treat translation as a core feature.
 - 2026-04-16: Inserted a new XR differentiation slide before the social-platform competitor page, reusing the four vertical socializing-experience cards plus `등등등...` to frame Mingle's sharpened entry by vertical.
 - 2026-04-16: Inserted a new XR differentiation slide before the AI-native competitor page, framing Mingle's goal as building a defensible moat through network effects in the socializing category.
+- 2026-04-16: Moved the XR reference-links slide for `소셜 번역기 밍글` from the strategy section to the very end of the deck so it works as a final resource page.
