@@ -67,6 +67,19 @@
         background: transparent;
       }
 
+      .slide-shell--image-only {
+        align-items: center;
+        justify-content: center;
+        padding: clamp(18px, 2.2vw, 34px);
+      }
+
+      .slide-full-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
       .slide-copy {
         display: grid;
         gap: clamp(18px, 2vw, 28px);
@@ -2028,8 +2041,12 @@
         </section>
 
         <section class="slide">
-          <article class="slide-shell">
-
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-venndiagram.png"
+              alt="Business venn diagram"
+            />
           </article>
         </section>
 

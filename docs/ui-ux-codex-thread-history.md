@@ -1363,3 +1363,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Reworked the XR goal-step badges from floating absolute circles into rounded rectangular `1단계` labels that sit in the title row, preventing overlap with the card title while keeping the numbered progression visually prominent.
 - 2026-04-16: Refined the XR viral-loop arrows so the stroke and arrowhead share the same visual weight and the curve connects from the vertical center of one step card toward the vertical center of the next step card.
 - 2026-04-16: Center-aligned the XR goal-step title text against the taller rounded step labels so the title row no longer reads as top-attached beside the `1단계`, `2단계`, and `3단계` markers.
+- 2026-04-16: Converted the newly inserted XR business-diagram slide into an image-only page that centers `business-venndiagram.png` and lets it fill the viewport within a narrow outer margin.
