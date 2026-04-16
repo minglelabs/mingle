@@ -901,12 +901,22 @@
 
       .slide-final-links {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 24px);
+        width: min(100%, 1180px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-final-link-row {
+        display: flex;
         align-items: center;
         justify-content: center;
         flex-wrap: nowrap;
         gap: clamp(14px, 1.4vw, 22px);
-        width: min(100%, 1180px);
-        margin-top: clamp(4px, 0.8vw, 12px);
+        width: 100%;
       }
 
       .slide-final-link {
@@ -936,6 +946,15 @@
         letter-spacing: -0.03em;
       }
 
+      .slide-final-link--linkedin {
+        min-width: clamp(164px, 14vw, 206px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
       .slide-final-link--store {
         height: auto;
         padding: 0;
@@ -956,6 +975,21 @@
         width: clamp(26px, 2.2vw, 34px);
         height: clamp(26px, 2.2vw, 34px);
         display: block;
+      }
+
+      .slide-final-logo--linkedin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: clamp(28px, 2.3vw, 36px);
+        height: clamp(28px, 2.3vw, 36px);
+        border-radius: 8px;
+        background: #0a66c2;
+        color: #fff;
+        font-size: clamp(1.05rem, 1.1vw, 1.35rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
       }
 
       .slide-final-store-badge {
@@ -1538,6 +1572,10 @@
         }
 
         .slide-final-links {
+          width: 100%;
+        }
+
+        .slide-final-link-row {
           flex-wrap: wrap;
         }
 
@@ -2853,22 +2891,30 @@
             <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <nav class="slide-final-links" aria-label="Mingle links">
-                <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
-                  <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
-                </a>
-                <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
-                  <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
-                  <span>GitHub</span>
-                </a>
-                <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
-                  <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
-                </a>
-                <a
-                  class="slide-final-link slide-final-link--store"
-                  href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
-                >
-                  <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
-                </a>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
+                  </a>
+                  <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
+                    <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
+                    <span>GitHub</span>
+                  </a>
+                  <a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/">
+                    <span class="slide-final-logo--linkedin" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                </div>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
+                    <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
+                  </a>
+                  <a
+                    class="slide-final-link slide-final-link--store"
+                    href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+                  >
+                    <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
+                  </a>
+                </div>
               </nav>
             </div>
           </article>
