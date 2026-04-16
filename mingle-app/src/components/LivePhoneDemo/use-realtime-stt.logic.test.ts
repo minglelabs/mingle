@@ -188,6 +188,22 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('promotes generic Chinese transcript language to zh-CN by default', () => {
+    const parsed = parseSttTranscriptMessage({
+      type: 'transcript',
+      data: {
+        is_final: true,
+        utterance: {
+          text: '这是简体中文',
+          language: 'zh',
+          speaker: 'speaker-1',
+        },
+      },
+    })
+
+    expect(parsed?.language).toBe('zh-CN')
+  })
+
   it('returns null for malformed non-transcript payloads', () => {
     expect(parseSttTranscriptMessage({ type: 'ready' })).toBeNull()
     expect(parseSttTranscriptMessage({ type: 'transcript', data: null })).toBeNull()
@@ -240,6 +256,54 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('treats generic Chinese source as zh-CN so zh-CN target bubbles do not duplicate', () => {
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
+      rawText: '这是简体中文',
+      rawLanguage: 'zh',
+      languages: ['zh-CN', 'zh-TW', 'en'],
+      partialTranslations: {
+        'zh-CN': '不应保留',
+        'zh-TW': '這是繁體中文',
+        en: 'This is simplified Chinese',
+      },
+      utteranceSerial: 8,
+      nowMs: 1700000000001,
+    })
+
+    expect(built?.language).toBe('zh-CN')
+    expect(built?.utterance.originalLang).toBe('zh-CN')
+    expect(built?.utterance.targetLanguages).toEqual(['zh-TW', 'en'])
+    expect(built?.utterance.translations).toEqual({
+      'zh-TW': '這是繁體中文',
+      en: 'This is simplified Chinese',
+    })
+  })
+
+  it('preserves explicit Traditional Chinese source language for target filtering', () => {
+    const built = buildFinalizedUtterancePayload({
+      speaker: 'speaker-2',
+      rawText: '這是繁體中文',
+      rawLanguage: 'zh-TW',
+      languages: ['zh-CN', 'zh-TW', 'en'],
+      partialTranslations: {
+        'zh-CN': '这是简体中文',
+        'zh-TW': '不应保留',
+        en: 'This is traditional Chinese',
+      },
+      utteranceSerial: 9,
+      nowMs: 1700000000002,
+    })
+
+    expect(built?.language).toBe('zh-TW')
+    expect(built?.utterance.originalLang).toBe('zh-TW')
+    expect(built?.utterance.targetLanguages).toEqual(['zh-CN', 'en'])
+    expect(built?.utterance.translations).toEqual({
+      'zh-CN': '这是简体中文',
+      en: 'This is traditional Chinese',
+    })
+  })
+
   it('normalizes language selection signatures for target-language comparisons', () => {
     expect(buildLanguageSelectionSignature([' en ', 'ko', '', 'ja ']))
       .toBe(buildLanguageSelectionSignature(['en', 'ko', 'ja']))
@@ -253,7 +317,19 @@ describe('use-realtime-stt pure logic', () => {
   })
 
   it('normalizes Soniox language hints without blanks or duplicates', () => {
-    expect(buildSonioxLanguageHints([' en ', '', 'ko', 'EN', 'ja '])).toEqual(['en', 'ko', 'ja'])
+    expect(buildSonioxLanguageHints([' en ', '', 'ko', 'EN', 'zh-CN', 'zh-TW', 'ja ']))
+      .toEqual(['en', 'ko', 'zh', 'ja'])
+  })
+
+  it('keeps Chinese translation variants distinct in target-language filtering', () => {
+    expect(filterTranslationsToTargetLanguages({
+      'zh-CN': '简体中文',
+      'zh-TW': '繁體中文',
+      en: 'English',
+    }, ['zh-CN', 'zh-TW'])).toEqual({
+      'zh-CN': '简体中文',
+      'zh-TW': '繁體中文',
+    })
   })
 
   it('restarts STT on language change only when Soniox hints are enabled and ready', () => {
@@ -1520,6 +1596,23 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('keeps Chinese variants distinct when classifying recent finalized matches', () => {
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server',
+      recentFinalizedUtterance: {
+        id: 'u-server-prev',
+        text: '你好',
+        language: 'zh-TW',
+        expiresAt: 5_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+      text: '你好',
+      language: 'zh-CN',
+    })).toEqual({ kind: 'none' })
+  })
+
   it('finds the most recent utterance matching source text and language', () => {
     expect(findRecentMatchingUtteranceIndex({
       utterances: [
@@ -1558,6 +1651,35 @@ describe('use-realtime-stt pure logic', () => {
       sourceText: 'Goodbye',
       sourceLanguage: 'en',
     })).toBe(-1)
+  })
+
+  it('keeps Chinese variants distinct while treating generic zh as zh-CN for recent matching', () => {
+    const utterances = [
+      {
+        id: 'u-1',
+        originalText: '你好',
+        originalLang: 'zh-TW',
+        translations: {},
+      },
+      {
+        id: 'u-2',
+        originalText: '你好',
+        originalLang: 'zh-CN',
+        translations: {},
+      },
+    ]
+
+    expect(findRecentMatchingUtteranceIndex({
+      utterances,
+      sourceText: '你好',
+      sourceLanguage: 'zh-TW',
+    })).toBe(0)
+
+    expect(findRecentMatchingUtteranceIndex({
+      utterances,
+      sourceText: '你好',
+      sourceLanguage: 'zh',
+    })).toBe(1)
   })
 
   it('accepts partial translation responses for the matching pending utterance only', () => {

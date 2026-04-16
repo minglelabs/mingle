@@ -1,3 +1,9 @@
+type TranslationLanguageDefinition = {
+  code: string;
+  englishName: string;
+  selectable?: boolean;
+};
+
 export const TRANSLATION_LANGUAGES = [
   { code: "af", englishName: "Afrikaans" },
   { code: "sq", englishName: "Albanian" },
@@ -9,7 +15,9 @@ export const TRANSLATION_LANGUAGES = [
   { code: "bs", englishName: "Bosnian" },
   { code: "bg", englishName: "Bulgarian" },
   { code: "ca", englishName: "Catalan" },
-  { code: "zh", englishName: "Chinese" },
+  { code: "zh", englishName: "Chinese", selectable: false },
+  { code: "zh-CN", englishName: "Chinese Simplified" },
+  { code: "zh-TW", englishName: "Chinese Traditional" },
   { code: "hr", englishName: "Croatian" },
   { code: "cs", englishName: "Czech" },
   { code: "da", englishName: "Danish" },
@@ -59,13 +67,31 @@ export const TRANSLATION_LANGUAGES = [
   { code: "ur", englishName: "Urdu" },
   { code: "vi", englishName: "Vietnamese" },
   { code: "cy", englishName: "Welsh" },
-] as const;
+] as const satisfies readonly TranslationLanguageDefinition[];
 
 export type TranslationLanguageCode = (typeof TRANSLATION_LANGUAGES)[number]["code"];
+type SelectableTranslationLanguage = Exclude<
+  (typeof TRANSLATION_LANGUAGES)[number],
+  { selectable: false }
+>;
+
+function isSelectableTranslationLanguage(
+  language: (typeof TRANSLATION_LANGUAGES)[number],
+): language is SelectableTranslationLanguage {
+  return !("selectable" in language) || language.selectable !== false;
+}
+
+export const SELECTABLE_TRANSLATION_LANGUAGES = TRANSLATION_LANGUAGES.filter(
+  isSelectableTranslationLanguage,
+);
 
 const TRANSLATION_LANGUAGE_CODE_SET = new Set<TranslationLanguageCode>(
   TRANSLATION_LANGUAGES.map((language) => language.code),
 );
+const TRANSLATION_LANGUAGE_NORMALIZED_CODE_MAP: Record<string, TranslationLanguageCode> =
+  Object.fromEntries(
+    TRANSLATION_LANGUAGES.map((language) => [language.code.toLowerCase(), language.code]),
+  ) as Record<string, TranslationLanguageCode>;
 
 const TRANSLATION_LANGUAGE_NAME_MAP: Record<TranslationLanguageCode, string> =
   Object.fromEntries(
@@ -78,13 +104,13 @@ const TRANSLATION_LANGUAGE_ALIASES: Record<string, TranslationLanguageCode> = {
   iw: "he",
   nb: "no",
   nn: "no",
-  "zh-cn": "zh",
-  "zh-hans": "zh",
-  "zh-hk": "zh",
-  "zh-mo": "zh",
-  "zh-sg": "zh",
-  "zh-tw": "zh",
-  "zh-hant": "zh",
+  "zh-cn": "zh-CN",
+  "zh-hans": "zh-CN",
+  "zh-sg": "zh-CN",
+  "zh-hk": "zh-TW",
+  "zh-mo": "zh-TW",
+  "zh-tw": "zh-TW",
+  "zh-hant": "zh-TW",
 };
 
 export function getTranslationLanguageName(code: string): string | null {
@@ -99,8 +125,19 @@ export function canonicalizeTranslationLanguageCode(rawValue: string): Translati
   const directAlias = TRANSLATION_LANGUAGE_ALIASES[normalized];
   if (directAlias) return directAlias;
 
-  if (TRANSLATION_LANGUAGE_CODE_SET.has(normalized as TranslationLanguageCode)) {
-    return normalized as TranslationLanguageCode;
+  const directCode = TRANSLATION_LANGUAGE_NORMALIZED_CODE_MAP[normalized];
+  if (directCode) {
+    return directCode;
+  }
+
+  const segments = normalized.split("-");
+  for (let length = segments.length - 1; length >= 2; length -= 1) {
+    const partial = segments.slice(0, length).join("-");
+    const partialAlias = TRANSLATION_LANGUAGE_ALIASES[partial];
+    if (partialAlias) return partialAlias;
+
+    const partialCode = TRANSLATION_LANGUAGE_NORMALIZED_CODE_MAP[partial];
+    if (partialCode) return partialCode;
   }
 
   const base = normalized.split("-")[0] || "";
@@ -109,8 +146,9 @@ export function canonicalizeTranslationLanguageCode(rawValue: string): Translati
   const baseAlias = TRANSLATION_LANGUAGE_ALIASES[base];
   if (baseAlias) return baseAlias;
 
-  if (TRANSLATION_LANGUAGE_CODE_SET.has(base as TranslationLanguageCode)) {
-    return base as TranslationLanguageCode;
+  const baseCode = TRANSLATION_LANGUAGE_NORMALIZED_CODE_MAP[base];
+  if (baseCode) {
+    return baseCode;
   }
 
   return "";
