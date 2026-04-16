@@ -1384,3 +1384,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Inserted a centered XR timing slide before the blitzscaling page, framing the Babel-tower moment as historically new and positioning Mingle as the team to build before others are ready.
 - 2026-04-16: Inserted a centered XR section-divider slide for `3. 팀` before the blitzscaling page so the strategy close now transitions into the team section.
 - 2026-04-16: Inserted a hero-style XR recruiting slide after the `3. 팀` divider, asking for teammates regardless of product orientation, major, or background.
+- 2026-04-16: Restored the previously removed XR vision slide after the `외국인을 만나고 싶을 때 가장 먼저 찾는 서비스` page, reframing Mingle's broader challenge as removing every barrier encountered in cross-cultural connection.
