@@ -175,6 +175,10 @@
         max-width: min(56rem, calc(100% - clamp(430px, 36vw, 580px)));
       }
 
+      .slide-copy--with-social-cloud {
+        max-width: min(58rem, calc(100% - clamp(380px, 33vw, 520px)));
+      }
+
       .slide-copy--with-ai-native-stack {
         max-width: min(50rem, calc(100% - clamp(380px, 34vw, 500px)));
       }
@@ -285,6 +289,13 @@
         right: clamp(28px, 4vw, 68px);
         width: clamp(430px, 36vw, 580px);
         height: clamp(340px, 34vw, 470px);
+      }
+
+      .slide-side-media--social-cloud {
+        top: clamp(122px, 15vh, 186px);
+        right: clamp(34px, 4vw, 72px);
+        width: clamp(380px, 33vw, 520px);
+        height: clamp(300px, 31vw, 430px);
       }
 
       .slide-side-media--ai-native-stack {
@@ -1219,6 +1230,10 @@
           max-width: 100%;
         }
 
+        .slide-copy--with-social-cloud {
+          max-width: 100%;
+        }
+
         .slide-copy--with-ai-native-stack {
           max-width: 100%;
         }
@@ -1285,6 +1300,10 @@
 
         .slide-side-media--competitor-tool-cloud {
           height: clamp(300px, 66vw, 420px);
+        }
+
+        .slide-side-media--social-cloud {
+          height: clamp(280px, 62vw, 380px);
         }
 
         .slide-side-media--ai-native-stack {
@@ -2322,7 +2341,7 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-competitor-cloud">
+            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-social-cloud">
               <p class="slide-kicker">경쟁자 3</p>
               <h1 class="slide-title">메신저/소셜미디어 기업들은<br/>통번역을 사소한 문제로 치부합니다</h1>
               <p class="slide-body">
@@ -2331,16 +2350,16 @@
                 심리스한 의사소통을 위해서는 통번역 UI/UX를 아주 섬세하게 깎아야 합니다.
               </p>
             </div>
-            <div class="slide-side-media slide-side-media--competitor-cloud">
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud">
               <div class="slide-competitor-cloud">
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 18%; --y: 16%; --s: clamp(72px, 6vw, 102px); --r: -8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 13%; --s: clamp(78px, 6.4vw, 108px); --r: 7deg" src="./assets/logo-instagram.png" alt="Instagram" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 78%; --y: 20%; --s: clamp(72px, 5.8vw, 98px); --r: -5deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 31%; --y: 43%; --s: clamp(76px, 6.2vw, 104px); --r: 10deg" src="./assets/logo-tinder.png" alt="Tinder" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 63%; --y: 45%; --s: clamp(80px, 6.6vw, 112px); --r: -9deg" src="./assets/logo-discord.png" alt="Discord" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 15%; --y: 70%; --s: clamp(74px, 6vw, 100px); --r: 6deg" src="./assets/logo-line.png" alt="LINE" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 48%; --y: 75%; --s: clamp(72px, 5.8vw, 98px); --r: -7deg" src="./assets/logo-facebook.png" alt="Facebook" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 81%; --y: 72%; --s: clamp(76px, 6.2vw, 106px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 18%; --y: 28%; --s: clamp(66px, 5.3vw, 88px); --r: -8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 39%; --y: 24%; --s: clamp(70px, 5.6vw, 94px); --r: 7deg" src="./assets/logo-instagram.png" alt="Instagram" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 61%; --y: 28%; --s: clamp(66px, 5.2vw, 88px); --r: -5deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 82%; --y: 25%; --s: clamp(68px, 5.4vw, 92px); --r: 10deg" src="./assets/logo-tinder.png" alt="Tinder" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 19%; --y: 67%; --s: clamp(72px, 5.8vw, 98px); --r: -9deg" src="./assets/logo-discord.png" alt="Discord" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 40%; --y: 70%; --s: clamp(68px, 5.4vw, 92px); --r: 6deg" src="./assets/logo-line.png" alt="LINE" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 61%; --y: 67%; --s: clamp(66px, 5.2vw, 88px); --r: -7deg" src="./assets/logo-facebook.png" alt="Facebook" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 82%; --y: 70%; --s: clamp(70px, 5.6vw, 94px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
               </div>
             </div>
           </article>
@@ -2362,14 +2381,18 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">감사합니다.<br/>Q & A<br/>소셜 번역기 밍글</h1>
+            <div class="slide-copy slide--hero slide-copy--center">
+              <h1 class="slide-title">소셜 번역기 밍글</h1>
+            </div>
+              <div class="slide-copy slide--hero slide-copy--center">
+              <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <p class="slide-body">
                 https://mingle-landing.vercel.app/normal<br />
                 https://github.com/minglelabs/mingle<br />
                 https://apps.apple.com/app/id6759795134
                 https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn
               </p>
+              </div>
             </div>
           </article>
         </section>
