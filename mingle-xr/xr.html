@@ -27,6 +27,9 @@
         --accent: #fbbc32;
         --accent-strong: #f97316;
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --deck-width: 100vw;
+        --deck-height: 100vh;
+        --deck-scale: 1;
       }
 
       * {
@@ -50,11 +53,19 @@
 
       .deck {
         position: relative;
-        width: 100vw;
-        height: 100vh;
+        width: var(--deck-width);
+        height: var(--deck-height);
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: none;
+        zoom: var(--deck-scale);
+      }
+
+      @supports not (zoom: 1) {
+        .deck {
+          transform: scale(var(--deck-scale));
+          transform-origin: top left;
+        }
       }
 
       .track {
@@ -67,9 +78,9 @@
       }
 
       .slide {
-        flex: 0 0 100vw;
-        width: 100vw;
-        height: 100vh;
+        flex: 0 0 var(--deck-width);
+        width: var(--deck-width);
+        height: var(--deck-height);
         padding: 0;
       }
 
@@ -901,12 +912,22 @@
 
       .slide-final-links {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 24px);
+        width: min(100%, 1180px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-final-link-row {
+        display: flex;
         align-items: center;
         justify-content: center;
         flex-wrap: nowrap;
         gap: clamp(14px, 1.4vw, 22px);
-        width: min(100%, 1180px);
-        margin-top: clamp(4px, 0.8vw, 12px);
+        width: 100%;
       }
 
       .slide-final-link {
@@ -936,6 +957,15 @@
         letter-spacing: -0.03em;
       }
 
+      .slide-final-link--linkedin {
+        min-width: clamp(164px, 14vw, 206px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
       .slide-final-link--store {
         height: auto;
         padding: 0;
@@ -956,6 +986,21 @@
         width: clamp(26px, 2.2vw, 34px);
         height: clamp(26px, 2.2vw, 34px);
         display: block;
+      }
+
+      .slide-final-logo--linkedin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: clamp(28px, 2.3vw, 36px);
+        height: clamp(28px, 2.3vw, 36px);
+        border-radius: 8px;
+        background: #0a66c2;
+        color: #fff;
+        font-size: clamp(1.05rem, 1.1vw, 1.35rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
       }
 
       .slide-final-store-badge {
@@ -1354,7 +1399,7 @@
       }
 
       .page-counter {
-        position: fixed;
+        position: absolute;
         right: clamp(24px, 4vw, 44px);
         bottom: clamp(20px, 3vw, 36px);
         z-index: 2;
@@ -1367,180 +1412,90 @@
       }
 
       @media (max-width: 900px) {
-        .slide-shell {
-          padding: 20px 28px 28px;
+        :root {
+          --deck-width: 1600px;
+          --deck-height: 900px;
+          --deck-scale: 0.5625;
         }
 
-        .slide-copy {
-          --kicker-slot: 34px;
-          padding-top: var(--kicker-slot);
-          margin-top: clamp(68px, calc(20vh - 12px), 116px);
+        html,
+        body {
+          height: 100dvh;
+          min-height: 100dvh;
         }
 
-        .slide-title {
-          font-size: clamp(2rem, 8vw, 3.2rem);
+        body {
+          display: grid;
+          place-items: center;
+          background:
+            radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
+            linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
+            var(--page);
         }
 
-        .slide-title--quoted {
-          gap: 0;
+        .deck {
+          box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
         }
+      }
 
-        .slide-title-quote {
-          font-size: clamp(3.6rem, 10vw, 4.8rem);
+      @media (max-width: 800px) {
+        :root {
+          --deck-scale: 0.5;
         }
+      }
 
-        .slide--hero .slide-title {
-          font-size: clamp(3.1rem, 12vw, 4.8rem);
+      @media (max-width: 700px) {
+        :root {
+          --deck-scale: 0.4375;
         }
+      }
 
-        .slide-body {
-          font-size: clamp(1rem, 4.4vw, 1.2rem);
+      @media (max-width: 600px) {
+        :root {
+          --deck-scale: 0.375;
         }
+      }
 
-        .slide-copy--with-side-media {
-          max-width: 100%;
+      @media (max-width: 500px) {
+        :root {
+          --deck-scale: 0.3125;
         }
+      }
 
-        .slide-copy--with-reason-media {
-          max-width: 100%;
+      @media (max-width: 430px) {
+        :root {
+          --deck-scale: 0.26875;
         }
+      }
 
-        .slide-copy--with-wide-side-media {
-          max-width: 100%;
+      @media (max-width: 414px) {
+        :root {
+          --deck-scale: 0.25875;
         }
+      }
 
-        .slide-copy--with-hurdles {
-          max-width: 100%;
+      @media (max-width: 393px) {
+        :root {
+          --deck-scale: 0.245625;
         }
+      }
 
-        .slide-copy--with-solution-stack {
-          max-width: 100%;
+      @media (max-width: 390px) {
+        :root {
+          --deck-scale: 0.24375;
         }
+      }
 
-        .slide-copy--with-brand-collage {
-          max-width: 100%;
+      @media (max-width: 375px) {
+        :root {
+          --deck-scale: 0.234375;
         }
+      }
 
-        .slide-copy--with-competitor-cloud {
-          max-width: 100%;
+      @media (max-width: 360px) {
+        :root {
+          --deck-scale: 0.225;
         }
-
-        .slide-copy--with-competitor-tool-cloud {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-social-cloud {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-ai-native-stack {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-musk-exception {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-tool-list {
-          max-width: 100%;
-        }
-
-        .slide-copy--with-experience-list {
-          max-width: 100%;
-        }
-
-        .slide-side-media {
-          top: 20px;
-          right: 28px;
-        }
-
-        .slide-preview-image {
-          display: none;
-        }
-
-        .slide-side-media--collage {
-          display: none;
-        }
-
-        .slide-side-media--reason {
-          display: none;
-        }
-
-        .slide-side-media--customer-hurdles {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--solution-stack {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-solution-columns {
-          grid-template-columns: 1fr;
-          row-gap: 12px;
-        }
-
-        .slide-side-media--brand-collage {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          height: clamp(280px, 56vw, 360px);
-          margin-top: 28px;
-        }
-
-        .slide-side-media--competitor-cloud {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          height: clamp(340px, 74vw, 460px);
-          margin-top: 28px;
-        }
-
-        .slide-side-media--competitor-tool-cloud {
-          height: clamp(300px, 66vw, 420px);
-        }
-
-        .slide-side-media--social-cloud {
-          height: clamp(280px, 62vw, 380px);
-        }
-
-        .slide-side-media--ai-native-stack {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--musk-exception {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--tool-list {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-side-media--experience-list {
-          position: relative;
-          inset: auto;
-          width: 100%;
-          margin-top: 28px;
-        }
-
-        .slide-final-links {
-          flex-wrap: wrap;
-        }
-
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -1719,7 +1674,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-tool-list">
               <p class="slide-kicker">원인</p>
-              <h1 class="slide-title">게다가 AI의 가격과<br/>성능 문제도 있습니다</h1>
+              <h1 class="slide-title">게다가 서비스 가격과<br/>성능도 문제가 있습니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--tool-list" aria-hidden="true">
               <div class="slide-tool-items">
@@ -2853,22 +2808,30 @@
             <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <nav class="slide-final-links" aria-label="Mingle links">
-                <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
-                  <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
-                </a>
-                <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
-                  <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
-                  <span>GitHub</span>
-                </a>
-                <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
-                  <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
-                </a>
-                <a
-                  class="slide-final-link slide-final-link--store"
-                  href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
-                >
-                  <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
-                </a>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
+                  </a>
+                  <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
+                    <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
+                    <span>GitHub</span>
+                  </a>
+                  <a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/">
+                    <span class="slide-final-logo--linkedin" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                </div>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
+                    <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
+                  </a>
+                  <a
+                    class="slide-final-link slide-final-link--store"
+                    href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+                  >
+                    <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
+                  </a>
+                </div>
               </nav>
             </div>
           </article>
@@ -2958,11 +2921,35 @@
         return `transform ${durationMs}ms var(--slide-ease)`;
       }
 
+      function syncMobileDeckScale() {
+        const viewportWidth = Math.min(
+          window.visualViewport?.width ?? window.innerWidth,
+          window.innerWidth
+        );
+        const cssDeckWidth = Number.parseFloat(
+          window.getComputedStyle(document.documentElement).getPropertyValue("--deck-width")
+        );
+        const isScaledDeck = Number.isFinite(cssDeckWidth) && cssDeckWidth >= 1599;
+        const isMobileViewport = viewportWidth <= 900;
+
+        if (!isMobileViewport || !isScaledDeck) {
+          document.documentElement.style.setProperty("--deck-scale", "1");
+          return;
+        }
+
+        const nextScale = Math.max(0.1, viewportWidth / 1600);
+        document.documentElement.style.setProperty("--deck-scale", String(nextScale));
+      }
+
+      function deckWidth() {
+        return track.clientWidth || track.getBoundingClientRect().width;
+      }
+
       function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
         track.style.transition = useTransition
           ? currentTransitionValue(durationMs)
           : "none";
-        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
       }
 
       function jumpToIndex(index) {
@@ -2973,7 +2960,7 @@
 
         activeIndex = index;
         track.style.transition = "none";
-        track.style.transform = `translate3d(${-activeIndex * window.innerWidth}px, 0, 0)`;
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
 
         // Force layout so the browser commits the jump before transition is restored.
         void track.offsetWidth;
@@ -3050,6 +3037,12 @@
       });
 
       window.addEventListener("resize", () => {
+        syncMobileDeckScale();
+        syncPosition(false);
+      });
+
+      window.visualViewport?.addEventListener("resize", () => {
+        syncMobileDeckScale();
         syncPosition(false);
       });
 
@@ -3216,6 +3209,7 @@
         { passive: true }
       );
 
+      syncMobileDeckScale();
       activeIndex = requestedSlideNumber();
       syncPosition(false);
       updateUi();
