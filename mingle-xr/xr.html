@@ -433,6 +433,12 @@
         transform: translate(-50%, -50%) rotate(-3deg);
       }
 
+      .slide-step-transition--disabled,
+      .slide-tool-item--disabled {
+        opacity: 0.32;
+        filter: grayscale(0.55);
+      }
+
       .slide-side-media--customer-hurdles .slide-hurdle-description {
         color: rgba(45, 42, 30, 0.62);
       }
@@ -2300,6 +2306,54 @@
 
         <section class="slide">
           <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">우선 친구를 초대하도록<br/>만드는 것에 집중합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second slide-step-transition--disabled">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">UGC 바이럴로<br/>추가 유저 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">비전</p>
               <h1 class="slide-title"><br/>결국 저희의 궁극적인 목표는<br/>AI 네이티브 SNS입니다
@@ -2533,7 +2587,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <h1 class="slide-title">팀원 구합니다</h1>
-              <p class="slide-body">제품향 인재든 아니든, 문과생이든 이과생이든 상관 없습니다.</p>
+              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
             </div>
           </article>
         </section>
