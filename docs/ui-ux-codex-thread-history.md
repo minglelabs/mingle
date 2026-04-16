@@ -2,232 +2,109 @@
 
 ## 2026-04-11 Ongoing Dev Validation Notes
 
-- **XR problem slide quotes needed to stay above and below the two-line statement**
-  Problem: Centering the quote marks on the left and right edges made the punctuation cleaner, but it broke the intended composition because the statement is visually structured as a two-line quoted block.
-  Cause: The previous refinement optimized the quote glyphs themselves, but it changed the reading pattern away from the original top-and-bottom framing the user had set.
-  Fix: Kept the improved quotation glyph styling, but moved the marks back into stacked top and bottom positions and tightened their spacing so they sit closer to the text block instead of drifting to the extremes.
+- **In-room language selection was too cramped to scan or control across the full language catalog**
+  Problem: The room header still opened a tiny tooltip-style selector. Flags were much smaller than the conversation-list avatar reference, there was no search, names only reflected the current UI locale, and users had no way to switch between locale-sorted and alphabetical browsing.
+  Fix: The room language selector was promoted to a full-screen overlay with avatar-sized flags, language search, dual-language labels (`localized / English / native` as needed), and a visible sort toggle for user-locale order vs. alphabetical order.
   Status: Resolved in-thread.
 
-- **XR problem slide needed real quotation glyphs instead of inline straight quotes**
-  Problem: The problem slide's quote marks were rendered as straight ASCII quotes on their own lines, which made them read like two dots and sit awkwardly at the top and bottom edges of the title block.
-  Cause: The quotation marks were part of the headline text flow instead of being styled as independent visual punctuation.
-  Fix: Rebuilt the problem headline with dedicated open and close quote spans, switched those marks to a serif quotation style, and vertically centered them against the two-line headline block.
+- **The full-screen in-room language selector could render invisibly behind the room overlay**
+  Problem: The selector itself was portaled to `document.body`, but the active room is also rendered as a full-screen body portal from the conversation list. The selector shipped with a lower stacking order than the room container, and the follow-up `z-[140]` Tailwind utility still resolved to `z-index: auto` at runtime, so tapping the language button updated state but the overlay stayed hidden underneath the room.
+  Fix: Raised the language-selector overlay above the room container and pinned the `z-index` with an inline style instead of relying on the missing utility class, so the full-screen selector reliably appears on top in both current and legacy room runtimes.
   Status: Resolved in-thread.
 
-- **XR reason slide needed paired reference visuals to show why generic translators fail**
-  Problem: The "reason" slide was text-only, so the point about UI and usage context differing by scenario was still abstract instead of immediately legible.
-  Cause: The deck had strong target-customer examples later, but this earlier bridge slide lacked concrete evidence that existing translation products ship radically different experience shapes.
-  Fix: Added a two-image comparison stack on the reason slide with matched heights, placing the chat-translation visual on the left as the front layer and the generic translator promo on the right behind it.
+- **The full-screen language selector still behaved like a detached modal instead of a first-class room subpage**
+  Problem: Even after the selector became visible, its top controls did not match the app's existing top-tab pattern, the selected-language area had no fast re-toggle strip, and closing it relied on local state only. That meant iOS edge-swipe / browser back could not dismiss it like a real screen, Android/native banner behavior did not mirror the hamburger drawer, and history replay risked a brief reopen flash right after a back gesture.
+  Fix: Rebuilt the selector header around the app's standard 56px top chrome and tab-style sort toggles, added a horizontal recent-language flag strip with active/inactive re-selection states, pushed a dedicated selector history entry for real back navigation, and hid the native banner while the selector is open so it behaves like the room drawer instead of a floating modal.
   Status: Resolved in-thread.
 
-- **XR deck needed a clearer narrative bridge before the target-customer slides**
-  Problem: The deck was moving from the generic solution statement straight into customer examples, which made the "why existing translators fail" logic feel under-explained.
-  Cause: The narrative jump was too abrupt, so the audience could see the vertical examples before fully understanding that the core issue is context-specific product experience rather than raw translation accuracy.
-  Fix: Inserted three framing slides between the solution overview and the target-customer sequence: a centered question slide, a left-aligned reason slide, and a centered conclusion slide that reframes the product as tailored translation UX for each scenario.
+- **Opening the full-screen language selector immediately forced the search field and mobile keyboard open**
+  Problem: The selector auto-focused the search input on mount with repeated timers. On mobile this meant the keyboard jumped up every time the screen opened, even when the user only wanted to scan or tap recent flags first.
+  Fix: Removed the automatic search focus path so the selector opens in a neutral browsing state and only raises the keyboard when the user explicitly taps search.
   Status: Resolved in-thread.
 
-- **XR gaming collage needed another round of relative offset tuning**
-  Problem: After the previous pass, the three reference images were still not sitting on the intended diagonals, so the user specified a second round of per-image movements from the current positions.
-  Cause: The collage composition was being refined incrementally, and the remaining mismatch was about exact relative offsets rather than size or hierarchy.
-  Fix: Moved `JOIN GUILD` 10vw upward, dropped `JotMe` 10vw downward, and nudged `Utell AI` an additional 3vw to the right while keeping the rest of the stack intact.
+- **The full-screen language selector header still looked like a modal instead of the app's normal top tab**
+  Problem: The selector header kept a right-side close affordance and left-aligned title, so it read like a dismissible popup instead of a room subpage. The expected chrome was a left chevron with the `언어 선택` title visually centered.
+  Fix: Replaced the close icon with a left chevron back button and centered the selector title within the 56px top bar, keeping the right side as spacing only so the title stays visually centered.
   Status: Resolved in-thread.
 
-- **XR gaming collage needed per-image position tuning from explicit screen-relative offsets**
-  Problem: The collage still needed finer control after several visual passes, because the intended movement for each image was now being specified in exact screen-relative deltas rather than broad compositional feedback.
-  Cause: The overall stack was close, but the final polish depended on moving each reference by precise `vw` offsets from its current top-left placement.
-  Fix: Shifted `JotMe` and `Utell AI` 5vw to the right, and moved `JOIN GUILD` 5vw to the left plus 10vw downward, preserving size and z-order while matching the requested placement model.
+- **Deselected recent-language flags did not look inactive enough**
+  Problem: In the horizontal recent-language strip, deselected flags only lost some saturation on the emoji itself. The circular chip still read too close to the active state, so users could miss that the language was currently off.
+  Fix: Shifted the entire deselected chip into a stronger gray treatment by darkening the chip background and border and lowering the flag opacity further, so the whole circular control reads as clearly inactive.
   Status: Resolved in-thread.
 
-- **XR gaming collage needed the guild card to drop lower without drifting farther right**
-  Problem: After spreading the collage, the guild image started protruding too far to the right while still not feeling low enough in the overall stack.
-  Cause: Widening the collage by moving its container rightward solved overlap, but it also pulled the front-most guild card toward the edge instead of using the extra space to the left.
-  Fix: Restored the collage's previous right boundary and lowered the guild card further within the wider container so the group expands leftward while the front image sits lower.
+- **Recent-language chips were ordered by raw recency instead of by active state**
+  Problem: The horizontal chip strip mixed active and inactive languages together based on the last interaction. That made it harder to scan the currently enabled set, because a recently deselected chip could sit ahead of still-active languages.
+  Fix: Reordered the chip strip into two groups: active languages always render first in their original selection order (oldest selected on the left, newest selected on the right), and deselected languages render after them in deselection-recency order (most recently turned off first).
   Status: Resolved in-thread.
 
-- **XR gaming collage needed to use spare horizontal space without squeezing the text block**
-  Problem: The collage still felt too tightly stacked even after the hierarchy was improved, because the three images were overlapping more than necessary while visible space remained to the left of the media cluster.
-  Cause: The slide was still reserving too much width for the collage as a dense stack and too little of the surrounding whitespace as usable composition space.
-  Fix: Relaxed the special text-width constraint for that slide, widened the collage footprint itself, and moved the two rear images further left so the cluster spreads out without shrinking the text column.
+- **Changing room languages could trigger a cross-component React update warning**
+  Problem: The room runtime notified `ConversationList` about selected-language changes from inside the `setSelectedLanguages` updater function. React can execute that updater while reconciling `LivePhoneDemo`, which produced the warning about updating `ConversationList` while rendering a different component.
+  Fix: Kept the local language toggle synchronous, but deferred the parent callback into a follow-up effect that runs after `selectedLanguages` commits. That preserves the same UI behavior without issuing parent state updates from the child render path.
   Status: Resolved in-thread.
 
-- **XR gaming collage needed the guild visual to sit lower in the stack**
-  Problem: After the guild image was promoted to the top layer and enlarged, it still sat a bit too high and crowded the upper part of the collage.
-  Cause: The previous top offset preserved the original stack balance, but the larger guild card shifted too much weight into the top-right corner.
-  Fix: Lowered the guild image noticeably while preserving its larger scale and highest z-layer so the collage feels more grounded.
+- **The search field and sort toggle row regressed into a boxy, cramped treatment**
+  Problem: The 60/40 search-and-sort row met the structural requirement, but the controls lost the softer rounded treatment and inner padding from the original design language. The row read too angular, too short, and the Korean alphabetical label surfaced as `EN A-Z`, which felt unnecessarily technical in UI copy.
+  Fix: Restored a taller rounded search field, converted the sort control back into a padded pill-style segmented toggle with rounded inner buttons, increased header-body spacing, and simplified the Korean alphabetical label to `A-Z`.
   Status: Resolved in-thread.
 
-- **XR gaming collage needed a clearer visual hierarchy between the three references**
-  Problem: The first collage pass placed the three images together, but the tall Utell AI reference was too small to read, while the Discord guild image did not yet dominate the stack as the main ecosystem cue.
-  Cause: The initial sizing treated all three references too evenly, which weakened the intended hierarchy between secondary tool examples and the primary Discord-community anchor.
-  Fix: Scaled the Utell AI image up substantially, enlarged the guild image as well, and made the guild visual the highest z-layer so the collage reads with a stronger focal order.
+- **Language-card secondary labels sat too far below the localized title and read too small**
+  Problem: In the language list cards, the gap between the localized language name and the `English / native` secondary label was slightly too loose, and the secondary line read smaller than intended for quick scanning.
+  Fix: Tightened the vertical gap between the two lines and increased the secondary-label font size while keeping its weight unchanged.
   Status: Resolved in-thread.
 
-- **XR second target-customer slide needed a denser visual cue than text alone**
-  Problem: Once the deck introduced global gaming Discord communities as a distinct target segment, the slide still read too abstractly because it had only a headline and no concrete visual texture.
-  Cause: The gaming-community concept spans creators, Discord growth, and AI voice tools, so a single plain label did not communicate the ecosystem quickly enough at presentation speed.
-  Fix: Added a dedicated right-side overlapping collage built from three user-provided reference images, and narrowed the text column on that slide only so the media cluster reads clearly without colliding with the title.
+- **Inactive recent-language chips became so gray that the underlying flag was hard to recognize**
+  Problem: The first inactive-chip pass pushed the whole circular chip too far into gray, to the point where the flag identity was harder to read than the intended lightweight disabled treatment.
+  Fix: Softened the inactive chip back toward the normal surface by using a lighter gray background and border and by dropping the full grayscale filter on the flag, leaving only a gentler opacity reduction similar to other disabled controls in the room UI.
   Status: Resolved in-thread.
 
-- **XR deck needed tighter kicker rhythm and explicit target-customer sequencing**
-  Problem: The kicker labels still felt slightly too loose, and the target-customer section needed two more dedicated slides so the audience progression could unfold one segment at a time.
-  Cause: The recent Korean kicker labels became longer than the original badge-style metadata, and the deck had only one target-customer page despite the presentation now naming multiple distinct entry markets.
-  Fix: Tightened the global kicker tracking one step further and inserted two new target-customer slides for global gaming Discord communities and business owners serving foreign travelers, pushing the remaining deck back in sequence.
+- **The language-selector title sat too high instead of sharing the back button's row**
+  Problem: The `언어 선택` title was absolutely centered inside a container that also mixed the safe-area inset into the same box. That made the title read like it was pinned toward the ceiling instead of sitting on the same visual baseline as the left chevron button.
+  Fix: Split the safe-area inset into its own spacer and rebuilt the header as a normal 56px row, so the title and back button are vertically aligned within the same chrome line.
   Status: Resolved in-thread.
 
-- **XR kicker tracking was too wide once labels became longer and more sentence-like**
-  Problem: As the deck started using longer Korean kicker labels, the existing tracking made them feel too stretched and visually brittle compared with the calmer title/body rhythm.
-  Cause: The earlier wider letter spacing worked for short badge-like tags, but it did not scale as well once the kicker text became more descriptive.
-  Fix: Reduced the global kicker letter spacing slightly so the labels still read as distinct metadata while feeling tighter and more deliberate.
+- **The recent-language horizontal strip showed a visible scrollbar under the flags**
+  Problem: On mobile especially, horizontally scrolling the recent-language flag strip exposed a long native scrollbar under the chips, which made the compact selector header feel noisier than intended.
+  Fix: Reused the app's existing `no-scrollbar` utility on the recent-language strip so horizontal swipe scrolling still works while the visible scrollbar stays hidden.
   Status: Resolved in-thread.
 
-- **XR target slide screenshot still sat too far right and slightly low for the deck rhythm**
-  Problem: After switching to the exact user-selected Voiceroom screenshot, the image itself was correct, but its placement still felt too far toward the right edge and slightly lower than the intended presentation balance.
-  Cause: The existing side-media offsets were inherited from the earlier placeholder treatment and were not retuned after the screenshot changed to a taller, more visually dominant phone image.
-  Fix: Moved the HelloTalk screenshot further left and raised it higher on the page so the phone image sits closer to the deck's visual center without affecting the text block coordinates.
+- **The language search and sort controls drifted into oversized pill shapes**
+  Problem: After the earlier control pass, the search field and sort toggle became taller than intended, looked like full pills instead of lightly rounded rectangles, and still gave the search side more width than the sort side. The Korean locale-order label was also longer than necessary for the available space.
+  Fix: Reduced both controls to a shorter rounded-rectangle treatment, changed the row split from 60/40 to 50/50, matched the inner sort buttons to the same smaller-corner shape, and shortened the Korean/Japanese/Chinese locale-order labels to `가나다`, `あいう`, `拼音`, and `注音`.
   Status: Resolved in-thread.
 
-- **XR target slide needed the exact user-picked product screenshot instead of a generic preview**
-  Problem: Even after simplifying the right side to one Voiceroom image, the slide was still using a generic official visual rather than the specific phone-framed screenshot the user wanted to present.
-  Cause: The earlier asset came from a public HelloTalk reference source and matched the product category, but not the exact image treatment the user selected for the deck.
-  Fix: Extracted the user-supplied screenshot from the current thread input, saved it as a local PNG asset, and updated the target-customer slide to render that exact image instead of the previous placeholder visual.
+- **The language-selector back chevron still did not match the room header exactly**
+  Problem: Even after the header row alignment was fixed, the selector's back button still used a different hit box, icon size, and hover treatment from the main conversation header chevron, so the mismatch was visible side by side.
+  Fix: Reused the same `38px/40px` button box, `24px` chevron icon sizing, and focus/interaction treatment as the room header back button so the selector chrome now matches it exactly.
   Status: Resolved in-thread.
 
-- **XR target slide felt busier than needed once both the logo and product preview were present**
-  Problem: The HelloTalk target-customer slide started showing both a square app logo and a Voiceroom product image, which made the right side feel stacked and more decorative than presentational.
-  Cause: The earlier iteration solved recognizability by adding more cues, but the user only needed a single clear Voiceroom reference rather than a brand-plus-product composition.
-  Fix: Removed the HelloTalk logo from the slide and left only the official Voiceroom visual on the right, while also simplifying the media styling so it reads like one placed product reference instead of a media stack.
+- **The selected-language count disappeared from the language-selector top bar**
+  Problem: The header no longer showed the active selection count like `2/5`, so users lost the quick confirmation of how many languages were currently enabled while browsing the selector.
+  Fix: Restored the count in the top-right header slot and aligned it to the same row as the back chevron and centered title, keeping the title visually centered while the count remains visible.
   Status: Resolved in-thread.
 
-- **XR target slide needed a fuller product reference than an icon alone**
-  Problem: The HelloTalk target-customer slide gained an app icon, but that still did not communicate what the Voiceroom product actually looks like in use.
-  Cause: A single square icon identifies the brand quickly, but it does not convey the live-room experience the slide is specifically discussing.
-  Fix: Added an official HelloTalk Voiceroom interface image from the HelloTalk Creator Portal and paired it with the app icon in a dedicated right-side media stack. The slide text width is constrained only on that page so the visuals do not collide with the copy.
+- **Alphabet-script locales still showed a redundant sort toggle beside search**
+  Problem: For locales whose native ordering label was already `A-Z`, the selector still rendered a second `EN A-Z` toggle even though the UI cost outweighed the value for these users, making the search row feel cramped for little gain.
+  Fix: When the locale-order label is `A-Z`, the sort toggle is hidden entirely and the search field expands to the full row width. In that state the selector also resets to its default sort mode so a previously chosen alternate mode does not leak into the hidden-toggle layout.
   Status: Resolved in-thread.
 
-- **XR target-customer slide needed a recognizable product cue without disturbing text alignment**
-  Problem: The HelloTalk target-customer slide described the product in text only, which made the reference feel abstract at presentation speed.
-  Cause: The slide had no visual brand anchor, and adding one inside normal flow risked shifting the text coordinates that were already being tuned carefully.
-  Fix: Added the current HelloTalk app icon as a local asset and placed it as an absolutely positioned slide-side marker on that page only, so the reference reads instantly without moving the text block.
+- **Selected languages still blended in slightly too much against nearby unselected items**
+  Problem: The selected recent-language chips and selected list cards already used amber accents, but the emphasis was still a touch too subtle when scanning quickly. The user specifically wanted the selected state to read a little more clearly without becoming heavy-handed.
+  Fix: Strengthened the selected treatment one small step by thickening the recent-chip amber border to `2px`, nudging the amber tone slightly deeper, and giving both the recent chips and selected cards a slightly stronger warm shadow while keeping the overall palette the same.
   Status: Resolved in-thread.
 
-- **XR intro slide needed to return to the deck's left-aligned reading rhythm**
-  Problem: Once the second slide reused the intro content, keeping it centered made it feel too much like a second cover instead of the first proper body slide in the sequence.
-  Cause: The shared center-alignment variant had been applied to both the cover and the duplicated intro slide, even though they serve different presentation roles.
-  Fix: Restored the second slide to the standard left-aligned layout and added a `소개` kicker so it reads as the opening body page rather than another title card.
+- **Scrolling the language list did not dismiss the focused search field or mobile keyboard**
+  Problem: Once the search field was focused, users could start scrolling the language selector without making a selection, but the input stayed focused and the mobile keyboard remained open. That made simple browsing after a search feel cramped.
+  Fix: The selector now blurs the search input as soon as a pointer interaction begins outside the search field, so starting a scroll gesture on the recent chips or the language list dismisses the keyboard immediately.
   Status: Resolved in-thread.
 
-- **XR presentation deck still sat too low even after position anchoring was fixed**
-  Problem: After the deck switched to fixed top anchoring, the relative positions stopped drifting, but the whole content block still felt too low on the page. The kicker, title, and body all needed to come up together.
-  Cause: The new anchor preserved consistency but kept a conservative top padding and copy offset that still placed the reading block lower than the intended presentation rhythm.
-  Fix: Pulled the entire content system upward by reducing the shell's top padding and tightening the copy block's top offset on both desktop and mobile. This keeps the same internal spacing while moving the whole composition higher.
+- **Touch selection styling and recent-strip visibility were fighting each other in the language selector**
+  Problem: The shared selector applied the same neutral hover border to both selected and unselected buttons. On touch WebViews, a sticky `:hover` state could survive a tap and override the selected amber border, which made selected chips/cards look gray even though their other selected styles updated correctly. Separately, the selector was deciding whether a tap meant “select” or “deselect” from the last rendered `selectedLanguages` prop. During quick retoggles, that prop could be one render behind the user's latest tap, so deselecting a just-reselected language could miss re-registering it in the recent list and make the chip appear to disappear. The recent-language strip also intentionally reorders chips between the active-left and inactive-right groups, but it did not preserve visibility for the chip that had just moved, so the toggled flag could appear to “disappear” when it simply jumped outside the current horizontal scroll window.
+  Fix: The selector now keeps selected hover styling separate from unselected hover styling so a selected item never reverts to the neutral gray hover border. It also tracks the latest intended selected-language set locally while processing taps, so rapid reselect/deselect sequences use the up-to-date state instead of a stale prop snapshot, and it preserves visibility of the just-toggled recent chip by scrolling the horizontal strip enough to keep that chip in view after each reorder.
   Status: Resolved in-thread.
 
-- **XR presentation deck needed slide-level alignment control once the cover and inner slides diverged**
-  Problem: The deck started needing two different horizontal compositions at once: a centered cover-style treatment for select slides and the existing left-aligned reading layout for the main body slides.
-  Cause: Alignment was effectively hardcoded into one shared copy block style, so changing the cover also changed every interior slide.
-  Fix: Added an explicit center-alignment modifier for the slide copy block while keeping left alignment as the default. This also enabled slide 1 to become a centered date cover and slide 2 to reuse the original intro content with normal title sizing.
-  Status: Resolved in-thread.
-
-- **XR presentation deck let the kicker and title start position drift by slide height**
-  Problem: Even after individual kicker spacing was improved, the visible top position of the kicker and the headline still drifted between slides because the whole text block was vertically centered based on its own height.
-  Cause: The slide copy container was anchored through content-height-dependent centering, so slides with more or fewer lines shifted upward or downward as a unit.
-  Fix: Re-anchored the deck content to a fixed top offset derived from the current page-2 composition. The kicker and headline now start from the same vertical coordinate across slides, while longer titles only grow downward from that shared origin.
-  Status: Resolved in-thread.
-
-- **XR presentation deck titles felt cramped once manual line breaks were introduced**
-  Problem: As more slide titles started using manual line breaks inside the `h1`, the headline lines sat too tightly on top of each other and looked visually compressed.
-  Cause: The deck used an aggressively tight headline line-height that worked for single-line titles but broke down when the presenter intentionally split titles across two lines.
-  Fix: Increased the title line-height to a visibly looser setting while keeping it distinctly tighter than body copy. The cover title was adjusted too so multi-line hero headlines follow the same rhythm.
-  Status: Resolved in-thread.
-
-- **XR presentation deck always snapped back to slide 1 on refresh**
-  Problem: While editing or presenting deeper in the deck, a browser refresh always reopened the file on slide 1. That made iteration clumsy and broke continuity during rehearsal or live deck review.
-  Cause: The deck tracked the active slide only in in-memory carousel state, with no URL representation of the current page.
-  Fix: Added URL-backed slide persistence using `#<page>` as the primary state and `?page=<n>` as a compatible fallback on load. The deck now rewrites the hash as navigation changes, restores the requested slide on refresh, and responds to manual hash changes without touching slide copy.
-  Status: Resolved in-thread.
-
-- **XR presentation deck still placed the kicker too close to the title**
-  Problem: Even after title alignment was stabilized, the kicker still sat too close to the headline and felt attached to it instead of reading like a separate higher-level attribute.
-  Cause: The reserved kicker slot kept the title stable, but the kicker itself still started too low within that slot.
-  Fix: Raised the kicker within its reserved slot and slightly adjusted the copy block offset so the kicker sits visibly higher while the title baseline remains stable across slides.
-  Status: Resolved in-thread.
-
-- **XR presentation deck needed a stable title baseline whether a kicker exists or not**
-  Problem: Once the optional kicker was introduced, slides with a kicker pushed the title lower than slides without one, and the whole text block also sat a bit too low on the page.
-  Cause: The kicker still occupied normal layout space above the title, so title placement changed depending on whether that element existed.
-  Fix: Turned the kicker into an absolute positioned overlay within a reserved top slot and nudged the overall copy block slightly upward. Titles now start from nearly the same vertical position whether a kicker is present or not.
-  Status: Resolved in-thread.
-
-- **XR cover title became too heavy after the hierarchy split**
-  Problem: The larger first-slide title gained enough scale, but its heavier weight made the cover feel denser than intended.
-  Cause: The hero title inherited an extra-bold weight in the hierarchy pass instead of only separating itself through size.
-  Fix: Kept the enlarged cover title size but restored its weight to the lighter title setting so the first page feels bigger without becoming visually too thick.
-  Status: Resolved in-thread.
-
-- **XR presentation deck needed title hierarchy between the cover slide and the rest**
-  Problem: Once the main deck content was filled in, the first slide no longer stood apart strongly enough from the interior slides, while the body slides still felt too headline-heavy for sustained reading.
-  Cause: A single title size and weight scale was being applied uniformly across the entire deck.
-  Fix: Introduced a dedicated hero treatment for slide 1 and reduced the default title size and weight for slides 2 onward, without changing the manually edited copy.
-  Status: Resolved in-thread.
-
-- **XR presentation deck needed stronger visual weight for the optional kicker label**
-  Problem: After the optional slide label was added, it was still too quiet relative to the title. The semantic cue existed, but it did not read strongly enough as a slide attribute at presentation distance.
-  Cause: The kicker used a small subdued text treatment with no structural emphasis beyond spacing.
-  Fix: Increased the kicker size and weight and added a Mingle key-color underline so the label reads as an intentional metadata layer without touching the manually edited slide titles or body copy.
-  Status: Resolved in-thread.
-
-- **XR presentation deck needed an optional slide attribute label above selected titles**
-  Problem: Some slides needed a small semantic marker above the main title, such as labeling slide 2 as `문제`, while most slides should remain untouched. Without that slot, the meaning either had to be buried in the title itself or dropped entirely.
-  Cause: The deck grammar only had title and body, with no lightweight presentation layer for selective slide metadata.
-  Fix: Added an optional top label style distinct from body text and applied it only to the requested slide. The structure now supports selective labels without forcing them across the whole deck.
-  Status: Resolved in-thread.
-
-- **XR presentation deck still felt stepwise when holding navigation keys**
-  Problem: Even after the infinite-loop reset was fixed, holding an arrow key still advanced one slide at a time with noticeable pauses. The deck technically worked, but it did not feel like a fast, fluid carousel when the presenter wanted to move quickly through multiple pages.
-  Cause: Navigation was still effectively tied to discrete key presses and a long default transition duration, so it inherited OS key-repeat delay and idle gaps between slide completions.
-  Fix: Switched the deck to immediate hold-aware navigation. A held direction now persists across transition completions, repeats without waiting for native key-repeat delay, and uses a much shorter animation duration for continuous movement while single taps remain readable.
-  Status: Resolved in-thread.
-
-- **XR presentation deck background still read as scattered color spots instead of one calm field**
-  Problem: The lightened deck removed the dark card treatment, but the remaining warm color accents still appeared as separate soft spots. That made the backdrop feel a bit patterned rather than like one clean presentation canvas.
-  Cause: The page background still relied on multiple localized radial highlights with relatively noticeable opacity.
-  Fix: Reworked the background into a mostly white full-field gradient with only very subtle large-scale Mingle key-color washes, so the page reads as one calm surface instead of a white canvas with scattered blobs.
-  Status: Resolved in-thread.
-
-- **XR presentation deck could occasionally sweep backward at the loop boundary**
-  Problem: Repeatedly advancing in one direction sometimes caused the deck to perform a long reverse-looking slide when wrapping from the cloned edge slide back to the real slide. That broke the illusion of a true infinite carousel.
-  Cause: The loop-reset path changed `transition` and `transform` too close together, so the browser could occasionally animate the reposition jump instead of treating it as an invisible reset.
-  Fix: Added a dedicated jump helper that disables transition, forces layout commit, repositions to the real slide, and only then restores transform animation. The transition-end listener was also narrowed to the track's own `transform` event.
-  Status: Resolved in-thread.
-
-- **XR presentation deck lost slide-number orientation while being simplified**
-  Problem: During the cleanup toward a lighter, non-card layout, the slide counter disappeared entirely. That made the deck cleaner, but it also removed the presenter's quick sense of where they were in the sequence.
-  Cause: The simplification pass removed the old deck UI wholesale, including the page counter, instead of preserving the one piece of orientation chrome that was still useful.
-  Fix: Restored a minimal page counter as plain text only, placed unobtrusively at the bottom-right without reintroducing a card, badge, or boxed control treatment.
-  Status: Resolved in-thread.
-
-- **XR presentation deck still felt too dark and card-like after adopting the Mingle palette**
-  Problem: Even after the deck picked up Mingle's warm key colors, it still rendered as a dark card floating over a separate outer background. That contradicted the requested direction for a lighter, cleaner relations deck built from white space plus brand color, with dark tones used only for text.
-  Cause: The prior pass only swapped palette values and kept the card container, inner panel fill, border, and shadow structure intact.
-  Fix: Removed the card treatment entirely, unified the slide surface with the page background, switched the deck to a light color scheme, and kept the visual system to white space plus Mingle key colors while moving dark emphasis into typography only.
-  Status: Resolved in-thread.
-
-- **XR presentation deck initially ignored the main Mingle service palette**
-  Problem: After the structure was simplified, the shared `mingle-xr/xr.html` deck still used a cool dark-blue palette that did not visually connect to the live `mingle-app` experience. That made the relations deck feel like a separate product instead of an extension of the service.
-  Cause: The template styling was reduced for clarity first, but its color system was not yet realigned to the app's established brand tones.
-  Fix: Rebased the deck onto the Mingle palette already used in `mingle-app`, especially the warm gradient family around `#FBBC32`, `#F59E0B`, and `#F97316`, while keeping the slide content model minimal with only title and body.
-  Status: Resolved in-thread.
-
-- **XR presentation deck initially carried too many decorative content blocks for a format-first draft**
-  Problem: The first shared `mingle-xr/xr.html` template included headers, counters, buttons, tag clusters, orbital visuals, and multi-card layouts. For a deck that was still at the format-definition stage, that made each slide feel overdesigned and distracted from the intended core structure.
-  Cause: The template was built like a polished showcase deck before the content model had been reduced, so presentation chrome grew faster than the actual slide grammar.
-  Fix: Rebuilt the shared XR deck into a minimal structure where each slide contains only two content elements: a title and a body. Navigation logic, horizontal motion, and looping behavior remain, but the visible slide system is now intentionally stripped down.
-  Status: Resolved in-thread.
-
-- **XR presentation deck motion originally moved vertically, which conflicted with deck-reading expectations**
-  Problem: The first `mingle-xr/xr.html` template advanced slides with an up/down full-page translation. Even though arrow keys worked, the motion language felt closer to section scrolling than to a presentation deck, which made the format read less like a polished keynote-style relations asset.
-  Cause: The deck track was implemented as a vertical flex column with `translate3d` based on `window.innerHeight`, so every transition reinforced vertical page movement.
-  Fix: Switched the slide track to a horizontal row, changed each slide to a `100vw` panel, updated the transform math to use `window.innerWidth`, and normalized wheel navigation so either dominant scroll axis still drives the same previous/next controls while the animation moves left/right.
+- **Chinese locale sort labels overstated the actual sort implementation, and sort-toggle visibility depended on copy text**
+  Problem: The selector labeled the locale-order option as `拼音` / `注音`, but the actual implementation only used locale-aware string comparison on localized names rather than explicit pinyin/zhuyin sort keys. Separately, the decision to hide the sort toggle for Latin-script locales was keyed off whether the translated label literally equaled `A-Z`, so a copy-only change could silently change layout behavior.
+  Fix: Lowered the Chinese locale labels to the more neutral `中文顺序` / `中文順序`, and moved sort-toggle visibility into explicit locale metadata inside the selector logic so UI behavior no longer depends on translated strings.
   Status: Resolved in-thread.
 
 - **Legacy bottom mic could render in the tiny composer size after hydration**
@@ -1275,137 +1152,6 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `019d6dbd-f288-74e1-9afa-f98dbd8c74fa` | No UI/UX issue found.
 - `019d6f80-a10d-7b10-ac88-4dd9ad89e780` | No UI/UX issue found.
 - `019d7151-fed2-75a1-8efe-69fc947979f4` | No UI/UX issue found.
-- 2026-04-13: Restored the HelloTalk single-image layout on XR slide 8 after a page-numbering mix-up briefly replaced that media with the wrong two-panel comparison visual.
-- 2026-04-13: Replaced the XR reason-slide comparison visuals with the user-supplied slide7 assets, keeping the front-left / back-right overlap hierarchy while preserving the existing copy layout.
-- 2026-04-13: Expanded the XR reason-slide visual from a two-card overlap into a three-card stack by inserting a centered middle reference image while preserving equal-height treatment and the existing left/front emphasis.
-- 2026-04-13: Swapped the XR HelloTalk slide imagery to the user-supplied `hellotalk.jpg` asset so the current HelloTalk target sequence stays visually consistent even as slide ordering changes.
-- 2026-04-13: Increased the XR HelloTalk target-slide image scale substantially on desktop so the updated `hellotalk.jpg` asset reads as a primary visual instead of a small side reference.
-- 2026-04-13: Split the two XR HelloTalk visuals into separate image modifier classes so each slide's HelloTalk asset can be repositioned independently without affecting the other.
-- 2026-04-13: Restored the first HelloTalk target slide to the original Voiceroom image and split each HelloTalk media wrapper into dedicated position classes so their top/right coordinates can be adjusted independently.
-- 2026-04-13: Added explicit `top`, `right`, and `width` defaults to the two HelloTalk-specific media classes so slide-level positioning can be tuned directly without tracing shared base styles.
-- 2026-04-13: Moved the two-card HelloTalk overlap onto the second HelloTalk slide, restoring the first HelloTalk slide to a single Voiceroom image and keeping `hellotalk1.jpg` front-left with `hellotalk2.jpg` back-right on the following page.
-- 2026-04-13: Split the newly added XR `gaming.jpg` slide visual onto its own `slide-side-media--gaming` and `slide-preview-image--gaming` classes so that page can be repositioned independently from the HelloTalk slides.
-- 2026-04-13: Moved the XR `gaming-stack` visual pair one slide later so the earlier Mingle-positioning slide returns to a single `gaming.jpg` reference while the following dependency proof slide carries the `hellotalk-voiceroom2.png` back-left and `mingle.png` front-right overlap.
-- 2026-04-13: Matched the front `mingle.png` width to the back HelloTalk reference on the XR dependency slide and wrapped the Mingle screenshot in a CSS iPhone-style frame so it reads as an actual in-device product view.
-- 2026-04-13: Added a dedicated `reddittalk.jpg` visual to the new XR absorption-plan slide with its own wrapper and image classes so that slide's media can be repositioned and resized independently from the other stacked reference slides.
-- 2026-04-13: Reassigned the media sequence across the three HelloTalk follow-up slides so the extension-positioning slide and the dependency-proof slide both use the stacked HelloTalk-plus-Mingle visual, while the absorption-plan slide uses the standalone `reddittalk.jpg` reference.
-- 2026-04-13: Turned the XR absorption-plan slide into a two-up vertical reference stack using `reddittalk.jpg` on top and `clubhouse.jpg` below, with a dedicated community-stack wrapper so that slide's position and each image size can be tuned independently.
-- 2026-04-13: Swapped the media sets between the XR extension-positioning slide and the XR absorption-plan slide so the former now uses the HelloTalk-plus-Mingle overlap and the latter uses the vertical RedditTalk-plus-Clubhouse stack, while leaving the middle dependency-proof slide unchanged.
-- 2026-04-13: Updated the XR dependency-proof slide to use the same HelloTalk-plus-Mingle overlap as the extension-positioning slide, leaving the absorption-plan slide as the only page that uses the RedditTalk-plus-Clubhouse vertical stack.
-- 2026-04-13: Removed the two side reference images from the XR target-customer-4 slide and restored its copy block to the standard full-width text layout.
-- 2026-04-14: Gave the XR table-of-contents slide its own typography treatment so the kicker reads like a large section heading while the numbered list sits below as a lighter, smaller subhead distinct from regular slide titles.
-- 2026-04-14: Kept the XR deck's global text anchor at its previous position and raised only the table-of-contents slide by giving `slide-copy--toc` its own tighter top margin.
-- 2026-04-14: Refined the XR table-of-contents typography so the kicker keeps the normal kicker styling and underline while only scaling up its size and weight, and the numbered title list keeps the normal title voice with just a modest reduction in size and weight.
-- 2026-04-14: Increased the XR table-of-contents kicker size again and tightened the kicker-to-underline gap so the heading reads more assertively without changing the rest of the deck.
-- 2026-04-14: Increased the vertical gap between the XR table-of-contents kicker block and the numbered title list so the two layers read as clearly separated elements.
-- 2026-04-14: Further increased the XR table-of-contents kicker-to-list spacing so the large kicker block and the numbered agenda read as two clearly separated tiers.
-- 2026-04-14: Rebuilt the XR table-of-contents agenda as a two-column layout so the numeric indices align cleanly on the right while the labels begin from a consistent left edge.
-- 2026-04-14: Switched the XR table-of-contents numeric column to left alignment as well, so both the `1.` through `6.` markers and the section labels now start from fixed left edges.
-- 2026-04-14: Increased the deck-wide XR kicker size to a body-adjacent scale so section labels feel more legible and intentional across the presentation.
-- 2026-04-14: Added an explicit top margin to the XR table-of-contents title block because the kicker is absolutely positioned there, restoring visible separation between the large `목차` kicker and the numbered agenda list.
-- 2026-04-14: Inserted a new XR customer-framing slide between the `2. 고객` and `3. 경과` divider pages, using a dedicated right-side stacked hurdles module with subtle accent rails so the two core barriers read as structured points without turning into heavy cards.
-- 2026-04-14: Duplicated the XR customer-hurdles slide once more before `3. 경과`, then added muted and focused state variants so the top hurdle can read as temporarily inactive while the lower hurdle carries the key-color emphasis.
-- 2026-04-14: Added a new XR problem slide before the `3. 경과` divider to explicitly frame existing translation tools as inadequate for socializing contexts, using the standard left-aligned text layout with no side media.
-- 2026-04-14: Added a follow-up XR cause slide after the social-translation problem framing, keeping the standard left-aligned text-only layout so the narrative can narrow from the problem statement into the missing social-specific UI/UX explanation without adding extra visual noise.
-- 2026-04-14: Added a new XR solution-UI slide after the cause framing, pairing the left-aligned headline with a dedicated right-side stack of seven compact capability modules so the required social-translation UX features read as a structured product checklist rather than body copy.
-- 2026-04-14: Tightened the XR customer-hurdles side module by narrowing its overall width, reducing the right inset, enlarging the description copy, and rewriting each description into explicit two-line statements so the two barriers read more clearly at presentation distance.
-- 2026-04-14: Moved the XR customer-hurdles side module much further left on both hurdle slides by increasing its right offset substantially, so the stack no longer hugs the viewport edge.
-- 2026-04-14: Matched the second XR customer-hurdles slide to the updated compact module styling and dimmed only the `문화적 장벽 존재` line so the focused second hurdle can still show one remaining inactive sub-barrier.
-- 2026-04-14: Reworked the XR solution-UI side stack to sit further left with a narrower column, swapped the dot bullets for the same vertical accent-rail language used on the customer hurdle slides, tightened the internal right padding, and added a muted `등등등...` tail to imply more situation-specific UX cases.
-- 2026-04-14: Added a floating brand-collage module to the XR social-translation problem slide, scattering five translation-service wordmark chips under a large red X so the page can visually reject the existing tool set without relying on another screenshot grid.
-- 2026-04-14: Replaced the XR problem-slide brand chips with user-provided app icons for ChatGPT, Google Translate, Apple Translate, Transync AI, and Felo Translator, switched every label to English, and tightened the collage so the larger logo-led chips sit closer together while still reading as a scattered cluster under the red X.
-- 2026-04-14: Added Papago to the XR translation-tool rejection collage so the problem slide now rejects six recognizable translation products instead of omitting the strongest local default.
-- 2026-04-14: Repositioned the XR Papago chip into the upper-middle cluster so it now sits beside Apple Translate and below Google Translate instead of reading like a lower-row outlier.
-- 2026-04-14: Recovered the XR deck after a stale-editor overwrite by restoring the latest slide styling and reapplying the customer-hurdle stack's corrected `top` clamp so the side module keeps the intended vertical anchor.
-- 2026-04-14: Tightened the XR solution-UI stack again by shrinking the overall column to roughly sixty percent of its previous width, enlarging the module labels to kicker-scale, trimming the internal right padding, and centering the `등등등...` tail with a larger gap beneath the list.
-- 2026-04-14: Reframed the XR solution-UI slide as a cause slide by renaming the kicker to `원인` and adding a short explanatory body sentence so the deck more clearly states that social translation only works when the full required UI/UX set is satisfied.
-- 2026-04-14: Dropped the XR customer-hurdles side stack lower on both slides and updated the focused second-hurdle subline from `문화적 장벽 존재` to the more concrete `대화 소재의 부재`.
-- 2026-04-14: Renamed both XR customer-hurdles slide kickers from `고객` to `문제` so those pages frame the barriers explicitly as problem-definition slides instead of audience slides.
-- 2026-04-14: Refined the customer-hurdles wording on both XR problem slides by changing `언어 장벽 존재` to `언어 장벽의 존재`, matching the more noun-phrase style used elsewhere in the deck.
-- 2026-04-14: Shifted the XR solution-UI side stack much further left by substantially increasing its `right` offset, so the narrow module column no longer sits awkwardly against the viewport edge.
-- 2026-04-14: Reduced the XR translation-tool collage footprint by shrinking both the side module width and the corresponding text-width subtraction, so the problem-slide title gets more breathing room and avoids an extra wrap on its second line.
-- 2026-04-14: Split the XR solution-UI side stack into two columns so the lower four capabilities (`푸쉬앤톡 번역`, `선택적 음성 출력`, `백그라운드 노트테이킹`, `등등등...`) can rise into a right-hand column instead of extending the single vertical list too far downward.
-- 2026-04-14: Added a new XR cause slide after the UI/UX capability stack, using a compact four-item logo list to call out the cost and quality limitations of Felo Translator, Google Translator, Apple Translator, and Papago.
-- 2026-04-14: Pulled the two-column XR solution stack back toward the right edge by nearly eliminating its right inset, and converted `등등등...` from a boxed module into plain trailing text beneath the second column.
-- 2026-04-14: Rebalanced the two-column XR solution stack by restoring similar left/right and top/bottom breathing room, and centered `등등등...` inside the second column's fourth slot so it reads like a proper trailing placeholder rather than a loose note.
-- 2026-04-14: Inserted a new centered XR Mingle positioning slide between the quoted solution slide and the later vision slide, using a simple kicker-plus-three-line title to frame Mingle explicitly as a mobile translation app for socializing.
-- 2026-04-14: Dropped the XR solution stack slightly lower again and normalized both column row heights so `등등등...` can sit centered within the second column's fourth row at the same vertical level as `3개국어 동시 스위칭`.
-- 2026-04-14: Refined the XR tool-limitation logo list by moving the module further left, narrowing each card column, enlarging both the logo-heading row and description copy, adding more breathing room after the accent rail, and clarifying the Google limitation copy to `대화 번역은 한국어 지원 안함`.
-- 2026-04-14: Reshaped the red XR rejection mark over the translation-tool collage into a square-centered overlay so the X reads less like a stretched horizontal slash and more like a balanced stamp across the logo cluster.
-- 2026-04-14: Restored the XR rejection mark's visual scale while keeping the overlay square, so the red X stays closer to its original impact without slipping back into an overly horizontal proportion.
-- 2026-04-14: Corrected the XR rejection mark again by steepening both red strokes to a much more vertical forty-three-degree cross and extending their length slightly, because box height alone was not enough to stop the X from reading like a sideways slash.
-- 2026-04-14: Nudged the XR translation-tool collage slightly down and left as a group, and brought the `Transync AI` chip in front of `Felo Translator` so the lower-right cluster reads with a clearer visual hierarchy.
-- 2026-04-14: Pulled the XR AI-cost-and-quality logo list further toward the center by increasing its right offset again, because the module still read as too tightly attached to the viewport edge on the four-item comparison slide.
-- 2026-04-14: Inserted a new XR solution slide before the `3. 경과` divider, using a standard left-aligned kicker-title-body layout to argue that advances over the last one to two years make the previously blocked social-translation problems finally solvable in 2026.
-- 2026-04-14: Expanded that AI-progress solution slide into the same right-side experience-card treatment used later in the deck, attaching three proof cards for cost, language quality, and UI/UX flexibility so the claim reads as concretely resolved rather than abstractly optimistic.
-- 2026-04-14: Expanded the follow-up XR solution slide into a right-side four-card list, reusing the compact comparison-card language from the earlier tool-limitations slide so each target situation maps to a concrete conversation experience type on the same page.
-- 2026-04-14: Split the XR conversation-experience slide into its own layout variant, keeping the same compact card language while removing the numeric badges, adding a trailing `등등등...`, and shifting the module slightly right so the heading has more room.
-- 2026-04-14: Dropped the XR conversation-experience card list slightly lower because the right-side stack was still sitting too high relative to the slide title block.
-- 2026-04-14: Matched the XR experience-card description color to the kicker color exactly, because the shared body style was still reading a little darker than the intended muted eyebrow tone on those right-side cards.
-- 2026-04-14: Extended that same kicker-matched description color treatment to the XR hurdle stack and tool-limitation list, so the muted support copy on pages using those right-side cards no longer reads darker than adjacent kickers.
-- 2026-04-14: Split the AI-progress proof cards onto their own experience-list position modifier and nudged that specific stack lower and slightly right, so the three proof cards stop crowding the title while the later experience-list slide keeps its existing placement.
-- 2026-04-14: Broke the AI-progress proof slide onto its own copy-width modifier as well, widening the title column while slightly shrinking and right-shifting the three-card stack so the word `가능합니다` no longer breaks awkwardly on the final character.
-- 2026-04-14: Replaced the second HelloTalk-support slide's overlapping screenshots with a stacked pair of real travel-community post captures at equal width, using a dedicated right-side vertical media module so the social-discovery demand reads more explicitly through authentic user posts.
-- 2026-04-14: Corrected that travel-post stack placement by moving it off the HelloTalk attrition slide and onto the actual overseas-travel matchmaking slide, while restoring the HelloTalk slide's original two-image support layout.
-- 2026-04-14: Reworked the overseas-travel post module from a plain equal-width vertical stack into an overlapping two-card composition, swapping the order so the personal meetup post sits smaller on top while the broader BTS travel thread anchors the larger lower layer.
-- 2026-04-14: Tightened that overseas-travel post composition further by pulling the whole stack left, pushing the lower card upward and in front of the upper card, and enlarging the lower image so the overlap reads as a denser layered collage instead of two loosely separated posters.
-- 2026-04-14: Added a blurred two-photo collage to the XR multilingual-networking slide, overlapping a smaller event poster over a larger meetup photo so the page implies atmosphere and social energy without competing too sharply with the text block.
-- 2026-04-14: Refined that networking collage to use selective blur masks instead of blurring both whole images, preserving the overall atmosphere while obscuring the poster header/photo region and the most identifiable area of the meetup group shot.
-- 2026-04-14: Corrected the page-shifted blur treatments by restoring the multilingual-networking collage to full-image blur on both cards, and moving the partial top-only blur treatment onto the overseas-travel matchmaking collage instead.
-- 2026-04-14: Tightened the overseas-travel collage masks by shrinking the top blur strip substantially and adding a second centered blur patch on the upper card, so the obscured area targets the sensitive region more precisely without washing out too much of the post.
-- 2026-04-14: Expanded and lifted that secondary blur patch on the overseas-travel post so it reaches farther upward and aligns flush to the left edge, while also restoring a taller top blur strip on the lower card to better cover the visible header area.
-- 2026-04-14: Nudged the overseas-travel collage's secondary blur patch slightly higher and taller again, and added a small left inset so the mask stops touching the image edge while still covering more of the central identifiable area.
-- 2026-04-14: Lifted that same secondary blur patch a bit further upward without changing its height, because the coverage size was already sufficient and only the vertical placement still felt slightly low.
-- 2026-04-14: Softened the multilingual-networking collage blur very slightly by dropping the full-image blur from five pixels to four, because the previous treatment was muting the social atmosphere a bit more than necessary.
-- 2026-04-14: Reduced only the top strip blur height on the upper travel-post card, because that header mask had grown too thick after the page reorder while the lower card's coverage was still appropriate.
-- 2026-04-16: Widened the right-side goal-step cards on the two XR goal slides and added prominent numbered badges for steps one through three, making the staged progression easier to scan while preserving the existing card language.
-- 2026-04-16: Added curved transition arrows and overlaid explanatory labels to the XR viral-loop goal slide, clarifying how users move from individual translation to invited voice chat and then into broader UGC-driven social-platform growth.
-- 2026-04-16: Reworked the XR goal-step badges from floating absolute circles into rounded rectangular `1단계` labels that sit in the title row, preventing overlap with the card title while keeping the numbered progression visually prominent.
-- 2026-04-16: Refined the XR viral-loop arrows so the stroke and arrowhead share the same visual weight and the curve connects from the vertical center of one step card toward the vertical center of the next step card.
-- 2026-04-16: Center-aligned the XR goal-step title text against the taller rounded step labels so the title row no longer reads as top-attached beside the `1단계`, `2단계`, and `3단계` markers.
-- 2026-04-16: Converted the newly inserted XR business-diagram slide into an image-only page that centers `business-venndiagram.png` and lets it fill the viewport within a narrow outer margin.
-- 2026-04-16: Added a second image-only XR business slide immediately after the Venn diagram page, using the same full-viewport treatment for `business-matrix.png`.
-- 2026-04-16: Added an XR competitor slide for translation and note-taking services, using a logo-only scatter cloud of ten translation tools and ten note-taking tools to show that the adjacent markets are growing without directly targeting socializing.
-- 2026-04-16: Added a second XR competitor slide for AI-native companies, pairing the cold-start argument with a simple vertical logo-and-name stack for ChatGPT, Claude, and Gemini instead of another scattered logo cloud.
-- 2026-04-16: Added a third XR competitor slide for messenger and social-media companies, using a logo-only scatter cloud for KakaoTalk, Instagram, HelloTalk, Tinder, Discord, LINE, Facebook, and Telegram.
-- 2026-04-16: Added a centered XR differentiation slide arguing that Mingle's viable path is blitzscaling before existing social platforms treat translation as a core feature.
-- 2026-04-16: Inserted a new XR differentiation slide before the social-platform competitor page, reusing the four vertical socializing-experience cards plus `등등등...` to frame Mingle's sharpened entry by vertical.
-- 2026-04-16: Inserted a new XR differentiation slide before the AI-native competitor page, framing Mingle's goal as building a defensible moat through network effects in the socializing category.
-- 2026-04-16: Moved the XR reference-links slide for `소셜 번역기 밍글` from the strategy section to the very end of the deck so it works as a final resource page.
-- 2026-04-16: Tightened the translation-and-notetaking competitor logo cloud into a compact page-specific layout, freeing more width for the left text block while keeping the logos close without overlapping.
-- 2026-04-16: Tightened the messenger/social-media competitor logo cloud into a compact two-row layout, reducing the right-side module width so the left headline has more room.
-- 2026-04-16: Replaced the competitor-cloud Alt logo with the correct App Store icon for `Alt - AI Voice Notes` instead of the previous unrelated favicon-style asset.
-- 2026-04-16: Added an XR Elon Musk exception slide immediately after the social-platform competitor page, pairing a portrait with two X/XChat service cards to frame X's automatic translation and upcoming chat launch as the key exception.
-- 2026-04-16: Converted the XR deck's final resource links into a horizontal CTA row, using the Mingle logo, GitHub mark, App Store badge, and Google Play badge instead of plain text URLs.
-- 2026-04-16: Restored the XR deck's final resource slide to the user's simpler centered title, Q&A subtitle, and plain URL body markup after the CTA version conflicted with the intended manual edit.
-- 2026-04-16: Rebalanced the XR competitor-one logo cloud by widening the left copy area, increasing the logo sizes, and moving the tool logos back into a denser but irregular scattered layout instead of a strict row-and-column grid.
-- 2026-04-16: Reworked the XR messenger/social-media competitor logo cloud into a taller, rounded scattered cluster and widened the left copy area so the page no longer reads as a rigid two-row logo grid.
-- 2026-04-16: Updated the XR blitzscaling differentiation slide copy to emphasize that Elon Musk's current exception is still limited to simple text translation, and that Mingle needs to grow before everyone attempts a Babel-tower strategy.
-- 2026-04-16: Inserted a centered XR timing slide before the blitzscaling page, framing the Babel-tower moment as historically new and positioning Mingle as the team to build before others are ready.
-- 2026-04-16: Inserted a centered XR section-divider slide for `3. 팀` before the blitzscaling page so the strategy close now transitions into the team section.
-- 2026-04-16: Inserted a hero-style XR recruiting slide after the `3. 팀` divider, asking for teammates regardless of product orientation, major, or background.
-- 2026-04-16: Restored the previously removed XR vision slide after the `외국인을 만나고 싶을 때 가장 먼저 찾는 서비스` page, reframing Mingle's broader challenge as removing every barrier encountered in cross-cultural connection.
-- 2026-04-16: Updated the XR Elon Musk exception slide with the actual XChat App Store icon and a tighter face/upper-body Elon Musk portrait so the right-side visual reads less distant.
-- 2026-04-16: Inserted copies of the early two customer-hurdle slides at pages 34 and 35, preserving the original 6 and 7 slides so the existing page 34 and everything after it shifts back by two pages as requested.
-- 2026-04-16: Duplicated the XR viral-loop growth slide and added a focused version that emphasizes inviting friends first, visually dimming the second viral arrow and the third-stage social-platform card.
-- 2026-04-16: Preserved follow-up XR deck edits that tightened the social-platform competitor copy and moved the blitzscaling slide ahead of the timing and team section sequence.
-- 2026-04-16: Preserved a follow-up XR differentiation title edit that reframes sharp vertical entry as the answer to cold-start problems.
-- 2026-04-16: Added an XR viral-case slide after the connection-difficulty page, reusing the HelloTalk-plus-Mingle two-image stack to frame a testable invite-and-chat hypothesis for friends first met on HelloTalk.
-- 2026-04-16: Restored the XR deck's final resource slide CTA buttons after the later plain-URL conflict resolution had removed them, keeping the user's centered Q&A copy while returning the Mingle, GitHub, App Store, and Google Play button row.
-- 2026-04-16: Replaced the XR Elon Musk exception slide portrait with the user-provided bust-style image so the visual lands between the earlier too-distant shot and the later overly tight face crop.
-- 2026-04-16: Preserved the user's latest XR deck reorder that moves the two customer-hurdle slides out of the early intro sequence and places them later in the strategy flow.
-- 2026-04-16: Preserved the user's follow-up XR viral-target slide edit, moving the HelloTalk-to-Mingle two-image slide later in the flow and reframing its copy from a case example to the first viral target.
-- 2026-04-16: Preserved the user's newly inserted XR viral-target slide that reframes the product direction as building a messenger experience after the initial HelloTalk friend-invite target.
-- 2026-04-16: Preserved the user's XR messenger-experience copy edit that narrows the slide body to messaging, group chat, invitation, and sharing capabilities, and saved the newly added conversation screenshot assets for follow-up slide work.
-- 2026-04-16: Updated the XR messenger-experience slide imagery to use the new Mingle conversation-list and conversation-room screenshots inside the existing overlapping phone-frame treatment.
-- 2026-04-16: Fixed the XR messenger-experience slide's rear conversation-list screenshot by adding a page-specific conversation stack layout, so the rear image no longer inherits the raw gaming screenshot absolute positioning inside a phone frame.
-- 2026-04-16: Preserved the user's final Q&A slide simplification that removes the extra `소셜 번역기 밍글` heading and keeps the closing page focused on `감사합니다. Q & A` plus the resource button row.
-- 2026-04-16: Preserved the user's follow-up XR viral-target split, converting the duplicated messenger-experience slide into a second viral-target slide about continuing offline conversations online.
-- 2026-04-16: Removed the extra white icon wrapper from the XR Elon Musk exception slide's XChat logo so the black App Store icon sits directly beside the `4/17 출시 예정` text inside the service card.
-- 2026-04-16: Cropped the XR final slide's Google Play badge asset to remove its built-in transparent outer padding, making it visually match the App Store badge without an extra wrapper-looking frame.
-- 2026-04-16: Added the new offline conversation photo to the XR viral-target-two slide as a right-side standalone image, using a dedicated layout class so its position and size can be tuned independently from phone-frame slides.
-- 2026-04-16: Preserved the user's XR customer-hurdle priority edit, moving communication difficulty ahead of meeting difficulty and updating the focused follow-up slides to match the new first-priority order.
-- 2026-04-16: Preserved the user's XR viral-loop arrow label edit, changing the later-stage acquisition wording from `UGC 바이럴` to the broader `매칭 및 바이럴` phrasing.
-- 2026-04-16: Preserved the user's newly added XR solution slide that repeats the viral-loop structure to show matching features becoming possible once enough users exist, with the first transition muted and the matching/viral transition emphasized.
-- 2026-04-16: Preserved the user's follow-up XR viral-loop label refinement, reframing the later-stage acquisition copy as additional users entering because they are looking for new relationships.
-- 2026-04-16: Preserved the user's XR matching-loop state edit, muting the first translation-only step and emphasizing the third social-platform step on the matching-feature slide.
+- `2026-04-15-zh-cn-zh-tw-selector-split` | Language selector now presents `zh-CN` and `zh-TW` as separate user-facing targets with distinct flags (`🇨🇳` Simplified, `🇹🇼` Traditional) while preserving Soniox STT hints as generic `zh`. This avoids misleading the user into thinking the translation target is a single generic Chinese option and keeps script-variant intent intact through translation, chip history, and bubble rendering.
+- `2026-04-15-soniox-zh-source-normalization` | Incoming generic Soniox `zh` source-language tags are normalized to `zh-CN` at the client STT boundary unless the transcript text clearly contains traditional-only Han characters. This prevents `zh-CN` from remaining in the target list for the same utterance, which previously made a single Chinese utterance render an unnecessary extra translation bubble and visually thicken the chat row.
+- `2026-04-15-soniox-zh-cn-default-source` | Chinese source-language normalization was simplified so every generic Soniox `zh` transcript is rendered as `zh-CN` without script heuristics, while explicit `zh-TW` inputs remain `zh-TW`. Matching and manual-input paths were aligned to the same rule so a Chinese utterance never grows an extra same-language `zh-CN` bubble just because some code paths kept generic `zh` and others promoted it differently.
