@@ -1376,3 +1376,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Tightened the messenger/social-media competitor logo cloud into a compact two-row layout, reducing the right-side module width so the left headline has more room.
 - 2026-04-16: Replaced the competitor-cloud Alt logo with the correct App Store icon for `Alt - AI Voice Notes` instead of the previous unrelated favicon-style asset.
 - 2026-04-16: Added an XR Elon Musk exception slide immediately after the social-platform competitor page, pairing a portrait with two X/XChat service cards to frame X's automatic translation and upcoming chat launch as the key exception.
+- 2026-04-16: Converted the XR deck's final resource links into a horizontal CTA row, using the Mingle logo, GitHub mark, App Store badge, and Google Play badge instead of plain text URLs.
