@@ -1370,3 +1370,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Added a third XR competitor slide for messenger and social-media companies, using a logo-only scatter cloud for KakaoTalk, Instagram, HelloTalk, Tinder, Discord, LINE, Facebook, and Telegram.
 - 2026-04-16: Added a centered XR differentiation slide arguing that Mingle's viable path is blitzscaling before existing social platforms treat translation as a core feature.
 - 2026-04-16: Inserted a new XR differentiation slide before the social-platform competitor page, reusing the four vertical socializing-experience cards plus `등등등...` to frame Mingle's sharpened entry by vertical.
+- 2026-04-16: Inserted a new XR differentiation slide before the AI-native competitor page, framing Mingle's goal as building a defensible moat through network effects in the socializing category.
