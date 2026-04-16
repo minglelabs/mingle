@@ -1383,3 +1383,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Updated the XR blitzscaling differentiation slide copy to emphasize that Elon Musk's current exception is still limited to simple text translation, and that Mingle needs to grow before everyone attempts a Babel-tower strategy.
 - 2026-04-16: Inserted a centered XR timing slide before the blitzscaling page, framing the Babel-tower moment as historically new and positioning Mingle as the team to build before others are ready.
 - 2026-04-16: Inserted a centered XR section-divider slide for `3. 팀` before the blitzscaling page so the strategy close now transitions into the team section.
+- 2026-04-16: Inserted a hero-style XR recruiting slide after the `3. 팀` divider, asking for teammates regardless of product orientation, major, or background.
