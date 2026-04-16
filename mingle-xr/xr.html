@@ -29,6 +29,8 @@
         --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
         --deck-width: 100vw;
         --deck-height: 100vh;
+        --deck-frame-width: 100vw;
+        --deck-frame-height: 100vh;
         --deck-scale: 1;
       }
 
@@ -51,21 +53,23 @@
         font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
       }
 
-      .deck {
+      .deck-frame {
         position: relative;
+        width: var(--deck-frame-width);
+        height: var(--deck-frame-height);
+        overflow: hidden;
+      }
+
+      .deck {
+        position: absolute;
+        inset: 0 auto auto 0;
         width: var(--deck-width);
         height: var(--deck-height);
         overflow: hidden;
         overscroll-behavior: none;
         touch-action: none;
-        zoom: var(--deck-scale);
-      }
-
-      @supports not (zoom: 1) {
-        .deck {
-          transform: scale(var(--deck-scale));
-          transform-origin: top left;
-        }
+        transform: scale(var(--deck-scale));
+        transform-origin: top left;
       }
 
       .track {
@@ -1415,6 +1419,8 @@
         :root {
           --deck-width: 1600px;
           --deck-height: 900px;
+          --deck-frame-width: 100vw;
+          --deck-frame-height: 56.25vw;
           --deck-scale: 0.5625;
         }
 
@@ -1433,7 +1439,7 @@
             var(--page);
         }
 
-        .deck {
+        .deck-frame {
           box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
         }
       }
@@ -1506,8 +1512,9 @@
     </style>
   </head>
   <body>
-    <main class="deck" aria-label="External relations presentation deck">
-      <div class="track" id="deck-track">
+    <div class="deck-frame" id="deck-frame">
+      <main class="deck" aria-label="External relations presentation deck">
+        <div class="track" id="deck-track">
         <section class="slide slide--hero">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
@@ -2836,9 +2843,10 @@
             </div>
           </article>
         </section>
-      </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
-    </main>
+        </div>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
+      </main>
+    </div>
 
     <script>
       const track = document.getElementById("deck-track");
@@ -2926,19 +2934,43 @@
           window.visualViewport?.width ?? window.innerWidth,
           window.innerWidth
         );
+        const viewportHeight = Math.min(
+          window.visualViewport?.height ?? window.innerHeight,
+          window.innerHeight
+        );
         const cssDeckWidth = Number.parseFloat(
           window.getComputedStyle(document.documentElement).getPropertyValue("--deck-width")
         );
-        const isScaledDeck = Number.isFinite(cssDeckWidth) && cssDeckWidth >= 1599;
+        const cssDeckHeight = Number.parseFloat(
+          window.getComputedStyle(document.documentElement).getPropertyValue("--deck-height")
+        );
+        const isScaledDeck =
+          Number.isFinite(cssDeckWidth)
+          && Number.isFinite(cssDeckHeight)
+          && cssDeckWidth >= 1599
+          && cssDeckHeight >= 899;
         const isMobileViewport = viewportWidth <= 900;
 
         if (!isMobileViewport || !isScaledDeck) {
           document.documentElement.style.setProperty("--deck-scale", "1");
+          document.documentElement.style.setProperty("--deck-frame-width", "100vw");
+          document.documentElement.style.setProperty("--deck-frame-height", "100vh");
           return;
         }
 
-        const nextScale = Math.max(0.1, viewportWidth / 1600);
+        const nextScale = Math.max(
+          0.1,
+          Math.min(viewportWidth / cssDeckWidth, viewportHeight / cssDeckHeight)
+        );
         document.documentElement.style.setProperty("--deck-scale", String(nextScale));
+        document.documentElement.style.setProperty(
+          "--deck-frame-width",
+          `${cssDeckWidth * nextScale}px`
+        );
+        document.documentElement.style.setProperty(
+          "--deck-frame-height",
+          `${cssDeckHeight * nextScale}px`
+        );
       }
 
       function deckWidth() {
