@@ -85,7 +85,7 @@ export default function LanguageSelector({
   const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
   const speechLanguagesRef = useRef<string[]>(speechLanguages);
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<LanguageSelectorTab>("translation");
+  const [activeTab, setActiveTab] = useState<LanguageSelectorTab>("speech");
   const [recentTranslationLanguageCodes, setRecentTranslationLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(RECENT_LANGUAGE_CODES_STORAGE_KEY),
   );
