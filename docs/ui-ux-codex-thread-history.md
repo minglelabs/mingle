@@ -1402,3 +1402,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - 2026-04-16: Preserved the user's final Q&A slide simplification that removes the extra `소셜 번역기 밍글` heading and keeps the closing page focused on `감사합니다. Q & A` plus the resource button row.
 - 2026-04-16: Preserved the user's follow-up XR viral-target split, converting the duplicated messenger-experience slide into a second viral-target slide about continuing offline conversations online.
 - 2026-04-16: Removed the extra white icon wrapper from the XR Elon Musk exception slide's XChat logo so the black App Store icon sits directly beside the `4/17 출시 예정` text inside the service card.
+- 2026-04-16: Cropped the XR final slide's Google Play badge asset to remove its built-in transparent outer padding, making it visually match the App Store badge without an extra wrapper-looking frame.
