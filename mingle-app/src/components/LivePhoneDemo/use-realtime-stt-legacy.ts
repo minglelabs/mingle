@@ -23,9 +23,16 @@ import {
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
   if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL
+  const wsPath = process.env.NEXT_PUBLIC_WS_PATH?.trim()
   const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
   const protocol = isSecure ? 'wss' : 'ws'
+  if (wsPath) {
+    const normalizedPath = wsPath.startsWith('/') ? wsPath : `/${wsPath}`
+    const locationPort = typeof window !== 'undefined' ? window.location.port : ''
+    const hostWithPort = locationPort ? `${host}:${locationPort}` : host
+    return `${protocol}://${hostWithPort}${normalizedPath}`
+  }
   return `${protocol}://${host}:${WS_PORT}`
 }
 const DEFAULT_USAGE_LIMIT_SEC = 60
