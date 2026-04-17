@@ -352,6 +352,10 @@
         width: clamp(420px, 34vw, 520px);
       }
 
+      .slide-side-media--social-requirements {
+        width: clamp(520px, 42vw, 680px);
+      }
+
       .slide-side-media--post-launch-sources {
         top: clamp(184px, 22vh, 238px);
         right: clamp(100px, 10vw, 118px);
@@ -728,6 +732,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         column-gap: clamp(12px, 1.4vw, 20px);
         align-items: start;
+      }
+
+      .slide-side-media--social-requirements .slide-solution-columns {
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .slide-solution-points {
@@ -1580,10 +1588,6 @@
             <div class="slide-copy slide-copy--with-brand-collage">
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title">기존의 통번역 서비스들은<br/>소셜링에는 별 도움이 안됩니다</h1>
-              <p class="slide-body">
-                외국인과 친해지고 싶은 상황에선 크게 도움을 받기 어렵고,<br/>
-                업무 툴로 쓰거나 혹은 여행시 간헐적으로만 쓸 수 있을 뿐입니다.<br/>
-              </p>
             </div>
             <div class="slide-side-media slide-side-media--brand-collage" aria-hidden="true">
               <div class="slide-brand-cloud">
@@ -1622,24 +1626,14 @@
             <div class="slide-copy">
               <p class="slide-kicker">원인</p>
               <h1 class="slide-title">소셜링 상황의 요구사항을<br/>충족하지 못하기 때문입니다</h1>
-              <p class="slide-body">
-                단순한 질의응답형 LLM이나 파파고 같은 푸쉬앤톡 번역기로는<br/>
-                복잡한 상황에 유연하게 대응하기 어렵습니다.
-              </p>
             </div>
-            <div class="slide-side-media slide-side-media--solution-stack">
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--social-requirements">
               <div class="slide-solution-columns">
                 <div class="slide-solution-points">
-                  <div class="slide-solution-point">끊기지 않는 지속 번역</div>
-                  <div class="slide-solution-point">실시간 동시 통번역</div>
-                  <div class="slide-solution-point">발화 및 발화자 분리</div>
-                  <div class="slide-solution-point">3개국어 동시 스위칭</div>
-                </div>
-                <div class="slide-solution-points slide-solution-points--tail">
-                  <div class="slide-solution-point">푸쉬앤톡 번역</div>
-                  <div class="slide-solution-point">선택적 음성 출력</div>
-                  <div class="slide-solution-point">백그라운드 실행</div>
-                  <p class="slide-solution-more">등등등...</p>
+                  <div class="slide-solution-point">버튼을 눌러야 해서 대화가 자꾸 끊김</div>
+                  <div class="slide-solution-point">실시간 번역이 안됨</div>
+                  <div class="slide-solution-point">발화 및 발화자 분리가 안됨</div>
+                  <div class="slide-solution-point">언어 설정을 </div>
                 </div>
               </div>
             </div>
