@@ -48,7 +48,7 @@
   "rewrites": [
     {
       "source": "/legal",
-      "destination": "/index.html"
+      "destination": "/legal-index.html"
     },
     {
       "source": "/legal/:path*",
