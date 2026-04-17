@@ -22,6 +22,9 @@ function normalizeReleaseTarget(rawValue: string): string {
 
 export function resolveMingleReleaseTarget(rawReleaseTarget: string): MingleReleaseTarget {
   const normalizedReleaseTarget = normalizeReleaseTarget(rawReleaseTarget)
+  if (normalizedReleaseTarget === 'v1_1_2') {
+    return 'v1_1_1'
+  }
   if (normalizedReleaseTarget === 'v1_1_0') {
     return 'v1_1_0'
   }

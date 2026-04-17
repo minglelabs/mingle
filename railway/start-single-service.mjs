@@ -2,6 +2,7 @@
 
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 
 const DEFAULT_PUBLIC_PORT = 8080;
@@ -21,6 +22,8 @@ const sttWsPath = normalizePath(
   process.env.MINGLE_STT_WS_PATH || process.env.NEXT_PUBLIC_WS_PATH || DEFAULT_STT_WS_PATH,
 );
 const shutdownGraceMs = parseInteger(process.env.MINGLE_RAILWAY_SHUTDOWN_GRACE_MS, DEFAULT_SHUTDOWN_GRACE_MS);
+const apiFallbackBaseUrl = normalizeHttpBaseUrl(process.env.MINGLE_API_FALLBACK_BASE_URL || '');
+const maxFallbackBodyBytes = parseInteger(process.env.MINGLE_API_FALLBACK_MAX_BODY_BYTES, 2 * 1024 * 1024);
 const children = new Map();
 
 let isShuttingDown = false;
@@ -37,6 +40,19 @@ function normalizePath(rawValue) {
   return withSlash.length > 1 ? withSlash.replace(/\/+$/, '') : withSlash;
 }
 
+function normalizeHttpBaseUrl(rawValue) {
+  const trimmed = String(rawValue || '').trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
 function requestPath(rawUrl) {
   try {
     return new URL(rawUrl || '/', 'http://mingle.local').pathname;
@@ -48,6 +64,14 @@ function requestPath(rawUrl) {
 function isPathMatch(rawUrl, pathPrefix) {
   const pathname = requestPath(rawUrl);
   return pathname === pathPrefix || pathname.startsWith(`${pathPrefix}/`);
+}
+
+function isRetryableApiStatus(statusCode) {
+  return Number.isFinite(statusCode) && statusCode >= 500 && statusCode <= 599;
+}
+
+function shouldUseApiFallback(rawUrl) {
+  return Boolean(apiFallbackBaseUrl) && isPathMatch(rawUrl, '/api');
 }
 
 function stripHopByHopHeaders(headers) {
@@ -184,6 +208,21 @@ function appendForwardedHeaders(req, headers) {
 }
 
 function proxyHttpToApp(req, res) {
+  if (shouldUseApiFallback(req.url)) {
+    bufferRequestBody(req, res, (body) => {
+      proxyBufferedHttpRequest(req, res, body, {
+        fallbackAttempt: false,
+        target: {
+          protocol: 'http:',
+          host: targetHost,
+          port: appPort,
+          path: req.url,
+        },
+      });
+    });
+    return;
+  }
+
   const upstreamHeaders = appendForwardedHeaders(req, stripHopByHopHeaders(req.headers));
   const upstreamReq = http.request({
     host: targetHost,
@@ -209,6 +248,108 @@ function proxyHttpToApp(req, res) {
   });
 
   req.pipe(upstreamReq);
+}
+
+function bufferRequestBody(req, res, onReady) {
+  const chunks = [];
+  let totalBytes = 0;
+  let rejected = false;
+
+  req.on('data', (chunk) => {
+    if (rejected) return;
+    totalBytes += chunk.length;
+    if (totalBytes > maxFallbackBodyBytes) {
+      rejected = true;
+      res.writeHead(413, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end('Payload Too Large');
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+
+  req.on('end', () => {
+    if (rejected) return;
+    onReady(Buffer.concat(chunks));
+  });
+
+  req.on('error', (error) => {
+    if (rejected) return;
+    console.error(`[railway] request body buffer error: ${error.message}`);
+    if (!res.headersSent) {
+      res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+    }
+    res.end('Bad Request');
+  });
+}
+
+function buildFallbackTarget(rawUrl) {
+  const fallbackUrl = new URL(rawUrl || '/', apiFallbackBaseUrl);
+  return {
+    protocol: fallbackUrl.protocol,
+    host: fallbackUrl.hostname,
+    port: fallbackUrl.port ? Number(fallbackUrl.port) : undefined,
+    path: `${fallbackUrl.pathname}${fallbackUrl.search}`,
+  };
+}
+
+function formatTargetHostHeader(target) {
+  if (!target.port) return target.host;
+  return `${target.host}:${target.port}`;
+}
+
+function proxyBufferedHttpRequest(req, res, body, options) {
+  const targetClient = options.target.protocol === 'https:' ? https : http;
+  const upstreamHeaders = appendForwardedHeaders(req, stripHopByHopHeaders(req.headers));
+  const requestOptions = {
+    protocol: options.target.protocol,
+    host: options.target.host,
+    ...(options.target.port ? { port: options.target.port } : {}),
+    method: req.method,
+    path: options.target.path,
+    headers: {
+      ...upstreamHeaders,
+      ...(options.fallbackAttempt ? { host: formatTargetHostHeader(options.target) } : {}),
+      'content-length': String(body.length),
+    },
+  };
+
+  const upstreamReq = targetClient.request(requestOptions, (upstreamRes) => {
+    if (!options.fallbackAttempt && isRetryableApiStatus(upstreamRes.statusCode || 0)) {
+      upstreamRes.resume();
+      proxyBufferedHttpRequest(req, res, body, {
+        fallbackAttempt: true,
+        target: buildFallbackTarget(req.url),
+      });
+      return;
+    }
+
+    res.writeHead(upstreamRes.statusCode || 502, stripHopByHopHeaders(upstreamRes.headers));
+    upstreamRes.pipe(res);
+  });
+
+  upstreamReq.setTimeout(120_000, () => {
+    upstreamReq.destroy(new Error(`${options.fallbackAttempt ? 'fallback' : 'mingle-app'} upstream timed out`));
+  });
+
+  upstreamReq.on('error', (error) => {
+    if (!options.fallbackAttempt) {
+      console.error(`[railway] mingle-app API proxy error; retrying fallback: ${error.message}`);
+      proxyBufferedHttpRequest(req, res, body, {
+        fallbackAttempt: true,
+        target: buildFallbackTarget(req.url),
+      });
+      return;
+    }
+
+    console.error(`[railway] API fallback proxy error: ${error.message}`);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+    }
+    res.end('Bad Gateway');
+  });
+
+  upstreamReq.end(body);
 }
 
 function writeUpgradeRequest(req, targetPort, upstream, head) {

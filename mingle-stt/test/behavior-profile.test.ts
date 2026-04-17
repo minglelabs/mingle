@@ -20,6 +20,7 @@ test('legacy namespaces stay on the 1.0.11 STT profile', () => {
 test('1.1.0 namespaces use the new STT profile', () => {
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.0'), 'v1_1_0');
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.1'), 'v1_1_1');
+    assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.2'), 'v1_1_1');
     assert.equal(resolveMingleSttBehaviorProfile('android/v1.1.1'), 'v1_1_1');
     assert.equal(resolveMingleSttBehaviorProfile('android/v1.2.0'), 'v1_1_1');
 });
@@ -34,6 +35,8 @@ test('release variants stay explicit for ios/android 1.0.11 and 1.1.0', () => {
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.0'), 'android_v1_1_0');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.1'), 'ios_v1_1_1');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.1'), 'android_v1_1_1');
+    assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.2'), 'ios_v1_1_1');
+    assert.equal(resolveMingleSttReleaseVariant('android/v1.1.2'), 'android_v1_1_1');
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_0_11'), true);
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_1_0'), false);
 });

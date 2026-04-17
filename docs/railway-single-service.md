@@ -39,6 +39,7 @@ NEXTAUTH_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_SITE_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}
 NEXT_PUBLIC_WS_PATH=/stt
 MINGLE_STT_WS_PATH=/stt
+MINGLE_API_FALLBACK_BASE_URL=https://mingle-app-xi.vercel.app
 SONIOX_API_KEY=
 TRANSLATE_PROVIDER=gemini
 ```
@@ -74,6 +75,11 @@ Leave `NEXT_PUBLIC_WS_URL` unset for this single-service deployment. The web
 client uses `NEXT_PUBLIC_WS_PATH=/stt`, so the browser connects to the same
 Railway domain with `wss://<domain>/stt`.
 
+`MINGLE_API_FALLBACK_BASE_URL` is only used by the Railway proxy. It retries
+`/api/*` requests against the fallback host only for transport failures or
+HTTP `5xx` responses. It does not fallback for `4xx` auth, validation, or
+not-found responses.
+
 ## Database Migration
 
 This change does not add a Prisma migration. When the Railway database is ready,
@@ -90,8 +96,9 @@ loader, which preserves the app schema parameter behavior.
 ## Release Namespace Policy
 
 The web deployment can keep `NEXT_PUBLIC_API_NAMESPACE` empty. For mobile
-release builds, keep the mobile app version and API namespace aligned. For
-example, app version `1.1.1` must use `ios/v1.1.1` and `android/v1.1.1`.
+release builds, keep the mobile app version and API namespace aligned. The
+Railway cutover starts with app version `1.1.2`, so iOS must use
+`ios/v1.1.2` and Android must use `android/v1.1.2`.
 
 ## Smoke Checks
 
