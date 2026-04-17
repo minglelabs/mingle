@@ -411,6 +411,13 @@
         height: clamp(430px, 42vw, 590px);
       }
 
+      .slide-side-media--network-effect-cloud {
+        top: clamp(56px, 8vh, 112px);
+        right: clamp(36px, 5vw, 86px);
+        width: clamp(500px, 46vw, 720px);
+        height: clamp(430px, 42vw, 590px);
+      }
+
       .slide-side-media--blitz-cloud .slide-competitor-cloud {
         isolation: isolate;
       }
@@ -956,6 +963,41 @@
 
       .slide-competitor-logo--note {
         box-shadow: 0 20px 42px rgba(45, 42, 30, 0.13);
+      }
+
+      .slide-network-effect-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-network-effect-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(8px, 0.72vw, 12px);
+        border-radius: clamp(18px, 1.7vw, 26px);
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        box-shadow: 0 22px 44px rgba(45, 42, 30, 0.12);
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r));
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-network-effect-label {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        margin: 0;
+        transform: translate(-50%, -50%);
+        font-size: clamp(2rem, 3vw, 3.5rem);
+        line-height: 1.05;
+        font-weight: 900;
+        color: rgba(45, 42, 30, 0.84);
+        white-space: nowrap;
       }
 
       .slide-ai-native-stack {
@@ -2386,7 +2428,21 @@
           <article class="slide-shell">
             <div class="slide-copy">
               <p class="slide-kicker">차별화점</p>
-              <h1 class="slide-title">반면, 저희는 소셜링 영역에서<br/>네트워크 효과 구축을 목표로 합니다</h1>
+              <h1 class="slide-title">반면, 저희는 메신저로의 진화를<br/>처음부터 목표로 합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--network-effect-cloud" aria-hidden="true">
+              <div class="slide-network-effect-cloud">
+                <img class="slide-network-effect-logo" style="--x: 18%; --y: 15%; --s: clamp(70px, 5.6vw, 94px); --r: -9deg" src="./assets/logo-instagram.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 40%; --y: 8%; --s: clamp(66px, 5.3vw, 90px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 64%; --y: 17%; --s: clamp(70px, 5.6vw, 94px); --r: -5deg" src="./assets/logo-hellotalk.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 84%; --y: 11%; --s: clamp(68px, 5.4vw, 92px); --r: 10deg" src="./assets/logo-tinder.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 30%; --y: 31%; --s: clamp(76px, 6vw, 102px); --r: 12deg" src="./assets/logo-discord.png" alt="" />
+                <h2 class="slide-network-effect-label">네트워크 효과</h2>
+                <img class="slide-network-effect-logo" style="--x: 20%; --y: 77%; --s: clamp(68px, 5.4vw, 92px); --r: 7deg" src="./assets/logo-wechat.jpg" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 48%; --y: 88%; --s: clamp(70px, 5.6vw, 94px); --r: -11deg" src="./assets/logo-line.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 72%; --y: 75%; --s: clamp(68px, 5.4vw, 92px); --r: 8deg" src="./assets/logo-facebook.png" alt="" />
+                <img class="slide-network-effect-logo" style="--x: 89%; --y: 88%; --s: clamp(74px, 5.9vw, 100px); --r: -7deg" src="./assets/logo-telegram.png" alt="" />
+              </div>
             </div>
           </article>
         </section>
