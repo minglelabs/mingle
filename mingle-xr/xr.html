@@ -388,6 +388,15 @@
         width: clamp(350px, 31vw, 470px);
       }
 
+      .slide-side-media--cursor-logo {
+        top: 50%;
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
+        display: grid;
+        place-items: center;
+        transform: translateY(-50%);
+      }
+
       .slide-side-media--tool-list {
         top: clamp(92px, 12vh, 152px);
         right: clamp(156px, 14vw, 236px);
@@ -925,6 +934,14 @@
         background: transparent;
         padding: 0;
         box-shadow: none;
+      }
+
+      .slide-cursor-logo {
+        display: block;
+        width: clamp(175px, 15.5vw, 235px);
+        height: auto;
+        border-radius: 18px;
+        box-shadow: 0 24px 52px rgba(66, 49, 15, 0.15);
       }
 
       .slide-copy--final-cta {
@@ -2693,35 +2710,6 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-musk-exception">
-              <p class="slide-kicker">경쟁자 3</p>
-              <h1 class="slide-title">일론 머스크만이 예외입니다</h1>
-              <p class="slide-body">
-                X가 자동번역과 알고리즘 글로벌화를 하자 세상이 뒤집어졌습니다.<br/>
-                Cursor의 출시로 바이브 코딩 쓰나미가 시작된 것과 같은 원리입니다.<br/>
-                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--musk-exception">
-              <div class="slide-musk-stack">
-                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
-                <div class="slide-musk-service-list">
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
-                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
-                  </section>
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
-                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">차별화점</p>
               <h1 class="slide-title">저희의 생존 전략은<br/>블리츠 스케일링입니다</h1>
@@ -2813,6 +2801,54 @@
 
         <section class="slide">
           <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception">
+              <p class="slide-kicker">참고 사례</p>
+              <h1 class="slide-title">X의 자동 번역이<br/>세상을 뒤집어 놓았습니다</h1>
+              <p class="slide-body">
+                단순히 '번역 보기' 버튼을 자동적용한 것에 불과한데<br/>
+                사람들이 열광한 이유는 무엇일까요?<br/>
+                Cursor와 같은 원리입니다.<br/>
+                열광적인 반응을 예상하지 못하신 분은 반성하셔야 됩니다.<br/>
+                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--musk-exception">
+              <div class="slide-musk-stack">
+                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
+                <div class="slide-musk-service-list">
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
+                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
+                  </section>
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
+                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception">
+              <p class="slide-kicker">참고 사례</p>
+              <h1 class="slide-title">Cursor는 UI/UX 래퍼로<br/>바이브 코딩 세상을 열었습니다</h1>
+              <p class="slide-body">
+                단순히 '번역 보기' 버튼을 자동으로 눌러준 것에 불과한 데 왜 유저들은<br/>
+                Cursor의 출시로 바이브 코딩 쓰나미가 시작된 것과 같은 원리입니다.<br/>
+                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--cursor-logo" aria-hidden="true">
+              <img class="slide-cursor-logo" src="./assets/logo-cursor.svg" alt="" />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
             <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <nav class="slide-final-links" aria-label="Mingle links">
@@ -2845,7 +2881,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 57</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 58</div>
     </main>
 
     <script>
