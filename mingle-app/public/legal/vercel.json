@@ -43,14 +43,13 @@
       "source": "/legal/:locale(ar|de|en|es|fr|hi|it|ja|ko|pt|ru|th|vi|zh-cn|zh-tw)/:page(privacy-policy|terms-of-use)",
       "destination": "/:locale/:page",
       "permanent": true
-    },
-    {
-      "source": "/legal",
-      "destination": "/",
-      "permanent": true
     }
   ],
   "rewrites": [
+    {
+      "source": "/legal",
+      "destination": "/index.html"
+    },
     {
       "source": "/legal/:path*",
       "destination": "/:path*"
@@ -69,7 +68,7 @@
     },
     {
       "source": "/",
-      "destination": "/index.html"
+      "destination": "/xr.html"
     }
   ]
 }
