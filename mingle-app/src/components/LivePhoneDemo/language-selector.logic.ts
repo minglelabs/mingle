@@ -294,16 +294,5 @@ export function buildLanguageSelectorButtonCodes(
   translationLanguages: readonly string[],
   limit = 5,
 ): SttLanguageCode[] {
-  const mergedCodes: SttLanguageCode[] = [];
-
-  for (const code of [
-    ...sanitizeLanguageCodes(speechLanguages, limit),
-    ...sanitizeLanguageCodes(translationLanguages, limit),
-  ]) {
-    if (mergedCodes.includes(code)) continue;
-    mergedCodes.push(code);
-    if (mergedCodes.length >= limit) break;
-  }
-
-  return mergedCodes;
+  return sanitizeLanguageCodes([...speechLanguages, ...translationLanguages], limit);
 }

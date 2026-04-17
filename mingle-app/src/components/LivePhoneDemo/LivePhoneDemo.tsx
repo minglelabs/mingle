@@ -3642,6 +3642,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleTranslationLanguagesLinkedChange = useCallback((nextLinked: boolean) => {
     setTranslationLanguagesLinked(nextLinked)
     if (nextLinked || translationLanguagesLinked) {
+      // When unlinking, seed the independent translation list from the current shared speech list.
       selectedLanguagesRef.current = [...speechLanguagesRef.current]
       setSelectedLanguages([...speechLanguagesRef.current])
     }

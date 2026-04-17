@@ -117,6 +117,9 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       selectedLanguages: selectedLanguages!,
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   if (hasSpeechLanguages) {
@@ -125,6 +128,9 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       speechLanguages: speechLanguages!,
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   if (hasTranslationLanguagesLinked) {
@@ -133,6 +139,9 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       translationLanguagesLinked: body.translationLanguagesLinked as boolean,
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   if (hasStatus) {
@@ -141,6 +150,9 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       status: normalizeConversationChannelStatus(requestedStatus),
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   if (hasTitle) {
@@ -149,6 +161,9 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       title: requestedTitle,
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
   }
 
   if (!conversation) {
