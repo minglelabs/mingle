@@ -469,19 +469,11 @@
 
       .slide-step-transition {
         position: absolute;
-        left: var(--slide-step-transition-left, clamp(-196px, -12.8vw, -148px));
-        width: var(--slide-step-transition-width, clamp(174px, 12vw, 212px));
-        height: var(--slide-step-transition-height, clamp(128px, 12vh, 150px));
+        left: clamp(-196px, -12.8vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(128px, 12vh, 150px);
         pointer-events: none;
         z-index: 4;
-      }
-
-      .slide[data-slide-number="26"] {
-        --slide-step-transition-left: clamp(-196px, -12.8vw, -148px);
-        --slide-step-transition-width: clamp(174px, 12vw, 212px);
-        --slide-step-transition-height: clamp(128px, 12vh, 150px);
-        --slide-step-transition-stroke-width: 8;
-        --slide-step-transition-label-width: clamp(136px, 10vw, 170px);
       }
 
       .slide-step-transition--first {
@@ -504,7 +496,7 @@
       .slide-step-transition polyline {
         fill: none;
         stroke: rgba(245, 158, 11, 0.82);
-        stroke-width: var(--slide-step-transition-stroke-width, 8);
+        stroke-width: 8;
         stroke-linecap: round;
         stroke-linejoin: round;
         filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
@@ -514,7 +506,7 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        width: var(--slide-step-transition-label-width, clamp(136px, 10vw, 170px));
+        width: clamp(136px, 10vw, 170px);
         padding: 8px 12px 9px;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.82);
@@ -2901,10 +2893,6 @@
       const pageCounter = document.getElementById("page-counter");
       const baseSlides = Array.from(track.querySelectorAll(".slide"));
       const slideCount = baseSlides.length;
-
-      baseSlides.forEach((slide, index) => {
-        slide.setAttribute("data-slide-number", String(index + 1));
-      });
 
       const firstClone = baseSlides[0].cloneNode(true);
       const lastClone = baseSlides[slideCount - 1].cloneNode(true);
