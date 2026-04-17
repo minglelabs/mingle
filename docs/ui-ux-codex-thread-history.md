@@ -9,6 +9,11 @@
    Fix: The room now converts the effective native banner inset into explicit top/bottom spacer elements inside the transcript scroll content instead of relying only on scroll-container padding. The native runtime detection and cached banner-layout listener were also relaxed so Android WebView bridge timing cannot skip the native layout event. RN now emits conversation top inset when the native banner is in the top slot and gates conversation bottom inset on the same render-ready conditions. Android bottom inset handling also no longer subtracts bottom-bar clearance when RN has already reported the banner's own height.
    Status: Fixed in-thread on 2026-04-18. Focused native UI and RN WebView layout unit tests passed; Android real-device QA passed after rebuilding the devbox app and clearing the stale WebView 502 state.
 
+2. **Android internal-test WebView could reuse the old banner layout without a URL change**
+   Problem: After installing Android internal-test build `1.1.1 (52)`, the native shell was updated but the WebView still used the same production URL as build `51`. Android can preserve WebView cache across app updates, and the initial URL did not include the native banner position or client build. If the web runtime missed the first native banner-layout event or reused older cached JS, both the transcript spacer and scroll-to-bottom button stayed at their pre-banner offsets even while the native banner rendered at the bottom.
+   Fix: The RN shell now appends `nativeBannerPosition`, the initial matching banner inset, `nativeClientVersion`, and `nativeClientBuild` to the WebView URL. This gives the web runtime an immediate fallback for top/bottom banner clearance and changes the URL on each uploaded build number, forcing Android WebView to re-resolve the current production page instead of silently reusing the previous build's cached route.
+   Status: Fixed in-thread on 2026-04-18 for the next Android internal-test build.
+
 ## 2026-04-17 Android/iOS 1.1.1 Devbox Local QA
 
 ### `2026-04-17-devbox-1.1.1-local-qa` | UI/UX issues found

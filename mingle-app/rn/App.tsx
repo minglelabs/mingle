@@ -41,6 +41,7 @@ import {
   WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
 } from './src/nativeNavigationBridge';
 import {
+  appendNativeRuntimeWebViewParams,
   normalizeNativeBottomBarClearancePx,
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
@@ -1093,6 +1094,13 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
   }, [windowWidthPx]);
+  const nativeInitialBannerInsetPx = useMemo(
+    () => resolveNativeBannerContentHeightPx({
+      bannerHeightPx: nativeBannerHeightPx,
+      canvasScale: nativeCanvasScale,
+    }),
+    [nativeBannerHeightPx, nativeCanvasScale],
+  );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
   const baseWebUrl = useMemo(() => {
@@ -1103,8 +1111,14 @@ function AppInner(): React.JSX.Element {
     const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
-  }, [nativeAvailable, webLocale]);
+    const rawWebUrl = `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    return appendNativeRuntimeWebViewParams(rawWebUrl, {
+      nativeBannerPosition: defaultNativeBannerPosition,
+      nativeBannerInsetPx: nativeInitialBannerInsetPx,
+      clientVersion: RUNTIME_CLIENT_INFO.clientVersion,
+      clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
+    });
+  }, [defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
   const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
   const rememberCurrentWebUrl = useCallback((nextUrl?: string) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
@@ -1229,13 +1243,7 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
-  const nativeTranscriptInsetPx = useMemo(
-    () => resolveNativeBannerContentHeightPx({
-      bannerHeightPx: nativeBannerHeightPx,
-      canvasScale: nativeCanvasScale,
-    }),
-    [nativeBannerHeightPx, nativeCanvasScale],
-  );
+  const nativeTranscriptInsetPx = nativeInitialBannerInsetPx;
   const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
   const activeBannerZoneRef = useRef<BannerZone>('list');
   const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');

@@ -62,6 +62,67 @@ export function shouldEnableNativeWebViewDebugging(params: {
   return params.isDebugBuild;
 }
 
+type NativeRuntimeWebViewBannerPosition = 'top' | 'bottom';
+
+function normalizePositiveInteger(value: unknown): number {
+  const numeric = Number(value ?? '');
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.round(numeric);
+}
+
+function appendQueryParams(raw: string, params: URLSearchParams): string {
+  try {
+    const url = new URL(raw);
+    params.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    return url.toString();
+  } catch {
+    const query = params.toString();
+    if (!query) return raw;
+    const separator = raw.includes('?') ? '&' : '?';
+    return `${raw}${separator}${query}`;
+  }
+}
+
+export function appendNativeRuntimeWebViewParams(
+  raw: string,
+  params: {
+    nativeBannerPosition?: NativeRuntimeWebViewBannerPosition | null;
+    nativeBannerInsetPx?: number;
+    clientVersion?: string;
+    clientBuild?: string;
+  },
+): string {
+  const query = new URLSearchParams();
+  const nativeBannerPosition =
+    params.nativeBannerPosition === 'top' || params.nativeBannerPosition === 'bottom'
+      ? params.nativeBannerPosition
+      : null;
+  const nativeBannerInsetPx = normalizePositiveInteger(params.nativeBannerInsetPx);
+  const clientVersion = params.clientVersion?.trim() || '';
+  const clientBuild = params.clientBuild?.trim() || '';
+
+  if (nativeBannerPosition) {
+    query.set('nativeBannerPosition', nativeBannerPosition);
+    if (nativeBannerInsetPx > 0) {
+      query.set(
+        nativeBannerPosition === 'top' ? 'nativeTopInsetPx' : 'nativeBottomInsetPx',
+        String(nativeBannerInsetPx),
+      );
+    }
+  }
+
+  if (clientVersion) {
+    query.set('nativeClientVersion', clientVersion);
+  }
+  if (clientBuild) {
+    query.set('nativeClientBuild', clientBuild);
+  }
+
+  return appendQueryParams(raw, query);
+}
+
 export function resolveNativeBannerContentHeightPx(params: {
   bannerHeightPx: number;
   canvasScale: number;
