@@ -88,7 +88,7 @@
     },
     {
       "source": "/",
-      "destination": "/xr.html"
+      "destination": "/index.html"
     }
   ]
 }
