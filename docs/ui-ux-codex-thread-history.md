@@ -19,6 +19,11 @@
    Fix: The shared chrome contract and mobile QA now expect the selector dialog contract while keeping the same visible chevron, border, and height affordance checks.
    Status: Resolved on 2026-04-17. The iOS real-device chrome case passed in the 9/9 QA run.
 
+4. **Android devbox AdMob could show only the fallback `AD` badge**
+   Problem: The Android device build and local version-policy server could inherit production AdMob values from vault during `--device-app-env dev`. The production Android banner unit returned `no-fill` during local QA, so the native fallback surface stayed visible as a lone `AD` badge instead of a real creative.
+   Fix: Devbox now forces Google's official sample AdMob app IDs and banner unit IDs for non-production device app envs, and the Next/Metro devbox runtime receives the same sample values after sourcing vault env files. The RN banner also removes the production fallback badge after a no-fill failure instead of leaving `AD` on screen.
+   Status: Resolved on 2026-04-17. Android should request the sample banner unit during local devbox verification.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found

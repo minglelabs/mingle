@@ -322,6 +322,7 @@ android {
         release {
             // Keep local device release installs working when no upload key is configured.
             signingConfig hasUploadSigning ? signingConfigs.upload : signingConfigs.debug
+            debuggable runtimeQaBridgeEnabled == "1"
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

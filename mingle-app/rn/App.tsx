@@ -930,7 +930,8 @@ export function NativeAdBanner(props: {
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
   const isDebugBannerUnit = unitId.startsWith('ca-app-pub-3940256099942544/');
-  const shouldShowFallbackPlaceholder = adLoadState !== 'loaded';
+  const shouldShowFallbackPlaceholder = adLoadState !== 'loaded'
+    && (adLoadState !== 'failed' || isDebugBannerUnit);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   // Reset banner state when a new slot/unit configuration is mounted.
@@ -1099,8 +1100,8 @@ function AppInner(): React.JSX.Element {
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
-    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
-    const qaParams = __DEV__ && RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
+    const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
+    const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
     return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
   }, [nativeAvailable, webLocale]);
@@ -1127,7 +1128,7 @@ function AppInner(): React.JSX.Element {
     );
   }, [baseWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
   const nativeQaBridgeBootstrapScript = useMemo(
-    () => buildNativeQaBridgeBootstrapScript(__DEV__ && RUNTIME_QA_BRIDGE_ENABLED),
+    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED),
     [],
   );
   const webViewSource = useMemo(() => {
@@ -2016,7 +2017,7 @@ function AppInner(): React.JSX.Element {
     }
 
     if (parsed.type === 'native_qa_set_stt_status') {
-      if (!__DEV__) return;
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
       const requestedStatus = typeof parsed.payload?.status === 'string'
         ? parsed.payload.status.trim()
         : '';
