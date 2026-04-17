@@ -93,6 +93,7 @@ import {
 import {
   LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA,
   LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA,
+  LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP,
   LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME,
   LIVE_DEMO_MENU_OVERLAY_CLASSNAME,
   LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME,
@@ -4635,7 +4636,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 type="button"
                 onClick={handleLanguageSelectorButtonPress}
                 aria-label={roomManagementCopy.languageSelectorTitle}
-                aria-haspopup="dialog"
+                aria-haspopup={LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP}
                 aria-expanded={langSelectorOpen}
                 className={LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME}
                 style={{ backgroundColor: '#ffffff' }}

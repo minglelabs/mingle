@@ -9,10 +9,15 @@
    Fix: The native shell now preserves the requested/current WebView URL across debug remounts, the room sends an explicit remount restore URL plus a short-lived restore marker, and the conversation list waits for loaded conversations before consuming that marker. The list also subscribes to native STT status events and performs a one-time active-conversation restore fallback when native status delivery is delayed.
    Status: Resolved on 2026-04-17. Android real-device QA passed 8/8 after restarting devbox and clearing the Android WebView/app data.
 
-2. **iPhone physical-device automation is still blocked at the Appium/XCUITest device layer**
-   Problem: The iPhone app is installed and launchable as version `1.1.1`, but Appium could not create an XCUITest session for the connected physical device. The standard UDID failed with `Unknown device or simulator UDID`, while the CoreDevice identifier moved into a WebDriverAgent `xcodebuild` wait with no progress.
-   Attempted fix: Verified the device through `xctrace`, `devicectl`, and `idevice_id`, confirmed the installed Mingle bundle version, and launched the app with `devicectl`. The automation session still did not become usable.
-   Status: Not resolved in-thread. iOS real-device UI assertions remain blocked until the device/CoreDevice/Appium WDA state is healthy again.
+2. **iPhone physical-device automation initially stalled at the Appium/XCUITest device layer**
+   Problem: The iPhone app was installed and launchable as version `1.1.1`, but the first Appium attempt could not create a usable XCUITest session for the connected physical device. The standard UDID failed with `Unknown device or simulator UDID`, while the CoreDevice identifier moved into a WebDriverAgent `xcodebuild` wait with no progress.
+   Fix: Rechecked the device through `xctrace`, `devicectl`, and `idevice_id`, then reran the physical-device suite with the standard UDID once the device state returned to `connected`. The runner now waits for the stamped native history forward state and falls back to the same WebView history-forward path when Appium's synthetic iOS edge-swipe preview does not commit on the physical device.
+   Status: Resolved on 2026-04-17. iOS real-device QA passed 9/9 against version `1.1.1`.
+
+3. **The language selector accessibility contract had drifted from the current UI shape**
+   Problem: The top-right language control now opens the full language selector surface, but one QA contract still treated it as a dropdown menu and expected `aria-haspopup="menu"`. That made the iOS chrome check fail even though the rendered selector is dialog-like and the visible affordance was intact.
+   Fix: The shared chrome contract and mobile QA now expect the selector dialog contract while keeping the same visible chevron, border, and height affordance checks.
+   Status: Resolved on 2026-04-17. The iOS real-device chrome case passed in the 9/9 QA run.
 
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 

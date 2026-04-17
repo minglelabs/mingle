@@ -1,6 +1,6 @@
 export const LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA = "live-demo-language-button";
 export const LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA = "live-demo-language-chevron";
-export const LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP = "menu";
+export const LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP = "dialog";
 export const LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME =
   "inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-gray-700 transition-colors";
 
