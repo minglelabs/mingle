@@ -3192,7 +3192,7 @@ export default function useRealtimeSTT({
     clearPartialBuffers,
   ])
 
-  const stopRecordingGracefully = useCallback(async (notifyLimitReached = false) => {
+  const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
     const useNativeStt = useNativeSttRef.current
