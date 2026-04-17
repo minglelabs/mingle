@@ -8,6 +8,17 @@
   },
   "cleanUrls": true,
   "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
   "redirects": [
     {
       "source": "/:page(privacy-policy|terms-of-use).html",
