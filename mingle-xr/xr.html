@@ -38,20 +38,20 @@
         window.addEventListener("orientationchange", applyViewport);
       })();
     </script>
-    <title>Mingle 소셜 번역기</title>
-    <meta name="description" content="세상에서 제일 편한 번역기를 만듭니다." />
-    <meta property="og:title" content="Mingle 소셜 번역기" />
-    <meta property="og:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <title>언어 장벽 없는 음성 메신저 밍글</title>
+    <meta name="description" content="헬로톡, 디스코드보다 편한 대화 경험을 만듭니다." />
+    <meta property="og:title" content="언어 장벽 없는 음성 메신저 밍글" />
+    <meta property="og:description" content="헬로톡, 디스코드보다 편한 대화 경험을 만듭니다." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://translator.minglelabs.xyz/xr" />
     <meta property="og:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="2400" />
     <meta property="og:image:height" content="1260" />
-    <meta property="og:image:alt" content="Mingle 소셜 번역기" />
+    <meta property="og:image:alt" content="언어 장벽 없는 음성 메신저 밍글" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Mingle 소셜 번역기" />
-    <meta name="twitter:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta name="twitter:title" content="언어 장벽 없는 음성 메신저 밍글" />
+    <meta name="twitter:description" content="헬로톡, 디스코드보다 편한 대화 경험을 만듭니다." />
     <meta name="twitter:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
     <style>
       :root {
@@ -255,6 +255,10 @@
         max-width: min(50rem, calc(100% - clamp(400px, 35vw, 520px)));
       }
 
+      .slide-copy--with-cursor-logo {
+        max-width: min(62rem, calc(100% - clamp(260px, 22vw, 360px)));
+      }
+
       .slide-copy--with-tool-list {
         max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
       }
@@ -283,7 +287,7 @@
 
       .slide-side-media--hellotalk-secondary {
         top: clamp(48px, 10vh, 108px);
-        right: clamp(40px, 0vw, 128px);
+        right: clamp(50px, 7vw, 128px);
         width: clamp(300px, 38vw, 520px);
         height: clamp(280px, 28vw, 420px);
       }
@@ -338,13 +342,35 @@
 
       .slide-side-media--customer-hurdles {
         top: clamp(150px, 18vh, 224px);
-        right: clamp(72px, 10vw, 132px);
+        right: clamp(100px, 15vw, 200px);
         width: clamp(290px, 26vw, 380px);
       }
 
       .slide-side-media--solution-stack {
         top: clamp(154px, 18vh, 238px);
         right: clamp(72px, 7vw, 118px);
+        width: clamp(420px, 34vw, 520px);
+      }
+
+      .slide-side-media--social-requirements {
+        width: clamp(300px, 27vw, 680px);
+        top: clamp(154px, 18vh, 238px);
+        right: clamp(72px, 10vw, 118px);
+      }
+
+      .slide-side-media--user-reactions {
+        width: clamp(300px, 30vw, 680px);
+        top: clamp(180px, 20vh, 300px);
+        right: clamp(100px, 12vw, 150px);
+      }
+
+      .slide-side-media--user-reactions .slide-solution-points {
+        grid-auto-rows: auto;
+      }
+
+      .slide-side-media--post-launch-sources {
+        top: clamp(184px, 22vh, 238px);
+        right: clamp(140px, 15vw, 140px);
         width: clamp(420px, 34vw, 520px);
       }
 
@@ -371,9 +397,34 @@
 
       .slide-side-media--social-cloud {
         top: clamp(78px, 11vh, 142px);
-        right: clamp(38px, 4.2vw, 74px);
+        right: clamp(80px, 10vw, 110px);
         width: clamp(300px, 26vw, 410px);
         height: clamp(430px, 42vw, 590px);
+      }
+
+      .slide-side-media--blitz-cloud .slide-competitor-cloud {
+        isolation: isolate;
+      }
+
+      .slide-mingle-flight {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: clamp(170px, 13vw, 228px);
+        height: clamp(170px, 13vw, 228px);
+        transform: translate(-50%, -50%) rotate(-8deg);
+        z-index: 6;
+        pointer-events: none;
+      }
+
+      .slide-mingle-flight-logo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: clamp(36px, 3.2vw, 52px);
+        object-fit: contain;
+        filter: drop-shadow(0 26px 38px rgba(12, 12, 12, 0.22));
       }
 
       .slide-side-media--ai-native-stack {
@@ -386,6 +437,15 @@
         top: clamp(72px, 9vh, 124px);
         right: clamp(74px, 8vw, 128px);
         width: clamp(350px, 31vw, 470px);
+      }
+
+      .slide-side-media--cursor-logo {
+        top: 50%;
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
+        display: grid;
+        place-items: center;
+        transform: translateY(-50%);
       }
 
       .slide-side-media--tool-list {
@@ -403,6 +463,12 @@
       .slide-side-media--experience-list-proof {
         top: clamp(152px, 18vh, 226px);
         right: clamp(88px, 10vw, 96px);
+        width: clamp(268px, 22vw, 324px);
+      }
+
+      .slide-side-media--ai-solution-proof {
+        top: clamp(152px, 18vh, 226px);
+        right: clamp(190px, 26vw, 96px);
         width: clamp(268px, 22vw, 324px);
       }
 
@@ -463,6 +529,12 @@
         z-index: 4;
       }
 
+      .slide-step-transition--conversion {
+        left: clamp(-196px, -10vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(100px, 10vh, 150px);
+      }
+
       .slide-step-transition--first {
         top: clamp(42px, 4vw, 52px);
       }
@@ -489,6 +561,11 @@
         filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
       }
 
+      .slide-step-transition--conversion path,
+      .slide-step-transition--conversion polyline {
+        stroke-width: 10;
+      }
+
       .slide-step-transition-label {
         position: absolute;
         top: 50%;
@@ -505,6 +582,10 @@
         letter-spacing: -0.045em;
         text-align: center;
         transform: translate(-50%, -50%) rotate(-3deg);
+      }
+
+      .slide-step-transition--conversion .slide-step-transition-label {
+        width: clamp(136px, 10vw, 170px);
       }
 
       .slide-step-transition--disabled,
@@ -694,6 +775,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         column-gap: clamp(12px, 1.4vw, 20px);
         align-items: start;
+      }
+
+      .slide-side-media--social-requirements .slide-solution-columns {
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .slide-solution-points {
@@ -925,6 +1010,14 @@
         background: transparent;
         padding: 0;
         box-shadow: none;
+      }
+
+      .slide-cursor-logo {
+        display: block;
+        width: clamp(175px, 15.5vw, 235px);
+        height: auto;
+        border-radius: 22px;
+        box-shadow: 0 24px 52px rgba(66, 49, 15, 0.15);
       }
 
       .slide-copy--final-cta {
@@ -1474,8 +1567,8 @@
         <section class="slide slide--hero">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">소셜 번역기 밍글</h1>
-              <p class="slide-body">이 자료는 26년 4월 12일 제작되었습니다</p>
+              <h1 class="slide-title">언어 장벽 없는<br/>음성 메신저 밍글</h1>
+              <p class="slide-body">헬로톡, 디스코드보다 편한 대화 경험을 만듭니다.<br/>최종 업데이트 - 2026-04-17</p>
             </div>
           </article>
         </section>
@@ -1486,9 +1579,11 @@
               <p class="slide-kicker">목차</p>
               <h1 class="slide-title">
                 <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></a>
-                <a class="slide-toc-item" href="#13"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
-                <a class="slide-toc-item" href="#29"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
-                <a class="slide-toc-item" href="#53"><span class="slide-toc-index">4.</span><span class="slide-toc-text">팀</span></a>
+                <a class="slide-toc-item" href="#11"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
+                <a class="slide-toc-item" href="#21"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
+                <a class="slide-toc-item" href="#27"><span class="slide-toc-index">4.</span><span class="slide-toc-text">비전</span></a>
+                <a class="slide-toc-item" href="#37"><span class="slide-toc-index">5.</span><span class="slide-toc-text">팀</span></a>
+                <a class="slide-toc-item" href="#40"><span class="slide-toc-index">6.</span><span class="slide-toc-text">부록</span></a>
               </h1>
             </div>
           </article>
@@ -1510,8 +1605,8 @@
               <p class="slide-kicker">문제</p>
               <h1 class="slide-title slide-title--quoted">
                 <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
-                <span class="slide-title-text">외국인과 친해지고 싶어도,<br/>
-                언어 장벽을 넘기 어렵다</span>
+                <span class="slide-title-text">외국인과 친해지고 싶은데<br/>
+                언어 장벽을 넘기 힘들다</span>
                 <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
               </h1>
             </div>
@@ -1536,11 +1631,7 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-brand-collage">
               <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">기존의 통번역 서비스들은<br/>소셜링에는 별 도움이 안됩니다</h1>
-              <p class="slide-body">
-                외국인과 친해지고 싶은 상황에선 크게 도움을 받기 어렵고,<br/>
-                업무 툴로 쓰거나 혹은 여행시 간헐적으로만 쓸 수 있을 뿐입니다.<br/>
-              </p>
+              <h1 class="slide-title">기존의 통번역 서비스는<br/>소셜링에 쓰긴 어렵습니다</h1>
             </div>
             <div class="slide-side-media slide-side-media--brand-collage" aria-hidden="true">
               <div class="slide-brand-cloud">
@@ -1579,56 +1670,16 @@
             <div class="slide-copy">
               <p class="slide-kicker">원인</p>
               <h1 class="slide-title">소셜링 상황의 요구사항을<br/>충족하지 못하기 때문입니다</h1>
-              <p class="slide-body">
-                단순한 질의응답형 LLM이나 파파고 같은 푸쉬앤톡 번역기로는<br/>
-                복잡한 상황에 유연하게 대응하기 어렵습니다.
-              </p>
             </div>
-            <div class="slide-side-media slide-side-media--solution-stack">
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--social-requirements">
               <div class="slide-solution-columns">
                 <div class="slide-solution-points">
-                  <div class="slide-solution-point">끊기지 않는 지속 번역</div>
-                  <div class="slide-solution-point">실시간 동시 통번역</div>
-                  <div class="slide-solution-point">발화 및 발화자 분리</div>
-                  <div class="slide-solution-point">3개국어 동시 스위칭</div>
-                </div>
-                <div class="slide-solution-points slide-solution-points--tail">
-                  <div class="slide-solution-point">푸쉬앤톡 번역</div>
-                  <div class="slide-solution-point">선택적 음성 출력</div>
-                  <div class="slide-solution-point">백그라운드 실행</div>
-                  <p class="slide-solution-more">등등등...</p>
+                  <div class="slide-solution-point">버튼을 눌러야 해서 대화가 자꾸 끊김</div>
+                  <div class="slide-solution-point">실시간 번역이 안됨</div>
+                  <div class="slide-solution-point">발화 및 발화자 분리가 안됨</div>
+                  <div class="slide-solution-point">언어 설정을 자꾸 바꿔줘야함</div>
                 </div>
               </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-solution-stack">
-              <p class="slide-kicker">원인</p>
-              <h1 class="slide-title">소셜링에 필요한 UI/UX는<br/>상황마다 전부 다릅니다</h1>
-              <p class="slide-body">
-                즉 고객에게 필요한 것은 단순한 번역이 아니라<br/>
-                "필요한 상황에서, 원하는 형태로, 끊기지 않는 경험"입니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--reason" aria-hidden="true">
-              <img
-                class="slide-reason-image slide-reason-image--left"
-                src="./assets/slide7-left.jpeg"
-                alt=""
-              />
-              <img
-                class="slide-reason-image slide-reason-image--middle"
-                src="./assets/slide7-middle.jpg"
-                alt=""
-              />
-              <img
-                class="slide-reason-image slide-reason-image--right"
-                src="./assets/slide7-right.jpg"
-                alt=""
-              />
             </div>
           </article>
         </section>
@@ -1678,13 +1729,9 @@
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
               <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">이 문제들은 전부 2026년 현재는<br/>AI 발전으로 해소 되었습니다</h1>
-              <p class="slide-body">
-                과거에는 기술적, 비용적 한계로 인해 해결이 어려웠습니다.<br/>
-                하지만 최근 1~2년 사이 AI 기술의 발전으로 전부 해결이 가능해졌습니다.
-              </p>
+              <h1 class="slide-title">이 문제들은 AI 발전으로<br/>현재는 해결 가능합니다</h1>
             </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof">
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--ai-solution-proof">
               <div class="slide-tool-items">
                 <section class="slide-tool-item">
                   <div class="slide-tool-heading">
@@ -1711,47 +1758,9 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">이를 통해 각 상황에 맞는<br/>맞춤식 통번역 경험을 만듭니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list">
-              <div class="slide-tool-items">
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
-                  </div>
-                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
-                  </div>
-                  <p class="slide-tool-description">오프라인 대화 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
-                  </div>
-                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
-                  </div>
-                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
-                </section>
-                <p class="slide-solution-more">등등등...</p>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
             <div class="slide-copy slide-copy--center">
               <p class="slide-kicker">밍글</p>
-              <h1 class="slide-title">그래서 저희가 만드는 건<br/>소셜링을 위한<br/>모바일 통번역 앱입니다</h1>
+              <h1 class="slide-title"><br/>그래서 저희는 소셜링을 위한<br/>모바일 통번역 앱을 만듭니다</h1>
             </div>
           </article>
         </section>
@@ -1769,14 +1778,14 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
+              <p class="slide-kicker">타겟 고객</p>
               <h1 class="slide-title">저희의 첫 번째 타겟은<br/>
                 헬로톡 보이스룸 유저입니다
               </h1>
               <p class="slide-body">
-                헬로톡은 7천만 이상이 가입한 언어 교환 플랫폼입니다.<br/>
-                중국인 창업자가 2012년 창업했으며,<br/>
-                최근에도 3년만에 2배 이상 성장한 것으로 추정됩니다.
+                7천만명 이상의 언어 교환 플랫폼<br/>
+                언어 학습에 방점<br/>
+                주로 소셜 미디어나 데이팅 서비스로 사용
               </p>
             </div>
             <div class="slide-side-media slide-side-media--hellotalk-primary" aria-hidden="true">
@@ -1792,66 +1801,10 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">헬로톡은 학습 위주 서비스라<br/>
-                대다수 유저는 쉽게 이탈합니다
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">헬로톡 보이스룸을 켜두고<br/>
+                밍글을 켜서 번역합니다
               </h1>
-              <p class="slide-body">
-                언어 교육이 핵심 BM이라 통번역을 제한적으로만 제공합니다.<br/>
-                그래서 외국어 학습에 동기부여가 충분한 유저만 살아 남습니다.<br/>
-                대부분의 유저는 초보 단계를 벗어나지 못하고 이탈합니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--hellotalk1"
-                src="./assets/hellotalk1.jpg"
-                alt="HelloTalk Voiceroom interface"
-              />
-              <img
-                class="slide-preview-image slide-preview-image--hellotalk2"
-                src="./assets/hellotalk2.jpg"
-                alt="HelloTalk language exchange interface"
-              />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">밍글은 언어라는 허들을 넘어<br/>
-                대화 그 자체를 목표로 합니다
-              </h1>
-              <p class="slide-body">
-                유저가 정말로 원하는 것은 외국인 친구를 사귀는 것이고<br/>
-                외국어는 사실 허들에 불과하다는 생각입니다.<br/>
-                밍글은 언어가 통하지 않아도 외국인과 수다 떨 수 있게 만듭니다.<br/>
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--gaming" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--gaming"
-                src="./assets/gaming.jpg"
-                alt="Gaming community visual"
-              />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">초기에는 헬로톡 보이스룸의<br/>
-                익스텐션으로 포지셔닝합니다
-              </h1>
-              <p class="slide-body">
-                헬로톡 보이스룸은 백그라운드로 돌리고,<br/>
-                포어그라운드에서는 밍글을 실행합니다.<br/>
-                헬로톡에서 나온 음성이 밍글에서 실시간으로 번역됩니다.<br/>
-              </p>
             </div>
             <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
               <img
@@ -1873,8 +1826,47 @@
         <section class="slide">
           <article class="slide-shell">
             <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">헬로톡 유저 중 일부는<br/>
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">밍글을 접해본 유저들의<br/>
+                반응은 긍정적입니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--social-requirements slide-side-media--user-reactions">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">"한 한국인 남성이 아랍어와 터키어를<br/>전부 알아들어서 너무 신기했다."</div>
+                  <div class="slide-solution-point">"번역할 때마다 끊기지 않고<br/>자막처럼 자동 재생되니까 너무 편하다."</div>
+                  <div class="slide-solution-point">"난 러시아어로, 넌 한국어로 말하는데도<br/>서로 알아들으니까 너무 좋다."</div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">밍글을 접해본 유저들의<br/>
+                반응은 긍정적입니다 2
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--social-requirements slide-side-media--user-reactions">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">"해외 여행 갈 때 무조건 써야겠다."</div>
+                  <div class="slide-solution-point">"애플 번역기보다 훨씬 잘 알아듣는다."</div>
+                  <div class="slide-solution-point">"이런 건 완전히 처음 본다.<br/>당신은 분명 부자가 될 것 같다."</div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">이들 중 일부는<br/>
                 벌써 밍글에 의존합니다
               </h1>
               <p class="slide-body">
@@ -1895,34 +1887,6 @@
                   alt="Mingle interface"
                 />
               </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">타겟 고객 1</p>
-              <h1 class="slide-title">밍글에도 보이스룸을 출시해<br/>
-                자연스런 정착을 유도합니다
-              </h1>
-              <p class="slide-body">
-                저희가 보이스룸과 메신저 등 유사 기능만 잘 제공해준다면,<br/>
-                통번역에 의존적인 유저가 굳이 헬로톡에 남아 있을 이유가 없습니다.<br/>
-                게다가 자신의 대화상대를 밍글로 초대하는 바이럴 루프도 기대됩니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--community-stack" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--reddittalk-top"
-                src="./assets/reddittalk.jpg"
-                alt="Reddit talk reference"
-              />
-              <img
-                class="slide-preview-image slide-preview-image--clubhouse-bottom"
-                src="./assets/clubhouse.jpg"
-                alt="Clubhouse voice room reference"
-              />
             </div>
           </article>
         </section>
@@ -1961,6 +1925,630 @@
                 </section>
                 <p class="slide-solution-more">등등등...</p>
               </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">출시 전 프로티타이핑<br/>
+                다운로드 시도 43%<br/>
+                이메일 제출 13%
+                </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">44명 웹사이트 진입</h2>
+                  <p class="slide-tool-description">언어 장벽이 해결된 외국인 만남 앱 제안</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--conversion slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">43% 전환</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">19명 다운로드 시도</h2>
+                  <p class="slide-tool-description">앱 다운로드 버튼 클릭</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--conversion slide-step-transition--second">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">31% 전환</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">6명 이메일 제출</h2>
+                  <p class="slide-tool-description">사전 예약을 위한 이메일 요구에 응답</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">출시 후 한 달<br/>
+                다운로드 약 120명<br/>
+                DAU 약 10명
+                </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack slide-side-media--post-launch-sources">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">헬로톡 약 30여명</div>
+                  <div class="slide-solution-point">지인 약 10여명</div>
+                  <div class="slide-solution-point">유료 광고 X</div>
+                </div>
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">오프라인 1명</div>
+                  <div class="slide-solution-point">기타 3명</div>
+                  <div class="slide-solution-point">나머지는 오가닉</div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">가격 - 무료로 서비스<br/>
+                배너 광고 매출 - 40원 / 사용시간<br/>
+                AI 추론 비용 - 400원 / 사용시간
+                </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>3. 전략</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-hurdles">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">저희가 해결할 문제는<br/>크게 두 가지입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--customer-hurdles">
+              <div class="slide-hurdles-stack">
+                <section class="slide-hurdle-item">
+                  <h2 class="slide-hurdle-title">첫째, 의사소통이 어렵다</h2>
+                  <p class="slide-hurdle-description">언어 장벽의 존재<br/>대화 소재의 부재</p>
+                </section>
+                <section class="slide-hurdle-item">
+                  <h2 class="slide-hurdle-title">둘째, 외국인을 만나기 어렵다</h2>
+                  <p class="slide-hurdle-description">매칭 및 디스커버리의 어려움<br/>물리적 만남의 어려움</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">세 단계로 나눠서<br/>문제를 해결합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">바이럴 루프를 도모해서<br/>다음 단계로 성장합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second slide-step-transition--disabled">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">그래서 저희는 보이스 챗 등<br/>메신저 경험을 만듭니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack slide-side-media--conversation-stack" aria-hidden="true">
+              <div class="slide-phone-frame slide-phone-frame--gaming-back">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-back"
+                  src="./assets/conversation-list.png"
+                  alt="Mingle interface"
+                />
+              </div>
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/conversation-room.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">유저가 충분해지면<br/>디스커버리도 제공합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first slide-step-transition--disabled">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 + 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>4. 비전</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title"><br/>결국 저희의 궁극적인 목표는<br/>AI 네이티브 SNS입니다
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-venndiagram.png"
+              alt="Business venn diagram"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-matrix.png"
+              alt="Business matrix"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-competitor-tool-cloud">
+              <p class="slide-kicker">경쟁자 1</p>
+              <h1 class="slide-title">통번역,노트테이킹 서비스는<br/>소셜링에 관심이 없습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--competitor-tool-cloud">
+              <div class="slide-competitor-cloud">
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 12%; --y: 18%; --s: clamp(62px, 5vw, 84px); --r: -11deg" src="./assets/logo-transync.jpg" alt="Transync AI" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 31%; --y: 10%; --s: clamp(64px, 5.1vw, 86px); --r: 6deg" src="./assets/logo-google-translate.jpg" alt="Google Translate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 47%; --y: 21%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-apple-translate.jpg" alt="Apple Translate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 68%; --y: 13%; --s: clamp(64px, 5.1vw, 86px); --r: 12deg" src="./assets/logo-felo.jpg" alt="Felo Translator" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 87%; --y: 24%; --s: clamp(60px, 4.9vw, 82px); --r: -4deg" src="./assets/logo-papago.jpg" alt="Papago" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 20%; --y: 40%; --s: clamp(66px, 5.2vw, 88px); --r: 9deg" src="./assets/logo-deepl.png" alt="DeepL" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 38%; --y: 31%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-microsoft-translator.png" alt="Microsoft Translator" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 57%; --y: 42%; --s: clamp(60px, 4.9vw, 82px); --r: 13deg" src="./assets/logo-itranslate.png" alt="iTranslate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 75%; --y: 34%; --s: clamp(64px, 5.1vw, 86px); --r: -13deg" src="./assets/logo-jotme.png" alt="JotMe" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 91%; --y: 46%; --s: clamp(58px, 4.7vw, 80px); --r: 7deg" src="./assets/logo-cuckoo.png" alt="Cuckoo" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 11%; --y: 62%; --s: clamp(60px, 4.8vw, 82px); --r: -6deg" src="./assets/logo-tiro.png" alt="Tiro" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 29%; --y: 54%; --s: clamp(64px, 5.1vw, 86px); --r: 8deg" src="./assets/logo-char.png" alt="Char" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 64%; --s: clamp(66px, 5.2vw, 88px); --r: -9deg" src="./assets/logo-granola.png" alt="Granola" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 56%; --s: clamp(60px, 4.8vw, 82px); --r: 14deg" src="./assets/logo-alt.png" alt="Alt" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 84%; --y: 68%; --s: clamp(58px, 4.7vw, 80px); --r: -12deg" src="./assets/logo-otter.png" alt="Otter.ai" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 17%; --y: 86%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-fireflies.png" alt="Fireflies.ai" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 36%; --y: 77%; --s: clamp(64px, 5.1vw, 86px); --r: 9deg" src="./assets/logo-fathom.png" alt="Fathom" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 55%; --y: 88%; --s: clamp(60px, 4.8vw, 82px); --r: -5deg" src="./assets/logo-tldv.png" alt="tl;dv" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 72%; --y: 78%; --s: clamp(64px, 5.1vw, 86px); --r: 7deg" src="./assets/logo-read-ai.png" alt="Read AI" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 90%; --y: 88%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-notion.png" alt="Notion" />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">반면, 저희는 소셜링 영역에서<br/>네트워크 효과 구축을 목표로 합니다</h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-ai-native-stack">
+              <p class="slide-kicker">경쟁자 2</p>
+              <h1 class="slide-title">AI 네이티브 기업들은<br/>콜드스타트 문제가 있습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-native-stack">
+              <div class="slide-ai-native-stack">
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-chatgpt.jpg" alt="" />
+                  <h2 class="slide-ai-native-name">ChatGPT</h2>
+                </section>
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-claude.png" alt="" />
+                  <h2 class="slide-ai-native-name">Claude</h2>
+                </section>
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-gemini.png" alt="" />
+                  <h2 class="slide-ai-native-name">Gemini</h2>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">저희는 날카롭게 시작해서<br/>콜드스타트를 극복합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-social-cloud">
+              <p class="slide-kicker">경쟁자 3</p>
+              <h1 class="slide-title">메신저와 SNS는 통번역을<br/>사소한 문제로 치부합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud">
+              <div class="slide-competitor-cloud">
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 10%; --s: clamp(70px, 5.6vw, 94px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 24%; --y: 25%; --s: clamp(76px, 6vw, 102px); --r: -10deg" src="./assets/logo-instagram.png" alt="Instagram" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 73%; --y: 22%; --s: clamp(70px, 5.6vw, 94px); --r: 6deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 85%; --y: 45%; --s: clamp(72px, 5.7vw, 98px); --r: -8deg" src="./assets/logo-tinder.png" alt="Tinder" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 28%; --y: 50%; --s: clamp(78px, 6.2vw, 106px); --r: 11deg" src="./assets/logo-discord.png" alt="Discord" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 53%; --y: 51%; --s: clamp(74px, 5.9vw, 100px); --r: -4deg" src="./assets/logo-wechat.jpg" alt="WeChat" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">지금 블리츠 스케일링으로<br/>앞서 나가야 합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud slide-side-media--blitz-cloud">
+              <div class="slide-competitor-cloud">
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 10%; --s: clamp(70px, 5.6vw, 94px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 24%; --y: 25%; --s: clamp(76px, 6vw, 102px); --r: -10deg" src="./assets/logo-instagram.png" alt="Instagram" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 73%; --y: 22%; --s: clamp(70px, 5.6vw, 94px); --r: 6deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 85%; --y: 45%; --s: clamp(72px, 5.7vw, 98px); --r: -8deg" src="./assets/logo-tinder.png" alt="Tinder" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 28%; --y: 50%; --s: clamp(78px, 6.2vw, 106px); --r: 11deg" src="./assets/logo-discord.png" alt="Discord" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 53%; --y: 51%; --s: clamp(74px, 5.9vw, 100px); --r: -4deg" src="./assets/logo-wechat.jpg" alt="WeChat" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+                <div class="slide-mingle-flight">
+                  <img class="slide-mingle-flight-logo" src="./assets/mingle-icon.png" alt="Mingle" />
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>5. 팀</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--hero">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">팀원 구합니다</h1>
+              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
+              <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
+              <nav class="slide-final-links" aria-label="Mingle links">
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
+                  </a>
+                  <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
+                    <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
+                    <span>GitHub</span>
+                  </a>
+                  <a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/">
+                    <span class="slide-final-logo--linkedin" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                </div>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
+                    <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
+                  </a>
+                  <a
+                    class="slide-final-link slide-final-link--store"
+                    href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+                  >
+                    <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
+                  </a>
+                </div>
+              </nav>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>6. 부록</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception slide-copy--with-cursor-logo">
+              <p class="slide-kicker">참고 사례</p>
+              <h1 class="slide-title">X의 자동 번역이<br/>세상을 뒤집어 놓았습니다</h1>
+              <p class="slide-body">
+                열광적인 반응을 예상하지 못하신 분은 반성하셔야 됩니다.<br/>
+                단순히 '번역 보기' 버튼을 자동적용한 것에 불과한데<br/>
+                사람들이 열광한 이유는 무엇일까요?<br/>
+                사용 환경에 완전히 통합하는 것이 그만큼 중요하기 때문입니다.<br/>
+                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--musk-exception">
+              <div class="slide-musk-stack">
+                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
+                <div class="slide-musk-service-list">
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
+                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
+                  </section>
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
+                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception">
+              <p class="slide-kicker">참고 사례</p>
+              <h1 class="slide-title">커서도 같은 원리로<br/>SW 개발을 혁신했습니다</h1>
+              <p class="slide-body">
+                커서 이전에도 AI가 코딩에 많은 도움을 주고는 있었습니다.<br/>
+                커서가 출시되고 나서는 완전한 바이브 코딩이 시작 됐습니다.<br/>
+                개발 환경에 AI를 완전히 통합했기 때문입니다.<br/>
+                그 전까지는 AI 챗과 개발환경을 왔다갔다 해야만 했습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--cursor-logo" aria-hidden="true">
+              <img class="slide-cursor-logo" src="./assets/logo-cursor.png" alt="" />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">헬로톡은 학습 위주라서<br/>
+                대부분 쉽게 이탈합니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk1"
+                src="./assets/hellotalk1.jpg"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk2"
+                src="./assets/hellotalk2.jpg"
+                alt="HelloTalk language exchange interface"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">밍글은 언어 장벽을 없애고<br/>
+                놀이만을 목표로 합니다
+              </h1>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming"
+                src="./assets/gaming.jpg"
+                alt="Gaming community visual"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">밍글에도 보이스룸을 출시해<br/>
+                자연스런 정착을 유도합니다
+              </h1>
+              <p class="slide-body">
+                저희가 보이스룸과 메신저 등 유사 기능만 잘 제공해준다면,<br/>
+                통번역에 의존적인 유저가 굳이 헬로톡에 남아 있을 이유가 없습니다.<br/>
+                게다가 자신의 대화상대를 밍글로 초대하는 바이럴 루프도 기대됩니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--community-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--reddittalk-top"
+                src="./assets/reddittalk.jpg"
+                alt="Reddit talk reference"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--clubhouse-bottom"
+                src="./assets/clubhouse.jpg"
+                alt="Clubhouse voice room reference"
+              />
             </div>
           </article>
         </section>
@@ -2105,59 +2693,111 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">지표</p>
-              <h1 class="slide-title">출시 전 테스트<br/>
-                1단 전환율 43%<br/>
-                2단 전환율 13%
-                </h1>
+            <div class="slide-copy slide-copy--with-solution-stack">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">소셜링에 필요한 UI/UX는<br/>상황마다 전부 다르다는 겁니다</h1>
               <p class="slide-body">
-                약 200명을 모수로 두 차례 테스트해봤습니다.<br/>
-                위 수치는 높게 나온 테스트의 수치입니다.<br/>
+                즉 고객에게 필요한 것은 단순한 번역이 아니라<br/>
+                "필요한 상황에서, 원하는 형태로, 끊기지 않는 경험"입니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--reason" aria-hidden="true">
+              <img
+                class="slide-reason-image slide-reason-image--left"
+                src="./assets/slide7-left.jpeg"
+                alt=""
+              />
+              <img
+                class="slide-reason-image slide-reason-image--middle"
+                src="./assets/slide7-middle.jpg"
+                alt=""
+              />
+              <img
+                class="slide-reason-image slide-reason-image--right"
+                src="./assets/slide7-right.jpg"
+                alt=""
+              />
             </div>
           </article>
         </section>
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">지표</p>
-              <h1 class="slide-title">출시 후 한 달<br/>
-                다운로드 약 120명<br/>
-                DAU 약 10명
-                </h1>
-              <p class="slide-body">
-                저희가 영업한 건 30명~50명 정도이며, 광고는 하지 않았습니다.<br/>
-                상당수는 그저 다운로드만 받은 지인들입니다.<br/>
-                서너차례 큰 장애가 있었음에도 꾸준히 사용되고 있습니다.
-              </p>
+            <div class="slide-copy slide-copy--with-experience-list">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">저희는 각 상황에 맞는<br/>맞춤식 통번역 경험을 만듭니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
+                  </div>
+                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
+                  </div>
+                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
+                  </div>
+                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
+                </section>
+                <p class="slide-solution-more">등등등...</p>
+              </div>
             </div>
           </article>
         </section>
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">지표</p>
-              <h1 class="slide-title">무료 서비스<br/>
-                배너 광고 매출 - 40원 / 사용시간<br/>
-                AI 추론 비용 - 400원 / 사용시간
-                </h1>
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 1</p>
+              <h1 class="slide-title">이미 유저는 헬로톡 대신<br/>밍글에서 대화를 원합니다</h1>
               <p class="slide-body">
-                연 50% 비용 감소시 4년뒤부터 배너만으로 공헌이익이 발생합니다.<br/>
-                여러 종류의 유저 경험을 만들어서 WIP가 높은 경우는 유료화할 생각입니다.
+                검증해야할 가설은, 밍글 내에서 보이스 챗이 충분히 가능하다면<br/>
+                헬로톡에서 만난 친구를 초대해 밍글에서 대화를 나눌 거라는 점입니다.
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
             </div>
           </article>
         </section>
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">
-                <span class="slide-title-text"><br/>3. 전략</span>
-              </h1>
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 2</p>
+              <h1 class="slide-title">오프라인 인연도<br/>온라인으로 옮겨옵니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--offline-conversation" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--offline-conversation"
+                src="./assets/offline-conversation.png"
+                alt=""
+              />
             </div>
           </article>
         </section>
@@ -2185,27 +2825,6 @@
                 장차 외국인과 만나고, 대화하고, 관계를 이어갈 때 발생하는<br/>
                 모든 문제를 해결하는 서비스가 되고 싶습니다.
               </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-hurdles">
-              <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--customer-hurdles">
-              <div class="slide-hurdles-stack">
-                <section class="slide-hurdle-item">
-                  <h2 class="slide-hurdle-title">첫째, 의사소통이 어렵다</h2>
-                  <p class="slide-hurdle-description">언어 장벽의 존재<br/>대화 소재의 부재</p>
-                </section>
-                <section class="slide-hurdle-item">
-                  <h2 class="slide-hurdle-title">둘째, 외국인을 만나기 어렵다</h2>
-                  <p class="slide-hurdle-description">매칭 및 디스커버리의 어려움<br/>물리적 만남의 어려움</p>
-                </section>
-              </div>
             </div>
           </article>
         </section>
@@ -2254,520 +2873,6 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
-              <p class="slide-kicker">문제</p>
-              <h1 class="slide-title">연결 문제에 대한 접근은<br/>세 단계로 나뉩니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
-              <div class="slide-tool-items">
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">1단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
-                  </div>
-                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
-                </section>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
-                  </div>
-                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
-                </section>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">3단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
-                  </div>
-                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">바이럴 루프를 도모해서<br/>다음 단계로 성장합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
-              <div class="slide-tool-items slide-tool-items--viral-loop">
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">1단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
-                  </div>
-                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--first">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
-                  </div>
-                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--second">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">3단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
-                  </div>
-                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">우선 친구를 초대하도록<br/>만드는 것에 집중합니다</h1>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
-              <div class="slide-tool-items slide-tool-items--viral-loop">
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">1단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
-                  </div>
-                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--first">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
-                  </div>
-                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--second slide-step-transition--disabled">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
-                  <span class="slide-tool-step-number">3단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
-                  </div>
-                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">바이럴 타겟 1</p>
-              <h1 class="slide-title">이미 헬로톡 유저 중 일부는<br/>밍글에서 대화하길 원합니다</h1>
-              <p class="slide-body">
-                검증해야할 가설은, 밍글 내에서 보이스 챗이 충분히 가능하다면<br/>
-                헬로톡에서 만난 친구를 초대해 밍글에서 대화를 나눌 거라는 점입니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--gaming-back"
-                src="./assets/hellotalk-voiceroom2.png"
-                alt="HelloTalk Voiceroom interface"
-              />
-              <div class="slide-phone-frame slide-phone-frame--gaming-front">
-                <img
-                  class="slide-preview-image slide-preview-image--gaming-front"
-                  src="./assets/mingle.png"
-                  alt="Mingle interface"
-                />
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">바이럴 타겟 1</p>
-              <h1 class="slide-title">그래서 저희는 보이스 챗 등<br/>메신저 경험을 만듭니다</h1>
-              <p class="slide-body">
-                저희는 대화록을 단순 번역 화면이 아니라 대화방으로 만들고 있습니다.<br/>
-                음성 통번역뿐 아니라 메시징, 그룹챗, 초대, 공유까지 가능하게 합니다.<br/>
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--gaming-stack slide-side-media--conversation-stack" aria-hidden="true">
-              <div class="slide-phone-frame slide-phone-frame--gaming-back">
-                <img
-                  class="slide-preview-image slide-preview-image--gaming-back"
-                  src="./assets/conversation-list.png"
-                  alt="Mingle interface"
-                />
-              </div>
-              <div class="slide-phone-frame slide-phone-frame--gaming-front">
-                <img
-                  class="slide-preview-image slide-preview-image--gaming-front"
-                  src="./assets/conversation-room.png"
-                  alt="Mingle interface"
-                />
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-side-media">
-              <p class="slide-kicker">바이럴 타겟 2</p>
-              <h1 class="slide-title">오프라인에서 만난 인연 또한<br/>밍글에서 이어갈 수 있습니다</h1>
-              <p class="slide-body">
-                오프라인 모임에서 만난 외국인 친구들과 헤어지고 나서도<br/>
-                밍글에 초대해 대화를 이어갈 수 있습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--offline-conversation" aria-hidden="true">
-              <img
-                class="slide-preview-image slide-preview-image--offline-conversation"
-                src="./assets/offline-conversation.png"
-                alt=""
-              />
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
-              <p class="slide-kicker">해결책</p>
-              <h1 class="slide-title">유저가 충분해지면<br/>매칭 피쳐도 가능해집니다</h1>
-              <p class="slide-body">
-                현재의 헬로톡처럼 새로운 인연을 찾는 사람들 또한<br/>
-                밍글을 찾게 만들 수 있을 거라는 생각입니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
-              <div class="slide-tool-items slide-tool-items--viral-loop">
-                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
-                  <span class="slide-tool-step-number">1단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
-                  </div>
-                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--first slide-step-transition--disabled">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">2단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
-                  </div>
-                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
-                </section>
-                <div class="slide-step-transition slide-step-transition--second">
-                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
-                    <path d="M154 8 C46 8 46 132 154 132" />
-                    <polyline points="136 118 154 132 136 146" />
-                  </svg>
-                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
-                </div>
-                <section class="slide-tool-item slide-tool-item--numbered">
-                  <span class="slide-tool-step-number">3단계</span>
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
-                  </div>
-                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">비전</p>
-              <h1 class="slide-title"><br/>결국 저희의 궁극적인 목표는<br/>AI 네이티브 SNS입니다
-              </h1>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--image-only">
-            <img
-              class="slide-full-image"
-              src="./assets/business-venndiagram.png"
-              alt="Business venn diagram"
-            />
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell slide-shell--image-only">
-            <img
-              class="slide-full-image"
-              src="./assets/business-matrix.png"
-              alt="Business matrix"
-            />
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-competitor-tool-cloud">
-              <p class="slide-kicker">경쟁자 1</p>
-              <h1 class="slide-title">통번역,노트테이킹 서비스들은<br/>소셜링에 관심이 없습니다</h1>
-              <p class="slide-body">
-                업무 영역 중심으로 빠르게 성장하고 있지만 경쟁이 너무나도 치열합니다.<br/>
-                이들이 매출은 낼 수 있을지라도 영업이익까지 낼 수 있을지는 의문입니다.<br/>
-                다행히도 이들은 소셜링에는 별 관심이 없는듯 합니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--competitor-tool-cloud">
-              <div class="slide-competitor-cloud">
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 12%; --y: 18%; --s: clamp(62px, 5vw, 84px); --r: -11deg" src="./assets/logo-transync.jpg" alt="Transync AI" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 31%; --y: 10%; --s: clamp(64px, 5.1vw, 86px); --r: 6deg" src="./assets/logo-google-translate.jpg" alt="Google Translate" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 47%; --y: 21%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-apple-translate.jpg" alt="Apple Translate" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 68%; --y: 13%; --s: clamp(64px, 5.1vw, 86px); --r: 12deg" src="./assets/logo-felo.jpg" alt="Felo Translator" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 87%; --y: 24%; --s: clamp(60px, 4.9vw, 82px); --r: -4deg" src="./assets/logo-papago.jpg" alt="Papago" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 20%; --y: 40%; --s: clamp(66px, 5.2vw, 88px); --r: 9deg" src="./assets/logo-deepl.png" alt="DeepL" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 38%; --y: 31%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-microsoft-translator.png" alt="Microsoft Translator" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 57%; --y: 42%; --s: clamp(60px, 4.9vw, 82px); --r: 13deg" src="./assets/logo-itranslate.png" alt="iTranslate" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 75%; --y: 34%; --s: clamp(64px, 5.1vw, 86px); --r: -13deg" src="./assets/logo-jotme.png" alt="JotMe" />
-                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 91%; --y: 46%; --s: clamp(58px, 4.7vw, 80px); --r: 7deg" src="./assets/logo-cuckoo.png" alt="Cuckoo" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 11%; --y: 62%; --s: clamp(60px, 4.8vw, 82px); --r: -6deg" src="./assets/logo-tiro.png" alt="Tiro" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 29%; --y: 54%; --s: clamp(64px, 5.1vw, 86px); --r: 8deg" src="./assets/logo-char.png" alt="Char" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 64%; --s: clamp(66px, 5.2vw, 88px); --r: -9deg" src="./assets/logo-granola.png" alt="Granola" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 56%; --s: clamp(60px, 4.8vw, 82px); --r: 14deg" src="./assets/logo-alt.png" alt="Alt" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 84%; --y: 68%; --s: clamp(58px, 4.7vw, 80px); --r: -12deg" src="./assets/logo-otter.png" alt="Otter.ai" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 17%; --y: 86%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-fireflies.png" alt="Fireflies.ai" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 36%; --y: 77%; --s: clamp(64px, 5.1vw, 86px); --r: 9deg" src="./assets/logo-fathom.png" alt="Fathom" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 55%; --y: 88%; --s: clamp(60px, 4.8vw, 82px); --r: -5deg" src="./assets/logo-tldv.png" alt="tl;dv" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 72%; --y: 78%; --s: clamp(64px, 5.1vw, 86px); --r: 7deg" src="./assets/logo-read-ai.png" alt="Read AI" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 90%; --y: 88%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-notion.png" alt="Notion" />
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy">
-              <p class="slide-kicker">차별화점</p>
-              <h1 class="slide-title">반면, 저희는 소셜링 영역에서<br/>네트워크 효과 구축을 목표로 합니다</h1>
-              <p class="slide-body">
-                래퍼 서비스는 가치는 있지만 해자는 없다는 큰 문제가 있습니다.<br/>
-                저희는 그래서 네트워크 효과로 해자를 만드는 것이 목표입니다.
-              </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-ai-native-stack">
-              <p class="slide-kicker">경쟁자 2</p>
-              <h1 class="slide-title">AI 네이티브 기업들은<br/>콜드스타트 문제가 있습니다</h1>
-              <p class="slide-body">
-                AI 네이티브 메신저를 만들겠다는 시도는 많지만 성과는 없습니다.<br/>
-                콜드 스타트 프라블럼을 해결하지 못하기 때문입니다.<br/>
-                날카롭게 시작하지 않아서 그렇습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--ai-native-stack">
-              <div class="slide-ai-native-stack">
-                <section class="slide-ai-native-item">
-                  <img class="slide-ai-native-logo" src="./assets/logo-chatgpt.jpg" alt="" />
-                  <h2 class="slide-ai-native-name">ChatGPT</h2>
-                </section>
-                <section class="slide-ai-native-item">
-                  <img class="slide-ai-native-logo" src="./assets/logo-claude.png" alt="" />
-                  <h2 class="slide-ai-native-name">Claude</h2>
-                </section>
-                <section class="slide-ai-native-item">
-                  <img class="slide-ai-native-logo" src="./assets/logo-gemini.png" alt="" />
-                  <h2 class="slide-ai-native-name">Gemini</h2>
-                </section>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-experience-list">
-              <p class="slide-kicker">차별화점</p>
-              <h1 class="slide-title">저희는 날카롭게 시작해서<br/>콜드스타트 문제를 해결합니다</h1>
-              <p class="slide-body">
-                각 소셜링 버티컬의 통번역 문제에만 집중합니다.<br/>
-                AI 네이티브 메신저로의 변화는 그 다음 단계입니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--experience-list">
-              <div class="slide-tool-items">
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
-                  </div>
-                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
-                  </div>
-                  <p class="slide-tool-description">오프라인 대화 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
-                  </div>
-                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
-                </section>
-                <section class="slide-tool-item">
-                  <div class="slide-tool-heading">
-                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
-                  </div>
-                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
-                </section>
-                <p class="slide-solution-more">등등등...</p>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-social-cloud">
-              <p class="slide-kicker">경쟁자 3</p>
-              <h1 class="slide-title">메신저/소셜미디어 기업들은<br/>통번역을 사소한 문제로 치부합니다</h1>
-              <p class="slide-body">
-                그냥 메시지에 번역 버튼 하나 붙인다고 끝이 아닙니다.<br/>
-                심리스한 의사소통을 위해서는 UI/UX를 아주 섬세하게 깎아야 합니다.<br/>
-                그래야 해외여행객들이 미용실 예약이라도 겨우 할 수 있습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud">
-              <div class="slide-competitor-cloud">
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 10%; --s: clamp(70px, 5.6vw, 94px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 24%; --y: 25%; --s: clamp(76px, 6vw, 102px); --r: -10deg" src="./assets/logo-instagram.png" alt="Instagram" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 73%; --y: 22%; --s: clamp(70px, 5.6vw, 94px); --r: 6deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 85%; --y: 45%; --s: clamp(72px, 5.7vw, 98px); --r: -8deg" src="./assets/logo-tinder.png" alt="Tinder" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 28%; --y: 50%; --s: clamp(78px, 6.2vw, 106px); --r: 11deg" src="./assets/logo-discord.png" alt="Discord" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 53%; --y: 51%; --s: clamp(74px, 5.9vw, 100px); --r: -4deg" src="./assets/logo-wechat.jpg" alt="WeChat" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
-                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--with-musk-exception">
-              <p class="slide-kicker">경쟁자 3</p>
-              <h1 class="slide-title">일론 머스크만이 예외입니다</h1>
-              <p class="slide-body">
-                X가 자동번역과 알고리즘 글로벌화를 하자 세상이 뒤집어졌습니다.<br/>
-                Cursor의 출시로 바이브 코딩 쓰나미가 시작된 것과 같은 원리입니다.<br/>
-                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
-              </p>
-            </div>
-            <div class="slide-side-media slide-side-media--musk-exception">
-              <div class="slide-musk-stack">
-                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
-                <div class="slide-musk-service-list">
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
-                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
-                  </section>
-                  <section class="slide-ai-native-item slide-musk-service-item">
-                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
-                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">차별화점</p>
-              <h1 class="slide-title">저희의 생존 전략은<br/>블리츠 스케일링입니다</h1>
-              <p class="slide-body">
-                다행히도 아직은 일론 머스크 뿐이고 그마저도 단순 번역에 그칩니다.<br/>
-                저희와 버티컬이 아예 다르기도 하고, 비용 문제도 심할 거라 추측합니다.<br/>
-                모두가 바벨탑 건설을 시도하기 전에 저희가 제일 먼저 선점해야만 합니다.
-              </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <p class="slide-kicker">타이밍</p>
-              <h1 class="slide-title">타이밍은 지금 뿐입니다.</h1>
-              <p class="slide-body">
-                바벨탑의 등장은 역사상 처음 있는 일입니다.<br/>
-                다행히 아직은 다들 준비되어 있지 않습니다.<br/>
-                저희가 만들겠습니다.
-              </p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">
-                <span class="slide-title-text"><br/>4. 팀</span>
-              </h1>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide slide--hero">
-          <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
-              <h1 class="slide-title">팀원 구합니다</h1>
-              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="slide">
-          <article class="slide-shell">
             <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
               <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
               <nav class="slide-final-links" aria-label="Mingle links">
@@ -2800,7 +2905,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 58</div>
     </main>
 
     <script>
