@@ -1,0 +1,3158 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        var DESIGN_WIDTH = 1600;
+        var MOBILE_BREAKPOINT = 900;
+        var meta = document.getElementById("viewport-meta");
+
+        function applyViewport() {
+          var screenWidth = Math.min(
+            window.screen ? window.screen.width : window.innerWidth,
+            window.innerWidth || Infinity
+          );
+          var isMobile = screenWidth <= MOBILE_BREAKPOINT;
+
+          if (isMobile) {
+            var scale = screenWidth / DESIGN_WIDTH;
+            meta.setAttribute(
+              "content",
+              "width=" + DESIGN_WIDTH +
+                ", initial-scale=" + scale +
+                ", minimum-scale=" + scale +
+                ", maximum-scale=" + scale +
+                ", user-scalable=no"
+            );
+            document.documentElement.classList.add("is-mobile-viewport");
+          } else {
+            meta.setAttribute("content", "width=device-width, initial-scale=1.0");
+            document.documentElement.classList.remove("is-mobile-viewport");
+          }
+        }
+
+        applyViewport();
+        window.addEventListener("resize", applyViewport);
+        window.addEventListener("orientationchange", applyViewport);
+      })();
+    </script>
+    <title>Mingle 소셜 번역기</title>
+    <meta name="description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta property="og:title" content="Mingle 소셜 번역기" />
+    <meta property="og:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://translator.minglelabs.xyz/xr" />
+    <meta property="og:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta property="og:image:alt" content="Mingle 소셜 번역기" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mingle 소셜 번역기" />
+    <meta name="twitter:description" content="세상에서 제일 편한 번역기를 만듭니다." />
+    <meta name="twitter:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260416-2" />
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #fffdf7;
+        --title: #2d2a1e;
+        --body: rgba(45, 42, 30, 0.72);
+        --accent: #fbbc32;
+        --accent-strong: #f97316;
+        --slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --deck-width: 100vw;
+        --deck-height: 100vh;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background:
+          radial-gradient(140% 100% at 0% 0%, rgba(251, 188, 50, 0.09), transparent 52%),
+          radial-gradient(120% 110% at 100% 100%, rgba(249, 115, 22, 0.05), transparent 50%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 44%, #fffdf7 100%),
+          var(--page);
+        color: var(--title);
+        font-family: "SF Pro Display", "Pretendard", "Segoe UI", sans-serif;
+      }
+
+      .deck {
+        position: relative;
+        width: var(--deck-width);
+        height: var(--deck-height);
+        overflow: hidden;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+
+      .track {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: row;
+        will-change: transform;
+        transition: transform 260ms var(--slide-ease);
+      }
+
+      .slide {
+        flex: 0 0 var(--deck-width);
+        width: var(--deck-width);
+        height: var(--deck-height);
+        padding: 0;
+      }
+
+      .slide-shell {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: flex-start;
+        position: relative;
+        padding: clamp(24px, 3.4vw, 56px) clamp(40px, 7vw, 96px) clamp(40px, 7vw, 96px);
+        background: transparent;
+      }
+
+      .slide-shell--image-only {
+        align-items: center;
+        justify-content: center;
+        padding: clamp(18px, 2.2vw, 34px);
+      }
+
+      .slide-full-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+      }
+
+      .slide-copy {
+        display: grid;
+        gap: clamp(18px, 2vw, 28px);
+        max-width: min(980px, 100%);
+        justify-items: start;
+        position: relative;
+        --kicker-slot: clamp(36px, 3vw, 44px);
+        padding-top: var(--kicker-slot);
+        margin-top: clamp(124px, calc(30vh - 112px), 196px);
+        text-align: left;
+      }
+
+      .slide-copy--center {
+        justify-items: center;
+        margin-inline: auto;
+        text-align: center;
+      }
+
+      .slide-copy--center .slide-kicker {
+        left: 50%;
+        transform: translateX(-50%);
+        justify-items: center;
+      }
+
+      .slide-copy--center .slide-body {
+        margin-inline: auto;
+      }
+
+      .slide-copy--toc {
+        gap: clamp(42px, 4vw, 60px);
+        margin-top: clamp(84px, calc(22vh - 80px), 136px);
+      }
+
+      .slide-copy--toc .slide-kicker {
+        gap: 6px;
+        font-size: clamp(2.15rem, 3vw, 2.9rem);
+        font-weight: 850;
+      }
+
+      .slide-copy--toc .slide-title {
+        display: grid;
+        gap: 10px;
+        justify-items: start;
+        margin-top: clamp(28px, 2.6vw, 42px);
+        font-size: clamp(2rem, 2.8vw, 3rem);
+        font-weight: 560;
+      }
+
+      .slide-toc-item {
+        display: grid;
+        grid-template-columns: clamp(2.2rem, 2.6vw, 2.8rem) auto;
+        column-gap: clamp(16px, 1.4vw, 24px);
+        align-items: baseline;
+        width: fit-content;
+        color: inherit;
+        text-decoration: none;
+        border-radius: 14px;
+        cursor: pointer;
+        transition:
+          color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .slide-toc-item:hover,
+      .slide-toc-item:focus-visible {
+        color: var(--accent-strong);
+        outline: none;
+        transform: translateX(0.3rem);
+      }
+
+      .slide-toc-index {
+        text-align: left;
+      }
+
+      .slide-toc-text {
+        text-align: left;
+      }
+
+      .slide-copy--with-side-media {
+        max-width: min(54rem, calc(100% - clamp(260px, 28vw, 420px)));
+      }
+
+      .slide-copy--with-reason-media {
+        max-width: min(56rem, calc(100% - clamp(420px, 42vw, 660px)));
+      }
+
+      .slide-copy--with-wide-side-media {
+        max-width: min(980px, calc(100% - clamp(160px, 16vw, 240px)));
+      }
+
+      .slide-copy--with-hurdles {
+        max-width: min(48rem, calc(100% - clamp(340px, 32vw, 460px)));
+      }
+
+      .slide-copy--with-solution-stack {
+        max-width: min(40rem, calc(100% - clamp(520px, 42vw, 640px)));
+      }
+
+      .slide-copy--with-brand-collage {
+        max-width: min(44rem, calc(100% - clamp(360px, 34vw, 520px)));
+      }
+
+      .slide-copy--with-competitor-cloud {
+        max-width: min(44rem, calc(100% - clamp(520px, 47vw, 720px)));
+      }
+
+      .slide-copy--with-competitor-tool-cloud {
+        max-width: min(62rem, calc(100% - clamp(360px, 31vw, 500px)));
+      }
+
+      .slide-copy--with-social-cloud {
+        max-width: min(64rem, calc(100% - clamp(300px, 26vw, 420px)));
+      }
+
+      .slide-copy--with-ai-native-stack {
+        max-width: min(50rem, calc(100% - clamp(380px, 34vw, 500px)));
+      }
+
+      .slide-copy--with-musk-exception {
+        max-width: min(50rem, calc(100% - clamp(400px, 35vw, 520px)));
+      }
+
+      .slide-copy--with-tool-list {
+        max-width: min(42rem, calc(100% - clamp(420px, 36vw, 560px)));
+      }
+
+      .slide-copy--with-experience-list {
+        max-width: min(46rem, calc(100% - clamp(360px, 31vw, 470px)));
+      }
+
+      .slide-copy--with-experience-list-proof {
+        max-width: min(58rem, calc(100% - clamp(280px, 23vw, 360px)));
+      }
+
+      .slide-side-media {
+        position: absolute;
+        top: clamp(48px, 8vh, 108px);
+        right: clamp(76px, 10vw, 156px);
+        display: block;
+      }
+
+      .slide-side-media--hellotalk-primary {
+        top: clamp(48px, 8vh, 108px);
+        right: clamp(0px, 0vw, 0px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--hellotalk-secondary {
+        top: clamp(48px, 10vh, 108px);
+        right: clamp(40px, 0vw, 128px);
+        width: clamp(300px, 38vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--gaming {
+        top: clamp(48px, 12vh, 108px);
+        right: clamp(30px, 5vw, 0px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(280px, 28vw, 420px);
+      }
+
+      .slide-side-media--gaming-stack {
+        top: clamp(44px, 9vh, 100px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(320px, 32vw, 470px);
+      }
+
+      .slide-side-media--reddittalk {
+        top: clamp(44px, 9vh, 100px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(320px, 32vw, 470px);
+      }
+
+      .slide-side-media--community-stack {
+        top: clamp(32px, 7vh, 88px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(360px, 36vw, 540px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
+      .slide-side-media--offline-conversation {
+        top: clamp(54px, 8vh, 104px);
+        right: clamp(72px, 8vw, 132px);
+        width: clamp(280px, 28vw, 400px);
+      }
+
+      .slide-side-media--travel-post-stack {
+        top: clamp(76px, 11vh, 136px);
+        right: clamp(56px, 7vw, 112px);
+        width: clamp(360px, 31vw, 468px);
+        height: clamp(420px, 39vw, 560px);
+      }
+
+      .slide-side-media--networking-collage {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(24px, 3vw, 68px);
+        width: clamp(360px, 34vw, 500px);
+        height: clamp(340px, 31vw, 460px);
+      }
+
+      .slide-side-media--customer-hurdles {
+        top: clamp(150px, 18vh, 224px);
+        right: clamp(72px, 10vw, 132px);
+        width: clamp(290px, 26vw, 380px);
+      }
+
+      .slide-side-media--solution-stack {
+        top: clamp(154px, 18vh, 238px);
+        right: clamp(72px, 7vw, 118px);
+        width: clamp(420px, 34vw, 520px);
+      }
+
+      .slide-side-media--brand-collage {
+        top: clamp(118px, 14vh, 186px);
+        right: clamp(42px, 4.8vw, 84px);
+        width: clamp(360px, 34vw, 520px);
+        height: clamp(300px, 30vw, 420px);
+      }
+
+      .slide-side-media--competitor-cloud {
+        top: clamp(76px, 10vh, 134px);
+        right: clamp(34px, 4vw, 72px);
+        width: clamp(520px, 48vw, 740px);
+        height: clamp(440px, 43vw, 620px);
+      }
+
+      .slide-side-media--competitor-tool-cloud {
+        top: clamp(112px, 14vh, 176px);
+        right: clamp(22px, 3vw, 54px);
+        width: clamp(390px, 33vw, 520px);
+        height: clamp(340px, 34vw, 470px);
+      }
+
+      .slide-side-media--social-cloud {
+        top: clamp(78px, 11vh, 142px);
+        right: clamp(38px, 4.2vw, 74px);
+        width: clamp(300px, 26vw, 410px);
+        height: clamp(430px, 42vw, 590px);
+      }
+
+      .slide-side-media--ai-native-stack {
+        top: clamp(138px, 17vh, 218px);
+        right: clamp(96px, 10vw, 156px);
+        width: clamp(310px, 28vw, 420px);
+      }
+
+      .slide-side-media--musk-exception {
+        top: clamp(72px, 9vh, 124px);
+        right: clamp(74px, 8vw, 128px);
+        width: clamp(350px, 31vw, 470px);
+      }
+
+      .slide-side-media--tool-list {
+        top: clamp(92px, 12vh, 152px);
+        right: clamp(156px, 14vw, 236px);
+        width: clamp(292px, 25vw, 348px);
+      }
+
+      .slide-side-media--experience-list {
+        top: clamp(118px, 14vh, 182px);
+        right: clamp(96px, 9vw, 156px);
+        width: clamp(292px, 25vw, 348px);
+      }
+
+      .slide-side-media--experience-list-proof {
+        top: clamp(152px, 18vh, 226px);
+        right: clamp(88px, 10vw, 96px);
+        width: clamp(268px, 22vw, 324px);
+      }
+
+      .slide-side-media--goal-steps {
+        width: clamp(360px, 31vw, 460px);
+      }
+
+      .slide-tool-items--viral-loop {
+        position: relative;
+      }
+
+      .slide-tool-item--numbered {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        column-gap: clamp(14px, 1.25vw, 20px);
+        align-items: center;
+        padding: clamp(18px, 1.55vw, 22px) clamp(16px, 1.35vw, 20px) clamp(18px, 1.55vw, 22px)
+          clamp(30px, 2.45vw, 38px);
+      }
+
+      .slide-tool-step-number {
+        position: relative;
+        grid-column: 1;
+        grid-row: 1;
+        min-width: clamp(72px, 5.7vw, 92px);
+        min-height: clamp(38px, 3vw, 46px);
+        display: inline-grid;
+        place-items: center;
+        padding: 0 0.62em;
+        border: 1px solid rgba(245, 158, 11, 0.24);
+        border-radius: 15px;
+        font-size: clamp(1.22rem, 1.52vw, 1.56rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.88);
+        background: linear-gradient(135deg, rgba(255, 247, 225, 0.98) 0%, rgba(255, 230, 171, 0.78) 100%);
+        box-shadow: 0 12px 24px rgba(245, 158, 11, 0.16);
+      }
+
+      .slide-tool-item--numbered .slide-tool-heading {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        align-self: center;
+      }
+
+      .slide-tool-item--numbered .slide-tool-description {
+        grid-column: 1 / -1;
+      }
+
+      .slide-step-transition {
+        position: absolute;
+        left: clamp(-196px, -12.8vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(128px, 12vh, 150px);
+        pointer-events: none;
+        z-index: 4;
+      }
+
+      .slide-step-transition--first {
+        top: clamp(42px, 4vw, 52px);
+      }
+
+      .slide-step-transition--second {
+        top: clamp(200px, 20vw, 176px);
+      }
+
+      .slide-step-transition svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+
+      .slide-step-transition path,
+      .slide-step-transition polyline {
+        fill: none;
+        stroke: rgba(245, 158, 11, 0.82);
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
+      }
+
+      .slide-step-transition-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: clamp(136px, 10vw, 170px);
+        padding: 8px 12px 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.08);
+        color: rgba(45, 42, 30, 0.78);
+        font-size: clamp(1rem, 1vw, 1rem);
+        font-weight: 800;
+        line-height: 1.25;
+        letter-spacing: -0.045em;
+        text-align: center;
+        transform: translate(-50%, -50%) rotate(-3deg);
+      }
+
+      .slide-step-transition--disabled,
+      .slide-tool-item--disabled {
+        opacity: 0.32;
+        filter: grayscale(0.55);
+      }
+
+      .slide-side-media--customer-hurdles .slide-hurdle-description {
+        color: rgba(45, 42, 30, 0.62);
+      }
+
+      .slide-side-media--tool-list .slide-tool-description,
+      .slide-side-media--experience-list .slide-tool-description {
+        color: rgba(45, 42, 30, 0.62);
+      }
+
+      .slide-travel-post-stack {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-travel-post-card {
+        position: absolute;
+        overflow: hidden;
+        border-radius: 24px;
+        box-shadow: 0 24px 48px rgba(72, 57, 18, 0.14);
+      }
+
+      .slide-travel-post-card--top {
+        top: 0;
+        right: 0;
+        width: 68%;
+        z-index: 1;
+        transform: rotate(-4deg);
+      }
+
+      .slide-travel-post-card--bottom {
+        left: 0;
+        bottom: 8%;
+        width: 98%;
+        z-index: 2;
+        transform: rotate(3deg);
+      }
+
+      .slide-travel-post-image {
+        display: block;
+        width: 100%;
+      }
+
+      .slide-travel-post-mask {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 16%;
+        background: rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+      }
+
+      .slide-travel-post-card--top .slide-travel-post-mask:not(.slide-travel-post-mask--middle) {
+        height: 11%;
+      }
+
+      .slide-travel-post-mask--middle {
+        top: 21%;
+        left: 3%;
+        right: auto;
+        width: 52%;
+        height: 42%;
+        border-radius: 18px;
+      }
+
+      .slide-networking-collage {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-networking-card {
+        position: absolute;
+        overflow: hidden;
+        border-radius: 28px;
+        box-shadow: 0 28px 56px rgba(72, 57, 18, 0.16);
+      }
+
+      .slide-networking-card--top {
+        top: 0;
+        left: 2%;
+        width: 54%;
+        z-index: 2;
+        transform: rotate(-6deg);
+      }
+
+      .slide-networking-card--bottom {
+        right: 0;
+        bottom: 0;
+        width: 90%;
+        z-index: 1;
+        transform: rotate(4deg);
+      }
+
+      .slide-networking-image {
+        display: block;
+        width: 100%;
+        filter: blur(4px);
+        transform: scale(1.02);
+      }
+
+      .slide-hurdles-stack {
+        display: grid;
+        gap: clamp(24px, 2.8vh, 38px);
+      }
+
+      .slide-hurdle-item {
+        position: relative;
+        padding: clamp(18px, 1.8vw, 28px) clamp(18px, 1.9vw, 28px) clamp(18px, 1.8vw, 26px) clamp(28px, 2.4vw, 40px);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 252, 246, 0.48) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-hurdle-item::before {
+        content: "";
+        position: absolute;
+        top: clamp(16px, 1.6vw, 22px);
+        bottom: clamp(16px, 1.6vw, 22px);
+        left: clamp(12px, 1.2vw, 18px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-hurdle-item--muted {
+        background: linear-gradient(180deg, rgba(247, 245, 241, 0.78) 0%, rgba(239, 236, 229, 0.52) 100%);
+        box-shadow: 0 12px 26px rgba(72, 57, 18, 0.04);
+      }
+
+      .slide-hurdle-item--muted::before {
+        background: rgba(88, 82, 69, 0.22);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-title {
+        color: rgba(27, 24, 17, 0.52);
+      }
+
+      .slide-hurdle-item--muted .slide-hurdle-description {
+        color: rgba(45, 42, 30, 0.46);
+      }
+
+      .slide-hurdle-item--focused {
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.92) 0%, rgba(255, 233, 181, 0.72) 100%);
+        box-shadow: 0 24px 48px rgba(245, 158, 11, 0.18);
+      }
+
+      .slide-hurdle-item--focused::before {
+        width: 5px;
+        background: linear-gradient(180deg, #f59e0b 0%, #f97316 100%);
+      }
+
+      .slide-hurdle-title {
+        margin: 0;
+        font-size: clamp(1.52rem, 2vw, 2.08rem);
+        font-weight: 650;
+        line-height: 1.3;
+        letter-spacing: -0.03em;
+        color: rgba(27, 24, 17, 0.96);
+      }
+
+      .slide-hurdle-description {
+        margin: clamp(10px, 1.1vw, 14px) 0 0;
+        font-size: clamp(1.18rem, 1.55vw, 1.42rem);
+        font-weight: 500;
+        line-height: 1.45;
+        color: rgba(45, 42, 30, 0.74);
+      }
+
+      .slide-hurdle-line--muted {
+        color: rgba(45, 42, 30, 0.42);
+      }
+
+      .slide-solution-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: clamp(12px, 1.4vw, 20px);
+        align-items: start;
+      }
+
+      .slide-solution-points {
+        display: grid;
+        gap: clamp(10px, 1.2vh, 14px);
+        grid-auto-rows: minmax(clamp(78px, 7.2vw, 98px), auto);
+      }
+
+      .slide-solution-points--tail {
+        align-content: start;
+      }
+
+      .slide-solution-point {
+        position: relative;
+        display: flex;
+        align-items: center;
+        padding: clamp(14px, 1.35vw, 18px) clamp(4px, 0.5vw, 8px) clamp(14px, 1.35vw, 18px)
+          clamp(28px, 2.2vw, 36px);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 252, 246, 0.42) 100%);
+        box-shadow: 0 14px 28px rgba(72, 57, 18, 0.06);
+        font-size: clamp(1.18rem, 1.6vw, 1.42rem);
+        font-weight: 600;
+        line-height: 1.42;
+        letter-spacing: -0.02em;
+        color: rgba(27, 24, 17, 0.94);
+      }
+
+      .slide-solution-point::before {
+        content: "";
+        position: absolute;
+        top: clamp(12px, 1.1vw, 16px);
+        bottom: clamp(12px, 1.1vw, 16px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-solution-more {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: clamp(1rem, 1.08vw, 1.1rem);
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.56);
+        text-align: center;
+      }
+
+      .slide-brand-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-brand-chip {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        gap: clamp(14px, 1.2vw, 18px);
+        padding: clamp(16px, 1.55vw, 22px) clamp(22px, 2vw, 30px);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.14);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-brand-chip::before {
+        display: none;
+      }
+
+      .slide-brand-logo {
+        width: clamp(42px, 3.2vw, 54px);
+        height: clamp(42px, 3.2vw, 54px);
+        border-radius: 12px;
+        flex: 0 0 auto;
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-brand-label {
+        font-size: clamp(1.1rem, 1.34vw, 1.5rem);
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+        white-space: nowrap;
+      }
+
+      .slide-brand-chip--chatgpt {
+        top: 6%;
+        left: 16%;
+        transform: rotate(-10deg);
+        z-index: 4;
+      }
+
+      .slide-brand-chip--google {
+        top: 18%;
+        right: 10%;
+        transform: rotate(7deg);
+        z-index: 3;
+      }
+
+      .slide-brand-chip--apple {
+        top: 34%;
+        left: 8%;
+        transform: rotate(-6deg);
+        z-index: 1;
+      }
+
+      .slide-brand-chip--transync {
+        bottom: 18%;
+        right: 14%;
+        transform: rotate(11deg);
+        z-index: 4;
+      }
+
+      .slide-brand-chip--felo {
+        bottom: 6%;
+        left: 18%;
+        transform: rotate(-8deg);
+        z-index: 2;
+      }
+
+      .slide-brand-chip--papago {
+        top: 39%;
+        left: 34%;
+        transform: rotate(3deg);
+        z-index: 4;
+      }
+
+      .slide-competitor-cloud {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide-competitor-logo {
+        position: absolute;
+        left: var(--x);
+        top: var(--y);
+        width: var(--s);
+        height: var(--s);
+        padding: clamp(8px, 0.72vw, 12px);
+        border-radius: clamp(16px, 1.55vw, 24px);
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 20px 40px rgba(66, 49, 15, 0.13);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        object-fit: contain;
+        transform: translate(-50%, -50%) rotate(var(--r));
+        backdrop-filter: blur(10px);
+      }
+
+      .slide-competitor-logo--translation {
+        box-shadow: 0 20px 42px rgba(249, 115, 22, 0.15);
+      }
+
+      .slide-competitor-logo--note {
+        box-shadow: 0 20px 42px rgba(45, 42, 30, 0.13);
+      }
+
+      .slide-ai-native-stack {
+        display: grid;
+        gap: clamp(18px, 2vh, 26px);
+      }
+
+      .slide-ai-native-item {
+        display: flex;
+        align-items: center;
+        gap: clamp(18px, 1.6vw, 24px);
+        padding: clamp(20px, 1.8vw, 28px) clamp(22px, 2vw, 32px);
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 252, 246, 0.62) 100%);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.11);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-ai-native-logo {
+        width: clamp(56px, 4.8vw, 78px);
+        height: clamp(56px, 4.8vw, 78px);
+        border-radius: 18px;
+        object-fit: contain;
+        flex: 0 0 auto;
+        box-shadow: 0 14px 28px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-ai-native-name {
+        margin: 0;
+        font-size: clamp(1.46rem, 1.85vw, 2rem);
+        font-weight: 760;
+        line-height: 1;
+        letter-spacing: -0.035em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-musk-stack {
+        display: grid;
+        gap: clamp(16px, 1.8vh, 24px);
+      }
+
+      .slide-musk-photo {
+        width: 100%;
+        height: clamp(230px, 23vw, 330px);
+        border-radius: 32px;
+        object-fit: cover;
+        object-position: center 18%;
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-musk-service-list {
+        display: grid;
+        gap: clamp(12px, 1.4vh, 18px);
+      }
+
+      .slide-musk-service-item {
+        padding: clamp(18px, 1.55vw, 24px) clamp(20px, 1.8vw, 28px);
+      }
+
+      .slide-musk-service-item .slide-ai-native-logo {
+        background: #ffffff;
+        padding: clamp(10px, 0.9vw, 14px);
+      }
+
+      .slide-musk-service-item .slide-ai-native-logo--xchat {
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+      }
+
+      .slide-copy--final-cta {
+        gap: clamp(22px, 2.2vw, 34px);
+        margin-top: clamp(86px, calc(24vh - 84px), 148px);
+      }
+
+      .slide-title--final-qa {
+        font-size: clamp(3.2rem, 5.2vw, 6.5rem);
+      }
+
+      .slide-final-links {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 24px);
+        width: min(100%, 1180px);
+        margin-top: clamp(4px, 0.8vw, 12px);
+      }
+
+      .slide-final-link-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        gap: clamp(14px, 1.4vw, 22px);
+        width: 100%;
+      }
+
+      .slide-final-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: clamp(56px, 5vw, 74px);
+        padding: 0 clamp(22px, 2vw, 32px);
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 22px 44px rgba(66, 49, 15, 0.12);
+        text-decoration: none;
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-final-link--brand {
+        min-width: clamp(170px, 15vw, 220px);
+      }
+
+      .slide-final-link--github {
+        min-width: clamp(150px, 13vw, 190px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-final-link--linkedin {
+        min-width: clamp(164px, 14vw, 206px);
+        gap: clamp(10px, 0.9vw, 14px);
+        color: var(--title);
+        font-size: clamp(1.1rem, 1.25vw, 1.42rem);
+        font-weight: 780;
+        letter-spacing: -0.03em;
+      }
+
+      .slide-final-link--store {
+        height: auto;
+        padding: 0;
+        border: 0;
+        border-radius: 14px;
+        background: transparent;
+        box-shadow: 0 20px 40px rgba(66, 49, 15, 0.14);
+        overflow: hidden;
+      }
+
+      .slide-final-logo--mingle {
+        width: clamp(120px, 11vw, 158px);
+        height: auto;
+        display: block;
+      }
+
+      .slide-final-logo--github {
+        width: clamp(26px, 2.2vw, 34px);
+        height: clamp(26px, 2.2vw, 34px);
+        display: block;
+      }
+
+      .slide-final-logo--linkedin {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: clamp(28px, 2.3vw, 36px);
+        height: clamp(28px, 2.3vw, 36px);
+        border-radius: 8px;
+        background: #0a66c2;
+        color: #fff;
+        font-size: clamp(1.05rem, 1.1vw, 1.35rem);
+        font-weight: 850;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .slide-final-store-badge {
+        height: clamp(48px, 4.4vw, 66px);
+        width: auto;
+        display: block;
+      }
+
+      .slide-cross-mark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(96%, clamp(320px, 31vw, 430px));
+        height: min(100%, clamp(400px, 40vw, 500px));
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .slide-cross-mark::before,
+      .slide-cross-mark::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 118%;
+        height: clamp(10px, 0.9vw, 14px);
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(220, 38, 38, 0.9) 0%, rgba(239, 68, 68, 0.96) 100%);
+        box-shadow: 0 10px 26px rgba(220, 38, 38, 0.22);
+        transform-origin: center;
+      }
+
+      .slide-cross-mark::before {
+        transform: translate(-50%, -50%) rotate(43deg);
+      }
+
+      .slide-cross-mark::after {
+        transform: translate(-50%, -50%) rotate(-43deg);
+      }
+
+      .slide-tool-items {
+        display: grid;
+        gap: clamp(14px, 1.6vh, 18px);
+      }
+
+      .slide-tool-item {
+        position: relative;
+        padding: clamp(16px, 1.45vw, 20px) clamp(14px, 1.2vw, 18px) clamp(16px, 1.45vw, 20px)
+          clamp(34px, 2.7vw, 40px);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 252, 246, 0.58) 100%);
+        box-shadow: 0 18px 36px rgba(72, 57, 18, 0.08);
+        backdrop-filter: blur(12px);
+      }
+
+      .slide-tool-item::before {
+        content: "";
+        position: absolute;
+        top: clamp(14px, 1.1vw, 18px);
+        bottom: clamp(14px, 1.1vw, 18px);
+        left: clamp(12px, 1vw, 16px);
+        width: 4px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-tool-heading {
+        display: flex;
+        align-items: center;
+        gap: clamp(12px, 1vw, 14px);
+      }
+
+      .slide-tool-badge {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        font-size: clamp(0.92rem, 1vw, 1.02rem);
+        font-weight: 750;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: rgba(24, 22, 18, 0.82);
+        background: linear-gradient(180deg, rgba(255, 244, 215, 0.94) 0%, rgba(255, 233, 181, 0.7) 100%);
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-tool-logo {
+        width: clamp(36px, 2.8vw, 44px);
+        height: clamp(36px, 2.8vw, 44px);
+        border-radius: 10px;
+        flex: 0 0 auto;
+        box-shadow: 0 10px 20px rgba(32, 30, 24, 0.12);
+      }
+
+      .slide-tool-title {
+        margin: 0;
+        font-size: clamp(1.22rem, 1.52vw, 1.56rem);
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+        color: rgba(24, 22, 18, 0.96);
+      }
+
+      .slide-tool-description {
+        margin: clamp(10px, 0.9vw, 12px) 0 0;
+        font-size: clamp(1.18rem, 1.55vw, 1.42rem);
+        font-weight: 600;
+        line-height: 1.4;
+        letter-spacing: -0.02em;
+        color: rgba(45, 42, 30, 0.76);
+      }
+
+      .slide-preview-image {
+        width: clamp(340px, 33vw, 520px);
+        display: block;
+      }
+
+      .slide-preview-image--hellotalk-primary {
+        width: clamp(300px, 24vw, 400px);
+      }
+
+      .slide-preview-image--hellotalk-secondary {
+        width: clamp(400px, 37vw, 600px);
+      }
+
+      .slide-preview-image--gaming {
+        width: clamp(300px, 32vw, 400px);
+      }
+
+      .slide-preview-image--offline-conversation {
+        width: 100%;
+        border-radius: clamp(26px, 2.4vw, 36px);
+        box-shadow: 0 28px 58px rgba(66, 49, 15, 0.16);
+      }
+
+      .slide-preview-image--reddittalk {
+        width: clamp(300px, 32vw, 420px);
+      }
+
+      .slide-preview-image--reddittalk-top {
+        position: absolute;
+        top: 10vh;
+        right: 3vw;
+        width: clamp(320px, 44vw, 440px);
+      }
+
+      .slide-preview-image--clubhouse-bottom {
+        position: absolute;
+        bottom: 0vh;
+        right: 3vw;
+        width: clamp(320px, 44vw, 440px);
+      }
+
+      .slide-preview-image--gaming-back {
+        position: absolute;
+        left: 0;
+        top: clamp(34px, 4vw, 58px);
+        width: clamp(220px, 21vw, 320px);
+        z-index: 1;
+      }
+
+      .slide-phone-frame {
+        position: absolute;
+        padding: clamp(10px, 0.8vw, 12px);
+        border-radius: clamp(28px, 2.6vw, 38px);
+        background: linear-gradient(180deg, #1f2937 0%, #0f172a 100%);
+        box-shadow: 0 26px 52px rgba(15, 23, 42, 0.28);
+      }
+
+      .slide-phone-frame::before {
+        content: "";
+        position: absolute;
+        top: clamp(8px, 0.8vw, 12px);
+        left: 50%;
+        width: 32%;
+        height: clamp(12px, 1vw, 16px);
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.96);
+      }
+
+      .slide-phone-frame--gaming-front {
+        right: 3vw;
+        top: 0;
+        width: clamp(220px, 21vw, 320px);
+        z-index: 2;
+      }
+
+      .slide-side-media--conversation-stack {
+        top: clamp(46px, 8vh, 92px);
+        right: clamp(12px, 2vw, 36px);
+        width: clamp(380px, 38vw, 560px);
+        height: clamp(420px, 42vw, 620px);
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-back {
+        left: clamp(8px, 1.2vw, 22px);
+        top: clamp(74px, 7.5vw, 116px);
+        width: clamp(188px, 18vw, 270px);
+        z-index: 1;
+      }
+
+      .slide-side-media--conversation-stack .slide-phone-frame--gaming-front {
+        right: clamp(12px, 1.8vw, 30px);
+        top: 0;
+        width: clamp(226px, 22vw, 330px);
+        z-index: 2;
+      }
+
+      .slide-side-media--conversation-stack .slide-preview-image--gaming-back {
+        position: static;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
+      }
+
+      .slide-preview-image--gaming-front {
+        display: block;
+        width: 100%;
+        border-radius: clamp(22px, 2.1vw, 30px);
+      }
+
+      .slide-preview-image--hellotalk1 {
+        position: absolute;
+        top: 7vh;
+        left: 1vw;
+        width: clamp(240px, 28vw, 320px);
+        z-index: 2;
+      }
+
+      .slide-preview-image--hellotalk2 {
+        position: absolute;
+        top: clamp(200px, 20vh, 46px);
+        right: 0;
+        width: clamp(220px, 24vw, 320px);
+        z-index: 1;
+      }
+
+      .slide-side-media--collage {
+        top: clamp(72px, 10vh, 128px);
+        right: clamp(36px, 4vw, 76px);
+        width: clamp(430px, 42vw, 640px);
+        height: clamp(300px, 34vw, 470px);
+      }
+
+      .slide-side-media--reason {
+        top: clamp(128px, 16vh, 188px);
+        right: clamp(28px, 4vw, 76px);
+        width: clamp(500px, 46vw, 720px);
+        height: clamp(280px, 32vw, 420px);
+      }
+
+      .slide-collage-image {
+        position: absolute;
+        display: block;
+        border-radius: 26px;
+        box-shadow: 0 24px 50px rgba(52, 43, 16, 0.16);
+      }
+
+      .slide-collage-image--jotme {
+        top: 5vw;
+        right: calc(clamp(214px, 21vw, 318px) - 7vw);
+        width: clamp(220px, 25vw, 330px);
+        transform: rotate(-6deg);
+        z-index: 1;
+      }
+
+      .slide-collage-image--guild {
+        top: calc(clamp(174px, 18vw, 236px) + 5vw);
+        right: 5vw;
+        width: clamp(300px, 30vw, 446px);
+        transform: rotate(4deg);
+        z-index: 3;
+      }
+
+      .slide-collage-image--utell {
+        top: clamp(42px, 5vw, 78px);
+        right: calc(clamp(116px, 11vw, 176px) - 8vw);
+        width: clamp(212px, 20vw, 296px);
+        transform: rotate(8deg);
+        z-index: 2;
+      }
+
+      .slide-reason-image {
+        position: absolute;
+        display: block;
+        height: clamp(260px, 28vw, 380px);
+        width: auto;
+        border-radius: 28px;
+        box-shadow: 0 24px 56px rgba(52, 43, 16, 0.18);
+      }
+
+      .slide-reason-image--left {
+        top: 0;
+        left: 5vw;
+        z-index: 3;
+        transform: rotate(-3deg);
+      }
+
+      .slide-reason-image--middle {
+        top: clamp(18px, 2vw, 34px);
+        left: 55%;
+        z-index: 2;
+        transform: translateX(-50%) rotate(1.5deg);
+      }
+
+      .slide-reason-image--right {
+        top: 0;
+        right: 0;
+        z-index: 1;
+        transform: rotate(3deg);
+      }
+
+      .slide-kicker {
+        position: absolute;
+        top: calc(var(--kicker-slot) * -0.32);
+        left: 0;
+        margin: 0;
+        display: inline-grid;
+        gap: 10px;
+        width: fit-content;
+        font-size: clamp(1.18rem, 1.6vw, 1.42rem);
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        color: rgba(45, 42, 30, 0.62);
+        text-transform: uppercase;
+      }
+
+      .slide-kicker::after {
+        content: "";
+        width: 100%;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .slide-title {
+        margin: 0;
+        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        font-weight: 650;
+        line-height: 1.22;
+        letter-spacing: -0.05em;
+        text-wrap: balance;
+      }
+
+      .slide-title--quoted {
+        display: inline-grid;
+        justify-items: center;
+        gap: 0;
+        padding-inline: 0;
+      }
+
+      .slide-title-quote {
+        display: block;
+        font-family: "Cormorant Garamond", "Baskerville", "Times New Roman", Georgia, serif;
+        font-size: clamp(4.2rem, 6vw, 6.8rem);
+        font-weight: 500;
+        line-height: 0.55;
+        color: rgba(45, 42, 30, 0.9);
+        text-align: center;
+      }
+
+      .slide-title-quote--open {
+        margin-top: clamp(30px, 1.2vw, 8px);
+      }
+
+      .slide-title-quote--close {
+        margin-top: clamp(30px, 1.4vw, 10px);
+      }
+
+      .slide-title-text {
+        display: block;
+      }
+
+      .slide--hero .slide-title {
+        font-size: clamp(4.2rem, 8vw, 8.6rem);
+        font-weight: 650;
+        line-height: 1.12;
+      }
+
+      .slide--hero h3.slide-title {
+        font-size: clamp(2.4rem, 4.6vw, 5rem);
+        line-height: 1.22;
+      }
+
+      .slide-body {
+        margin: 0;
+        max-width: 44rem;
+        font-size: clamp(1.12rem, 1.8vw, 1.7rem);
+        line-height: 1.65;
+        color: var(--body);
+        text-wrap: pretty;
+      }
+
+      .page-counter {
+        position: absolute;
+        right: clamp(24px, 4vw, 44px);
+        bottom: clamp(20px, 3vw, 36px);
+        z-index: 2;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: rgba(45, 42, 30, 0.52);
+        text-transform: uppercase;
+        user-select: none;
+      }
+
+      html.is-mobile-viewport {
+        --deck-width: 1600px;
+        --deck-height: 900px;
+      }
+
+      html.is-mobile-viewport,
+      html.is-mobile-viewport body {
+        height: 100dvh;
+        min-height: 100dvh;
+      }
+
+      html.is-mobile-viewport body {
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
+          linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
+          var(--page);
+      }
+
+      html.is-mobile-viewport .deck {
+        box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .track {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck" aria-label="External relations presentation deck">
+      <div class="track" id="deck-track">
+        <section class="slide slide--hero">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">소셜 번역기 밍글</h1>
+              <p class="slide-body">이 자료는 26년 4월 12일 제작되었습니다</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--toc">
+              <p class="slide-kicker">목차</p>
+              <h1 class="slide-title">
+                <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></a>
+                <a class="slide-toc-item" href="#13"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
+                <a class="slide-toc-item" href="#29"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
+                <a class="slide-toc-item" href="#53"><span class="slide-toc-index">4.</span><span class="slide-toc-text">팀</span></a>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>1. 개요</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
+                <span class="slide-title-text">외국인과 친해지고 싶어도,<br/>
+                언어 장벽을 넘기 어렵다</span>
+                <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
+                <span class="slide-title-text">소셜링을 위한<br/>
+                실시간 통번역 서비스를 만들자</span>
+                <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-brand-collage">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">기존의 통번역 서비스들은<br/>소셜링에는 별 도움이 안됩니다</h1>
+              <p class="slide-body">
+                외국인과 친해지고 싶은 상황에선 크게 도움을 받기 어렵고,<br/>
+                업무 툴로 쓰거나 혹은 여행시 간헐적으로만 쓸 수 있을 뿐입니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--brand-collage" aria-hidden="true">
+              <div class="slide-brand-cloud">
+                <div class="slide-brand-chip slide-brand-chip--chatgpt">
+                  <img class="slide-brand-logo" src="./assets/logo-chatgpt.jpg" alt="" />
+                  <span class="slide-brand-label">ChatGPT</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--google">
+                  <img class="slide-brand-logo" src="./assets/logo-google-translate.jpg" alt="" />
+                  <span class="slide-brand-label">Google Translate</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--apple">
+                  <img class="slide-brand-logo" src="./assets/logo-apple-translate.jpg" alt="" />
+                  <span class="slide-brand-label">Apple Translate</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--transync">
+                  <img class="slide-brand-logo" src="./assets/logo-transync.jpg" alt="" />
+                  <span class="slide-brand-label">Transync AI</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--felo">
+                  <img class="slide-brand-logo" src="./assets/logo-felo.jpg" alt="" />
+                  <span class="slide-brand-label">Felo Translator</span>
+                </div>
+                <div class="slide-brand-chip slide-brand-chip--papago">
+                  <img class="slide-brand-logo" src="./assets/logo-papago.jpg" alt="" />
+                  <span class="slide-brand-label">Papago</span>
+                </div>
+                <div class="slide-cross-mark"></div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title">소셜링 상황의 요구사항을<br/>충족하지 못하기 때문입니다</h1>
+              <p class="slide-body">
+                단순한 질의응답형 LLM이나 파파고 같은 푸쉬앤톡 번역기로는<br/>
+                복잡한 상황에 유연하게 대응하기 어렵습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">끊기지 않는 지속 번역</div>
+                  <div class="slide-solution-point">실시간 동시 통번역</div>
+                  <div class="slide-solution-point">발화 및 발화자 분리</div>
+                  <div class="slide-solution-point">3개국어 동시 스위칭</div>
+                </div>
+                <div class="slide-solution-points slide-solution-points--tail">
+                  <div class="slide-solution-point">푸쉬앤톡 번역</div>
+                  <div class="slide-solution-point">선택적 음성 출력</div>
+                  <div class="slide-solution-point">백그라운드 실행</div>
+                  <p class="slide-solution-more">등등등...</p>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-solution-stack">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title">소셜링에 필요한 UI/UX는<br/>상황마다 전부 다릅니다</h1>
+              <p class="slide-body">
+                즉 고객에게 필요한 것은 단순한 번역이 아니라<br/>
+                "필요한 상황에서, 원하는 형태로, 끊기지 않는 경험"입니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--reason" aria-hidden="true">
+              <img
+                class="slide-reason-image slide-reason-image--left"
+                src="./assets/slide7-left.jpeg"
+                alt=""
+              />
+              <img
+                class="slide-reason-image slide-reason-image--middle"
+                src="./assets/slide7-middle.jpg"
+                alt=""
+              />
+              <img
+                class="slide-reason-image slide-reason-image--right"
+                src="./assets/slide7-right.jpg"
+                alt=""
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-tool-list">
+              <p class="slide-kicker">원인</p>
+              <h1 class="slide-title">게다가 서비스 가격과<br/>성능도 문제가 있습니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--tool-list" aria-hidden="true">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-felo.jpg" alt="" />
+                    <h2 class="slide-tool-title">Felo Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">시간당 무려 5500원</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-google-translate.jpg" alt="" />
+                    <h2 class="slide-tool-title">Google Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">대화 번역은 한국어 지원 안함</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-apple-translate.jpg" alt="" />
+                    <h2 class="slide-tool-title">Apple Translator</h2>
+                  </div>
+                  <p class="slide-tool-description">기본적인 말도 못 알아들음</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <img class="slide-tool-logo" src="./assets/logo-papago.jpg" alt="" />
+                    <h2 class="slide-tool-title">Papago</h2>
+                  </div>
+                  <p class="slide-tool-description">큰 언어팩을 여러개 다운 받아야 됨</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">이 문제들은 전부 2026년 현재는<br/>AI 발전으로 해소 되었습니다</h1>
+              <p class="slide-body">
+                과거에는 기술적, 비용적 한계로 인해 해결이 어려웠습니다.<br/>
+                하지만 최근 1~2년 사이 AI 기술의 발전으로 전부 해결이 가능해졌습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 비용</h2>
+                  </div>
+                  <p class="slide-tool-description">시간당 500원 이하</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">언어 능력</h2>
+                  </div>
+                  <p class="slide-tool-description">60개 국어 전문 통역가 수준</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">UI/UX의 유연함</h2>
+                  </div>
+                  <p class="slide-tool-description">언어 자동 감지 및 발화 분리</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">이를 통해 각 상황에 맞는<br/>맞춤식 통번역 경험을 만듭니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
+                  </div>
+                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
+                  </div>
+                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
+                  </div>
+                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
+                </section>
+                <p class="slide-solution-more">등등등...</p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">밍글</p>
+              <h1 class="slide-title">그래서 저희가 만드는 건<br/>소셜링을 위한<br/>모바일 통번역 앱입니다</h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>2. 고객</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">저희의 첫 번째 타겟은<br/>
+                헬로톡 보이스룸 유저입니다
+              </h1>
+              <p class="slide-body">
+                헬로톡은 7천만 이상이 가입한 언어 교환 플랫폼입니다.<br/>
+                중국인 창업자가 2012년 창업했으며,<br/>
+                최근에도 3년만에 2배 이상 성장한 것으로 추정됩니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--hellotalk-primary" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk-primary"
+                src="./assets/hellotalk-voiceroom.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">헬로톡은 학습 위주 서비스라<br/>
+                대다수 유저는 쉽게 이탈합니다
+              </h1>
+              <p class="slide-body">
+                언어 교육이 핵심 BM이라 통번역을 제한적으로만 제공합니다.<br/>
+                그래서 외국어 학습에 동기부여가 충분한 유저만 살아 남습니다.<br/>
+                대부분의 유저는 초보 단계를 벗어나지 못하고 이탈합니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--hellotalk-secondary" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk1"
+                src="./assets/hellotalk1.jpg"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--hellotalk2"
+                src="./assets/hellotalk2.jpg"
+                alt="HelloTalk language exchange interface"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">밍글은 언어라는 허들을 넘어<br/>
+                대화 그 자체를 목표로 합니다
+              </h1>
+              <p class="slide-body">
+                유저가 정말로 원하는 것은 외국인 친구를 사귀는 것이고<br/>
+                외국어는 사실 허들에 불과하다는 생각입니다.<br/>
+                밍글은 언어가 통하지 않아도 외국인과 수다 떨 수 있게 만듭니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming"
+                src="./assets/gaming.jpg"
+                alt="Gaming community visual"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">초기에는 헬로톡 보이스룸의<br/>
+                익스텐션으로 포지셔닝합니다
+              </h1>
+              <p class="slide-body">
+                헬로톡 보이스룸은 백그라운드로 돌리고,<br/>
+                포어그라운드에서는 밍글을 실행합니다.<br/>
+                헬로톡에서 나온 음성이 밍글에서 실시간으로 번역됩니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">헬로톡 유저 중 일부는<br/>
+                벌써 밍글에 의존합니다
+              </h1>
+              <p class="slide-body">
+                한 일본인 유저는 2주간 밍글을 매일 2.5시간씩 사용했습니다.<br/>
+                이외에도 몇몇 유저가 헬로톡을 사용할 때 항상 밍글을 대동합니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 1</p>
+              <h1 class="slide-title">밍글에도 보이스룸을 출시해<br/>
+                자연스런 정착을 유도합니다
+              </h1>
+              <p class="slide-body">
+                저희가 보이스룸과 메신저 등 유사 기능만 잘 제공해준다면,<br/>
+                통번역에 의존적인 유저가 굳이 헬로톡에 남아 있을 이유가 없습니다.<br/>
+                게다가 자신의 대화상대를 밍글로 초대하는 바이럴 루프도 기대됩니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--community-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--reddittalk-top"
+                src="./assets/reddittalk.jpg"
+                alt="Reddit talk reference"
+              />
+              <img
+                class="slide-preview-image slide-preview-image--clubhouse-bottom"
+                src="./assets/clubhouse.jpg"
+                alt="Clubhouse voice room reference"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list">
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">이외에도 여럿 타겟 버티컬을<br/>개별로 공략할 계획입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
+                  </div>
+                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
+                  </div>
+                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">관광 서비스 업종 사장님들</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <p class="slide-solution-more">등등등...</p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 2</p>
+              <h1 class="slide-title">다국적 네트워킹 모임</h1>
+              <p class="slide-body">
+                서울에서도 외국인 관광객/유학생의 네트워킹 모임이 자주 이루어집니다.<br/>
+                이들의 대부분은 영어나 한국어를 아직 잘 하지 못합니다.<br/>
+                이들을 위한 오프라인 통번역 경험을 제공합니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--networking-collage" aria-hidden="true">
+              <div class="slide-networking-collage">
+                <div class="slide-networking-card slide-networking-card--top">
+                  <img
+                    class="slide-networking-image"
+                    src="./assets/networking-event-top.jpeg"
+                    alt="Networking event poster"
+                  />
+                </div>
+                <div class="slide-networking-card slide-networking-card--bottom">
+                  <img
+                    class="slide-networking-image"
+                    src="./assets/networking-event-bottom.jpeg"
+                    alt="Networking meetup group photo"
+                  />
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">타겟 고객 3</p>
+              <h1 class="slide-title">해외 여행 현지 만남 주선</h1>
+              <p class="slide-body">
+                헬로톡, 레딧, 쓰레드에는 여행지 만남 글이 수없이 올라옵니다.<br/>
+                하지만 의사소통의 어려움에 흐지부지 되기 십상입니다.<br/>
+                매칭 시스템의 부족이나 신원 확인의 어려움 등도 문제입니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--travel-post-stack" aria-hidden="true">
+              <div class="slide-travel-post-stack">
+                <div class="slide-travel-post-card slide-travel-post-card--top">
+                  <img
+                    class="slide-travel-post-image"
+                    src="./assets/travel-post-bottom.jpg"
+                    alt="Travel meetup post screenshot"
+                  />
+                  <div class="slide-travel-post-mask"></div>
+                  <div class="slide-travel-post-mask slide-travel-post-mask--middle"></div>
+                </div>
+                <div class="slide-travel-post-card slide-travel-post-card--bottom">
+                  <img
+                    class="slide-travel-post-image"
+                    src="./assets/travel-post-top.png"
+                    alt="Travel community post screenshot"
+                  />
+                  <div class="slide-travel-post-mask"></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-wide-side-media">
+              <p class="slide-kicker">타겟 고객 4</p>
+              <h1 class="slide-title">글로벌 게임들의<br/>
+                디스코드 커뮤니티</h1>
+              <p class="slide-body">
+                글로벌 서버 운영이 흔해지면서 통번역에 대한 수요도 늘었습니다.<br/>
+                하지만 디스코드엔 통번역 기능이 없어 써드파티를 써야합니다.<br/>
+                익스텐션이 난무하지만 그나마도 PC환경에서만 적용가능합니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--collage" aria-hidden="true">
+              <img
+                class="slide-collage-image slide-collage-image--jotme"
+                src="./assets/discord-target-jotme.png"
+                alt="JotMe update thumbnail"
+              />
+              <img
+                class="slide-collage-image slide-collage-image--guild"
+                src="./assets/discord-target-guild.png"
+                alt="Discord guild thumbnail"
+              />
+              <img
+                class="slide-collage-image slide-collage-image--utell"
+                src="./assets/discord-target-utell.png"
+                alt="Utell AI voice translator thumbnail"
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">타겟 고객 5</p>
+              <h1 class="slide-title">관광 서비스 업종 사장님들</h1>
+              <p class="slide-body">
+                서울에 매년 수많은 외국인 관광객이 방문하지만,<br/>
+                서비스업 종사자분들은 여전히 외국어 소통이 준비되어 있지 않습니다.<br/>
+                이 분들이 편하게 쓸 수 있는 통번역 서비스가 필요합니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--solution-stack">
+              <div class="slide-solution-columns">
+                <div class="slide-solution-points">
+                  <div class="slide-solution-point">택시 기사 아저씨</div>
+                  <div class="slide-solution-point">숙박 업소 사장님</div>
+                  <div class="slide-solution-point">음식점 사장님</div>
+                  <div class="slide-solution-point">미용실 사장님</div>
+                </div>
+                <div class="slide-solution-points slide-solution-points--tail">
+                  <div class="slide-solution-point">공항 데스크 직원</div>
+                  <div class="slide-solution-point">미용 병원 원장님</div>
+                  <div class="slide-solution-point">관광 가이드</div>
+                  <p class="slide-solution-more">등등등...</p>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">타겟 고객</p>
+              <h1 class="slide-title">이들 모두를 대상으로<br/>실제 고객 피드백을<br/>한땀 한땀 모을 예정입니다</h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">출시 전 테스트<br/>
+                1단 전환율 43%<br/>
+                2단 전환율 13%
+                </h1>
+              <p class="slide-body">
+                약 200명을 모수로 두 차례 테스트해봤습니다.<br/>
+                위 수치는 높게 나온 테스트의 수치입니다.<br/>
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">출시 후 한 달<br/>
+                다운로드 약 120명<br/>
+                DAU 약 10명
+                </h1>
+              <p class="slide-body">
+                저희가 영업한 건 30명~50명 정도이며, 광고는 하지 않았습니다.<br/>
+                상당수는 그저 다운로드만 받은 지인들입니다.<br/>
+                서너차례 큰 장애가 있었음에도 꾸준히 사용되고 있습니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">지표</p>
+              <h1 class="slide-title">무료 서비스<br/>
+                배너 광고 매출 - 40원 / 사용시간<br/>
+                AI 추론 비용 - 400원 / 사용시간
+                </h1>
+              <p class="slide-body">
+                연 50% 비용 감소시 4년뒤부터 배너만으로 공헌이익이 발생합니다.<br/>
+                여러 종류의 유저 경험을 만들어서 WIP가 높은 경우는 유료화할 생각입니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>3. 전략</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title slide-title--quoted">
+                <span class="slide-title-quote slide-title-quote--open mt-10">“</span>
+                <span class="slide-title-text">외국인을 만나고 싶을 때<br/>가장 먼저 찾는 서비스</span>
+                <span class="slide-title-quote slide-title-quote--close mt-10">”</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title">외국인과의 교류에서 마주하는<br/>모든 장벽 해소가 저희의 과제입니다</h1>
+              <p class="slide-body">
+                처음에는 날카롭게 번역기로만 시작하지만<br/>
+                장차 외국인과 만나고, 대화하고, 관계를 이어갈 때 발생하는<br/>
+                모든 문제를 해결하는 서비스가 되고 싶습니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-hurdles">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">외국인 친구를 사귈 때의<br/>허들은 크게 두 가지입니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--customer-hurdles">
+              <div class="slide-hurdles-stack">
+                <section class="slide-hurdle-item">
+                  <h2 class="slide-hurdle-title">첫째, 의사소통이 어렵다</h2>
+                  <p class="slide-hurdle-description">언어 장벽의 존재<br/>대화 소재의 부재</p>
+                </section>
+                <section class="slide-hurdle-item">
+                  <h2 class="slide-hurdle-title">둘째, 외국인을 만나기 어렵다</h2>
+                  <p class="slide-hurdle-description">매칭 및 디스커버리의 어려움<br/>물리적 만남의 어려움</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-hurdles">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">우선은 첫 번째로 시작합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--customer-hurdles">
+              <div class="slide-hurdles-stack">
+                <section class="slide-hurdle-item slide-hurdle-item--focused">
+                  <h2 class="slide-hurdle-title">첫째, 의사소통이 어렵다</h2>
+                  <p class="slide-hurdle-description">언어 장벽의 존재<br/><span class="slide-hurdle-line--muted">대화 소재의 부재</span></p>
+                </section>
+                <section class="slide-hurdle-item slide-hurdle-item--muted">
+                  <h2 class="slide-hurdle-title">둘째, 외국인을 만나기 어렵다</h2>
+                  <p class="slide-hurdle-description">매칭 및 디스커버리의 어려움<br/>물리적 만남의 어려움</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-hurdles">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">그 다음<br/>연결의 어려움을 해결합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--customer-hurdles">
+              <div class="slide-hurdles-stack">
+                <section class="slide-hurdle-item slide-hurdle-item--muted">
+                  <h2 class="slide-hurdle-title">첫째, 의사소통이 어렵다</h2>
+                  <p class="slide-hurdle-description">언어 장벽의 존재<br/>대화 소재의 부재</p>
+                </section>
+                <section class="slide-hurdle-item slide-hurdle-item--focused">
+                  <h2 class="slide-hurdle-title">둘째, 외국인을 만나기 어렵다</h2>
+                  <p class="slide-hurdle-description">매칭 및 디스커버리의 어려움<br/><span class="slide-hurdle-line--muted">물리적 만남의 어려움</span></p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">문제</p>
+              <h1 class="slide-title">연결 문제에 대한 접근은<br/>세 단계로 나뉩니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">바이럴 루프를 도모해서<br/>다음 단계로 성장합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">우선 친구를 초대하도록<br/>만드는 것에 집중합니다</h1>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second slide-step-transition--disabled">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 1</p>
+              <h1 class="slide-title">이미 헬로톡 유저 중 일부는<br/>밍글에서 대화하길 원합니다</h1>
+              <p class="slide-body">
+                검증해야할 가설은, 밍글 내에서 보이스 챗이 충분히 가능하다면<br/>
+                헬로톡에서 만난 친구를 초대해 밍글에서 대화를 나눌 거라는 점입니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--gaming-back"
+                src="./assets/hellotalk-voiceroom2.png"
+                alt="HelloTalk Voiceroom interface"
+              />
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/mingle.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 1</p>
+              <h1 class="slide-title">그래서 저희는 보이스 챗 등<br/>메신저 경험을 만듭니다</h1>
+              <p class="slide-body">
+                저희는 대화록을 단순 번역 화면이 아니라 대화방으로 만들고 있습니다.<br/>
+                음성 통번역뿐 아니라 메시징, 그룹챗, 초대, 공유까지 가능하게 합니다.<br/>
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--gaming-stack slide-side-media--conversation-stack" aria-hidden="true">
+              <div class="slide-phone-frame slide-phone-frame--gaming-back">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-back"
+                  src="./assets/conversation-list.png"
+                  alt="Mingle interface"
+                />
+              </div>
+              <div class="slide-phone-frame slide-phone-frame--gaming-front">
+                <img
+                  class="slide-preview-image slide-preview-image--gaming-front"
+                  src="./assets/conversation-room.png"
+                  alt="Mingle interface"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-side-media">
+              <p class="slide-kicker">바이럴 타겟 2</p>
+              <h1 class="slide-title">오프라인에서 만난 인연 또한<br/>밍글에서 이어갈 수 있습니다</h1>
+              <p class="slide-body">
+                오프라인 모임에서 만난 외국인 친구들과 헤어지고 나서도<br/>
+                밍글에 초대해 대화를 이어갈 수 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--offline-conversation" aria-hidden="true">
+              <img
+                class="slide-preview-image slide-preview-image--offline-conversation"
+                src="./assets/offline-conversation.png"
+                alt=""
+              />
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list slide-copy--with-experience-list-proof">
+              <p class="slide-kicker">해결책</p>
+              <h1 class="slide-title">유저가 충분해지면<br/>매칭 피쳐도 가능해집니다</h1>
+              <p class="slide-body">
+                현재의 헬로톡처럼 새로운 인연을 찾는 사람들 또한<br/>
+                밍글을 찾게 만들 수 있을 거라는 생각입니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered slide-tool-item--disabled">
+                  <span class="slide-tool-step-number">1단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">혼자 쓰는 실시간 번역기</h2>
+                  </div>
+                  <p class="slide-tool-description">초기 타겟 버티컬들의 고객이 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--first slide-step-transition--disabled">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">유저가 스스로<br/>대화 상대 초대</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">2단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 보이스 챗</h2>
+                  </div>
+                  <p class="slide-tool-description">디스코드/전화/메신저 대신 사용</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--second">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">새로운 인연을 찾는<br/>유저 추가 유입</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <span class="slide-tool-step-number">3단계</span>
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">실시간 통번역 소셜 플랫폼</h2>
+                  </div>
+                  <p class="slide-tool-description">헬로톡/틴더/인스타그램 대신 사용</p>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">비전</p>
+              <h1 class="slide-title"><br/>결국 저희의 궁극적인 목표는<br/>AI 네이티브 SNS입니다
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-venndiagram.png"
+              alt="Business venn diagram"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--image-only">
+            <img
+              class="slide-full-image"
+              src="./assets/business-matrix.png"
+              alt="Business matrix"
+            />
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-competitor-tool-cloud">
+              <p class="slide-kicker">경쟁자 1</p>
+              <h1 class="slide-title">통번역,노트테이킹 서비스들은<br/>소셜링에 관심이 없습니다</h1>
+              <p class="slide-body">
+                업무 영역 중심으로 빠르게 성장하고 있지만 경쟁이 너무나도 치열합니다.<br/>
+                이들이 매출은 낼 수 있을지라도 영업이익까지 낼 수 있을지는 의문입니다.<br/>
+                다행히도 이들은 소셜링에는 별 관심이 없는듯 합니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--competitor-tool-cloud">
+              <div class="slide-competitor-cloud">
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 12%; --y: 18%; --s: clamp(62px, 5vw, 84px); --r: -11deg" src="./assets/logo-transync.jpg" alt="Transync AI" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 31%; --y: 10%; --s: clamp(64px, 5.1vw, 86px); --r: 6deg" src="./assets/logo-google-translate.jpg" alt="Google Translate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 47%; --y: 21%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-apple-translate.jpg" alt="Apple Translate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 68%; --y: 13%; --s: clamp(64px, 5.1vw, 86px); --r: 12deg" src="./assets/logo-felo.jpg" alt="Felo Translator" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 87%; --y: 24%; --s: clamp(60px, 4.9vw, 82px); --r: -4deg" src="./assets/logo-papago.jpg" alt="Papago" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 20%; --y: 40%; --s: clamp(66px, 5.2vw, 88px); --r: 9deg" src="./assets/logo-deepl.png" alt="DeepL" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 38%; --y: 31%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-microsoft-translator.png" alt="Microsoft Translator" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 57%; --y: 42%; --s: clamp(60px, 4.9vw, 82px); --r: 13deg" src="./assets/logo-itranslate.png" alt="iTranslate" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 75%; --y: 34%; --s: clamp(64px, 5.1vw, 86px); --r: -13deg" src="./assets/logo-jotme.png" alt="JotMe" />
+                <img class="slide-competitor-logo slide-competitor-logo--translation" style="--x: 91%; --y: 46%; --s: clamp(58px, 4.7vw, 80px); --r: 7deg" src="./assets/logo-cuckoo.png" alt="Cuckoo" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 11%; --y: 62%; --s: clamp(60px, 4.8vw, 82px); --r: -6deg" src="./assets/logo-tiro.png" alt="Tiro" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 29%; --y: 54%; --s: clamp(64px, 5.1vw, 86px); --r: 8deg" src="./assets/logo-char.png" alt="Char" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 64%; --s: clamp(66px, 5.2vw, 88px); --r: -9deg" src="./assets/logo-granola.png" alt="Granola" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 56%; --s: clamp(60px, 4.8vw, 82px); --r: 14deg" src="./assets/logo-alt.png" alt="Alt" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 84%; --y: 68%; --s: clamp(58px, 4.7vw, 80px); --r: -12deg" src="./assets/logo-otter.png" alt="Otter.ai" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 17%; --y: 86%; --s: clamp(60px, 4.8vw, 82px); --r: -8deg" src="./assets/logo-fireflies.png" alt="Fireflies.ai" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 36%; --y: 77%; --s: clamp(64px, 5.1vw, 86px); --r: 9deg" src="./assets/logo-fathom.png" alt="Fathom" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 55%; --y: 88%; --s: clamp(60px, 4.8vw, 82px); --r: -5deg" src="./assets/logo-tldv.png" alt="tl;dv" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 72%; --y: 78%; --s: clamp(64px, 5.1vw, 86px); --r: 7deg" src="./assets/logo-read-ai.png" alt="Read AI" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 90%; --y: 88%; --s: clamp(58px, 4.7vw, 80px); --r: -10deg" src="./assets/logo-notion.png" alt="Notion" />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">반면, 저희는 소셜링 영역에서<br/>네트워크 효과 구축을 목표로 합니다</h1>
+              <p class="slide-body">
+                래퍼 서비스는 가치는 있지만 해자는 없다는 큰 문제가 있습니다.<br/>
+                저희는 그래서 네트워크 효과로 해자를 만드는 것이 목표입니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-ai-native-stack">
+              <p class="slide-kicker">경쟁자 2</p>
+              <h1 class="slide-title">AI 네이티브 기업들은<br/>콜드스타트 문제가 있습니다</h1>
+              <p class="slide-body">
+                AI 네이티브 메신저를 만들겠다는 시도는 많지만 성과는 없습니다.<br/>
+                콜드 스타트 프라블럼을 해결하지 못하기 때문입니다.<br/>
+                날카롭게 시작하지 않아서 그렇습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--ai-native-stack">
+              <div class="slide-ai-native-stack">
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-chatgpt.jpg" alt="" />
+                  <h2 class="slide-ai-native-name">ChatGPT</h2>
+                </section>
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-claude.png" alt="" />
+                  <h2 class="slide-ai-native-name">Claude</h2>
+                </section>
+                <section class="slide-ai-native-item">
+                  <img class="slide-ai-native-logo" src="./assets/logo-gemini.png" alt="" />
+                  <h2 class="slide-ai-native-name">Gemini</h2>
+                </section>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-experience-list">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">저희는 날카롭게 시작해서<br/>콜드스타트 문제를 해결합니다</h1>
+              <p class="slide-body">
+                각 소셜링 버티컬의 통번역 문제에만 집중합니다.<br/>
+                AI 네이티브 메신저로의 변화는 그 다음 단계입니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list">
+              <div class="slide-tool-items">
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">헬로톡 보이스룸 유저들</h2>
+                  </div>
+                  <p class="slide-tool-description">모바일 보이스 챗 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">다국적 네트워킹 모임</h2>
+                  </div>
+                  <p class="slide-tool-description">오프라인 대화 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">해외 여행 현지 만남 주선</h2>
+                  </div>
+                  <p class="slide-tool-description">온라인 매칭, 메시징 경험</p>
+                </section>
+                <section class="slide-tool-item">
+                  <div class="slide-tool-heading">
+                    <h2 class="slide-tool-title">글로벌 게임 디스코드 커뮤니티</h2>
+                  </div>
+                  <p class="slide-tool-description">길드원 간 온라인 대화 경험</p>
+                </section>
+                <p class="slide-solution-more">등등등...</p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-competitor-cloud slide-copy--with-social-cloud">
+              <p class="slide-kicker">경쟁자 3</p>
+              <h1 class="slide-title">메신저/소셜미디어 기업들은<br/>통번역을 사소한 문제로 치부합니다</h1>
+              <p class="slide-body">
+                그냥 메시지에 번역 버튼 하나 붙인다고 끝이 아닙니다.<br/>
+                심리스한 의사소통을 위해서는 UI/UX를 아주 섬세하게 깎아야 합니다.<br/>
+                그래야 해외여행객들이 미용실 예약이라도 겨우 할 수 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud">
+              <div class="slide-competitor-cloud">
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 10%; --s: clamp(70px, 5.6vw, 94px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 24%; --y: 25%; --s: clamp(76px, 6vw, 102px); --r: -10deg" src="./assets/logo-instagram.png" alt="Instagram" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 73%; --y: 22%; --s: clamp(70px, 5.6vw, 94px); --r: 6deg" src="./assets/logo-hellotalk.png" alt="HelloTalk" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 85%; --y: 45%; --s: clamp(72px, 5.7vw, 98px); --r: -8deg" src="./assets/logo-tinder.png" alt="Tinder" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 28%; --y: 50%; --s: clamp(78px, 6.2vw, 106px); --r: 11deg" src="./assets/logo-discord.png" alt="Discord" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 53%; --y: 51%; --s: clamp(74px, 5.9vw, 100px); --r: -4deg" src="./assets/logo-wechat.jpg" alt="WeChat" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
+                <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--with-musk-exception">
+              <p class="slide-kicker">경쟁자 3</p>
+              <h1 class="slide-title">일론 머스크만이 예외입니다</h1>
+              <p class="slide-body">
+                X가 자동번역과 알고리즘 글로벌화를 하자 세상이 뒤집어졌습니다.<br/>
+                Cursor의 출시로 바이브 코딩 쓰나미가 시작된 것과 같은 원리입니다.<br/>
+                저는 4/17에 출시예정인 X Chat도 기대하고 있습니다.
+              </p>
+            </div>
+            <div class="slide-side-media slide-side-media--musk-exception">
+              <div class="slide-musk-stack">
+                <img class="slide-musk-photo" src="./assets/elon-musk-hyuni-2023.png" alt="Elon Musk" />
+                <div class="slide-musk-service-list">
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo" src="./assets/logo-x.svg" alt="" />
+                    <h2 class="slide-ai-native-name">모든 컨텐츠 자동번역</h2>
+                  </section>
+                  <section class="slide-ai-native-item slide-musk-service-item">
+                    <img class="slide-ai-native-logo slide-ai-native-logo--xchat" src="./assets/logo-xchat.jpg" alt="" />
+                    <h2 class="slide-ai-native-name">4/17 출시 예정</h2>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">차별화점</p>
+              <h1 class="slide-title">저희의 생존 전략은<br/>블리츠 스케일링입니다</h1>
+              <p class="slide-body">
+                다행히도 아직은 일론 머스크 뿐이고 그마저도 단순 번역에 그칩니다.<br/>
+                저희와 버티컬이 아예 다르기도 하고, 비용 문제도 심할 거라 추측합니다.<br/>
+                모두가 바벨탑 건설을 시도하기 전에 저희가 제일 먼저 선점해야만 합니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <p class="slide-kicker">타이밍</p>
+              <h1 class="slide-title">타이밍은 지금 뿐입니다.</h1>
+              <p class="slide-body">
+                바벨탑의 등장은 역사상 처음 있는 일입니다.<br/>
+                다행히 아직은 다들 준비되어 있지 않습니다.<br/>
+                저희가 만들겠습니다.
+              </p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">
+                <span class="slide-title-text"><br/>4. 팀</span>
+              </h1>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide slide--hero">
+          <article class="slide-shell">
+            <div class="slide-copy slide-copy--center">
+              <h1 class="slide-title">팀원 구합니다</h1>
+              <p class="slide-body">제품향 인재든 사업향 인재든, 문과생이든 이과생이든 상관 없습니다.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell">
+            <div class="slide-copy slide--hero slide-copy--center slide-copy--final-cta">
+              <h1 class="slide-title">감사합니다.<br/>Q & A</h1>
+              <nav class="slide-final-links" aria-label="Mingle links">
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--brand" href="https://mingle-landing.vercel.app/normal">
+                    <img class="slide-final-logo--mingle" src="./assets/logo-mingle.png" alt="Mingle" />
+                  </a>
+                  <a class="slide-final-link slide-final-link--github" href="https://github.com/minglelabs/mingle">
+                    <img class="slide-final-logo--github" src="./assets/logo-github.svg" alt="" />
+                    <span>GitHub</span>
+                  </a>
+                  <a class="slide-final-link slide-final-link--linkedin" href="https://www.linkedin.com/in/roycenam/">
+                    <span class="slide-final-logo--linkedin" aria-hidden="true">in</span>
+                    <span>LinkedIn</span>
+                  </a>
+                </div>
+                <div class="slide-final-link-row">
+                  <a class="slide-final-link slide-final-link--store" href="https://apps.apple.com/app/id6759795134">
+                    <img class="slide-final-store-badge" src="./assets/badge-app-store.svg" alt="Download on the App Store" />
+                  </a>
+                  <a
+                    class="slide-final-link slide-final-link--store"
+                    href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn"
+                  >
+                    <img class="slide-final-store-badge" src="./assets/badge-google-play.png" alt="Get it on Google Play" />
+                  </a>
+                </div>
+              </nav>
+            </div>
+          </article>
+        </section>
+      </div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 50</div>
+    </main>
+
+    <script>
+      const track = document.getElementById("deck-track");
+      const pageCounter = document.getElementById("page-counter");
+      const baseSlides = Array.from(track.querySelectorAll(".slide"));
+      const slideCount = baseSlides.length;
+
+      const firstClone = baseSlides[0].cloneNode(true);
+      const lastClone = baseSlides[slideCount - 1].cloneNode(true);
+      firstClone.setAttribute("data-clone", "first");
+      lastClone.setAttribute("data-clone", "last");
+
+      track.innerHTML = "";
+      track.append(lastClone, ...baseSlides, firstClone);
+
+      const allSlides = Array.from(track.querySelectorAll(".slide"));
+      const TAP_DURATION_MS = 260;
+      const HOLD_DURATION_MS = 110;
+      let activeIndex = 1;
+      let isAnimating = false;
+      let wheelLock = false;
+      let restoreTransitionFrame = null;
+      let holdStep = null;
+      let touchStartX = 0;
+      let touchStartY = 0;
+      let touchMoved = false;
+      let touchNavigationTriggered = false;
+      const TOUCH_INTENT_THRESHOLD = 12;
+      const TOUCH_NAVIGATION_THRESHOLD = 52;
+
+      function parseSlideNumber(rawValue) {
+        const parsedValue = Number.parseInt(rawValue ?? "", 10);
+
+        if (!Number.isFinite(parsedValue) || parsedValue < 1 || parsedValue > slideCount) {
+          return null;
+        }
+
+        return parsedValue;
+      }
+
+      function requestedSlideNumber() {
+        const hashSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (hashSlideNumber !== null) {
+          return hashSlideNumber;
+        }
+
+        const pageParam = new URLSearchParams(window.location.search).get("page");
+        return parseSlideNumber(pageParam) ?? 1;
+      }
+
+      function syncUrl() {
+        const slideNumber = realSlideNumber(activeIndex);
+        const nextHash = `#${slideNumber}`;
+
+        if (window.location.hash === nextHash) {
+          return;
+        }
+
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${window.location.search}${nextHash}`
+        );
+      }
+
+      function realSlideNumber(index) {
+        if (index === 0) {
+          return slideCount;
+        }
+
+        if (index === slideCount + 1) {
+          return 1;
+        }
+
+        return index;
+      }
+
+      function currentTransitionValue(durationMs) {
+        return `transform ${durationMs}ms var(--slide-ease)`;
+      }
+
+      function deckWidth() {
+        return track.clientWidth || track.getBoundingClientRect().width;
+      }
+
+      function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
+        track.style.transition = useTransition
+          ? currentTransitionValue(durationMs)
+          : "none";
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
+      }
+
+      function jumpToIndex(index) {
+        if (restoreTransitionFrame !== null) {
+          window.cancelAnimationFrame(restoreTransitionFrame);
+          restoreTransitionFrame = null;
+        }
+
+        activeIndex = index;
+        track.style.transition = "none";
+        track.style.transform = `translate3d(${-activeIndex * deckWidth()}px, 0, 0)`;
+
+        // Force layout so the browser commits the jump before transition is restored.
+        void track.offsetWidth;
+
+        restoreTransitionFrame = window.requestAnimationFrame(() => {
+          track.style.transition = currentTransitionValue(
+            holdStep === null ? TAP_DURATION_MS : HOLD_DURATION_MS
+          );
+          restoreTransitionFrame = null;
+
+          if (holdStep !== null && !isAnimating) {
+            move(holdStep, true);
+          }
+        });
+      }
+
+      function updateUi() {
+        allSlides.forEach((slide, index) => {
+          const isActive = index === activeIndex;
+          slide.classList.toggle("is-active", isActive);
+          slide.setAttribute("aria-hidden", String(!isActive));
+        });
+
+        const currentNumber = String(realSlideNumber(activeIndex)).padStart(2, "0");
+        const totalNumber = String(slideCount).padStart(2, "0");
+        pageCounter.textContent = `${currentNumber} / ${totalNumber}`;
+        syncUrl();
+      }
+
+      function finishAnimation() {
+        let jumped = false;
+
+        if (activeIndex === 0) {
+          jumped = true;
+          jumpToIndex(slideCount);
+        } else if (activeIndex === slideCount + 1) {
+          jumped = true;
+          jumpToIndex(1);
+        }
+
+        updateUi();
+        isAnimating = false;
+
+        if (!jumped && holdStep !== null) {
+          move(holdStep, true);
+        }
+      }
+
+      function move(step, isContinuous = false) {
+        if (isAnimating) {
+          return;
+        }
+
+        isAnimating = true;
+        activeIndex += step;
+        syncPosition(true, isContinuous ? HOLD_DURATION_MS : TAP_DURATION_MS);
+        updateUi();
+      }
+
+      function next() {
+        move(1);
+      }
+
+      function previous() {
+        move(-1);
+      }
+
+      track.addEventListener("transitionend", (event) => {
+        if (event.target !== track || event.propertyName !== "transform") {
+          return;
+        }
+
+        finishAnimation();
+      });
+
+      window.addEventListener("resize", () => {
+        syncPosition(false);
+      });
+
+      window.visualViewport?.addEventListener("resize", () => {
+        syncPosition(false);
+      });
+
+      window.addEventListener("hashchange", () => {
+        const targetSlideNumber = parseSlideNumber(window.location.hash.slice(1));
+
+        if (targetSlideNumber === null || targetSlideNumber === realSlideNumber(activeIndex)) {
+          return;
+        }
+
+        holdStep = null;
+        isAnimating = false;
+        jumpToIndex(targetSlideNumber);
+        updateUi();
+      });
+
+      window.addEventListener("keydown", (event) => {
+        const isForwardKey =
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " ";
+        const isBackwardKey =
+          event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "PageUp";
+
+        if (!isForwardKey && !isBackwardKey) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const step = isForwardKey ? 1 : -1;
+        holdStep = step;
+
+        if (event.repeat) {
+          return;
+        }
+
+        if (!isAnimating) {
+          move(step, false);
+        }
+      });
+
+      window.addEventListener("keyup", (event) => {
+        if (
+          event.key === "ArrowRight"
+          || event.key === "ArrowDown"
+          || event.key === "PageDown"
+          || event.key === " "
+          || event.key === "ArrowLeft"
+          || event.key === "ArrowUp"
+          || event.key === "PageUp"
+        ) {
+          event.preventDefault();
+          holdStep = null;
+        }
+      });
+
+      window.addEventListener(
+        "wheel",
+        (event) => {
+          const primaryDelta =
+            Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+          if (wheelLock || Math.abs(primaryDelta) < 12) {
+            return;
+          }
+
+          wheelLock = true;
+          window.setTimeout(() => {
+            wheelLock = false;
+          }, 700);
+
+          if (primaryDelta > 0) {
+            next();
+          } else {
+            previous();
+          }
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchstart",
+        (event) => {
+          if (event.touches.length !== 1) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          touchMoved = false;
+          touchNavigationTriggered = false;
+          holdStep = null;
+        },
+        { passive: true }
+      );
+
+      window.addEventListener(
+        "touchmove",
+        (event) => {
+          if (event.touches.length !== 1 || touchNavigationTriggered) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+          const primaryDistance = Math.max(absX, absY);
+
+          if (primaryDistance < TOUCH_INTENT_THRESHOLD) {
+            return;
+          }
+
+          touchMoved = true;
+          event.preventDefault();
+
+          if (primaryDistance < TOUCH_NAVIGATION_THRESHOLD) {
+            return;
+          }
+
+          touchNavigationTriggered = true;
+
+          if (primaryDelta < 0) {
+            next();
+          } else {
+            previous();
+          }
+        },
+        { passive: false }
+      );
+
+      window.addEventListener(
+        "touchend",
+        (event) => {
+          if (!touchMoved || touchNavigationTriggered || event.changedTouches.length !== 1) {
+            touchMoved = false;
+            touchNavigationTriggered = false;
+            return;
+          }
+
+          const touch = event.changedTouches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          const primaryDelta = absX >= absY ? deltaX : deltaY;
+
+          if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
+            if (primaryDelta < 0) {
+              next();
+            } else {
+              previous();
+            }
+          }
+
+          touchMoved = false;
+          touchNavigationTriggered = false;
+        },
+        { passive: true }
+      );
+
+      activeIndex = requestedSlideNumber();
+      syncPosition(false);
+      updateUi();
+    </script>
+  </body>
+</html>
