@@ -1,11 +1,14 @@
 import { DEFAULT_LOCALE } from "@/i18n";
 import { resolveDefaultMingleClientReleaseVariant } from "@/lib/client-behavior-profile";
 import DefaultV110HomeEntry from "@/web/default/v1.1.0/home-entry";
+import DefaultV111HomeEntry from "@/web/default/v1.1.1/home-entry";
 import LegacyHomeEntry from "@/web/legacy/v1.0.11/home-entry";
 import AndroidV1011HomeEntry from "@/web/android/v1.0.11/home-entry";
 import AndroidV110HomeEntry from "@/web/android/v1.1.0/home-entry";
+import AndroidV111HomeEntry from "@/web/android/v1.1.1/home-entry";
 import IosV1011HomeEntry from "@/web/ios/v1.0.11/home-entry";
 import IosV110HomeEntry from "@/web/ios/v1.1.0/home-entry";
+import IosV111HomeEntry from "@/web/ios/v1.1.1/home-entry";
 
 export default function Page() {
   const locale = DEFAULT_LOCALE;
@@ -16,13 +19,19 @@ export default function Page() {
       return LegacyHomeEntry({ locale });
     case "default_v1_1_0":
       return DefaultV110HomeEntry({ locale, searchParams: {} });
+    case "default_v1_1_1":
+      return DefaultV111HomeEntry({ locale, searchParams: {} });
     case "ios_v1_0_11":
       return IosV1011HomeEntry({ locale });
     case "android_v1_0_11":
       return AndroidV1011HomeEntry({ locale });
     case "ios_v1_1_0":
       return IosV110HomeEntry({ locale, searchParams: {} });
+    case "ios_v1_1_1":
+      return IosV111HomeEntry({ locale, searchParams: {} });
     case "android_v1_1_0":
       return AndroidV110HomeEntry({ locale, searchParams: {} });
+    case "android_v1_1_1":
+      return AndroidV111HomeEntry({ locale, searchParams: {} });
   }
 }
