@@ -476,6 +476,12 @@
         z-index: 4;
       }
 
+      .slide-step-transition--conversion {
+        left: clamp(-196px, -12.8vw, -148px);
+        width: clamp(174px, 12vw, 212px);
+        height: clamp(128px, 12vh, 150px);
+      }
+
       .slide-step-transition--first {
         top: clamp(42px, 4vw, 52px);
       }
@@ -502,6 +508,11 @@
         filter: drop-shadow(0 10px 14px rgba(245, 158, 11, 0.14));
       }
 
+      .slide-step-transition--conversion path,
+      .slide-step-transition--conversion polyline {
+        stroke-width: 8;
+      }
+
       .slide-step-transition-label {
         position: absolute;
         top: 50%;
@@ -518,6 +529,10 @@
         letter-spacing: -0.045em;
         text-align: center;
         transform: translate(-50%, -50%) rotate(-3deg);
+      }
+
+      .slide-step-transition--conversion .slide-step-transition-label {
+        width: clamp(136px, 10vw, 170px);
       }
 
       .slide-step-transition--disabled,
@@ -2127,16 +2142,46 @@
 
         <section class="slide">
           <article class="slide-shell">
-            <div class="slide-copy slide-copy--center">
+            <div class="slide-copy">
               <p class="slide-kicker">지표</p>
-              <h1 class="slide-title">출시 전 테스트<br/>
-                1단 전환율 43%<br/>
-                2단 전환율 13%
+              <h1 class="slide-title">출시 전 프로티타이핑<br/>
+                다운로드 클릭 43%<br/>
+                이메일 제출 13%
                 </h1>
               <p class="slide-body">
                 약 200명을 모수로 두 차례 테스트해봤습니다.<br/>
                 위 수치는 높게 나온 테스트의 수치입니다.<br/>
               </p>
+            </div>
+            <div class="slide-side-media slide-side-media--experience-list slide-side-media--experience-list-proof slide-side-media--goal-steps slide-side-media--viral-loop">
+              <div class="slide-tool-items slide-tool-items--viral-loop">
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">44명 웹사이트에 진입</h2>
+                  <p class="slide-tool-description">언어 장벽이 해결된 외국인 만남 앱 제안</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--conversion slide-step-transition--first">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">43% 전환</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">19명 다운로드 버튼 클릭</h2>
+                  <p class="slide-tool-description">앱 다운로드 버튼</p>
+                </section>
+                <div class="slide-step-transition slide-step-transition--conversion slide-step-transition--second">
+                  <svg viewBox="0 0 190 140" aria-hidden="true" focusable="false">
+                    <path d="M154 8 C46 8 46 132 154 132" />
+                    <polyline points="136 118 154 132 136 146" />
+                  </svg>
+                  <span class="slide-step-transition-label">31% 전환</span>
+                </div>
+                <section class="slide-tool-item slide-tool-item--numbered">
+                  <h2 class="slide-tool-title">6명 이메일 제출</h2>
+                  <p class="slide-tool-description">사전 예약 이메일 제출</p>
+                </section>
+              </div>
             </div>
           </article>
         </section>
