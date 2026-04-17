@@ -7,6 +7,8 @@ const {
   mockGetConversationHydrationStateForUser,
   mockUpdateConversationChannelStatus,
   mockUpdateConversationChannelSelectedLanguages,
+  mockUpdateConversationChannelSpeechLanguages,
+  mockUpdateConversationChannelTranslationLanguagesLinked,
   mockUpdateConversationChannelTitle,
   mockEnsureTrackingContext,
   mockResolveOrCreateUserIdForRequest,
@@ -17,6 +19,8 @@ const {
   mockGetConversationHydrationStateForUser: vi.fn(),
   mockUpdateConversationChannelStatus: vi.fn(),
   mockUpdateConversationChannelSelectedLanguages: vi.fn(),
+  mockUpdateConversationChannelSpeechLanguages: vi.fn(),
+  mockUpdateConversationChannelTranslationLanguagesLinked: vi.fn(),
   mockUpdateConversationChannelTitle: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
@@ -41,6 +45,8 @@ vi.mock("@/lib/app-conversations", () => ({
   ),
   updateConversationChannelStatus: mockUpdateConversationChannelStatus,
   updateConversationChannelSelectedLanguages: mockUpdateConversationChannelSelectedLanguages,
+  updateConversationChannelSpeechLanguages: mockUpdateConversationChannelSpeechLanguages,
+  updateConversationChannelTranslationLanguagesLinked: mockUpdateConversationChannelTranslationLanguagesLinked,
   updateConversationChannelTitle: mockUpdateConversationChannelTitle,
 }));
 
@@ -294,6 +300,74 @@ describe("/api/conversations/[conversationId] route", () => {
     });
   });
 
+  it("updates speech recognition languages for a guest request", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["ko", "ja"]);
+    mockUpdateConversationChannelSpeechLanguages.mockResolvedValue({
+      id: "conv_1",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "conv_session_1",
+      selectedLanguages: ["en", "fr"],
+      speechLanguages: ["ko", "ja"],
+      createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:03:00.000Z",
+      pausedAt: "2026-04-02T00:03:00.000Z",
+    });
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speechLanguages: ["ko", "ja"] }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.conversation?.speechLanguages).toEqual(["ko", "ja"]);
+    expect(mockUpdateConversationChannelSpeechLanguages).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      speechLanguages: ["ko", "ja"],
+    });
+  });
+
+  it("updates the translation language link setting for a guest request", async () => {
+    mockUpdateConversationChannelTranslationLanguagesLinked.mockResolvedValue({
+      id: "conv_1",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "conv_session_1",
+      selectedLanguages: ["ko", "ja"],
+      speechLanguages: ["ko", "ja"],
+      translationLanguagesLinked: true,
+      createdAt: "2026-04-02T00:00:00.000Z",
+      updatedAt: "2026-04-02T00:03:00.000Z",
+      pausedAt: "2026-04-02T00:03:00.000Z",
+    });
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ translationLanguagesLinked: true }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.conversation?.translationLanguagesLinked).toBe(true);
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      translationLanguagesLinked: true,
+    });
+  });
+
   it("rejects invalid selected languages", async () => {
     mockSanitizeSttLanguageSelection.mockReturnValue([]);
 
@@ -310,6 +384,50 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ error: "invalid_selected_languages" });
     expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelSpeechLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTitle).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid speech recognition languages", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue([]);
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ speechLanguages: [] }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_speech_languages" });
+    expect(mockUpdateConversationChannelSpeechLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTitle).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid translation language link values", async () => {
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ translationLanguagesLinked: "true" }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_translation_languages_linked" });
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelSpeechLanguages).not.toHaveBeenCalled();
     expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
     expect(mockUpdateConversationChannelTitle).not.toHaveBeenCalled();
   });
@@ -378,6 +496,8 @@ describe("/api/conversations/[conversationId] route", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ error: "invalid_status" });
     expect(mockUpdateConversationChannelSelectedLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelSpeechLanguages).not.toHaveBeenCalled();
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).not.toHaveBeenCalled();
     expect(mockUpdateConversationChannelStatus).not.toHaveBeenCalled();
   });
 

@@ -39,8 +39,6 @@ const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
-const LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS = 400
-const LANGUAGE_CHANGE_RESTART_GAP_MS = 120
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
@@ -184,17 +182,6 @@ export function buildSonioxLanguageHints(languages: string[]): string[] {
     hints.push(language)
   }
   return hints
-}
-
-export function shouldRestartSttForLanguageHintChange(input: {
-  previousSelectionSignature: string
-  nextSelectionSignature: string
-  connectionStatus: ConnectionStatus
-  sonioxLanguageHintsEnabled: boolean
-}): boolean {
-  if (!input.sonioxLanguageHintsEnabled) return false
-  if (input.previousSelectionSignature === input.nextSelectionSignature) return false
-  return input.connectionStatus === 'ready'
 }
 
 type NativeSttStartCommand = {
@@ -1853,10 +1840,7 @@ export default function useRealtimeSTT({
   const useNativeSttRef = useRef(false)
   const nativeStopRequestedRef = useRef(false)
   const targetLanguagesRef = useRef([...languages])
-  const previousLanguageSelectionSignatureRef = useRef(buildLanguageSelectionSignature(languages))
-  const languageChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connectionErrorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingLanguageChangeRestartRef = useRef(false)
   const sonioxLanguageHintsEnabledRef = useRef(false)
 
   const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
@@ -1917,12 +1901,6 @@ export default function useRealtimeSTT({
     delete pendingTurnsBySpeakerRef.current[speaker]
     bumpPendingTurnRenderVersion()
   }, [bumpPendingTurnRenderVersion, clearPendingTurnTranslationRuntime])
-
-  const clearLanguageChangeRestartTimer = useCallback(() => {
-    if (!languageChangeRestartTimerRef.current) return
-    clearTimeout(languageChangeRestartTimerRef.current)
-    languageChangeRestartTimerRef.current = null
-  }, [])
 
   const clearConnectionErrorResetTimer = useCallback(() => {
     if (!connectionErrorResetTimerRef.current) return
@@ -2181,7 +2159,6 @@ export default function useRealtimeSTT({
     isStoppingRef.current = false
     hasActiveSessionRef.current = false
     nativeStopRequestedRef.current = false
-    pendingLanguageChangeRestartRef.current = false
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
     turnStartedAtRef.current = null
     clearSpeakerAvatarSession()
@@ -2837,12 +2814,10 @@ export default function useRealtimeSTT({
     const wasActiveSession = hasActiveSessionRef.current
 
     conversationClearSequenceRef.current += 1
-    clearLanguageChangeRestartTimer()
     clearConnectionErrorResetTimer()
     clearAllFinalizedTurnTranslationControllers()
     clearUtterancePersistTimer()
     isStoppingRef.current = true
-    pendingLanguageChangeRestartRef.current = false
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
 
     if (useNativeSttRef.current) {
@@ -2881,7 +2856,6 @@ export default function useRealtimeSTT({
   }, [
     clearAllFinalizedTurnTranslationControllers,
     clearConnectionErrorResetTimer,
-    clearLanguageChangeRestartTimer,
     clearUtterancePersistTimer,
     clearPartialBuffers,
     logClientEvent,
@@ -2892,12 +2866,7 @@ export default function useRealtimeSTT({
   const stopRecordingGracefully = useCallback(async (notifyLimitReached = false, stopReason?: string) => {
     if (isStoppingRef.current) return
     isStoppingRef.current = true
-    clearLanguageChangeRestartTimer()
-    if (stopReason !== 'language_hint_change') {
-      pendingLanguageChangeRestartRef.current = false
-    }
     const useNativeStt = useNativeSttRef.current
-    let waitingForNativeStopAck = false
 
     stopAudioPipeline({ closeContext: false })
 
@@ -2936,8 +2905,6 @@ export default function useRealtimeSTT({
       })
       if (!posted) {
         nativeStopRequestedRef.current = false
-      } else if (stopReason === 'language_hint_change') {
-        waitingForNativeStopAck = true
       }
     } else {
       // Fire-and-forget stop_recording to server (so it can clean up STT provider)
@@ -2959,9 +2926,7 @@ export default function useRealtimeSTT({
         socketRef.current = null
       }
     }
-    if (!waitingForNativeStopAck) {
-      setConnectionStatus('idle')
-    }
+    setConnectionStatus('idle')
     isStoppingRef.current = false
     const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
@@ -2999,7 +2964,6 @@ export default function useRealtimeSTT({
     logClientEvent,
     sendNativeSttCommand,
     clearSpeakerAvatarSession,
-    clearLanguageChangeRestartTimer,
     stopAudioPipeline,
   ])
 
@@ -3057,7 +3021,6 @@ export default function useRealtimeSTT({
     console.error('[MingleSTT] transport.error', details || {})
     const wasActiveSession = hasActiveSessionRef.current
     hasActiveSessionRef.current = false
-    pendingLanguageChangeRestartRef.current = false
 
     const localFinalizeResults: LocalFinalizeResult[] = []
     for (const pendingTurn of getPendingTurnsForLocalFinalize()) {
@@ -3684,54 +3647,6 @@ export default function useRealtimeSTT({
     }
   }, [connectionStatus, normalizedUsageLimitSec, stopRecordingGracefully])
 
-  useEffect(() => {
-    const currentSignature = buildLanguageSelectionSignature(languages)
-    const previousSignature = previousLanguageSelectionSignatureRef.current
-    previousLanguageSelectionSignatureRef.current = currentSignature
-
-    if (!shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: previousSignature,
-      nextSelectionSignature: currentSignature,
-      connectionStatus: connectionStatusRef.current,
-      sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
-    })) {
-      return
-    }
-
-    logSttDebug('recording.languages.restart_scheduled', {
-      previousSignature,
-      currentSignature,
-      sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
-    })
-    clearLanguageChangeRestartTimer()
-    languageChangeRestartTimerRef.current = setTimeout(() => {
-      languageChangeRestartTimerRef.current = null
-      if (!sonioxLanguageHintsEnabledRef.current) return
-      if (connectionStatusRef.current !== 'ready') return
-      pendingLanguageChangeRestartRef.current = true
-      logSttDebug('recording.languages.restart_begin', {
-        currentSignature: buildLanguageSelectionSignature(targetLanguagesRef.current),
-      })
-      void stopRecordingGracefully(false, 'language_hint_change')
-    }, LANGUAGE_CHANGE_RESTART_DEBOUNCE_MS)
-  }, [clearLanguageChangeRestartTimer, languages, stopRecordingGracefully])
-
-  useEffect(() => {
-    if (!pendingLanguageChangeRestartRef.current) return
-    if (connectionStatus !== 'idle') return
-
-    pendingLanguageChangeRestartRef.current = false
-    logSttDebug('recording.languages.restart_after_stop')
-    const timer = window.setTimeout(() => {
-      if (connectionStatusRef.current !== 'idle') return
-      void startRecording()
-    }, LANGUAGE_CHANGE_RESTART_GAP_MS)
-
-    return () => {
-      clearTimeout(timer)
-    }
-  }, [connectionStatus, startRecording])
-
   const recoverFromBackgroundIfNeeded = useCallback(async () => {
     if (useNativeSttRef.current) return
     if (connectionStatus !== 'ready') return
@@ -3970,11 +3885,10 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     return () => {
-      clearLanguageChangeRestartTimer()
       clearConnectionErrorResetTimer()
       cleanup()
     }
-  }, [clearConnectionErrorResetTimer, clearLanguageChangeRestartTimer, cleanup])
+  }, [clearConnectionErrorResetTimer, cleanup])
 
   useEffect(() => {
     const shouldStop = () => connectionStatus === 'ready' || connectionStatus === 'connecting'

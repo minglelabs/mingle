@@ -30,7 +30,6 @@ import {
   shouldTrackUsageForConnectionStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
-  shouldRestartSttForLanguageHintChange,
   shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
@@ -330,29 +329,6 @@ describe('use-realtime-stt pure logic', () => {
       'zh-CN': '简体中文',
       'zh-TW': '繁體中文',
     })
-  })
-
-  it('restarts STT on language change only when Soniox hints are enabled and ready', () => {
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: true,
-    })).toBe(true)
-
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: false,
-    })).toBe(false)
-
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: true,
-    })).toBe(false)
   })
 
   it('maps iOS microphone denial errors to open-settings recovery', () => {

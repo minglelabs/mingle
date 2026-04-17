@@ -71,6 +71,8 @@ export async function postConversationResponse(request: NextRequest) {
     locale?: unknown;
     legacySessionKey?: unknown;
     selectedLanguages?: unknown;
+    speechLanguages?: unknown;
+    translationLanguagesLinked?: unknown;
   } | null = null;
   try {
     body = await request.json();
@@ -85,6 +87,10 @@ export async function postConversationResponse(request: NextRequest) {
     ? sanitizeRequestIdentityValue(body.legacySessionKey)
     : "";
   const selectedLanguages = sanitizeSttLanguageSelection(body?.selectedLanguages);
+  const speechLanguages = sanitizeSttLanguageSelection(body?.speechLanguages);
+  const translationLanguagesLinked = typeof body?.translationLanguagesLinked === "boolean"
+    ? body.translationLanguagesLinked
+    : true;
 
   const trackingHints = resolvedUser.tracking
     ? {
@@ -96,6 +102,8 @@ export async function postConversationResponse(request: NextRequest) {
     locale,
     preferredSessionKey: legacySessionKey || undefined,
     selectedLanguages,
+    speechLanguages,
+    translationLanguagesLinked,
   });
   const response = NextResponse.json({ conversation }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);

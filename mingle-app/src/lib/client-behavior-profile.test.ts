@@ -22,6 +22,7 @@ describe('resolveMingleBehaviorProfile', () => {
 
   it('routes 1.1.0 and above to the new profile', () => {
     expect(resolveMingleBehaviorProfile('ios/v1.1.0')).toBe('v1_1_0')
+    expect(resolveMingleBehaviorProfile('ios/v1.1.1')).toBe('v1_1_1')
     expect(resolveMingleBehaviorProfile('android/v1.1.1')).toBe('v1_1_1')
     expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_1')
   })
