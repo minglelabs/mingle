@@ -126,11 +126,25 @@
         padding: clamp(18px, 2.2vw, 34px);
       }
 
+      .slide-shell--video-only {
+        align-items: center;
+        justify-content: center;
+        padding: clamp(18px, 2.2vw, 34px);
+      }
+
       .slide-full-image {
         width: 100%;
         height: 100%;
         object-fit: contain;
         display: block;
+      }
+
+      .slide-short-video {
+        width: min(420px, 30vw, calc(82vh * 9 / 16));
+        aspect-ratio: 9 / 16;
+        display: block;
+        border: 0;
+        background: #000;
       }
 
       .slide-copy {
@@ -473,8 +487,8 @@
       }
 
       .slide-side-media--mingle-solution-proof {
-        top: clamp(152px, 18vh, 226px);
-        right: clamp(190px, 26vw, 96px);
+        top: clamp(120px, 15vh, 226px);
+        right: clamp(150px, 20vw, 96px);
         width: clamp(300px, 25vw, 380px);
       }
 
@@ -1589,11 +1603,11 @@
               <p class="slide-kicker">목차</p>
               <h1 class="slide-title">
                 <a class="slide-toc-item" href="#3"><span class="slide-toc-index">1.</span><span class="slide-toc-text">개요</span></a>
-                <a class="slide-toc-item" href="#11"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
-                <a class="slide-toc-item" href="#21"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
-                <a class="slide-toc-item" href="#27"><span class="slide-toc-index">4.</span><span class="slide-toc-text">비전</span></a>
-                <a class="slide-toc-item" href="#37"><span class="slide-toc-index">5.</span><span class="slide-toc-text">팀</span></a>
-                <a class="slide-toc-item" href="#40"><span class="slide-toc-index">6.</span><span class="slide-toc-text">부록</span></a>
+                <a class="slide-toc-item" href="#12"><span class="slide-toc-index">2.</span><span class="slide-toc-text">고객</span></a>
+                <a class="slide-toc-item" href="#22"><span class="slide-toc-index">3.</span><span class="slide-toc-text">전략</span></a>
+                <a class="slide-toc-item" href="#31"><span class="slide-toc-index">4.</span><span class="slide-toc-text">비전</span></a>
+                <a class="slide-toc-item" href="#41"><span class="slide-toc-index">5.</span><span class="slide-toc-text">팀</span></a>
+                <a class="slide-toc-item" href="#44"><span class="slide-toc-index">6.</span><span class="slide-toc-text">부록</span></a>
               </h1>
             </div>
           </article>
@@ -1800,6 +1814,19 @@
                 </section>
               </div>
             </div>
+          </article>
+        </section>
+
+        <section class="slide">
+          <article class="slide-shell slide-shell--video-only">
+            <iframe
+              class="slide-short-video"
+              src="https://www.youtube.com/embed/GCg3FG4PdaA?playsinline=1&rel=0&modestbranding=1"
+              title="Mingle short video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen
+            ></iframe>
           </article>
         </section>
 
@@ -2966,7 +2993,7 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 58</div>
+      <div class="page-counter" id="page-counter" aria-live="polite">01 / 61</div>
     </main>
 
     <script>
