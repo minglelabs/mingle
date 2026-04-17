@@ -3,9 +3,10 @@ import {
   parseApiNamespaceVersion,
 } from './apiNamespace';
 
-export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'unknown';
+export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'unknown';
 
 const V1_1_0_VERSION: readonly [number, number, number] = [1, 1, 0];
+const V1_1_1_VERSION: readonly [number, number, number] = [1, 1, 1];
 
 export const DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL = 'https://mingle-app-xi.vercel.app';
 export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle.up.railway.app';
@@ -72,9 +73,13 @@ export function resolveMingleReleaseTarget(apiNamespace: string): MingleReleaseT
   const parsedNamespace = parseApiNamespaceVersion(apiNamespace);
   if (!parsedNamespace) return 'unknown';
 
-  return compareApiNamespaceVersions(parsedNamespace.version, V1_1_0_VERSION) >= 0
-    ? 'v1_1_0'
-    : 'legacy_1_0_11';
+  if (compareApiNamespaceVersions(parsedNamespace.version, V1_1_1_VERSION) >= 0) {
+    return 'v1_1_1';
+  }
+  if (compareApiNamespaceVersions(parsedNamespace.version, V1_1_0_VERSION) >= 0) {
+    return 'v1_1_0';
+  }
+  return 'legacy_1_0_11';
 }
 
 type ValidateDedicatedReleaseTargetInput = {
@@ -93,9 +98,11 @@ export function validateDedicatedReleaseTargetConfig(
     return { ok: true };
   }
 
-  if (resolveMingleReleaseTarget(input.apiNamespace) !== 'v1_1_0') {
+  const releaseTarget = resolveMingleReleaseTarget(input.apiNamespace);
+  if (releaseTarget !== 'v1_1_0' && releaseTarget !== 'v1_1_1') {
     return { ok: true };
   }
+  const releaseTargetLabel = releaseTarget === 'v1_1_1' ? '1.1.1' : '1.1.0';
 
   const normalizedWebAppBaseUrl = normalizeUrlForComparison(input.webAppBaseUrl);
   const normalizedWsUrl = normalizeUrlForComparison(input.wsUrl);
@@ -120,7 +127,7 @@ export function validateDedicatedReleaseTargetConfig(
   ) {
     return {
       ok: false,
-      error: `NEXT_PUBLIC_SITE_URL must point to a dedicated 1.1.0 web deployment, not the legacy production host (${normalizedLegacyWebAppBaseUrl}).`,
+      error: `NEXT_PUBLIC_SITE_URL must point to a dedicated ${releaseTargetLabel} web deployment, not the legacy production host (${normalizedLegacyWebAppBaseUrl}).`,
     };
   }
 
@@ -132,7 +139,7 @@ export function validateDedicatedReleaseTargetConfig(
   ) {
     return {
       ok: false,
-      error: `NEXT_PUBLIC_WS_URL must point to a dedicated 1.1.0 STT deployment, not the legacy production host (${normalizedLegacyWsUrl}).`,
+      error: `NEXT_PUBLIC_WS_URL must point to a dedicated ${releaseTargetLabel} STT deployment, not the legacy production host (${normalizedLegacyWsUrl}).`,
     };
   }
 
