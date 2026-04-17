@@ -71,6 +71,7 @@ import {
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
+  isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
   readCachedNativeUiBannerLayout,
   resolveNativeBottomBarBannerClearancePx,
@@ -203,6 +204,8 @@ type LivePhoneDemoQaSnapshot = {
   effectiveNativeBottomContentInsetPx: number
   effectiveNativeBottomBannerInsetPx: number
   nativeBottomBarClearancePx: number
+  nativeChatTopSpacerPx: number
+  nativeChatBottomSpacerPx: number
   headerHeightPx: number
   bottomBarHeightPx: number
   chatPaddingTopPx: number
@@ -289,6 +292,14 @@ function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) 
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
+function isNativeUiRuntimeSignalPresent(): boolean {
+  return typeof window !== 'undefined'
+    && (
+      isNativeApp()
+      || isNativeUiBridgeEnabledFromSearch(window.location.search || '')
+    )
 }
 
 function isNativeIosAppRuntime(): boolean {
@@ -438,6 +449,13 @@ export function resolveNativeBottomBannerOverlayInsetPx(input: {
 
   if (safeReportedBottomInsetPx <= 0 || safeBottomBarClearancePx <= 0) {
     return fallbackInsetPx
+  }
+
+  if (
+    safeEstimatedBottomBannerInsetPx > 0
+    && safeReportedBottomInsetPx <= safeEstimatedBottomBannerInsetPx + 8
+  ) {
+    return safeReportedBottomInsetPx
   }
 
   const derivedOverlayInsetPx = safeReportedBottomInsetPx - safeBottomBarClearancePx
@@ -1512,11 +1530,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [onSpeechLanguagesChange, speechLanguages])
 
   useEffect(() => {
-    if (!isNativeApp()) return
+    if (typeof window === 'undefined') return
 
-    const nativeRuntimeTimerId = window.setTimeout(() => {
+    const syncNativeRuntime = () => {
+      if (!isNativeUiRuntimeSignalPresent()) return
       setIsNativeAppRuntime(true)
-    }, 0)
+    }
+
+    syncNativeRuntime()
+    const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0)
+    const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250)
 
     const windowWithUpdate = window as NativeAppUpdateWindow
     const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
@@ -1533,6 +1556,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     return () => {
       window.clearTimeout(nativeRuntimeTimerId)
+      window.clearTimeout(nativeRuntimeRetryTimerId)
       window.clearTimeout(nativeUpdateTimerId)
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
@@ -4078,7 +4102,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
-    if (!isNativeApp()) return
+    if (typeof window === 'undefined') return
 
     const cachedBannerLayout = readCachedNativeUiBannerLayout(window)
     if (cachedBannerLayout) {
@@ -4372,8 +4396,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBannerInsetPx: effectiveNativeBottomBannerInsetPx,
   })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
-  const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
+  const nativeChatTopSpacerPx = Math.max(0, Math.round(effectiveNativeTopInsetPx))
+  const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
+  const chatPaddingTop = '0.625rem'
+  const chatPaddingBottom = '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -4451,6 +4477,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           effectiveNativeBottomContentInsetPx,
           effectiveNativeBottomBannerInsetPx,
           nativeBottomBarClearancePx: Math.max(0, Math.round(nativeBottomBarClearancePx ?? 0)),
+          nativeChatTopSpacerPx,
+          nativeChatBottomSpacerPx,
           headerHeightPx,
           bottomBarHeightPx,
           chatPaddingTopPx,
@@ -4569,6 +4597,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuScreen,
     nativeBannerLayout?.position,
     nativeBottomBarClearancePx,
+    nativeChatBottomSpacerPx,
+    nativeChatTopSpacerPx,
     persistComposerDraft,
     persistedUtteranceCount,
     pushMenuHistoryEntry,
@@ -5569,6 +5599,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
               }}
             >
+              {nativeChatTopSpacerPx > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none shrink-0"
+                  style={{ height: `${nativeChatTopSpacerPx}px` }}
+                />
+              )}
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}
@@ -5663,6 +5700,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
                   <p className="text-sm">{connectionFailedLabel}</p>
                 </div>
+              )}
+              {nativeChatBottomSpacerPx > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none shrink-0"
+                  style={{ height: `${nativeChatBottomSpacerPx}px` }}
+                />
               )}
             </div>
 

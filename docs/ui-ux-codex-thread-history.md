@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
+
+### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found
+
+1. **Android conversation transcripts did not reserve scroll space for the native banner**
+   Problem: The Android 1.1.1 internal-test build could load a test AdMob banner, but the in-room transcript scroll area still ended directly behind the native banner. With the banner at the bottom, the last transcript items could sit under the banner; with the banner at the top, the same contract expected an equivalent top clearance. iOS already behaved correctly, making the Android room feel cramped and partially occluded.
+   Fix: The room now converts the effective native banner inset into explicit top/bottom spacer elements inside the transcript scroll content instead of relying only on scroll-container padding. The native runtime detection and cached banner-layout listener were also relaxed so Android WebView bridge timing cannot skip the native layout event. RN now emits conversation top inset when the native banner is in the top slot and gates conversation bottom inset on the same render-ready conditions. Android bottom inset handling also no longer subtracts bottom-bar clearance when RN has already reported the banner's own height.
+   Status: Fixed in-thread on 2026-04-18. Focused native UI and RN WebView layout unit tests passed; Android real-device QA passed after rebuilding the devbox app and clearing the stale WebView 502 state.
+
 ## 2026-04-17 Android/iOS 1.1.1 Devbox Local QA
 
 ### `2026-04-17-devbox-1.1.1-local-qa` | UI/UX issues found

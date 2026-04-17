@@ -123,6 +123,16 @@ describe('live phone demo composer logic', () => {
     })).toBe(50)
   })
 
+  it('keeps a near-estimated Android bottom banner inset instead of subtracting bottom bar clearance again', () => {
+    expect(resolveNativeBottomBannerOverlayInsetPx({
+      isNativeAppRuntime: true,
+      displayedAdBannerPosition: 'bottom',
+      reportedBottomInsetPx: 56,
+      bottomBarClearancePx: 54,
+      estimatedBottomBannerInsetPx: 55,
+    })).toBe(56)
+  })
+
   it('shrinks the composer textarea height when content becomes shorter again', () => {
     const style = {
       height: '104px',

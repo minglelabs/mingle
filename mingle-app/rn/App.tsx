@@ -1241,7 +1241,6 @@ function AppInner(): React.JSX.Element {
   const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
   const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
   const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
-  const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
     bannerHeightPx: nativeBannerHeightPx,
@@ -1616,13 +1615,19 @@ function AppInner(): React.JSX.Element {
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
     const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
+    const shouldReserveConversationInset = activeBannerZone === 'conversation'
+      && canRenderNativeBanner
+      && nativeAdsReady
+      && !isNativeMenuOverlayOpen;
     const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
       ? nativeBannerPosition
       : 'top';
-    const effectiveTopInsetPx = shouldReserveListTopInset
+    const shouldReserveTopInset = shouldReserveListTopInset
+      || (shouldReserveConversationInset && nativeBannerPosition === 'top');
+    const effectiveTopInsetPx = shouldReserveTopInset
       ? nativeTranscriptInsetPx
       : 0;
-    const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
+    const effectiveBottomInsetPx = shouldReserveConversationInset && nativeBannerPosition === 'bottom'
       ? resolveNativeBottomBannerWebInsetPx({
           isIosPlatform: Platform.OS === 'ios',
           bannerContentInsetPx: nativeBannerBottomInsetPx,

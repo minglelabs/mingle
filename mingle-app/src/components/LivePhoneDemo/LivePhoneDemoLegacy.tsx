@@ -354,6 +354,13 @@ export function resolveNativeBottomBannerOverlayInsetPx(input: {
     return fallbackInsetPx
   }
 
+  if (
+    safeEstimatedBottomBannerInsetPx > 0
+    && safeReportedBottomInsetPx <= safeEstimatedBottomBannerInsetPx + 8
+  ) {
+    return safeReportedBottomInsetPx
+  }
+
   const derivedOverlayInsetPx = safeReportedBottomInsetPx - safeBottomBarClearancePx
   return derivedOverlayInsetPx > 0 ? derivedOverlayInsetPx : fallbackInsetPx
 }
