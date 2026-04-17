@@ -974,10 +974,8 @@ export function NativeAdBanner(props: {
   const bannerSlotWidthPx = prefersFixedHeightBanner
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
-  const shouldShowDebugPlaceholder = Platform.OS === 'ios' && unitId.startsWith('ca-app-pub-3940256099942544/');
-  const shouldShowFallbackPlaceholder = Platform.OS === 'android'
-    ? adLoadState !== 'loaded'
-    : shouldShowDebugPlaceholder && adLoadState !== 'loaded';
+  const isDebugBannerUnit = unitId.startsWith('ca-app-pub-3940256099942544/');
+  const shouldShowFallbackPlaceholder = adLoadState !== 'loaded';
 
   /* eslint-disable react-hooks/set-state-in-effect */
   // Reset banner state when a new slot/unit configuration is mounted.
@@ -1038,15 +1036,13 @@ export function NativeAdBanner(props: {
             testID="native-banner-fallback"
             style={[
               styles.nativeBannerFallbackSurface,
-              shouldShowDebugPlaceholder ? styles.nativeBannerDebugPlaceholder : null,
+              isDebugBannerUnit ? styles.nativeBannerDebugPlaceholder : null,
             ]}
           >
-            {Platform.OS === 'android' ? (
-              <View style={styles.nativeBannerFallbackBadge}>
-                <Text style={styles.nativeBannerFallbackBadgeText}>AD</Text>
-              </View>
-            ) : null}
-            {shouldShowDebugPlaceholder ? (
+            <View style={styles.nativeBannerFallbackBadge}>
+              <Text style={styles.nativeBannerFallbackBadgeText}>AD</Text>
+            </View>
+            {isDebugBannerUnit ? (
               <>
                 <Text style={styles.nativeBannerDebugTitle}>
                   {adLoadState === 'failed' ? 'AdMob failed' : 'AdMob loading'}
@@ -1339,7 +1335,6 @@ function AppInner(): React.JSX.Element {
   }, [nativeAdModule, nativeBannerUnitId]);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return;
     if (!nativeBannerUnitId) return;
 
     let previousState = AppState.currentState;

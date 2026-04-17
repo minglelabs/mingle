@@ -1,5 +1,4 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 
 import { NativeAdBanner } from '../App';
@@ -18,14 +17,7 @@ function createAdModule() {
 }
 
 describe('NativeAdBanner', () => {
-  const originalPlatform = Platform.OS;
-
-  afterEach(() => {
-    (Platform as { OS: typeof Platform.OS }).OS = originalPlatform;
-  });
-
-  it('keeps the Android banner slot visible until the creative loads', async () => {
-    (Platform as { OS: typeof Platform.OS }).OS = 'android';
+  it('keeps the banner slot visible until the creative loads', async () => {
     const consoleErrorSpy = jest
       .spyOn(console, 'error')
       .mockImplementation((...args: unknown[]) => {
