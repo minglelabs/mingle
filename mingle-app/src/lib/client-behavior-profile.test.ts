@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   isLegacyMingleClientReleaseVariant,
   isV1_1_0MingleClientReleaseVariant,
+  isV1_1_1MingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
@@ -21,9 +22,9 @@ describe('resolveMingleBehaviorProfile', () => {
 
   it('routes 1.1.0 and above to the new profile', () => {
     expect(resolveMingleBehaviorProfile('ios/v1.1.0')).toBe('v1_1_0')
-    expect(resolveMingleBehaviorProfile('ios/v1.1.1')).toBe('v1_1_0')
-    expect(resolveMingleBehaviorProfile('android/v1.1.1')).toBe('v1_1_0')
-    expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_0')
+    expect(resolveMingleBehaviorProfile('ios/v1.1.1')).toBe('v1_1_1')
+    expect(resolveMingleBehaviorProfile('android/v1.1.1')).toBe('v1_1_1')
+    expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_1')
   })
 })
 
@@ -36,8 +37,11 @@ describe('resolveMingleClientReleaseVariant', () => {
   it('keeps explicit ios and android 1.1.0 targets separate', () => {
     expect(resolveMingleClientReleaseVariant('ios/v1.1.0')).toBe('ios_v1_1_0')
     expect(resolveMingleClientReleaseVariant('android/v1.1.0')).toBe('android_v1_1_0')
-    expect(resolveMingleClientReleaseVariant('ios/v1.1.1')).toBe('ios_v1_1_0')
-    expect(resolveMingleClientReleaseVariant('android/v1.1.1')).toBe('android_v1_1_0')
+  })
+
+  it('keeps explicit ios and android 1.1.1 targets separate', () => {
+    expect(resolveMingleClientReleaseVariant('ios/v1.1.1')).toBe('ios_v1_1_1')
+    expect(resolveMingleClientReleaseVariant('android/v1.1.1')).toBe('android_v1_1_1')
   })
 
   it('defaults unknown namespaces to the safe legacy release line', () => {
@@ -48,6 +52,7 @@ describe('resolveMingleClientReleaseVariant', () => {
 describe('resolveMingleReleaseTarget', () => {
   it('recognizes the dedicated 1.1.0 web release target', () => {
     expect(resolveMingleReleaseTarget('v1_1_0')).toBe('v1_1_0')
+    expect(resolveMingleReleaseTarget('v1_1_1')).toBe('v1_1_1')
     expect(resolveMingleReleaseTarget('')).toBe('unknown')
   })
 })
@@ -94,6 +99,14 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
     expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_0')
     expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_0')
   })
+
+  it('uses the dedicated 1.1.1 release target when the namespace is intentionally blank', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_1'
+
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_1')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_1')
+  })
 })
 
 describe('release-variant feature flags', () => {
@@ -108,5 +121,12 @@ describe('release-variant feature flags', () => {
     expect(isV1_1_0MingleClientReleaseVariant('ios_v1_1_0')).toBe(true)
     expect(isV1_1_0MingleClientReleaseVariant('android_v1_1_0')).toBe(true)
     expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_0')).toBe('v1_1_0')
+  })
+
+  it('keeps 1.1.1 variants on the 1.1.1 release line', () => {
+    expect(isV1_1_1MingleClientReleaseVariant('default_v1_1_1')).toBe(true)
+    expect(isV1_1_1MingleClientReleaseVariant('ios_v1_1_1')).toBe(true)
+    expect(isV1_1_1MingleClientReleaseVariant('android_v1_1_1')).toBe(true)
+    expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_1')).toBe('v1_1_1')
   })
 })

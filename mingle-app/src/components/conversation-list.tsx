@@ -8,7 +8,6 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
   forwardRef,
-  type CSSProperties,
   type FormEvent,
   useCallback,
   useEffect,
@@ -41,26 +40,39 @@ import {
   parseNativeUiBannerLayoutDetail,
   type NativeUiBannerLayoutEventDetail,
 } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
-
-const conversationAvatarImageStyle: CSSProperties & { WebkitUserDrag: string } = {
-  WebkitUserDrag: "none",
-  pointerEvents: "none",
-};
+import {
+  calculateConversationRowTooltipPosForRect,
+  compareConversationRecency,
+  CONVERSATION_AVATAR_IMAGE_STYLE,
+  CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  isSearchOverlayHistoryOpen,
+  MAX_RECENT_SEARCHES,
+  mergeConversationLists,
+  mergeSearchOverlayHistoryState,
+  normalizeRecentSearches,
+  normalizeSearchTerm,
+  replaceConversationLists,
+  type TooltipPos,
+  upsertConversation,
+  updateConversationSummaryStatus,
+} from "@/components/conversation-list.logic";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import {
+  readNativeQaBridgeAuthority,
+  shouldExposeNativeQaBridge,
+} from "@/lib/native-qa-bridge";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
-const SEARCH_OVERLAY_HISTORY_STATE_KEY = "__mingleConversationSearchOpen";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
-const MAX_RECENT_SEARCHES = 6;
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
@@ -75,9 +87,6 @@ const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50;
 const NATIVE_INSET_QUERY_MAX_PX = 240;
 const ROW_ACTION_LONG_PRESS_DELAY_MS = 450;
 const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
-const ROW_ACTION_TOOLTIP_GAP_PX = 8;
-const ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX = 200;
-const ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO = 0.4;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
@@ -98,6 +107,35 @@ type ConversationListWindow = Window & {
   [SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG]?: boolean;
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: "unknown" | "granted" | "denied" | "prompt";
 };
+
+type ConversationListQaSnapshot = {
+  routePathname: string;
+  documentLanguage: string;
+  uiLocale: string;
+  isNativeAppRuntime: boolean;
+  isHydratingConversations: boolean;
+  conversationCount: number;
+  activeConversationId: string | null;
+  showSearch: boolean;
+  effectiveNativeTopInsetPx: number;
+  effectiveNativeBottomInsetPx: number;
+  nativeBannerLayoutPosition: "top" | "bottom" | null;
+  createButtonLabel: string;
+};
+
+type ConversationListQaEnsureRoomResult = {
+  conversationId: string;
+  action: "active" | "opened-existing" | "created";
+};
+
+declare global {
+  interface Window {
+    __MINGLE_CONVERSATION_LIST_QA__?: {
+      getConversationListSnapshot: () => ConversationListQaSnapshot;
+      ensureConversationRoom: () => Promise<ConversationListQaEnsureRoomResult>;
+    };
+  }
+}
 
 const conversationOverlayVariants: Variants = {
   initial: (transitionState: ConversationOverlayTransitionState) => (
@@ -144,10 +182,6 @@ interface ConversationItem {
   translationLanguagesLinked: boolean;
   languageFlags: string;
 }
-
-type TooltipPos =
-  | { side: "above"; bottom: number; left: number }
-  | { side: "below"; top: number; left: number };
 
 type ConversationRowActionMenuState = {
   item: ConversationItem;
@@ -200,10 +234,6 @@ function rememberDeniedCreateConversationMicWarmup(): void {
 
   const cachedWindow = window as ConversationListWindow;
   cachedWindow.__MINGLE_LAST_NATIVE_MIC_PERMISSION = "denied";
-}
-
-function normalizeSearchTerm(rawValue: string): string {
-  return rawValue.trim().replace(/\s+/g, " ");
 }
 
 function buildLegacySingleRoomMigrationMarkerKey(): string {
@@ -332,22 +362,6 @@ function copyLegacySingleRoomSnapshotToConversation(
   }
 }
 
-function normalizeRecentSearches(values: string[]): string[] {
-  const deduped: string[] = [];
-
-  for (const value of values) {
-    const normalized = normalizeSearchTerm(value);
-    if (!normalized) continue;
-    if (deduped.some((item) => item.toLocaleLowerCase() === normalized.toLocaleLowerCase())) {
-      continue;
-    }
-    deduped.push(normalized);
-    if (deduped.length >= MAX_RECENT_SEARCHES) break;
-  }
-
-  return deduped;
-}
-
 function cacheRecentSearchesSnapshot(rawValue: string | null, nextValues: string[]): string[] {
   const normalized = normalizeRecentSearches(nextValues);
   recentSearchesSnapshotRaw = rawValue ?? "__null__";
@@ -465,29 +479,6 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
   }
 }
 
-function mergeSearchOverlayHistoryState(state: unknown, open: boolean): Record<string, unknown> {
-  const nextState = state && typeof state === "object" && !Array.isArray(state)
-    ? { ...(state as Record<string, unknown>) }
-    : {};
-
-  if (open) {
-    nextState[SEARCH_OVERLAY_HISTORY_STATE_KEY] = true;
-  } else {
-    delete nextState[SEARCH_OVERLAY_HISTORY_STATE_KEY];
-  }
-
-  return nextState;
-}
-
-function isSearchOverlayHistoryOpen(state: unknown): boolean {
-  return Boolean(
-    state
-    && typeof state === "object"
-    && !Array.isArray(state)
-    && (state as Record<string, unknown>)[SEARCH_OVERLAY_HISTORY_STATE_KEY] === true,
-  );
-}
-
 function pushSearchOverlayHistoryState(): void {
   if (typeof window === "undefined") return;
 
@@ -532,94 +523,6 @@ function consumeNativeHistoryCloseAnimationFlag(): boolean {
   const shouldAnimate = conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] === true;
   conversationWindow[NATIVE_HISTORY_BACK_ANIMATE_FLAG] = false;
   return shouldAnimate;
-}
-
-function compareConversationRecency(a: ConversationChannelSummary, b: ConversationChannelSummary): number {
-  const leftTimestamp = Date.parse(a.latestMessageAt || a.createdAt) || 0;
-  const rightTimestamp = Date.parse(b.latestMessageAt || b.createdAt) || 0;
-  return rightTimestamp - leftTimestamp;
-}
-
-function upsertConversation(
-  conversations: ConversationChannelSummary[],
-  nextConversation: ConversationChannelSummary,
-): ConversationChannelSummary[] {
-  const previousConversation = conversations.find((conversation) => conversation.id === nextConversation.id);
-  const mergedConversation = previousConversation
-    ? {
-        ...previousConversation,
-        ...nextConversation,
-        latestMessagePreview:
-          nextConversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
-        latestMessageAt:
-          nextConversation.latestMessageAt ?? previousConversation.latestMessageAt,
-        latestSpeaker:
-          nextConversation.latestSpeaker ?? previousConversation.latestSpeaker,
-        latestSpeakerAvatarSeed:
-          nextConversation.latestSpeakerAvatarSeed ?? previousConversation.latestSpeakerAvatarSeed,
-        latestSpeakerAvatarIndex:
-          nextConversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
-      }
-    : nextConversation;
-
-  return [
-    mergedConversation,
-    ...conversations.filter((conversation) => conversation.id !== nextConversation.id),
-  ].sort(compareConversationRecency);
-}
-
-function updateConversationSummaryStatus(
-  conversation: ConversationChannelSummary,
-  status: "active" | "paused",
-  nowIso = new Date().toISOString(),
-): ConversationChannelSummary {
-  return {
-    ...conversation,
-    status,
-    pausedAt: status === "active" ? null : (conversation.pausedAt ?? nowIso),
-    updatedAt: conversation.updatedAt,
-  };
-}
-
-function mergeConversationLists(
-  current: ConversationChannelSummary[],
-  incoming: ConversationChannelSummary[],
-): ConversationChannelSummary[] {
-  const merged = new Map<string, ConversationChannelSummary>();
-  for (const conversation of current) {
-    merged.set(conversation.id, conversation);
-  }
-  for (const conversation of incoming) {
-    merged.set(conversation.id, conversation);
-  }
-  return [...merged.values()].sort(compareConversationRecency);
-}
-
-function replaceConversationLists(
-  current: ConversationChannelSummary[],
-  incoming: ConversationChannelSummary[],
-): ConversationChannelSummary[] {
-  const currentById = new Map(current.map((conversation) => [conversation.id, conversation]));
-  return incoming.map((conversation) => {
-    const previousConversation = currentById.get(conversation.id);
-    if (!previousConversation) {
-      return conversation;
-    }
-    return {
-      ...previousConversation,
-      ...conversation,
-      latestMessagePreview:
-        conversation.latestMessagePreview ?? previousConversation.latestMessagePreview,
-      latestMessageAt:
-        conversation.latestMessageAt ?? previousConversation.latestMessageAt,
-      latestSpeaker:
-        conversation.latestSpeaker ?? previousConversation.latestSpeaker,
-      latestSpeakerAvatarSeed:
-        conversation.latestSpeakerAvatarSeed ?? previousConversation.latestSpeakerAvatarSeed,
-      latestSpeakerAvatarIndex:
-        conversation.latestSpeakerAvatarIndex ?? previousConversation.latestSpeakerAvatarIndex,
-    };
-  }).sort(compareConversationRecency);
 }
 
 function formatConversationTime(isoTimestamp: string, locale: string): string {
@@ -861,23 +764,12 @@ function isNativeSttStatusLive(status: string | null): boolean {
 
 function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   const rect = element.getBoundingClientRect();
-  const left = rect.left + rect.width / 2;
-  const shouldForceBelow = rect.top <= window.innerHeight * ROW_ACTION_TOOLTIP_FORCE_BELOW_VIEWPORT_RATIO;
-  if (
-    !shouldForceBelow
-    && rect.top - ROW_ACTION_TOOLTIP_GAP_PX >= ROW_ACTION_TOOLTIP_ESTIMATED_MAX_HEIGHT_PX
-  ) {
-    return {
-      side: "above",
-      bottom: window.innerHeight - rect.top + ROW_ACTION_TOOLTIP_GAP_PX,
-      left,
-    };
-  }
-  return {
-    side: "below",
-    top: rect.bottom + ROW_ACTION_TOOLTIP_GAP_PX,
-    left,
-  };
+  return calculateConversationRowTooltipPosForRect({
+    top: rect.top,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+  }, window.innerHeight);
 }
 
 function ConversationRow({
@@ -961,11 +853,7 @@ function ConversationRow({
       }}
       disabled={disabled}
       className={`flex w-full select-none items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
-      style={{
-        WebkitTouchCallout: "none",
-        WebkitUserSelect: "none",
-        userSelect: "none",
-      }}
+      style={CONVERSATION_ROW_TOUCH_SAFE_STYLE}
     >
       <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
         <Image
@@ -975,7 +863,7 @@ function ConversationRow({
           width={56}
           height={56}
           draggable={false}
-          style={conversationAvatarImageStyle}
+          style={CONVERSATION_AVATAR_IMAGE_STYLE}
           unoptimized
         />
       </div>
@@ -2325,6 +2213,49 @@ export default function ConversationList({
     return conversation;
   }, [closeSearchOverlay]);
 
+  const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
+    const currentActiveConversation = activeConversationRef.current;
+    if (currentActiveConversation?.id) {
+      return {
+        conversationId: currentActiveConversation.id,
+        action: "active",
+      };
+    }
+
+    const mostRecentConversation = conversationsRef.current[0] ?? null;
+    if (mostRecentConversation) {
+      await openConversationSummary(mostRecentConversation, { enterMode: "instant" });
+      return {
+        conversationId: mostRecentConversation.id,
+        action: "opened-existing",
+      };
+    }
+
+    const response = await fetch(buildConversationApiPath(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(),
+      },
+      body: JSON.stringify({
+        locale,
+        selectedLanguages: defaultSelectedLanguages,
+      }),
+    });
+    const nextConversation = await readConversationResponse(response);
+    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+    setConversations((current) => upsertConversation(current, nextConversation));
+    setOverlayEnterMode("instant");
+    setOverlayExitMode("animate");
+    setAutoStartConversationId(null);
+    setActiveConversation(nextConversation);
+
+    return {
+      conversationId: nextConversation.id,
+      action: "created",
+    };
+  }, [closeSearchOverlay, defaultSelectedLanguages, locale, openConversationSummary]);
+
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
 
@@ -2345,6 +2276,51 @@ export default function ConversationList({
     isCreatingConversation,
     isImportingLegacyConversation,
     openConversationSummary,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (!shouldExposeNativeQaBridge({
+      search: window.location.search,
+      isNativeAppRuntime: isNativeRuntime,
+      runtimeQaBridgeAuthorized: readNativeQaBridgeAuthority(window),
+    })) {
+      delete window.__MINGLE_CONVERSATION_LIST_QA__;
+      return;
+    }
+
+    window.__MINGLE_CONVERSATION_LIST_QA__ = {
+      getConversationListSnapshot: () => ({
+        routePathname: window.location.pathname,
+        documentLanguage: document.documentElement.lang || "",
+        uiLocale: locale,
+        isNativeAppRuntime: isNativeRuntime,
+        isHydratingConversations,
+        conversationCount: conversationsRef.current.length,
+        activeConversationId: activeConversationRef.current?.id ?? null,
+        showSearch,
+        effectiveNativeTopInsetPx,
+        effectiveNativeBottomInsetPx,
+        nativeBannerLayoutPosition: nativeBannerLayout?.position ?? null,
+        createButtonLabel: copy.newConversationButtonLabel,
+      }),
+      ensureConversationRoom: async () => await ensureConversationRoomForQa(),
+    };
+
+    return () => {
+      delete window.__MINGLE_CONVERSATION_LIST_QA__;
+    };
+  }, [
+    copy.newConversationButtonLabel,
+    effectiveNativeBottomInsetPx,
+    effectiveNativeTopInsetPx,
+    ensureConversationRoomForQa,
+    isHydratingConversations,
+    isNativeRuntime,
+    locale,
+    nativeBannerLayout?.position,
+    showSearch,
   ]);
 
   const handleCloseActiveConversation = useCallback(async () => {
@@ -2595,14 +2571,14 @@ export default function ConversationList({
         onTouchCancel={resetPullRefresh}
       >
         <div
-          className="pointer-events-none sticky top-0 z-10 flex h-0 justify-center overflow-visible"
+          className="pointer-events-none sticky top-0 z-10 h-0 overflow-visible"
           aria-hidden
         >
           <div
-            className="mt-3 flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
+            className="absolute left-1/2 top-3 flex h-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/95 px-3 shadow-[0_10px_30px_rgba(15,23,42,0.10)]"
             style={{
               opacity: pullRefreshProgress,
-              transform: `translateY(${Math.max(0, effectivePullRefreshOffsetPx - 56)}px) scale(${0.92 + pullRefreshProgress * 0.08})`,
+              transform: `translate(-50%, ${effectivePullRefreshOffsetPx - 56}px) scale(${0.92 + pullRefreshProgress * 0.08})`,
               transition: pullRefreshTrackingRef.current
                 ? "none"
                 : "transform 180ms ease, opacity 180ms ease",
@@ -2629,7 +2605,12 @@ export default function ConversationList({
               <Loader2 size={28} className="animate-spin" />
             </div>
           ) : conversationItems.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-16 text-center text-gray-400">
+            <div
+              className="flex flex-col items-center px-6 py-16 text-center text-gray-400"
+              style={{
+                paddingTop: effectiveNativeTopInsetPx > 0 ? "84px" : undefined,
+              }}
+            >
               <span className="mb-3 text-5xl">💬</span>
               <p className="text-[15px] font-semibold text-slate-700">
                 {copy.emptyTitle}

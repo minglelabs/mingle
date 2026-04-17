@@ -15,6 +15,15 @@ import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
+import {
+  AUTH_GATE_BACKGROUND_STYLE,
+  AUTH_GATE_PANEL_CLASSNAME,
+  createProviderResetAuthPanelState,
+  createProviderSelectionAuthPanelState,
+  resolveAuthGateVisualState,
+  type AuthProvider,
+  type AuthPanelStep,
+} from "@/components/mingle-home.auth-contract";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 
@@ -121,8 +130,6 @@ type NativeAuthPendingResponse =
       message: string;
     };
 
-type AuthPanelStep = "provider" | "terms";
-type AuthProvider = NativeAuthProvider | "email";
 type LegalSheetKind = "privacy" | "terms";
 type EmailAuthSheetMode = "login" | "signup" | "forgot";
 type EmailAuthErrorCode = "required" | "invalid_email" | "password_mismatch";
@@ -785,33 +792,34 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const handleProviderSelect = useCallback(
     (provider: AuthProvider) => {
       if (isSigningIn) return;
+      const nextState = createProviderSelectionAuthPanelState(provider);
       clearEmailSheetCloseTimer();
-      setIsEmailSheetOpen(false);
-      setIsEmailSheetClosing(false);
-      setEmailSheetMode("login");
-      setEmailAuthErrorCode(null);
-      setIsEmailSubmitting(false);
-      setSelectedProvider(provider);
-      // Start with the required agreements checked by default; users can still opt out manually.
-      setAgreedPrivacy(true);
-      setAgreedTerms(true);
-      setAuthPanelStep("terms");
+      setIsEmailSheetOpen(nextState.isEmailSheetOpen);
+      setIsEmailSheetClosing(nextState.isEmailSheetClosing);
+      setEmailSheetMode(nextState.emailSheetMode);
+      setEmailAuthErrorCode(nextState.emailAuthErrorCode);
+      setIsEmailSubmitting(nextState.isEmailSubmitting);
+      setSelectedProvider(nextState.selectedProvider);
+      setAgreedPrivacy(nextState.agreedPrivacy);
+      setAgreedTerms(nextState.agreedTerms);
+      setAuthPanelStep(nextState.authPanelStep);
     },
     [clearEmailSheetCloseTimer, isSigningIn],
   );
 
   const handleBackToProviderSelect = useCallback(() => {
     if (isSigningIn) return;
+    const nextState = createProviderResetAuthPanelState();
     clearEmailSheetCloseTimer();
-    setIsEmailSheetOpen(false);
-    setIsEmailSheetClosing(false);
-    setEmailSheetMode("login");
-    setEmailAuthErrorCode(null);
-    setIsEmailSubmitting(false);
-    setAuthPanelStep("provider");
-    setSelectedProvider(null);
-    setAgreedPrivacy(false);
-    setAgreedTerms(false);
+    setIsEmailSheetOpen(nextState.isEmailSheetOpen);
+    setIsEmailSheetClosing(nextState.isEmailSheetClosing);
+    setEmailSheetMode(nextState.emailSheetMode);
+    setEmailAuthErrorCode(nextState.emailAuthErrorCode);
+    setIsEmailSubmitting(nextState.isEmailSubmitting);
+    setAuthPanelStep(nextState.authPanelStep);
+    setSelectedProvider(nextState.selectedProvider);
+    setAgreedPrivacy(nextState.agreedPrivacy);
+    setAgreedTerms(nextState.agreedTerms);
   }, [clearEmailSheetCloseTimer, isSigningIn]);
 
   const handleAgreeAllRequiredTerms = useCallback(() => {
@@ -1118,19 +1126,25 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
   // Keep loading and unauthenticated states within one stable layout.
   // The panel always stays mounted and only its inner content changes to avoid pop-in.
-  const shouldShowAuthGate =
-    REQUIRE_AUTH_FOR_TRANSLATOR &&
-    (status === "loading" || status !== "authenticated");
+  const authGateVisualState = resolveAuthGateVisualState({
+    requireAuthGate: REQUIRE_AUTH_FOR_TRANSLATOR,
+    status,
+    isSigningIn,
+    isEmailSubmitting,
+    selectedProvider,
+    agreedPrivacy,
+    agreedTerms,
+  });
+  const shouldShowAuthGate = authGateVisualState.shouldShowAuthGate;
   if (shouldShowAuthGate) {
-    const isLoading = status === "loading";
-    const disabled = isSigningIn || isLoading;
-    const emailSheetDisabled = isEmailSubmitting || isLoading;
+    const { isLoading, disabled, emailSheetDisabled, hasAgreedAllRequiredTerms } =
+      authGateVisualState;
 
     return (
       // 1) Use a full-background gradient so the outer edges never flash white.
       <main
         className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
-        style={{ background: "linear-gradient(160deg, #FBBC32 0%, #F97316 100%)" }}
+        style={{ background: AUTH_GATE_BACKGROUND_STYLE }}
       >
         <style>{`@keyframes fade-in {
             from { opacity: 0; }
@@ -1186,7 +1200,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         {/* Bottom panel stays mounted; only its inner content swaps conditionally */}
         <section
           aria-busy={isLoading || disabled}
-          className="rounded-t-[2rem] bg-[#1C1C1E] px-5 pb-[calc(1.05rem+env(safe-area-inset-bottom))] pt-4"
+          className={AUTH_GATE_PANEL_CLASSNAME}
         >
           {isLoading ? (
             /* Loading state: spinner only */

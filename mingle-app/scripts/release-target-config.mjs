@@ -1,5 +1,11 @@
 export const DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL = 'https://mingle-app-xi.vercel.app';
 export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle.up.railway.app';
+const DEDICATED_RELEASE_TARGETS = new Set(['v1_1_0', 'v1_1_1']);
+
+function formatReleaseTargetForMessage(rawValue) {
+  const match = /^v(\d+)_(\d+)_(\d+)$/.exec(typeof rawValue === 'string' ? rawValue.trim() : '');
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : rawValue;
+}
 
 function normalizeUrlForComparison(rawValue) {
   const normalizedValue = typeof rawValue === 'string' ? rawValue.trim() : '';
@@ -52,10 +58,11 @@ export function parseBooleanEnv(rawValue) {
 }
 
 export function validateReleaseTargetConfig(input) {
-  if (input.releaseTarget !== 'v1_1_0' || input.allowLegacyProductionTargets) {
+  if (!DEDICATED_RELEASE_TARGETS.has(input.releaseTarget) || input.allowLegacyProductionTargets) {
     return { ok: true };
   }
 
+  const releaseTargetLabel = formatReleaseTargetForMessage(input.releaseTarget);
   const normalizedWebAppBaseUrl = normalizeUrlForComparison(input.siteUrl);
   const normalizedWsUrl = normalizeUrlForComparison(input.wsUrl);
   const normalizedLegacyWebAppBaseUrl = normalizeUrlForComparison(
@@ -73,7 +80,7 @@ export function validateReleaseTargetConfig(input) {
   ) {
     return {
       ok: false,
-      error: `NEXT_PUBLIC_SITE_URL must point to a dedicated 1.1.0 web deployment, not the legacy production host (${normalizedLegacyWebAppBaseUrl}).`,
+      error: `NEXT_PUBLIC_SITE_URL must point to a dedicated ${releaseTargetLabel} web deployment, not the legacy production host (${normalizedLegacyWebAppBaseUrl}).`,
     };
   }
 
@@ -85,7 +92,7 @@ export function validateReleaseTargetConfig(input) {
   ) {
     return {
       ok: false,
-      error: `NEXT_PUBLIC_WS_URL must point to a dedicated 1.1.0 STT deployment, not the legacy production host (${normalizedLegacyWsUrl}).`,
+      error: `NEXT_PUBLIC_WS_URL must point to a dedicated ${releaseTargetLabel} STT deployment, not the legacy production host (${normalizedLegacyWsUrl}).`,
     };
   }
 

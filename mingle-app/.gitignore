@@ -53,3 +53,6 @@ next-env.d.ts
 
 # debug audio dumps (local only)
 /debug-audio/
+
+# Appium runtime cache (local only)
+/.appium/

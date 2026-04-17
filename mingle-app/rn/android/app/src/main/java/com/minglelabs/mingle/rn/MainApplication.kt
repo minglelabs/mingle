@@ -1,6 +1,7 @@
 package com.minglelabs.mingle.rn
 
 import android.app.Application
+import android.webkit.WebView
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -21,6 +22,9 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    if (BuildConfig.DEBUG) {
+      WebView.setWebContentsDebuggingEnabled(true)
+    }
     loadReactNative(this)
   }
 }

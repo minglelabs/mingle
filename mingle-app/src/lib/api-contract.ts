@@ -1,8 +1,15 @@
 const DEFAULT_API_NAMESPACE = ''
-const DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM = {
-  android: 'android/v1.1.0',
-  ios: 'ios/v1.1.0',
+const DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET = {
+  v1_1_0: {
+    android: 'android/v1.1.0',
+    ios: 'ios/v1.1.0',
+  },
+  v1_1_1: {
+    android: 'android/v1.1.1',
+    ios: 'ios/v1.1.1',
+  },
 } as const
+type ReleaseTargetWithDefaultApiNamespace = keyof typeof DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET
 const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'android/v1.0.2', enablesFinalizeSourceRedetection: false },
@@ -16,6 +23,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.0.10', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.0.11', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v1.1.1', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -28,6 +36,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v1.0.10', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.11', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.1.0', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v1.1.1', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,
@@ -88,15 +97,20 @@ function detectRuntimePlatform(): 'android' | 'ios' | null {
 }
 
 function resolveReleaseTargetDefaultApiNamespace(): string {
-  if (normalizeReleaseTarget(process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET || '') !== 'v1_1_0') {
+  const releaseTarget = normalizeReleaseTarget(process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET || '')
+  const defaults = Object.prototype.hasOwnProperty.call(DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET, releaseTarget)
+    ? DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET[releaseTarget as ReleaseTargetWithDefaultApiNamespace]
+    : null
+
+  if (!defaults) {
     return DEFAULT_API_NAMESPACE
   }
 
   const runtimePlatform = detectRuntimePlatform()
   if (runtimePlatform === 'android') {
-    return DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM.android
+    return defaults.android
   }
-  return DEFAULT_V1_1_0_API_NAMESPACE_BY_PLATFORM.ios
+  return defaults.ios
 }
 
 const envNamespace = parseAllowedApiNamespace(process.env.NEXT_PUBLIC_API_NAMESPACE || '')

@@ -5,6 +5,8 @@ import {
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
+  shouldEnableIosWebViewBackForwardNavigation,
+  shouldEnableNativeWebViewDebugging,
   resolveNativeBottomBannerWebInsetPx,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
@@ -72,6 +74,42 @@ describe('RN WebView layout helpers', () => {
     expect(shouldHideIosKeyboardAccessoryView({
       isIosPlatform: false,
       pathname: '/ko/translator',
+    })).toBe(false)
+  })
+
+  it('keeps iOS back-forward gestures enabled when either back or forward history exists', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: false,
+    })).toBe(true)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: true,
+    })).toBe(true)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: false,
+    })).toBe(false)
+
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: false,
+      canGoBack: true,
+      canGoForward: true,
+    })).toBe(false)
+  })
+
+  it('enables native WebView debugging only in debug builds', () => {
+    expect(shouldEnableNativeWebViewDebugging({
+      isDebugBuild: true,
+    })).toBe(true)
+
+    expect(shouldEnableNativeWebViewDebugging({
+      isDebugBuild: false,
     })).toBe(false)
   })
 
