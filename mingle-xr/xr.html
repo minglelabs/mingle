@@ -402,6 +402,64 @@
         height: clamp(430px, 42vw, 590px);
       }
 
+      .slide-side-media--blitz-cloud .slide-competitor-cloud {
+        isolation: isolate;
+      }
+
+      .slide-mingle-flight {
+        position: absolute;
+        left: clamp(-12px, -0.8vw, 0px);
+        bottom: clamp(24px, 4.2vw, 68px);
+        width: clamp(250px, 22vw, 340px);
+        height: clamp(82px, 7.2vw, 112px);
+        transform: rotate(-8deg);
+        z-index: 6;
+        pointer-events: none;
+      }
+
+      .slide-mingle-flight-logo {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: clamp(200px, 18vw, 278px);
+        filter: drop-shadow(0 22px 34px rgba(12, 12, 12, 0.2));
+      }
+
+      .slide-mingle-flight-tail {
+        position: absolute;
+        left: 0;
+        bottom: clamp(18px, 1.7vw, 28px);
+        width: clamp(86px, 7.2vw, 118px);
+        height: clamp(48px, 4.4vw, 68px);
+        z-index: -1;
+      }
+
+      .slide-mingle-flight-tail-line {
+        position: absolute;
+        right: 0;
+        height: clamp(3px, 0.35vw, 5px);
+        border-radius: 999px;
+        background: rgba(12, 12, 12, 0.92);
+        transform-origin: right center;
+      }
+
+      .slide-mingle-flight-tail-line:nth-child(1) {
+        top: 18%;
+        width: 70%;
+        transform: rotate(-14deg);
+      }
+
+      .slide-mingle-flight-tail-line:nth-child(2) {
+        top: 48%;
+        width: 100%;
+      }
+
+      .slide-mingle-flight-tail-line:nth-child(3) {
+        top: 78%;
+        width: 62%;
+        transform: rotate(13deg);
+      }
+
       .slide-side-media--ai-native-stack {
         top: clamp(138px, 17vh, 218px);
         right: clamp(96px, 10vw, 156px);
@@ -2448,7 +2506,7 @@
               <p class="slide-kicker">차별화점</p>
               <h1 class="slide-title">지금 블리츠 스케일링으로<br/>앞서 나가야 합니다</h1>
             </div>
-            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud">
+            <div class="slide-side-media slide-side-media--competitor-cloud slide-side-media--social-cloud slide-side-media--blitz-cloud">
               <div class="slide-competitor-cloud">
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 49%; --y: 10%; --s: clamp(70px, 5.6vw, 94px); --r: 8deg" src="./assets/logo-kakaotalk.png" alt="KakaoTalk" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 24%; --y: 25%; --s: clamp(76px, 6vw, 102px); --r: -10deg" src="./assets/logo-instagram.png" alt="Instagram" />
@@ -2459,6 +2517,14 @@
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 69%; --y: 67%; --s: clamp(72px, 5.7vw, 98px); --r: -6deg" src="./assets/logo-line.png" alt="LINE" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 37%; --y: 78%; --s: clamp(70px, 5.5vw, 94px); --r: -12deg" src="./assets/logo-facebook.png" alt="Facebook" />
                 <img class="slide-competitor-logo slide-competitor-logo--note" style="--x: 57%; --y: 91%; --s: clamp(76px, 6vw, 102px); --r: 9deg" src="./assets/logo-telegram.png" alt="Telegram" />
+                <div class="slide-mingle-flight">
+                  <div class="slide-mingle-flight-tail" aria-hidden="true">
+                    <span class="slide-mingle-flight-tail-line"></span>
+                    <span class="slide-mingle-flight-tail-line"></span>
+                    <span class="slide-mingle-flight-tail-line"></span>
+                  </div>
+                  <img class="slide-mingle-flight-logo" src="./assets/logo-mingle.png" alt="Mingle" />
+                </div>
               </div>
             </div>
           </article>
