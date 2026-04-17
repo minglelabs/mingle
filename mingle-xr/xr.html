@@ -1658,7 +1658,9 @@
       }
 
       html.is-mobile-viewport .slide-shell--has-side-media {
-        justify-content: space-between;
+        justify-content: flex-start;
+        gap: clamp(34px, 5.2vh, 54px);
+        padding-top: calc(env(safe-area-inset-top) + clamp(34px, 5vh, 52px));
       }
 
       html.is-mobile-viewport .slide-shell--image-only {
