@@ -6,25 +6,20 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <script>
       (function () {
-        var DESIGN_WIDTH = 1600;
         var MOBILE_BREAKPOINT = 900;
         var meta = document.getElementById("viewport-meta");
 
         function applyViewport() {
-          var screenWidth = Math.min(
-            window.screen ? window.screen.width : window.innerWidth,
-            window.innerWidth || Infinity
-          );
-          var isMobile = screenWidth <= MOBILE_BREAKPOINT;
+          var viewportWidth = window.innerWidth || (window.screen ? window.screen.width : 0);
+          var isMobile = viewportWidth <= MOBILE_BREAKPOINT;
 
           if (isMobile) {
-            var scale = screenWidth / DESIGN_WIDTH;
             meta.setAttribute(
               "content",
-              "width=" + DESIGN_WIDTH +
-                ", initial-scale=" + scale +
-                ", minimum-scale=" + scale +
-                ", maximum-scale=" + scale +
+              "width=device-width" +
+                ", initial-scale=1.0" +
+                ", minimum-scale=1.0" +
+                ", maximum-scale=1.0" +
                 ", user-scalable=no"
             );
             document.documentElement.classList.add("is-mobile-viewport");
@@ -1607,19 +1602,23 @@
       }
 
       html.is-mobile-viewport {
-        --deck-width: 1600px;
-        --deck-height: 900px;
+        --deck-width: 100vw;
+        --deck-height: 100dvh;
+        --mobile-content-width: min(100%, 680px);
+        --mobile-slide-x: clamp(18px, 5.2vw, 28px);
       }
 
       html.is-mobile-viewport,
       html.is-mobile-viewport body {
+        width: 100%;
+        height: 100vh;
         height: 100dvh;
         min-height: 100dvh;
+        overflow: hidden;
       }
 
       html.is-mobile-viewport body {
-        display: grid;
-        place-items: center;
+        display: block;
         background:
           radial-gradient(130% 90% at 50% 0%, rgba(251, 188, 50, 0.12), transparent 54%),
           linear-gradient(135deg, #fffefb 0%, #fffaf1 48%, #fffdf7 100%),
@@ -1627,7 +1626,508 @@
       }
 
       html.is-mobile-viewport .deck {
-        box-shadow: 0 24px 80px rgba(66, 49, 15, 0.08);
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        box-shadow: none;
+      }
+
+      html.is-mobile-viewport .track {
+        transition: transform 360ms var(--slide-ease);
+      }
+
+      html.is-mobile-viewport .slide {
+        flex-basis: 100vw;
+        width: 100vw;
+        min-width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      html.is-mobile-viewport .slide-shell {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(14px, 2.4vh, 24px);
+        padding:
+          calc(env(safe-area-inset-top) + clamp(18px, 4vh, 32px))
+          var(--mobile-slide-x)
+          calc(env(safe-area-inset-bottom) + clamp(54px, 7vh, 72px));
+        overflow: hidden;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media {
+        justify-content: space-between;
+      }
+
+      html.is-mobile-viewport .slide-shell--image-only {
+        justify-content: center;
+        padding:
+          calc(env(safe-area-inset-top) + clamp(14px, 3vh, 24px))
+          var(--mobile-slide-x)
+          calc(env(safe-area-inset-bottom) + clamp(42px, 5vh, 56px));
+      }
+
+      html.is-mobile-viewport .slide-full-image {
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      html.is-mobile-viewport .slide-copy {
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        gap: clamp(10px, 1.7vh, 16px);
+        justify-items: start;
+        --kicker-slot: clamp(24px, 4vh, 34px);
+        padding-top: var(--kicker-slot);
+        margin-top: 0;
+        text-align: left;
+      }
+
+      html.is-mobile-viewport .slide-copy--center {
+        justify-items: center;
+        text-align: center;
+      }
+
+      html.is-mobile-viewport .slide-copy--toc {
+        gap: clamp(20px, 4vh, 34px);
+      }
+
+      html.is-mobile-viewport .slide-copy--toc .slide-title {
+        gap: 8px;
+        margin-top: 8px;
+        font-size: clamp(1.72rem, 7.2vw, 2.58rem);
+      }
+
+      html.is-mobile-viewport .slide-copy--toc .slide-kicker {
+        font-size: clamp(1.4rem, 6vw, 2.1rem);
+      }
+
+      html.is-mobile-viewport .slide-kicker {
+        gap: 6px;
+        font-size: clamp(0.74rem, 2.9vw, 0.96rem);
+        letter-spacing: 0.08em;
+      }
+
+      html.is-mobile-viewport .slide-title {
+        font-size: clamp(1.82rem, 8vw, 3.08rem);
+        line-height: 1.16;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+      }
+
+      html.is-mobile-viewport .slide--hero .slide-title {
+        font-size: clamp(2.9rem, 12vw, 4.6rem);
+        line-height: 1.08;
+      }
+
+      html.is-mobile-viewport .slide--hero h3.slide-title {
+        font-size: clamp(1.82rem, 8vw, 3.08rem);
+        line-height: 1.16;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media .slide-title {
+        font-size: clamp(1.5rem, 6.25vw, 2.25rem);
+        line-height: 1.18;
+      }
+
+      html.is-mobile-viewport .slide-shell--has-side-media .slide-body {
+        font-size: clamp(0.82rem, 3.05vw, 0.98rem);
+        line-height: 1.46;
+      }
+
+      html.is-mobile-viewport .slide-title-quote {
+        font-size: clamp(3.4rem, 13vw, 5.1rem);
+      }
+
+      html.is-mobile-viewport .slide-body {
+        max-width: 100%;
+        font-size: clamp(0.9rem, 3.45vw, 1.08rem);
+        line-height: 1.5;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-side-media {
+        position: relative;
+        top: auto;
+        right: auto;
+        width: var(--mobile-content-width);
+        max-width: var(--mobile-content-width);
+        height: auto;
+        display: block;
+        flex: 0 1 auto;
+        transform: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--brand-collage,
+      html.is-mobile-viewport .slide-side-media--competitor-cloud,
+      html.is-mobile-viewport .slide-side-media--network-effect-cloud,
+      html.is-mobile-viewport .slide-side-media--gaming-stack,
+      html.is-mobile-viewport .slide-side-media--hellotalk-secondary,
+      html.is-mobile-viewport .slide-side-media--reddittalk,
+      html.is-mobile-viewport .slide-side-media--community-stack,
+      html.is-mobile-viewport .slide-side-media--travel-post-stack,
+      html.is-mobile-viewport .slide-side-media--networking-collage,
+      html.is-mobile-viewport .slide-side-media--collage,
+      html.is-mobile-viewport .slide-side-media--reason {
+        height: clamp(220px, 42vh, 360px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--social-cloud {
+        height: clamp(250px, 44vh, 390px);
+      }
+
+      html.is-mobile-viewport .slide-side-media--mingle-solution-proof {
+        display: grid;
+        place-items: center;
+        height: clamp(250px, 44vh, 390px);
+      }
+
+      html.is-mobile-viewport .slide-short-video {
+        width: min(58vw, 230px);
+        max-width: 100%;
+        max-height: 42vh;
+      }
+
+      html.is-mobile-viewport .slide-preview-image {
+        max-width: 100%;
+        height: auto;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk-primary,
+      html.is-mobile-viewport .slide-preview-image--hellotalk-secondary,
+      html.is-mobile-viewport .slide-preview-image--gaming,
+      html.is-mobile-viewport .slide-preview-image--offline-conversation,
+      html.is-mobile-viewport .slide-preview-image--reddittalk {
+        width: min(100%, 340px);
+        margin-inline: auto;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk-primary {
+        width: min(58vw, 230px);
+      }
+
+      html.is-mobile-viewport .slide-preview-image--gaming-back {
+        position: absolute;
+        left: 4%;
+        top: 16%;
+        width: 36%;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame {
+        padding: 8px;
+        border-radius: 24px;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame::before {
+        top: 7px;
+        height: 10px;
+      }
+
+      html.is-mobile-viewport .slide-phone-frame--gaming-front {
+        position: absolute;
+        right: 4%;
+        top: 0;
+        width: 40%;
+      }
+
+      html.is-mobile-viewport .slide-side-media--conversation-stack .slide-phone-frame--gaming-back {
+        left: 4%;
+        top: 18%;
+        width: 34%;
+      }
+
+      html.is-mobile-viewport .slide-side-media--conversation-stack .slide-phone-frame--gaming-front {
+        right: 4%;
+        width: 42%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--reddittalk-top {
+        top: 3%;
+        right: 4%;
+        width: 62%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--clubhouse-bottom {
+        right: 4%;
+        bottom: 2%;
+        width: 68%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk1 {
+        top: 3%;
+        left: 4%;
+        width: 42%;
+      }
+
+      html.is-mobile-viewport .slide-preview-image--hellotalk2 {
+        top: 34%;
+        right: 4%;
+        width: 42%;
+      }
+
+      html.is-mobile-viewport .slide-tool-items,
+      html.is-mobile-viewport .slide-hurdles-stack,
+      html.is-mobile-viewport .slide-ai-native-stack,
+      html.is-mobile-viewport .slide-musk-stack,
+      html.is-mobile-viewport .slide-musk-service-list {
+        gap: clamp(8px, 1.2vh, 12px);
+      }
+
+      html.is-mobile-viewport .slide-tool-item,
+      html.is-mobile-viewport .slide-hurdle-item,
+      html.is-mobile-viewport .slide-ai-native-item {
+        border-radius: 16px;
+        padding: 12px 12px 12px 24px;
+      }
+
+      html.is-mobile-viewport .slide-ai-native-item {
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+      }
+
+      html.is-mobile-viewport .slide-tool-item::before,
+      html.is-mobile-viewport .slide-hurdle-item::before {
+        left: 10px;
+        top: 12px;
+        bottom: 12px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-tool-heading {
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-tool-logo,
+      html.is-mobile-viewport .slide-tool-badge,
+      html.is-mobile-viewport .slide-ai-native-logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+      }
+
+      html.is-mobile-viewport .slide-tool-title,
+      html.is-mobile-viewport .slide-hurdle-title,
+      html.is-mobile-viewport .slide-ai-native-name {
+        font-size: clamp(0.98rem, 3.6vw, 1.22rem);
+        line-height: 1.25;
+        letter-spacing: 0;
+        white-space: normal;
+      }
+
+      html.is-mobile-viewport .slide-tool-description,
+      html.is-mobile-viewport .slide-hurdle-description {
+        margin-top: 6px;
+        font-size: clamp(0.82rem, 3.05vw, 0.98rem);
+        line-height: 1.38;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-tool-item--numbered {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 13px 14px;
+      }
+
+      html.is-mobile-viewport .slide-tool-item--numbered .slide-tool-heading,
+      html.is-mobile-viewport .slide-tool-item--numbered .slide-tool-description {
+        grid-column: 1;
+      }
+
+      html.is-mobile-viewport .slide-tool-step-number {
+        min-width: 0;
+        min-height: 0;
+        padding: 5px 8px;
+        font-size: 0.82rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-step-transition {
+        display: none;
+      }
+
+      html.is-mobile-viewport .slide-solution-columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--social-requirements .slide-solution-columns {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      html.is-mobile-viewport .slide-solution-points {
+        gap: 8px;
+        grid-auto-rows: minmax(48px, auto);
+      }
+
+      html.is-mobile-viewport .slide-solution-point {
+        min-height: 48px;
+        padding: 10px 8px 10px 22px;
+        border-radius: 14px;
+        font-size: clamp(0.82rem, 3.05vw, 0.98rem);
+        line-height: 1.34;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-solution-point::before {
+        top: 10px;
+        bottom: 10px;
+        left: 9px;
+        width: 3px;
+      }
+
+      html.is-mobile-viewport .slide-solution-more {
+        font-size: 0.78rem;
+        line-height: 1.3;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-brand-chip {
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      html.is-mobile-viewport .slide-brand-logo {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+      }
+
+      html.is-mobile-viewport .slide-brand-label {
+        font-size: 0.86rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-cross-mark {
+        width: min(90%, 270px);
+        height: min(90%, 300px);
+      }
+
+      html.is-mobile-viewport .slide-cross-mark::before,
+      html.is-mobile-viewport .slide-cross-mark::after {
+        height: 8px;
+      }
+
+      html.is-mobile-viewport .slide-competitor-logo,
+      html.is-mobile-viewport .slide-network-effect-logo {
+        width: clamp(38px, 12vw, 56px);
+        height: clamp(38px, 12vw, 56px);
+        padding: 6px;
+        border-radius: 13px;
+      }
+
+      html.is-mobile-viewport .slide-network-effect-label {
+        font-size: clamp(1.42rem, 7vw, 2.3rem);
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-mingle-flight {
+        width: clamp(82px, 24vw, 118px);
+        height: clamp(82px, 24vw, 118px);
+      }
+
+      html.is-mobile-viewport .slide-mingle-flight-logo {
+        border-radius: 20px;
+      }
+
+      html.is-mobile-viewport .slide-musk-photo {
+        height: clamp(118px, 22vh, 178px);
+        border-radius: 18px;
+      }
+
+      html.is-mobile-viewport .slide-cursor-logo {
+        width: min(48vw, 190px);
+        border-radius: 18px;
+      }
+
+      html.is-mobile-viewport .slide-collage-image,
+      html.is-mobile-viewport .slide-reason-image,
+      html.is-mobile-viewport .slide-networking-card,
+      html.is-mobile-viewport .slide-travel-post-card {
+        border-radius: 16px;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--jotme {
+        top: 9%;
+        right: 35%;
+        width: 48%;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--guild {
+        top: 38%;
+        right: 4%;
+        width: 66%;
+      }
+
+      html.is-mobile-viewport .slide-collage-image--utell {
+        top: 5%;
+        right: 8%;
+        width: 36%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image {
+        height: auto;
+        width: 32%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--left {
+        left: 3%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--middle {
+        left: 50%;
+      }
+
+      html.is-mobile-viewport .slide-reason-image--right {
+        right: 3%;
+      }
+
+      html.is-mobile-viewport .slide-travel-post-card--top {
+        width: 56%;
+      }
+
+      html.is-mobile-viewport .slide-travel-post-card--bottom {
+        width: 84%;
+      }
+
+      html.is-mobile-viewport .slide-final-links {
+        width: var(--mobile-content-width);
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-final-link-row {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      html.is-mobile-viewport .slide-final-link {
+        height: 44px;
+        min-width: 0;
+        padding: 0 14px;
+      }
+
+      html.is-mobile-viewport .slide-final-logo--mingle {
+        width: 106px;
+      }
+
+      html.is-mobile-viewport .slide-final-link--github,
+      html.is-mobile-viewport .slide-final-link--linkedin {
+        font-size: 0.94rem;
+        letter-spacing: 0;
+      }
+
+      html.is-mobile-viewport .slide-final-store-badge {
+        height: 40px;
+      }
+
+      html.is-mobile-viewport .page-counter {
+        right: 50%;
+        bottom: calc(env(safe-area-inset-bottom) + 16px);
+        transform: translateX(50%);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -3050,6 +3550,13 @@
     <script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
+
+      track.querySelectorAll(".slide-shell").forEach((shell) => {
+        if (shell.querySelector(".slide-side-media")) {
+          shell.classList.add("slide-shell--has-side-media");
+        }
+      });
+
       const baseSlides = Array.from(track.querySelectorAll(".slide"));
       const slideCount = baseSlides.length;
 
@@ -3062,7 +3569,8 @@
       track.append(lastClone, ...baseSlides, firstClone);
 
       const allSlides = Array.from(track.querySelectorAll(".slide"));
-      const TAP_DURATION_MS = 260;
+      const DESKTOP_TAP_DURATION_MS = 260;
+      const MOBILE_TAP_DURATION_MS = 360;
       const HOLD_DURATION_MS = 110;
       let activeIndex = 1;
       let isAnimating = false;
@@ -3128,11 +3636,27 @@
         return `transform ${durationMs}ms var(--slide-ease)`;
       }
 
+      function isMobileViewport() {
+        return document.documentElement.classList.contains("is-mobile-viewport");
+      }
+
+      function tapDurationMs() {
+        return isMobileViewport() ? MOBILE_TAP_DURATION_MS : DESKTOP_TAP_DURATION_MS;
+      }
+
+      function touchStepForDelta(primaryDelta) {
+        if (isMobileViewport()) {
+          return primaryDelta > 0 ? 1 : -1;
+        }
+
+        return primaryDelta < 0 ? 1 : -1;
+      }
+
       function deckWidth() {
         return track.clientWidth || track.getBoundingClientRect().width;
       }
 
-      function syncPosition(useTransition, durationMs = TAP_DURATION_MS) {
+      function syncPosition(useTransition, durationMs = tapDurationMs()) {
         track.style.transition = useTransition
           ? currentTransitionValue(durationMs)
           : "none";
@@ -3154,7 +3678,7 @@
 
         restoreTransitionFrame = window.requestAnimationFrame(() => {
           track.style.transition = currentTransitionValue(
-            holdStep === null ? TAP_DURATION_MS : HOLD_DURATION_MS
+            holdStep === null ? tapDurationMs() : HOLD_DURATION_MS
           );
           restoreTransitionFrame = null;
 
@@ -3203,7 +3727,7 @@
 
         isAnimating = true;
         activeIndex += step;
-        syncPosition(true, isContinuous ? HOLD_DURATION_MS : TAP_DURATION_MS);
+        syncPosition(true, isContinuous ? HOLD_DURATION_MS : tapDurationMs());
         updateUi();
       }
 
@@ -3355,11 +3879,7 @@
 
           touchNavigationTriggered = true;
 
-          if (primaryDelta < 0) {
-            next();
-          } else {
-            previous();
-          }
+          move(touchStepForDelta(primaryDelta));
         },
         { passive: false }
       );
@@ -3381,11 +3901,7 @@
           const primaryDelta = absX >= absY ? deltaX : deltaY;
 
           if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
-            if (primaryDelta < 0) {
-              next();
-            } else {
-              previous();
-            }
+            move(touchStepForDelta(primaryDelta));
           }
 
           touchMoved = false;
