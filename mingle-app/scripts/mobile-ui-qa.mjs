@@ -1215,7 +1215,7 @@ async function withQaFailureDetails(driver, runner) {
 }
 
 async function resetQaDemoState(driver) {
-  const usedQaReset = await driver.execute(() => {
+  const runQaReset = async () => await driver.execute(() => {
     const keysToRemove = [
       'mingle_demo_utterances',
       'mingle_demo_ad_banner_position',
@@ -1232,8 +1232,15 @@ async function resetQaDemoState(driver) {
     return Boolean(window.__MINGLE_QA__?.resetUiState);
   });
 
+  let usedQaReset = await runQaReset();
+  if (!usedQaReset) {
+    await ensureConversationRoom(driver);
+    usedQaReset = await runQaReset();
+  }
+
   if (!usedQaReset) {
     await reloadCurrentPage(driver);
+    await ensureConversationRoom(driver);
     return;
   }
 
@@ -1256,6 +1263,7 @@ async function resetQaDemoState(driver) {
     }, 'the menu panel DOM to unmount after reset', 4000, 250);
   } catch {
     await reloadCurrentPage(driver);
+    await ensureConversationRoom(driver);
     await waitFor(async () => {
       const snapshot = await getQaSnapshot(driver);
       return snapshot
@@ -1604,7 +1612,7 @@ async function runAndroidCases(driver, reportDir) {
       await resetQaDemoState(driver);
       const baseline = await getQaSnapshot(driver);
 
-      const injected = await invokeQaMethod(driver, 'setNativeSttStatusForQa', 'running');
+      const injected = await invokeQaMethod(driver, 'setNativeSttStatusForQa', 'ready');
       assert(injected === true, 'The Android QA bridge could not inject native STT state.', {
         baseline,
         injected,

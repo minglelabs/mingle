@@ -109,6 +109,10 @@ import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
+import {
+  buildNativeRemountRestoreUrl,
+  rememberNativeRemountRestoreConversation,
+} from '@/lib/native-remount-restore'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
@@ -1013,6 +1017,9 @@ type NativeSetBottomBarClearanceCommand = {
 
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
+  payload?: {
+    url?: string
+  }
 }
 
 type NativeQaSetSttStatusCommand = {
@@ -2126,10 +2133,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
     if (!isNativeApp()) return
 
+    if (conversationId) {
+      rememberNativeRemountRestoreConversation(conversationId)
+    }
     postNativeQaCommand({
       type: 'native_remount_webview',
+      payload: {
+        url: buildNativeRemountRestoreUrl(window.location.href, conversationId),
+      },
     } satisfies NativeRemountWebViewCommand)
-  }, [])
+  }, [conversationId])
 
   const handleMenuButtonPress = useCallback(() => {
     closeLanguageSelector({ syncHistory: 'replace' })
@@ -4509,8 +4522,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       },
       remountWebView: () => {
         if (!isNativeAppRuntime) return false
+        if (conversationId) {
+          rememberNativeRemountRestoreConversation(conversationId)
+        }
         return postNativeQaCommand({
           type: 'native_remount_webview',
+          payload: {
+            url: buildNativeRemountRestoreUrl(window.location.href, conversationId),
+          },
         } satisfies NativeRemountWebViewCommand)
       },
       setNativeSttStatusForQa: (status: string) => {
@@ -4534,6 +4553,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     closeMenuPanel,
     composerTextareaHeightPx,
     composerTextareaRef,
+    conversationId,
     displayedAdBannerPosition,
     effectiveNativeBottomBannerInsetPx,
     effectiveNativeBottomContentInsetPx,

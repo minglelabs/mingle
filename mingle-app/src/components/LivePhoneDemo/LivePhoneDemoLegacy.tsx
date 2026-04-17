@@ -763,6 +763,9 @@ type NativeSetBottomBarClearanceCommand = {
 
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
+  payload?: {
+    url?: string
+  }
 }
 
 type NativeAppUpdateWindow = Window & {
@@ -1641,6 +1644,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     try {
       window.ReactNativeWebView?.postMessage(JSON.stringify({
         type: 'native_remount_webview',
+        payload: {
+          url: window.location.href,
+        },
       } satisfies NativeRemountWebViewCommand))
     } catch {
       // Ignore bridge errors for the native-only debug action.

@@ -1,5 +1,19 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-17 Android/iOS 1.1.1 Devbox Local QA
+
+### `2026-04-17-devbox-1.1.1-local-qa` | UI/UX issues found
+
+1. **Android native/WebView remount could strand an in-progress conversation on the list**
+   Problem: Android real-device QA reloaded the WebView to the conversation list after a native remount while native STT was still running. The list showed an in-progress conversation row, but the live room and QA bridge were unavailable, so the user-facing state looked paused even though native speech state was still active.
+   Fix: The native shell now preserves the requested/current WebView URL across debug remounts, the room sends an explicit remount restore URL plus a short-lived restore marker, and the conversation list waits for loaded conversations before consuming that marker. The list also subscribes to native STT status events and performs a one-time active-conversation restore fallback when native status delivery is delayed.
+   Status: Resolved on 2026-04-17. Android real-device QA passed 8/8 after restarting devbox and clearing the Android WebView/app data.
+
+2. **iPhone physical-device automation is still blocked at the Appium/XCUITest device layer**
+   Problem: The iPhone app is installed and launchable as version `1.1.1`, but Appium could not create an XCUITest session for the connected physical device. The standard UDID failed with `Unknown device or simulator UDID`, while the CoreDevice identifier moved into a WebDriverAgent `xcodebuild` wait with no progress.
+   Attempted fix: Verified the device through `xctrace`, `devicectl`, and `idevice_id`, confirmed the installed Mingle bundle version, and launched the app with `devicectl`. The automation session still did not become usable.
+   Status: Not resolved in-thread. iOS real-device UI assertions remain blocked until the device/CoreDevice/Appium WDA state is healthy again.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found

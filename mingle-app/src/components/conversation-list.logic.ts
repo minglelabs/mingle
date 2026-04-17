@@ -120,6 +120,16 @@ export function updateConversationSummaryStatus(
   };
 }
 
+export function findNativeSttRestoreConversation(
+  conversations: ConversationChannelSummary[],
+  deletingConversationIds: ReadonlySet<string>,
+): ConversationChannelSummary | null {
+  return conversations.find((conversation) => (
+    conversation.status === "active"
+    && !deletingConversationIds.has(conversation.id)
+  )) ?? null;
+}
+
 export function mergeConversationLists(
   current: ConversationChannelSummary[],
   incoming: ConversationChannelSummary[],

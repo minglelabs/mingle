@@ -45,6 +45,7 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   MAX_RECENT_SEARCHES,
   mergeConversationLists,
@@ -65,6 +66,7 @@ import {
   readNativeQaBridgeAuthority,
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
+import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -72,6 +74,7 @@ import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
+const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
@@ -116,6 +119,7 @@ type ConversationListQaSnapshot = {
   isHydratingConversations: boolean;
   conversationCount: number;
   activeConversationId: string | null;
+  nativeSttStatus: string | null;
   showSearch: boolean;
   effectiveNativeTopInsetPx: number;
   effectiveNativeBottomInsetPx: number;
@@ -762,6 +766,15 @@ function isNativeSttStatusLive(status: string | null): boolean {
     || status === "recovering";
 }
 
+function readNativeSttStatusEventStatus(event: Event): string | null {
+  const detail = (event as CustomEvent<unknown>).detail;
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return null;
+  if ((detail as { type?: unknown }).type !== "status") return null;
+
+  const status = (detail as { status?: unknown }).status;
+  return typeof status === "string" ? status.trim().toLowerCase() || null : null;
+}
+
 function calculateConversationRowTooltipPos(element: HTMLElement): TooltipPos {
   const rect = element.getBoundingClientRect();
   return calculateConversationRowTooltipPosForRect({
@@ -1207,6 +1220,7 @@ export default function ConversationList({
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
+  const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
   const [timeLabelsReady, setTimeLabelsReady] = useState(false);
@@ -1226,6 +1240,7 @@ export default function ConversationList({
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
+  const nativeSttRestoreAttemptedRef = useRef(false);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -1866,6 +1881,24 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!isNativeRuntime && !isNativeAppRuntime()) return;
+
+    setNativeSttStatus(readCachedNativeSttStatus());
+
+    const handleNativeSttEvent = (event: Event) => {
+      const nextStatus = readNativeSttStatusEventStatus(event);
+      if (!nextStatus) return;
+      setNativeSttStatus(nextStatus);
+    };
+
+    window.addEventListener(NATIVE_STT_EVENT, handleNativeSttEvent);
+    return () => {
+      window.removeEventListener(NATIVE_STT_EVENT, handleNativeSttEvent);
+    };
+  }, [isNativeRuntime]);
+
+  useEffect(() => {
     activeConversationRef.current = activeConversation;
   }, [activeConversation]);
 
@@ -1900,12 +1933,81 @@ export default function ConversationList({
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!isNativeAppRuntime()) return;
-    if (activeConversation) return;
-    if (liveConversationId) return;
+    const cachedNativeSttStatus = nativeSttStatus ?? readCachedNativeSttStatus();
+    if (activeConversation || liveConversationId) {
+      if (isNativeSttStatusLive(cachedNativeSttStatus)) {
+        nativeSttRestoreAttemptedRef.current = true;
+      }
+      return;
+    }
     if (isHydratingConversations) return;
+    if (conversations.length === 0) return;
 
-    const cachedNativeSttStatus = readCachedNativeSttStatus();
-    if (isNativeSttStatusLive(cachedNativeSttStatus)) return;
+    const restoreConversationId = takeNativeRemountRestoreConversation();
+    const explicitRestoreConversation = restoreConversationId
+      ? conversations.find((conversation) => (
+          conversation.id === restoreConversationId
+          && !deletingConversationIdsRef.current.has(conversation.id)
+        )) ?? null
+      : null;
+    if (explicitRestoreConversation) {
+      nativeSttRestoreAttemptedRef.current = true;
+      conversationRunningStateRef.current.set(
+        explicitRestoreConversation.id,
+        explicitRestoreConversation.status === "active",
+      );
+      postNativeBannerZone("hidden");
+      closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+      setOverlayEnterMode("instant");
+      setOverlayExitMode("animate");
+      setAutoStartConversationId(null);
+      setLiveConversationId(
+        explicitRestoreConversation.status === "active" ? explicitRestoreConversation.id : null,
+      );
+      setActiveConversation(explicitRestoreConversation);
+      return;
+    }
+
+    if (isNativeSttStatusLive(cachedNativeSttStatus)) {
+      if (nativeSttRestoreAttemptedRef.current) return;
+      const restoreConversation = findNativeSttRestoreConversation(
+        conversations,
+        deletingConversationIdsRef.current,
+      );
+      if (!restoreConversation) return;
+
+      nativeSttRestoreAttemptedRef.current = true;
+      conversationRunningStateRef.current.set(restoreConversation.id, true);
+      postNativeBannerZone("hidden");
+      closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+      setOverlayEnterMode("instant");
+      setOverlayExitMode("animate");
+      setAutoStartConversationId(null);
+      setLiveConversationId(restoreConversation.id);
+      setActiveConversation(restoreConversation);
+      return;
+    }
+
+    if (cachedNativeSttStatus === null && !nativeSttRestoreAttemptedRef.current) {
+      const restoreConversation = findNativeSttRestoreConversation(
+        conversations,
+        deletingConversationIdsRef.current,
+      );
+      if (restoreConversation) {
+        nativeSttRestoreAttemptedRef.current = true;
+        conversationRunningStateRef.current.set(restoreConversation.id, true);
+        postNativeBannerZone("hidden");
+        closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+        setOverlayEnterMode("instant");
+        setOverlayExitMode("animate");
+        setAutoStartConversationId(null);
+        setLiveConversationId(restoreConversation.id);
+        setActiveConversation(restoreConversation);
+      }
+      return;
+    }
+
+    if (cachedNativeSttStatus === null) return;
 
     const staleActiveConversationIds = conversations
       .filter((conversation) => (
@@ -1936,7 +2038,14 @@ export default function ConversationList({
         // Keep the local fallback paused state even when the reconciliation request fails.
       });
     }
-  }, [activeConversation, conversations, isHydratingConversations, liveConversationId]);
+  }, [
+    activeConversation,
+    closeSearchOverlay,
+    conversations,
+    isHydratingConversations,
+    liveConversationId,
+    nativeSttStatus,
+  ]);
 
   useEffect(() => {
     const knownConversationIds = new Set(conversations.map((conversation) => conversation.id));
@@ -2299,6 +2408,7 @@ export default function ConversationList({
         isHydratingConversations,
         conversationCount: conversationsRef.current.length,
         activeConversationId: activeConversationRef.current?.id ?? null,
+        nativeSttStatus: nativeSttStatus ?? readCachedNativeSttStatus(),
         showSearch,
         effectiveNativeTopInsetPx,
         effectiveNativeBottomInsetPx,
@@ -2320,6 +2430,7 @@ export default function ConversationList({
     isNativeRuntime,
     locale,
     nativeBannerLayout?.position,
+    nativeSttStatus,
     showSearch,
   ]);
 
