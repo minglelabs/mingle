@@ -30,7 +30,6 @@ import {
   shouldTrackUsageForConnectionStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
-  shouldRestartSttForLanguageHintChange,
   shouldTriggerPartialTranslate,
   shouldOverrideTranslationByPriority,
 } from './use-realtime-stt'
@@ -330,29 +329,6 @@ describe('use-realtime-stt pure logic', () => {
       'zh-CN': '简体中文',
       'zh-TW': '繁體中文',
     })
-  })
-
-  it('restarts STT on language change only when Soniox hints are enabled and ready', () => {
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: true,
-    })).toBe(true)
-
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ja']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: false,
-    })).toBe(false)
-
-    expect(shouldRestartSttForLanguageHintChange({
-      previousSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      nextSelectionSignature: buildLanguageSelectionSignature(['en', 'ko']),
-      connectionStatus: 'ready',
-      sonioxLanguageHintsEnabled: true,
-    })).toBe(false)
   })
 
   it('maps iOS microphone denial errors to open-settings recovery', () => {
@@ -702,6 +678,69 @@ describe('use-realtime-stt pure logic', () => {
         createdAtMs: 1700000000002,
       },
     ])
+  })
+
+  it('lets one speaker finalize without stealing the other speaker live slot', () => {
+    const finalized = buildFinalizedUtterancePayload({
+      speaker: 'speaker-1',
+      rawText: ' First speaker finalized ',
+      rawLanguage: 'en',
+      languages: ['en', 'ko'],
+      partialTranslations: {
+        ko: '첫 번째 화자 확정',
+      },
+      utteranceSerial: 11,
+      nowMs: 1700000000011,
+    })
+
+    expect(finalized).not.toBeNull()
+    if (!finalized) {
+      return
+    }
+
+    const store = appendFinalizedUtteranceToStoreState(
+      createUtteranceStoreState([]),
+      finalized.utterance,
+      {
+        translations: finalized.currentTurnPreviousState.translations,
+        priorities: new Map([
+          ['ko', { kind: 'final', seq: 1 }],
+        ]),
+      },
+    )
+
+    const liveUtterances = buildLiveUtterances({
+      pendingTurns: [
+        {
+          utteranceId: 'u-live-speaker-2',
+          createdAtMs: 1700000000012,
+          speaker: 'speaker-2',
+          speakerAvatarSeed: 'avatar_seed_2',
+          speakerAvatarIndex: 2,
+          language: 'ko',
+          text: '두 번째 화자는 아직 말하는 중',
+          partialTranslations: {
+            en: 'Second speaker is still talking',
+          },
+        },
+      ],
+      languages: ['en', 'ko'],
+    })
+
+    const merged = mergeDisplayUtterances({
+      utterances: store.utterances,
+      liveUtterances,
+    })
+
+    expect(merged.map((utterance) => utterance.id)).toEqual([
+      finalized.utteranceId,
+      'u-live-speaker-2',
+    ])
+    expect(merged[0]?.originalText).toBe('First speaker finalized')
+    expect(merged[1]?.speaker).toBe('speaker-2')
+    expect(merged[1]?.translations).toEqual({
+      en: 'Second speaker is still talking',
+    })
   })
 
   it('keeps speaker avatar seed on finalized utterances when provided', () => {

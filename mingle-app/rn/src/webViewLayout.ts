@@ -48,6 +48,20 @@ export function shouldHideIosKeyboardAccessoryView(params: {
   return params.isIosPlatform && isLiveDemoPathname(params.pathname);
 }
 
+export function shouldEnableIosWebViewBackForwardNavigation(params: {
+  isIosPlatform: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+}): boolean {
+  return params.isIosPlatform && (params.canGoBack || params.canGoForward);
+}
+
+export function shouldEnableNativeWebViewDebugging(params: {
+  isDebugBuild: boolean;
+}): boolean {
+  return params.isDebugBuild;
+}
+
 export function resolveNativeBannerContentHeightPx(params: {
   bannerHeightPx: number;
   canvasScale: number;

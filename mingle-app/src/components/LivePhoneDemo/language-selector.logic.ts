@@ -288,3 +288,11 @@ export function buildRecentLanguageChipCodes(
 
   return [...selectedCodes, ...inactiveCodes].slice(0, limit);
 }
+
+export function buildLanguageSelectorButtonCodes(
+  speechLanguages: readonly string[],
+  translationLanguages: readonly string[],
+  limit = 5,
+): SttLanguageCode[] {
+  return sanitizeLanguageCodes([...speechLanguages, ...translationLanguages], limit);
+}

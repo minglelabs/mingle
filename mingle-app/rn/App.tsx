@@ -37,11 +37,17 @@ import {
 } from './src/nativeAuth';
 import { validateRnApiNamespace } from './src/apiNamespace';
 import {
+  buildNativeQaBridgeBootstrapScript,
+  WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
+} from './src/nativeNavigationBridge';
+import {
   normalizeNativeBottomBarClearancePx,
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
   resolveNativeBottomBannerContentInsetPx,
   resolveNativeBottomBannerWebInsetPx,
+  shouldEnableIosWebViewBackForwardNavigation,
+  shouldEnableNativeWebViewDebugging,
   shouldDisableIosWebViewScrolling,
   shouldHideIosKeyboardAccessoryView,
 } from './src/webViewLayout';
@@ -58,7 +64,10 @@ import {
   resolveNativeAppUpdateSnapshot,
   type NativeAppUpdateSnapshot,
 } from './src/appUpdateStatus';
-import { readPreferredRuntimeValue } from './src/runtimeConfig';
+import {
+  readPreferredRuntimeBoolean,
+  readPreferredRuntimeValue,
+} from './src/runtimeConfig';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
@@ -67,6 +76,7 @@ type NativeRuntimeConfig = {
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
+  qaBridgeEnabled?: string | boolean;
   deviceLocaleTag?: string;
   devicePreferredLanguages?: string[];
   adBannerPosition?: string;
@@ -236,6 +246,33 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
   }
 }
 
+function shouldApplyNgrokBrowserWarningBypass(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const { hostname } = new URL(raw);
+    const normalized = hostname.toLowerCase();
+    return normalized.endsWith('.ngrok-free.dev')
+      || normalized.endsWith('.ngrok-free.app');
+  } catch {
+    return /\.ngrok-free\.(dev|app)/i.test(raw);
+  }
+}
+
+function appendNgrokBrowserWarningBypass(raw: string): string {
+  if (!shouldApplyNgrokBrowserWarningBypass(raw)) return raw;
+
+  try {
+    const url = new URL(raw);
+    if (!url.searchParams.has('ngrok-skip-browser-warning')) {
+      url.searchParams.set('ngrok-skip-browser-warning', '1');
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 function shouldEnableDebugWebViewRemount(rawUrl: string): boolean {
   return __DEV__ || isLoopbackUrl(rawUrl) || isDebugWebViewRemountAllowedUrl(rawUrl);
 }
@@ -265,6 +302,10 @@ const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
 const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.apiNamespace,
   readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
+);
+const RUNTIME_QA_BRIDGE_ENABLED = readPreferredRuntimeBoolean(
+  NATIVE_RUNTIME_CONFIG.qaBridgeEnabled,
+  readRuntimeEnvValue(['NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED', 'RN_QA_BRIDGE_ENABLED']),
 );
 const WEB_APP_BASE_URL = normalizeConfiguredUrl(
   RUNTIME_WEB_APP_BASE_URL,
@@ -363,128 +404,6 @@ const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
   bottomEdgeMode: 'transparent',
 };
 
-const WEBVIEW_NAVIGATION_BRIDGE_SCRIPT = `
-  (function () {
-    if (window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__) {
-      return true;
-    }
-    window.__MINGLE_NATIVE_NAV_BRIDGE_INSTALLED__ = true;
-
-    var NATIVE_NAV_INDEX_KEY = '__MINGLE_NATIVE_NAV_INDEX__';
-    var NATIVE_NAV_RAW_STATE_KEY = '__MINGLE_NATIVE_NAV_RAW_STATE__';
-    var currentHistoryIndex = 0;
-
-    var isMergeableState = function (state) {
-      return state !== null && typeof state === 'object' && !Array.isArray(state);
-    };
-
-    var readHistoryIndex = function (state) {
-      if (!state || typeof state !== 'object') {
-        return null;
-      }
-      var value = state[NATIVE_NAV_INDEX_KEY];
-      if (typeof value !== 'number' || !isFinite(value)) {
-        return null;
-      }
-      return Math.max(0, Math.floor(value));
-    };
-
-    var stampHistoryState = function (state, index) {
-      if (isMergeableState(state)) {
-        var nextState = {};
-        for (var key in state) {
-          if (Object.prototype.hasOwnProperty.call(state, key) && key !== NATIVE_NAV_INDEX_KEY) {
-            nextState[key] = state[key];
-          }
-        }
-        nextState[NATIVE_NAV_INDEX_KEY] = index;
-        return nextState;
-      }
-
-      var wrappedState = {};
-      wrappedState[NATIVE_NAV_INDEX_KEY] = index;
-      wrappedState[NATIVE_NAV_RAW_STATE_KEY] = typeof state === 'undefined' ? null : state;
-      return wrappedState;
-    };
-
-    var ensureStampedCurrentEntry = function (fallbackIndex) {
-      currentHistoryIndex = fallbackIndex;
-      try {
-        window.history.replaceState(
-          stampHistoryState(window.history.state, currentHistoryIndex),
-          '',
-          window.location.href
-        );
-      } catch (error) {
-        // Ignore replaceState failures on locked-down history entries.
-      }
-    };
-
-    var postCurrentUrl = function () {
-      var bridge = window.ReactNativeWebView;
-      if (!bridge || typeof bridge.postMessage !== 'function') {
-        return;
-      }
-      try {
-        bridge.postMessage(JSON.stringify({
-          type: 'native_navigation_state',
-          payload: {
-            url: window.location.href,
-            canGoBack: currentHistoryIndex > 0,
-          }
-        }));
-      } catch (error) {
-        // Ignore bridge serialization failures.
-      }
-    };
-
-    var wrapHistoryMethod = function (methodName) {
-      var original = window.history[methodName];
-      if (typeof original !== 'function') {
-        return;
-      }
-      window.history[methodName] = function () {
-        var nextIndex = methodName === 'pushState'
-          ? currentHistoryIndex + 1
-          : currentHistoryIndex;
-        var nextArgs = [];
-        nextArgs[0] = stampHistoryState(arguments[0], nextIndex);
-        for (var argumentIndex = 1; argumentIndex < arguments.length; argumentIndex += 1) {
-          nextArgs[argumentIndex] = arguments[argumentIndex];
-        }
-        var result = original.apply(window.history, nextArgs);
-        currentHistoryIndex = nextIndex;
-        postCurrentUrl();
-        return result;
-      };
-    };
-
-    var initialHistoryIndex = readHistoryIndex(window.history.state);
-    if (initialHistoryIndex === null) {
-      ensureStampedCurrentEntry(0);
-    } else {
-      currentHistoryIndex = initialHistoryIndex;
-    }
-
-    wrapHistoryMethod('pushState');
-    wrapHistoryMethod('replaceState');
-    window.addEventListener('popstate', function (event) {
-      var nextIndex = readHistoryIndex(event && event.state);
-      if (nextIndex === null) {
-        nextIndex = readHistoryIndex(window.history.state);
-      }
-      if (nextIndex === null) {
-        ensureStampedCurrentEntry(0);
-      } else {
-        currentHistoryIndex = nextIndex;
-      }
-      postCurrentUrl();
-    });
-    window.addEventListener('hashchange', postCurrentUrl);
-    postCurrentUrl();
-    return true;
-  })();
-`;
 type VersionPolicyLocale =
   | 'ko'
   | 'en'
@@ -618,6 +537,7 @@ type NativeNavigationStateCommand = {
   type: 'native_navigation_state';
   payload?: {
     canGoBack?: boolean;
+    canGoForward?: boolean;
     url?: string;
   };
 };
@@ -661,6 +581,13 @@ type NativeRemountWebViewCommand = {
   type: 'native_remount_webview';
 };
 
+type NativeQaSetSttStatusCommand = {
+  type: 'native_qa_set_stt_status';
+  payload?: {
+    status?: string;
+  };
+};
+
 type WebViewCommand =
   | NativeSttCommand
   | NativeTtsCommand
@@ -675,7 +602,8 @@ type WebViewCommand =
   | NativeSetAdBannerPositionCommand
   | NativeSetBannerZoneCommand
   | NativeSetBottomBarClearanceCommand
-  | NativeRemountWebViewCommand;
+  | NativeRemountWebViewCommand
+  | NativeQaSetSttStatusCommand;
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
@@ -1144,8 +1072,9 @@ function AppInner(): React.JSX.Element {
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
+    const qaParams = __DEV__ && RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}`;
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
   }, [nativeAvailable, webLocale]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
@@ -1156,12 +1085,32 @@ function AppInner(): React.JSX.Element {
     try {
       const url = new URL(baseWebUrl);
       url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
-      return url.toString();
+      return appendNgrokBrowserWarningBypass(url.toString());
     } catch {
       const separator = baseWebUrl.includes('?') ? '&' : '?';
-      return `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`;
+      return appendNgrokBrowserWarningBypass(
+        `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`,
+      );
     }
   }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  const nativeQaBridgeBootstrapScript = useMemo(
+    () => buildNativeQaBridgeBootstrapScript(__DEV__ && RUNTIME_QA_BRIDGE_ENABLED),
+    [],
+  );
+  const webViewSource = useMemo(() => {
+    if (!webUrl) {
+      return { html: '<html><body style="margin:0;background:#fff;"></body></html>' };
+    }
+
+    if (!shouldApplyNgrokBrowserWarningBypass(webUrl)) {
+      return { uri: webUrl };
+    }
+
+    return {
+      uri: webUrl,
+      headers: { 'ngrok-skip-browser-warning': '1' },
+    };
+  }, [webUrl]);
   const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
@@ -1269,6 +1218,7 @@ function AppInner(): React.JSX.Element {
     !nativeBannerUnitId
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
+  const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
@@ -1631,10 +1581,11 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
+    const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
     const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
       ? nativeBannerPosition
       : 'top';
-    const effectiveTopInsetPx = activeBannerZone === 'list'
+    const effectiveTopInsetPx = shouldReserveListTopInset
       ? nativeTranscriptInsetPx
       : 0;
     const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
@@ -1652,8 +1603,10 @@ function AppInner(): React.JSX.Element {
     });
   }, [
     activeBannerZone,
+    canRenderNativeBanner,
     emitUiToWeb,
     isNativeMenuOverlayOpen,
+    nativeAdsReady,
     nativeBannerBottomInsetPx,
     nativeBannerPosition,
     nativeBannerUnitId,
@@ -1994,6 +1947,9 @@ function AppInner(): React.JSX.Element {
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
       }
+      if (typeof parsed.payload?.canGoForward === 'boolean') {
+        setCanWebViewGoForward(parsed.payload.canGoForward);
+      }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
       return;
@@ -2012,6 +1968,19 @@ function AppInner(): React.JSX.Element {
     if (parsed.type === 'native_remount_webview') {
       if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
       handleDebugWebViewRemount();
+      return;
+    }
+
+    if (parsed.type === 'native_qa_set_stt_status') {
+      if (!__DEV__) return;
+      const requestedStatus = typeof parsed.payload?.status === 'string'
+        ? parsed.payload.status.trim()
+        : '';
+      if (!requestedStatus) return;
+      nativeStatusRef.current = requestedStatus;
+      if (isPageReadyRef.current) {
+        emitToWeb({ type: 'status', status: nativeStatusRef.current });
+      }
       return;
     }
 
@@ -2357,7 +2326,7 @@ function AppInner(): React.JSX.Element {
           <WebView
             key={`webview:${webViewMountToken}`}
             ref={webViewRef}
-            source={webUrl ? { uri: webUrl } : { html: '<html><body style="margin:0;background:#fff;"></body></html>' }}
+            source={webViewSource}
             originWhitelist={['*']}
             userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
             javaScriptEnabled
@@ -2370,9 +2339,17 @@ function AppInner(): React.JSX.Element {
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             hideKeyboardAccessoryView={shouldHideIosKeyboardAccessory}
+            webviewDebuggingEnabled={shouldEnableNativeWebViewDebugging({
+              isDebugBuild: __DEV__,
+            })}
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
-            allowsBackForwardNavigationGestures={Platform.OS === 'ios' && canWebViewGoBack}
+            injectedJavaScriptBeforeContentLoaded={nativeQaBridgeBootstrapScript}
+            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+              isIosPlatform: Platform.OS === 'ios',
+              canGoBack: canWebViewGoBack,
+              canGoForward: canWebViewGoForward,
+            })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
             onLoadStart={handleLoadStart}

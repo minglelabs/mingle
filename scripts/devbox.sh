@@ -136,6 +136,7 @@ DEVBOX_LOG_FILE=""
 DEVBOX_OPENCLAW_ROOT=""
 DEVBOX_IOS_TEAM_ID="${DEVBOX_IOS_TEAM_ID:-}"
 DEVBOX_ACTIVE_DEVICE_APP_ENV=""
+DEVBOX_QA_BRIDGE_ENABLED="${DEVBOX_QA_BRIDGE_ENABLED:-}"
 
 log() {
   printf '[devbox] %s\n' "$*"
@@ -216,10 +217,11 @@ Usage:
   scripts/devbox ios-appstore-sync-metadata [--json PATH] [--api-key-json PATH] [--app-id BUNDLE_ID] [--dry-run] [--no-fallback]
   scripts/devbox ios-rn-ipa [--ios-configuration Debug|Release] [--device-app-env dev|prod] [--site-url URL] [--ws-url URL] [--archive-path PATH] [--export-path PATH] [--export-options-plist PATH] [--export-method app-store-connect|release-testing|debugging|enterprise|app-store|ad-hoc|development] [--team-id TEAM_ID] [--allow-provisioning-updates|--no-allow-provisioning-updates] [--skip-export] [--dry-run]
   scripts/devbox ios-rn-ipa-prod [ios-rn-ipa options...]
-  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
-  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
+  scripts/devbox mobile [--profile local|device] [--host HOST] [--platform ios|android|all] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--with-ios-clean-install] [--qa-bridge] [--device-app-env dev|prod] [--tunnel-provider ngrok|cloudflare] [--site-url URL] [--ws-url URL]
+  scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
+  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
   scripts/devbox status
 
 Commands:
@@ -236,6 +238,7 @@ Commands:
   up           Start STT + Next app together (device profile includes tunnel startup).
   down         Stop devbox runtime processes (web/stt/metro/tunnels) for this repo.
   test         Run mingle-app unit tests by default (live with --with-live).
+  qa           Run mingle-app mobile UI QA wrappers (contracts/Appium/iOS regression inventory).
   status       Print current endpoints for PC/iOS/Android web and app targets.
 
 Global Options:
@@ -393,6 +396,14 @@ is_truthy() {
     1|true|yes|y|on) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+resolve_devbox_qa_bridge_enabled() {
+  if is_truthy "${DEVBOX_QA_BRIDGE_ENABLED:-0}"; then
+    printf '1'
+    return 0
+  fi
+  printf '0'
 }
 
 normalize_domain_input() {
@@ -1979,6 +1990,7 @@ write_rn_ios_runtime_xcconfig() {
   local site_host="${DEVBOX_SITE_URL#*://}"
   local ws_scheme="${DEVBOX_RN_WS_URL%%://*}"
   local ws_host="${DEVBOX_RN_WS_URL#*://}"
+  local qa_bridge_enabled=""
   local ad_banner_position=""
   local ad_banner_height_px=""
   local admob_app_id_ios=""
@@ -1991,6 +2003,8 @@ write_rn_ios_runtime_xcconfig() {
   escaped_site_url="${escaped_site_url//\"/\\\"}"
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
+  escaped_ws_url="${escaped_ws_url//\//\\/}"
+  qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
   ad_banner_position="$(resolve_devbox_ad_banner_position ios)"
   ad_banner_height_px="$(resolve_devbox_ad_banner_height_px)"
   admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
@@ -2012,6 +2026,7 @@ NEXT_PUBLIC_SITE_HOST = $site_host
 NEXT_PUBLIC_WS_SCHEME = $ws_scheme
 NEXT_PUBLIC_WS_HOST = $ws_host
 NEXT_PUBLIC_API_NAMESPACE = $IOS_RN_REQUIRED_API_NAMESPACE
+NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED = $qa_bridge_enabled
 RN_ADMOB_APP_ID_IOS = $xcconfig_admob_app_id_ios
 NEXT_PUBLIC_RN_AD_BANNER_POSITION = $ad_banner_position
 NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = $ad_banner_height_px
@@ -2582,6 +2597,16 @@ resolve_rn_ios_development_team() {
   printf '%s' ""
 }
 
+resolve_ios_wda_bundle_id() {
+  local app_bundle_id=""
+  app_bundle_id="$(trim_whitespace "$(resolve_ios_bundle_id)")"
+  if [[ -n "$app_bundle_id" ]]; then
+    printf '%s' "${app_bundle_id}.WebDriverAgentRunner"
+    return 0
+  fi
+  printf '%s' "com.minglelabs.mingle.rn.WebDriverAgentRunner"
+}
+
 resolve_android_application_id() {
   local gradle_file="$ROOT_DIR/mingle-app/rn/android/app/build.gradle"
   if [[ -f "$gradle_file" ]]; then
@@ -2714,6 +2739,7 @@ run_ios_mobile_install() {
   local coredevice_id=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_app_id_android=""
+  local runtime_qa_bridge_enabled=""
 
   if [[ -z "$destination_udid" ]]; then
     destination_udid="$(detect_ios_xcode_destination_udid || true)"
@@ -2741,6 +2767,7 @@ run_ios_mobile_install() {
   bundle_id="$(resolve_ios_bundle_id)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
+  runtime_qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
 
   if [[ "$with_clean_install" -eq 1 && -n "$bundle_id" ]]; then
     log "uninstalling existing iOS app before reinstall: $bundle_id (device=$coredevice_id)"
@@ -2759,6 +2786,9 @@ run_ios_mobile_install() {
   [[ -d "$workspace_path" ]] || die "RN iOS workspace not found: $workspace_path"
 
   log "building iOS app ($configuration) for destination: $destination_udid"
+  if [[ "$runtime_qa_bridge_enabled" == "1" ]]; then
+    log "iOS QA bridge is enabled for this install"
+  fi
   (
     local rn_app_json_backup=""
     local had_original_rn_app_json=0
@@ -2801,6 +2831,7 @@ run_android_mobile_install() {
   local runtime_admob_app_id_android=""
   local runtime_admob_app_id_ios=""
   local runtime_admob_banner_unit_id_android=""
+  local runtime_qa_bridge_enabled=""
 
   if [[ -z "$serial" ]]; then
     serial="$(detect_android_device_serial || true)"
@@ -2825,8 +2856,12 @@ run_android_mobile_install() {
   runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
   runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
   runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
+  runtime_qa_bridge_enabled="$(resolve_devbox_qa_bridge_enabled)"
 
   log "building Android app ($variant) for device: $serial"
+  if [[ "$runtime_qa_bridge_enabled" == "1" ]]; then
+    log "Android QA bridge is enabled for this install"
+  fi
   (
     local rn_app_json_backup=""
     local had_original_rn_app_json=0
@@ -2846,6 +2881,7 @@ run_android_mobile_install() {
     RN_AD_BANNER_HEIGHT_PX="$runtime_ad_banner_height_px" \
     RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
     RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
+    RN_QA_BRIDGE_ENABLED="$runtime_qa_bridge_enabled" \
       ./gradlew "$gradle_task"
   )
 
@@ -2867,9 +2903,11 @@ run_mobile_install_targets() {
   local app_site_override="${8:-}"
   local app_ws_override="${9:-}"
   local device_app_env="${10:-}"
+  local qa_bridge_enabled="${11:-0}"
 
   (
     DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
+    DEVBOX_QA_BRIDGE_ENABLED="$qa_bridge_enabled"
     if [[ -n "$app_site_override" ]]; then
       DEVBOX_SITE_URL="$app_site_override"
     fi
@@ -4495,6 +4533,7 @@ cmd_mobile() {
   local android_serial=""
   local ios_configuration="Release"
   local android_variant="release"
+  local qa_bridge_enabled=0
   local tunnel_provider_override=""
   local mobile_site_override=""
   local mobile_ws_override=""
@@ -4513,6 +4552,7 @@ cmd_mobile() {
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
       --android-variant) android_variant="${2:-}"; shift 2 ;;
       --with-ios-clean-install) with_ios_clean_install=1; shift ;;
+      --qa-bridge) qa_bridge_enabled=1; shift ;;
       --device-app-env) device_app_env="${2:-}"; shift 2 ;;
       --tunnel-provider) tunnel_provider_override="${2:-}"; shift 2 ;;
       --site-url) site_override="${2:-}"; shift 2 ;;
@@ -4650,7 +4690,8 @@ cmd_mobile() {
     "$with_ios_clean_install" \
     "$mobile_site_override" \
     "$mobile_ws_override" \
-    "$device_app_env"
+    "$device_app_env" \
+    "$qa_bridge_enabled"
 
   DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
   log "mobile build/install complete"
@@ -4669,6 +4710,7 @@ cmd_up() {
   local with_android_install=0
   local ios_runtime="rn"
   local with_ios_clean_install=0
+  local qa_bridge_enabled=0
   local device_app_env=""
   local ios_udid=""
   local android_serial=""
@@ -4688,6 +4730,7 @@ cmd_up() {
       --with-mobile-install) with_ios_install=1; with_android_install=1; shift ;;
       --ios-runtime) ios_runtime="${2:-}"; shift 2 ;;
       --with-ios-clean-install) with_ios_clean_install=1; shift ;;
+      --qa-bridge) qa_bridge_enabled=1; shift ;;
       --ios-udid) ios_udid="${2:-}"; with_ios_install=1; shift 2 ;;
       --android-serial) android_serial="${2:-}"; with_android_install=1; shift 2 ;;
       --ios-configuration) ios_configuration="${2:-}"; shift 2 ;;
@@ -4934,7 +4977,8 @@ $(ngrok_plan_capacity_hint)"
       "$with_ios_clean_install" \
       "$mobile_site_override" \
       "$mobile_ws_override" \
-      "$device_app_env"
+      "$device_app_env" \
+      "$qa_bridge_enabled"
   fi
 
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
@@ -5156,6 +5200,168 @@ cmd_test() {
   fi
 }
 
+cmd_qa() {
+  require_devbox_env
+  require_cmd pnpm
+
+  local platform="all"
+  local mode="platform"
+  local ios_udid="${MINGLE_UI_QA_IOS_UDID:-}"
+  local ios_real_udid="${MINGLE_UI_QA_IOS_REAL_UDID:-${MINGLE_UI_QA_IOS_UDID:-}}"
+  local ios_sim_udid="${MINGLE_UI_QA_IOS_SIM_UDID:-}"
+  local android_serial="${MINGLE_UI_QA_ANDROID_SERIAL:-}"
+  local ios_xcode_org_id="${MINGLE_UI_QA_IOS_XCODE_ORG_ID:-}"
+  local ios_xcode_signing_id="${MINGLE_UI_QA_IOS_XCODE_SIGNING_ID:-}"
+  local ios_updated_wda_bundle_id="${MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID:-}"
+  local -a qa_args=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --platform) platform="${2:-}"; shift 2 ;;
+      --contracts)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        mode="contracts"
+        shift
+        ;;
+      --ios-regressions)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        mode="ios-regressions"
+        shift
+        ;;
+      --android-regressions)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        mode="android-regressions"
+        shift
+        ;;
+      --ios-udid) ios_udid="${2:-}"; shift 2 ;;
+      --ios-real-udid) ios_real_udid="${2:-}"; shift 2 ;;
+      --ios-sim-udid) ios_sim_udid="${2:-}"; shift 2 ;;
+      --android-serial) android_serial="${2:-}"; shift 2 ;;
+      --)
+        shift
+        qa_args+=("$@")
+        break
+        ;;
+      -h|--help)
+        cat <<'EOF'
+Usage: scripts/devbox qa [options] [-- extra-runner-args...]
+
+Options:
+  --platform ios|android|all   Run the standard mobile UI QA runner for one platform or both.
+                               Default: all
+  --contracts                  Run the fast contract gate only.
+  --ios-regressions            Run the expanded iOS regression inventory.
+  --android-regressions        Run the expanded Android regression inventory.
+  --ios-udid UDID              Physical iPhone or simulator UDID for the standard iOS QA runner.
+  --ios-real-udid UDID         Physical iPhone UDID for the expanded iOS regression inventory.
+  --ios-sim-udid UDID          Simulator UDID for the expanded iOS regression inventory.
+  --android-serial SERIAL      Android device serial for the standard Android QA runner.
+  --                          Pass remaining arguments directly to the underlying QA script.
+
+Examples:
+  scripts/devbox qa --contracts
+  scripts/devbox qa --platform ios --ios-udid <UDID>
+  scripts/devbox qa --ios-regressions --ios-real-udid <REAL_UDID> --ios-sim-udid <SIM_UDID>
+  scripts/devbox qa --android-regressions --android-serial <SERIAL>
+EOF
+        return 0
+        ;;
+      *)
+        qa_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  case "$platform" in
+    ios|android|all) ;;
+    *) die "invalid --platform for qa: $platform (expected ios|android|all)" ;;
+  esac
+
+  if [[ "$platform" == "ios" || "$platform" == "all" || "$mode" == "ios-regressions" ]]; then
+    if [[ -z "$ios_xcode_org_id" ]]; then
+      ios_xcode_org_id="$(trim_whitespace "${DEVBOX_IOS_TEAM_ID:-}")"
+    fi
+    if [[ -z "$ios_xcode_org_id" ]]; then
+      ios_xcode_org_id="$(trim_whitespace "$(resolve_rn_ios_development_team)")"
+    fi
+    if [[ -z "$ios_xcode_signing_id" ]]; then
+      ios_xcode_signing_id="Apple Development"
+    fi
+    if [[ -z "$ios_updated_wda_bundle_id" ]]; then
+      ios_updated_wda_bundle_id="$(resolve_ios_wda_bundle_id)"
+    fi
+  fi
+
+  local script_name=""
+  local -a runner_args=()
+  local -a command_args=()
+
+  case "$mode" in
+    contracts)
+      script_name="test:qa:ui:contracts"
+      ;;
+    ios-regressions)
+      script_name="test:qa:ui:ios:regressions"
+      [[ -n "$ios_real_udid" ]] && runner_args+=(--ios-real-udid "$ios_real_udid")
+      [[ -n "$ios_sim_udid" ]] && runner_args+=(--ios-sim-udid "$ios_sim_udid")
+      ;;
+    android-regressions)
+      script_name="test:qa:ui:android:regressions"
+      [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+      ;;
+    platform)
+      case "$platform" in
+        ios)
+          script_name="test:qa:ui:ios"
+          [[ -n "$ios_udid" ]] && runner_args+=(--ios-udid "$ios_udid")
+          ;;
+        android)
+          script_name="test:qa:ui:android"
+          [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+          ;;
+        all)
+          script_name="test:qa:ui"
+          [[ -n "$ios_udid" ]] && runner_args+=(--ios-udid "$ios_udid")
+          [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+          ;;
+      esac
+      ;;
+    *)
+      die "unsupported QA mode: $mode"
+      ;;
+  esac
+
+  log "running mingle-app QA via devbox (script=$script_name)"
+  command_args=("$script_name")
+  if ((${#runner_args[@]} > 0)); then
+    command_args+=("${runner_args[@]}")
+  fi
+  if ((${#qa_args[@]} > 0)); then
+    command_args+=("${qa_args[@]}")
+  fi
+  (
+    cd "$ROOT_DIR/mingle-app"
+    DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
+    DEVBOX_PROFILE="$DEVBOX_PROFILE" \
+    DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
+    DEVBOX_STT_PORT="$DEVBOX_STT_PORT" \
+    DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT" \
+    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
+    NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
+    MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
+    MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
+    MINGLE_UI_QA_IOS_UDID="$ios_udid" \
+    MINGLE_UI_QA_IOS_REAL_UDID="$ios_real_udid" \
+    MINGLE_UI_QA_IOS_SIM_UDID="$ios_sim_udid" \
+    MINGLE_UI_QA_IOS_XCODE_ORG_ID="$ios_xcode_org_id" \
+    MINGLE_UI_QA_IOS_XCODE_SIGNING_ID="$ios_xcode_signing_id" \
+    MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID="$ios_updated_wda_bundle_id" \
+    MINGLE_UI_QA_ANDROID_SERIAL="$android_serial" \
+      pnpm "${command_args[@]}"
+  )
+}
+
 cmd_status() {
   require_devbox_env
   local ngrok_web_domain="(auto)"
@@ -5224,6 +5430,10 @@ Run:
 - scripts/devbox mobile --platform ios
 - scripts/devbox mobile --platform android
 - scripts/devbox test --with-live
+- scripts/devbox qa --contracts
+- scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
+- scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
+- scripts/devbox qa --android-regressions --android-serial <ANDROID_SERIAL>
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
 EOF
@@ -5345,6 +5555,7 @@ main() {
       ;;
     down) cmd_down "$@" ;;
     test|test-live) cmd_test "$@" ;;
+    qa|qa-ui) cmd_qa "$@" ;;
     status) cmd_status "$@" ;;
     help|-h|--help) usage ;;
     *) die "unknown command: $cmd (run: scripts/devbox help)" ;;

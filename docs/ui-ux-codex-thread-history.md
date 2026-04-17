@@ -1,5 +1,37 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-12 iPhone Real-Device QA Follow-Up
+
+### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found
+
+1. **The in-room top-banner toggle still fails to move the native iPhone banner out of the bottom slot**
+   Problem: During the connected physical iPhone regression pass, the QA bridge could flip the live-demo preference to `top`, but the native banner layout stayed pinned to `bottom` and the real screen still rendered the bottom banner above the orange start control. This reopens the old in-room top-banner placement family around `019d4cae#13`: instead of merely sitting too low below the room header, the iPhone conversation surface can now fail to switch into the top-banner mode at all.
+   Attempted fix: The iPhone QA path itself was repaired first so the physical-device runner now reaches the conversations surface through the same QA bridge/bootstrap path as Android, exports the QA bridge runtime flag from native config, and auto-infers WDA signing defaults from `scripts/devbox qa`. That removed the earlier session/bootstrap failures and isolated the remaining failure to the actual banner-position regression.
+   Status: Reproduced on 2026-04-12 during the connected iPhone physical-device pass. Not resolved in-thread.
+
+## 2026-04-12 Android Real-Device QA Follow-Up
+
+### `2026-04-12-android-real-device-ui-qa` | UI/UX issues found
+
+1. **Android native/WebView remount can still fall back to the orange idle/play state while native STT is supposed to remain running**
+   Problem: On the connected physical Android device, the live-demo WebView still comes back in the idle visual state (`Tap play to start`, orange mic/play control) after a native-driven WebView remount, even when the native QA status injector keeps the underlying STT status pinned to `running`. That matches the old state-split regression where Android could show a stopped/orange button while STT was still effectively active underneath.
+   Attempted fix: The Android regression suite now has both contract coverage for the native-to-WebView reconcile rules and a physical-device remount case that only checks the post-remount recovery path. Narrowing the test removed earlier bridge flakiness, but the real-device remount case still reproduces the idle-state fallback.
+   Status: Reproduced on 2026-04-12 during the connected Android physical-device pass. Not resolved in-thread.
+
+## 2026-04-11 Real-Device QA Follow-Up
+
+### `2026-04-11-real-device-ui-qa-automation` | UI/UX issues found
+
+1. **The iPhone WebView could load the ngrok root page but still fail to hydrate into the real UI**
+   Problem: On a physical iPhone, the RN WebView could open the main `ngrok` URL and expose a `WEBVIEW_*` context, but Next.js client chunks under `/_next/static/...` were still being replaced by `ERR_NGROK_6024` HTML. That left the page title intact while the visible body stayed on the server-rendered loading shell, so the `window.__MINGLE_QA__` bridge never attached and the automated UI regression suite could not assert real UI state.
+   Attempted fix: The native app now appends `ngrok-skip-browser-warning=1` to the initial WebView URL and sends the `ngrok-skip-browser-warning: 1` header on the first WebView request so the root page itself stops landing on the ngrok warning interstitial.
+   Status: Partially resolved in-thread. The root page now loads as the real app, but subresource requests still do not inherit the bypass header, so full hydration on real-device ngrok remains blocked until the WebView can propagate the header to same-origin asset requests or the tunnel/provider path changes.
+
+2. **Cloudflare removed the tunnel hydration issue, but iOS 26 real-device WebView automation still lost the JavaScript runtime**
+   Problem: After switching the physical iPhone build from `ngrok` to the named `cloudflare` tunnel, the WebView finally opened the real `mingle-app-devbox.photo-for-passport.com` page. However, Appium could no longer run `title`, `execute`, or any QA bridge JavaScript inside that `WEBVIEW_*` context because WebKit returned `code=-32601, "'Runtime' domain was not found"`. The page rendered in the accessibility tree, but the automation layer could not evaluate `window.__MINGLE_QA__` or any DOM script, so real-device regression assertions still stalled at session start.
+   Attempted fix: The QA runner was traced down to an outdated automation stack (`Appium 2.19.0` with `xcuitest 8.4.3`) that matches the upstream iOS 26 WebKit failure mode. The in-thread remediation is to move the local QA stack to `Appium 3.x` with a current `xcuitest` driver so real-device WebView commands can speak the newer WebKit target/runtime protocol.
+   Status: Root cause identified in-thread. Tunnel hydration is resolved on Cloudflare, but real-device iPhone QA remains blocked until the Appium/XCUITest stack is upgraded and revalidated.
+
 ## 2026-04-11 Ongoing Dev Validation Notes
 
 - **In-room language selection was too cramped to scan or control across the full language catalog**
@@ -133,11 +165,13 @@
 - This pass is organized by session ID, not by merged issue theme.
 - It covers 277 unique Codex sessions whose `cwd` matched `mingle`, including archived sessions.
 - Source split in this rescan: 29 live sessions and 248 archived sessions.
-- Sessions with standalone UI/UX issues: 30.
-- Total standalone UI/UX issue atoms documented in this file: 125.
+- Sessions with standalone UI/UX issues: 33.
+- Total standalone UI/UX issue atoms documented under standalone session headings in this file: 127.
+- Additional ongoing validation-note UI/UX atoms documented in this file: 4.
+- Total documented UI/UX issue atoms in this file: 131.
 - Sessions with UI/UX feature/polish requests only: 15.
 - Sessions where a UI/UX issue was only mentioned or handed off: 8.
-- Sessions with no UI/UX issue found: 224.
+- Sessions with no UI/UX issue found: 221.
 - `019d4cae-5142-7be2-9c74-30f95bfb5787` is listed first, exactly as requested.
 - If a session had no UI/UX issue, the entry says only `No UI/UX issue found.`
 
@@ -161,7 +195,7 @@
 
 3. **The top gap above the list was over-expanded by fallback spacer math**
    Problem: Even after the header size was corrected, the page was still pushed down because a fallback banner estimate and a header-adjacent spacer were both being applied.
-   Attempted fix: The explicit native inset was trusted when present, the guessed `50px` fallback was demoted to old cases only, and the header-front spacer was removed.
+   Attempted fix: The explicit native inset was trusted when present, the guessed `50px` fallback was demoted to old cases only, and the header-front spacer was removed. During later QA-automation work, the same symptom briefly reappeared only in the QA branch because failed test runs could leave the QA-only banner-position override persisted in local storage; the harness was then changed to reset QA demo state after every case instead of touching product layout again.
    Status: Resolved in-thread.
 
 4. **Android hardware back initially did not return from a room to the list**
@@ -206,7 +240,7 @@
 
 12. **The list top banner sat too low below the header**
    Problem: The top ad/banner spacing for the list screen had too much clearance and did not visually lock to the header.
-   Attempted fix: The list banner offset was tightened separately from the in-room banner offsets.
+   Attempted fix: The list banner offset was tightened separately from the in-room banner offsets. Later QA-branch validation on real devices found two extra contributors: the pull-to-refresh chip was still rendered as a sticky flex child with `opacity: 0`, so it occupied about `50px` between the native top banner and the first conversation row even while idle, and RN was reserving the list top inset as soon as the list zone became active instead of waiting until the native banner was actually render-ready. The follow-up fixes moved the pull chip to an absolutely positioned overlay, gated the list inset reservation on banner readiness, and added a small empty-state-only top cushion so the placeholder does not kiss the banner edge.
    Status: Resolved in-thread.
 
 13. **The in-room top banner sat too far below the room header**
@@ -236,7 +270,7 @@
 
 18. **iOS forward-swipe failed to restore the room cleanly**
    Problem: After swiping back to the list, swiping forward could leave the list visible or replay a new room-open instead of restoring the prior room state.
-   Attempted fix: Route sync was made to subscribe directly to the `conversation` query and reopen through the history-specific path.
+   Attempted fix: Route sync was made to subscribe directly to the `conversation` query and reopen through the history-specific path. Later QA-branch validation found that RN still turned off `allowsBackForwardNavigationGestures` as soon as the current stamped history index hit `0`, even though a forward target still existed. The follow-up fix now keeps iOS back/forward gestures enabled whenever stamped history still has either a backward or forward entry.
    Status: Resolved in-thread.
 
 19. **The drawer had its own swipe-back flicker on iOS**
@@ -361,7 +395,7 @@
 
 43. **iOS swipe-back regressed again later because gesture enablement became tied to menu-open state**
    Problem: After later merges, swipe-back silently became available only when the native menu overlay was open.
-   Attempted fix: `allowsBackForwardNavigationGestures` was restored to unconditional iOS enablement instead of `isNativeMenuOverlayOpen`.
+   Attempted fix: `allowsBackForwardNavigationGestures` was first restored to unconditional iOS enablement instead of `isNativeMenuOverlayOpen`, but later validation showed that QA-automation work must still preserve the original `canGoBack` gating so iOS forward-history behavior matches `main`.
    Status: Resolved in-thread.
 
 44. **A later room-state pass hit an `isLikelyIOSPlatform` runtime error**
@@ -750,9 +784,9 @@
 ### `019d43a0-d5ec-7fd1-94b1-884dcea6de65` | UI/UX issues found
 
 1. **Thread-level UI/UX issue**
-   Problem: iOS banner/runtime debugging expanded into a hydration mismatch around render-time Date/Intl formatting.
-   Attempted fix: banner/runtime work landed, but the hydration mismatch itself was only diagnosed.
-   Status: mixed.
+   Problem: iOS banner/runtime debugging exposed a wider live-demo hydration mismatch family. Server-rendered markup could disagree with the client once localStorage-backed preferences, native inset query params, and timestamp `Date`/`Intl` formatting were applied on the browser side, which produced hydration warnings and sometimes first-paint UI drift.
+   Attempted fix: the thread mainly diagnosed the mismatch class and pointed at client-only initialization paths. Follow-up work later moved storage-backed initialization behind client hydration, stabilized native inset reads, suppressed timestamp hydration drift, and briefly disabled SSR for the live demo during one mitigation pass.
+   Status: diagnosed in-thread; follow-up commits later resolved the underlying hydration mismatch paths.
 
 ### `019d43a3-c1e7-7600-858d-64964413a683` | UI/UX issues found
 
@@ -785,9 +819,9 @@
 ### `019d4eba-14af-7523-ad3c-0f5a5b3a810b` | UI/UX issues found
 
 1. **Thread-level UI/UX issue**
-   Problem: forced WebView reload/flicker could leave STT still running while room metadata/status looked reset or stale.
-   Attempted fix: native/WebView state-reconcile work.
-   Status: issue clearly existed; exact final closure is spread across follow-up reconcile threads.
+   Problem: after a forced WebView reload/flicker, native STT could still be running while the reloaded React state fell back toward idle. In practice that meant the UI could show the orange play/start control instead of the red stop/running control, and related room metadata could look reset or stale even though audio capture was still active.
+   Attempted fix: native/WebView state-reconcile work taught the reloaded WebView to restore native STT status and promote the UI back into its ready/running state when native status or transcript activity resumed.
+   Status: issue clearly existed in-thread; follow-up reconcile commits later targeted the state-restore path directly.
 
 ### `019d4f37-af30-7872-bc3a-4f68be0fabd6` | UI/UX issues found
 
@@ -1155,4 +1189,12 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-04-15-zh-cn-zh-tw-selector-split` | Language selector now presents `zh-CN` and `zh-TW` as separate user-facing targets with distinct flags (`🇨🇳` Simplified, `🇹🇼` Traditional) while preserving Soniox STT hints as generic `zh`. This avoids misleading the user into thinking the translation target is a single generic Chinese option and keeps script-variant intent intact through translation, chip history, and bubble rendering.
 - `2026-04-15-soniox-zh-source-normalization` | Incoming generic Soniox `zh` source-language tags are normalized to `zh-CN` at the client STT boundary unless the transcript text clearly contains traditional-only Han characters. This prevents `zh-CN` from remaining in the target list for the same utterance, which previously made a single Chinese utterance render an unnecessary extra translation bubble and visually thicken the chat row.
 - `2026-04-15-soniox-zh-cn-default-source` | Chinese source-language normalization was simplified so every generic Soniox `zh` transcript is rendered as `zh-CN` without script heuristics, while explicit `zh-TW` inputs remain `zh-TW`. Matching and manual-input paths were aligned to the same rule so a Chinese utterance never grows an extra same-language `zh-CN` bubble just because some code paths kept generic `zh` and others promoted it differently.
+- `2026-04-16-language-selector-speech-translation-tabs` | The language selector now separates speech-recognition hint languages from translation target languages with two segmented tabs placed between the selected/recent flag strip and the search/sort controls. The previous single selector made a hidden Soniox hint setting look identical to the visible translation output setting, so users could not intentionally tune recognition hints without also changing translated bubble targets. Each tab keeps its own selected state and recent deselection history while the header button continues to foreground translation targets, preserving the existing user-facing meaning of the compact flag control.
+- `2026-04-16-linked-translation-language-default` | The translation tab now starts with `Use the same language list for translation` checked, so the visible translation targets follow the speech-recognition language list by default. Without this linkage, splitting the tabs made the first-run state feel like two independent decisions even though the product default should keep speech hints and translation targets aligned. Users can uncheck the box inside the translation tab to unlock separate translation-language selection for that conversation.
+- `2026-04-16-speech-language-stt-restart-control` | The speech-recognition language tab now explains that speech-language changes require an STT restart before Soniox hints are reflected, and it exposes the same compact start/stop control used in text-composer mode. The split selector previously let users change speech hint languages while the active WebSocket session was still visually controlled only from the bottom bar, which made the restart requirement easy to miss when the selector covered the conversation. Reusing the same button state, colors, loading spinner, and click handlers keeps the selector control synchronized with the underlying STT session rather than creating a second independent toggle.
+- `2026-04-16-language-button-speech-translation-union` | The conversation header language button now displays the union of speech-recognition and translation languages, ordered by speech languages first and capped at five flags. After splitting the selector into two tabs, the header still reflected only translation targets, so a user could add a speech hint language and see no header feedback unless translation was linked. Showing the speech-first union keeps the compact header summary aligned with both configuration surfaces without overcrowding the header.
+- `2026-04-16-manual-speech-language-restart` | Speech-recognition language changes no longer auto-restart the active STT session. The prior automatic restart made the new restart hint and compact start/stop button misleading because the WebSocket could reconnect while the user was still editing languages. Leaving the current STT session running with its existing Soniox hints until the user explicitly stops and starts recording makes the visible control the single source of truth for when speech-language changes take effect.
+- `2026-04-16-language-setting-response-order` | Speech-language, translation-language, and linked-language updates now share one optimistic sync sequence in the conversation list. With independent response guards, a slower checkbox response could overwrite a newer translation selection after the user quickly unlocked and edited the translation tab. Treating the three controls as one language settings surface keeps the visible selector state stable even when PATCH responses resolve out of order.
 - `2026-04-16-android-empty-banner-hitbox` | Android native AdMob banners could remain visually blank while the native banner slot still sat above the WebView and intercepted that screen area. Because the slot looked transparent instead of reserved, users could interpret the dead area as a touch regression. The RN banner now renders a shared visible fallback surface with an `AD` badge whenever the creative has not finished loading and remounts the banner after foreground resumes, so the reserved banner space remains legible even if AdMob fails or stalls.
+- `2026-04-17-language-selector-diacritics` | New language selector copy for extended Latin locales now keeps native diacritics in French, German, Spanish, Portuguese, and Vietnamese. The review called out that the new speech/translation tab labels and restart/link messages looked lower quality than existing localized strings when they were ASCII-only. Aligning the new copy with the existing localized style avoids making the selector tabs feel like fallback text.
+- `2026-04-17-versioned-stt-restart-coverage` | The manual speech-language restart behavior now covers both the current `1.1.0` conversation runtime and the legacy `1.0.11` translator runtime path. The versioned web/STT split means a fix can look correct in the latest shared component while an older release line still carries automatic Soniox hint restarts. Keeping the legacy hook free of language-change auto-restart and adding explicit `1.1.1+` routing coverage prevents users on older or future client namespaces from seeing a different restart UX.
