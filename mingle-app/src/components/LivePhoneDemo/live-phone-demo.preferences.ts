@@ -72,9 +72,14 @@ export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
   nativeLayoutPosition: LivePhoneDemoAdBannerPosition | null
   queryPosition: LivePhoneDemoAdBannerPosition | null
 }): LivePhoneDemoAdBannerPosition | null {
+  // The URL query carries the configured banner position at load time and is
+  // stable across zones. The native layout event flips to 'top' while the
+  // conversation-list banner is showing and only corrects to the configured
+  // position after the conversation zone re-emit; preferring the query keeps
+  // the room transcript padded correctly even when that re-emit is delayed.
   return input.preferredPosition
-    ?? input.nativeLayoutPosition
     ?? input.queryPosition
+    ?? input.nativeLayoutPosition
     ?? null
 }
 

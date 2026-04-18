@@ -89,20 +89,20 @@ describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
     })).toBe('bottom')
   })
 
-  it('falls back to native layout when no user preference is available', () => {
+  it('prefers the URL query position over a transient native layout event', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: null,
-      nativeLayoutPosition: 'bottom',
-      queryPosition: 'top',
+      nativeLayoutPosition: 'top',
+      queryPosition: 'bottom',
     })).toBe('bottom')
   })
 
-  it('falls back to query position last', () => {
+  it('falls back to native layout when neither preference nor query is available', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: null,
-      nativeLayoutPosition: null,
-      queryPosition: 'top',
-    })).toBe('top')
+      nativeLayoutPosition: 'bottom',
+      queryPosition: null,
+    })).toBe('bottom')
   })
 })
 

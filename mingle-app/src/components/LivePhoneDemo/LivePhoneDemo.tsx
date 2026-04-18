@@ -4372,8 +4372,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isCenteredMenuLayout = viewportWidthPx >= 640
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
-  const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
-  const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
+  // Treat a layout-reported 0 as "no inset for this edge right now" so the
+  // URL query fallback still drives conversation spacer/scroll-to-bottom
+  // math before the conversation-zone banner_layout event arrives. Without
+  // this, `0 ?? query` short-circuits to 0 and leaves the transcript glued
+  // to the banner on Android where the list-zone emit fires first.
+  const nativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.topInsetPx)
+    : nativeTopInsetPxFromQuery
+  const nativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.bottomInsetPx)
+    : nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)

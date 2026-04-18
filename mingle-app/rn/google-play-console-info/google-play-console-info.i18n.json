@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "completed",
       "changesNotSentForReview": false,
-      "releaseName": "1.1.1 (53)",
+      "releaseName": "1.1.1 (54)",
       "releaseNotes": {
         "en-US": "Version 1.1.1 adds multiple conversation rooms with renaming and deletion, improves room management, search, and pull-to-refresh in the conversation list, and makes microphone permission recovery, STT startup, and navigation on iPhone and Android more reliable.",
         "ar": "يضيف الإصدار 1.1.1 غرف محادثة متعددة مع إمكانية إعادة التسمية والحذف، ويحسّن إدارة الغرف والبحث والسحب للتحديث في قائمة المحادثات، ويجعل استعادة إذن الميكروفون وبدء STT والتنقل على iPhone وAndroid أكثر موثوقية.",
