@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-18 Admin Feedback Inbox
+
+### `2026-04-18-admin-feedback-inbox` | UI/UX issues found
+
+1. **The admin inbox route would have inherited the mobile WebView canvas and locale redirect**
+   Problem: The root layout wraps app pages in the fixed 400px mobile canvas, and the proxy redirects unlocalized paths to locale-prefixed routes. A desktop admin inbox mounted at `/admin` would therefore either redirect away from the requested path or render as a clipped mobile viewport instead of a usable feedback-management surface.
+   Fix: `/admin` now bypasses locale redirection in the proxy, and `MobileCanvasShell` renders admin routes without the mobile frame while preserving the existing mobile canvas for the app experience.
+   Status: Resolved in-thread.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found
