@@ -1,0 +1,52 @@
+FROM node:20-slim AS base
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV NEXT_TELEMETRY_DISABLED="1"
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+
+FROM base AS app-deps
+WORKDIR /app/mingle-app
+COPY mingle-app/package.json mingle-app/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+FROM app-deps AS app-build
+ARG NEXT_PUBLIC_WS_PATH=/stt
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mingle?schema=app"
+ENV NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH"
+COPY mingle-app/components.json mingle-app/next.config.ts mingle-app/postcss.config.mjs mingle-app/tsconfig.json ./
+COPY mingle-app/prisma ./prisma
+COPY mingle-app/public ./public
+COPY mingle-app/scripts ./scripts
+COPY mingle-app/src ./src
+COPY mingle-app/data ./data
+RUN pnpm build
+RUN pnpm prune --prod
+
+FROM base AS stt-deps
+WORKDIR /app/mingle-stt
+COPY mingle-stt/package.json mingle-stt/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+FROM stt-deps AS stt-build
+COPY mingle-stt/tsconfig.json ./
+COPY mingle-stt/*.ts ./
+COPY mingle-stt/runtime ./runtime
+RUN pnpm build
+RUN pnpm prune --prod
+
+FROM base AS runtime
+ENV NODE_ENV="production"
+ENV MINGLE_APP_PORT="3000"
+ENV MINGLE_STT_PORT="3001"
+ENV MINGLE_STT_WS_PATH="/stt"
+WORKDIR /app
+COPY --from=app-build /app/mingle-app ./mingle-app
+COPY --from=stt-build /app/mingle-stt ./mingle-stt
+COPY railway ./railway
+EXPOSE 8080
+CMD ["node", "railway/start-single-service.mjs"]

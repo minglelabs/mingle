@@ -60,6 +60,7 @@ scripts/devbox status
 ```
 
 - Detailed guide: `docs/worktree-devbox.md`
+- Railway single-service deployment guide: `docs/railway-single-service.md`
 - `scripts/devbox bootstrap` is read-only and does not modify `.env.local`.
   It only installs dependencies and runs validation checks.
   (If `@prisma/client` artifacts are missing, it automatically runs `db:generate`, and it also checks RN/Pods.)

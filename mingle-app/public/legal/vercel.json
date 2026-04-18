@@ -8,6 +8,26 @@
   },
   "cleanUrls": true,
   "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ],
   "redirects": [
     {
       "source": "/:page(privacy-policy|terms-of-use).html",
@@ -43,14 +63,13 @@
       "source": "/legal/:locale(ar|de|en|es|fr|hi|it|ja|ko|pt|ru|th|vi|zh-cn|zh-tw)/:page(privacy-policy|terms-of-use)",
       "destination": "/:locale/:page",
       "permanent": true
-    },
-    {
-      "source": "/legal",
-      "destination": "/",
-      "permanent": true
     }
   ],
   "rewrites": [
+    {
+      "source": "/legal",
+      "destination": "/legal-index"
+    },
     {
       "source": "/legal/:path*",
       "destination": "/:path*"
@@ -65,7 +84,7 @@
     },
     {
       "source": "/:locale(ar|de|en|es|fr|hi|it|ja|ko|pt|ru|th|vi|zh-cn|zh-tw)",
-      "destination": "/index.html"
+      "destination": "/legal-index"
     },
     {
       "source": "/",
