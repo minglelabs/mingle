@@ -1113,8 +1113,9 @@ function AppInner(): React.JSX.Element {
     const nativeSttQuery = nativeAvailable ? '1' : '0';
     const rawWebUrl = `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
     return appendNativeRuntimeWebViewParams(rawWebUrl, {
-      nativeBannerPosition: defaultNativeBannerPosition,
-      nativeBannerInsetPx: nativeInitialBannerInsetPx,
+      nativeListTopInsetPx: nativeInitialBannerInsetPx,
+      nativeConversationBannerPosition: defaultNativeBannerPosition,
+      nativeConversationBannerInsetPx: nativeInitialBannerInsetPx,
       clientVersion: RUNTIME_CLIENT_INFO.clientVersion,
       clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
     });

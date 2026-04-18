@@ -595,24 +595,27 @@ function useNativeInsetPx(queryKey: string): number {
   )
 }
 
-function parseNativeBannerPositionFromSearch(search: string): LivePhoneDemoAdBannerPosition | null {
+function parseNativeBannerPositionFromSearch(
+  search: string,
+  queryKey: string,
+): LivePhoneDemoAdBannerPosition | null {
   try {
     const params = new URLSearchParams(search)
-    return normalizeLivePhoneDemoAdBannerPosition(params.get('nativeBannerPosition'))
+    return normalizeLivePhoneDemoAdBannerPosition(params.get(queryKey))
   } catch {
     return null
   }
 }
 
-function readNativeBannerPositionFromWindow(): LivePhoneDemoAdBannerPosition | null {
+function readNativeBannerPositionFromWindow(queryKey: string): LivePhoneDemoAdBannerPosition | null {
   if (typeof window === 'undefined') return null
-  return parseNativeBannerPositionFromSearch(window.location.search || '')
+  return parseNativeBannerPositionFromSearch(window.location.search || '', queryKey)
 }
 
-function useNativeBannerPositionFromSearch(): LivePhoneDemoAdBannerPosition | null {
+function useNativeBannerPositionFromSearch(queryKey: string): LivePhoneDemoAdBannerPosition | null {
   return useSyncExternalStore(
     subscribeToLocationSearch,
-    readNativeBannerPositionFromWindow,
+    () => readNativeBannerPositionFromWindow(queryKey),
     () => null,
   )
 }
@@ -1316,7 +1319,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
   const translationModelListboxId = useId()
-  const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch()
+  const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeBannerPosition')
+  const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch('nativeConversationBannerPosition')
+  const nativeBannerPositionFromQuery = nativeConversationBannerPositionFromQuery ?? legacyNativeBannerPositionFromQuery
 
   const showFloatingToast = useCallback((message: string) => {
     const normalizedMessage = message.trim()
@@ -4378,8 +4383,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const navSurfaceClassName = 'bg-white'
   const viewportWidthPx = useViewportWidthPx()
   const isCenteredMenuLayout = viewportWidthPx >= 640
-  const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
-  const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
+  const legacyNativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
+  const legacyNativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
+  const nativeConversationTopInsetPxFromQuery = useNativeInsetPx('nativeConversationTopInsetPx')
+  const nativeConversationBottomInsetPxFromQuery = useNativeInsetPx('nativeConversationBottomInsetPx')
   // Treat a layout-reported 0 as "no inset for this edge right now" so the
   // URL query fallback still drives conversation spacer/scroll-to-bottom
   // math before the conversation-zone banner_layout event arrives. Without
@@ -4387,10 +4394,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // to the banner on Android where the list-zone emit fires first.
   const nativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
     ? (nativeBannerLayout!.topInsetPx)
-    : nativeTopInsetPxFromQuery
+    : (nativeConversationTopInsetPxFromQuery > 0
+        ? nativeConversationTopInsetPxFromQuery
+        : (legacyNativeBannerPositionFromQuery === 'top' ? legacyNativeTopInsetPxFromQuery : 0))
   const nativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
     ? (nativeBannerLayout!.bottomInsetPx)
-    : nativeBottomInsetPxFromQuery
+    : (nativeConversationBottomInsetPxFromQuery > 0
+        ? nativeConversationBottomInsetPxFromQuery
+        : (legacyNativeBannerPositionFromQuery === 'bottom' ? legacyNativeBottomInsetPxFromQuery : 0))
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
