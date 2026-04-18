@@ -1996,25 +1996,8 @@ export default function ConversationList({
       return;
     }
 
-    if (cachedNativeSttStatus === null && !nativeSttRestoreAttemptedRef.current) {
-      const restoreConversation = findNativeSttRestoreConversation(
-        conversations,
-        deletingConversationIdsRef.current,
-      );
-      if (restoreConversation) {
-        nativeSttRestoreAttemptedRef.current = true;
-        conversationRunningStateRef.current.set(restoreConversation.id, true);
-        postNativeBannerZone("hidden");
-        closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
-        setOverlayEnterMode("instant");
-        setOverlayExitMode("animate");
-        setAutoStartConversationId(null);
-        setLiveConversationId(restoreConversation.id);
-        setActiveConversation(restoreConversation);
-      }
-      return;
-    }
-
+    // Wait for RN's first native STT status before reconciling stale active
+    // summaries. A missing status is not proof that STT is still live.
     if (cachedNativeSttStatus === null) return;
 
     const staleActiveConversationIds = conversations

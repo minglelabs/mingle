@@ -43,6 +43,11 @@
    Fix: Devbox now forces Google's official sample AdMob app IDs and banner unit IDs for non-production device app envs, and the Next/Metro devbox runtime receives the same sample values after sourcing vault env files. The RN banner also removes the production fallback badge after a no-fill failure instead of leaving `AD` on screen.
    Status: Resolved on 2026-04-17. Android should request the sample banner unit during local devbox verification.
 
+5. **Native STT remount fallback could reopen a stale active room before status arrived**
+   Problem: The remount recovery path treated a missing native STT status as a delayed live status and reopened the first active conversation. If RN later reported `idle`, the opened room could bypass the stale-active reconciliation path and keep a non-live room looking active.
+   Fix: The list now restores a room only from an explicit remount marker or a live native STT status. A `null` status waits for RN's first status event instead of reopening an active room by inference.
+   Status: Fixed in-thread on 2026-04-18 before merging the 1.1.1 QA branch.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found
