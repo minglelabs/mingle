@@ -976,6 +976,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredPosition: adBannerPosition,
     nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
     queryPosition: nativeBannerPositionFromQuery,
+    isNativeAppRuntime,
   })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
@@ -3326,8 +3327,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isCenteredMenuLayout = viewportWidthPx >= 640
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
-  const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
-  const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
+  // Only trust the layout event's inset when it is actually reserving space
+  // for that edge. A 0 means the current zone's banner is not on that edge,
+  // so keep the URL query fallback visible to the transcript spacer math.
+  const nativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.topInsetPx)
+    : nativeTopInsetPxFromQuery
+  const nativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.bottomInsetPx)
+    : nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? Math.max(nativeTopInsetPx, estimatedNativeBannerInsetPx)

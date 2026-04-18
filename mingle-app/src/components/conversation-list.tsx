@@ -1260,9 +1260,17 @@ export default function ConversationList({
   const routeConversationId = useConversationIdFromSearch();
   const hasNativeBannerLayout = nativeBannerLayout !== null;
   const hasNativeRuntimeInsets = initialNativeUi || isNativeRuntime;
-  const runtimeNativeBannerPosition = nativeBannerLayout?.position ?? nativeBannerPositionFromQuery;
-  const runtimeNativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPx;
-  const runtimeNativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPx;
+  // Prefer the URL query's banner position over a transient layout event so
+  // the list-zone 'top' emit cannot mask a conversation room that configures
+  // the banner at the bottom. Inset fallbacks likewise require a positive
+  // layout value so a zero-for-this-edge emit does not zero out the query.
+  const runtimeNativeBannerPosition = nativeBannerPositionFromQuery ?? nativeBannerLayout?.position ?? null;
+  const runtimeNativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.topInsetPx)
+    : nativeTopInsetPx;
+  const runtimeNativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.bottomInsetPx)
+    : nativeBottomInsetPx;
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
   const effectiveNativeTopInsetPx = hasNativeRuntimeInsets
     ? resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx)

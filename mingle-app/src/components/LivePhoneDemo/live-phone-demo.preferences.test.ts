@@ -81,7 +81,7 @@ describe('readPersistedBooleanPreference', () => {
 })
 
 describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
-  it('prefers hydrated user preference over native layout and query fallback', () => {
+  it('prefers hydrated user preference over native layout and query fallback in standalone web', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: 'bottom',
       nativeLayoutPosition: 'top',
@@ -103,6 +103,24 @@ describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
       nativeLayoutPosition: 'bottom',
       queryPosition: null,
     })).toBe('bottom')
+  })
+
+  it('prefers the URL query over a stale persisted preference in native runtime', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'top',
+      nativeLayoutPosition: 'top',
+      queryPosition: 'bottom',
+      isNativeAppRuntime: true,
+    })).toBe('bottom')
+  })
+
+  it('still respects the persisted preference in native runtime when the URL carries no banner position', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'top',
+      nativeLayoutPosition: null,
+      queryPosition: null,
+      isNativeAppRuntime: true,
+    })).toBe('top')
   })
 })
 

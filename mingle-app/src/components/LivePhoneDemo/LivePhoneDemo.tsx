@@ -1352,6 +1352,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredPosition: adBannerPosition,
     nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
     queryPosition: nativeBannerPositionFromQuery,
+    isNativeAppRuntime,
   })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
