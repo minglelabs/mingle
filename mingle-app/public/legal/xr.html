@@ -1589,10 +1589,13 @@
         text-wrap: pretty;
       }
 
-      .page-counter {
+      .page-controls {
         position: absolute;
         right: clamp(24px, 4vw, 44px);
         bottom: clamp(20px, 3vw, 36px);
+        display: flex;
+        align-items: center;
+        gap: 14px;
         z-index: 2;
         font-size: 0.92rem;
         font-weight: 700;
@@ -1600,6 +1603,48 @@
         color: rgba(45, 42, 30, 0.52);
         text-transform: uppercase;
         user-select: none;
+      }
+
+      .page-counter {
+        min-width: 4.8em;
+        text-align: right;
+      }
+
+      .page-home-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .page-home-button:hover,
+      .page-home-button:focus-visible {
+        color: rgba(45, 42, 30, 0.72);
+      }
+
+      .page-home-button:focus-visible {
+        outline: 2px solid rgba(249, 115, 22, 0.48);
+        outline-offset: 5px;
+        border-radius: 999px;
+      }
+
+      .page-home-icon {
+        width: 1.05em;
+        height: 1.05em;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
       }
 
       html.is-mobile-viewport {
@@ -2195,12 +2240,21 @@
         height: 40px;
       }
 
-      html.is-mobile-viewport .page-counter {
-        right: 50%;
+      html.is-mobile-viewport .page-controls {
+        right: auto;
+        left: 50%;
         bottom: calc(env(safe-area-inset-bottom) + 16px);
-        transform: translateX(50%);
+        transform: translateX(-50%);
+        gap: 0;
         font-size: 0.72rem;
         letter-spacing: 0.08em;
+      }
+
+      html.is-mobile-viewport .page-home-button {
+        position: absolute;
+        left: calc(100% + 10px);
+        top: 50%;
+        transform: translateY(-50%);
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -3617,12 +3671,23 @@
           </article>
         </section>
       </div>
-      <div class="page-counter" id="page-counter" aria-live="polite">01 / 61</div>
+      <div class="page-controls" aria-label="페이지 이동">
+        <button class="page-home-button" id="page-home-button" type="button" aria-label="처음으로 이동">
+          <svg class="page-home-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path d="M4 4v12" />
+            <path d="M9 6 5 10l4 4" />
+            <path d="M5 10h11" />
+          </svg>
+          <span>처음으로</span>
+        </button>
+        <div class="page-counter" id="page-counter" aria-live="polite">01 / 61</div>
+      </div>
     </main>
 
     <script>
       const track = document.getElementById("deck-track");
       const pageCounter = document.getElementById("page-counter");
+      const homeButton = document.getElementById("page-home-button");
 
       track.querySelectorAll(".slide-shell").forEach((shell) => {
         if (shell.querySelector(".slide-side-media")) {
@@ -3818,6 +3883,15 @@
       function previous() {
         move(-1);
       }
+
+      function goToFirstSlide() {
+        holdStep = null;
+        isAnimating = false;
+        jumpToIndex(1);
+        updateUi();
+      }
+
+      homeButton.addEventListener("click", goToFirstSlide);
 
       track.addEventListener("transitionend", (event) => {
         if (event.target !== track || event.propertyName !== "transform") {
