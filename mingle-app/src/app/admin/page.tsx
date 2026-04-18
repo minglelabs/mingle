@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  ChevronLeft,
+  ChevronRight,
   Inbox,
   LogOut,
   Mail,
@@ -18,6 +22,14 @@ import {
   verifyAdminLogin,
   verifyAdminSessionToken,
 } from "@/lib/admin-auth";
+import {
+  ADMIN_FEEDBACK_PAGE_SIZE,
+  type AdminFeedbackFilter,
+  buildAdminFeedbackHref,
+  normalizeAdminFeedbackFilter,
+  normalizeAdminFeedbackPage,
+  sanitizeAdminFeedbackReturnTo,
+} from "@/lib/admin-feedback-query";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +62,20 @@ function takeFirst(value: string | string[] | undefined): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value[0] ?? "";
   return "";
+}
+
+function adminFeedbackPathWithStatus(path: string, status: { error?: string; sent?: string }): string {
+  const url = new URL(path, "https://mingle.local");
+  url.searchParams.delete("error");
+  url.searchParams.delete("sent");
+  if (status.error) {
+    url.searchParams.set("error", status.error);
+  }
+  if (status.sent) {
+    url.searchParams.set("sent", status.sent);
+  }
+  const query = url.searchParams.toString();
+  return query ? `${url.pathname}?${query}` : url.pathname;
 }
 
 function adminCookieOptions() {
@@ -100,14 +126,15 @@ async function logoutAdminAction() {
 async function createFeedbackReplyAction(formData: FormData) {
   "use server";
 
+  const returnTo = sanitizeAdminFeedbackReturnTo(readFormString(formData.get("returnTo")));
   if (!(await isAdminAuthenticated())) {
-    redirect("/admin?error=session_required");
+    redirect(adminFeedbackPathWithStatus(returnTo, { error: "session_required" }));
   }
 
   const feedbackId = readFormString(formData.get("feedbackId")).trim();
   const message = normalizeReplyMessage(formData.get("message"));
   if (!feedbackId || message.length < 2) {
-    redirect("/admin?error=invalid_reply");
+    redirect(adminFeedbackPathWithStatus(returnTo, { error: "invalid_reply" }));
   }
 
   const feedback = await prisma.appFeedback.findUnique({
@@ -115,7 +142,7 @@ async function createFeedbackReplyAction(formData: FormData) {
     select: { id: true },
   });
   if (!feedback) {
-    redirect("/admin?error=feedback_not_found");
+    redirect(adminFeedbackPathWithStatus(returnTo, { error: "feedback_not_found" }));
   }
 
   await prisma.appFeedbackReply.create({
@@ -127,14 +154,40 @@ async function createFeedbackReplyAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
-  redirect(`/admin?sent=${encodeURIComponent(feedbackId)}`);
+  redirect(adminFeedbackPathWithStatus(returnTo, { sent: feedbackId }));
 }
 
-async function loadFeedbackThreads() {
-  const [threads, totalCount, unansweredCount] = await prisma.$transaction([
-    prisma.appFeedback.findMany({
+function needsReplyWhere(): Prisma.AppFeedbackWhereInput {
+  return {
+    replies: {
+      none: {
+        authorType: "team",
+      },
+    },
+  };
+}
+
+function feedbackWhereForFilter(filter: AdminFeedbackFilter): Prisma.AppFeedbackWhereInput {
+  return filter === "needs-reply" ? needsReplyWhere() : {};
+}
+
+async function loadFeedbackThreads(args: { filter: AdminFeedbackFilter; page: number }) {
+  const where = feedbackWhereForFilter(args.filter);
+  const [totalCount, unansweredCount, filteredCount] = await prisma.$transaction([
+    prisma.appFeedback.count(),
+    prisma.appFeedback.count({ where: needsReplyWhere() }),
+    prisma.appFeedback.count({ where }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(filteredCount / ADMIN_FEEDBACK_PAGE_SIZE));
+  const page = Math.min(args.page, totalPages);
+  const skip = (page - 1) * ADMIN_FEEDBACK_PAGE_SIZE;
+  const threads = filteredCount === 0
+    ? []
+    : await prisma.appFeedback.findMany({
+      where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip,
+      take: ADMIN_FEEDBACK_PAGE_SIZE,
       select: {
         id: true,
         category: true,
@@ -163,23 +216,17 @@ async function loadFeedbackThreads() {
           },
         },
       },
-    }),
-    prisma.appFeedback.count(),
-    prisma.appFeedback.count({
-      where: {
-        replies: {
-          none: {
-            authorType: "team",
-          },
-        },
-      },
-    }),
-  ]);
+    });
 
   return {
     threads,
     totalCount,
     unansweredCount,
+    filteredCount,
+    filter: args.filter,
+    page,
+    totalPages,
+    pageSize: ADMIN_FEEDBACK_PAGE_SIZE,
   };
 }
 
@@ -223,6 +270,108 @@ function renderMetaLabel(thread: FeedbackThread): string {
     thread.apiNamespace,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : "No client metadata";
+}
+
+function renderShowingLabel(args: {
+  filteredCount: number;
+  page: number;
+  pageSize: number;
+  visibleCount: number;
+}): string {
+  if (args.filteredCount === 0) return "0 of 0";
+  const start = (args.page - 1) * args.pageSize + 1;
+  const end = start + args.visibleCount - 1;
+  return `${start}-${end} of ${args.filteredCount}`;
+}
+
+function filterLinkClassName(isActive: boolean): string {
+  return [
+    "inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-semibold transition",
+    isActive
+      ? "border-slate-950 bg-slate-950 text-white"
+      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+  ].join(" ");
+}
+
+function FilterTabs({
+  activeFilter,
+  totalCount,
+  unansweredCount,
+}: {
+  activeFilter: AdminFeedbackFilter;
+  totalCount: number;
+  unansweredCount: number;
+}) {
+  return (
+    <nav className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-5" aria-label="Feedback filters">
+      <Link
+        className={filterLinkClassName(activeFilter === "all")}
+        href={buildAdminFeedbackHref({ filter: "all" })}
+      >
+        All feedback
+        <span className="text-xs opacity-75">{totalCount}</span>
+      </Link>
+      <Link
+        className={filterLinkClassName(activeFilter === "needs-reply")}
+        href={buildAdminFeedbackHref({ filter: "needs-reply" })}
+      >
+        Needs reply
+        <span className="text-xs opacity-75">{unansweredCount}</span>
+      </Link>
+    </nav>
+  );
+}
+
+function Pagination({
+  filter,
+  page,
+  totalPages,
+}: {
+  filter: AdminFeedbackFilter;
+  page: number;
+  totalPages: number;
+}) {
+  if (totalPages <= 1) return null;
+
+  const previousPage = page - 1;
+  const nextPage = page + 1;
+  const pageLabel = `Page ${page} of ${totalPages}`;
+  const buttonClassName = "inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50";
+  const disabledClassName = "inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-100 px-4 text-sm font-semibold text-slate-400";
+
+  return (
+    <nav className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4" aria-label="Feedback pagination">
+      {page > 1 ? (
+        <Link
+          className={buttonClassName}
+          href={buildAdminFeedbackHref({ filter, page: previousPage })}
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          Previous
+        </Link>
+      ) : (
+        <span className={disabledClassName} aria-disabled="true">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          Previous
+        </span>
+      )}
+      <span className="text-sm font-medium text-slate-600">{pageLabel}</span>
+      {page < totalPages ? (
+        <Link
+          className={buttonClassName}
+          href={buildAdminFeedbackHref({ filter, page: nextPage })}
+        >
+          Next
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      ) : (
+        <span className={disabledClassName} aria-disabled="true">
+          Next
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </span>
+      )}
+    </nav>
+  );
 }
 
 function LoginView({ error }: { error: string }) {
@@ -292,7 +441,15 @@ function LoginView({ error }: { error: string }) {
   );
 }
 
-function FeedbackCard({ thread, wasSent }: { thread: FeedbackThread; wasSent: boolean }) {
+function FeedbackCard({
+  thread,
+  returnTo,
+  wasSent,
+}: {
+  thread: FeedbackThread;
+  returnTo: string;
+  wasSent: boolean;
+}) {
   const teamReplies = thread.replies.filter((reply) => reply.authorType === "team");
   const authorName = thread.user?.name || thread.user?.email || thread.user?.externalUserId || "Anonymous user";
   const contactEmail = thread.contactEmail || thread.user?.email || "";
@@ -362,6 +519,7 @@ function FeedbackCard({ thread, wasSent }: { thread: FeedbackThread; wasSent: bo
 
       <form action={createFeedbackReplyAction} className="mt-4 space-y-3">
         <input name="feedbackId" type="hidden" value={thread.id} />
+        <input name="returnTo" type="hidden" value={returnTo} />
         <label className="block text-sm font-medium text-slate-700" htmlFor={replyInputId}>
           Reply
         </label>
@@ -397,12 +555,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = await searchParams;
   const error = errorMessage(takeFirst(params.error));
   const sentFeedbackId = takeFirst(params.sent);
+  const filter = normalizeAdminFeedbackFilter(takeFirst(params.filter));
+  const requestedPage = normalizeAdminFeedbackPage(takeFirst(params.page));
 
   if (!(await isAdminAuthenticated())) {
     return <LoginView error={error} />;
   }
 
-  const feedback = await loadFeedbackThreads();
+  const feedback = await loadFeedbackThreads({ filter, page: requestedPage });
+  const returnTo = buildAdminFeedbackHref({ filter, page: feedback.page });
+  const showingLabel = renderShowingLabel({
+    filteredCount: feedback.filteredCount,
+    page: feedback.page,
+    pageSize: feedback.pageSize,
+    visibleCount: feedback.threads.length,
+  });
 
   return (
     <main className="h-svh w-full overflow-y-auto bg-[#f8fafc] text-slate-950">
@@ -437,20 +604,34 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <p className="mt-2 text-2xl font-semibold text-amber-800">{feedback.unansweredCount}</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <p className="text-sm font-medium text-slate-500">Showing latest</p>
-          <p className="mt-2 text-2xl font-semibold">{feedback.threads.length}</p>
+          <p className="text-sm font-medium text-slate-500">Showing</p>
+          <p className="mt-2 text-2xl font-semibold">{showingLabel}</p>
         </div>
       </section>
 
+      <FilterTabs
+        activeFilter={feedback.filter}
+        totalCount={feedback.totalCount}
+        unansweredCount={feedback.unansweredCount}
+      />
+
       {error ? (
-        <section className="mx-auto w-full max-w-6xl px-5">
+        <section className="mx-auto mt-4 w-full max-w-6xl px-5">
           <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {error}
           </p>
         </section>
       ) : null}
 
-      <section className="mx-auto w-full max-w-6xl space-y-4 px-5 pb-10">
+      {sentFeedbackId ? (
+        <section className="mx-auto mt-4 w-full max-w-6xl px-5">
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
+            Reply sent.
+          </p>
+        </section>
+      ) : null}
+
+      <section className="mx-auto mt-5 w-full max-w-6xl space-y-4 px-5 pb-10">
         {feedback.threads.length === 0 ? (
           <div className="rounded-lg border border-slate-200 bg-white p-10 text-center">
             <Inbox className="mx-auto mb-3 h-8 w-8 text-slate-400" aria-hidden="true" />
@@ -461,11 +642,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           feedback.threads.map((thread) => (
             <FeedbackCard
               key={thread.id}
+              returnTo={returnTo}
               thread={thread}
               wasSent={sentFeedbackId === thread.id}
             />
           ))
         )}
+        <Pagination
+          filter={feedback.filter}
+          page={feedback.page}
+          totalPages={feedback.totalPages}
+        />
       </section>
     </main>
   );
