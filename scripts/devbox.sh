@@ -13,8 +13,8 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.0"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.0"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.1"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.1"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -435,25 +435,25 @@ validate_host() {
 validate_http_url() {
   local name="$1"
   local value="$2"
-  [[ "$value" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "invalid $name: $value"
+  [[ "$value" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || die "invalid $name: $value"
 }
 
 validate_https_url() {
   local name="$1"
   local value="$2"
-  [[ "$value" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "invalid $name (https required): $value"
+  [[ "$value" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || die "invalid $name (https required): $value"
 }
 
 validate_ws_url() {
   local name="$1"
   local value="$2"
-  [[ "$value" =~ ^wss?://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "invalid $name: $value"
+  [[ "$value" =~ ^wss?://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || die "invalid $name: $value"
 }
 
 validate_wss_url() {
   local name="$1"
   local value="$2"
-  [[ "$value" =~ ^wss://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || die "invalid $name (wss required): $value"
+  [[ "$value" =~ ^wss://[A-Za-z0-9.-]+(:[0-9]+)?(/[^[:space:]]*)?$ ]] || die "invalid $name (wss required): $value"
 }
 
 ensure_single_line_value() {
