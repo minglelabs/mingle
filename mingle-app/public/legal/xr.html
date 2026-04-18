@@ -131,6 +131,7 @@
 
       .slide-short-video {
         width: 100%;
+        height: auto;
         aspect-ratio: 9 / 16;
         display: block;
         border: 0;
@@ -1788,9 +1789,10 @@
       }
 
       html.is-mobile-viewport .slide-short-video {
-        width: min(58vw, 230px);
+        width: min(58vw, 25.875vh, 230px);
+        height: min(103.111vw, 46vh, 408.889px);
         max-width: 100%;
-        max-height: 42vh;
+        max-height: none;
       }
 
       html.is-mobile-viewport .slide-preview-image {
