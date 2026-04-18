@@ -3717,9 +3717,16 @@
         return isMobileViewport() ? MOBILE_TAP_DURATION_MS : DESKTOP_TAP_DURATION_MS;
       }
 
-      function touchStepForDelta(primaryDelta) {
+      function touchStepForDelta(deltaX, deltaY) {
+        const isHorizontalIntent = Math.abs(deltaX) >= Math.abs(deltaY);
+        const primaryDelta = isHorizontalIntent ? deltaX : deltaY;
+
         if (isMobileViewport()) {
-          return primaryDelta > 0 ? 1 : -1;
+          if (isHorizontalIntent) {
+            return deltaX < 0 ? 1 : -1;
+          }
+
+          return deltaY > 0 ? 1 : -1;
         }
 
         return primaryDelta < 0 ? 1 : -1;
@@ -3936,7 +3943,6 @@
           const deltaY = touch.clientY - touchStartY;
           const absX = Math.abs(deltaX);
           const absY = Math.abs(deltaY);
-          const primaryDelta = absX >= absY ? deltaX : deltaY;
           const primaryDistance = Math.max(absX, absY);
 
           if (primaryDistance < TOUCH_INTENT_THRESHOLD) {
@@ -3952,7 +3958,7 @@
 
           touchNavigationTriggered = true;
 
-          move(touchStepForDelta(primaryDelta));
+          move(touchStepForDelta(deltaX, deltaY));
         },
         { passive: false }
       );
@@ -3971,10 +3977,9 @@
           const deltaY = touch.clientY - touchStartY;
           const absX = Math.abs(deltaX);
           const absY = Math.abs(deltaY);
-          const primaryDelta = absX >= absY ? deltaX : deltaY;
 
           if (Math.max(absX, absY) >= TOUCH_NAVIGATION_THRESHOLD) {
-            move(touchStepForDelta(primaryDelta));
+            move(touchStepForDelta(deltaX, deltaY));
           }
 
           touchMoved = false;
