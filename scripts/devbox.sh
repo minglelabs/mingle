@@ -5045,30 +5045,34 @@ $(ngrok_plan_capacity_hint)"
       set +a
     fi
     normalize_prisma_database_env
-    # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
-    # Use webpack for device testing, but avoid forcing polling watchers because they can
-    # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
-    DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
-    DEVBOX_PROFILE="$DEVBOX_PROFILE" \
-    DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
-    DEVBOX_STT_PORT="$DEVBOX_STT_PORT" \
-    DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT" \
-    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
-    NEXTAUTH_URL="$DEVBOX_SITE_URL" \
-    NEXTAUTH_SECRET="$runtime_nextauth_secret" \
-    AUTH_SECRET="$runtime_nextauth_secret" \
-    NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT" \
-    NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
-    NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
-    RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios" \
-    RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
-    RN_ADMOB_BANNER_UNIT_ID_IOS="$runtime_admob_banner_unit_id_ios" \
-    RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
-    MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
-    MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
-    WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}" \
-    CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}" \
-    pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
+    # Turbopack is the default for devbox because webpack's macOS watcher can
+    # wedge after startup on some worktrees and leave every route unresponsive.
+    # Set DEVBOX_NEXT_DEV_BUNDLER=webpack when debugging webpack-specific issues.
+    export DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME"
+    export DEVBOX_PROFILE="$DEVBOX_PROFILE"
+    export DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT"
+    export DEVBOX_STT_PORT="$DEVBOX_STT_PORT"
+    export DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT"
+    export NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL"
+    export NEXTAUTH_URL="$DEVBOX_SITE_URL"
+    export NEXTAUTH_SECRET="$runtime_nextauth_secret"
+    export AUTH_SECRET="$runtime_nextauth_secret"
+    export NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT"
+    export NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL"
+    export NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE"
+    export RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios"
+    export RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android"
+    export RN_ADMOB_BANNER_UNIT_ID_IOS="$runtime_admob_banner_unit_id_ios"
+    export RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android"
+    export MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL"
+    export MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL"
+    export WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}"
+    export CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}"
+    if [[ "${DEVBOX_NEXT_DEV_BUNDLER:-turbopack}" == "turbopack" ]]; then
+      pnpm exec next dev --port "$DEVBOX_WEB_PORT"
+    else
+      pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
+    fi
   ) &
   pids+=("$!")
 

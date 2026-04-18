@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const CANVAS_WIDTH = 400;
 
@@ -11,9 +12,13 @@ function calculateScale() {
 }
 
 export default function MobileCanvasShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname() || "";
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
+    if (isAdminRoute) return;
+
     const updateScale = () => {
       setScale(calculateScale());
     };
@@ -26,12 +31,16 @@ export default function MobileCanvasShell({ children }: { children: ReactNode })
       window.removeEventListener("resize", updateScale);
       window.removeEventListener("orientationchange", updateScale);
     };
-  }, []);
+  }, [isAdminRoute]);
 
   const normalizedScale = scale > 0 ? scale : 1;
   const needsScale = normalizedScale < 1;
   const frameHeight = useMemo(() => needsScale ? `calc(100svh / ${normalizedScale})` : '100svh', [needsScale, normalizedScale]);
   const scaledWidth = useMemo(() => `${CANVAS_WIDTH * normalizedScale}px`, [normalizedScale]);
+
+  if (isAdminRoute) {
+    return <>{children}</>;
+  }
 
   // When scale is 1 (device width >= CANVAS_WIDTH), skip the transform entirely
   // to avoid creating an unnecessary compositing layer that hurts scroll perf in WKWebView.
