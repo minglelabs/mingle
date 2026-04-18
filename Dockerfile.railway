@@ -18,7 +18,7 @@ FROM app-deps AS app-build
 ARG NEXT_PUBLIC_WS_PATH=/stt
 ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mingle?schema=app"
 ENV NEXT_PUBLIC_WS_PATH="$NEXT_PUBLIC_WS_PATH"
-COPY mingle-app/components.json mingle-app/next.config.ts mingle-app/postcss.config.mjs mingle-app/tsconfig.json ./
+COPY mingle-app/components.json mingle-app/next.config.mjs mingle-app/postcss.config.mjs mingle-app/tsconfig.json ./
 COPY mingle-app/prisma ./prisma
 COPY mingle-app/public ./public
 COPY mingle-app/scripts ./scripts
