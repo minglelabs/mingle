@@ -329,12 +329,12 @@
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
-				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
+				NEXT_PUBLIC_SITE_HOST = "mingle.up.railway.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
-				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";
+				NEXT_PUBLIC_SITE_URL = "https://mingle.up.railway.app";
 				NEXT_PUBLIC_WS_HOST = mingle.up.railway.app;
 				NEXT_PUBLIC_WS_SCHEME = wss;
-				NEXT_PUBLIC_WS_URL = "wss://mingle.up.railway.app";
+				NEXT_PUBLIC_WS_URL = "wss://mingle.up.railway.app/stt";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -374,12 +374,12 @@
 				NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = "ca-app-pub-7057041881494735/3768106846";
 				NEXT_PUBLIC_RN_AD_BANNER_HEIGHT_PX = 50;
 				NEXT_PUBLIC_RN_AD_BANNER_POSITION = bottom;
-				NEXT_PUBLIC_SITE_HOST = "mingle-app-xi.vercel.app";
+				NEXT_PUBLIC_SITE_HOST = "mingle.up.railway.app";
 				NEXT_PUBLIC_SITE_SCHEME = https;
-				NEXT_PUBLIC_SITE_URL = "https://mingle-app-xi.vercel.app";
+				NEXT_PUBLIC_SITE_URL = "https://mingle.up.railway.app";
 				NEXT_PUBLIC_WS_HOST = mingle.up.railway.app;
 				NEXT_PUBLIC_WS_SCHEME = wss;
-				NEXT_PUBLIC_WS_URL = "wss://mingle.up.railway.app";
+				NEXT_PUBLIC_WS_URL = "wss://mingle.up.railway.app/stt";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

@@ -24,7 +24,7 @@
       "version": "1.1.2",
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
-      "changesNotSentForReview": true,
+      "changesNotSentForReview": false,
       "releaseName": "1.1.2 (57)",
       "releaseNotes": {
         "en-US": "Version 1.1.2 adds multiple conversation rooms with renaming and deletion, improves room management, search, and pull-to-refresh in the conversation list, and makes microphone permission recovery, STT startup, and navigation on iPhone and Android more reliable.",
