@@ -2001,6 +2001,7 @@ write_rn_ios_runtime_xcconfig() {
   local xcconfig_admob_banner_unit_id_ios=""
   escaped_site_url="${escaped_site_url//\\/\\\\}"
   escaped_site_url="${escaped_site_url//\"/\\\"}"
+  escaped_site_url="${escaped_site_url//\//\\/}"
   escaped_ws_url="${escaped_ws_url//\\/\\\\}"
   escaped_ws_url="${escaped_ws_url//\"/\\\"}"
   escaped_ws_url="${escaped_ws_url//\//\\/}"
