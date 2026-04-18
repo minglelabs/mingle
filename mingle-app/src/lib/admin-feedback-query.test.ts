@@ -30,4 +30,3 @@ describe("admin-feedback-query", () => {
     expect(sanitizeAdminFeedbackReturnTo("/admin?error=invalid_credentials&sent=feedback_1&page=2")).toBe("/admin?page=2");
   });
 });
-
