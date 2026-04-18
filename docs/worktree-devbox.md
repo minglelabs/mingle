@@ -40,6 +40,9 @@ scripts/devbox up --profile device
 # 5-a) (선택) ngrok 한도 초과 시 cloudflare quick tunnel 사용
 scripts/devbox up --profile device --tunnel-provider cloudflare
 
+# 5-a-2) (선택) webpack dev watcher가 멈추는 워크트리에서는 Turbopack으로 실행
+DEVBOX_NEXT_DEV_BUNDLER=turbopack scripts/devbox up --profile device --tunnel-provider cloudflare
+
 # 5-a-1) (선택) cloudflare named tunnel(고정 호스트) 사용
 export DEVBOX_CLOUDFLARE_TUNNEL_TOKEN="<token>"
 export DEVBOX_CLOUDFLARE_WEB_HOSTNAME="web-dev.example.com"
@@ -209,6 +212,8 @@ scripts/devbox bootstrap --vault-push
     서버 프로세스 환경변수로 런타임 주입(파일 미기록)
   - `.env.local` 갱신은 devbox가 수행하지 않음(수동 편집 원칙)
   - `mingle-stt` + `mingle-app` 동시 실행
+  - 기본 web dev server는 `next dev --webpack`으로 실행
+    - 특정 워크트리에서 macOS watcher가 멈추면 `DEVBOX_NEXT_DEV_BUNDLER=turbopack`을 붙여 `next dev` 기본 Turbopack 경로로 실행 가능
   - `device` 프로필에서 ngrok이 없으면 iTerm/Terminal에 별도 탭/패널로 ngrok 실행 시도
     (실패 시 기존 인라인 실행으로 폴백)
   - `--with-ios-install`, `--with-android-install`, `--with-mobile-install`, `--with-ios-clean-install` 옵션으로

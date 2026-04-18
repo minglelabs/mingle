@@ -5032,23 +5032,27 @@ $(ngrok_plan_capacity_hint)"
     # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
     # Use webpack for device testing, but avoid forcing polling watchers because they can
     # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
-    DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME" \
-    DEVBOX_PROFILE="$DEVBOX_PROFILE" \
-    DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT" \
-    DEVBOX_STT_PORT="$DEVBOX_STT_PORT" \
-    DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT" \
-    NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL" \
-    NEXTAUTH_URL="$DEVBOX_SITE_URL" \
-    NEXTAUTH_SECRET="$runtime_nextauth_secret" \
-    AUTH_SECRET="$runtime_nextauth_secret" \
-    NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT" \
-    NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
-    NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
-    MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
-    MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
-    WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}" \
-    CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}" \
-    pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
+    export DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME"
+    export DEVBOX_PROFILE="$DEVBOX_PROFILE"
+    export DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT"
+    export DEVBOX_STT_PORT="$DEVBOX_STT_PORT"
+    export DEVBOX_METRO_PORT="$DEVBOX_METRO_PORT"
+    export NEXT_PUBLIC_SITE_URL="$DEVBOX_SITE_URL"
+    export NEXTAUTH_URL="$DEVBOX_SITE_URL"
+    export NEXTAUTH_SECRET="$runtime_nextauth_secret"
+    export AUTH_SECRET="$runtime_nextauth_secret"
+    export NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT"
+    export NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL"
+    export NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE"
+    export MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL"
+    export MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL"
+    export WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}"
+    export CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}"
+    if [[ "${DEVBOX_NEXT_DEV_BUNDLER:-webpack}" == "turbopack" ]]; then
+      pnpm exec next dev --port "$DEVBOX_WEB_PORT"
+    else
+      pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
+    fi
   ) &
   pids+=("$!")
 
