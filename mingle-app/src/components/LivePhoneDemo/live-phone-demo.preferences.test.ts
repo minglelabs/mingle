@@ -81,7 +81,7 @@ describe('readPersistedBooleanPreference', () => {
 })
 
 describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
-  it('prefers hydrated user preference over native layout and query fallback', () => {
+  it('prefers hydrated user preference over native layout and query fallback in standalone web', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: 'bottom',
       nativeLayoutPosition: 'top',
@@ -89,19 +89,47 @@ describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
     })).toBe('bottom')
   })
 
-  it('falls back to native layout when no user preference is available', () => {
+  it('prefers the URL query position over a transient native layout event', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: null,
-      nativeLayoutPosition: 'bottom',
-      queryPosition: 'top',
+      nativeLayoutPosition: 'top',
+      queryPosition: 'bottom',
     })).toBe('bottom')
   })
 
-  it('falls back to query position last', () => {
+  it('falls back to native layout when neither preference nor query is available', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: null,
+      nativeLayoutPosition: 'bottom',
+      queryPosition: null,
+    })).toBe('bottom')
+  })
+
+  it('prefers the URL query over a stale persisted preference in native runtime', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'top',
+      nativeLayoutPosition: 'top',
+      queryPosition: 'bottom',
+      isNativeAppRuntime: true,
+    })).toBe('bottom')
+  })
+
+  it('lets an in-session native user selection override the URL query', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'bottom',
+      nativeLayoutPosition: 'bottom',
+      queryPosition: 'bottom',
+      sessionOverridePosition: 'top',
+      isNativeAppRuntime: true,
+    })).toBe('top')
+  })
+
+  it('still respects the persisted preference in native runtime when the URL carries no banner position', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'top',
       nativeLayoutPosition: null,
-      queryPosition: 'top',
+      queryPosition: null,
+      isNativeAppRuntime: true,
     })).toBe('top')
   })
 })

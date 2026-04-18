@@ -1,5 +1,58 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
+
+### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found
+
+1. **Android conversation transcripts did not reserve scroll space for the native banner**
+   Problem: The Android 1.1.1 internal-test build could load a test AdMob banner, but the in-room transcript scroll area still ended directly behind the native banner. With the banner at the bottom, the last transcript items could sit under the banner; with the banner at the top, the same contract expected an equivalent top clearance. iOS already behaved correctly, making the Android room feel cramped and partially occluded.
+   Fix: The room now converts the effective native banner inset into explicit top/bottom spacer elements inside the transcript scroll content instead of relying only on scroll-container padding. The native runtime detection and cached banner-layout listener were also relaxed so Android WebView bridge timing cannot skip the native layout event. RN now emits conversation top inset when the native banner is in the top slot and gates conversation bottom inset on the same render-ready conditions. Android bottom inset handling also no longer subtracts bottom-bar clearance when RN has already reported the banner's own height.
+   Status: Fixed in-thread on 2026-04-18. Focused native UI and RN WebView layout unit tests passed; Android real-device QA passed after rebuilding the devbox app and clearing the stale WebView 502 state.
+
+2. **Android internal-test WebView could reuse the old banner layout without a URL change**
+   Problem: After installing Android internal-test build `1.1.1 (52)`, the native shell was updated but the WebView still used the same production URL as build `51`. Android can preserve WebView cache across app updates, and the initial URL did not include the native banner position or client build. If the web runtime missed the first native banner-layout event or reused older cached JS, both the transcript spacer and scroll-to-bottom button stayed at their pre-banner offsets even while the native banner rendered at the bottom.
+   Fix: The RN shell now appends `nativeBannerPosition`, the initial matching banner inset, `nativeClientVersion`, and `nativeClientBuild` to the WebView URL. This gives the web runtime an immediate fallback for top/bottom banner clearance and changes the URL on each uploaded build number, forcing Android WebView to re-resolve the current production page instead of silently reusing the previous build's cached route.
+   Status: Fixed in-thread on 2026-04-18 for the next Android internal-test build.
+
+3. **Android conversation banner fallback could still be overwritten by stale web layout state**
+   Problem: Android internal-test build `1.1.1 (53)` was installed from Google Play, but the bottom native banner still covered the conversation transcript and scroll-to-bottom button. The RN shell correctly added `nativeBannerPosition=bottom` and `nativeBottomInsetPx` to the WebView URL, but the web runtime could cache an earlier list-zone `banner_layout` event with `position: "top"` and `bottomInsetPx: 0`. Because the displayed banner position preferred native layout state before the URL query, and because `nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery` treats numeric `0` as a real value, that stale event could override the URL fallback and keep the effective bottom inset at `0`.
+   Fix: The web position resolver now prefers the URL-provided native banner position before cached native layout position, so a stale list-zone `top` event cannot override the runtime URL. The conversation layout also only trusts native layout inset values when they are positive and match the active displayed position; otherwise it falls back to the URL-provided top/bottom inset. This preserves the Android bottom spacer and scroll-to-bottom offset even if the conversation-zone banner event is delayed or missed.
+   Status: Fixed in-thread on 2026-04-18 for Android internal-test build `1.1.1 (54)` and iOS TestFlight build `1.1.1 (52)`.
+
+4. **Native banner position toggles could desynchronize from the URL fallback**
+   Problem: After the Android stale-layout fix, native runtime preferred the URL-provided banner position over persisted web preferences. That protected startup from stale localStorage, but an in-session user tap on the top/bottom banner setting could no longer override `nativeBannerPosition` from the URL. The web spacer math could stay on the URL's bottom setting while RN moved the physical banner to top.
+   Fix: The room now tracks an explicit session-level banner-position override. Native runtime resolves position as session override → URL query → persisted preference → layout event, and the RN `native_set_ad_banner_position` command also prefers the session override and URL query before stored fallback values. Startup remains protected from stale storage while current user taps take effect immediately.
+   Status: Fixed in-thread on 2026-04-18 before merging the 1.1.1 QA branch.
+
+## 2026-04-17 Android/iOS 1.1.1 Devbox Local QA
+
+### `2026-04-17-devbox-1.1.1-local-qa` | UI/UX issues found
+
+1. **Android native/WebView remount could strand an in-progress conversation on the list**
+   Problem: Android real-device QA reloaded the WebView to the conversation list after a native remount while native STT was still running. The list showed an in-progress conversation row, but the live room and QA bridge were unavailable, so the user-facing state looked paused even though native speech state was still active.
+   Fix: The native shell now preserves the requested/current WebView URL across debug remounts, the room sends an explicit remount restore URL plus a short-lived restore marker, and the conversation list waits for loaded conversations before consuming that marker. The list also subscribes to native STT status events and performs a one-time active-conversation restore fallback when native status delivery is delayed.
+   Status: Resolved on 2026-04-17. Android real-device QA passed 8/8 after restarting devbox and clearing the Android WebView/app data.
+
+2. **iPhone physical-device automation initially stalled at the Appium/XCUITest device layer**
+   Problem: The iPhone app was installed and launchable as version `1.1.1`, but the first Appium attempt could not create a usable XCUITest session for the connected physical device. The standard UDID failed with `Unknown device or simulator UDID`, while the CoreDevice identifier moved into a WebDriverAgent `xcodebuild` wait with no progress.
+   Fix: Rechecked the device through `xctrace`, `devicectl`, and `idevice_id`, then reran the physical-device suite with the standard UDID once the device state returned to `connected`. The runner now waits for the stamped native history forward state and falls back to the same WebView history-forward path when Appium's synthetic iOS edge-swipe preview does not commit on the physical device.
+   Status: Resolved on 2026-04-17. iOS real-device QA passed 9/9 against version `1.1.1`.
+
+3. **The language selector accessibility contract had drifted from the current UI shape**
+   Problem: The top-right language control now opens the full language selector surface, but one QA contract still treated it as a dropdown menu and expected `aria-haspopup="menu"`. That made the iOS chrome check fail even though the rendered selector is dialog-like and the visible affordance was intact.
+   Fix: The shared chrome contract and mobile QA now expect the selector dialog contract while keeping the same visible chevron, border, and height affordance checks.
+   Status: Resolved on 2026-04-17. The iOS real-device chrome case passed in the 9/9 QA run.
+
+4. **Android devbox AdMob could show only the fallback `AD` badge**
+   Problem: The Android device build and local version-policy server could inherit production AdMob values from vault during `--device-app-env dev`. The production Android banner unit returned `no-fill` during local QA, so the native fallback surface stayed visible as a lone `AD` badge instead of a real creative.
+   Fix: Devbox now forces Google's official sample AdMob app IDs and banner unit IDs for non-production device app envs, and the Next/Metro devbox runtime receives the same sample values after sourcing vault env files. The RN banner also removes the production fallback badge after a no-fill failure instead of leaving `AD` on screen.
+   Status: Resolved on 2026-04-17. Android should request the sample banner unit during local devbox verification.
+
+5. **Native STT remount fallback could reopen a stale active room before status arrived**
+   Problem: The remount recovery path treated a missing native STT status as a delayed live status and reopened the first active conversation. If RN later reported `idle`, the opened room could bypass the stale-active reconciliation path and keep a non-live room looking active.
+   Fix: The list now restores a room only from an explicit remount marker or a live native STT status. A `null` status waits for RN's first status event instead of reopening an active room by inference.
+   Status: Fixed in-thread on 2026-04-18 before merging the 1.1.1 QA branch.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found

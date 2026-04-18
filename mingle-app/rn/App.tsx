@@ -41,6 +41,7 @@ import {
   WEBVIEW_NAVIGATION_BRIDGE_SCRIPT,
 } from './src/nativeNavigationBridge';
 import {
+  appendNativeRuntimeWebViewParams,
   normalizeNativeBottomBarClearancePx,
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
@@ -270,6 +271,30 @@ function appendNgrokBrowserWarningBypass(raw: string): string {
     return url.toString();
   } catch {
     return raw;
+  }
+}
+
+function appendNativeWebViewSession(raw: string, sessionId: string): string {
+  try {
+    const url = new URL(raw);
+    url.searchParams.set('__nativeWebViewSession', sessionId);
+    return appendNgrokBrowserWarningBypass(url.toString());
+  } catch {
+    const separator = raw.includes('?') ? '&' : '?';
+    return appendNgrokBrowserWarningBypass(
+      `${raw}${separator}__nativeWebViewSession=${encodeURIComponent(sessionId)}`,
+    );
+  }
+}
+
+function shouldPreserveDebugRemountUrl(raw: string): boolean {
+  if (!raw) return false;
+
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
   }
 }
 
@@ -579,6 +604,9 @@ type NativeSetBottomBarClearanceCommand = {
 
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview';
+  payload?: {
+    url?: string;
+  };
 };
 
 type NativeQaSetSttStatusCommand = {
@@ -903,7 +931,8 @@ export function NativeAdBanner(props: {
     ? Math.min(frameWidthPx, 320)
     : frameWidthPx;
   const isDebugBannerUnit = unitId.startsWith('ca-app-pub-3940256099942544/');
-  const shouldShowFallbackPlaceholder = adLoadState !== 'loaded';
+  const shouldShowFallbackPlaceholder = adLoadState !== 'loaded'
+    && (adLoadState !== 'failed' || isDebugBannerUnit);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   // Reset banner state when a new slot/unit configuration is mounted.
@@ -1010,6 +1039,7 @@ function AppInner(): React.JSX.Element {
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
+  const lastWebViewUrlRef = useRef('');
   const authDispatchRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const authDispatchRetryCountRef = useRef(0);
   const [iosTopTapOverlayHeight, setIosTopTapOverlayHeight] = useState(() => {
@@ -1064,6 +1094,13 @@ function AppInner(): React.JSX.Element {
     }
     return Math.max(1, Math.min(WEB_CANVAS_BASE_WIDTH_PX, Math.round(windowWidthPx)));
   }, [windowWidthPx]);
+  const nativeInitialBannerInsetPx = useMemo(
+    () => resolveNativeBannerContentHeightPx({
+      bannerHeightPx: nativeBannerHeightPx,
+      canvasScale: nativeCanvasScale,
+    }),
+    [nativeBannerHeightPx, nativeCanvasScale],
+  );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
   const baseWebUrl = useMemo(() => {
@@ -1071,30 +1108,41 @@ function AppInner(): React.JSX.Element {
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
-    const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
-    const qaParams = __DEV__ && RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
+    const debugParams = (__DEV__ || RUNTIME_QA_BRIDGE_ENABLED) ? '&sttDebug=1&ttsDebug=1' : '';
+    const qaParams = RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
-  }, [nativeAvailable, webLocale]);
+    const rawWebUrl = `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+    return appendNativeRuntimeWebViewParams(rawWebUrl, {
+      nativeBannerPosition: defaultNativeBannerPosition,
+      nativeBannerInsetPx: nativeInitialBannerInsetPx,
+      clientVersion: RUNTIME_CLIENT_INFO.clientVersion,
+      clientBuild: RUNTIME_CLIENT_INFO.clientBuild,
+    });
+  }, [defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
+  const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
+  const rememberCurrentWebUrl = useCallback((nextUrl?: string) => {
+    const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
+    if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return;
+    lastWebViewUrlRef.current = normalizedUrl;
+  }, []);
+  useEffect(() => {
+    lastWebViewUrlRef.current = baseWebUrl;
+    setDebugRemountWebUrl('');
+  }, [baseWebUrl]);
   const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
   const webUrl = useMemo(() => {
-    if (!baseWebUrl) return '';
-    if (!shouldDisableWebViewCache) return baseWebUrl;
-    try {
-      const url = new URL(baseWebUrl);
-      url.searchParams.set('__nativeWebViewSession', `${devWebViewRequestScopeRef.current}-${webViewMountToken}`);
-      return appendNgrokBrowserWarningBypass(url.toString());
-    } catch {
-      const separator = baseWebUrl.includes('?') ? '&' : '?';
-      return appendNgrokBrowserWarningBypass(
-        `${baseWebUrl}${separator}__nativeWebViewSession=${encodeURIComponent(`${devWebViewRequestScopeRef.current}-${webViewMountToken}`)}`,
-      );
-    }
-  }, [baseWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+    const requestedWebUrl = debugRemountWebUrl || baseWebUrl;
+    if (!requestedWebUrl) return '';
+    if (!shouldDisableWebViewCache) return requestedWebUrl;
+    return appendNativeWebViewSession(
+      requestedWebUrl,
+      `${devWebViewRequestScopeRef.current}-${webViewMountToken}`,
+    );
+  }, [baseWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
   const nativeQaBridgeBootstrapScript = useMemo(
-    () => buildNativeQaBridgeBootstrapScript(__DEV__ && RUNTIME_QA_BRIDGE_ENABLED),
+    () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED),
     [],
   );
   const webViewSource = useMemo(() => {
@@ -1195,19 +1243,12 @@ function AppInner(): React.JSX.Element {
     () => safeAreaInsets.bottom + nativeBottomBannerClearancePx,
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
-  const nativeTranscriptInsetPx = useMemo(
-    () => resolveNativeBannerContentHeightPx({
-      bannerHeightPx: nativeBannerHeightPx,
-      canvasScale: nativeCanvasScale,
-    }),
-    [nativeBannerHeightPx, nativeCanvasScale],
-  );
+  const nativeTranscriptInsetPx = nativeInitialBannerInsetPx;
   const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
   const activeBannerZoneRef = useRef<BannerZone>('list');
   const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
   const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
   const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
-  const nativeBannerTopInsetPx = nativeBannerPosition === 'top' ? nativeTranscriptInsetPx : 0;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
     bannerHeightPx: nativeBannerHeightPx,
@@ -1582,13 +1623,19 @@ function AppInner(): React.JSX.Element {
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
     const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
+    const shouldReserveConversationInset = activeBannerZone === 'conversation'
+      && canRenderNativeBanner
+      && nativeAdsReady
+      && !isNativeMenuOverlayOpen;
     const effectiveBannerPosition: NativeBannerPosition = activeBannerZone === 'conversation'
       ? nativeBannerPosition
       : 'top';
-    const effectiveTopInsetPx = shouldReserveListTopInset
+    const shouldReserveTopInset = shouldReserveListTopInset
+      || (shouldReserveConversationInset && nativeBannerPosition === 'top');
+    const effectiveTopInsetPx = shouldReserveTopInset
       ? nativeTranscriptInsetPx
       : 0;
-    const effectiveBottomInsetPx = activeBannerZone === 'conversation' && !isNativeMenuOverlayOpen
+    const effectiveBottomInsetPx = shouldReserveConversationInset && nativeBannerPosition === 'bottom'
       ? resolveNativeBottomBannerWebInsetPx({
           isIosPlatform: Platform.OS === 'ios',
           bannerContentInsetPx: nativeBannerBottomInsetPx,
@@ -1926,14 +1973,24 @@ function AppInner(): React.JSX.Element {
     }
   }, [clearAuthDispatchRetryTimer, emitAuthToWeb, trustedNativeAuthOrigin]);
 
-  const handleDebugWebViewRemount = useCallback(() => {
+  const handleDebugWebViewRemount = useCallback((requestedUrl?: string) => {
+    const normalizedRequestedUrl = typeof requestedUrl === 'string' ? requestedUrl.trim() : '';
+    const preservedUrl = shouldPreserveDebugRemountUrl(normalizedRequestedUrl)
+      ? normalizedRequestedUrl
+      : '';
     isPageReadyRef.current = false;
     setLoadError(null);
     setIsNativeMenuOverlayOpen(false);
+    setDebugRemountWebUrl(preservedUrl || lastWebViewUrlRef.current || webUrl || baseWebUrl);
     setWebViewMountToken((current) => current + 1);
-  }, []);
+  }, [baseWebUrl, webUrl]);
 
   const handleWebMessage = useCallback((event: WebViewMessageEvent) => {
+    const sourceUrl = typeof (event.nativeEvent as { url?: unknown }).url === 'string'
+      ? ((event.nativeEvent as { url: string }).url)
+      : '';
+    rememberCurrentWebUrl(sourceUrl);
+
     let parsed: WebViewCommand | null = null;
     try {
       parsed = JSON.parse(event.nativeEvent.data) as WebViewCommand;
@@ -1944,6 +2001,7 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
+      rememberCurrentWebUrl(url);
       if (typeof parsed.payload?.canGoBack === 'boolean') {
         setCanWebViewGoBack(parsed.payload.canGoBack);
       }
@@ -1967,12 +2025,12 @@ function AppInner(): React.JSX.Element {
 
     if (parsed.type === 'native_remount_webview') {
       if (!shouldEnableDebugWebViewRemount(WEB_APP_BASE_URL)) return;
-      handleDebugWebViewRemount();
+      handleDebugWebViewRemount(parsed.payload?.url || sourceUrl);
       return;
     }
 
     if (parsed.type === 'native_qa_set_stt_status') {
-      if (!__DEV__) return;
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
       const requestedStatus = typeof parsed.payload?.status === 'string'
         ? parsed.payload.status.trim()
         : '';
@@ -2143,6 +2201,7 @@ function AppInner(): React.JSX.Element {
     handleNativeAuthStart,
     handleNativeStart,
     handleNativeStop,
+    rememberCurrentWebUrl,
     updateSafeAreaPalette,
   ]);
 
@@ -2254,9 +2313,11 @@ function AppInner(): React.JSX.Element {
     if (!initialLoadSettledRef.current) {
       setStartupSplashVisible(true);
     }
-    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
-    updateSafeAreaPalette(event?.nativeEvent?.url);
-  }, [updateSafeAreaPalette, webUrl]);
+    const nextUrl = event?.nativeEvent?.url || webUrl;
+    rememberCurrentWebUrl(nextUrl);
+    setCurrentWebPathname(parseWebPathname(nextUrl));
+    updateSafeAreaPalette(nextUrl);
+  }, [rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
     isPageReadyRef.current = true;
@@ -2264,8 +2325,10 @@ function AppInner(): React.JSX.Element {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
-    setCurrentWebPathname(parseWebPathname(event?.nativeEvent?.url || webUrl));
-    updateSafeAreaPalette(event?.nativeEvent?.url);
+    const nextUrl = event?.nativeEvent?.url || webUrl;
+    rememberCurrentWebUrl(nextUrl);
+    setCurrentWebPathname(parseWebPathname(nextUrl));
+    updateSafeAreaPalette(nextUrl);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
@@ -2273,7 +2336,7 @@ function AppInner(): React.JSX.Element {
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
     if (!initialLoadSettledRef.current) {
@@ -2285,9 +2348,10 @@ function AppInner(): React.JSX.Element {
   }, [webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
+    rememberCurrentWebUrl(navigationState.url);
     setCurrentWebPathname(parseWebPathname(navigationState.url));
     updateSafeAreaPalette(navigationState.url);
-  }, [prepareBannerZoneTransition, updateSafeAreaPalette]);
+  }, [prepareBannerZoneTransition, rememberCurrentWebUrl, updateSafeAreaPalette]);
 
   useEffect(() => {
     if (versionGate.status === 'force_update' && !initialLoadSettledRef.current) {

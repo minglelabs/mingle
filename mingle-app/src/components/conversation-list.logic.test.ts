@@ -6,6 +6,7 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
@@ -45,7 +46,7 @@ function buildConversationSummary(
     createdAt: overrides.createdAt || "2026-04-12T09:00:00.000Z",
     updatedAt: overrides.updatedAt || "2026-04-12T10:00:00.000Z",
     pausedAt: Object.prototype.hasOwnProperty.call(overrides, "pausedAt")
-      ? overrides.pausedAt
+      ? (overrides.pausedAt as string | null)
       : "2026-04-12T10:00:00.000Z",
   };
 }
@@ -226,6 +227,29 @@ describe("conversation-list logic", () => {
       status: "active",
       pausedAt: null,
     }));
+  });
+
+  it("finds the active conversation that should be restored after native STT remount", () => {
+    const paused = buildConversationSummary({
+      id: "conv-paused",
+      status: "paused",
+    });
+    const deletingActive = buildConversationSummary({
+      id: "conv-deleting",
+      status: "active",
+      pausedAt: null,
+    });
+    const live = buildConversationSummary({
+      id: "conv-live",
+      status: "active",
+      pausedAt: null,
+    });
+
+    expect(findNativeSttRestoreConversation([
+      paused,
+      deletingActive,
+      live,
+    ], new Set(["conv-deleting"]))).toBe(live);
   });
 
   it("keeps row actions touch-safe and avatar long-press safe", () => {

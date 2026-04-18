@@ -13,8 +13,8 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.0"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.0"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.1"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.1"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -874,13 +874,13 @@ resolve_devbox_ad_banner_height_px() {
 
 resolve_devbox_admob_app_id_ios() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_IOS || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_IOS"
     return 0
   fi
   printf '%s' "$DEFAULT_ADMOB_APP_ID_IOS"
@@ -888,13 +888,13 @@ resolve_devbox_admob_app_id_ios() {
 
 resolve_devbox_admob_app_id_android() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_APP_ID_ANDROID || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_APP_ID_ANDROID"
     return 0
   fi
   printf '%s' "$DEFAULT_ADMOB_APP_ID_ANDROID"
@@ -902,13 +902,13 @@ resolve_devbox_admob_app_id_android() {
 
 resolve_devbox_admob_banner_unit_id_ios() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_IOS || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS"
     return 0
   fi
   printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_IOS"
@@ -916,13 +916,13 @@ resolve_devbox_admob_banner_unit_id_ios() {
 
 resolve_devbox_admob_banner_unit_id_android() {
   local value=""
+  if is_nonprod_mobile_build; then
+    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
+    return 0
+  fi
   value="$(trim_whitespace "$(read_app_setting_value RN_ADMOB_BANNER_UNIT_ID_ANDROID || true)")"
   if [[ -n "$value" ]]; then
     printf '%s' "$value"
-    return 0
-  fi
-  if is_nonprod_mobile_build; then
-    printf '%s' "$DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_ANDROID"
     return 0
   fi
   printf '%s' "$DEFAULT_ADMOB_BANNER_UNIT_ID_ANDROID"
@@ -4587,6 +4587,7 @@ cmd_mobile() {
   local tunnel_provider=""
   tunnel_provider="$(resolve_tunnel_provider "$tunnel_provider_override")"
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
   local profile_already_saved=0
   case "$active_profile" in
     device)
@@ -4719,6 +4720,7 @@ cmd_up() {
   local mobile_site_override=""
   local mobile_ws_override=""
   local tunnel_provider_override=""
+  local previous_active_device_app_env="${DEVBOX_ACTIVE_DEVICE_APP_ENV:-}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -4749,17 +4751,26 @@ cmd_up() {
   local tunnel_provider=""
   tunnel_provider="$(resolve_tunnel_provider "$tunnel_provider_override")"
   DEVBOX_TUNNEL_PROVIDER="$tunnel_provider"
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$device_app_env"
 
   resolve_vault_paths "$vault_app_override" "$vault_stt_override"
   log "stateless mode: skipping automatic vault -> .env.local sync (.env.local is user-managed)"
   local runtime_app_env_file=""
   local runtime_stt_env_file=""
   local runtime_nextauth_secret=""
+  local runtime_admob_app_id_ios=""
+  local runtime_admob_app_id_android=""
+  local runtime_admob_banner_unit_id_ios=""
+  local runtime_admob_banner_unit_id_android=""
   runtime_app_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-app-runtime-env.XXXXXX")"
   runtime_stt_env_file="$(mktemp "${TMPDIR:-/tmp}/devbox-stt-runtime-env.XXXXXX")"
   write_runtime_env_from_vault_path "app" "$DEVBOX_VAULT_APP_PATH" "$runtime_app_env_file"
   write_runtime_env_from_vault_path "stt" "$DEVBOX_VAULT_STT_PATH" "$runtime_stt_env_file"
   runtime_nextauth_secret="$(resolve_runtime_nextauth_secret "$runtime_app_env_file")"
+  runtime_admob_app_id_ios="$(resolve_devbox_admob_app_id_ios)"
+  runtime_admob_app_id_android="$(resolve_devbox_admob_app_id_android)"
+  runtime_admob_banner_unit_id_ios="$(resolve_devbox_admob_banner_unit_id_ios)"
+  runtime_admob_banner_unit_id_android="$(resolve_devbox_admob_banner_unit_id_android)"
   ensure_workspace_dependencies
 
   local -a pids=()
@@ -4984,6 +4995,7 @@ $(ngrok_plan_capacity_hint)"
   if [[ "$profile" == "device" && "$device_app_env" == "prod" ]]; then
     log "device app env is prod; skipping mingle-app/mingle-stt/tunnel runtime startup"
     rm -f "$runtime_app_env_file" "$runtime_stt_env_file"
+    DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
     return 0
   fi
 
@@ -5044,6 +5056,10 @@ $(ngrok_plan_capacity_hint)"
     NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT" \
     NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
+    RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios" \
+    RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
+    RN_ADMOB_BANNER_UNIT_ID_IOS="$runtime_admob_banner_unit_id_ios" \
+    RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
     MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
     MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
     WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}" \
@@ -5076,6 +5092,10 @@ $(ngrok_plan_capacity_hint)"
       NEXT_PUBLIC_WS_PORT="$DEVBOX_STT_PORT" \
       NEXT_PUBLIC_WS_URL="$DEVBOX_PUBLIC_WS_URL" \
       NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
+      RN_ADMOB_APP_ID_IOS="$runtime_admob_app_id_ios" \
+      RN_ADMOB_APP_ID_ANDROID="$runtime_admob_app_id_android" \
+      RN_ADMOB_BANNER_UNIT_ID_IOS="$runtime_admob_banner_unit_id_ios" \
+      RN_ADMOB_BANNER_UNIT_ID_ANDROID="$runtime_admob_banner_unit_id_android" \
       MINGLE_TEST_API_BASE_URL="$DEVBOX_TEST_API_BASE_URL" \
       MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL" \
       node scripts/run-with-env-local.mjs pnpm --dir rn start --port "$DEVBOX_METRO_PORT"
@@ -5107,6 +5127,7 @@ $(ngrok_plan_capacity_hint)"
 
   cleanup_processes "${pids[@]}"
   trap - INT TERM EXIT
+  DEVBOX_ACTIVE_DEVICE_APP_ENV="$previous_active_device_app_env"
   return "$exit_code"
 }
 
@@ -5358,6 +5379,9 @@ EOF
     MINGLE_UI_QA_IOS_XCODE_SIGNING_ID="$ios_xcode_signing_id" \
     MINGLE_UI_QA_IOS_UPDATED_WDA_BUNDLE_ID="$ios_updated_wda_bundle_id" \
     MINGLE_UI_QA_ANDROID_SERIAL="$android_serial" \
+    MINGLE_UI_QA_ANDROID_METRO_HOST_PORT="$DEVBOX_METRO_PORT" \
+    MINGLE_UI_QA_ANDROID_WEB_HOST_PORT="$DEVBOX_WEB_PORT" \
+    MINGLE_UI_QA_IOS_METRO_HOST_PORT="$DEVBOX_METRO_PORT" \
       pnpm "${command_args[@]}"
   )
 }

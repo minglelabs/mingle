@@ -93,7 +93,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 51
+def appVersionCode = 54
 def appVersionName = "1.1.1"
 
 def normalizeRuntimeConfigValue = { String value ->
@@ -322,6 +322,7 @@ android {
         release {
             // Keep local device release installs working when no upload key is configured.
             signingConfig hasUploadSigning ? signingConfigs.upload : signingConfigs.debug
+            debuggable runtimeQaBridgeEnabled == "1"
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
