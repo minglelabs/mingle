@@ -114,6 +114,16 @@ describe('resolveDisplayedLivePhoneDemoAdBannerPosition', () => {
     })).toBe('bottom')
   })
 
+  it('lets an in-session native user selection override the URL query', () => {
+    expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
+      preferredPosition: 'bottom',
+      nativeLayoutPosition: 'bottom',
+      queryPosition: 'bottom',
+      sessionOverridePosition: 'top',
+      isNativeAppRuntime: true,
+    })).toBe('top')
+  })
+
   it('still respects the persisted preference in native runtime when the URL carries no banner position', () => {
     expect(resolveDisplayedLivePhoneDemoAdBannerPosition({
       preferredPosition: 'top',

@@ -19,6 +19,11 @@
    Fix: The web position resolver now prefers the URL-provided native banner position before cached native layout position, so a stale list-zone `top` event cannot override the runtime URL. The conversation layout also only trusts native layout inset values when they are positive and match the active displayed position; otherwise it falls back to the URL-provided top/bottom inset. This preserves the Android bottom spacer and scroll-to-bottom offset even if the conversation-zone banner event is delayed or missed.
    Status: Fixed in-thread on 2026-04-18 for Android internal-test build `1.1.1 (54)` and iOS TestFlight build `1.1.1 (52)`.
 
+4. **Native banner position toggles could desynchronize from the URL fallback**
+   Problem: After the Android stale-layout fix, native runtime preferred the URL-provided banner position over persisted web preferences. That protected startup from stale localStorage, but an in-session user tap on the top/bottom banner setting could no longer override `nativeBannerPosition` from the URL. The web spacer math could stay on the URL's bottom setting while RN moved the physical banner to top.
+   Fix: The room now tracks an explicit session-level banner-position override. Native runtime resolves position as session override → URL query → persisted preference → layout event, and the RN `native_set_ad_banner_position` command also prefers the session override and URL query before stored fallback values. Startup remains protected from stale storage while current user taps take effect immediately.
+   Status: Fixed in-thread on 2026-04-18 before merging the 1.1.1 QA branch.
+
 ## 2026-04-17 Android/iOS 1.1.1 Devbox Local QA
 
 ### `2026-04-17-devbox-1.1.1-local-qa` | UI/UX issues found

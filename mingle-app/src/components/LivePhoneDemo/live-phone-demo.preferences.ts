@@ -72,6 +72,7 @@ export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
   nativeLayoutPosition: LivePhoneDemoAdBannerPosition | null
   queryPosition: LivePhoneDemoAdBannerPosition | null
   isNativeAppRuntime?: boolean
+  sessionOverridePosition?: LivePhoneDemoAdBannerPosition | null
 }): LivePhoneDemoAdBannerPosition | null {
   // The URL query carries the configured banner position at load time and is
   // stable across zones. The native layout event flips to 'top' while the
@@ -83,11 +84,13 @@ export function resolveDisplayedLivePhoneDemoAdBannerPosition(input: {
   // `mingle_demo_ad_banner_position` in Android WebView localStorage (e.g.,
   // a user who toggled 'top' in an earlier build) must not override the
   // current URL's `nativeBannerPosition`. We therefore prefer the query
-  // ahead of the persisted preference whenever the native bridge is active.
+  // ahead of the persisted preference whenever the native bridge is active,
+  // while still letting an explicit in-session user toggle win immediately.
   // Standalone web (no nativeUi bridge) keeps the persisted preference on top
   // so an explicit user choice still wins.
   if (input.isNativeAppRuntime) {
-    return input.queryPosition
+    return input.sessionOverridePosition
+      ?? input.queryPosition
       ?? input.preferredPosition
       ?? input.nativeLayoutPosition
       ?? null

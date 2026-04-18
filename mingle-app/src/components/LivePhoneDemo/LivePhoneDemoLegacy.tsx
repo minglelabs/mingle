@@ -869,6 +869,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
+  const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [deleteConversationDialogOpen, setDeleteConversationDialogOpen] = useState(false)
@@ -977,6 +978,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
     queryPosition: nativeBannerPositionFromQuery,
     isNativeAppRuntime,
+    sessionOverridePosition: sessionAdBannerPositionOverride,
   })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
@@ -1707,7 +1709,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
   const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
-    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) return
+    setSessionAdBannerPositionOverride(nextAdBannerPosition)
+    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) {
+      setAdBannerPosition(nextAdBannerPosition)
+      return
+    }
     setAdBannerPosition(nextAdBannerPosition)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride({
@@ -1749,8 +1755,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     if (!isNativeApp()) return
 
-    const nextBannerPosition = adBannerPosition
+    const nextBannerPosition = sessionAdBannerPositionOverride
       || nativeBannerPositionFromQuery
+      || adBannerPosition
     if (!nextBannerPosition) return
     const command: NativeSetAdBannerPositionCommand = {
       type: 'native_set_ad_banner_position',
@@ -1762,7 +1769,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner position unchanged.
     }
-  }, [adBannerPosition, nativeBannerPositionFromQuery])
+  }, [adBannerPosition, nativeBannerPositionFromQuery, sessionAdBannerPositionOverride])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
