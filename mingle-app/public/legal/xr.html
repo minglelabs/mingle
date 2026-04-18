@@ -1959,6 +1959,68 @@
         display: none;
       }
 
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-tool-items--viral-loop {
+        gap: 0;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition {
+        position: relative;
+        left: auto;
+        top: auto;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: clamp(42px, 6.4vh, 58px);
+        margin: 2px 0;
+        padding-left: 38px;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition svg {
+        display: none;
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition::before {
+        content: "";
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        left: 16px;
+        width: 3px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, rgba(251, 188, 50, 0.95) 0%, rgba(249, 115, 22, 0.9) 100%);
+        box-shadow: 0 8px 16px rgba(245, 158, 11, 0.14);
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition::after {
+        content: "";
+        position: absolute;
+        bottom: 4px;
+        left: 11px;
+        width: 10px;
+        height: 10px;
+        border-right: 3px solid rgba(249, 115, 22, 0.9);
+        border-bottom: 3px solid rgba(249, 115, 22, 0.9);
+        transform: rotate(45deg);
+      }
+
+      html.is-mobile-viewport .slide-side-media--strategy-steps.slide-side-media--viral-loop
+        .slide-step-transition-label {
+        position: static;
+        width: auto;
+        max-width: calc(100% - 8px);
+        padding: 6px 10px 7px;
+        font-size: clamp(0.72rem, 2.65vw, 0.84rem);
+        line-height: 1.24;
+        letter-spacing: 0;
+        text-align: left;
+        transform: none;
+      }
+
       html.is-mobile-viewport .slide-solution-columns {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
