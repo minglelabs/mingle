@@ -56,6 +56,17 @@ describe('release-target-config', () => {
     });
   });
 
+  it('rejects legacy production endpoints for a v1_1_2 release build', () => {
+    expect(validateReleaseTargetConfig({
+      releaseTarget: 'v1_1_2',
+      siteUrl: 'https://mingle-app-v112.vercel.app',
+      wsUrl: DEFAULT_LEGACY_PRODUCTION_WS_URL,
+    })).toEqual({
+      ok: false,
+      error: `NEXT_PUBLIC_WS_URL must point to a dedicated 1.1.2 STT deployment, not the legacy production host (${DEFAULT_LEGACY_PRODUCTION_WS_URL}).`,
+    });
+  });
+
   it('parses boolean env values', () => {
     expect(parseBooleanEnv('true')).toBe(true);
     expect(parseBooleanEnv('on')).toBe(true);

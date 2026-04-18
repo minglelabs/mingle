@@ -91,7 +91,7 @@ loader, which preserves the app schema parameter behavior.
 
 The web deployment can keep `NEXT_PUBLIC_API_NAMESPACE` empty. For mobile
 release builds, keep the mobile app version and API namespace aligned. For
-example, app version `1.1.1` must use `ios/v1.1.1` and `android/v1.1.1`.
+example, app version `1.1.2` must use `ios/v1.1.2` and `android/v1.1.2`.
 
 ## Smoke Checks
 

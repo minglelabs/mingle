@@ -11,7 +11,7 @@ export type MingleClientReleaseVariant =
   | 'android_v1_1_0'
   | 'ios_v1_1_1'
   | 'android_v1_1_1'
-export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'unknown'
+export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'v1_1_2' | 'unknown'
 
 const FIRST_V1_1_0_VERSION: readonly [number, number, number] = [1, 1, 0]
 const FIRST_V1_1_1_VERSION: readonly [number, number, number] = [1, 1, 1]
@@ -27,6 +27,9 @@ export function resolveMingleReleaseTarget(rawReleaseTarget: string): MingleRele
   }
   if (normalizedReleaseTarget === 'v1_1_1') {
     return 'v1_1_1'
+  }
+  if (normalizedReleaseTarget === 'v1_1_2') {
+    return 'v1_1_2'
   }
   if (normalizedReleaseTarget === 'legacy_1_0_11') {
     return 'legacy_1_0_11'
@@ -88,6 +91,9 @@ export function resolveDefaultMingleClientReleaseVariant(): MingleClientReleaseV
     return 'default_v1_1_0'
   }
   if (releaseTarget === 'v1_1_1') {
+    return 'default_v1_1_1'
+  }
+  if (releaseTarget === 'v1_1_2') {
     return 'default_v1_1_1'
   }
 

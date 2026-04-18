@@ -3,10 +3,16 @@ import {
   parseApiNamespaceVersion,
 } from './apiNamespace';
 
-export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'unknown';
+export type MingleReleaseTarget = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'v1_1_2' | 'unknown';
 
 const V1_1_0_VERSION: readonly [number, number, number] = [1, 1, 0];
 const V1_1_1_VERSION: readonly [number, number, number] = [1, 1, 1];
+const V1_1_2_VERSION: readonly [number, number, number] = [1, 1, 2];
+const DEDICATED_RELEASE_TARGET_LABELS = {
+  v1_1_0: '1.1.0',
+  v1_1_1: '1.1.1',
+  v1_1_2: '1.1.2',
+} as const;
 
 export const DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL = 'https://mingle-app-xi.vercel.app';
 export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle.up.railway.app';
@@ -73,6 +79,9 @@ export function resolveMingleReleaseTarget(apiNamespace: string): MingleReleaseT
   const parsedNamespace = parseApiNamespaceVersion(apiNamespace);
   if (!parsedNamespace) return 'unknown';
 
+  if (compareApiNamespaceVersions(parsedNamespace.version, V1_1_2_VERSION) >= 0) {
+    return 'v1_1_2';
+  }
   if (compareApiNamespaceVersions(parsedNamespace.version, V1_1_1_VERSION) >= 0) {
     return 'v1_1_1';
   }
@@ -99,10 +108,14 @@ export function validateDedicatedReleaseTargetConfig(
   }
 
   const releaseTarget = resolveMingleReleaseTarget(input.apiNamespace);
-  if (releaseTarget !== 'v1_1_0' && releaseTarget !== 'v1_1_1') {
+  if (
+    releaseTarget !== 'v1_1_0'
+    && releaseTarget !== 'v1_1_1'
+    && releaseTarget !== 'v1_1_2'
+  ) {
     return { ok: true };
   }
-  const releaseTargetLabel = releaseTarget === 'v1_1_1' ? '1.1.1' : '1.1.0';
+  const releaseTargetLabel = DEDICATED_RELEASE_TARGET_LABELS[releaseTarget];
 
   const normalizedWebAppBaseUrl = normalizeUrlForComparison(input.webAppBaseUrl);
   const normalizedWsUrl = normalizeUrlForComparison(input.wsUrl);
