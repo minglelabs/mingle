@@ -3787,14 +3787,20 @@
         const primaryDelta = isHorizontalIntent ? deltaX : deltaY;
 
         if (isMobileViewport()) {
-          if (isHorizontalIntent) {
-            return deltaX < 0 ? 1 : -1;
-          }
-
-          return deltaY > 0 ? 1 : -1;
+          return primaryDelta > 0 ? 1 : -1;
         }
 
         return primaryDelta < 0 ? 1 : -1;
+      }
+
+      function wheelStepForDelta(deltaX, deltaY) {
+        const isHorizontalIntent = Math.abs(deltaX) >= Math.abs(deltaY);
+
+        if (isHorizontalIntent) {
+          return deltaX > 0 ? 1 : -1;
+        }
+
+        return deltaY < 0 ? 1 : -1;
       }
 
       function deckWidth() {
@@ -3968,7 +3974,7 @@
         "wheel",
         (event) => {
           const primaryDelta =
-            Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+            Math.abs(event.deltaX) >= Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
 
           if (wheelLock || Math.abs(primaryDelta) < 12) {
             return;
@@ -3979,11 +3985,7 @@
             wheelLock = false;
           }, 700);
 
-          if (primaryDelta > 0) {
-            next();
-          } else {
-            previous();
-          }
+          move(wheelStepForDelta(event.deltaX, event.deltaY));
         },
         { passive: true }
       );
