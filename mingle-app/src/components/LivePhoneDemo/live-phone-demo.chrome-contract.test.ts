@@ -13,10 +13,10 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.chrome-contract";
 
 describe("live-phone-demo chrome contracts", () => {
-  it("keeps the language control visually recognizable as a dropdown", () => {
+  it("keeps the language control visually recognizable as a selector dialog", () => {
     expect(LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA).toBe("live-demo-language-button");
     expect(LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA).toBe("live-demo-language-chevron");
-    expect(LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP).toBe("menu");
+    expect(LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP).toBe("dialog");
     expect(LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME).toContain("min-h-[38px]");
     expect(LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME).toContain("border border-gray-200");
   });

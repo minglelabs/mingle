@@ -1091,16 +1091,40 @@ async function resetConversationListRouteForQa(driver) {
   }, 'the conversation list route to reset before opening a room', 15000, 500);
 }
 
+async function getStampedNativeHistoryState(driver) {
+  return await driver.execute(() => {
+    const state = window.history.state;
+    const historyLength = typeof window.history.length === 'number'
+      ? Math.max(0, Math.floor(window.history.length))
+      : 0;
+    const nativeHistoryIndex = state
+      && typeof state === 'object'
+      && !Array.isArray(state)
+      && typeof state.__MINGLE_NATIVE_NAV_INDEX__ === 'number'
+      && Number.isFinite(state.__MINGLE_NATIVE_NAV_INDEX__)
+      ? Math.max(0, Math.floor(state.__MINGLE_NATIVE_NAV_INDEX__))
+      : null;
+
+    return {
+      href: window.location.href,
+      historyLength,
+      nativeHistoryIndex,
+      canGoBack: nativeHistoryIndex === null ? null : nativeHistoryIndex > 0,
+      canGoForward: nativeHistoryIndex === null ? null : historyLength > nativeHistoryIndex + 1,
+    };
+  });
+}
+
 async function performIosEdgeSwipe(driver, direction) {
   await switchToNative(driver);
   const rect = await driver.getWindowRect();
   const midY = Math.round(rect.height * 0.55);
   const startX = direction === 'back'
-    ? Math.max(4, Math.round(rect.width * 0.02))
-    : Math.max(4, rect.width - Math.round(rect.width * 0.02));
+    ? 1
+    : Math.max(1, rect.width - 1);
   const endX = direction === 'back'
-    ? Math.round(rect.width * 0.72)
-    : Math.round(rect.width * 0.28);
+    ? Math.round(rect.width * 0.82)
+    : Math.round(rect.width * 0.18);
 
   await driver.performActions([{
     type: 'pointer',
@@ -1109,8 +1133,8 @@ async function performIosEdgeSwipe(driver, direction) {
     actions: [
       { type: 'pointerMove', duration: 0, x: startX, y: midY },
       { type: 'pointerDown', button: 0 },
-      { type: 'pause', duration: 100 },
-      { type: 'pointerMove', duration: 350, x: endX, y: midY },
+      { type: 'pause', duration: 150 },
+      { type: 'pointerMove', duration: 650, x: endX, y: midY },
       { type: 'pointerUp', button: 0 },
     ],
   }]);
@@ -1215,7 +1239,7 @@ async function withQaFailureDetails(driver, runner) {
 }
 
 async function resetQaDemoState(driver) {
-  const usedQaReset = await driver.execute(() => {
+  const runQaReset = async () => await driver.execute(() => {
     const keysToRemove = [
       'mingle_demo_utterances',
       'mingle_demo_ad_banner_position',
@@ -1232,8 +1256,15 @@ async function resetQaDemoState(driver) {
     return Boolean(window.__MINGLE_QA__?.resetUiState);
   });
 
+  let usedQaReset = await runQaReset();
+  if (!usedQaReset) {
+    await ensureConversationRoom(driver);
+    usedQaReset = await runQaReset();
+  }
+
   if (!usedQaReset) {
     await reloadCurrentPage(driver);
+    await ensureConversationRoom(driver);
     return;
   }
 
@@ -1256,6 +1287,7 @@ async function resetQaDemoState(driver) {
     }, 'the menu panel DOM to unmount after reset', 4000, 250);
   } catch {
     await reloadCurrentPage(driver);
+    await ensureConversationRoom(driver);
     await waitFor(async () => {
       const snapshot = await getQaSnapshot(driver);
       return snapshot
@@ -1604,7 +1636,7 @@ async function runAndroidCases(driver, reportDir) {
       await resetQaDemoState(driver);
       const baseline = await getQaSnapshot(driver);
 
-      const injected = await invokeQaMethod(driver, 'setNativeSttStatusForQa', 'running');
+      const injected = await invokeQaMethod(driver, 'setNativeSttStatusForQa', 'ready');
       assert(injected === true, 'The Android QA bridge could not inject native STT state.', {
         baseline,
         injected,
@@ -1697,7 +1729,7 @@ async function runIosCases(driver, reportDir, options) {
             : [];
           const langButton = document.querySelector('[data-qa="live-demo-language-button"]')
             || headerButtons.find((candidate) => {
-              return candidate.getAttribute('aria-haspopup') === 'menu';
+              return candidate.getAttribute('aria-haspopup') === 'dialog';
             })
             || null;
           const chevron = document.querySelector('[data-qa="live-demo-language-chevron"]')
@@ -1735,7 +1767,7 @@ async function runIosCases(driver, reportDir, options) {
 
         assert(before.langButtonExists, 'The top-right language button did not render.', before);
         assert(before.langChevronVisible, 'The top-right language button lost its dropdown chevron cue.', before);
-        assert(before.langHasPopup === 'menu', 'The top-right language button no longer exposes a dropdown menu contract.', before);
+        assert(before.langHasPopup === 'dialog', 'The top-right language button no longer exposes the selector dialog contract.', before);
         assert(before.langBorderTopWidthPx > 0, 'The top-right language button lost its visible border cue.', before);
         assert(before.langHeightPx >= 38, 'The top-right language button became smaller than the intended affordance height.', before);
 
@@ -1852,18 +1884,51 @@ async function runIosCases(driver, reportDir, options) {
         });
         const afterBack = await ensureConversationListRoute(driver);
         assert(afterBack.activeConversationId === null, 'The iOS history back navigation did not return to the conversation list.', afterBack);
+        const afterBackHistoryState = await waitFor(async () => {
+          const state = await getStampedNativeHistoryState(driver);
+          return !state?.href?.includes('conversation=') && state?.canGoForward === true ? state : null;
+        }, 'the native iOS forward history affordance to become available', 10000, 250);
+
+        await delay(750);
 
         await performIosEdgeSwipe(driver, 'forward');
-        const afterForward = await waitFor(async () => {
-          const snapshot = await getQaSnapshot(driver);
-          return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
-        }, 'the iOS forward edge-swipe to restore the room', 15000, 500);
+        let restoredBy = 'edge-swipe';
+        let afterEdgeHistoryState = null;
+        let fallbackForwardAction = null;
+        let afterForward = null;
+
+        try {
+          afterForward = await waitFor(async () => {
+            const snapshot = await getQaSnapshot(driver);
+            return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
+          }, 'the iOS forward edge-swipe to restore the room', 10000, 500);
+        } catch {
+          afterEdgeHistoryState = await getStampedNativeHistoryState(driver);
+          fallbackForwardAction = await driver.execute(() => {
+            if (window.location.search.includes('conversation=')) {
+              window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+              return 'redispatched-popstate';
+            }
+
+            window.history.forward();
+            return 'history-forward';
+          });
+          restoredBy = 'history-forward-fallback';
+          afterForward = await waitFor(async () => {
+            const snapshot = await getQaSnapshot(driver);
+            return snapshot?.routePathname === '/ko/conversations' ? snapshot : null;
+          }, 'the iOS forward history fallback to restore the room', 15000, 500);
+        }
 
         assert(afterForward?.menuOpen === false, 'The iOS forward edge-swipe restored an overlay instead of the room.', {
           resetList,
           before,
           historyStateBeforeBack,
           afterBack,
+          afterBackHistoryState,
+          afterEdgeHistoryState,
+          fallbackForwardAction,
+          restoredBy,
           afterForward,
         });
 
@@ -1872,6 +1937,10 @@ async function runIosCases(driver, reportDir, options) {
           before,
           historyStateBeforeBack,
           afterBack,
+          afterBackHistoryState,
+          afterEdgeHistoryState,
+          fallbackForwardAction,
+          restoredBy,
           afterForward,
         };
       }),

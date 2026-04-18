@@ -71,6 +71,7 @@ import {
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
+  isNativeUiBridgeEnabledFromSearch,
   parseNativeUiBannerLayoutDetail,
   readCachedNativeUiBannerLayout,
   resolveNativeBottomBarBannerClearancePx,
@@ -93,6 +94,7 @@ import {
 import {
   LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA,
   LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA,
+  LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP,
   LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME,
   LIVE_DEMO_MENU_OVERLAY_CLASSNAME,
   LIVE_DEMO_MENU_SCROLL_CONTAINER_CLASSNAME,
@@ -109,6 +111,10 @@ import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
+import {
+  buildNativeRemountRestoreUrl,
+  rememberNativeRemountRestoreConversation,
+} from '@/lib/native-remount-restore'
 
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
@@ -198,6 +204,8 @@ type LivePhoneDemoQaSnapshot = {
   effectiveNativeBottomContentInsetPx: number
   effectiveNativeBottomBannerInsetPx: number
   nativeBottomBarClearancePx: number
+  nativeChatTopSpacerPx: number
+  nativeChatBottomSpacerPx: number
   headerHeightPx: number
   bottomBarHeightPx: number
   chatPaddingTopPx: number
@@ -284,6 +292,14 @@ function TranslationModelBadgeChip({ badge }: { badge: TranslationModelBadge }) 
 function isNativeApp(): boolean {
   return typeof window !== 'undefined'
     && typeof window.ReactNativeWebView?.postMessage === 'function'
+}
+
+function isNativeUiRuntimeSignalPresent(): boolean {
+  return typeof window !== 'undefined'
+    && (
+      isNativeApp()
+      || isNativeUiBridgeEnabledFromSearch(window.location.search || '')
+    )
 }
 
 function isNativeIosAppRuntime(): boolean {
@@ -433,6 +449,13 @@ export function resolveNativeBottomBannerOverlayInsetPx(input: {
 
   if (safeReportedBottomInsetPx <= 0 || safeBottomBarClearancePx <= 0) {
     return fallbackInsetPx
+  }
+
+  if (
+    safeEstimatedBottomBannerInsetPx > 0
+    && safeReportedBottomInsetPx <= safeEstimatedBottomBannerInsetPx + 8
+  ) {
+    return safeReportedBottomInsetPx
   }
 
   const derivedOverlayInsetPx = safeReportedBottomInsetPx - safeBottomBarClearancePx
@@ -1013,6 +1036,9 @@ type NativeSetBottomBarClearanceCommand = {
 
 type NativeRemountWebViewCommand = {
   type: 'native_remount_webview'
+  payload?: {
+    url?: string
+  }
 }
 
 type NativeQaSetSttStatusCommand = {
@@ -1174,6 +1200,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
+  const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [isSilenceFinalizeSliderLocked, setIsSilenceFinalizeSliderLocked] = useState(false)
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false)
   const [deleteConversationDialogOpen, setDeleteConversationDialogOpen] = useState(false)
@@ -1326,6 +1353,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     preferredPosition: adBannerPosition,
     nativeLayoutPosition: normalizeLivePhoneDemoAdBannerPosition(nativeBannerLayout?.position),
     queryPosition: nativeBannerPositionFromQuery,
+    isNativeAppRuntime,
+    sessionOverridePosition: sessionAdBannerPositionOverride,
   })
   const selectedTranslationModelOption = useMemo(
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
@@ -1504,11 +1533,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [onSpeechLanguagesChange, speechLanguages])
 
   useEffect(() => {
-    if (!isNativeApp()) return
+    if (typeof window === 'undefined') return
 
-    const nativeRuntimeTimerId = window.setTimeout(() => {
+    const syncNativeRuntime = () => {
+      if (!isNativeUiRuntimeSignalPresent()) return
       setIsNativeAppRuntime(true)
-    }, 0)
+    }
+
+    syncNativeRuntime()
+    const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0)
+    const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250)
 
     const windowWithUpdate = window as NativeAppUpdateWindow
     const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS)
@@ -1525,6 +1559,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     return () => {
       window.clearTimeout(nativeRuntimeTimerId)
+      window.clearTimeout(nativeRuntimeRetryTimerId)
       window.clearTimeout(nativeUpdateTimerId)
       window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener)
     }
@@ -2126,10 +2161,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleDebugWebViewRemountMenuItemPress = useCallback(() => {
     if (!isNativeApp()) return
 
+    if (conversationId) {
+      rememberNativeRemountRestoreConversation(conversationId)
+    }
     postNativeQaCommand({
       type: 'native_remount_webview',
+      payload: {
+        url: buildNativeRemountRestoreUrl(window.location.href, conversationId),
+      },
     } satisfies NativeRemountWebViewCommand)
-  }, [])
+  }, [conversationId])
 
   const handleMenuButtonPress = useCallback(() => {
     closeLanguageSelector({ syncHistory: 'replace' })
@@ -2182,7 +2223,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [clearAccountPreferencesSyncTimer, syncAccountPreferencesOverride])
 
   const handleAdBannerPositionSelect = useCallback((nextAdBannerPosition: LivePhoneDemoAdBannerPosition) => {
-    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) return
+    setSessionAdBannerPositionOverride(nextAdBannerPosition)
+    if (latestAccountPreferencesRef.current.adBannerPosition === nextAdBannerPosition) {
+      setAdBannerPosition(nextAdBannerPosition)
+      return
+    }
     setAdBannerPosition(nextAdBannerPosition)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride({
@@ -2257,8 +2302,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!enableNativeBannerBridge || !isVisible) return
     if (!isNativeApp()) return
 
-    const nextBannerPosition = adBannerPosition
+    const nextBannerPosition = sessionAdBannerPositionOverride
       || nativeBannerPositionFromQuery
+      || adBannerPosition
     if (!nextBannerPosition) return
     const command: NativeSetAdBannerPositionCommand = {
       type: 'native_set_ad_banner_position',
@@ -2270,7 +2316,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } catch {
       // Ignore bridge errors and leave the native banner position unchanged.
     }
-  }, [adBannerPosition, enableNativeBannerBridge, isVisible, nativeBannerPositionFromQuery])
+  }, [adBannerPosition, enableNativeBannerBridge, isVisible, nativeBannerPositionFromQuery, sessionAdBannerPositionOverride])
 
   const flushAccountPreferencesSync = useCallback(() => {
     if (!shouldScheduleAccountPreferencesSync({
@@ -4064,7 +4110,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [closeMenuPanel, nativeAppUpdate?.updateUrl])
 
   useEffect(() => {
-    if (!isNativeApp()) return
+    if (typeof window === 'undefined') return
 
     const cachedBannerLayout = readCachedNativeUiBannerLayout(window)
     if (cachedBannerLayout) {
@@ -4334,8 +4380,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isCenteredMenuLayout = viewportWidthPx >= 640
   const nativeTopInsetPxFromQuery = useNativeInsetPx('nativeTopInsetPx')
   const nativeBottomInsetPxFromQuery = useNativeInsetPx('nativeBottomInsetPx')
-  const nativeTopInsetPx = nativeBannerLayout?.topInsetPx ?? nativeTopInsetPxFromQuery
-  const nativeBottomInsetPx = nativeBannerLayout?.bottomInsetPx ?? nativeBottomInsetPxFromQuery
+  // Treat a layout-reported 0 as "no inset for this edge right now" so the
+  // URL query fallback still drives conversation spacer/scroll-to-bottom
+  // math before the conversation-zone banner_layout event arrives. Without
+  // this, `0 ?? query` short-circuits to 0 and leaves the transcript glued
+  // to the banner on Android where the list-zone emit fires first.
+  const nativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.topInsetPx)
+    : nativeTopInsetPxFromQuery
+  const nativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
+    ? (nativeBannerLayout!.bottomInsetPx)
+    : nativeBottomInsetPxFromQuery
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx)
   const effectiveNativeTopInsetPx = isNativeAppRuntime && displayedAdBannerPosition === 'top'
     ? resolveEffectiveNativeBannerInsetPx(nativeTopInsetPx, estimatedNativeBannerInsetPx)
@@ -4358,8 +4413,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     bottomBannerInsetPx: effectiveNativeBottomBannerInsetPx,
   })
   const copyToastBottomOffsetPx = scrollToBottomButtonBottomPx + SCROLL_TO_BOTTOM_BUTTON_SIZE_PX + 12
-  const chatPaddingTop = effectiveNativeTopInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeTopInsetPx}px)` : '0.625rem'
-  const chatPaddingBottom = effectiveNativeBottomBannerInsetPx > 0 ? `calc(0.625rem + ${effectiveNativeBottomBannerInsetPx}px)` : '0.625rem'
+  const nativeChatTopSpacerPx = Math.max(0, Math.round(effectiveNativeTopInsetPx))
+  const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
+  const chatPaddingTop = '0.625rem'
+  const chatPaddingBottom = '0.625rem'
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -4437,6 +4494,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           effectiveNativeBottomContentInsetPx,
           effectiveNativeBottomBannerInsetPx,
           nativeBottomBarClearancePx: Math.max(0, Math.round(nativeBottomBarClearancePx ?? 0)),
+          nativeChatTopSpacerPx,
+          nativeChatBottomSpacerPx,
           headerHeightPx,
           bottomBarHeightPx,
           chatPaddingTopPx,
@@ -4472,6 +4531,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         persistedInputModeRef.current = 'voice'
         setIsComposerOpen(false)
         setAdBannerPosition('bottom')
+        setSessionAdBannerPositionOverride('bottom')
         closeMenuPanel()
         try {
           localStorage.removeItem(LS_KEY_AD_BANNER_POSITION)
@@ -4489,6 +4549,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       },
       setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => {
         setAdBannerPosition(nextPosition)
+        setSessionAdBannerPositionOverride(nextPosition)
         try {
           localStorage.setItem(LS_KEY_AD_BANNER_POSITION, nextPosition)
         } catch {
@@ -4509,8 +4570,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       },
       remountWebView: () => {
         if (!isNativeAppRuntime) return false
+        if (conversationId) {
+          rememberNativeRemountRestoreConversation(conversationId)
+        }
         return postNativeQaCommand({
           type: 'native_remount_webview',
+          payload: {
+            url: buildNativeRemountRestoreUrl(window.location.href, conversationId),
+          },
         } satisfies NativeRemountWebViewCommand)
       },
       setNativeSttStatusForQa: (status: string) => {
@@ -4534,6 +4601,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     closeMenuPanel,
     composerTextareaHeightPx,
     composerTextareaRef,
+    conversationId,
     displayedAdBannerPosition,
     effectiveNativeBottomBannerInsetPx,
     effectiveNativeBottomContentInsetPx,
@@ -4548,6 +4616,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuScreen,
     nativeBannerLayout?.position,
     nativeBottomBarClearancePx,
+    nativeChatBottomSpacerPx,
+    nativeChatTopSpacerPx,
     persistComposerDraft,
     persistedUtteranceCount,
     pushMenuHistoryEntry,
@@ -4615,7 +4685,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 type="button"
                 onClick={handleLanguageSelectorButtonPress}
                 aria-label={roomManagementCopy.languageSelectorTitle}
-                aria-haspopup="dialog"
+                aria-haspopup={LIVE_DEMO_LANGUAGE_TRIGGER_ARIA_HASPOPUP}
                 aria-expanded={langSelectorOpen}
                 className={LIVE_DEMO_LANGUAGE_TRIGGER_CLASSNAME}
                 style={{ backgroundColor: '#ffffff' }}
@@ -5548,6 +5618,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
               }}
             >
+              {nativeChatTopSpacerPx > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none shrink-0"
+                  style={{ height: `${nativeChatTopSpacerPx}px` }}
+                />
+              )}
               {hasOlderUtterances && (
                 <button
                   onClick={handleLoadOlder}
@@ -5642,6 +5719,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 <div className="flex min-h-full flex-col items-center justify-center gap-2 text-center text-red-400">
                   <p className="text-sm">{connectionFailedLabel}</p>
                 </div>
+              )}
+              {nativeChatBottomSpacerPx > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none shrink-0"
+                  style={{ height: `${nativeChatBottomSpacerPx}px` }}
+                />
               )}
             </div>
 
