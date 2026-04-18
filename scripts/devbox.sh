@@ -5029,9 +5029,9 @@ $(ngrok_plan_capacity_hint)"
       set +a
     fi
     normalize_prisma_database_env
-    # Turbopack can fail with EMFILE on large worktrees and degrade into all-route 404.
-    # Use webpack for device testing, but avoid forcing polling watchers because they can
-    # push Next.js into high memory usage on large worktrees and trigger OS SIGKILL.
+    # Turbopack is the default for devbox because webpack's macOS watcher can
+    # wedge after startup on some worktrees and leave every route unresponsive.
+    # Set DEVBOX_NEXT_DEV_BUNDLER=webpack when debugging webpack-specific issues.
     export DEVBOX_WORKTREE_NAME="$DEVBOX_WORKTREE_NAME"
     export DEVBOX_PROFILE="$DEVBOX_PROFILE"
     export DEVBOX_WEB_PORT="$DEVBOX_WEB_PORT"
@@ -5048,7 +5048,7 @@ $(ngrok_plan_capacity_hint)"
     export MINGLE_TEST_WS_URL="$DEVBOX_TEST_WS_URL"
     export WATCHPACK_POLLING="${WATCHPACK_POLLING:-false}"
     export CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-0}"
-    if [[ "${DEVBOX_NEXT_DEV_BUNDLER:-webpack}" == "turbopack" ]]; then
+    if [[ "${DEVBOX_NEXT_DEV_BUNDLER:-turbopack}" == "turbopack" ]]; then
       pnpm exec next dev --port "$DEVBOX_WEB_PORT"
     else
       pnpm exec next dev --webpack --port "$DEVBOX_WEB_PORT"
