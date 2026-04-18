@@ -59,10 +59,13 @@ RN can render a native ad banner overlay with a build-time/env option.
 
 When banner is enabled, RN forwards these query params to web:
 
-- `nativeTopInsetPx`
-- `nativeBottomInsetPx`
+- `nativeListTopInsetPx`
+- `nativeConversationBannerPosition`
+- `nativeConversationTopInsetPx` or `nativeConversationBottomInsetPx`
 
-`LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
+The list and conversation room use separate inset params so the list CTA does not reserve conversation-only
+bottom banner space. `LivePhoneDemo` uses the conversation values to add transcript-safe padding so chat rows are
+not hidden by the banner overlay.
 
 For `scripts/devbox mobile --device-app-env dev` and `scripts/devbox up --profile device --device-app-env dev`,
 devbox forces Google's official sample AdMob app IDs and banner unit IDs. This keeps local release verification

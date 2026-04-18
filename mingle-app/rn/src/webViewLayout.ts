@@ -88,27 +88,35 @@ function appendQueryParams(raw: string, params: URLSearchParams): string {
 export function appendNativeRuntimeWebViewParams(
   raw: string,
   params: {
-    nativeBannerPosition?: NativeRuntimeWebViewBannerPosition | null;
-    nativeBannerInsetPx?: number;
+    nativeConversationBannerPosition?: NativeRuntimeWebViewBannerPosition | null;
+    nativeConversationBannerInsetPx?: number;
+    nativeListTopInsetPx?: number;
     clientVersion?: string;
     clientBuild?: string;
   },
 ): string {
   const query = new URLSearchParams();
-  const nativeBannerPosition =
-    params.nativeBannerPosition === 'top' || params.nativeBannerPosition === 'bottom'
-      ? params.nativeBannerPosition
+  const nativeConversationBannerPosition =
+    params.nativeConversationBannerPosition === 'top' || params.nativeConversationBannerPosition === 'bottom'
+      ? params.nativeConversationBannerPosition
       : null;
-  const nativeBannerInsetPx = normalizePositiveInteger(params.nativeBannerInsetPx);
+  const nativeConversationBannerInsetPx = normalizePositiveInteger(params.nativeConversationBannerInsetPx);
+  const nativeListTopInsetPx = normalizePositiveInteger(params.nativeListTopInsetPx);
   const clientVersion = params.clientVersion?.trim() || '';
   const clientBuild = params.clientBuild?.trim() || '';
 
-  if (nativeBannerPosition) {
-    query.set('nativeBannerPosition', nativeBannerPosition);
-    if (nativeBannerInsetPx > 0) {
+  if (nativeListTopInsetPx > 0) {
+    query.set('nativeListTopInsetPx', String(nativeListTopInsetPx));
+  }
+
+  if (nativeConversationBannerPosition) {
+    query.set('nativeConversationBannerPosition', nativeConversationBannerPosition);
+    if (nativeConversationBannerInsetPx > 0) {
       query.set(
-        nativeBannerPosition === 'top' ? 'nativeTopInsetPx' : 'nativeBottomInsetPx',
-        String(nativeBannerInsetPx),
+        nativeConversationBannerPosition === 'top'
+          ? 'nativeConversationTopInsetPx'
+          : 'nativeConversationBottomInsetPx',
+        String(nativeConversationBannerInsetPx),
       );
     }
   }

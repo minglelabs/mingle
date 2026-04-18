@@ -53,6 +53,15 @@
    Fix: The list now restores a room only from an explicit remount marker or a live native STT status. A `null` status waits for RN's first status event instead of reopening an active room by inference.
    Status: Fixed in-thread on 2026-04-18 before merging the 1.1.1 QA branch.
 
+## 2026-04-18 Admin Feedback Inbox
+
+### `2026-04-18-admin-feedback-inbox` | UI/UX issues found
+
+1. **The admin inbox route would have inherited the mobile WebView canvas and locale redirect**
+   Problem: The root layout wraps app pages in the fixed 400px mobile canvas, and the proxy redirects unlocalized paths to locale-prefixed routes. A desktop admin inbox mounted at `/admin` would therefore either redirect away from the requested path or render as a clipped mobile viewport instead of a usable feedback-management surface.
+   Fix: `/admin` now bypasses locale redirection in the proxy, and `MobileCanvasShell` renders admin routes without the mobile frame while preserving the existing mobile canvas for the app experience.
+   Status: Resolved in-thread.
+
 ## 2026-04-12 iPhone Real-Device QA Follow-Up
 
 ### `2026-04-12-iphone-real-device-ui-qa` | UI/UX issues found
@@ -1264,3 +1273,4 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-04-18-xr-strategy-step-title-nowrap` | The enlarged strategy step titles were wrapping after the title scale change because the separate step-number badge consumed too much horizontal space. The strategy cards now fold the step label into the title text, such as `1단계 - 혼자 쓰는 실시간 번역기`, remove the badge column for those slides only, widen the card group modestly, and keep the titles on one line.
 - `2026-04-18-xr-strategy-step-width-retune` | The strategy step cards were retuned after the widened version visually invaded the left slide copy area. The strategy step container width is now reduced to `clamp(410px, 27vw, 420px)`, and the inline step labels use a colon format such as `1단계: 혼자 쓰는 실시간 번역기` to keep the label compact while preserving the larger title scale.
 - `2026-04-18-xr-network-effect-title-refine` | The XR deck's page 36 differentiation title was refined to `반면, 저희는 소셜링에 집중해 메신저 경험까지 제공합니다`. The updated wording narrows the claim from building the broader social network experience to focusing on socializing and delivering the messenger experience, matching the current slide positioning more closely.
+- `2026-04-18-mingle-1-1-1-conversation-list-bottom-cta-inset` | The `1.1.1` native app started sending a generic `nativeBannerPosition=bottom` and `nativeBottomInsetPx` fallback in the initial WebView URL. The conversation list interpreted that room-only bottom banner fallback as list footer clearance, making the new-conversation CTA much taller than the `1.1.0` layout while conversation rooms still looked correct. The native/web banner contract is now split by zone: list screens receive only `nativeListTopInsetPx`, conversation rooms receive `nativeConversationBannerPosition` plus conversation-specific top/bottom inset fallbacks, and the list CTA keeps a fixed safe-area bottom padding so room banner clearance cannot leak into the list view.

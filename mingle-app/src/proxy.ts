@@ -28,11 +28,17 @@ function pickPreferredLocale(headerValue: string | null): AppLocale {
   return DEFAULT_LOCALE;
 }
 
+export function shouldBypassLocaleRedirect(pathname: string): boolean {
+  const segments = pathname.split("/").filter(Boolean);
+  const first = segments[0];
+  return first === "admin";
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Do not locale-redirect public/static files such as /og-image.png.
-  if (/\.[^/]+$/.test(pathname)) {
+  if (/\.[^/]+$/.test(pathname) || shouldBypassLocaleRedirect(pathname)) {
     return NextResponse.next();
   }
 

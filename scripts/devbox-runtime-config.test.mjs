@@ -110,6 +110,29 @@ write_rn_ios_runtime_xcconfig
   assert.match(contents, /^NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_IOS = ca-app-pub-7057041881494735\/3768106846$/m);
 });
 
+test("iOS runtime xcconfig escapes URL scheme separators without quoting values", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-xcconfig-"));
+  const emptyEnvPath = path.join(tempDir, "empty.env");
+  const xcconfigPath = path.join(tempDir, "devbox.runtime.xcconfig");
+  fs.writeFileSync(emptyEnvPath, "", "utf8");
+
+  runDevboxEval(`
+APP_ENV_FILE="${emptyEnvPath}"
+DEVBOX_VAULT_APP_PATH=""
+DEVBOX_ACTIVE_DEVICE_APP_ENV="prod"
+DEVBOX_SITE_URL="https://example.com"
+DEVBOX_RN_WS_URL="wss://example.com/socket"
+RN_IOS_RUNTIME_XCCONFIG="${xcconfigPath}"
+write_rn_ios_runtime_xcconfig
+`);
+
+  const contents = fs.readFileSync(xcconfigPath, "utf8");
+  assert.match(contents, /^NEXT_PUBLIC_SITE_URL = https:\/\$\(\)\/example\.com$/m);
+  assert.match(contents, /^NEXT_PUBLIC_WS_URL = wss:\/\$\(\)\/example\.com\/socket$/m);
+  assert.doesNotMatch(contents, /^NEXT_PUBLIC_SITE_URL = "https:\/\//m);
+  assert.doesNotMatch(contents, /^NEXT_PUBLIC_WS_URL = "wss:\/\//m);
+});
+
 test("mobile ads app.json generation fails fast when either AdMob app id is empty", () => {
   assert.throws(
     () =>

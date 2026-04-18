@@ -20,6 +20,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Admin Feedback Inbox
+
+The admin inbox is served by the same Next.js app at `/admin`. Configure fixed credentials with server-only environment variables:
+
+```bash
+MINGLE_ADMIN_USERNAME=admin
+MINGLE_ADMIN_PASSWORD=replace-with-a-long-random-password
+```
+
+Admin sessions use an HTTP-only signed cookie with no server-side expiry. Changing `MINGLE_ADMIN_PASSWORD` or `AUTH_SECRET` invalidates existing admin cookies.
+
 ## Live STT/API Integration Test (opt-in)
 
 `pnpm test` runs unit tests only by default.

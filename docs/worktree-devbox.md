@@ -209,6 +209,8 @@ scripts/devbox bootstrap --vault-push
     서버 프로세스 환경변수로 런타임 주입(파일 미기록)
   - `.env.local` 갱신은 devbox가 수행하지 않음(수동 편집 원칙)
   - `mingle-stt` + `mingle-app` 동시 실행
+  - 기본 web dev server는 `next dev`(Turbopack)으로 실행
+    - webpack 동작 확인이 필요하면 `DEVBOX_NEXT_DEV_BUNDLER=webpack`을 붙여 `next dev --webpack`으로 실행 가능
   - `device` 프로필에서 ngrok이 없으면 iTerm/Terminal에 별도 탭/패널로 ngrok 실행 시도
     (실패 시 기존 인라인 실행으로 폴백)
   - `--with-ios-install`, `--with-android-install`, `--with-mobile-install`, `--with-ios-clean-install` 옵션으로
