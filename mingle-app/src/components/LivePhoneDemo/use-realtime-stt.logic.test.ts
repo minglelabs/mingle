@@ -56,12 +56,18 @@ function createLocalStorageMock(seed: Record<string, string> = {}) {
 
 describe('use-realtime-stt pure logic', () => {
   const originalWsUrl = process.env.NEXT_PUBLIC_WS_URL
+  const originalWsPath = process.env.NEXT_PUBLIC_WS_PATH
 
   afterEach(() => {
     if (originalWsUrl === undefined) {
       delete process.env.NEXT_PUBLIC_WS_URL
     } else {
       process.env.NEXT_PUBLIC_WS_URL = originalWsUrl
+    }
+    if (originalWsPath === undefined) {
+      delete process.env.NEXT_PUBLIC_WS_PATH
+    } else {
+      process.env.NEXT_PUBLIC_WS_PATH = originalWsPath
     }
     vi.unstubAllGlobals()
   })
@@ -80,6 +86,7 @@ describe('use-realtime-stt pure logic', () => {
 
   it('infers ws/wss from page protocol when env override is absent', () => {
     delete process.env.NEXT_PUBLIC_WS_URL
+    delete process.env.NEXT_PUBLIC_WS_PATH
 
     vi.stubGlobal('window', {
       location: {
@@ -96,6 +103,29 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('uses same-origin websocket path when NEXT_PUBLIC_WS_PATH is set', () => {
+    delete process.env.NEXT_PUBLIC_WS_URL
+    process.env.NEXT_PUBLIC_WS_PATH = '/stt'
+
+    vi.stubGlobal('window', {
+      location: {
+        hostname: 'mingle.up.railway.app',
+        port: '',
+        protocol: 'https:',
+      },
+    })
+    expect(getWsUrl()).toBe('wss://mingle.up.railway.app/stt')
+
+    vi.stubGlobal('window', {
+      location: {
+        hostname: 'localhost',
+        port: '8080',
+        protocol: 'http:',
+      },
+    })
+    expect(getWsUrl()).toBe('ws://localhost:8080/stt')
   })
 
   it('generates and persists a stable anonymous tracking user id in localStorage', () => {
