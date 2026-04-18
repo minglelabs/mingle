@@ -64,7 +64,9 @@ When banner is enabled, RN forwards these query params to web:
 
 `LivePhoneDemo` uses those values to add transcript-safe padding so chat rows are not hidden by the banner overlay.
 
-For `scripts/devbox mobile --device-app-env dev`, devbox falls back to Google's official sample AdMob app IDs and banner unit IDs when the AdMob env vars are unset, so local release verification can proceed without production credentials.
+For `scripts/devbox mobile --device-app-env dev` and `scripts/devbox up --profile device --device-app-env dev`,
+devbox forces Google's official sample AdMob app IDs and banner unit IDs. This keeps local release verification
+off production inventory even when vault or runtime env files contain production AdMob values.
 
 This project was bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 

@@ -56,6 +56,39 @@ printf '%s\\n%s\\n%s\\n%s' \
   ]);
 });
 
+test("dev device app env always uses Google sample AdMob identifiers", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-runtime-config-"));
+  const prodLikeEnvPath = path.join(tempDir, "prod-like.env");
+  fs.writeFileSync(
+    prodLikeEnvPath,
+    [
+      "RN_ADMOB_APP_ID_IOS=ca-app-pub-7057041881494735~7844963551",
+      "RN_ADMOB_APP_ID_ANDROID=ca-app-pub-7057041881494735~1471126891",
+      "RN_ADMOB_BANNER_UNIT_ID_IOS=ca-app-pub-7057041881494735/3768106846",
+      "RN_ADMOB_BANNER_UNIT_ID_ANDROID=ca-app-pub-7057041881494735/6522262692",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const output = runDevboxEval(`
+APP_ENV_FILE="${prodLikeEnvPath}"
+DEVBOX_VAULT_APP_PATH=""
+DEVBOX_ACTIVE_DEVICE_APP_ENV="dev"
+printf '%s\\n%s\\n%s\\n%s' \
+  "$(resolve_devbox_admob_app_id_ios)" \
+  "$(resolve_devbox_admob_app_id_android)" \
+  "$(resolve_devbox_admob_banner_unit_id_ios)" \
+  "$(resolve_devbox_admob_banner_unit_id_android)"
+`);
+
+  assert.deepEqual(output.split("\n"), [
+    "ca-app-pub-3940256099942544~1458002511",
+    "ca-app-pub-3940256099942544~3347511713",
+    "ca-app-pub-3940256099942544/2435281174",
+    "ca-app-pub-3940256099942544/6300978111",
+  ]);
+});
+
 test("iOS runtime xcconfig never writes an empty AdMob app id for prod installs", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "devbox-ios-xcconfig-"));
   const emptyEnvPath = path.join(tempDir, "empty.env");
