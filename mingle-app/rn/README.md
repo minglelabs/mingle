@@ -13,11 +13,9 @@ The RN app requires the following environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
-- `MINGLE_API_FALLBACK_SITE_URL` (optional, default source for the Vercel web fallback)
-- `MINGLE_STT_FALLBACK_WS_URL` (optional, default source for the legacy STT fallback)
 - `MINGLE_LEGACY_SITE_URL` (optional override, default: current 1.0.11 production web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional override, default: current 1.0.11 production STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.1.2`, Android: `android/v1.1.2`)
+- `NEXT_PUBLIC_API_NAMESPACE` (iOS: `ios/v1.1.1`, Android: `android/v1.1.1`)
 - `RN_CLIENT_VERSION` (optional, fallback: iOS `CFBundleShortVersionString`, Android `BuildConfig.MINGLE_CLIENT_VERSION`)
 - `RN_CLIENT_BUILD` (optional, fallback: iOS `CFBundleVersion`, Android `BuildConfig.MINGLE_CLIENT_BUILD`)
 - `RN_AD_BANNER_POSITION` (optional: `top` | `bottom`, default: `bottom`)
@@ -29,16 +27,15 @@ The RN app requires the following environment variables.
 
 The RN WebView forwards `apiNamespace` to the web layer as a query parameter.
 If the value is missing or does not match the platform baseline, the app shows an error instead of loading the WebView.
-`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.2` before launch.
-`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.2` before launch.
-For release-safe 1.1.2 builds, `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_WS_URL` must not point to the legacy 1.0.11 production hosts.
+`pnpm rn:ios` validates `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.1` before launch.
+`pnpm rn:android` validates `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.1` before launch.
+For release-safe 1.1.1 builds, `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_WS_URL` must not point to the legacy 1.0.11 production hosts.
 If they still match `MINGLE_LEGACY_SITE_URL` / `MINGLE_LEGACY_WS_URL`, the app now fails closed at startup instead of silently using the old servers.
-When the 1.1.2 primary Railway WebView or native STT target has a transport/startup failure, RN can retry the configured fallback target. HTTP policy fallback is limited to network failures and 5xx responses.
 
 On startup, the RN app calls the version-policy API and applies `force_update | recommend_update | none`.
 
-- iOS: `/api/ios/v1.1.2/client/version-policy`
-- Android: `/api/android/v1.1.2/client/version-policy`
+- iOS: `/api/ios/v1.1.1/client/version-policy`
+- Android: `/api/android/v1.1.1/client/version-policy`
 - The request body includes `platform` (`ios` | `android`).
 - The response can optionally override the banner ad unit ID via server env, while the built-in production IDs remain the fallback.
 

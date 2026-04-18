@@ -56,17 +56,6 @@ describe('release-target-config', () => {
     });
   });
 
-  it('rejects legacy production endpoints for a v1_1_2 release build', () => {
-    expect(validateReleaseTargetConfig({
-      releaseTarget: 'v1_1_2',
-      siteUrl: DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL,
-      wsUrl: 'wss://mingle-v112.up.railway.app',
-    })).toEqual({
-      ok: false,
-      error: `NEXT_PUBLIC_SITE_URL must point to a dedicated 1.1.2 web deployment, not the legacy production host (${DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL}).`,
-    });
-  });
-
   it('parses boolean env values', () => {
     expect(parseBooleanEnv('true')).toBe(true);
     expect(parseBooleanEnv('on')).toBe(true);

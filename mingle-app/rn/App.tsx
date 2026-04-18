@@ -68,19 +68,11 @@ import {
   readPreferredRuntimeBoolean,
   readPreferredRuntimeValue,
 } from './src/runtimeConfig';
-import {
-  normalizeHttpBaseUrl,
-  normalizeWsUrl,
-  resolveDistinctFallbackTarget,
-  shouldFallbackHttpStatus,
-} from './src/fallbackTargets';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type NativeRuntimeConfig = {
   webAppBaseUrl?: string;
   defaultWsUrl?: string;
-  legacyWebAppBaseUrl?: string;
-  legacyDefaultWsUrl?: string;
   apiNamespace?: string;
   clientVersion?: string;
   clientBuild?: string;
@@ -307,14 +299,6 @@ const RUNTIME_DEFAULT_WS_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.defaultWsUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_WS_URL', 'RN_DEFAULT_WS_URL']),
 );
-const RUNTIME_FALLBACK_WEB_APP_BASE_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyWebAppBaseUrl,
-  readRuntimeEnvValue(['MINGLE_API_FALLBACK_SITE_URL', 'RN_WEB_APP_FALLBACK_BASE_URL', 'MINGLE_LEGACY_SITE_URL']),
-);
-const RUNTIME_FALLBACK_WS_URL = readPreferredRuntimeValue(
-  NATIVE_RUNTIME_CONFIG.legacyDefaultWsUrl,
-  readRuntimeEnvValue(['MINGLE_STT_FALLBACK_WS_URL', 'RN_DEFAULT_WS_FALLBACK_URL', 'MINGLE_LEGACY_WS_URL']),
-);
 const RUNTIME_API_NAMESPACE = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.apiNamespace,
   readRuntimeEnvValue(['NEXT_PUBLIC_API_NAMESPACE', 'RN_API_NAMESPACE']),
@@ -332,14 +316,6 @@ const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
 ) || 'wss://mingle.up.railway.app';
-const FALLBACK_WEB_APP_BASE_URL = resolveDistinctFallbackTarget(
-  WEB_APP_BASE_URL,
-  normalizeHttpBaseUrl(RUNTIME_FALLBACK_WEB_APP_BASE_URL),
-);
-const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
-  DEFAULT_WS_URL,
-  normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
-);
 
 function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -1023,7 +999,6 @@ function AppInner(): React.JSX.Element {
   const safeAreaInsets = useSafeAreaInsets();
   const nativeAvailable = useMemo(() => isNativeSttAvailable(), []);
   const [loadError, setLoadError] = useState<string | null>(REQUIRED_CONFIG_ERROR);
-  const [activeWebAppBaseUrl, setActiveWebAppBaseUrl] = useState(WEB_APP_BASE_URL);
   const [versionGate, setVersionGate] = useState<VersionGateState>(() => (
     (Platform.OS === 'ios' || Platform.OS === 'android') && WEB_APP_BASE_URL && !REQUIRED_CONFIG_ERROR
       ? { status: 'checking' }
@@ -1092,16 +1067,16 @@ function AppInner(): React.JSX.Element {
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
   const baseWebUrl = useMemo(() => {
-    if (!activeWebAppBaseUrl || REQUIRED_CONFIG_ERROR) return '';
+    if (!WEB_APP_BASE_URL || REQUIRED_CONFIG_ERROR) return '';
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
       ? `&apiNamespace=${encodeURIComponent(VALIDATED_API_NAMESPACE)}`
       : '';
     const debugParams = __DEV__ ? '&sttDebug=1&ttsDebug=1' : '';
     const qaParams = __DEV__ && RUNTIME_QA_BRIDGE_ENABLED ? '&qa=1&nativeQa=1' : '';
     const nativeSttQuery = nativeAvailable ? '1' : '0';
-    return `${activeWebAppBaseUrl}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
-  }, [activeWebAppBaseUrl, nativeAvailable, webLocale]);
-  const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(activeWebAppBaseUrl), [activeWebAppBaseUrl]);
+    return `${WEB_APP_BASE_URL}/${webLocale}?nativeStt=${nativeSttQuery}&nativeUi=1&nativeAuth=1${apiNamespaceQuery}${debugParams}${qaParams}`;
+  }, [nativeAvailable, webLocale]);
+  const trustedNativeAuthOrigin = useMemo(() => resolveTrustedOrigin(WEB_APP_BASE_URL), []);
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
   const webUrl = useMemo(() => {
@@ -1411,6 +1386,7 @@ function AppInner(): React.JSX.Element {
 
     let active = true;
     let settled = false;
+    const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const clientVersion = RUNTIME_CLIENT_INFO.clientVersion;
     const clientBuild = RUNTIME_CLIENT_INFO.clientBuild;
     setNativeAppUpdateSnapshot(createCheckingNativeAppUpdateSnapshot(clientVersion));
@@ -1425,62 +1401,29 @@ function AppInner(): React.JSX.Element {
       setVersionGate({ status: 'ready' });
     };
 
-    const fetchPolicy = async (baseUrl: string): Promise<VersionPolicyResponse> => {
-      const attemptAbortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = setTimeout(() => {
-        attemptAbortController?.abort();
-      }, IOS_VERSION_POLICY_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => {
+      abortController?.abort();
+      fallbackToReady('timeout');
+    }, IOS_VERSION_POLICY_TIMEOUT_MS);
 
-      try {
-        const response = await fetch(buildVersionPolicyUrl(baseUrl, VALIDATED_API_NAMESPACE), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: attemptAbortController?.signal,
-          body: JSON.stringify({
-            platform: resolveVersionPolicyClientPlatform(Platform.OS),
-            clientVersion,
-            clientBuild,
-            locale: versionPolicyLocale,
-          }),
-        });
-
+    void fetch(buildVersionPolicyUrl(WEB_APP_BASE_URL, VALIDATED_API_NAMESPACE), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: abortController?.signal,
+      body: JSON.stringify({
+        platform: resolveVersionPolicyClientPlatform(Platform.OS),
+        clientVersion,
+        clientBuild,
+        locale: versionPolicyLocale,
+      }),
+    })
+      .then(async (response) => {
         if (!response.ok) {
-          const error = new Error(`version_policy_status_${response.status}`);
-          (error as Error & { status?: number }).status = response.status;
-          throw error;
+          throw new Error(`version_policy_status_${response.status}`);
         }
-
         return response.json() as Promise<VersionPolicyResponse>;
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    };
-
-    const shouldTryFallbackPolicy = (error: unknown): boolean => {
-      if (!FALLBACK_WEB_APP_BASE_URL) return false;
-      const status = (error as { status?: unknown })?.status;
-      if (typeof status === 'number') {
-        return shouldFallbackHttpStatus(status);
-      }
-      return true;
-    };
-
-    void (async () => {
-      try {
-        let policy: VersionPolicyResponse;
-        try {
-          policy = await fetchPolicy(WEB_APP_BASE_URL);
-        } catch (error: unknown) {
-          if (!shouldTryFallbackPolicy(error)) {
-            throw error;
-          }
-          if (__DEV__) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.log(`[VersionPolicy] retrying fallback host: ${message}`);
-          }
-          policy = await fetchPolicy(FALLBACK_WEB_APP_BASE_URL);
-        }
-
+      })
+      .then((policy) => {
         if (!active || settled) return;
         setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
         setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
@@ -1537,14 +1480,19 @@ function AppInner(): React.JSX.Element {
             pendingRecommendPromptRef.current = prompt;
           }
         }
-      } catch (error: unknown) {
+      })
+      .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         fallbackToReady('error', message);
-      }
-    })();
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+      });
 
     return () => {
       active = false;
+      clearTimeout(timeoutId);
+      abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
   }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
@@ -1802,7 +1750,6 @@ function AppInner(): React.JSX.Element {
     const wsUrl = payloadWsUrl
       ? payloadWsUrl
       : DEFAULT_WS_URL;
-    const fallbackWsUrl = resolveDistinctFallbackTarget(wsUrl, DEFAULT_WS_FALLBACK_URL);
     const sttModel = typeof payload?.sttModel === 'string' && payload.sttModel.trim()
       ? payload.sttModel.trim()
       : 'soniox';
@@ -1821,7 +1768,8 @@ function AppInner(): React.JSX.Element {
 
     try {
       nativeStatusRef.current = 'starting';
-      const startPayload = {
+      await startNativeStt({
+        wsUrl,
         sttModel,
         aecEnabled,
         ...(apiNamespace ? { apiNamespace } : {}),
@@ -1830,34 +1778,7 @@ function AppInner(): React.JSX.Element {
         ...(typeof sonioxManualFinalizeSilenceMs === 'number'
           ? { sonioxManualFinalizeSilenceMs }
           : {}),
-      };
-      try {
-        await startNativeStt({
-          wsUrl,
-          ...startPayload,
-        });
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code = typeof (error as { code?: unknown })?.code === 'string'
-          ? (error as { code: string }).code.trim()
-          : resolveNativeSttErrorCode(message);
-        const shouldRetryFallback = Boolean(
-          fallbackWsUrl
-          && code !== 'mic_permission'
-          && !__DEV__
-          && !isLoopbackUrl(wsUrl)
-          && !isDevelopmentTunnelUrl(wsUrl),
-        );
-
-        if (!shouldRetryFallback) {
-          throw error;
-        }
-
-        await startNativeStt({
-          wsUrl: fallbackWsUrl,
-          ...startPayload,
-        });
-      }
+      });
       nativeStatusRef.current = 'running';
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2355,26 +2276,13 @@ function AppInner(): React.JSX.Element {
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: { nativeEvent: { description?: string } }) => {
-    if (
-      FALLBACK_WEB_APP_BASE_URL
-      && activeWebAppBaseUrl === WEB_APP_BASE_URL
-      && !isLoopbackUrl(WEB_APP_BASE_URL)
-      && !isDevelopmentTunnelUrl(WEB_APP_BASE_URL)
-    ) {
-      isPageReadyRef.current = false;
-      setLoadError(null);
-      setActiveWebAppBaseUrl(FALLBACK_WEB_APP_BASE_URL);
-      setWebViewMountToken((current) => current + 1);
-      return;
-    }
-
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
       setStartupSplashVisible(false);
     }
     const description = event.nativeEvent.description || 'webview_load_failed';
     setLoadError(formatWebViewLoadError(description, webUrl));
-  }, [activeWebAppBaseUrl, webUrl]);
+  }, [webUrl]);
 
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     setCurrentWebPathname(parseWebPathname(navigationState.url));
