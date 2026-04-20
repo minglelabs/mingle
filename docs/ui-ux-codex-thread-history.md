@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Comparison Table Row Order
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: Felo Translator and Transync appeared immediately after Mingle, ahead of the broader consumer translator set.
+- User impact: The table ordering made newer comparison additions feel over-prioritized instead of supplemental to the core translator set.
+- Resolution: Kept Mingle first, moved Google Translate, Apple Translate, Microsoft Translator, Papago, and DeepL directly after it, and placed Felo Translator and Transync as the final two rows.
+
 ## 2026-04-20 - Blog Comparison Table AI Performance Column
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
