@@ -260,19 +260,38 @@
 
       table {
         width: 100%;
-        min-width: 2200px;
+        min-width: 2440px;
         border-collapse: collapse;
+        table-layout: fixed;
       }
 
       th,
       td {
         border-bottom: 1px solid var(--line);
         border-right: 1px solid var(--line);
-        min-width: 160px;
-        padding: 20px 22px;
+        min-width: 180px;
+        padding: 20px 24px;
         text-align: left;
         vertical-align: top;
         line-height: 1.55;
+      }
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 170px;
+        min-width: 170px;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 145px;
+        min-width: 145px;
+      }
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        width: 170px;
+        min-width: 170px;
       }
 
       th:last-child,
@@ -306,7 +325,7 @@
       }
 
       .tool-cell {
-        min-width: 220px;
+        min-width: 170px;
       }
 
       .tool-name {
