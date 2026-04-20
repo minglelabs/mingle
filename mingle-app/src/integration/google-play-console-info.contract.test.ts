@@ -102,7 +102,7 @@ describe("google-play-console-info contract", () => {
 
     expect(isNonEmptyString(release?.defaultTrack)).toBe(true);
     expect(release?.defaultReleaseStatus).toBe("draft");
-    expect(release?.changesNotSentForReview).toBe(true);
+    expect(release?.changesNotSentForReview).toBe(false);
     expect(isNonEmptyString(release?.releaseName)).toBe(true);
     expect(isNonEmptyString(release?.releaseNotes?.["en-US"])).toBe(true);
   });
