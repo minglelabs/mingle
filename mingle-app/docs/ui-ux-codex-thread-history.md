@@ -1,4 +1,4 @@
-# Mingle Codex Thread-by-Thread UI/UX Audit
+# Mingle App Codex Thread-by-Thread UI/UX Audit
 
 ## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
 

@@ -2,7 +2,7 @@
 
 This document explains what is outside the explicit iOS regression inventory.
 
-- Historical atoms in [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md): `131`
+- Historical atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md): `131`
 - Atoms explicitly linked in [IOS_REGRESSION_INVENTORY.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/IOS_REGRESSION_INVENTORY.md): `69`
 - Atoms not explicitly linked in the iOS inventory: `62`
 
