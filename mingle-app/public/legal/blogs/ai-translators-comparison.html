@@ -260,7 +260,7 @@
 
       table {
         width: 100%;
-        min-width: 1420px;
+        min-width: 2200px;
         border-collapse: collapse;
       }
 
@@ -268,7 +268,8 @@
       td {
         border-bottom: 1px solid var(--line);
         border-right: 1px solid var(--line);
-        padding: 17px 15px;
+        min-width: 160px;
+        padding: 20px 22px;
         text-align: left;
         vertical-align: top;
         line-height: 1.55;
@@ -305,7 +306,7 @@
       }
 
       .tool-cell {
-        min-width: 180px;
+        min-width: 220px;
       }
 
       .tool-name {
@@ -645,7 +646,7 @@
               live spoken conversations rather than document translation alone.
             </p>
             <p class="lede">
-              Across 10 criteria including price, platforms, language coverage, live captions, transcripts, background
+              Across 12 criteria including price, platforms, language coverage, live captions, transcripts, background
               translation, and external app audio capture, Mingle comes out as the best mobile app overall for continuous
               multilingual conversation translation.
             </p>
@@ -672,6 +673,8 @@
                     <th>Platforms</th>
                     <th>Supported languages</th>
                     <th>Messenger-like sentence turns</th>
+                    <th>Realtime speaker diarization</th>
+                    <th>Messenger + voice chat app</th>
                     <th>3+ languages at once</th>
                     <th>Auto detect + switching</th>
                     <th>Continuous note-style translation</th>
@@ -689,6 +692,8 @@
                     <td>iOS, Android, and Web.</td>
                     <td>62 translation languages and 61 selectable speech languages in the current app catalog.</td>
                     <td><span class="status status-yes">Yes.</span> Speech is split into conversation turns in a room-style timeline.</td>
+                    <td><span class="status status-yes">Yes.</span> Separates speakers and keeps live turns readable in real time.</td>
+                    <td><span class="status status-yes">Yes.</span> Can be used directly as a messenger and voice chat app.</td>
                     <td><span class="status status-yes">Yes.</span> Built for all-direction translation across 3+ languages.</td>
                     <td><span class="status status-yes">Yes.</span> Detects the spoken language and switches without manual speaker changes.</td>
                     <td><span class="status status-yes">Yes.</span> Designed for uninterrupted long-form conversation flow.</td>
@@ -704,6 +709,8 @@
                     <td>iOS, Android, and Web.</td>
                     <td>108 typed text languages, 70 conversation languages, and 8 transcribe languages on the Google Play listing.</td>
                     <td><span class="status status-partial">Partial.</span> Conversation and transcribe views show chunks, not a persistent messenger room.</td>
+                    <td><span class="status status-no">No.</span> The consumer Translate app is not a real-time speaker diarization tool.</td>
+                    <td><span class="status status-no">No.</span> It is a translation utility, not a messenger or voice chat app.</td>
                     <td><span class="status status-no">No.</span> Conversation mode is built around bilingual conversations.</td>
                     <td><span class="status status-yes">Yes.</span> Strong automatic detection for text and bilingual conversation flows.</td>
                     <td><span class="status status-partial">Partial.</span> Transcribe supports near real-time continuous translation in fewer languages.</td>
@@ -719,6 +726,8 @@
                     <td>iOS, iPadOS, and macOS. No Android or standalone web app.</td>
                     <td>21 Translate app language entries; Apple Intelligence Live Translation has a narrower language list.</td>
                     <td><span class="status status-partial">Partial.</span> Translate and Messages feel conversation-like, but mostly inside Apple surfaces.</td>
+                    <td><span class="status status-no">No.</span> Not a standalone real-time speaker diarization workflow.</td>
+                    <td><span class="status status-no">No.</span> Translation runs inside Apple surfaces; the translator is not its own messenger or voice chat app.</td>
                     <td><span class="status status-no">No.</span> Live Translation is positioned for one-to-one messages, calls, and nearby conversations.</td>
                     <td><span class="status status-partial">Partial.</span> Works well after languages are selected or inside supported Apple apps.</td>
                     <td><span class="status status-no">No.</span> Not a general continuous note-style translator.</td>
@@ -734,6 +743,8 @@
                     <td>iOS, Android, and Web conversation site.</td>
                     <td>Over 100 languages in the app listing; feature support varies by text, speech, image, and conversation.</td>
                     <td><span class="status status-yes">Yes.</span> Group conversations include transcripts and navigation aids.</td>
+                    <td><span class="status status-partial">Partial.</span> Participants are separated when each joins a hosted conversation from their own device.</td>
+                    <td><span class="status status-no">No.</span> It hosts translation sessions, but is not a general messenger or voice chat app.</td>
                     <td><span class="status status-yes">Yes.</span> Multi-device conversations can support multilingual groups.</td>
                     <td><span class="status status-partial">Partial.</span> Participants choose their language; comments translate into each user's language.</td>
                     <td><span class="status status-partial">Partial.</span> Strong for hosted group sessions, but not a passive note-style listener for every app.</td>
@@ -749,6 +760,8 @@
                     <td>iOS, Android, and Web.</td>
                     <td>13 core text translation languages in NAVER Cloud docs; app and detection features have different coverage.</td>
                     <td><span class="status status-partial">Partial.</span> One-on-one conversation mode is turn-based.</td>
+                    <td><span class="status status-no">No.</span> Not built for live speaker diarization across multiple speakers.</td>
+                    <td><span class="status status-no">No.</span> It is not a messenger or voice chat app.</td>
                     <td><span class="status status-no">No.</span> Best suited to two-language travel and Korean-centered use cases.</td>
                     <td><span class="status status-partial">Partial.</span> Auto language detection exists for text, but not broad speaker auto-switching.</td>
                     <td><span class="status status-no">No.</span> Conversation translation is not built as a continuous transcript notebook.</td>
@@ -764,6 +777,8 @@
                     <td>iOS, Android, Web, desktop apps, and browser extensions.</td>
                     <td>30 core Translator languages plus additional next-generation languages; Voice language coverage is narrower.</td>
                     <td><span class="status status-partial">Partial.</span> DeepL Voice supports meeting captions; the main Translator is not a messenger timeline.</td>
+                    <td><span class="status status-partial">Partial.</span> Meeting products are speaker-session oriented; the mobile Translator is not a live diarization app.</td>
+                    <td><span class="status status-no">No.</span> DeepL is not a messenger or voice chat app.</td>
                     <td><span class="status status-partial">Partial.</span> Available in meeting/conversation products, not the standard mobile translator flow.</td>
                     <td><span class="status status-partial">Partial.</span> Strong text detection; live speech workflows depend on DeepL Voice setup.</td>
                     <td><span class="status status-partial">Partial.</span> DeepL Voice can follow meetings, but it is a separate product path.</td>
