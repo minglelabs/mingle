@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Comparison Table AI Performance Column
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The translator comparison table listed language counts and workflow features but did not summarize perceived AI performance as a scannable criterion.
+- User impact: Readers had to infer model quality from adjacent feature descriptions instead of comparing a direct `Good` or `Standard` performance signal.
+- Resolution: Added an `AI performance` column immediately after `Supported languages`, marked Mingle, Google Translate, Transync, and DeepL as `Good`, marked Felo Translator, Apple Translate, Microsoft Translator, and Papago as `Standard`, and widened the table to preserve cell spacing.
+
 ## 2026-04-20 - Blog Landing Page Reference Button
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
