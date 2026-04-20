@@ -87,6 +87,14 @@
       "destination": "https://mingle-landing.vercel.app/:asset"
     },
     {
+      "source": "/blogs",
+      "destination": "/blogs/index.html"
+    },
+    {
+      "source": "/blogs/:slug",
+      "destination": "/blogs/:slug.html"
+    },
+    {
       "source": "/legal",
       "destination": "/legal-index"
     },
