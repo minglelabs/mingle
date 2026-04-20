@@ -505,6 +505,35 @@
         outline: none;
       }
 
+      .reference-cta {
+        display: flex;
+        justify-content: center;
+        margin-top: 34px;
+      }
+
+      .reference-button {
+        display: inline-flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(25, 105, 90, 0.28);
+        border-radius: 8px;
+        background: var(--green);
+        padding: 0 22px;
+        color: #fffdf8;
+        font-size: 0.96rem;
+        font-weight: 800;
+        line-height: 1.2;
+        text-decoration: none;
+        box-shadow: 0 16px 34px rgba(15, 67, 57, 0.18);
+      }
+
+      .reference-button:hover,
+      .reference-button:focus-visible {
+        background: var(--green-deep);
+        outline: none;
+      }
+
       .footer {
         border-top: 1px solid var(--line);
         background: #151914;
@@ -1004,6 +1033,9 @@
               <li><a href="https://support.deepl.com/hc/en-us/articles/360019925219-DeepL-Translator-languages">DeepL Translator languages</a></li>
               <li><a href="https://support.deepl.com/hc/en-us/articles/26625846174364-DeepL-Voice-languages">DeepL Voice languages</a></li>
             </ul>
+            <div class="reference-cta">
+              <a class="reference-button" href="https://translator.minglelabs.xyz/landing/">View Mingle landing page</a>
+            </div>
           </div>
         </section>
       </article>

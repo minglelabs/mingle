@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Landing Page Reference Button
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The comparison article ended at source references without a clear path back to the Mingle product landing page.
+- User impact: Readers who reached the bottom of the article had to use navigation or manually change URLs to inspect the referenced product page.
+- Resolution: Added a centered bottom reference button linking to `https://translator.minglelabs.xyz/landing/`, styled to match the article's restrained button language.
+
 ## 2026-04-20 - Blog Comparison Table Felo And Transync Rows
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
