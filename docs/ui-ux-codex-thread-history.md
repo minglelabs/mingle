@@ -1,19 +1,5 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
-## 2026-04-20 Translator Root Landing Page
-
-### `2026-04-20-translator-root-landing` | UI/UX issues found
-
-1. **The translator root duplicated the legal index instead of presenting the product**
-   Problem: `https://translator.minglelabs.xyz/` served the same legal-document index experience as `https://translator.minglelabs.xyz/legal`, even though the root URL is also used as the public support/product URL. That made the first public impression a compliance table rather than a product explanation, and it hid the Mingle translator value proposition behind the legal surface.
-   Fix: The root static `index.html` now serves a one-page, text-forward responsive landing page built from the positioning in `public/legal/xr.html`: real-time voice translation for social conversations, HelloTalk-style early users, automatic language handling, subtitle-like translation playback, target verticals, and the long-term voice messenger/social platform vision. The existing `/legal` route continues to rewrite to `legal-index.html`, so legal documents remain reachable without sharing the root page.
-   Status: Resolved in-thread on 2026-04-20.
-
-2. **Translator-hosted landing routes did not share the main landing/i18n experience**
-   Problem: The new translator root page existed only at `/` and `/landing`, while the richer `mingle-landing` normal/gaming pages and their language selector still lived on the separate marketing deployment. That meant users entering through `translator.minglelabs.xyz` could not reach `/landing/normal` or `/landing/gaming` on the same public support domain, and the new static root page had no locale detection or language switcher.
-   Fix: `mingle-landing` now supports the `/landing/{version}/{locale}` prefix for `normal` and `gaming`, preserving language-switch URLs under the prefixed path. The translator legal Vercel config proxies those landing routes, their `_next` assets, public media, and versioned landing APIs to the landing deployment. The custom static root page also now uses the same primary locale catalog, `i18nextLng` storage key, browser/route/query locale detection, and an in-page language selector.
-   Status: Resolved in-thread on 2026-04-20.
-
 ## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
 
 ### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found
@@ -1288,4 +1274,3 @@ UI/UX issue mentioned in planning only: the opener explicitly called out fragmen
 - `2026-04-18-xr-strategy-step-width-retune` | The strategy step cards were retuned after the widened version visually invaded the left slide copy area. The strategy step container width is now reduced to `clamp(410px, 27vw, 420px)`, and the inline step labels use a colon format such as `1단계: 혼자 쓰는 실시간 번역기` to keep the label compact while preserving the larger title scale.
 - `2026-04-18-xr-network-effect-title-refine` | The XR deck's page 36 differentiation title was refined to `반면, 저희는 소셜링에 집중해 메신저 경험까지 제공합니다`. The updated wording narrows the claim from building the broader social network experience to focusing on socializing and delivering the messenger experience, matching the current slide positioning more closely.
 - `2026-04-18-mingle-1-1-1-conversation-list-bottom-cta-inset` | The `1.1.1` native app started sending a generic `nativeBannerPosition=bottom` and `nativeBottomInsetPx` fallback in the initial WebView URL. The conversation list interpreted that room-only bottom banner fallback as list footer clearance, making the new-conversation CTA much taller than the `1.1.0` layout while conversation rooms still looked correct. The native/web banner contract is now split by zone: list screens receive only `nativeListTopInsetPx`, conversation rooms receive `nativeConversationBannerPosition` plus conversation-specific top/bottom inset fallbacks, and the list CTA keeps a fixed safe-area bottom padding so room banner clearance cannot leak into the list view.
-- `2026-04-20-translator-landing-default-language` | The translator root landing page originally shipped its static HTML and client fallback locale as Korean, and the initial load also reused any previous `i18nextLng=ko` value. This made bare `/` and `/landing` feel Korean-first even though the shared `mingle-landing` default is English. The page now uses English HTML/meta/body copy as the initial render, treats bare `/` and `/landing` as English defaults regardless of browser or stale stored locale, and still honors explicit locale routes such as `/landing/ko` plus manual language-picker changes.
