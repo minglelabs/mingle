@@ -145,8 +145,11 @@
 
       .article-hero {
         position: relative;
+        display: flex;
+        align-items: center;
+        min-height: 540px;
         overflow: hidden;
-        padding: 88px 0 72px;
+        padding: 118px 0 112px;
         background:
           linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 52%, rgba(251, 247, 238, 0.56) 100%),
           linear-gradient(135deg, #fbf7ee 0%, #fffaf0 46%, #e8f0eb 100%);
@@ -157,10 +160,10 @@
         position: absolute;
         inset: 0;
         background-image: url("/assets/mingle.png");
-        background-position: right 5% bottom 0;
+        background-position: right 8% center;
         background-repeat: no-repeat;
-        background-size: min(430px, 34vw) auto;
-        opacity: 0.3;
+        background-size: min(320px, 24vw) auto;
+        opacity: 0.28;
         filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.24));
       }
 
@@ -525,12 +528,13 @@
         }
 
         .article-hero {
-          padding: 74px 0 64px;
+          min-height: 500px;
+          padding: 90px 0 82px;
         }
 
         .article-hero::before {
-          background-position: right -120px bottom -40px;
-          background-size: 330px auto;
+          background-position: right -70px center;
+          background-size: 240px auto;
           opacity: 0.18;
         }
 
@@ -639,6 +643,11 @@
               Most translation apps can translate a sentence. Fewer can keep up when people are speaking continuously,
               switching languages, using voice rooms, or trying to preserve a transcript. This comparison focuses on
               live spoken conversations rather than document translation alone.
+            </p>
+            <p class="lede">
+              Across 10 criteria including price, platforms, language coverage, live captions, transcripts, background
+              translation, and external app audio capture, Mingle comes out as the best mobile app overall for continuous
+              multilingual conversation translation.
             </p>
           </div>
         </header>
