@@ -27,3 +27,10 @@
 - Issue: The comparison table cells felt too narrow after multiple feature columns were added, and the table did not yet compare real-time speaker diarization or whether each product can function as its own messenger and voice chat app.
 - User impact: Readers had to parse cramped cells and could miss two core differentiators for Mingle as a live social translation product.
 - Resolution: Increased the table minimum width, widened table padding and the translator column, added `Realtime speaker diarization` and `Messenger + voice chat app` columns, and updated the hero summary from 10 to 12 criteria.
+
+## 2026-04-20 - Blog Comparison Table Column Balance
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The `Translator`, `Price`, and `Platforms` columns consumed more horizontal space than needed while feature columns still felt compressed.
+- User impact: The most important feature comparison cells were harder to scan, especially after the table gained additional criteria.
+- Resolution: Switched the table to fixed layout, narrowed the first three columns, increased the overall table width, and widened the remaining feature columns with larger default cell widths.
