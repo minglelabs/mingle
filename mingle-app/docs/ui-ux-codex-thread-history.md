@@ -1,5 +1,14 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-20 Translator Landing Social Route Follow-Up
+
+### `2026-04-20-translator-landing-social-route` | UI/UX issues found
+
+1. **The `/landing/social` variant was not reachable through the translator domain**
+   Problem: The social landing configuration still existed in `mingle-landing`, but the version route guard and the translator legal proxy only allowed `normal` and `gaming` under `/landing`. As a result, `/landing/social` and localized social URLs could show a 404 instead of the existing social-focused landing page.
+   Fix: Restored `social` as an allowed landing version in the `/landing/[version]/[[...locale]]` entry point, kept the direct version route in sync, and updated the legal proxy rewrite rules so `/landing/social` and `/landing/social/{locale}` forward to `mingle-landing`.
+   Status: Fixed in-thread on 2026-04-20.
+
 ## 2026-04-20 Translator Landing Locale Follow-Up
 
 ### `2026-04-20-translator-landing-15-locales` | UI/UX issues found

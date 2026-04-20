@@ -3,7 +3,7 @@ import HomePage from '@/components/HomePage'
 import { notFound } from 'next/navigation'
 import { resolvePrimaryUiLocaleTag } from '../../../../../shared/i18n/mingle-locales'
 
-const versions = ['normal', 'gaming']
+const versions = ['normal', 'social', 'gaming']
 
 type LandingVersionPageProps = {
   params: Promise<{
