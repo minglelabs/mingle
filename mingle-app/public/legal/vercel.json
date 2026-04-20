@@ -67,11 +67,11 @@
   ],
   "rewrites": [
     {
-      "source": "/landing/:version(normal|gaming)",
+      "source": "/landing/:version(normal|social|gaming)",
       "destination": "https://mingle-landing.vercel.app/landing/:version"
     },
     {
-      "source": "/landing/:version(normal|gaming)/:path*",
+      "source": "/landing/:version(normal|social|gaming)/:path*",
       "destination": "https://mingle-landing.vercel.app/landing/:version/:path*"
     },
     {
