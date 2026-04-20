@@ -87,6 +87,10 @@
       "destination": "/legal-index"
     },
     {
+      "source": "/landing",
+      "destination": "/index.html"
+    },
+    {
       "source": "/",
       "destination": "/index.html"
     }
