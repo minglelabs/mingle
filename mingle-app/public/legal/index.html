@@ -3,82 +3,2370 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mingle Legal</title>
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>Mingle - Voice messenger without language barriers</title>
+    <meta
+      name="description"
+      content="Mingle is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+    />
+    <meta property="og:title" content="Mingle - Voice messenger without language barriers" />
+    <meta
+      property="og:description"
+      content="Mingle is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://translator.minglelabs.xyz/" />
+    <meta property="og:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260420-1" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2400" />
+    <meta property="og:image:height" content="1260" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mingle - Voice messenger without language barriers" />
+    <meta
+      name="twitter:description"
+      content="Mingle is a real-time voice translation app for foreign friends, global communities, and conversations while traveling."
+    />
+    <meta name="twitter:image" content="https://translator.minglelabs.xyz/assets/og-image.png?v=20260420-1" />
     <style>
+      :root {
+        color-scheme: light;
+        --paper: #fbf7ee;
+        --paper-deep: #f0eadf;
+        --surface: #fffdf8;
+        --ink: #1d211d;
+        --muted: #626a61;
+        --line: rgba(29, 33, 29, 0.13);
+        --green: #19695a;
+        --green-deep: #0f4339;
+        --amber: #e6a72a;
+        --blue: #2f68d8;
+        --rose: #a34436;
+        --shadow: 0 20px 60px rgba(29, 33, 29, 0.13);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        background: var(--paper);
+      }
+
       body {
         margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        background: #f6f8fd;
-        color: #162033;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI",
+          sans-serif;
+        letter-spacing: 0;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
       }
 
-      main {
-        max-width: 960px;
-        margin: 40px auto;
-        padding: 0 16px 24px;
-      }
-
-      .card {
-        background: #fff;
-        border: 1px solid #dbe2ef;
-        border-radius: 14px;
-        padding: 24px;
-      }
-
-      h1 {
-        margin-top: 0;
+      ::selection {
+        background: rgba(230, 167, 42, 0.34);
       }
 
       a {
-        color: #0d6efd;
+        color: inherit;
       }
 
-      table {
-        border-collapse: collapse;
-        width: 100%;
+      img {
+        max-width: 100%;
       }
 
-      th,
-      td {
-        border-bottom: 1px solid #e6ebf5;
-        padding: 10px 8px;
-        text-align: left;
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid var(--line);
+        background: rgba(251, 247, 238, 0.84);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav {
+        width: min(1120px, calc(100% - 40px));
+        min-height: 68px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 800;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        box-shadow: 0 8px 20px rgba(25, 105, 90, 0.2);
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 0.93rem;
+        font-weight: 650;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+      }
+
+      .nav-links a:hover,
+      .nav-links a:focus-visible {
+        color: var(--green);
+        outline: none;
+      }
+
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .language-picker {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 38px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 253, 248, 0.76);
+        color: rgba(29, 33, 29, 0.76);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .language-picker select {
+        min-width: 104px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        letter-spacing: 0;
+        outline: none;
+      }
+
+      .hero {
+        position: relative;
+        min-height: 92svh;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        isolation: isolate;
+        background:
+          linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 44%, rgba(251, 247, 238, 0.54) 100%),
+          linear-gradient(135deg, #fbf7ee 0%, #fffaf0 46%, #e8f0eb 100%);
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background-image: url("/assets/mingle.png");
+        background-repeat: no-repeat;
+        background-position: right 9% center;
+        background-size: min(390px, 31vw) auto;
+        opacity: 0.72;
+        filter: drop-shadow(0 28px 70px rgba(25, 105, 90, 0.22));
+        transform: rotate(2deg);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        z-index: -1;
+        height: 34%;
+        background: linear-gradient(180deg, rgba(251, 247, 238, 0) 0%, rgba(251, 247, 238, 0.94) 100%);
+      }
+
+      .hero-inner,
+      .section-inner {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .hero-copy {
+        max-width: 710px;
+        padding: 68px 0 92px;
+      }
+
+      .eyebrow {
+        margin: 0 0 18px;
+        color: var(--green);
+        font-size: 0.9rem;
+        font-weight: 850;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 4.65rem;
+        line-height: 0.98;
+        font-weight: 900;
+        letter-spacing: 0;
+        max-width: 11ch;
+      }
+
+      .hero-lede {
+        max-width: 620px;
+        margin-top: 30px;
+        color: rgba(29, 33, 29, 0.74);
+        font-size: 1.25rem;
+        line-height: 1.8;
+        font-weight: 520;
+      }
+
+      .hero-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+      }
+
+      .store-link {
+        display: inline-flex;
+        height: 48px;
+        align-items: center;
+        border-radius: 8px;
+        transition:
+          transform 160ms ease,
+          filter 160ms ease;
+      }
+
+      .store-link:hover,
+      .store-link:focus-visible {
+        transform: translateY(-2px);
+        filter: brightness(0.96);
+        outline: none;
+      }
+
+      .store-link img {
+        display: block;
+        height: 48px;
+        width: auto;
+      }
+
+      .hero-note {
+        margin-top: 22px;
+        color: rgba(29, 33, 29, 0.58);
         font-size: 0.95rem;
+        line-height: 1.65;
       }
 
-      th {
-        background: #f8faff;
+      .section {
+        scroll-margin-top: 90px;
+        padding: 96px 0;
+      }
+
+      .section--deep {
+        background: var(--green-deep);
+        color: #fffdf8;
+      }
+
+      .section--paper-deep {
+        background: var(--paper-deep);
+      }
+
+      .section--surface {
+        background: var(--surface);
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 18px;
+        max-width: 830px;
+        margin-bottom: 46px;
+      }
+
+      .section-heading h2 {
+        font-size: 3.05rem;
+        line-height: 1.08;
+        font-weight: 880;
+        letter-spacing: 0;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        font-size: 1.08rem;
+        line-height: 1.8;
+        font-weight: 500;
+      }
+
+      .section--deep .section-heading p,
+      .section--deep .eyebrow {
+        color: rgba(255, 253, 248, 0.72);
+      }
+
+      .two-column {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 0.82fr);
+        gap: 54px;
+        align-items: start;
+      }
+
+      .copy-stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .copy-stack p {
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 1.06rem;
+        line-height: 1.86;
+      }
+
+      .section--deep .copy-stack p {
+        color: rgba(255, 253, 248, 0.74);
+      }
+
+      .highlight-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .highlight-item,
+      .proof-item,
+      .vertical-item,
+      .principle-item {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 253, 248, 0.72);
+        padding: 20px;
+      }
+
+      .highlight-item {
+        display: grid;
+        gap: 8px;
+      }
+
+      .highlight-item strong,
+      .proof-item strong,
+      .vertical-item strong,
+      .principle-item strong {
+        display: block;
+        font-size: 1.04rem;
+        line-height: 1.45;
+      }
+
+      .highlight-item span,
+      .proof-item span,
+      .vertical-item span,
+      .principle-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.96rem;
+        line-height: 1.65;
+      }
+
+      .problem-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .problem-card {
+        min-height: 250px;
+        border: 1px solid rgba(255, 253, 248, 0.17);
+        border-radius: 8px;
+        padding: 24px;
+        background: rgba(255, 253, 248, 0.08);
+      }
+
+      .problem-card h3 {
+        color: #fff7d7;
+        font-size: 1.2rem;
+        line-height: 1.45;
+      }
+
+      .problem-card p {
+        margin-top: 16px;
+        color: rgba(255, 253, 248, 0.74);
+        font-size: 1rem;
+        line-height: 1.78;
+      }
+
+      .product-band {
+        display: grid;
+        grid-template-columns: minmax(290px, 0.74fr) minmax(0, 1fr);
+        gap: 54px;
+        align-items: center;
+      }
+
+      .phone-stage {
+        position: relative;
+        min-height: 640px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .phone-stage::before {
+        content: "";
+        position: absolute;
+        width: 66%;
+        height: 78%;
+        border: 1px solid rgba(25, 105, 90, 0.16);
+        border-radius: 8px;
+        background:
+          linear-gradient(135deg, rgba(47, 104, 216, 0.08), rgba(230, 167, 42, 0.12)),
+          rgba(255, 253, 248, 0.62);
+        transform: rotate(-4deg);
+      }
+
+      .phone-stage img {
+        position: relative;
+        width: min(330px, 84%);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+      }
+
+      .principle-list {
+        display: grid;
+        gap: 16px;
+      }
+
+      .principle-item {
+        background: #fffdf8;
+      }
+
+      .principle-item strong::before {
+        content: "";
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        margin-right: 9px;
+        border-radius: 50%;
+        background: var(--amber);
+        vertical-align: 1px;
+      }
+
+      .proof-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .proof-item {
+        min-height: 196px;
+        background: #fffdf8;
+      }
+
+      .proof-item strong {
+        color: var(--green);
+      }
+
+      .proof-item span {
+        margin-top: 12px;
+      }
+
+      .quote-strip {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .quote {
+        margin: 0;
+        border: 1px solid rgba(25, 105, 90, 0.18);
+        border-radius: 8px;
+        background: rgba(25, 105, 90, 0.06);
+        padding: 22px;
+        color: rgba(29, 33, 29, 0.76);
+        font-size: 1rem;
+        line-height: 1.75;
+      }
+
+      .vertical-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1fr);
+        gap: 48px;
+        align-items: center;
+      }
+
+      .vertical-copy {
+        display: grid;
+        gap: 20px;
+      }
+
+      .vertical-copy p {
+        color: rgba(255, 253, 248, 0.76);
+        font-size: 1.06rem;
+        line-height: 1.82;
+      }
+
+      .vertical-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .vertical-item {
+        min-height: 170px;
+        border-color: rgba(255, 253, 248, 0.17);
+        background: rgba(255, 253, 248, 0.08);
+      }
+
+      .vertical-item strong {
+        color: #fff7d7;
+      }
+
+      .vertical-item span {
+        margin-top: 10px;
+        color: rgba(255, 253, 248, 0.72);
+      }
+
+      .vision {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .vision::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(90deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.9) 52%, rgba(251, 247, 238, 0.7) 100%),
+          url("/assets/offline-conversation.png") right 8% center / min(360px, 30vw) auto no-repeat;
+        opacity: 1;
+      }
+
+      .vision .section-inner {
+        position: relative;
+      }
+
+      .vision-copy {
+        max-width: 720px;
+        display: grid;
+        gap: 24px;
+      }
+
+      .vision-copy h2 {
+        font-size: 3.15rem;
+        line-height: 1.1;
+        font-weight: 890;
+      }
+
+      .vision-copy p {
+        color: rgba(29, 33, 29, 0.72);
+        font-size: 1.08rem;
+        line-height: 1.84;
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        background: #151914;
+        color: rgba(255, 253, 248, 0.74);
+        padding: 36px 0;
+      }
+
+      .footer-inner {
+        width: min(1120px, calc(100% - 40px));
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        font-size: 0.92rem;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 16px;
+      }
+
+      .footer-links a {
+        color: rgba(255, 253, 248, 0.76);
+        text-decoration: none;
+      }
+
+      .footer-links a:hover,
+      .footer-links a:focus-visible {
+        color: #fffdf8;
+        outline: none;
+      }
+
+      @media (max-width: 980px) {
+        .nav {
+          width: min(100% - 28px, 900px);
+        }
+
+        .nav-links {
+          gap: 14px;
+        }
+
+        .nav-actions {
+          gap: 10px;
+        }
+
+        .hero-inner,
+        .section-inner,
+        .footer-inner {
+          width: min(100% - 28px, 900px);
+        }
+
+        .hero {
+          min-height: 92svh;
+          align-items: flex-start;
+        }
+
+        .hero::before {
+          background-position: right -80px bottom 8px;
+          background-size: 270px auto;
+          opacity: 0.24;
+          transform: rotate(4deg);
+        }
+
+        .hero-copy {
+          max-width: 650px;
+          padding: 76px 0 104px;
+        }
+
+        h1 {
+          font-size: 3.6rem;
+          line-height: 1.02;
+        }
+
+        .hero-lede {
+          font-size: 1.12rem;
+        }
+
+        .section {
+          padding: 78px 0;
+        }
+
+        .section-heading h2,
+        .vision-copy h2 {
+          font-size: 2.45rem;
+        }
+
+        .two-column,
+        .product-band,
+        .vertical-layout {
+          grid-template-columns: 1fr;
+          gap: 34px;
+        }
+
+        .phone-stage {
+          min-height: 520px;
+        }
+
+        .problem-grid,
+        .proof-grid,
+        .quote-strip {
+          grid-template-columns: 1fr;
+        }
+
+        .problem-card,
+        .proof-item {
+          min-height: auto;
+        }
+
+        .vision::before {
+          background:
+            linear-gradient(180deg, rgba(251, 247, 238, 0.98) 0%, rgba(251, 247, 238, 0.92) 58%, rgba(251, 247, 238, 0.86) 100%),
+            url("/assets/offline-conversation.png") right -90px bottom -120px / 280px auto no-repeat;
+        }
+      }
+
+      @media (max-width: 680px) {
+        body {
+          word-break: normal;
+        }
+
+        .site-header {
+          position: static;
+        }
+
+        .nav {
+          min-height: 62px;
+        }
+
+        .nav-links a:not(.nav-legal) {
+          display: none;
+        }
+
+        .language-picker {
+          height: 36px;
+          padding: 0 8px;
+        }
+
+        .language-picker select {
+          min-width: 82px;
+          max-width: 108px;
+        }
+
+        .brand img {
+          width: 31px;
+          height: 31px;
+        }
+
+        .hero {
+          min-height: auto;
+        }
+
+        .hero::before {
+          background-position: right -140px bottom 4px;
+          background-size: 250px auto;
+          opacity: 0.18;
+        }
+
+        .hero-copy {
+          padding: 48px 0 42px;
+        }
+
+        .eyebrow {
+          font-size: 0.82rem;
+          margin-bottom: 14px;
+        }
+
+        h1 {
+          font-size: 2.55rem;
+          line-height: 1.06;
+          max-width: 100%;
+        }
+
+        .hero-lede {
+          margin-top: 24px;
+          font-size: 1.02rem;
+          line-height: 1.76;
+        }
+
+        .hero-actions {
+          margin-top: 28px;
+        }
+
+        .store-link,
+        .store-link img {
+          height: 42px;
+        }
+
+        .section {
+          padding: 64px 0;
+        }
+
+        .section-heading {
+          gap: 14px;
+          margin-bottom: 32px;
+        }
+
+        .section-heading h2,
+        .vision-copy h2 {
+          font-size: 2rem;
+          line-height: 1.16;
+        }
+
+        .section-heading p,
+        .copy-stack p,
+        .vertical-copy p,
+        .vision-copy p {
+          font-size: 1rem;
+          line-height: 1.78;
+        }
+
+        .highlight-item,
+        .proof-item,
+        .vertical-item,
+        .principle-item,
+        .problem-card,
+        .quote {
+          padding: 18px;
+        }
+
+        .phone-stage {
+          min-height: 430px;
+        }
+
+        .phone-stage img {
+          width: min(260px, 82%);
+        }
+
+        .phone-stage::before {
+          width: 78%;
+          height: 78%;
+        }
+
+        .vertical-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .nav,
+        .hero-inner,
+        .section-inner,
+        .footer-inner {
+          width: min(360px, calc(100% - 28px));
+          margin-left: 14px;
+          margin-right: auto;
+        }
       }
     </style>
   </head>
   <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="Mingle site navigation">
+        <a class="brand" href="/" aria-label="Mingle home">
+          <img src="/assets/mingle-icon.png" alt="" />
+          <span>Mingle</span>
+        </a>
+        <div class="nav-actions">
+          <div class="nav-links">
+            <a href="#problem" data-i18n="nav.problem">Problem</a>
+            <a href="#product" data-i18n="nav.product">Product</a>
+            <a href="#proof" data-i18n="nav.proof">Proof</a>
+            <a href="#vision" data-i18n="nav.vision">Vision</a>
+            <a class="nav-legal" href="/legal" data-i18n="nav.legal">Legal</a>
+          </div>
+          <label class="language-picker">
+            <span aria-hidden="true">🌐</span>
+            <select id="landing-language" aria-label="Language"></select>
+          </label>
+        </div>
+      </nav>
+    </header>
+
     <main>
-      <section class="card">
-        <h1>Mingle Legal Documents</h1>
-        <p>Supported language set (15 locales) for App Store and user trust pages.</p>
-        <table>
-          <thead>
-            <tr><th>Language</th><th>Locale</th><th>Privacy</th><th>Terms</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>English</td><td>en</td><td><a href="/legal/en/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/en/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Korean</td><td>ko</td><td><a href="/legal/ko/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/ko/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Japanese</td><td>ja</td><td><a href="/legal/ja/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/ja/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Chinese (Simplified)</td><td>zh-CN</td><td><a href="/legal/zh-cn/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/zh-cn/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Chinese (Traditional)</td><td>zh-TW</td><td><a href="/legal/zh-tw/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/zh-tw/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>French</td><td>fr</td><td><a href="/legal/fr/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/fr/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>German</td><td>de</td><td><a href="/legal/de/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/de/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Spanish</td><td>es</td><td><a href="/legal/es/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/es/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Portuguese</td><td>pt</td><td><a href="/legal/pt/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/pt/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Italian</td><td>it</td><td><a href="/legal/it/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/it/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Russian</td><td>ru</td><td><a href="/legal/ru/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/ru/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Arabic</td><td>ar</td><td><a href="/legal/ar/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/ar/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Hindi</td><td>hi</td><td><a href="/legal/hi/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/hi/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Thai</td><td>th</td><td><a href="/legal/th/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/th/terms-of-use.html">Terms of Use</a></td></tr>
-<tr><td>Vietnamese</td><td>vi</td><td><a href="/legal/vi/privacy-policy.html">Privacy Policy</a></td><td><a href="/legal/vi/terms-of-use.html">Terms of Use</a></td></tr>
-          </tbody>
-        </table>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow" data-i18n="hero.eyebrow">Real-time voice translation for social moments</p>
+            <h1 id="hero-title" data-i18n-html="hero.title">Voice messenger<br />without language barriers</h1>
+            <p class="hero-lede" data-i18n="hero.lede">
+              When you want to get closer to someone from another country, language is usually the first thing that
+              gets in the way. Mingle listens, translates, and keeps the conversation moving with subtitle-like text
+              and voice playback.
+            </p>
+            <div class="hero-actions" aria-label="Download Mingle">
+              <a class="store-link" href="https://apps.apple.com/app/id6759795134">
+                <img src="/assets/badge-app-store.svg" alt="Download on the App Store" />
+              </a>
+              <a class="store-link" href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">
+                <img src="/assets/badge-google-play.png" alt="Get it on Google Play" />
+              </a>
+            </div>
+            <p class="hero-note" data-i18n="hero.note">
+              The starting point is a real-time translator you can use on your own. The next step is a voice messenger
+              with translation built in, then a social platform people open first when they want to meet someone abroad.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--deep" id="problem">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="problem.eyebrow">The problem</p>
+            <h2 data-i18n="problem.title">Existing translators cannot keep up with social conversations.</h2>
+            <p data-i18n="problem.description">
+              Translation tools are everywhere, but they still feel awkward when you are trying to become friends with
+              someone. Switching apps, changing language settings, and waiting for results breaks the rhythm.
+            </p>
+          </div>
+          <div class="problem-grid">
+            <article class="problem-card">
+              <h3 data-i18n="problem.cards.realtime.title">They are not built for live speech.</h3>
+              <p data-i18n="problem.cards.realtime.body">
+                Most translators are designed around entering a sentence and checking a result. In voice rooms, calls,
+                and networking events, that flow stops the conversation again and again.
+              </p>
+            </article>
+            <article class="problem-card">
+              <h3 data-i18n="problem.cards.language.title">Language settings get in the way.</h3>
+              <p data-i18n="problem.cards.language.body">
+                When languages or speakers change, users still have to manage settings. In social moments, that means
+                staring at controls instead of the person in front of you.
+              </p>
+            </article>
+            <article class="problem-card">
+              <h3 data-i18n="problem.cards.social.title">The social experience is missing.</h3>
+              <p data-i18n="problem.cards.social.body">
+                Translation, note-taking, messengers, and social networks each solve separate problems. People trying
+                to make foreign friends need a relationship to continue, not just a translated sentence.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--surface">
+        <div class="section-inner">
+          <div class="two-column">
+            <div class="section-heading">
+              <p class="eyebrow" data-i18n="why.eyebrow">Why Mingle</p>
+              <h2 data-i18n="why.title">AI can now make social translation part of the product itself.</h2>
+            </div>
+            <div class="copy-stack">
+              <p data-i18n="why.body1">
+                Mingle is not just another translate button. It combines real-time speech recognition, automatic
+                language detection, speaker separation, translated captions, and playback in one conversation surface.
+              </p>
+              <p data-i18n="why.body2">
+                Users do not need to choose the other person's language every time. Even when each person speaks
+                naturally in a different language, Mingle shows the translation like captions and can play it back as
+                voice.
+              </p>
+              <p data-i18n="why.body3">
+                The core is not accuracy alone. It is the whole path from opening your mouth to feeling that a
+                conversation can continue. The more translation fades into the background, the more people can focus on
+                each other.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--paper-deep" id="product">
+        <div class="section-inner">
+          <div class="product-band">
+            <div class="phone-stage" aria-hidden="true">
+              <img src="/assets/mingle.png" alt="" />
+            </div>
+            <div>
+              <div class="section-heading">
+                <p class="eyebrow" data-i18n="product.eyebrow">Product principles</p>
+                <h2 data-i18n="product.title">Keep only the flow a conversation needs.</h2>
+                <p data-i18n="product.description">
+                  Mingle redesigns translation as a social tool. The goal is not a screen that shows off accuracy, but
+                  a state where users can keep listening and speaking.
+                </p>
+              </div>
+              <div class="principle-list">
+                <article class="principle-item">
+                  <strong data-i18n="product.principles.detect.title">Listen and detect automatically.</strong>
+                  <span data-i18n="product.principles.detect.body">The conversation can begin without asking users to keep selecting the other person's language.</span>
+                </article>
+                <article class="principle-item">
+                  <strong data-i18n="product.principles.subtitle.title">Follow the conversation like captions.</strong>
+                  <span data-i18n="product.principles.subtitle.body">Translation sits on top of the conversation flow, so users do not have to bounce between apps.</span>
+                </article>
+                <article class="principle-item">
+                  <strong data-i18n="product.principles.messenger.title">Expand into a voice messenger.</strong>
+                  <span data-i18n="product.principles.messenger.body">It starts as a translator, but the goal is a translated messenger that can replace Discord, calls, or chat.</span>
+                </article>
+                <article class="principle-item">
+                  <strong data-i18n="product.principles.relationship.title">Focus on relationships.</strong>
+                  <span data-i18n="product.principles.relationship.body">Mingle is for moments where real exchange happens: foreign friends, communities, travel, and meetups.</span>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--surface" id="proof">
+        <div class="section-inner">
+          <div class="section-heading">
+            <p class="eyebrow" data-i18n="proof.eyebrow">Early signal</p>
+            <h2 data-i18n="proof.title">HelloTalk users are already showing the need.</h2>
+            <p data-i18n="proof.description">
+              Mingle's first target is language-exchange users who want foreign friends. They already try voice rooms,
+              and as translation becomes natural, they rely on Mingle more.
+            </p>
+          </div>
+          <div class="proof-grid">
+            <article class="proof-item">
+              <strong data-i18n="proof.cards.market.title">A 70M+ language exchange market</strong>
+              <span data-i18n="proof.cards.market.body">Platforms like HelloTalk already gather people who want to talk with others around the world.</span>
+            </article>
+            <article class="proof-item">
+              <strong data-i18n="proof.cards.voiceroom.title">A translator beside the voice room</strong>
+              <span data-i18n="proof.cards.voiceroom.body">Users keep a HelloTalk voice room open and run Mingle alongside it to understand the other person.</span>
+            </article>
+            <article class="proof-item">
+              <strong data-i18n="proof.cards.repeat.title">A need that turns into repeat use</strong>
+              <span data-i18n="proof.cards.repeat.body">Some users spend long sessions across multiple days and bring Mingle whenever they talk to foreigners.</span>
+            </article>
+          </div>
+          <div class="quote-strip" aria-label="Mingle user reactions">
+            <blockquote class="quote" data-i18n="proof.quotes.first">"It is so convenient because the translation keeps playing automatically like subtitles."</blockquote>
+            <blockquote class="quote" data-i18n="proof.quotes.second">"I speak Russian and you speak Korean, but we still understand each other. That's amazing."</blockquote>
+            <blockquote class="quote" data-i18n="proof.quotes.third">"It understands much better than Apple Translate."</blockquote>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--deep">
+        <div class="section-inner">
+          <div class="vertical-layout">
+            <div class="vertical-copy">
+              <p class="eyebrow" data-i18n="useCases.eyebrow">Use cases</p>
+              <h2 data-i18n="useCases.title">Not one translator, but conversation experiences for each context.</h2>
+              <p data-i18n="useCases.description">
+                The UI and translation flow people need are different in every social situation. Mingle starts with
+                sharp verticals and builds the right experience for each one.
+              </p>
+            </div>
+            <div class="vertical-grid">
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.hellotalk.title">HelloTalk voice rooms</strong>
+                <span data-i18n="useCases.items.hellotalk.body">Users who want foreign friends but cannot keep conversations going because of language.</span>
+              </article>
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.gaming.title">Global gaming Discords</strong>
+                <span data-i18n="useCases.items.gaming.body">Teams and communities that need voice chat across countries but lack built-in translation.</span>
+              </article>
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.networking.title">International networking events</strong>
+                <span data-i18n="useCases.items.networking.body">Offline moments where people need to speak and understand immediately.</span>
+              </article>
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.travel.title">Meeting locals while traveling</strong>
+                <span data-i18n="useCases.items.travel.body">Travelers who want to start natural conversations with people they meet abroad.</span>
+              </article>
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.tourism.title">Tourism service counters</strong>
+                <span data-i18n="useCases.items.tourism.body">Small businesses that talk to foreign guests every day but cannot hire interpreters.</span>
+              </article>
+              <article class="vertical-item">
+                <strong data-i18n="useCases.items.sns.title">AI-native social network</strong>
+                <span data-i18n="useCases.items.sns.body">A new social platform where translation is not a feature, but the default.</span>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section vision" id="vision">
+        <div class="section-inner">
+          <div class="vision-copy">
+            <p class="eyebrow" data-i18n="vision.eyebrow">Vision</p>
+            <h2 data-i18n="vision.title">The first service people open when they want to meet someone abroad.</h2>
+            <p data-i18n="vision.body1">
+              It starts as a real-time translator for one person. Once users feel the language barrier disappear, the
+              next step is inviting others, making rooms, and growing into communities.
+            </p>
+            <p data-i18n="vision.body2">
+              Mingle is not only changing sentences into another language. It is lowering the language barrier, the
+              lack of topics, and the difficulty of meeting people across borders.
+            </p>
+            <div class="hero-actions" aria-label="Download Mingle">
+              <a class="store-link" href="https://apps.apple.com/app/id6759795134">
+                <img src="/assets/badge-app-store.svg" alt="Download on the App Store" />
+              </a>
+              <a class="store-link" href="https://play.google.com/store/apps/details?id=com.minglelabs.mingle.rn">
+                <img src="/assets/badge-google-play.png" alt="Get it on Google Play" />
+              </a>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span data-i18n="footer.copy">© Mingle Labs. Built for conversations across languages.</span>
+        <div class="footer-links">
+          <a href="/legal/privacy-policy.html" data-i18n="footer.privacy">Privacy</a>
+          <a href="/legal/terms-of-use.html" data-i18n="footer.terms">Terms</a>
+          <a href="/legal" data-i18n="footer.legal">Legal</a>
+        </div>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var storageKey = "i18nextLng";
+        var manualLocaleKey = "translatorLandingLocaleManual";
+        var defaultLocale = "en";
+        var languages = [
+          { code: "en", name: "English", flag: "🇺🇸" },
+          { code: "ko", name: "한국어", flag: "🇰🇷" },
+          { code: "ja", name: "日本語", flag: "🇯🇵" },
+          { code: "zh-CN", name: "简体中文", flag: "🇨🇳" },
+          { code: "zh-TW", name: "繁體中文", flag: "🇹🇼" },
+          { code: "fr", name: "Français", flag: "🇫🇷" },
+          { code: "de", name: "Deutsch", flag: "🇩🇪" },
+          { code: "es", name: "Español", flag: "🇪🇸" },
+          { code: "pt", name: "Português", flag: "🇧🇷" },
+          { code: "it", name: "Italiano", flag: "🇮🇹" },
+          { code: "ru", name: "Русский", flag: "🇷🇺" },
+          { code: "ar", name: "العربية", flag: "🇸🇦" },
+          { code: "hi", name: "हिन्दी", flag: "🇮🇳" },
+          { code: "th", name: "ไทย", flag: "🇹🇭" },
+          { code: "vi", name: "Tiếng Việt", flag: "🇻🇳" }
+        ];
+        var aliases = {
+          zh: "zh-CN",
+          "zh-cn": "zh-CN",
+          "zh-hans": "zh-CN",
+          "zh-sg": "zh-CN",
+          "zh-tw": "zh-TW",
+          "zh-hant": "zh-TW",
+          "zh-hk": "zh-TW",
+          "zh-mo": "zh-TW",
+          in: "en"
+        };
+        languages.forEach(function (language) {
+          aliases[language.code.toLowerCase()] = language.code;
+        });
+
+        var messages = {
+          ko: {
+            metaTitle: "Mingle - 언어 장벽 없는 음성 메신저",
+            metaDescription: "Mingle은 외국인 친구, 글로벌 커뮤니티, 여행지에서의 만남을 위해 만든 실시간 음성 통번역 앱입니다.",
+            nav: { problem: "문제", product: "제품", proof: "반응", vision: "비전", legal: "Legal" },
+            hero: {
+              eyebrow: "Real-time voice translation for social moments",
+              title: "언어 장벽 없는<br />음성 메신저 밍글",
+              lede: "외국인과 친해지고 싶은 순간, 가장 먼저 막히는 것은 말입니다. Mingle은 대화를 멈추지 않고 상대의 말을 듣고, 번역하고, 자막과 음성으로 자연스럽게 이어 주는 모바일 통번역 경험을 만듭니다.",
+              note: "현재의 시작점은 혼자 쓰는 실시간 번역기입니다. 다음 단계는 통번역이 기본으로 들어간 음성 메신저, 그리고 외국인을 만나고 싶을 때 가장 먼저 찾는 소셜 플랫폼입니다."
+            },
+            problem: {
+              eyebrow: "The problem",
+              title: "기존 번역기는 소셜링의 속도를 따라오지 못합니다.",
+              description: "번역 자체는 많아졌지만, 외국인 친구와 실제로 친해지는 대화에서는 여전히 불편합니다. 앱을 오가고, 언어 설정을 바꾸고, 번역 결과를 기다리는 동안 대화의 리듬이 끊깁니다.",
+              cards: {
+                realtime: { title: "실시간 대화에 맞지 않습니다.", body: "일반 번역 앱은 문장을 입력하고 결과를 확인하는 흐름에 가깝습니다. 보이스룸, 전화, 네트워킹 자리처럼 말이 계속 이어지는 상황에서는 대화가 자주 멈춥니다." },
+                language: { title: "언어 설정이 대화를 방해합니다.", body: "여러 언어가 섞이거나 상대가 바뀌면 사용자가 직접 언어를 고쳐야 합니다. 소셜링에서는 상대보다 설정 화면을 더 오래 보는 순간이 생깁니다." },
+                social: { title: "소셜 경험이 빠져 있습니다.", body: "통번역, 노트테이킹, 메신저, SNS는 각자 다른 문제를 봅니다. 하지만 외국인과 친해지는 사람에게 필요한 것은 번역 결과가 아니라 이어지는 관계입니다." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI 발전으로 이제 소셜 통번역을 제품 안에 녹일 수 있습니다.",
+              body1: "Mingle은 번역 버튼 하나를 더 만드는 제품이 아닙니다. 대화의 흐름을 유지하기 위해 실시간 음성 인식, 자동 언어 감지, 발화 분리, 번역 결과 재생을 한 화면에서 묶습니다.",
+              body2: "사용자는 상대가 어떤 언어로 말하는지 매번 고르지 않아도 됩니다. 서로 다른 언어를 쓰는 사람이 각자 편한 말로 대화해도, Mingle은 자막처럼 번역을 띄우고 필요한 경우 음성으로 다시 들려줍니다.",
+              body3: "그래서 Mingle의 핵심은 정확도 하나가 아니라, 외국인과 말문이 트이는 순간까지 가는 전체 경험입니다. 번역이 배경으로 내려갈수록 사람은 상대에게 더 집중할 수 있습니다."
+            },
+            product: {
+              eyebrow: "Product principles",
+              title: "대화 중인 사람에게 필요한 흐름만 남깁니다.",
+              description: "Mingle은 통번역을 소셜링 도구로 다시 설계합니다. 목표는 번역 정확도를 자랑하는 화면이 아니라, 사용자가 계속 듣고 말할 수 있는 상태입니다.",
+              principles: {
+                detect: { title: "자동으로 듣고 감지합니다.", body: "상대의 언어를 매번 고르지 않아도 대화가 시작되도록, 음성과 언어를 자연스럽게 처리합니다." },
+                subtitle: { title: "자막처럼 바로 따라옵니다.", body: "번역 결과가 대화 흐름 위에 얹혀서, 사용자가 앱 사이를 왕복하지 않아도 됩니다." },
+                messenger: { title: "음성 메신저로 확장됩니다.", body: "초기에는 번역기로 시작하지만, 목표는 디스코드나 전화 대신 쓸 수 있는 통번역 메신저입니다." },
+                relationship: { title: "관계 형성에 집중합니다.", body: "언어 학습보다 외국인 친구, 커뮤니티, 여행지 만남처럼 실제 교류가 일어나는 순간을 봅니다." }
+              }
+            },
+            proof: {
+              eyebrow: "Early signal",
+              title: "헬로톡 유저들이 먼저 문제를 보여 주고 있습니다.",
+              description: "Mingle의 첫 번째 타겟은 외국인 친구를 사귀고 싶어 하는 언어 교환 사용자입니다. 이들은 이미 보이스룸에서 대화를 시도하고 있고, 통번역이 자연스러워질수록 Mingle에 더 의존합니다.",
+              cards: {
+                market: { title: "7천만명 이상의 언어 교환 시장", body: "헬로톡처럼 전세계 사람과 대화할 수 있는 플랫폼에는 이미 외국인과 친해지고 싶은 사용자가 모여 있습니다." },
+                voiceroom: { title: "보이스룸 옆에서 쓰는 번역기", body: "사용자는 헬로톡 보이스룸을 켜두고 Mingle을 함께 실행해 상대의 말을 번역합니다." },
+                repeat: { title: "반복 사용으로 이어지는 필요", body: "일부 사용자는 여러 날 동안 긴 시간 사용하며, 외국인과 대화할 때 Mingle을 대동합니다." }
+              },
+              quotes: {
+                first: "\"번역할 때마다 끊기지 않고 자막처럼 자동 재생되니까 너무 편하다.\"",
+                second: "\"난 러시아어로, 넌 한국어로 말하는데도 서로 알아들으니까 너무 좋다.\"",
+                third: "\"애플 번역기보다 훨씬 잘 알아듣는다.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Use cases",
+              title: "한 가지 번역기가 아니라, 상황별 대화 경험으로 확장합니다.",
+              description: "소셜링에 필요한 UI와 번역 흐름은 상황마다 다릅니다. Mingle은 먼저 날카로운 문제를 가진 버티컬에서 시작해, 각 상황에 맞는 통번역 경험을 하나씩 쌓아 갑니다.",
+              items: {
+                hellotalk: { title: "헬로톡 보이스룸", body: "외국인 친구와 대화하고 싶지만 언어 때문에 오래 이어지지 않는 사용자." },
+                gaming: { title: "글로벌 게임 디스코드", body: "다국적 서버와 커뮤니티에서 음성 대화가 필요하지만 통번역 기능이 부족한 팀." },
+                networking: { title: "다국적 네트워킹 모임", body: "현장에서 바로 말하고 이해해야 하는 오프라인 교류 상황." },
+                travel: { title: "해외 여행 현지 만남", body: "여행지에서 만난 사람과 자연스럽게 대화를 시작하고 싶은 사용자." },
+                tourism: { title: "관광 서비스 현장", body: "외국인 손님과 매일 대화해야 하지만 전문 통역사를 두기 어려운 소상공인." },
+                sns: { title: "AI 네이티브 SNS", body: "번역이 기능이 아니라 기본값이 되는 새로운 소셜 플랫폼." }
+              }
+            },
+            vision: {
+              eyebrow: "Vision",
+              title: "외국인을 만나고 싶을 때 가장 먼저 찾는 서비스.",
+              body1: "처음에는 혼자 쓰는 실시간 번역기로 시작합니다. 사용자가 언어 장벽이 사라지는 경험을 먼저 느끼면, 그 다음은 상대를 초대하고, 방을 만들고, 커뮤니티로 확장하는 일입니다.",
+              body2: "Mingle이 해결하려는 것은 단순히 문장을 다른 언어로 바꾸는 일이 아닙니다. 외국인과의 교류에서 마주치는 언어 장벽, 대화 소재의 부재, 만남의 어려움까지 낮추는 것입니다."
+            },
+            footer: { copy: "© Mingle Labs. Built for conversations across languages.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          en: {
+            metaTitle: "Mingle - Voice messenger without language barriers",
+            metaDescription: "Mingle is a real-time voice translation app for foreign friends, global communities, and conversations while traveling.",
+            nav: { problem: "Problem", product: "Product", proof: "Proof", vision: "Vision", legal: "Legal" },
+            hero: {
+              eyebrow: "Real-time voice translation for social moments",
+              title: "Voice messenger<br />without language barriers",
+              lede: "When you want to get closer to someone from another country, language is usually the first thing that gets in the way. Mingle listens, translates, and keeps the conversation moving with subtitle-like text and voice playback.",
+              note: "The starting point is a real-time translator you can use on your own. The next step is a voice messenger with translation built in, then a social platform people open first when they want to meet someone abroad."
+            },
+            problem: {
+              eyebrow: "The problem",
+              title: "Existing translators cannot keep up with social conversations.",
+              description: "Translation tools are everywhere, but they still feel awkward when you are trying to become friends with someone. Switching apps, changing language settings, and waiting for results breaks the rhythm.",
+              cards: {
+                realtime: { title: "They are not built for live speech.", body: "Most translators are designed around entering a sentence and checking a result. In voice rooms, calls, and networking events, that flow stops the conversation again and again." },
+                language: { title: "Language settings get in the way.", body: "When languages or speakers change, users still have to manage settings. In social moments, that means staring at controls instead of the person in front of you." },
+                social: { title: "The social experience is missing.", body: "Translation, note-taking, messengers, and social networks each solve separate problems. People trying to make foreign friends need a relationship to continue, not just a translated sentence." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI can now make social translation part of the product itself.",
+              body1: "Mingle is not just another translate button. It combines real-time speech recognition, automatic language detection, speaker separation, translated captions, and playback in one conversation surface.",
+              body2: "Users do not need to choose the other person's language every time. Even when each person speaks naturally in a different language, Mingle shows the translation like captions and can play it back as voice.",
+              body3: "The core is not accuracy alone. It is the whole path from opening your mouth to feeling that a conversation can continue. The more translation fades into the background, the more people can focus on each other."
+            },
+            product: {
+              eyebrow: "Product principles",
+              title: "Keep only the flow a conversation needs.",
+              description: "Mingle redesigns translation as a social tool. The goal is not a screen that shows off accuracy, but a state where users can keep listening and speaking.",
+              principles: {
+                detect: { title: "Listen and detect automatically.", body: "The conversation can begin without asking users to keep selecting the other person's language." },
+                subtitle: { title: "Follow the conversation like captions.", body: "Translation sits on top of the conversation flow, so users do not have to bounce between apps." },
+                messenger: { title: "Expand into a voice messenger.", body: "It starts as a translator, but the goal is a translated messenger that can replace Discord, calls, or chat." },
+                relationship: { title: "Focus on relationships.", body: "Mingle is for moments where real exchange happens: foreign friends, communities, travel, and meetups." }
+              }
+            },
+            proof: {
+              eyebrow: "Early signal",
+              title: "HelloTalk users are already showing the need.",
+              description: "Mingle's first target is language-exchange users who want foreign friends. They already try voice rooms, and as translation becomes natural, they rely on Mingle more.",
+              cards: {
+                market: { title: "A 70M+ language exchange market", body: "Platforms like HelloTalk already gather people who want to talk with others around the world." },
+                voiceroom: { title: "A translator beside the voice room", body: "Users keep a HelloTalk voice room open and run Mingle alongside it to understand the other person." },
+                repeat: { title: "A need that turns into repeat use", body: "Some users spend long sessions across multiple days and bring Mingle whenever they talk to foreigners." }
+              },
+              quotes: {
+                first: "\"It is so convenient because the translation keeps playing automatically like subtitles.\"",
+                second: "\"I speak Russian and you speak Korean, but we still understand each other. That's amazing.\"",
+                third: "\"It understands much better than Apple Translate.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Use cases",
+              title: "Not one translator, but conversation experiences for each context.",
+              description: "The UI and translation flow people need are different in every social situation. Mingle starts with sharp verticals and builds the right experience for each one.",
+              items: {
+                hellotalk: { title: "HelloTalk voice rooms", body: "Users who want foreign friends but cannot keep conversations going because of language." },
+                gaming: { title: "Global gaming Discords", body: "Teams and communities that need voice chat across countries but lack built-in translation." },
+                networking: { title: "International networking events", body: "Offline moments where people need to speak and understand immediately." },
+                travel: { title: "Meeting locals while traveling", body: "Travelers who want to start natural conversations with people they meet abroad." },
+                tourism: { title: "Tourism service counters", body: "Small businesses that talk to foreign guests every day but cannot hire interpreters." },
+                sns: { title: "AI-native social network", body: "A new social platform where translation is not a feature, but the default." }
+              }
+            },
+            vision: {
+              eyebrow: "Vision",
+              title: "The first service people open when they want to meet someone abroad.",
+              body1: "It starts as a real-time translator for one person. Once users feel the language barrier disappear, the next step is inviting others, making rooms, and growing into communities.",
+              body2: "Mingle is not only changing sentences into another language. It is lowering the language barrier, the lack of topics, and the difficulty of meeting people across borders."
+            },
+            footer: { copy: "© Mingle Labs. Built for conversations across languages.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          ja: {
+            metaTitle: "Mingle - 言語の壁をなくす音声メッセンジャー",
+            metaDescription: "Mingleは、海外の友人、グローバルコミュニティ、旅行先での会話のためのリアルタイム音声翻訳アプリです。",
+            nav: { problem: "課題", product: "プロダクト", proof: "反応", vision: "ビジョン", legal: "Legal" },
+            hero: {
+              eyebrow: "ソーシャルな瞬間のためのリアルタイム音声翻訳",
+              title: "言語の壁をなくす<br />音声メッセンジャー",
+              lede: "海外の人ともっと近づきたいとき、最初に立ちはだかるのは言葉です。Mingleは相手の声を聞き取り、翻訳し、字幕のようなテキストと音声再生で会話を止めずにつなげます。",
+              note: "出発点は一人で使えるリアルタイム翻訳機です。次の段階は翻訳が組み込まれた音声メッセンジャー、そして海外の人と出会いたいときに最初に開くソーシャルプラットフォームです。"
+            },
+            problem: {
+              eyebrow: "課題",
+              title: "既存の翻訳ツールは、ソーシャルな会話の速さについていけません。",
+              description: "翻訳ツールは増えましたが、海外の人と実際に仲良くなる会話ではまだ不自然です。アプリを切り替え、言語設定を変え、結果を待つ間に会話のリズムが途切れます。",
+              cards: {
+                realtime: { title: "ライブ音声向けに作られていません。", body: "多くの翻訳アプリは文を入力して結果を確認する流れです。ボイスルーム、通話、ネットワーキングの場では、その流れが会話を何度も止めてしまいます。" },
+                language: { title: "言語設定が会話を邪魔します。", body: "言語や話し手が変わるたびに、ユーザーは設定を管理しなければなりません。ソーシャルな場では相手よりも操作画面を見てしまいます。" },
+                social: { title: "ソーシャル体験が抜けています。", body: "翻訳、メモ、メッセンジャー、SNSはそれぞれ別の問題を解いています。海外の友人を作りたい人に必要なのは、翻訳文だけでなく続いていく関係です。" }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AIにより、ソーシャル翻訳をプロダクトそのものに組み込めるようになりました。",
+              body1: "Mingleは翻訳ボタンを一つ増やすだけのプロダクトではありません。リアルタイム音声認識、自動言語検出、話者分離、翻訳字幕、音声再生を一つの会話画面にまとめます。",
+              body2: "ユーザーは相手の言語を毎回選ぶ必要がありません。互いに違う言語で自然に話しても、Mingleは字幕のように翻訳を表示し、必要なら音声で再生します。",
+              body3: "核にあるのは正確さだけではありません。口を開いてから会話が続くと感じるまでの体験全体です。翻訳が背景に下がるほど、人は相手に集中できます。"
+            },
+            product: {
+              eyebrow: "プロダクト原則",
+              title: "会話に必要な流れだけを残します。",
+              description: "Mingleは翻訳をソーシャルツールとして設計し直します。目標は精度を見せる画面ではなく、ユーザーが聞き続け、話し続けられる状態です。",
+              principles: {
+                detect: { title: "自動で聞き取り、検出します。", body: "相手の言語を選び続けなくても、会話を始められるようにします。" },
+                subtitle: { title: "字幕のように会話についてきます。", body: "翻訳が会話の流れに重なるため、ユーザーはアプリを行き来する必要がありません。" },
+                messenger: { title: "音声メッセンジャーへ広がります。", body: "最初は翻訳機ですが、目標はDiscord、通話、チャットの代わりになる翻訳メッセンジャーです。" },
+                relationship: { title: "関係づくりに集中します。", body: "Mingleは海外の友人、コミュニティ、旅行、ミートアップなど、実際の交流が生まれる瞬間のためのものです。" }
+              }
+            },
+            proof: {
+              eyebrow: "初期シグナル",
+              title: "HelloTalkユーザーがすでにニーズを示しています。",
+              description: "Mingleの最初のターゲットは、海外の友人を作りたい言語交換ユーザーです。彼らはすでにボイスルームで会話を試しており、翻訳が自然になるほどMingleに頼るようになります。",
+              cards: {
+                market: { title: "7,000万人以上の言語交換市場", body: "HelloTalkのようなプラットフォームには、世界中の人と話したいユーザーがすでに集まっています。" },
+                voiceroom: { title: "ボイスルームの横に置く翻訳機", body: "ユーザーはHelloTalkのボイスルームを開いたまま、Mingleを並行して使い相手の言葉を理解します。" },
+                repeat: { title: "繰り返し使われるニーズ", body: "一部のユーザーは何日にもわたって長時間使い、海外の人と話すたびにMingleを使っています。" }
+              },
+              quotes: {
+                first: "\"翻訳が字幕のように自動再生されるので、とても便利です。\"",
+                second: "\"私はロシア語、あなたは韓国語でも、お互いに理解できるのがすごい。\"",
+                third: "\"Apple翻訳よりずっとよく聞き取ってくれます。\""
+              }
+            },
+            useCases: {
+              eyebrow: "ユースケース",
+              title: "一つの翻訳機ではなく、状況ごとの会話体験へ広げます。",
+              description: "ソーシャルな場で必要なUIと翻訳フローは状況ごとに異なります。Mingleは課題が明確なバーティカルから始め、それぞれに合う体験を積み上げます。",
+              items: {
+                hellotalk: { title: "HelloTalkボイスルーム", body: "海外の友人と話したいのに、言語のせいで会話が続かないユーザー。" },
+                gaming: { title: "グローバルゲームDiscord", body: "国をまたぐ音声チャットが必要なのに、内蔵翻訳がないチームやコミュニティ。" },
+                networking: { title: "国際ネットワーキングイベント", body: "その場ですぐ話し、理解する必要があるオフライン交流。" },
+                travel: { title: "旅行先で現地の人と出会う", body: "旅先で出会った人と自然に会話を始めたい旅行者。" },
+                tourism: { title: "観光サービスの現場", body: "外国人ゲストと毎日話すが、通訳を雇うのが難しい小規模事業者。" },
+                sns: { title: "AIネイティブSNS", body: "翻訳が機能ではなく標準になる新しいソーシャルプラットフォーム。" }
+              }
+            },
+            vision: {
+              eyebrow: "ビジョン",
+              title: "海外の人と出会いたいとき、最初に開くサービス。",
+              body1: "最初は一人で使えるリアルタイム翻訳機です。ユーザーが言語の壁が消える体験をすると、次は相手を招待し、部屋を作り、コミュニティへ広がっていきます。",
+              body2: "Mingleが解決するのは、文を別の言語に置き換えることだけではありません。海外の人との交流で生まれる言語の壁、話題の不足、出会いの難しさまで下げることです。"
+            },
+            footer: { copy: "© Mingle Labs. 言語を越える会話のために作られました。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          "zh-CN": {
+            metaTitle: "Mingle - 没有语言障碍的语音聊天",
+            metaDescription: "Mingle 是一款实时语音翻译应用，适合结识外国朋友、加入全球社区以及旅行中的对话。",
+            nav: { problem: "问题", product: "产品", proof: "反馈", vision: "愿景", legal: "Legal" },
+            hero: {
+              eyebrow: "为社交场景打造的实时语音翻译",
+              title: "没有语言障碍的<br />语音聊天",
+              lede: "当你想和来自其他国家的人更亲近时，语言往往是第一道阻碍。Mingle 会聆听、翻译，并用字幕般的文字和语音播放让对话继续下去。",
+              note: "起点是一款可以单独使用的实时翻译器。下一步是内置翻译的语音聊天，再之后是人们想认识海外朋友时首先打开的社交平台。"
+            },
+            problem: {
+              eyebrow: "问题",
+              title: "现有翻译工具跟不上真实社交对话的速度。",
+              description: "翻译工具已经很多，但在真正想和外国人成为朋友的对话里仍然很别扭。切换应用、调整语言、等待结果都会打断节奏。",
+              cards: {
+                realtime: { title: "它们不是为实时语音而生。", body: "大多数翻译器的流程是输入一句话再查看结果。在语音房、通话和社交活动中，这种流程会一次次打断对话。" },
+                language: { title: "语言设置会打扰对话。", body: "当语言或说话人变化时，用户仍然要管理设置。在社交场景里，这意味着你看控制项的时间比看对方更多。" },
+                social: { title: "缺少社交体验。", body: "翻译、笔记、聊天和社交网络各自解决不同问题。想交外国朋友的人需要的是持续的关系，而不只是翻译后的句子。" }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI 已经可以让社交翻译成为产品本身的一部分。",
+              body1: "Mingle 不是又一个翻译按钮。它把实时语音识别、自动语言检测、说话人区分、翻译字幕和语音播放整合在同一个对话界面里。",
+              body2: "用户不需要每次选择对方的语言。即使双方自然地说不同语言，Mingle 也会像字幕一样显示翻译，并可按需用语音播放。",
+              body3: "核心不只是准确率，而是从开口到感到对话可以继续的完整路径。翻译越退到背景里，人们就越能专注于彼此。"
+            },
+            product: {
+              eyebrow: "产品原则",
+              title: "只保留一场对话真正需要的流程。",
+              description: "Mingle 将翻译重新设计成社交工具。目标不是炫耀准确率的界面，而是让用户持续听、持续说的状态。",
+              principles: {
+                detect: { title: "自动聆听和识别。", body: "不用反复选择对方语言，也能自然开始对话。" },
+                subtitle: { title: "像字幕一样跟上对话。", body: "翻译覆盖在对话流程上，用户不用在应用之间来回切换。" },
+                messenger: { title: "扩展为语音聊天。", body: "它从翻译器开始，但目标是能替代 Discord、通话或聊天的翻译聊天工具。" },
+                relationship: { title: "专注于建立关系。", body: "Mingle 面向真实交流发生的时刻：外国朋友、社区、旅行和线下聚会。" }
+              }
+            },
+            proof: {
+              eyebrow: "早期信号",
+              title: "HelloTalk 用户已经展示了这种需求。",
+              description: "Mingle 的第一批目标用户是想交外国朋友的语言交换用户。他们已经在尝试语音房；当翻译变得自然时，他们会更依赖 Mingle。",
+              cards: {
+                market: { title: "超过 7000 万人的语言交换市场", body: "像 HelloTalk 这样的平台已经聚集了想和世界各地的人交流的用户。" },
+                voiceroom: { title: "语音房旁边的翻译器", body: "用户打开 HelloTalk 语音房，同时运行 Mingle 来理解对方。" },
+                repeat: { title: "会带来重复使用的需求", body: "一些用户会连续多天长时间使用，并在和外国人对话时带上 Mingle。" }
+              },
+              quotes: {
+                first: "\"翻译像字幕一样自动播放，非常方便。\"",
+                second: "\"我说俄语，你说韩语，但我们仍然能听懂彼此，这太棒了。\"",
+                third: "\"它比 Apple 翻译听得清楚多了。\""
+              }
+            },
+            useCases: {
+              eyebrow: "使用场景",
+              title: "不是一个翻译器，而是面向不同情境的对话体验。",
+              description: "每种社交情境需要的 UI 和翻译流程都不同。Mingle 从痛点清晰的垂直场景开始，为每个场景构建合适体验。",
+              items: {
+                hellotalk: { title: "HelloTalk 语音房", body: "想交外国朋友却因为语言无法让对话继续的用户。" },
+                gaming: { title: "全球游戏 Discord", body: "需要跨国家语音聊天但缺少内置翻译的团队和社区。" },
+                networking: { title: "国际社交活动", body: "需要现场立即表达和理解的线下交流。" },
+                travel: { title: "旅行中认识当地人", body: "想和旅途中遇到的人自然开始对话的旅行者。" },
+                tourism: { title: "旅游服务现场", body: "每天接待外国客人却难以聘请口译员的小商家。" },
+                sns: { title: "AI 原生社交网络", body: "翻译不再是功能，而是默认状态的新社交平台。" }
+              }
+            },
+            vision: {
+              eyebrow: "愿景",
+              title: "当人们想结识海外朋友时，首先打开的服务。",
+              body1: "它先从一个人使用的实时翻译器开始。一旦用户感受到语言障碍消失，下一步就是邀请他人、创建房间，并成长为社区。",
+              body2: "Mingle 解决的不只是把句子换成另一种语言。它也在降低跨国交流中的语言障碍、话题不足和相遇难度。"
+            },
+            footer: { copy: "© Mingle Labs. 为跨越语言的对话而构建。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          "zh-TW": {
+            metaTitle: "Mingle - 沒有語言障礙的語音聊天",
+            metaDescription: "Mingle 是為外國朋友、全球社群與旅行對話打造的即時語音翻譯應用程式。",
+            nav: { problem: "問題", product: "產品", proof: "反應", vision: "願景", legal: "Legal" },
+            hero: {
+              eyebrow: "為社交時刻打造的即時語音翻譯",
+              title: "沒有語言障礙的<br />語音聊天",
+              lede: "當你想和來自其他國家的人更靠近時，語言往往是第一道阻礙。Mingle 會聆聽、翻譯，並用像字幕一樣的文字與語音播放讓對話繼續。",
+              note: "起點是一款可以單獨使用的即時翻譯器。下一步是內建翻譯的語音聊天，之後則是人們想認識海外朋友時最先打開的社交平台。"
+            },
+            problem: {
+              eyebrow: "問題",
+              title: "既有翻譯工具跟不上真實社交對話的速度。",
+              description: "翻譯工具很多，但在真正想和外國人成為朋友的對話裡仍然彆扭。切換 App、調整語言、等待結果，都會打斷節奏。",
+              cards: {
+                realtime: { title: "它們不是為即時語音而設計。", body: "多數翻譯器是輸入一句話再查看結果的流程。在語音房、通話和交流活動中，這種流程會一次次中斷對話。" },
+                language: { title: "語言設定會干擾對話。", body: "當語言或說話者改變時，使用者仍然要管理設定。在社交場景裡，這代表你看控制項的時間比看對方更多。" },
+                social: { title: "缺少社交體驗。", body: "翻譯、筆記、聊天與社群網路各自解決不同問題。想交外國朋友的人需要的是能延續的關係，而不只是翻譯句子。" }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI 已經能把社交翻譯融入產品本身。",
+              body1: "Mingle 不是多做一個翻譯按鈕。它把即時語音辨識、自動語言偵測、說話者分離、翻譯字幕與語音播放整合在同一個對話介面。",
+              body2: "使用者不需要每次選擇對方的語言。即使雙方自然地說不同語言，Mingle 也會像字幕一樣顯示翻譯，並可在需要時用語音播放。",
+              body3: "核心不只是準確率，而是從開口到感覺對話能繼續的完整體驗。翻譯越退到背景，人們就越能專注於彼此。"
+            },
+            product: {
+              eyebrow: "產品原則",
+              title: "只留下對話真正需要的流程。",
+              description: "Mingle 將翻譯重新設計成社交工具。目標不是展示準確率的畫面，而是讓使用者能持續聽、持續說的狀態。",
+              principles: {
+                detect: { title: "自動聆聽並偵測。", body: "不用反覆選擇對方語言，也能自然開始對話。" },
+                subtitle: { title: "像字幕一樣跟上對話。", body: "翻譯覆蓋在對話流程上，使用者不用在 App 之間來回切換。" },
+                messenger: { title: "擴展成語音聊天。", body: "它從翻譯器開始，但目標是能替代 Discord、通話或聊天的翻譯聊天工具。" },
+                relationship: { title: "專注於建立關係。", body: "Mingle 面向真實交流發生的時刻：外國朋友、社群、旅行和聚會。" }
+              }
+            },
+            proof: {
+              eyebrow: "早期訊號",
+              title: "HelloTalk 使用者已經顯示了需求。",
+              description: "Mingle 的第一個目標是想交外國朋友的語言交換使用者。他們已經在嘗試語音房；當翻譯變得自然，就會更依賴 Mingle。",
+              cards: {
+                market: { title: "超過 7000 萬人的語言交換市場", body: "像 HelloTalk 這樣的平台已經聚集了想和世界各地的人交流的使用者。" },
+                voiceroom: { title: "語音房旁邊的翻譯器", body: "使用者開著 HelloTalk 語音房，同時執行 Mingle 來理解對方。" },
+                repeat: { title: "會帶來重複使用的需求", body: "有些使用者會連續多天長時間使用，並在和外國人對話時帶上 Mingle。" }
+              },
+              quotes: {
+                first: "\"翻譯像字幕一樣自動播放，非常方便。\"",
+                second: "\"我說俄語，你說韓語，但我們仍然能互相理解，太棒了。\"",
+                third: "\"它比 Apple 翻譯聽得清楚多了。\""
+              }
+            },
+            useCases: {
+              eyebrow: "使用情境",
+              title: "不是一個翻譯器，而是面向不同情境的對話體驗。",
+              description: "每種社交情境需要的 UI 和翻譯流程都不同。Mingle 從痛點清楚的垂直場景開始，為每個情境建立合適體驗。",
+              items: {
+                hellotalk: { title: "HelloTalk 語音房", body: "想交外國朋友卻因語言無法讓對話持續的使用者。" },
+                gaming: { title: "全球遊戲 Discord", body: "需要跨國語音聊天但缺少內建翻譯的團隊與社群。" },
+                networking: { title: "國際交流活動", body: "需要現場立即表達與理解的線下交流。" },
+                travel: { title: "旅行中認識當地人", body: "想和旅途中遇到的人自然開始對話的旅行者。" },
+                tourism: { title: "觀光服務現場", body: "每天接待外國客人卻難以聘請口譯員的小商家。" },
+                sns: { title: "AI 原生社群網路", body: "翻譯不再是功能，而是預設狀態的新社交平台。" }
+              }
+            },
+            vision: {
+              eyebrow: "願景",
+              title: "人們想認識海外朋友時，最先打開的服務。",
+              body1: "它先從一個人使用的即時翻譯器開始。一旦使用者感受到語言障礙消失，下一步就是邀請他人、建立房間，並成長為社群。",
+              body2: "Mingle 解決的不只是把句子換成另一種語言。它也在降低跨國交流中的語言障礙、話題不足與相遇難度。"
+            },
+            footer: { copy: "© Mingle Labs. 為跨越語言的對話而打造。", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          fr: {
+            metaTitle: "Mingle - Messenger vocal sans barrière de langue",
+            metaDescription: "Mingle est une application de traduction vocale en temps réel pour les amis étrangers, les communautés mondiales et les conversations en voyage.",
+            nav: { problem: "Problème", product: "Produit", proof: "Preuves", vision: "Vision", legal: "Legal" },
+            hero: {
+              eyebrow: "Traduction vocale en temps réel pour les moments sociaux",
+              title: "Messenger vocal<br />sans barrière de langue",
+              lede: "Quand vous voulez vous rapprocher de quelqu'un d'un autre pays, la langue est souvent le premier obstacle. Mingle écoute, traduit et maintient la conversation avec du texte façon sous-titres et une lecture vocale.",
+              note: "Le point de départ est un traducteur en temps réel utilisable seul. L'étape suivante est un messenger vocal avec traduction intégrée, puis une plateforme sociale que l'on ouvre en premier pour rencontrer quelqu'un à l'étranger."
+            },
+            problem: {
+              eyebrow: "Le problème",
+              title: "Les traducteurs existants ne suivent pas le rythme des conversations sociales.",
+              description: "Les outils de traduction sont partout, mais ils restent maladroits quand on essaie de devenir ami avec quelqu'un. Changer d'application, modifier les langues et attendre les résultats casse le rythme.",
+              cards: {
+                realtime: { title: "Ils ne sont pas pensés pour la parole en direct.", body: "La plupart des traducteurs sont conçus pour saisir une phrase puis lire un résultat. Dans les salons vocaux, les appels et les événements, ce flux interrompt sans cesse la conversation." },
+                language: { title: "Les réglages de langue gênent.", body: "Quand les langues ou les interlocuteurs changent, les utilisateurs doivent encore gérer les réglages. Dans un moment social, on regarde alors les contrôles au lieu de la personne." },
+                social: { title: "L'expérience sociale manque.", body: "Traduction, notes, messageries et réseaux sociaux résolvent chacun des problèmes séparés. Les personnes qui veulent se faire des amis étrangers ont besoin d'une relation qui continue, pas seulement d'une phrase traduite." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "L'IA permet désormais d'intégrer la traduction sociale au cœur du produit.",
+              body1: "Mingle n'est pas simplement un bouton de traduction de plus. Il réunit reconnaissance vocale en temps réel, détection automatique de langue, séparation des locuteurs, sous-titres traduits et lecture vocale dans une même surface de conversation.",
+              body2: "Les utilisateurs n'ont pas besoin de choisir la langue de l'autre personne à chaque fois. Même si chacun parle naturellement une langue différente, Mingle affiche la traduction comme des sous-titres et peut la lire à voix haute.",
+              body3: "Le cœur n'est pas seulement la précision. C'est tout le chemin qui va de la prise de parole au sentiment que la conversation peut continuer. Plus la traduction passe en arrière-plan, plus les gens se concentrent l'un sur l'autre."
+            },
+            product: {
+              eyebrow: "Principes produit",
+              title: "Ne garder que le flux dont une conversation a besoin.",
+              description: "Mingle repense la traduction comme un outil social. Le but n'est pas un écran qui montre la précision, mais un état où l'on peut continuer à écouter et à parler.",
+              principles: {
+                detect: { title: "Écouter et détecter automatiquement.", body: "La conversation peut commencer sans demander aux utilisateurs de sélectionner sans cesse la langue de l'autre personne." },
+                subtitle: { title: "Suivre la conversation comme des sous-titres.", body: "La traduction se pose sur le flux de la conversation, sans va-et-vient entre les applications." },
+                messenger: { title: "S'étendre vers un messenger vocal.", body: "Cela commence comme un traducteur, mais l'objectif est une messagerie traduite capable de remplacer Discord, les appels ou le chat." },
+                relationship: { title: "Se concentrer sur les relations.", body: "Mingle est conçu pour les moments où de vrais échanges naissent : amis étrangers, communautés, voyages et rencontres." }
+              }
+            },
+            proof: {
+              eyebrow: "Signal précoce",
+              title: "Les utilisateurs de HelloTalk montrent déjà le besoin.",
+              description: "La première cible de Mingle est constituée d'utilisateurs d'échange linguistique qui veulent des amis étrangers. Ils essaient déjà les salons vocaux et, plus la traduction devient naturelle, plus ils comptent sur Mingle.",
+              cards: {
+                market: { title: "Un marché d'échange linguistique de 70 M+ de personnes", body: "Des plateformes comme HelloTalk rassemblent déjà des gens qui veulent parler avec le monde entier." },
+                voiceroom: { title: "Un traducteur à côté du salon vocal", body: "Les utilisateurs gardent un salon vocal HelloTalk ouvert et lancent Mingle à côté pour comprendre l'autre personne." },
+                repeat: { title: "Un besoin qui crée de l'usage répété", body: "Certains utilisateurs passent de longues sessions sur plusieurs jours et ouvrent Mingle chaque fois qu'ils parlent à des étrangers." }
+              },
+              quotes: {
+                first: "\"C'est très pratique parce que la traduction se lit automatiquement comme des sous-titres.\"",
+                second: "\"Je parle russe et tu parles coréen, mais on se comprend quand même. C'est incroyable.\"",
+                third: "\"Il comprend beaucoup mieux qu'Apple Traduction.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Cas d'usage",
+              title: "Pas un seul traducteur, mais des expériences de conversation pour chaque contexte.",
+              description: "L'interface et le flux de traduction dont les gens ont besoin changent selon la situation sociale. Mingle part de verticaux précis et construit la bonne expérience pour chacun.",
+              items: {
+                hellotalk: { title: "Salons vocaux HelloTalk", body: "Des utilisateurs qui veulent des amis étrangers mais n'arrivent pas à faire durer la conversation à cause de la langue." },
+                gaming: { title: "Discords de jeux mondiaux", body: "Des équipes et communautés qui ont besoin de chat vocal entre pays sans traduction intégrée." },
+                networking: { title: "Événements de networking internationaux", body: "Des moments hors ligne où il faut parler et comprendre immédiatement." },
+                travel: { title: "Rencontrer des locaux en voyage", body: "Des voyageurs qui veulent lancer des conversations naturelles avec les personnes qu'ils rencontrent." },
+                tourism: { title: "Comptoirs de services touristiques", body: "Des petites entreprises qui parlent chaque jour à des clients étrangers sans pouvoir embaucher d'interprète." },
+                sns: { title: "Réseau social natif IA", body: "Une nouvelle plateforme sociale où la traduction n'est pas une fonction, mais le réglage par défaut." }
+              }
+            },
+            vision: {
+              eyebrow: "Vision",
+              title: "Le premier service que l'on ouvre pour rencontrer quelqu'un à l'étranger.",
+              body1: "Cela commence par un traducteur en temps réel pour une personne. Quand les utilisateurs sentent la barrière de la langue disparaître, l'étape suivante consiste à inviter d'autres personnes, créer des salons et développer des communautés.",
+              body2: "Mingle ne se contente pas de transformer des phrases dans une autre langue. Il abaisse la barrière linguistique, le manque de sujets et la difficulté de rencontrer des personnes au-delà des frontières."
+            },
+            footer: { copy: "© Mingle Labs. Conçu pour les conversations entre langues.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          de: {
+            metaTitle: "Mingle - Voice-Messenger ohne Sprachbarrieren",
+            metaDescription: "Mingle ist eine Echtzeit-App für Sprachübersetzung, für ausländische Freunde, globale Communities und Gespräche auf Reisen.",
+            nav: { problem: "Problem", product: "Produkt", proof: "Signal", vision: "Vision", legal: "Legal" },
+            hero: {
+              eyebrow: "Echtzeit-Sprachübersetzung für soziale Momente",
+              title: "Voice-Messenger<br />ohne Sprachbarrieren",
+              lede: "Wenn man jemandem aus einem anderen Land näherkommen möchte, ist Sprache meist die erste Hürde. Mingle hört zu, übersetzt und hält das Gespräch mit untertitelartigem Text und Sprachausgabe in Bewegung.",
+              note: "Der Startpunkt ist ein Echtzeit-Übersetzer, den man allein nutzen kann. Der nächste Schritt ist ein Voice-Messenger mit eingebauter Übersetzung und danach eine soziale Plattform, die man zuerst öffnet, wenn man Menschen im Ausland kennenlernen möchte."
+            },
+            problem: {
+              eyebrow: "Das Problem",
+              title: "Bestehende Übersetzer halten mit sozialen Gesprächen nicht Schritt.",
+              description: "Übersetzungstools gibt es überall, aber sie fühlen sich unbeholfen an, wenn man wirklich Freundschaften schließen möchte. Apps wechseln, Spracheinstellungen ändern und auf Ergebnisse warten bricht den Rhythmus.",
+              cards: {
+                realtime: { title: "Sie sind nicht für Live-Sprache gebaut.", body: "Die meisten Übersetzer sind darauf ausgelegt, einen Satz einzugeben und ein Ergebnis zu prüfen. In Voice-Rooms, Anrufen und Networking-Situationen stoppt dieser Ablauf das Gespräch immer wieder." },
+                language: { title: "Spracheinstellungen stehen im Weg.", body: "Wenn Sprachen oder Sprecher wechseln, müssen Nutzer weiterhin Einstellungen verwalten. In sozialen Momenten schaut man dann auf Bedienelemente statt auf die Person." },
+                social: { title: "Die soziale Erfahrung fehlt.", body: "Übersetzung, Notizen, Messenger und soziale Netzwerke lösen jeweils getrennte Probleme. Wer ausländische Freunde finden möchte, braucht eine Beziehung, die weitergeht, nicht nur einen übersetzten Satz." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "KI kann soziale Übersetzung jetzt direkt in das Produkt bringen.",
+              body1: "Mingle ist nicht nur ein weiterer Übersetzen-Button. Es kombiniert Echtzeit-Spracherkennung, automatische Spracherkennung, Sprechertrennung, übersetzte Untertitel und Sprachausgabe in einer Gesprächsfläche.",
+              body2: "Nutzer müssen nicht jedes Mal die Sprache der anderen Person wählen. Selbst wenn beide natürlich in unterschiedlichen Sprachen sprechen, zeigt Mingle die Übersetzung wie Untertitel und kann sie als Stimme wiedergeben.",
+              body3: "Der Kern ist nicht nur Genauigkeit. Es ist der ganze Weg vom ersten Wort bis zu dem Gefühl, dass das Gespräch weitergehen kann. Je mehr die Übersetzung in den Hintergrund tritt, desto mehr konzentrieren sich Menschen aufeinander."
+            },
+            product: {
+              eyebrow: "Produktprinzipien",
+              title: "Nur den Ablauf behalten, den ein Gespräch braucht.",
+              description: "Mingle gestaltet Übersetzung als soziales Werkzeug neu. Das Ziel ist kein Bildschirm, der Genauigkeit demonstriert, sondern ein Zustand, in dem Nutzer weiter zuhören und sprechen können.",
+              principles: {
+                detect: { title: "Automatisch zuhören und erkennen.", body: "Das Gespräch kann beginnen, ohne dass Nutzer ständig die Sprache der anderen Person auswählen müssen." },
+                subtitle: { title: "Wie Untertitel dem Gespräch folgen.", body: "Die Übersetzung liegt über dem Gesprächsfluss, sodass Nutzer nicht zwischen Apps wechseln müssen." },
+                messenger: { title: "Zum Voice-Messenger wachsen.", body: "Es beginnt als Übersetzer, aber das Ziel ist ein übersetzter Messenger, der Discord, Anrufe oder Chat ersetzen kann." },
+                relationship: { title: "Beziehungen in den Mittelpunkt stellen.", body: "Mingle ist für Momente, in denen echter Austausch entsteht: ausländische Freunde, Communities, Reisen und Treffen." }
+              }
+            },
+            proof: {
+              eyebrow: "Frühes Signal",
+              title: "HelloTalk-Nutzer zeigen den Bedarf bereits.",
+              description: "Mingles erste Zielgruppe sind Sprachaustausch-Nutzer, die ausländische Freunde finden möchten. Sie probieren bereits Voice-Rooms aus, und je natürlicher Übersetzung wird, desto stärker verlassen sie sich auf Mingle.",
+              cards: {
+                market: { title: "Ein Sprachaustausch-Markt mit über 70 Mio. Menschen", body: "Plattformen wie HelloTalk versammeln bereits Menschen, die mit anderen weltweit sprechen möchten." },
+                voiceroom: { title: "Ein Übersetzer neben dem Voice-Room", body: "Nutzer lassen einen HelloTalk-Voice-Room offen und nutzen Mingle parallel, um die andere Person zu verstehen." },
+                repeat: { title: "Ein Bedarf, der zu wiederholter Nutzung führt", body: "Manche Nutzer verbringen lange Sitzungen über mehrere Tage und öffnen Mingle, wann immer sie mit Ausländern sprechen." }
+              },
+              quotes: {
+                first: "\"Es ist sehr praktisch, weil die Übersetzung automatisch wie Untertitel abgespielt wird.\"",
+                second: "\"Ich spreche Russisch und du Koreanisch, aber wir verstehen uns trotzdem. Das ist großartig.\"",
+                third: "\"Es versteht viel besser als Apple Übersetzen.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Anwendungsfälle",
+              title: "Nicht ein Übersetzer, sondern Gesprächserlebnisse für jeden Kontext.",
+              description: "Die passende UI und der Übersetzungsfluss unterscheiden sich je nach sozialer Situation. Mingle startet in klaren Verticals und baut für jedes die richtige Erfahrung.",
+              items: {
+                hellotalk: { title: "HelloTalk-Voice-Rooms", body: "Nutzer, die ausländische Freunde finden möchten, deren Gespräche aber wegen der Sprache abbrechen." },
+                gaming: { title: "Globale Gaming-Discords", body: "Teams und Communities, die Voice-Chat über Länder hinweg brauchen, aber keine eingebaute Übersetzung haben." },
+                networking: { title: "Internationale Networking-Events", body: "Offline-Momente, in denen Menschen sofort sprechen und verstehen müssen." },
+                travel: { title: "Einheimische auf Reisen treffen", body: "Reisende, die natürliche Gespräche mit Menschen beginnen möchten, die sie unterwegs treffen." },
+                tourism: { title: "Tourismus-Service-Counter", body: "Kleine Unternehmen, die täglich mit ausländischen Gästen sprechen, aber keine Dolmetscher einstellen können." },
+                sns: { title: "KI-natives soziales Netzwerk", body: "Eine neue soziale Plattform, in der Übersetzung keine Funktion ist, sondern der Standard." }
+              }
+            },
+            vision: {
+              eyebrow: "Vision",
+              title: "Der erste Service, den man öffnet, um jemanden im Ausland kennenzulernen.",
+              body1: "Es beginnt als Echtzeit-Übersetzer für eine Person. Sobald Nutzer spüren, dass die Sprachbarriere verschwindet, folgen Einladungen, Räume und wachsende Communities.",
+              body2: "Mingle übersetzt nicht nur Sätze in andere Sprachen. Es senkt Sprachbarrieren, fehlende Gesprächsthemen und die Schwierigkeit, Menschen über Grenzen hinweg zu treffen."
+            },
+            footer: { copy: "© Mingle Labs. Entwickelt für Gespräche über Sprachen hinweg.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          es: {
+            metaTitle: "Mingle - Mensajero de voz sin barreras de idioma",
+            metaDescription: "Mingle es una app de traducción de voz en tiempo real para amigos extranjeros, comunidades globales y conversaciones durante viajes.",
+            nav: { problem: "Problema", product: "Producto", proof: "Señales", vision: "Visión", legal: "Legal" },
+            hero: {
+              eyebrow: "Traducción de voz en tiempo real para momentos sociales",
+              title: "Mensajero de voz<br />sin barreras de idioma",
+              lede: "Cuando quieres acercarte a alguien de otro país, el idioma suele ser lo primero que se interpone. Mingle escucha, traduce y mantiene la conversación con texto tipo subtítulos y reproducción de voz.",
+              note: "El punto de partida es un traductor en tiempo real que puedes usar solo. El siguiente paso es un mensajero de voz con traducción integrada, y luego una plataforma social que la gente abre primero cuando quiere conocer a alguien del extranjero."
+            },
+            problem: {
+              eyebrow: "El problema",
+              title: "Los traductores existentes no siguen el ritmo de las conversaciones sociales.",
+              description: "Las herramientas de traducción están en todas partes, pero siguen siendo incómodas cuando intentas hacer amistad con alguien. Cambiar de app, ajustar idiomas y esperar resultados rompe el ritmo.",
+              cards: {
+                realtime: { title: "No están hechos para voz en vivo.", body: "La mayoría de los traductores están diseñados para escribir una frase y revisar un resultado. En salas de voz, llamadas y eventos, ese flujo detiene la conversación una y otra vez." },
+                language: { title: "La configuración de idioma estorba.", body: "Cuando cambian los idiomas o las personas, los usuarios aún deben gestionar ajustes. En momentos sociales, eso significa mirar controles en vez de mirar a la persona." },
+                social: { title: "Falta la experiencia social.", body: "Traducción, notas, mensajeros y redes sociales resuelven problemas separados. Quien quiere hacer amigos extranjeros necesita que la relación continúe, no solo una frase traducida." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "La IA ya permite que la traducción social sea parte del propio producto.",
+              body1: "Mingle no es solo otro botón de traducción. Combina reconocimiento de voz en tiempo real, detección automática de idioma, separación de hablantes, subtítulos traducidos y reproducción de voz en una sola superficie de conversación.",
+              body2: "Los usuarios no necesitan elegir el idioma de la otra persona cada vez. Aunque cada uno hable de forma natural en un idioma distinto, Mingle muestra la traducción como subtítulos y puede reproducirla como voz.",
+              body3: "El núcleo no es solo la precisión. Es todo el camino desde abrir la boca hasta sentir que la conversación puede continuar. Cuanto más pasa la traducción al fondo, más pueden las personas enfocarse entre sí."
+            },
+            product: {
+              eyebrow: "Principios del producto",
+              title: "Dejar solo el flujo que necesita una conversación.",
+              description: "Mingle rediseña la traducción como una herramienta social. El objetivo no es una pantalla que presume precisión, sino un estado en el que los usuarios pueden seguir escuchando y hablando.",
+              principles: {
+                detect: { title: "Escuchar y detectar automáticamente.", body: "La conversación puede empezar sin pedir a los usuarios que sigan seleccionando el idioma de la otra persona." },
+                subtitle: { title: "Seguir la conversación como subtítulos.", body: "La traducción se coloca sobre el flujo de la conversación, así que no hace falta saltar entre apps." },
+                messenger: { title: "Expandirse a un mensajero de voz.", body: "Empieza como traductor, pero el objetivo es un mensajero traducido que pueda reemplazar Discord, llamadas o chat." },
+                relationship: { title: "Centrarse en relaciones.", body: "Mingle es para momentos donde ocurre un intercambio real: amigos extranjeros, comunidades, viajes y encuentros." }
+              }
+            },
+            proof: {
+              eyebrow: "Señal inicial",
+              title: "Los usuarios de HelloTalk ya muestran la necesidad.",
+              description: "El primer público de Mingle son usuarios de intercambio de idiomas que quieren amigos extranjeros. Ya prueban salas de voz y, cuanto más natural se vuelve la traducción, más dependen de Mingle.",
+              cards: {
+                market: { title: "Un mercado de intercambio de idiomas de más de 70 M", body: "Plataformas como HelloTalk ya reúnen a personas que quieren hablar con otras de todo el mundo." },
+                voiceroom: { title: "Un traductor junto a la sala de voz", body: "Los usuarios mantienen abierta una sala de voz de HelloTalk y ejecutan Mingle al lado para entender a la otra persona." },
+                repeat: { title: "Una necesidad que se convierte en uso repetido", body: "Algunos usuarios pasan sesiones largas durante varios días y abren Mingle cada vez que hablan con extranjeros." }
+              },
+              quotes: {
+                first: "\"Es muy cómodo porque la traducción se reproduce automáticamente como subtítulos.\"",
+                second: "\"Yo hablo ruso y tú coreano, pero aun así nos entendemos. Es increíble.\"",
+                third: "\"Entiende mucho mejor que Apple Translate.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Casos de uso",
+              title: "No un traductor único, sino experiencias de conversación para cada contexto.",
+              description: "La interfaz y el flujo de traducción que la gente necesita cambian en cada situación social. Mingle empieza por verticales claros y construye la experiencia adecuada para cada uno.",
+              items: {
+                hellotalk: { title: "Salas de voz de HelloTalk", body: "Usuarios que quieren amigos extranjeros pero no pueden mantener conversaciones por el idioma." },
+                gaming: { title: "Discords de gaming globales", body: "Equipos y comunidades que necesitan voz entre países pero no tienen traducción integrada." },
+                networking: { title: "Eventos internacionales de networking", body: "Momentos offline en los que hay que hablar y entender de inmediato." },
+                travel: { title: "Conocer locales viajando", body: "Viajeros que quieren iniciar conversaciones naturales con personas que conocen en el camino." },
+                tourism: { title: "Mostradores de servicios turísticos", body: "Pequeños negocios que hablan con huéspedes extranjeros todos los días pero no pueden contratar intérpretes." },
+                sns: { title: "Red social nativa de IA", body: "Una nueva plataforma social donde la traducción no es una función, sino el valor por defecto." }
+              }
+            },
+            vision: {
+              eyebrow: "Visión",
+              title: "El primer servicio que la gente abre cuando quiere conocer a alguien del extranjero.",
+              body1: "Empieza como un traductor en tiempo real para una persona. Cuando los usuarios sienten que desaparece la barrera del idioma, el siguiente paso es invitar a otros, crear salas y hacer crecer comunidades.",
+              body2: "Mingle no solo cambia frases a otro idioma. Reduce la barrera lingüística, la falta de temas y la dificultad de conocer personas más allá de las fronteras."
+            },
+            footer: { copy: "© Mingle Labs. Creado para conversaciones entre idiomas.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          pt: {
+            metaTitle: "Mingle - Mensageiro de voz sem barreiras de idioma",
+            metaDescription: "Mingle é um app de tradução de voz em tempo real para amigos estrangeiros, comunidades globais e conversas durante viagens.",
+            nav: { problem: "Problema", product: "Produto", proof: "Sinais", vision: "Visão", legal: "Legal" },
+            hero: {
+              eyebrow: "Tradução de voz em tempo real para momentos sociais",
+              title: "Mensageiro de voz<br />sem barreiras de idioma",
+              lede: "Quando você quer se aproximar de alguém de outro país, o idioma costuma ser o primeiro obstáculo. Mingle escuta, traduz e mantém a conversa fluindo com texto parecido com legenda e reprodução por voz.",
+              note: "O ponto de partida é um tradutor em tempo real que você usa sozinho. O próximo passo é um mensageiro de voz com tradução integrada, depois uma plataforma social que as pessoas abrem primeiro quando querem conhecer alguém de fora."
+            },
+            problem: {
+              eyebrow: "O problema",
+              title: "Tradutores existentes não acompanham o ritmo das conversas sociais.",
+              description: "Ferramentas de tradução estão por toda parte, mas ainda parecem desajeitadas quando você tenta fazer amizade com alguém. Trocar de app, mudar idiomas e esperar resultados quebra o ritmo.",
+              cards: {
+                realtime: { title: "Não foram feitos para fala ao vivo.", body: "A maioria dos tradutores foi criada para digitar uma frase e conferir o resultado. Em salas de voz, chamadas e eventos, esse fluxo interrompe a conversa repetidamente." },
+                language: { title: "As configurações de idioma atrapalham.", body: "Quando idiomas ou pessoas mudam, usuários ainda precisam gerenciar ajustes. Em momentos sociais, isso significa olhar para controles em vez da pessoa." },
+                social: { title: "A experiência social está faltando.", body: "Tradução, notas, mensageiros e redes sociais resolvem problemas separados. Quem quer fazer amigos estrangeiros precisa de uma relação que continue, não só de uma frase traduzida." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "A IA agora permite que a tradução social faça parte do próprio produto.",
+              body1: "Mingle não é apenas mais um botão de tradução. Ele combina reconhecimento de fala em tempo real, detecção automática de idioma, separação de falantes, legendas traduzidas e reprodução por voz em uma única superfície de conversa.",
+              body2: "Usuários não precisam escolher o idioma da outra pessoa toda vez. Mesmo que cada um fale naturalmente em um idioma diferente, Mingle mostra a tradução como legendas e pode reproduzi-la em voz.",
+              body3: "O centro não é só precisão. É todo o caminho entre começar a falar e sentir que a conversa pode continuar. Quanto mais a tradução vai para o fundo, mais as pessoas se concentram umas nas outras."
+            },
+            product: {
+              eyebrow: "Princípios do produto",
+              title: "Manter apenas o fluxo que uma conversa precisa.",
+              description: "Mingle redesenha tradução como ferramenta social. O objetivo não é uma tela que mostra precisão, mas um estado em que usuários continuam ouvindo e falando.",
+              principles: {
+                detect: { title: "Ouvir e detectar automaticamente.", body: "A conversa pode começar sem pedir que usuários continuem selecionando o idioma da outra pessoa." },
+                subtitle: { title: "Acompanhar a conversa como legendas.", body: "A tradução fica sobre o fluxo da conversa, para que usuários não precisem alternar entre apps." },
+                messenger: { title: "Expandir para um mensageiro de voz.", body: "Começa como tradutor, mas o objetivo é um mensageiro traduzido que possa substituir Discord, chamadas ou chat." },
+                relationship: { title: "Focar em relações.", body: "Mingle é para momentos em que trocas reais acontecem: amigos estrangeiros, comunidades, viagens e encontros." }
+              }
+            },
+            proof: {
+              eyebrow: "Sinal inicial",
+              title: "Usuários do HelloTalk já mostram a necessidade.",
+              description: "O primeiro público de Mingle são usuários de intercâmbio de idiomas que querem amigos estrangeiros. Eles já testam salas de voz e, quanto mais natural fica a tradução, mais dependem do Mingle.",
+              cards: {
+                market: { title: "Um mercado de intercâmbio de idiomas com mais de 70 mi", body: "Plataformas como HelloTalk já reúnem pessoas que querem falar com outras ao redor do mundo." },
+                voiceroom: { title: "Um tradutor ao lado da sala de voz", body: "Usuários mantêm uma sala de voz do HelloTalk aberta e rodam o Mingle junto para entender a outra pessoa." },
+                repeat: { title: "Uma necessidade que vira uso recorrente", body: "Alguns usuários passam longas sessões por vários dias e abrem o Mingle sempre que falam com estrangeiros." }
+              },
+              quotes: {
+                first: "\"É muito prático porque a tradução toca automaticamente como legendas.\"",
+                second: "\"Eu falo russo e você fala coreano, mas ainda nos entendemos. Isso é incrível.\"",
+                third: "\"Ele entende muito melhor que o Apple Tradutor.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Casos de uso",
+              title: "Não um único tradutor, mas experiências de conversa para cada contexto.",
+              description: "A interface e o fluxo de tradução necessários mudam em cada situação social. Mingle começa por verticais claras e constrói a experiência certa para cada uma.",
+              items: {
+                hellotalk: { title: "Salas de voz do HelloTalk", body: "Usuários que querem amigos estrangeiros, mas não conseguem manter conversas por causa do idioma." },
+                gaming: { title: "Discords globais de jogos", body: "Equipes e comunidades que precisam de voz entre países, mas não têm tradução integrada." },
+                networking: { title: "Eventos internacionais de networking", body: "Momentos offline em que as pessoas precisam falar e entender imediatamente." },
+                travel: { title: "Conhecer locais viajando", body: "Viajantes que querem iniciar conversas naturais com pessoas que encontram pelo caminho." },
+                tourism: { title: "Balcões de serviços turísticos", body: "Pequenos negócios que falam com hóspedes estrangeiros todos os dias, mas não podem contratar intérpretes." },
+                sns: { title: "Rede social nativa de IA", body: "Uma nova plataforma social onde tradução não é recurso, mas padrão." }
+              }
+            },
+            vision: {
+              eyebrow: "Visão",
+              title: "O primeiro serviço que as pessoas abrem quando querem conhecer alguém de fora.",
+              body1: "Começa como um tradutor em tempo real para uma pessoa. Quando usuários sentem a barreira do idioma desaparecer, o próximo passo é convidar outras pessoas, criar salas e fazer comunidades crescerem.",
+              body2: "Mingle não apenas transforma frases em outro idioma. Ele reduz a barreira linguística, a falta de assunto e a dificuldade de conhecer pessoas além das fronteiras."
+            },
+            footer: { copy: "© Mingle Labs. Criado para conversas entre idiomas.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          it: {
+            metaTitle: "Mingle - Messaggistica vocale senza barriere linguistiche",
+            metaDescription: "Mingle è un'app di traduzione vocale in tempo reale per amici stranieri, community globali e conversazioni in viaggio.",
+            nav: { problem: "Problema", product: "Prodotto", proof: "Segnali", vision: "Visione", legal: "Legal" },
+            hero: {
+              eyebrow: "Traduzione vocale in tempo reale per momenti sociali",
+              title: "Messaggistica vocale<br />senza barriere linguistiche",
+              lede: "Quando vuoi avvicinarti a qualcuno di un altro paese, la lingua è spesso il primo ostacolo. Mingle ascolta, traduce e mantiene viva la conversazione con testo simile a sottotitoli e riproduzione vocale.",
+              note: "Il punto di partenza è un traduttore in tempo reale da usare da soli. Il passo successivo è un messenger vocale con traduzione integrata, poi una piattaforma social che le persone aprono per prima quando vogliono conoscere qualcuno all'estero."
+            },
+            problem: {
+              eyebrow: "Il problema",
+              title: "I traduttori esistenti non tengono il ritmo delle conversazioni sociali.",
+              description: "Gli strumenti di traduzione sono ovunque, ma risultano ancora scomodi quando provi a fare amicizia. Cambiare app, modificare lingue e aspettare risultati spezza il ritmo.",
+              cards: {
+                realtime: { title: "Non sono pensati per il parlato dal vivo.", body: "La maggior parte dei traduttori è progettata per inserire una frase e controllare un risultato. In stanze vocali, chiamate ed eventi, quel flusso interrompe la conversazione continuamente." },
+                language: { title: "Le impostazioni linguistiche intralciano.", body: "Quando cambiano lingue o persone, gli utenti devono ancora gestire le impostazioni. Nei momenti sociali significa guardare i controlli invece della persona." },
+                social: { title: "Manca l'esperienza sociale.", body: "Traduzione, note, messenger e social network risolvono problemi separati. Chi vuole fare amicizie internazionali ha bisogno di una relazione che continui, non solo di una frase tradotta." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "L'IA può ormai rendere la traduzione sociale parte del prodotto stesso.",
+              body1: "Mingle non è solo un altro pulsante di traduzione. Combina riconoscimento vocale in tempo reale, rilevamento automatico della lingua, separazione dei parlanti, sottotitoli tradotti e riproduzione vocale in un'unica superficie di conversazione.",
+              body2: "Gli utenti non devono scegliere ogni volta la lingua dell'altra persona. Anche se ognuno parla naturalmente in una lingua diversa, Mingle mostra la traduzione come sottotitoli e può riprodurla con la voce.",
+              body3: "Il cuore non è solo la precisione. È l'intero percorso dall'aprire bocca al sentire che la conversazione può continuare. Più la traduzione resta sullo sfondo, più le persone possono concentrarsi l'una sull'altra."
+            },
+            product: {
+              eyebrow: "Principi di prodotto",
+              title: "Lasciare solo il flusso di cui una conversazione ha bisogno.",
+              description: "Mingle riprogetta la traduzione come strumento sociale. L'obiettivo non è una schermata che mostra la precisione, ma uno stato in cui gli utenti possono continuare ad ascoltare e parlare.",
+              principles: {
+                detect: { title: "Ascoltare e rilevare automaticamente.", body: "La conversazione può iniziare senza chiedere agli utenti di selezionare continuamente la lingua dell'altra persona." },
+                subtitle: { title: "Seguire la conversazione come sottotitoli.", body: "La traduzione si appoggia al flusso della conversazione, così gli utenti non devono passare da un'app all'altra." },
+                messenger: { title: "Espandersi in un messenger vocale.", body: "Inizia come traduttore, ma l'obiettivo è un messenger tradotto che possa sostituire Discord, chiamate o chat." },
+                relationship: { title: "Concentrarsi sulle relazioni.", body: "Mingle è per i momenti in cui avviene uno scambio reale: amici stranieri, community, viaggi e incontri." }
+              }
+            },
+            proof: {
+              eyebrow: "Segnale iniziale",
+              title: "Gli utenti HelloTalk mostrano già il bisogno.",
+              description: "Il primo target di Mingle sono utenti di scambio linguistico che vogliono amici stranieri. Provano già le stanze vocali e, più la traduzione diventa naturale, più si affidano a Mingle.",
+              cards: {
+                market: { title: "Un mercato di scambio linguistico da oltre 70 M", body: "Piattaforme come HelloTalk riuniscono già persone che vogliono parlare con il mondo." },
+                voiceroom: { title: "Un traduttore accanto alla stanza vocale", body: "Gli utenti tengono aperta una stanza vocale HelloTalk e usano Mingle accanto per capire l'altra persona." },
+                repeat: { title: "Un bisogno che diventa uso ripetuto", body: "Alcuni utenti fanno sessioni lunghe per più giorni e aprono Mingle ogni volta che parlano con stranieri." }
+              },
+              quotes: {
+                first: "\"È molto comodo perché la traduzione parte automaticamente come sottotitoli.\"",
+                second: "\"Io parlo russo e tu coreano, ma ci capiamo comunque. È incredibile.\"",
+                third: "\"Capisce molto meglio di Apple Traduttore.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Casi d'uso",
+              title: "Non un solo traduttore, ma esperienze di conversazione per ogni contesto.",
+              description: "L'interfaccia e il flusso di traduzione necessari cambiano in ogni situazione sociale. Mingle parte da verticali con problemi chiari e costruisce l'esperienza giusta per ciascuno.",
+              items: {
+                hellotalk: { title: "Stanze vocali HelloTalk", body: "Utenti che vogliono amici stranieri ma non riescono a mantenere conversazioni per via della lingua." },
+                gaming: { title: "Discord globali di gaming", body: "Team e community che hanno bisogno di chat vocale tra paesi ma non hanno traduzione integrata." },
+                networking: { title: "Eventi internazionali di networking", body: "Momenti offline in cui bisogna parlare e capire immediatamente." },
+                travel: { title: "Conoscere persone locali in viaggio", body: "Viaggiatori che vogliono iniziare conversazioni naturali con chi incontrano." },
+                tourism: { title: "Servizi turistici sul campo", body: "Piccole attività che parlano ogni giorno con ospiti stranieri ma non possono assumere interpreti." },
+                sns: { title: "Social network nativo IA", body: "Una nuova piattaforma social in cui la traduzione non è una funzione, ma il default." }
+              }
+            },
+            vision: {
+              eyebrow: "Visione",
+              title: "Il primo servizio che si apre quando si vuole conoscere qualcuno all'estero.",
+              body1: "Inizia come traduttore in tempo reale per una persona. Quando gli utenti sentono sparire la barriera linguistica, il passo successivo è invitare altri, creare stanze e far crescere community.",
+              body2: "Mingle non si limita a trasformare frasi in un'altra lingua. Abbassa la barriera linguistica, la mancanza di argomenti e la difficoltà di incontrare persone oltre i confini."
+            },
+            footer: { copy: "© Mingle Labs. Creato per conversazioni tra lingue.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          ru: {
+            metaTitle: "Mingle - Голосовой мессенджер без языковых барьеров",
+            metaDescription: "Mingle — приложение для голосового перевода в реальном времени для иностранных друзей, глобальных сообществ и разговоров в путешествиях.",
+            nav: { problem: "Проблема", product: "Продукт", proof: "Сигналы", vision: "Видение", legal: "Legal" },
+            hero: {
+              eyebrow: "Голосовой перевод в реальном времени для социальных моментов",
+              title: "Голосовой мессенджер<br />без языковых барьеров",
+              lede: "Когда вы хотите сблизиться с человеком из другой страны, язык обычно становится первым препятствием. Mingle слушает, переводит и поддерживает разговор с помощью текста как субтитры и голосового воспроизведения.",
+              note: "Начальная точка — переводчик в реальном времени для одного человека. Следующий шаг — голосовой мессенджер со встроенным переводом, а затем социальная платформа, которую открывают первой, когда хотят познакомиться с кем-то за границей."
+            },
+            problem: {
+              eyebrow: "Проблема",
+              title: "Существующие переводчики не успевают за темпом живых социальных разговоров.",
+              description: "Инструменты перевода есть везде, но они по-прежнему неудобны, когда вы пытаетесь подружиться с человеком. Переключение приложений, настройка языков и ожидание результатов ломают ритм.",
+              cards: {
+                realtime: { title: "Они не созданы для живой речи.", body: "Большинство переводчиков рассчитаны на ввод фразы и проверку результата. В голосовых комнатах, звонках и на мероприятиях такой поток снова и снова останавливает разговор." },
+                language: { title: "Языковые настройки мешают.", body: "Когда меняются языки или собеседники, пользователям всё еще приходится управлять настройками. В социальных ситуациях это значит смотреть на контролы, а не на человека." },
+                social: { title: "Не хватает социальной части.", body: "Перевод, заметки, мессенджеры и соцсети решают разные задачи. Тем, кто хочет найти иностранных друзей, нужна продолжающаяся связь, а не только переведенная фраза." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "ИИ уже позволяет сделать социальный перевод частью самого продукта.",
+              body1: "Mingle — это не просто еще одна кнопка перевода. Он объединяет распознавание речи в реальном времени, автоматическое определение языка, разделение говорящих, переведенные субтитры и голосовое воспроизведение на одной поверхности разговора.",
+              body2: "Пользователям не нужно каждый раз выбирать язык другого человека. Даже если каждый говорит естественно на своем языке, Mingle показывает перевод как субтитры и может воспроизвести его голосом.",
+              body3: "Главное — не только точность. Это весь путь от первого слова до ощущения, что разговор может продолжаться. Чем больше перевод уходит на фон, тем больше люди сосредоточены друг на друге."
+            },
+            product: {
+              eyebrow: "Принципы продукта",
+              title: "Оставить только тот поток, который нужен разговору.",
+              description: "Mingle переосмысливает перевод как социальный инструмент. Цель — не экран, который демонстрирует точность, а состояние, в котором пользователи продолжают слушать и говорить.",
+              principles: {
+                detect: { title: "Слушать и определять автоматически.", body: "Разговор может начаться без постоянного выбора языка другого человека." },
+                subtitle: { title: "Следовать за разговором как субтитры.", body: "Перевод ложится поверх потока разговора, поэтому пользователям не нужно прыгать между приложениями." },
+                messenger: { title: "Расширяться в голосовой мессенджер.", body: "Все начинается с переводчика, но цель — переведенный мессенджер, способный заменить Discord, звонки или чат." },
+                relationship: { title: "Фокусироваться на отношениях.", body: "Mingle создан для моментов реального обмена: иностранных друзей, сообществ, путешествий и встреч." }
+              }
+            },
+            proof: {
+              eyebrow: "Ранний сигнал",
+              title: "Пользователи HelloTalk уже показывают потребность.",
+              description: "Первая аудитория Mingle — пользователи языкового обмена, которые хотят иностранных друзей. Они уже пробуют голосовые комнаты, и чем естественнее становится перевод, тем больше полагаются на Mingle.",
+              cards: {
+                market: { title: "Рынок языкового обмена 70 млн+", body: "Платформы вроде HelloTalk уже собирают людей, которые хотят общаться с миром." },
+                voiceroom: { title: "Переводчик рядом с голосовой комнатой", body: "Пользователи держат открытой голосовую комнату HelloTalk и запускают Mingle рядом, чтобы понимать собеседника." },
+                repeat: { title: "Потребность, которая приводит к повторному использованию", body: "Некоторые пользователи проводят длинные сессии несколько дней подряд и открывают Mingle каждый раз, когда говорят с иностранцами." }
+              },
+              quotes: {
+                first: "\"Очень удобно, потому что перевод автоматически проигрывается как субтитры.\"",
+                second: "\"Я говорю по-русски, ты по-корейски, но мы всё равно понимаем друг друга. Это потрясающе.\"",
+                third: "\"Он понимает намного лучше, чем Apple Translate.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Сценарии",
+              title: "Не один переводчик, а разговорные опыты для каждого контекста.",
+              description: "Интерфейс и поток перевода, которые нужны людям, отличаются в каждой социальной ситуации. Mingle начинает с четких вертикалей и строит правильный опыт для каждой.",
+              items: {
+                hellotalk: { title: "Голосовые комнаты HelloTalk", body: "Пользователи, которые хотят иностранных друзей, но не могут продолжать разговор из-за языка." },
+                gaming: { title: "Глобальные игровые Discord-серверы", body: "Команды и сообщества, которым нужен голосовой чат между странами без встроенного перевода." },
+                networking: { title: "Международные networking-мероприятия", body: "Офлайн-ситуации, где нужно сразу говорить и понимать." },
+                travel: { title: "Знакомство с местными в путешествии", body: "Путешественники, которые хотят естественно начать разговор с людьми, которых встречают." },
+                tourism: { title: "Туристические сервисные стойки", body: "Малые бизнесы, которые ежедневно говорят с иностранными гостями, но не могут нанять переводчика." },
+                sns: { title: "AI-native социальная сеть", body: "Новая социальная платформа, где перевод — не функция, а стандарт." }
+              }
+            },
+            vision: {
+              eyebrow: "Видение",
+              title: "Первый сервис, который открывают, когда хотят познакомиться с кем-то за границей.",
+              body1: "Он начинается как переводчик в реальном времени для одного человека. Когда пользователи чувствуют, что языковой барьер исчезает, следующий шаг — приглашать других, создавать комнаты и развивать сообщества.",
+              body2: "Mingle не только переводит предложения на другой язык. Он снижает языковой барьер, нехватку тем и сложность знакомства с людьми за пределами границ."
+            },
+            footer: { copy: "© Mingle Labs. Создано для разговоров между языками.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          ar: {
+            metaTitle: "Mingle - مراسلة صوتية بلا حواجز لغة",
+            metaDescription: "Mingle تطبيق ترجمة صوتية فورية للأصدقاء من الخارج، والمجتمعات العالمية، والمحادثات أثناء السفر.",
+            nav: { problem: "المشكلة", product: "المنتج", proof: "الدليل", vision: "الرؤية", legal: "Legal" },
+            hero: {
+              eyebrow: "ترجمة صوتية فورية للحظات الاجتماعية",
+              title: "مراسلة صوتية<br />بلا حواجز لغة",
+              lede: "عندما تريد الاقتراب من شخص من بلد آخر، تكون اللغة غالبا أول عائق. يستمع Mingle ويترجم ويحافظ على استمرار الحديث بنص يشبه الترجمة المصاحبة وتشغيل صوتي.",
+              note: "نقطة البداية هي مترجم فوري يمكن استخدامه بمفردك. الخطوة التالية هي مراسل صوتي مدمج بالترجمة، ثم منصة اجتماعية يفتحها الناس أولا عندما يريدون التعرف على شخص في الخارج."
+            },
+            problem: {
+              eyebrow: "المشكلة",
+              title: "المترجمات الحالية لا تواكب سرعة المحادثات الاجتماعية.",
+              description: "أدوات الترجمة في كل مكان، لكنها ما زالت مربكة عندما تحاول تكوين صداقة. التنقل بين التطبيقات وتغيير إعدادات اللغة وانتظار النتائج يكسر إيقاع الحديث.",
+              cards: {
+                realtime: { title: "ليست مصممة للكلام المباشر.", body: "معظم المترجمات مبنية على إدخال جملة ثم قراءة النتيجة. في غرف الصوت والمكالمات والفعاليات، هذا الأسلوب يوقف المحادثة مرارا." },
+                language: { title: "إعدادات اللغة تعترض الطريق.", body: "عندما تتغير اللغات أو المتحدثون، لا يزال على المستخدمين إدارة الإعدادات. في اللحظات الاجتماعية يعني ذلك النظر إلى عناصر التحكم بدلا من الشخص أمامك." },
+                social: { title: "التجربة الاجتماعية ناقصة.", body: "الترجمة والملاحظات والمراسلات والشبكات الاجتماعية تحل مشكلات منفصلة. من يريد أصدقاء من الخارج يحتاج علاقة تستمر، لا جملة مترجمة فقط." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "يمكن للذكاء الاصطناعي الآن أن يجعل الترجمة الاجتماعية جزءا من المنتج نفسه.",
+              body1: "Mingle ليس مجرد زر ترجمة آخر. إنه يجمع التعرف على الكلام فوريا، واكتشاف اللغة تلقائيا، وفصل المتحدثين، والترجمة كنصوص، وتشغيل الصوت في مساحة محادثة واحدة.",
+              body2: "لا يحتاج المستخدمون إلى اختيار لغة الشخص الآخر كل مرة. حتى عندما يتحدث كل شخص بلغته الطبيعية، يعرض Mingle الترجمة مثل النصوص المصاحبة ويمكنه تشغيلها صوتيا.",
+              body3: "الجوهر ليس الدقة فقط. إنه المسار الكامل من بدء الكلام إلى الشعور بأن المحادثة يمكن أن تستمر. كلما بقيت الترجمة في الخلفية، ركز الناس أكثر على بعضهم."
+            },
+            product: {
+              eyebrow: "مبادئ المنتج",
+              title: "الإبقاء فقط على التدفق الذي تحتاجه المحادثة.",
+              description: "يعيد Mingle تصميم الترجمة كأداة اجتماعية. الهدف ليس شاشة تعرض الدقة، بل حالة يستطيع فيها المستخدمون الاستمرار في الاستماع والكلام.",
+              principles: {
+                detect: { title: "الاستماع والاكتشاف تلقائيا.", body: "يمكن أن تبدأ المحادثة دون مطالبة المستخدمين باختيار لغة الشخص الآخر باستمرار." },
+                subtitle: { title: "متابعة الحديث مثل الترجمة المصاحبة.", body: "تظهر الترجمة فوق تدفق المحادثة، فلا يحتاج المستخدمون إلى التنقل بين التطبيقات." },
+                messenger: { title: "التوسع إلى مراسل صوتي.", body: "يبدأ كمترجم، لكن الهدف هو مراسل مترجم يمكنه أن يحل محل Discord أو المكالمات أو الدردشة." },
+                relationship: { title: "التركيز على العلاقات.", body: "Mingle للحظات التي يحدث فيها تبادل حقيقي: أصدقاء من الخارج، مجتمعات، سفر ولقاءات." }
+              }
+            },
+            proof: {
+              eyebrow: "إشارة مبكرة",
+              title: "مستخدمو HelloTalk يظهرون الحاجة بالفعل.",
+              description: "أول جمهور لـ Mingle هم مستخدمو تبادل اللغة الذين يريدون أصدقاء من الخارج. هم يجربون غرف الصوت بالفعل، وكلما أصبحت الترجمة طبيعية أكثر زاد اعتمادهم على Mingle.",
+              cards: {
+                market: { title: "سوق تبادل لغة يتجاوز 70 مليون شخص", body: "منصات مثل HelloTalk تجمع بالفعل أشخاصا يريدون الحديث مع العالم." },
+                voiceroom: { title: "مترجم بجانب غرفة الصوت", body: "يبقي المستخدمون غرفة HelloTalk الصوتية مفتوحة ويشغلون Mingle بجانبها لفهم الشخص الآخر." },
+                repeat: { title: "حاجة تتحول إلى استخدام متكرر", body: "يقضي بعض المستخدمين جلسات طويلة على مدار عدة أيام ويفتحون Mingle كلما تحدثوا مع أجانب." }
+              },
+              quotes: {
+                first: "\"الأمر مريح جدا لأن الترجمة تعمل تلقائيا مثل الترجمة المصاحبة.\"",
+                second: "\"أنا أتكلم الروسية وأنت تتكلم الكورية، ومع ذلك نفهم بعضنا. هذا رائع.\"",
+                third: "\"يفهم أفضل بكثير من Apple Translate.\""
+              }
+            },
+            useCases: {
+              eyebrow: "حالات الاستخدام",
+              title: "ليس مترجما واحدا، بل تجارب محادثة لكل سياق.",
+              description: "واجهة المستخدم وتدفق الترجمة اللازمان يختلفان في كل موقف اجتماعي. يبدأ Mingle من قطاعات ذات ألم واضح ويبني التجربة المناسبة لكل منها.",
+              items: {
+                hellotalk: { title: "غرف HelloTalk الصوتية", body: "مستخدمون يريدون أصدقاء من الخارج لكن اللغة تمنع استمرار المحادثات." },
+                gaming: { title: "مجتمعات ألعاب Discord عالمية", body: "فرق ومجتمعات تحتاج دردشة صوتية بين البلدان لكنها تفتقر إلى ترجمة مدمجة." },
+                networking: { title: "فعاليات تواصل دولية", body: "لحظات حضورية يحتاج فيها الناس إلى الكلام والفهم فورا." },
+                travel: { title: "لقاء السكان المحليين أثناء السفر", body: "مسافرون يريدون بدء أحاديث طبيعية مع الأشخاص الذين يقابلونهم." },
+                tourism: { title: "خدمات السياحة الميدانية", body: "شركات صغيرة تتحدث مع ضيوف أجانب يوميا ولا تستطيع توظيف مترجمين." },
+                sns: { title: "شبكة اجتماعية أصلية للذكاء الاصطناعي", body: "منصة اجتماعية جديدة تكون فيها الترجمة هي الوضع الافتراضي لا مجرد ميزة." }
+              }
+            },
+            vision: {
+              eyebrow: "الرؤية",
+              title: "الخدمة الأولى التي يفتحها الناس عندما يريدون التعرف على شخص في الخارج.",
+              body1: "تبدأ كمترجم فوري لشخص واحد. عندما يشعر المستخدمون بأن حاجز اللغة اختفى، تكون الخطوة التالية دعوة الآخرين، وإنشاء غرف، وتنمية المجتمعات.",
+              body2: "Mingle لا يحول الجمل إلى لغة أخرى فقط. إنه يخفض حاجز اللغة، ونقص المواضيع، وصعوبة لقاء الناس عبر الحدود."
+            },
+            footer: { copy: "© Mingle Labs. صمم لمحادثات تتجاوز اللغات.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          hi: {
+            metaTitle: "Mingle - भाषा की दीवारों के बिना वॉइस मैसेंजर",
+            metaDescription: "Mingle विदेशी दोस्तों, वैश्विक समुदायों और यात्रा के दौरान बातचीत के लिए रियल-टाइम वॉइस ट्रांसलेशन ऐप है।",
+            nav: { problem: "समस्या", product: "प्रोडक्ट", proof: "संकेत", vision: "विजन", legal: "Legal" },
+            hero: {
+              eyebrow: "सामाजिक पलों के लिए रियल-टाइम वॉइस ट्रांसलेशन",
+              title: "भाषा की दीवारों के बिना<br />वॉइस मैसेंजर",
+              lede: "जब आप किसी दूसरे देश के व्यक्ति के करीब जाना चाहते हैं, भाषा अक्सर पहली बाधा बनती है। Mingle सुनता है, अनुवाद करता है और सबटाइटल जैसे टेक्स्ट तथा आवाज़ से बातचीत को चलाए रखता है।",
+              note: "शुरुआत एक ऐसे रियल-टाइम ट्रांसलेटर से होती है जिसे आप अकेले इस्तेमाल कर सकते हैं। अगला कदम है अनुवाद वाला वॉइस मैसेंजर, फिर वह सोशल प्लेटफॉर्म जिसे लोग विदेश में किसी से मिलने के लिए पहले खोलते हैं।"
+            },
+            problem: {
+              eyebrow: "समस्या",
+              title: "मौजूदा ट्रांसलेटर सामाजिक बातचीत की गति के साथ नहीं चल पाते।",
+              description: "ट्रांसलेशन टूल हर जगह हैं, लेकिन जब आप किसी से दोस्ती करना चाहते हैं तो वे अब भी अटपटे लगते हैं। ऐप बदलना, भाषा सेटिंग बदलना और परिणाम का इंतज़ार करना बातचीत की लय तोड़ देता है।",
+              cards: {
+                realtime: { title: "वे लाइव स्पीच के लिए नहीं बने।", body: "अधिकांश ट्रांसलेटर एक वाक्य लिखने और परिणाम देखने के लिए बने हैं। वॉइस रूम, कॉल और नेटवर्किंग में यह प्रवाह बातचीत को बार-बार रोकता है।" },
+                language: { title: "भाषा सेटिंग बीच में आती है।", body: "जब भाषाएँ या वक्ता बदलते हैं, उपयोगकर्ताओं को अब भी सेटिंग संभालनी पड़ती है। सामाजिक पलों में इसका मतलब व्यक्ति के बजाय कंट्रोल्स को देखना है।" },
+                social: { title: "सामाजिक अनुभव गायब है।", body: "ट्रांसलेशन, नोट्स, मैसेंजर और सोशल नेटवर्क अलग-अलग समस्याएँ हल करते हैं। विदेशी दोस्त बनाने वाले लोगों को सिर्फ अनुवादित वाक्य नहीं, आगे बढ़ने वाला रिश्ता चाहिए।" }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI अब सामाजिक अनुवाद को प्रोडक्ट का हिस्सा बना सकता है।",
+              body1: "Mingle सिर्फ एक और translate बटन नहीं है। यह रियल-टाइम स्पीच रिकग्निशन, ऑटो भाषा पहचान, वक्ता अलग करना, अनुवादित कैप्शन और वॉइस प्लेबैक को एक ही बातचीत सतह में जोड़ता है।",
+              body2: "उपयोगकर्ताओं को हर बार दूसरे व्यक्ति की भाषा चुनने की जरूरत नहीं होती। जब दोनों अपनी-अपनी भाषा में स्वाभाविक रूप से बोलते हैं, Mingle अनुवाद को कैप्शन की तरह दिखाता है और जरूरत होने पर आवाज़ में चलाता है।",
+              body3: "मुख्य बात सिर्फ सटीकता नहीं है। यह बोलना शुरू करने से लेकर यह महसूस करने तक का पूरा रास्ता है कि बातचीत जारी रह सकती है। अनुवाद जितना पृष्ठभूमि में जाता है, लोग उतना एक-दूसरे पर ध्यान दे पाते हैं।"
+            },
+            product: {
+              eyebrow: "प्रोडक्ट सिद्धांत",
+              title: "बातचीत को जिस प्रवाह की जरूरत है, बस वही रखें।",
+              description: "Mingle अनुवाद को सामाजिक टूल की तरह फिर से डिजाइन करता है। लक्ष्य सटीकता दिखाने वाली स्क्रीन नहीं, बल्कि वह स्थिति है जिसमें उपयोगकर्ता सुनते और बोलते रह सकें।",
+              principles: {
+                detect: { title: "अपने आप सुनना और पहचानना।", body: "बातचीत दूसरे व्यक्ति की भाषा बार-बार चुने बिना शुरू हो सकती है।" },
+                subtitle: { title: "सबटाइटल की तरह बातचीत के साथ चलना।", body: "अनुवाद बातचीत के प्रवाह पर रहता है, इसलिए उपयोगकर्ताओं को ऐप्स के बीच जाना नहीं पड़ता।" },
+                messenger: { title: "वॉइस मैसेंजर में विस्तार।", body: "यह ट्रांसलेटर से शुरू होता है, लेकिन लक्ष्य ऐसा translated messenger है जो Discord, calls या chat की जगह ले सके।" },
+                relationship: { title: "रिश्तों पर ध्यान।", body: "Mingle उन पलों के लिए है जहाँ वास्तविक आदान-प्रदान होता है: विदेशी दोस्त, समुदाय, यात्रा और मुलाकातें।" }
+              }
+            },
+            proof: {
+              eyebrow: "शुरुआती संकेत",
+              title: "HelloTalk उपयोगकर्ता पहले से जरूरत दिखा रहे हैं।",
+              description: "Mingle का पहला लक्ष्य भाषा-विनिमय उपयोगकर्ता हैं जो विदेशी दोस्त चाहते हैं। वे पहले से वॉइस रूम आजमा रहे हैं, और अनुवाद जितना स्वाभाविक होता है, वे Mingle पर उतना निर्भर होते हैं।",
+              cards: {
+                market: { title: "70 मिलियन से अधिक लोगों का भाषा-विनिमय बाजार", body: "HelloTalk जैसे प्लेटफॉर्म पहले से उन लोगों को जोड़ते हैं जो दुनिया भर के लोगों से बात करना चाहते हैं।" },
+                voiceroom: { title: "वॉइस रूम के साथ एक ट्रांसलेटर", body: "उपयोगकर्ता HelloTalk वॉइस रूम खुला रखते हैं और दूसरे व्यक्ति को समझने के लिए Mingle साथ में चलाते हैं।" },
+                repeat: { title: "जरूरत जो बार-बार इस्तेमाल में बदलती है", body: "कुछ उपयोगकर्ता कई दिनों तक लंबी sessions करते हैं और विदेशियों से बात करते समय Mingle खोलते हैं।" }
+              },
+              quotes: {
+                first: "\"अनुवाद सबटाइटल की तरह अपने आप चलता है, इसलिए बहुत सुविधाजनक है।\"",
+                second: "\"मैं रूसी बोलता हूँ और तुम कोरियाई, फिर भी हम समझते हैं। यह कमाल है।\"",
+                third: "\"यह Apple Translate से बहुत बेहतर समझता है।\""
+              }
+            },
+            useCases: {
+              eyebrow: "उपयोग के मामले",
+              title: "एक ही ट्रांसलेटर नहीं, हर संदर्भ के लिए बातचीत अनुभव।",
+              description: "हर सामाजिक स्थिति में लोगों को अलग UI और अनुवाद प्रवाह चाहिए। Mingle स्पष्ट समस्याओं वाले verticals से शुरू करता है और हर एक के लिए सही अनुभव बनाता है।",
+              items: {
+                hellotalk: { title: "HelloTalk वॉइस रूम", body: "वे उपयोगकर्ता जो विदेशी दोस्त चाहते हैं लेकिन भाषा के कारण बातचीत जारी नहीं रख पाते।" },
+                gaming: { title: "ग्लोबल गेमिंग Discords", body: "टीमें और समुदाय जिन्हें देशों के बीच वॉइस चैट चाहिए लेकिन built-in translation नहीं है।" },
+                networking: { title: "अंतरराष्ट्रीय networking events", body: "ऑफलाइन पल जहाँ लोगों को तुरंत बोलना और समझना होता है।" },
+                travel: { title: "यात्रा में locals से मिलना", body: "यात्री जो रास्ते में मिले लोगों से स्वाभाविक बातचीत शुरू करना चाहते हैं।" },
+                tourism: { title: "Tourism service counters", body: "छोटे व्यवसाय जो रोज विदेशी मेहमानों से बात करते हैं लेकिन interpreter नहीं रख सकते।" },
+                sns: { title: "AI-native social network", body: "एक नया social platform जहाँ translation feature नहीं, default होता है।" }
+              }
+            },
+            vision: {
+              eyebrow: "विजन",
+              title: "विदेश में किसी से मिलना हो तो लोग सबसे पहले यही खोलें।",
+              body1: "यह एक व्यक्ति के लिए real-time translator से शुरू होता है। जब उपयोगकर्ता महसूस करते हैं कि भाषा बाधा हट गई है, अगला कदम दूसरों को invite करना, rooms बनाना और communities बढ़ाना है।",
+              body2: "Mingle सिर्फ वाक्यों को दूसरी भाषा में बदलता नहीं है। यह भाषा बाधा, विषयों की कमी और सीमाओं के पार लोगों से मिलने की कठिनाई को कम करता है।"
+            },
+            footer: { copy: "© Mingle Labs. भाषाओं के पार बातचीत के लिए बनाया गया।", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          th: {
+            metaTitle: "Mingle - วอยซ์เมสเซนเจอร์ไร้กำแพงภาษา",
+            metaDescription: "Mingle คือแอปแปลเสียงแบบเรียลไทม์สำหรับเพื่อนต่างชาติ ชุมชนทั่วโลก และบทสนทนาระหว่างเดินทาง",
+            nav: { problem: "ปัญหา", product: "ผลิตภัณฑ์", proof: "สัญญาณ", vision: "วิสัยทัศน์", legal: "Legal" },
+            hero: {
+              eyebrow: "การแปลเสียงแบบเรียลไทม์สำหรับช่วงเวลาทางสังคม",
+              title: "วอยซ์เมสเซนเจอร์<br />ไร้กำแพงภาษา",
+              lede: "เมื่อคุณอยากสนิทกับคนจากอีกประเทศ ภาษา มักเป็นสิ่งแรกที่ขวางทาง Mingle ฟัง แปล และช่วยให้บทสนทนาเดินต่อด้วยข้อความเหมือนซับไตเติลและเสียงอ่านกลับ",
+              note: "จุดเริ่มต้นคือเครื่องแปลแบบเรียลไทม์ที่ใช้คนเดียวได้ ขั้นต่อไปคือวอยซ์เมสเซนเจอร์ที่มีการแปลในตัว แล้วจึงเป็นแพลตฟอร์มโซเชียลที่ผู้คนเปิดเป็นอันดับแรกเมื่อต้องการพบคนจากต่างประเทศ"
+            },
+            problem: {
+              eyebrow: "ปัญหา",
+              title: "เครื่องแปลที่มีอยู่ตามความเร็วของบทสนทนาทางสังคมไม่ทัน",
+              description: "เครื่องมือแปลมีอยู่มากมาย แต่ยังรู้สึกติดขัดเมื่อคุณพยายามเป็นเพื่อนกับใครสักคน การสลับแอป เปลี่ยนภาษา และรอผลลัพธ์ทำให้จังหวะของบทสนทนาขาดหาย",
+              cards: {
+                realtime: { title: "ไม่ได้สร้างมาสำหรับเสียงสด", body: "เครื่องแปลส่วนใหญ่ถูกออกแบบให้พิมพ์ประโยคแล้วดูผลลัพธ์ ในห้องเสียง การโทร และงาน networking กระบวนการแบบนี้หยุดบทสนทนาซ้ำแล้วซ้ำเล่า" },
+                language: { title: "การตั้งค่าภาษาเข้ามาขวาง", body: "เมื่อภาษา หรือผู้พูดเปลี่ยน ผู้ใช้ยังต้องจัดการการตั้งค่า ในช่วงเวลาทางสังคม นั่นหมายถึงมองปุ่มควบคุมแทนที่จะมองคนตรงหน้า" },
+                social: { title: "ขาดประสบการณ์แบบโซเชียล", body: "การแปล โน้ต เมสเซนเจอร์ และโซเชียลเน็ตเวิร์กแก้ปัญหาคนละส่วน คนที่อยากมีเพื่อนต่างชาติต้องการความสัมพันธ์ที่ต่อเนื่อง ไม่ใช่แค่ประโยคที่แปลแล้ว" }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI ทำให้การแปลเพื่อสังคมเป็นส่วนหนึ่งของผลิตภัณฑ์ได้แล้ว",
+              body1: "Mingle ไม่ใช่แค่ปุ่มแปลอีกปุ่มหนึ่ง แต่รวมการรู้จำเสียงแบบเรียลไทม์ การตรวจจับภาษาอัตโนมัติ การแยกผู้พูด ซับไตเติลแปล และเสียงอ่านกลับไว้ในหน้าบทสนทนาเดียว",
+              body2: "ผู้ใช้ไม่ต้องเลือกภาษาของอีกฝ่ายทุกครั้ง แม้แต่ละคนพูดภาษาของตนอย่างเป็นธรรมชาติ Mingle ก็จะแสดงคำแปลเหมือนซับไตเติลและเล่นกลับเป็นเสียงได้เมื่อจำเป็น",
+              body3: "แก่นหลักไม่ใช่แค่ความแม่นยำ แต่คือเส้นทางทั้งหมดตั้งแต่เริ่มพูดจนรู้สึกว่าบทสนทนาไปต่อได้ ยิ่งการแปลถอยไปอยู่เบื้องหลัง ผู้คนก็ยิ่งโฟกัสกันและกันได้มากขึ้น"
+            },
+            product: {
+              eyebrow: "หลักการผลิตภัณฑ์",
+              title: "เหลือไว้เฉพาะ flow ที่บทสนทนาต้องการ",
+              description: "Mingle ออกแบบการแปลใหม่ให้เป็นเครื่องมือทางสังคม เป้าหมายไม่ใช่หน้าจอที่โชว์ความแม่นยำ แต่เป็นสภาวะที่ผู้ใช้ฟังและพูดต่อได้",
+              principles: {
+                detect: { title: "ฟังและตรวจจับอัตโนมัติ", body: "บทสนทนาเริ่มได้โดยไม่ต้องให้ผู้ใช้คอยเลือกภาษาของอีกฝ่าย" },
+                subtitle: { title: "ตามบทสนทนาเหมือนซับไตเติล", body: "คำแปลวางอยู่บน flow ของบทสนทนา ผู้ใช้จึงไม่ต้องสลับไปมาระหว่างแอป" },
+                messenger: { title: "ขยายเป็นวอยซ์เมสเซนเจอร์", body: "เริ่มจากเครื่องแปล แต่เป้าหมายคือเมสเซนเจอร์พร้อมแปลที่ใช้แทน Discord การโทร หรือแชทได้" },
+                relationship: { title: "โฟกัสที่ความสัมพันธ์", body: "Mingle สร้างมาเพื่อช่วงเวลาที่มีการแลกเปลี่ยนจริง: เพื่อนต่างชาติ ชุมชน การเดินทาง และการพบปะ" }
+              }
+            },
+            proof: {
+              eyebrow: "สัญญาณแรก",
+              title: "ผู้ใช้ HelloTalk แสดงความต้องการนี้แล้ว",
+              description: "กลุ่มเป้าหมายแรกของ Mingle คือผู้ใช้แลกเปลี่ยนภาษาที่อยากมีเพื่อนต่างชาติ พวกเขาลองใช้ห้องเสียงอยู่แล้ว และเมื่อการแปลเป็นธรรมชาติมากขึ้น พวกเขาก็พึ่งพา Mingle มากขึ้น",
+              cards: {
+                market: { title: "ตลาดแลกเปลี่ยนภาษามากกว่า 70 ล้านคน", body: "แพลตฟอร์มอย่าง HelloTalk รวมผู้คนที่อยากคุยกับคนทั่วโลกไว้อยู่แล้ว" },
+                voiceroom: { title: "เครื่องแปลข้างห้องเสียง", body: "ผู้ใช้เปิดห้องเสียง HelloTalk ไว้ แล้วใช้ Mingle ควบคู่เพื่อเข้าใจอีกฝ่าย" },
+                repeat: { title: "ความต้องการที่กลายเป็นการใช้ซ้ำ", body: "ผู้ใช้บางคนใช้งานเป็นเวลานานหลายวัน และเปิด Mingle ทุกครั้งที่คุยกับชาวต่างชาติ" }
+              },
+              quotes: {
+                first: "\"สะดวกมาก เพราะคำแปลเล่นอัตโนมัติเหมือนซับไตเติล\"",
+                second: "\"ฉันพูดรัสเซีย คุณพูดเกาหลี แต่เรายังเข้าใจกันได้ น่าทึ่งมาก\"",
+                third: "\"เข้าใจดีกว่า Apple Translate มาก\""
+              }
+            },
+            useCases: {
+              eyebrow: "Use cases",
+              title: "ไม่ใช่เครื่องแปลหนึ่งตัว แต่เป็นประสบการณ์บทสนทนาสำหรับแต่ละบริบท",
+              description: "UI และ flow การแปลที่ผู้คนต้องการแตกต่างกันในแต่ละสถานการณ์ทางสังคม Mingle เริ่มจาก vertical ที่มีปัญหาชัด และสร้างประสบการณ์ที่เหมาะกับแต่ละกรณี",
+              items: {
+                hellotalk: { title: "ห้องเสียง HelloTalk", body: "ผู้ใช้ที่อยากมีเพื่อนต่างชาติแต่คุยต่อไม่ได้เพราะภาษา" },
+                gaming: { title: "Discord เกมระดับโลก", body: "ทีมและชุมชนที่ต้องใช้ voice chat ข้ามประเทศแต่ไม่มีการแปลในตัว" },
+                networking: { title: "งาน networking นานาชาติ", body: "สถานการณ์ offline ที่ผู้คนต้องพูดและเข้าใจทันที" },
+                travel: { title: "พบคนท้องถิ่นระหว่างเดินทาง", body: "นักเดินทางที่อยากเริ่มบทสนทนาธรรมชาติกับคนที่พบระหว่างทาง" },
+                tourism: { title: "จุดบริการท่องเที่ยว", body: "ธุรกิจขนาดเล็กที่คุยกับแขกต่างชาติทุกวันแต่จ้างล่ามไม่ได้" },
+                sns: { title: "โซเชียลเน็ตเวิร์กแบบ AI-native", body: "แพลตฟอร์มโซเชียลใหม่ที่การแปลไม่ใช่ฟีเจอร์ แต่เป็นค่าเริ่มต้น" }
+              }
+            },
+            vision: {
+              eyebrow: "วิสัยทัศน์",
+              title: "บริการแรกที่ผู้คนเปิดเมื่อต้องการพบใครสักคนจากต่างประเทศ",
+              body1: "เริ่มจากเครื่องแปลแบบเรียลไทม์สำหรับคนเดียว เมื่อผู้ใช้รู้สึกว่ากำแพงภาษาหายไป ขั้นต่อไปคือเชิญผู้อื่น สร้างห้อง และเติบโตเป็นชุมชน",
+              body2: "Mingle ไม่ได้แค่เปลี่ยนประโยคเป็นอีกภาษา แต่ช่วยลดกำแพงภาษา การขาดหัวข้อสนทนา และความยากในการพบผู้คนข้ามพรมแดน"
+            },
+            footer: { copy: "© Mingle Labs. สร้างเพื่อบทสนทนาข้ามภาษา", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          },
+          vi: {
+            metaTitle: "Mingle - Nhắn thoại không còn rào cản ngôn ngữ",
+            metaDescription: "Mingle là ứng dụng dịch giọng nói thời gian thực cho bạn bè quốc tế, cộng đồng toàn cầu và các cuộc trò chuyện khi du lịch.",
+            nav: { problem: "Vấn đề", product: "Sản phẩm", proof: "Tín hiệu", vision: "Tầm nhìn", legal: "Legal" },
+            hero: {
+              eyebrow: "Dịch giọng nói thời gian thực cho những khoảnh khắc xã hội",
+              title: "Nhắn thoại<br />không còn rào cản ngôn ngữ",
+              lede: "Khi bạn muốn gần gũi hơn với một người đến từ quốc gia khác, ngôn ngữ thường là điều cản trở đầu tiên. Mingle lắng nghe, dịch và giữ cuộc trò chuyện tiếp tục bằng văn bản như phụ đề và phát lại bằng giọng nói.",
+              note: "Điểm khởi đầu là một trình dịch thời gian thực có thể dùng một mình. Bước tiếp theo là một trình nhắn thoại có dịch tích hợp, rồi một nền tảng xã hội mà mọi người mở đầu tiên khi muốn gặp ai đó ở nước ngoài."
+            },
+            problem: {
+              eyebrow: "Vấn đề",
+              title: "Các trình dịch hiện tại không theo kịp nhịp độ trò chuyện xã hội.",
+              description: "Công cụ dịch có ở khắp nơi, nhưng vẫn lúng túng khi bạn muốn kết bạn thật sự. Chuyển ứng dụng, đổi cài đặt ngôn ngữ và chờ kết quả làm đứt nhịp trò chuyện.",
+              cards: {
+                realtime: { title: "Chúng không được xây cho lời nói trực tiếp.", body: "Hầu hết trình dịch được thiết kế để nhập một câu và xem kết quả. Trong phòng thoại, cuộc gọi và sự kiện networking, luồng đó liên tục làm dừng cuộc trò chuyện." },
+                language: { title: "Cài đặt ngôn ngữ gây cản trở.", body: "Khi ngôn ngữ hoặc người nói thay đổi, người dùng vẫn phải quản lý cài đặt. Trong khoảnh khắc xã hội, điều đó nghĩa là nhìn vào điều khiển thay vì người đối diện." },
+                social: { title: "Thiếu trải nghiệm xã hội.", body: "Dịch, ghi chú, nhắn tin và mạng xã hội giải quyết các vấn đề riêng lẻ. Người muốn kết bạn quốc tế cần một mối quan hệ tiếp tục, không chỉ một câu đã dịch." }
+              }
+            },
+            why: {
+              eyebrow: "Why Mingle",
+              title: "AI giờ đây có thể đưa dịch xã hội vào chính sản phẩm.",
+              body1: "Mingle không chỉ là thêm một nút dịch. Nó kết hợp nhận dạng giọng nói thời gian thực, tự động phát hiện ngôn ngữ, tách người nói, phụ đề đã dịch và phát lại bằng giọng trong một bề mặt trò chuyện.",
+              body2: "Người dùng không cần chọn ngôn ngữ của người kia mỗi lần. Ngay cả khi mỗi người nói tự nhiên bằng một ngôn ngữ khác nhau, Mingle hiển thị bản dịch như phụ đề và có thể phát lại bằng giọng nói.",
+              body3: "Cốt lõi không chỉ là độ chính xác. Đó là toàn bộ hành trình từ mở lời đến cảm giác rằng cuộc trò chuyện có thể tiếp tục. Khi dịch lùi vào nền, mọi người tập trung vào nhau nhiều hơn."
+            },
+            product: {
+              eyebrow: "Nguyên tắc sản phẩm",
+              title: "Giữ lại đúng luồng mà một cuộc trò chuyện cần.",
+              description: "Mingle thiết kế lại dịch thuật như một công cụ xã hội. Mục tiêu không phải là màn hình khoe độ chính xác, mà là trạng thái người dùng có thể tiếp tục nghe và nói.",
+              principles: {
+                detect: { title: "Tự động lắng nghe và phát hiện.", body: "Cuộc trò chuyện có thể bắt đầu mà không cần người dùng liên tục chọn ngôn ngữ của người kia." },
+                subtitle: { title: "Theo cuộc trò chuyện như phụ đề.", body: "Bản dịch nằm trên luồng trò chuyện, nên người dùng không cần nhảy qua lại giữa các ứng dụng." },
+                messenger: { title: "Mở rộng thành trình nhắn thoại.", body: "Bắt đầu như một trình dịch, nhưng mục tiêu là một messenger có dịch có thể thay thế Discord, cuộc gọi hoặc chat." },
+                relationship: { title: "Tập trung vào mối quan hệ.", body: "Mingle dành cho những khoảnh khắc có trao đổi thật: bạn bè quốc tế, cộng đồng, du lịch và gặp gỡ." }
+              }
+            },
+            proof: {
+              eyebrow: "Tín hiệu ban đầu",
+              title: "Người dùng HelloTalk đã cho thấy nhu cầu.",
+              description: "Nhóm mục tiêu đầu tiên của Mingle là người dùng trao đổi ngôn ngữ muốn có bạn bè quốc tế. Họ đã thử phòng thoại, và khi dịch trở nên tự nhiên hơn, họ dựa vào Mingle nhiều hơn.",
+              cards: {
+                market: { title: "Thị trường trao đổi ngôn ngữ hơn 70 triệu người", body: "Các nền tảng như HelloTalk đã tập hợp những người muốn nói chuyện với người khác trên khắp thế giới." },
+                voiceroom: { title: "Trình dịch bên cạnh phòng thoại", body: "Người dùng giữ phòng thoại HelloTalk mở và chạy Mingle song song để hiểu người kia." },
+                repeat: { title: "Nhu cầu biến thành sử dụng lặp lại", body: "Một số người dùng dành các phiên dài trong nhiều ngày và mở Mingle mỗi khi nói chuyện với người nước ngoài." }
+              },
+              quotes: {
+                first: "\"Rất tiện vì bản dịch tự phát như phụ đề.\"",
+                second: "\"Tôi nói tiếng Nga, bạn nói tiếng Hàn, vậy mà chúng ta vẫn hiểu nhau. Thật tuyệt.\"",
+                third: "\"Nó hiểu tốt hơn Apple Translate rất nhiều.\""
+              }
+            },
+            useCases: {
+              eyebrow: "Trường hợp sử dụng",
+              title: "Không phải một trình dịch, mà là trải nghiệm trò chuyện cho từng ngữ cảnh.",
+              description: "UI và luồng dịch mà mọi người cần khác nhau trong từng tình huống xã hội. Mingle bắt đầu từ các vertical có vấn đề rõ và xây dựng trải nghiệm phù hợp cho từng nơi.",
+              items: {
+                hellotalk: { title: "Phòng thoại HelloTalk", body: "Người dùng muốn có bạn bè quốc tế nhưng không thể giữ cuộc trò chuyện vì ngôn ngữ." },
+                gaming: { title: "Discord gaming toàn cầu", body: "Nhóm và cộng đồng cần voice chat xuyên quốc gia nhưng thiếu dịch tích hợp." },
+                networking: { title: "Sự kiện networking quốc tế", body: "Những khoảnh khắc offline nơi mọi người cần nói và hiểu ngay lập tức." },
+                travel: { title: "Gặp người địa phương khi du lịch", body: "Du khách muốn bắt đầu cuộc trò chuyện tự nhiên với những người họ gặp." },
+                tourism: { title: "Quầy dịch vụ du lịch", body: "Doanh nghiệp nhỏ nói chuyện với khách nước ngoài mỗi ngày nhưng khó thuê phiên dịch viên." },
+                sns: { title: "Mạng xã hội AI-native", body: "Một nền tảng xã hội mới nơi dịch không phải tính năng mà là mặc định." }
+              }
+            },
+            vision: {
+              eyebrow: "Tầm nhìn",
+              title: "Dịch vụ đầu tiên mọi người mở khi muốn gặp ai đó ở nước ngoài.",
+              body1: "Nó bắt đầu như một trình dịch thời gian thực cho một người. Khi người dùng cảm thấy rào cản ngôn ngữ biến mất, bước tiếp theo là mời người khác, tạo phòng và phát triển thành cộng đồng.",
+              body2: "Mingle không chỉ chuyển câu sang ngôn ngữ khác. Nó giảm rào cản ngôn ngữ, thiếu chủ đề và khó khăn khi gặp gỡ con người xuyên biên giới."
+            },
+            footer: { copy: "© Mingle Labs. Được xây dựng cho các cuộc trò chuyện xuyên ngôn ngữ.", privacy: "Privacy", terms: "Terms", legal: "Legal" }
+          }
+        };
+
+        function resolveLocale(rawLocale) {
+          if (!rawLocale || typeof rawLocale !== "string") return null;
+          var normalized = rawLocale.trim().replace("_", "-").toLowerCase();
+          if (!normalized) return null;
+          if (aliases[normalized]) return aliases[normalized];
+          var primary = normalized.split("-")[0];
+          return aliases[primary] || null;
+        }
+
+        function resolveSupportedLocale(rawLocale) {
+          var resolved = resolveLocale(rawLocale);
+          return resolved && messages[resolved] ? resolved : null;
+        }
+
+        function readNested(source, key) {
+          return key.split(".").reduce(function (current, segment) {
+            return current && Object.prototype.hasOwnProperty.call(current, segment) ? current[segment] : undefined;
+          }, source);
+        }
+
+        function getRouteLocale() {
+          var segments = window.location.pathname.split("/").filter(Boolean);
+          if (segments[0] === "landing" && segments.length === 2 && segments[1] !== "normal" && segments[1] !== "gaming") {
+            return resolveSupportedLocale(segments[1]);
+          }
+          return null;
+        }
+
+        function getQueryLocale() {
+          try {
+            return resolveSupportedLocale(new URLSearchParams(window.location.search).get("lang"));
+          } catch (error) {
+            return null;
+          }
+        }
+
+        function isBareLandingPath() {
+          var segments = window.location.pathname.split("/").filter(Boolean);
+          return segments.length === 0 || (segments.length === 1 && segments[0] === "landing");
+        }
+
+        function isLandingLocalePath() {
+          var segments = window.location.pathname.split("/").filter(Boolean);
+          return segments[0] === "landing" && segments.length === 2 && segments[1] !== "normal" && segments[1] !== "gaming";
+        }
+
+        function getInitialLocale() {
+          var routeLocale = getRouteLocale();
+          if (routeLocale) return routeLocale;
+
+          var queryLocale = getQueryLocale();
+          if (queryLocale) return queryLocale;
+
+          if (isLandingLocalePath()) return defaultLocale;
+
+          try {
+            var storedLocale = resolveSupportedLocale(window.localStorage.getItem(storageKey));
+            if (storedLocale && (!isBareLandingPath() || window.localStorage.getItem(manualLocaleKey) === "1")) {
+              return storedLocale;
+            }
+          } catch (error) {}
+
+          if (isBareLandingPath()) return defaultLocale;
+
+          return resolveSupportedLocale(window.navigator && window.navigator.language) || defaultLocale;
+        }
+
+        function updateLandingPath(locale) {
+          var segments = window.location.pathname.split("/").filter(Boolean);
+          if (segments[0] !== "landing" || segments[1] === "normal" || segments[1] === "gaming") return;
+          var nextPath = "/landing/" + locale;
+          if (window.location.pathname !== nextPath) {
+            window.history.replaceState(null, "", nextPath + window.location.search + window.location.hash);
+          }
+        }
+
+        function applyLocale(locale, options) {
+          var resolved = resolveSupportedLocale(locale) || defaultLocale;
+          var dictionary = messages[resolved];
+
+          document.documentElement.lang = resolved;
+          document.documentElement.dir = resolved === "ar" && messages.ar ? "rtl" : "ltr";
+          document.title = dictionary.metaTitle || messages.en.metaTitle;
+
+          var description = dictionary.metaDescription || messages.en.metaDescription;
+          document.querySelectorAll('meta[name="description"], meta[property="og:description"], meta[name="twitter:description"]').forEach(function (meta) {
+            meta.setAttribute("content", description);
+          });
+          document.querySelectorAll('meta[property="og:title"], meta[name="twitter:title"]').forEach(function (meta) {
+            meta.setAttribute("content", document.title);
+          });
+
+          document.querySelectorAll("[data-i18n]").forEach(function (element) {
+            var value = readNested(dictionary, element.getAttribute("data-i18n")) ?? readNested(messages.en, element.getAttribute("data-i18n"));
+            if (typeof value === "string") element.textContent = value;
+          });
+          document.querySelectorAll("[data-i18n-html]").forEach(function (element) {
+            var value = readNested(dictionary, element.getAttribute("data-i18n-html")) ?? readNested(messages.en, element.getAttribute("data-i18n-html"));
+            if (typeof value === "string") element.innerHTML = value;
+          });
+
+          var selector = document.getElementById("landing-language");
+          if (selector) selector.value = resolved;
+
+          try {
+            window.localStorage.setItem(storageKey, resolved);
+            if (options && options.manual) window.localStorage.setItem(manualLocaleKey, "1");
+          } catch (error) {}
+          if (options && options.updatePath) updateLandingPath(resolved);
+        }
+
+        var selector = document.getElementById("landing-language");
+        if (selector) {
+          languages.forEach(function (language) {
+            var option = document.createElement("option");
+            option.value = language.code;
+            option.textContent = language.flag + " " + language.name;
+            selector.appendChild(option);
+          });
+          selector.addEventListener("change", function (event) {
+            applyLocale(event.target.value, { manual: true, updatePath: true });
+          });
+        }
+
+        applyLocale(getInitialLocale());
+      })();
+    </script>
   </body>
 </html>

@@ -2,7 +2,7 @@
 
 This inventory lists the regression targets that are explicitly wired into the current Android mobile suite.
 
-- Historical UI/UX atoms in [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md): `131`
+- Historical UI/UX atoms in [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md): `131`
 - Current automated Android validation targets: `27`
 - Historical atoms explicitly linked to the Android inventory: `70 / 131`
 - Current scope: React Native shell, live-demo WebView, and the shipping `1.1.0` conversations/list/room/navigation surface on Android.

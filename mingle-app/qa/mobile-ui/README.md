@@ -1,6 +1,6 @@
 # Mobile UI Regression QA
 
-This folder contains the mobile UI/UX regression automation derived from [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md).
+This folder contains the mobile UI/UX regression automation derived from [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md).
 
 ## Scope
 
@@ -20,7 +20,7 @@ The suite splits regressions into:
 
 Future agents should read these in order:
 
-1. [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md)
+1. [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md)
    - Canonical historical issue atom list.
 2. [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md)
    - Global `131`-atom classification and union-level automation coverage.
@@ -159,6 +159,6 @@ Whenever a future agent adds or removes a regression target, update these togeth
 2. The relevant inventory doc.
 3. [ATOM_CLASSIFICATION.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/ATOM_CLASSIFICATION.md) if atoms moved between backlog buckets.
 4. [COVERAGE.md](/Users/nam/.codex/worktrees/a92b/mingle/mingle-app/qa/mobile-ui/COVERAGE.md) if the top-level counts changed.
-5. [docs/ui-ux-codex-thread-history.md](/Users/nam/.codex/worktrees/a92b/mingle/docs/ui-ux-codex-thread-history.md) if new UI/UX regressions were discovered during QA work.
+5. [mingle-app/docs/ui-ux-codex-thread-history.md](../../docs/ui-ux-codex-thread-history.md) if new UI/UX regressions were discovered during QA work.
 
 Reports are written to `mingle-app/qa/mobile-ui/reports/<timestamp>/`.
