@@ -1094,23 +1094,11 @@
     <script>
       (function () {
         var storageKey = "i18nextLng";
+        var manualLocaleKey = "translatorLandingLocaleManual";
         var defaultLocale = "en";
         var languages = [
           { code: "en", name: "English", flag: "🇺🇸" },
-          { code: "ko", name: "한국어", flag: "🇰🇷" },
-          { code: "ja", name: "日本語", flag: "🇯🇵" },
-          { code: "zh-CN", name: "简体中文", flag: "🇨🇳" },
-          { code: "zh-TW", name: "繁體中文", flag: "🇹🇼" },
-          { code: "fr", name: "Français", flag: "🇫🇷" },
-          { code: "de", name: "Deutsch", flag: "🇩🇪" },
-          { code: "es", name: "Español", flag: "🇪🇸" },
-          { code: "pt", name: "Português", flag: "🇧🇷" },
-          { code: "it", name: "Italiano", flag: "🇮🇹" },
-          { code: "ru", name: "Русский", flag: "🇷🇺" },
-          { code: "ar", name: "العربية", flag: "🇸🇦" },
-          { code: "hi", name: "हिन्दी", flag: "🇮🇳" },
-          { code: "th", name: "ไทย", flag: "🇹🇭" },
-          { code: "vi", name: "Tiếng Việt", flag: "🇻🇳" }
+          { code: "ko", name: "한국어", flag: "🇰🇷" }
         ];
         var aliases = {
           zh: "zh-CN",
@@ -1287,6 +1275,11 @@
           return aliases[primary] || null;
         }
 
+        function resolveSupportedLocale(rawLocale) {
+          var resolved = resolveLocale(rawLocale);
+          return resolved && messages[resolved] ? resolved : null;
+        }
+
         function readNested(source, key) {
           return key.split(".").reduce(function (current, segment) {
             return current && Object.prototype.hasOwnProperty.call(current, segment) ? current[segment] : undefined;
@@ -1296,14 +1289,14 @@
         function getRouteLocale() {
           var segments = window.location.pathname.split("/").filter(Boolean);
           if (segments[0] === "landing" && segments.length === 2 && segments[1] !== "normal" && segments[1] !== "gaming") {
-            return resolveLocale(segments[1]);
+            return resolveSupportedLocale(segments[1]);
           }
           return null;
         }
 
         function getQueryLocale() {
           try {
-            return resolveLocale(new URLSearchParams(window.location.search).get("lang"));
+            return resolveSupportedLocale(new URLSearchParams(window.location.search).get("lang"));
           } catch (error) {
             return null;
           }
@@ -1314,6 +1307,11 @@
           return segments.length === 0 || (segments.length === 1 && segments[0] === "landing");
         }
 
+        function isLandingLocalePath() {
+          var segments = window.location.pathname.split("/").filter(Boolean);
+          return segments[0] === "landing" && segments.length === 2 && segments[1] !== "normal" && segments[1] !== "gaming";
+        }
+
         function getInitialLocale() {
           var routeLocale = getRouteLocale();
           if (routeLocale) return routeLocale;
@@ -1321,14 +1319,18 @@
           var queryLocale = getQueryLocale();
           if (queryLocale) return queryLocale;
 
-          if (isBareLandingPath()) return defaultLocale;
+          if (isLandingLocalePath()) return defaultLocale;
 
           try {
-            var storedLocale = resolveLocale(window.localStorage.getItem(storageKey));
-            if (storedLocale) return storedLocale;
+            var storedLocale = resolveSupportedLocale(window.localStorage.getItem(storageKey));
+            if (storedLocale && (!isBareLandingPath() || window.localStorage.getItem(manualLocaleKey) === "1")) {
+              return storedLocale;
+            }
           } catch (error) {}
 
-          return resolveLocale(window.navigator && window.navigator.language) || defaultLocale;
+          if (isBareLandingPath()) return defaultLocale;
+
+          return resolveSupportedLocale(window.navigator && window.navigator.language) || defaultLocale;
         }
 
         function updateLandingPath(locale) {
@@ -1341,8 +1343,8 @@
         }
 
         function applyLocale(locale, options) {
-          var resolved = resolveLocale(locale) || defaultLocale;
-          var dictionary = messages[resolved] || messages.en;
+          var resolved = resolveSupportedLocale(locale) || defaultLocale;
+          var dictionary = messages[resolved];
 
           document.documentElement.lang = resolved;
           document.documentElement.dir = resolved === "ar" && messages.ar ? "rtl" : "ltr";
@@ -1370,6 +1372,7 @@
 
           try {
             window.localStorage.setItem(storageKey, resolved);
+            if (options && options.manual) window.localStorage.setItem(manualLocaleKey, "1");
           } catch (error) {}
           if (options && options.updatePath) updateLandingPath(resolved);
         }
@@ -1383,7 +1386,7 @@
             selector.appendChild(option);
           });
           selector.addEventListener("change", function (event) {
-            applyLocale(event.target.value, { updatePath: true });
+            applyLocale(event.target.value, { manual: true, updatePath: true });
           });
         }
 
