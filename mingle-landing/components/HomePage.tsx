@@ -11,9 +11,10 @@ import { versionConfigs, defaultVersion, sectionRegistry } from '@/configs/versi
 interface HomePageProps {
   version?: string
   locale?: string
+  basePath?: string
 }
 
-export default function HomePage({ version, locale }: HomePageProps) {
+export default function HomePage({ version, locale, basePath = '' }: HomePageProps) {
   const { i18n } = useTranslation()
   const isRTL = i18n.language === 'ar'
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -47,7 +48,7 @@ export default function HomePage({ version, locale }: HomePageProps) {
       <EmailModal isOpen={isModalOpen} onClose={closeModal} />
 
       {/* Navigation - 항상 표시 */}
-      <NavBar version={version} />
+      <NavBar version={version} basePath={basePath} />
 
       {/* 버전 설정에 따라 섹션을 동적으로 렌더링 */}
       {config.sections.map((section) => {

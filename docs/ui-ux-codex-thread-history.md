@@ -9,6 +9,11 @@
    Fix: The root static `index.html` now serves a one-page, text-forward responsive landing page built from the positioning in `public/legal/xr.html`: real-time voice translation for social conversations, HelloTalk-style early users, automatic language handling, subtitle-like translation playback, target verticals, and the long-term voice messenger/social platform vision. The existing `/legal` route continues to rewrite to `legal-index.html`, so legal documents remain reachable without sharing the root page.
    Status: Resolved in-thread on 2026-04-20.
 
+2. **Translator-hosted landing routes did not share the main landing/i18n experience**
+   Problem: The new translator root page existed only at `/` and `/landing`, while the richer `mingle-landing` normal/gaming pages and their language selector still lived on the separate marketing deployment. That meant users entering through `translator.minglelabs.xyz` could not reach `/landing/normal` or `/landing/gaming` on the same public support domain, and the new static root page had no locale detection or language switcher.
+   Fix: `mingle-landing` now supports the `/landing/{version}/{locale}` prefix for `normal` and `gaming`, preserving language-switch URLs under the prefixed path. The translator legal Vercel config proxies those landing routes, their `_next` assets, public media, and versioned landing APIs to the landing deployment. The custom static root page also now uses the same primary locale catalog, `i18nextLng` storage key, browser/route/query locale detection, and an in-page language selector.
+   Status: Resolved in-thread on 2026-04-20.
+
 ## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
 
 ### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found

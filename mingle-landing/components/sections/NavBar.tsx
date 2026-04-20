@@ -10,9 +10,16 @@ import StoreDownloadButtons from '@/components/sections/StoreDownloadButtons'
 
 interface LanguageSelectorProps {
   version?: string
+  basePath?: string
 }
 
-function LanguageSelector({ version }: LanguageSelectorProps) {
+function normalizeBasePath(basePath?: string) {
+  if (!basePath) return ''
+  const trimmed = basePath.trim().replace(/\/+$/, '')
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+function LanguageSelector({ version, basePath }: LanguageSelectorProps) {
   const { i18n } = useTranslation()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
@@ -64,8 +71,9 @@ function LanguageSelector({ version }: LanguageSelectorProps) {
                   i18n.changeLanguage(lang.code)
                   // URL 경로 업데이트 - 항상 locale 포함 (영어도 /en 포함)
                   // router.push를 사용해 Next.js 라우터가 params를 올바르게 업데이트하도록 함
-                  const basePath = version ? `/${version}` : ''
-                  const newPath = `${basePath}/${lang.code}`
+                  const routePrefix = normalizeBasePath(basePath)
+                  const versionPath = version ? `${routePrefix}/${version}` : routePrefix
+                  const newPath = `${versionPath}/${lang.code}`
                   router.push(newPath)
                   setIsOpen(false)
                 }}
@@ -84,9 +92,10 @@ function LanguageSelector({ version }: LanguageSelectorProps) {
 
 export interface NavBarProps {
   version?: string
+  basePath?: string
 }
 
-export default function NavBar({ version }: NavBarProps) {
+export default function NavBar({ version, basePath }: NavBarProps) {
   const { t } = useTranslation()
 
   return (
@@ -96,7 +105,7 @@ export default function NavBar({ version }: NavBarProps) {
           Mingle
         </div>
         <div className="flex items-center gap-4">
-          <LanguageSelector version={version} />
+          <LanguageSelector version={version} basePath={basePath} />
           <StoreDownloadButtons size="sm" label={t('nav.cta')} />
         </div>
       </div>
