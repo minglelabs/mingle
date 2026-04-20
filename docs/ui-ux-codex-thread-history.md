@@ -1,5 +1,14 @@
 # Mingle Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-20 Translator Root Landing Page
+
+### `2026-04-20-translator-root-landing` | UI/UX issues found
+
+1. **The translator root duplicated the legal index instead of presenting the product**
+   Problem: `https://translator.minglelabs.xyz/` served the same legal-document index experience as `https://translator.minglelabs.xyz/legal`, even though the root URL is also used as the public support/product URL. That made the first public impression a compliance table rather than a product explanation, and it hid the Mingle translator value proposition behind the legal surface.
+   Fix: The root static `index.html` now serves a one-page, text-forward responsive landing page built from the positioning in `public/legal/xr.html`: real-time voice translation for social conversations, HelloTalk-style early users, automatic language handling, subtitle-like translation playback, target verticals, and the long-term voice messenger/social platform vision. The existing `/legal` route continues to rewrite to `legal-index.html`, so legal documents remain reachable without sharing the root page.
+   Status: Resolved in-thread on 2026-04-20.
+
 ## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
 
 ### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found
