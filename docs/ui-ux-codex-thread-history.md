@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Felo And Transync Turn Criteria Corrections
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: Felo's messenger-like sentence turns were understated as `Partial`, while Transync's sentence-turn and speaker-diarization cells were overstated as `Partial`.
+- User impact: Readers could misread Felo's sentence-level transcript behavior and Transync's live transcript behavior against the table's stricter messenger-turn and diarization criteria.
+- Resolution: Updated Felo `Messenger-like sentence turns` to `Yes`, and updated Transync `Messenger-like sentence turns` plus `Realtime speaker diarization` to `No`.
+
 ## 2026-04-20 - Blog Transync External Audio Correction
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
