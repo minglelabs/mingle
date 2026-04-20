@@ -108,15 +108,11 @@
     },
     {
       "source": "/landing",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/landing/:locale(en|ko)",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ]
 }
