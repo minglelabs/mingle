@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Transync External Audio Correction
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: Transync was marked as `Partial` for `External app audio capture`, implying some external-app audio capture support.
+- User impact: Readers could incorrectly interpret Transync as supporting external app audio capture in the same comparison category.
+- Resolution: Updated the Transync `External app audio capture` cell to `No` and clarified that meeting integrations do not make it an external app audio capture layer.
+
 ## 2026-04-20 - Blog Felo Price Copy
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
