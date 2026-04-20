@@ -20,3 +20,10 @@
 - Issue: The Mingle app screenshot in the article hero was too zoomed in, and the hero section felt too short for the article framing.
 - User impact: The app screen was harder to recognize as a full Mingle interface, and the top of the article did not give enough visual weight to the comparison.
 - Resolution: Reduced the hero screenshot background size, centered it more calmly, increased hero vertical spacing, and added a second hero paragraph summarizing that Mingle ranks best overall among mobile apps across the 10 comparison criteria.
+
+## 2026-04-20 - Blog Comparison Table Width And Live Chat Criteria
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The comparison table cells felt too narrow after multiple feature columns were added, and the table did not yet compare real-time speaker diarization or whether each product can function as its own messenger and voice chat app.
+- User impact: Readers had to parse cramped cells and could miss two core differentiators for Mingle as a live social translation product.
+- Resolution: Increased the table minimum width, widened table padding and the translator column, added `Realtime speaker diarization` and `Messenger + voice chat app` columns, and updated the hero summary from 10 to 12 criteria.
