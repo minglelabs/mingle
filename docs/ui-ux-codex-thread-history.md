@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Felo Price Copy
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The Felo Translator price cell mixed KRW and USD conversion details, making the table less clean for English readers.
+- User impact: Readers saw an unnecessary currency conversion instead of a direct dollar-only price comparison.
+- Resolution: Updated the Felo Translator price to a dollar-only public pricing summary, `About $2/hour; public web pricing lists 120 minutes at $3.90.`, and removed the KRW exchange reference from the source notes.
+
 ## 2026-04-20 - Blog Comparison Table Row Order
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
