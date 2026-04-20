@@ -358,7 +358,7 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
-) || 'wss://mingle.up.railway.app';
+) || 'wss://mingle.up.railway.app/stt';
 const FALLBACK_WEB_APP_BASE_URL = resolveDistinctFallbackTarget(
   WEB_APP_BASE_URL,
   normalizeHttpBaseUrl(RUNTIME_FALLBACK_WEB_APP_BASE_URL),
@@ -1130,6 +1130,24 @@ function AppInner(): React.JSX.Element {
   );
   const [nativeBannerReloadToken, setNativeBannerReloadToken] = useState(0);
   const [webViewMountToken, setWebViewMountToken] = useState(0);
+  const webFallbackActivatedRef = useRef(false);
+  const activateWebFallback = useCallback((): boolean => {
+    if (
+      !FALLBACK_WEB_APP_BASE_URL
+      || webFallbackActivatedRef.current
+      || isLoopbackUrl(WEB_APP_BASE_URL)
+      || isDevelopmentTunnelUrl(WEB_APP_BASE_URL)
+    ) {
+      return false;
+    }
+
+    webFallbackActivatedRef.current = true;
+    isPageReadyRef.current = false;
+    setLoadError(null);
+    setActiveWebAppBaseUrl(FALLBACK_WEB_APP_BASE_URL);
+    setWebViewMountToken((current) => current + 1);
+    return true;
+  }, []);
   const baseWebUrl = useMemo(() => {
     if (!activeWebAppBaseUrl || REQUIRED_CONFIG_ERROR) return '';
     const apiNamespaceQuery = VALIDATED_API_NAMESPACE
@@ -1522,6 +1540,9 @@ function AppInner(): React.JSX.Element {
             console.log(`[VersionPolicy] retrying fallback host: ${message}`);
           }
           policy = await fetchPolicy(FALLBACK_WEB_APP_BASE_URL);
+          if (active && !settled) {
+            activateWebFallback();
+          }
         }
 
         if (!active || settled) return;
@@ -1594,7 +1615,7 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
+  }, [activateWebFallback, presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;
@@ -2430,23 +2451,6 @@ function AppInner(): React.JSX.Element {
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
-
-  const activateWebFallback = useCallback((): boolean => {
-    if (
-      !FALLBACK_WEB_APP_BASE_URL
-      || activeWebAppBaseUrl !== WEB_APP_BASE_URL
-      || isLoopbackUrl(WEB_APP_BASE_URL)
-      || isDevelopmentTunnelUrl(WEB_APP_BASE_URL)
-    ) {
-      return false;
-    }
-
-    isPageReadyRef.current = false;
-    setLoadError(null);
-    setActiveWebAppBaseUrl(FALLBACK_WEB_APP_BASE_URL);
-    setWebViewMountToken((current) => current + 1);
-    return true;
-  }, [activeWebAppBaseUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (activateWebFallback()) return;
