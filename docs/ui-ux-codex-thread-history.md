@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-20 - Blog Comparison Table Felo And Transync Rows
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: The live AI translator comparison table did not include Felo Translator or Transync, two relevant real-time voice translation products.
+- User impact: Readers could not compare Mingle against adjacent live translation products with hourly or meeting-oriented pricing.
+- Resolution: Added Felo Translator and Transync rows directly after Mingle, including their logos, platform coverage, pricing, language support, live caption behavior, detection behavior, and other existing comparison criteria.
+
 ## 2026-04-20 - Blog Translator Comparison Table Logo
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
