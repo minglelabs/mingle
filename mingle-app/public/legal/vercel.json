@@ -111,7 +111,7 @@
       "destination": "/"
     },
     {
-      "source": "/landing/:locale(en|ko)",
+      "source": "/landing/:locale(ar|de|en|es|fr|hi|it|ja|ko|pt|ru|th|vi|zh-CN|zh-TW|zh-cn|zh-tw)",
       "destination": "/"
     }
   ]

@@ -1,5 +1,14 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-20 Translator Landing Locale Follow-Up
+
+### `2026-04-20-translator-landing-15-locales` | UI/UX issues found
+
+1. **Translator landing exposed too few locale choices after the review fix**
+   Problem: The first review fix prevented untranslated locale selection by limiting the custom translator landing selector to English and Korean. That avoided broken fallback copy, but it no longer matched the broader 15-language primary UI locale catalog already used by `mingle-landing`, making the landing experience feel incomplete for a multilingual product.
+   Fix: The custom static translator landing now exposes the same 15 primary UI locales and includes a complete message dictionary for each visible locale. The `/landing/{locale}` rewrite also accepts those landing locale paths, including Simplified and Traditional Chinese casing variants.
+   Status: Fixed in-thread on 2026-04-20.
+
 ## 2026-04-18 Android 1.1.1 Internal Test Banner Follow-Up
 
 ### `2026-04-18-android-1.1.1-banner-scroll-inset` | UI/UX issues found
