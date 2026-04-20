@@ -94,7 +94,7 @@ Release target safety:
 - When that target is active, `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_WS_URL` must not match the legacy 1.0.11 production hosts.
 - Legacy host anchors default to:
   - `MINGLE_LEGACY_SITE_URL=https://mingle-app-xi.vercel.app`
-  - `MINGLE_LEGACY_WS_URL=wss://mingle.up.railway.app`
+  - `MINGLE_LEGACY_WS_URL=wss://mingle-stt.fly.dev`
 - `MINGLE_ALLOW_LEGACY_RELEASE_TARGETS=1` bypasses the guard intentionally for emergency or local debugging only.
 
 URL override (optional):
@@ -372,6 +372,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_WS_URL`
+- `MINGLE_API_FALLBACK_SITE_URL` (optional fallback web target, defaults to the current Vercel deployment)
+- `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Fly deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional override, defaults to the current 1.0.11 production web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional override, defaults to the current 1.0.11 production STT deployment)
 - `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.0`)

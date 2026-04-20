@@ -32,7 +32,7 @@ const DEFAULT_AAB_PATH = path.join(
 );
 const DEFAULT_SYNC_SCRIPT = path.join(REPO_ROOT, "scripts/google-play-console-sync.mjs");
 const LEGACY_PRODUCTION_WEB_APP_BASE_URL = "https://mingle-app-xi.vercel.app";
-const LEGACY_PRODUCTION_WS_URL = "wss://mingle.up.railway.app";
+const LEGACY_PRODUCTION_WS_URL = "wss://mingle-stt.fly.dev";
 const RAILWAY_WEB_APP_BASE_URL = "https://mingle.up.railway.app";
 const RAILWAY_WS_URL = "wss://mingle.up.railway.app/stt";
 
@@ -486,6 +486,18 @@ function buildReleaseAab(plan) {
       process.env.NEXT_PUBLIC_SITE_URL?.trim() || defaultRuntimeUrls.siteUrl,
     NEXT_PUBLIC_WS_URL:
       process.env.NEXT_PUBLIC_WS_URL?.trim() || defaultRuntimeUrls.wsUrl,
+    MINGLE_API_FALLBACK_SITE_URL:
+      process.env.MINGLE_API_FALLBACK_SITE_URL?.trim() || LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+    MINGLE_STT_FALLBACK_WS_URL:
+      process.env.MINGLE_STT_FALLBACK_WS_URL?.trim() || LEGACY_PRODUCTION_WS_URL,
+    MINGLE_LEGACY_SITE_URL:
+      process.env.MINGLE_LEGACY_SITE_URL?.trim()
+      || process.env.MINGLE_API_FALLBACK_SITE_URL?.trim()
+      || LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+    MINGLE_LEGACY_WS_URL:
+      process.env.MINGLE_LEGACY_WS_URL?.trim()
+      || process.env.MINGLE_STT_FALLBACK_WS_URL?.trim()
+      || LEGACY_PRODUCTION_WS_URL,
     NEXT_PUBLIC_API_NAMESPACE: plan.runtimeApiNamespace,
     RN_API_NAMESPACE: plan.runtimeApiNamespace,
   };

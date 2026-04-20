@@ -1,5 +1,5 @@
 export const DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL = 'https://mingle-app-xi.vercel.app';
-export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle.up.railway.app';
+export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle-stt.fly.dev';
 const DEDICATED_RELEASE_TARGETS = new Set(['v1_1_0', 'v1_1_1', 'v1_1_2']);
 
 function formatReleaseTargetForMessage(rawValue) {

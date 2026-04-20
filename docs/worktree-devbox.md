@@ -198,6 +198,7 @@ scripts/devbox bootstrap --vault-push
     `secret/mingle-app/dev` 또는 `secret/mingle-app/prod`에서 직접 읽어 주입
     - 기준 키: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_WS_URL`
     - fallback(마이그레이션 호환): `MINGLE_API_BASE_URL`, `RN_WEB_APP_BASE_URL`, `MINGLE_WEB_APP_BASE_URL`, `MINGLE_WS_URL`, `RN_DEFAULT_WS_URL`, `MINGLE_DEFAULT_WS_URL`
+    - 장애 fallback 키: `MINGLE_API_FALLBACK_SITE_URL`, `MINGLE_STT_FALLBACK_WS_URL`
   - `--device-app-env prod`면 ngrok 및 로컬 서버(mingle-app/mingle-stt) 기동을 생략
   - `--device-app-env dev`면 기존 device(ngrok) 흐름을 그대로 사용
 

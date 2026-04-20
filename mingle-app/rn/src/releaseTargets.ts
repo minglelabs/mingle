@@ -15,7 +15,7 @@ const DEDICATED_RELEASE_TARGET_LABELS = {
 } as const;
 
 export const DEFAULT_LEGACY_PRODUCTION_WEB_APP_BASE_URL = 'https://mingle-app-xi.vercel.app';
-export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle.up.railway.app';
+export const DEFAULT_LEGACY_PRODUCTION_WS_URL = 'wss://mingle-stt.fly.dev';
 
 function normalizeUrlForComparison(rawValue: string): string {
   const normalizedValue = rawValue.trim();
