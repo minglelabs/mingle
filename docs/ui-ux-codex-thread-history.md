@@ -34,3 +34,10 @@
 - Issue: The `Translator`, `Price`, and `Platforms` columns consumed more horizontal space than needed while feature columns still felt compressed.
 - User impact: The most important feature comparison cells were harder to scan, especially after the table gained additional criteria.
 - Resolution: Switched the table to fixed layout, narrowed the first three columns, increased the overall table width, and widened the remaining feature columns with larger default cell widths.
+
+## 2026-04-20 - Blog Comparison Table Feature Order
+
+- Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`
+- Issue: `Continuous note-style translation` and `Live captions + transcript` were placed later in the table, after detection and multilingual routing features.
+- User impact: Two core live-output criteria were harder to compare immediately after basic language support.
+- Resolution: Moved both columns to immediately follow `Supported languages` across the header and all translator rows, without changing the feature values.
