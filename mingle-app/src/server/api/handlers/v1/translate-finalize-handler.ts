@@ -1167,11 +1167,11 @@ async function translateWithGemini(
         model: config.model,
         translations: {},
         emptyReason: 'blank_translations',
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens,
-        },
+        usage: normalizeUsage({
+          prompt: promptTokens,
+          completion: completionTokens,
+          total: totalTokens,
+        }),
       }
     }
     return null
