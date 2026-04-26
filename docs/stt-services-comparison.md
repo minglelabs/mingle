@@ -7,17 +7,16 @@ Last reviewed: 2026-04-27
 표는 가로 스크롤을 전제로 한 넓은 비교표입니다. 각 헤더의 작은 설명은 해당 칼럼이 무엇을 뜻하는지 나타냅니다.
 
 <div style="max-width: 100%; overflow-x: auto;">
-<table width="4200" style="min-width: 4200px; table-layout: fixed;">
+<table width="3780" style="min-width: 3780px; table-layout: fixed;">
   <colgroup>
     <col width="220">
     <col width="330">
     <col width="160">
-    <col width="420">
+    <col width="340">
     <col width="320">
     <col width="230">
     <col width="160">
     <col width="220">
-    <col width="340">
     <col width="170">
     <col width="170">
     <col width="190">
@@ -29,12 +28,11 @@ Last reviewed: 2026-04-27
       <th width="220" nowrap="nowrap">&nbsp;&nbsp;모&#8288;델&nbsp;&nbsp;<br><sub>서비스/모델군</sub></th>
       <th width="330" nowrap="nowrap">&nbsp;&nbsp;최&#8288;신/최&#8288;고&nbsp;모&#8288;델&nbsp;&nbsp;<br><sub>대표&nbsp;모델명</sub></th>
       <th width="160" nowrap="nowrap">&nbsp;&nbsp;출&#8288;시&#8288;일&nbsp;&nbsp;<br><sub>YYYY-MM-DD</sub></th>
-      <th width="420" nowrap="nowrap">&nbsp;&nbsp;결&#8288;론&nbsp;&nbsp;<br><sub>Mingle&nbsp;관점&nbsp;요약</sub></th>
+      <th width="340" nowrap="nowrap">&nbsp;&nbsp;시&#8288;간&#8288;당&nbsp;가&#8288;격&nbsp;&nbsp;<br><sub>USD/audio&nbsp;hour</sub></th>
       <th width="320" nowrap="nowrap">&nbsp;&nbsp;언&#8288;어&nbsp;감&#8288;지/스&#8288;위&#8288;칭&nbsp;&nbsp;<br><sub>다국어&nbsp;자동&nbsp;처리</sub></th>
       <th width="230" nowrap="nowrap">&nbsp;&nbsp;한&#8288;국&#8288;어&nbsp;품&#8288;질&nbsp;&nbsp;<br><sub>STT&nbsp;정확도</sub></th>
       <th width="160" nowrap="nowrap">&nbsp;&nbsp;번&#8288;역&nbsp;&nbsp;<br><sub>내장</sub></th>
       <th width="220" nowrap="nowrap">&nbsp;&nbsp;무&#8288;료&nbsp;티&#8288;어&nbsp;&nbsp;<br><sub>체험/크레딧</sub></th>
-      <th width="340" nowrap="nowrap">&nbsp;&nbsp;시&#8288;간&#8288;당&nbsp;가&#8288;격&nbsp;&nbsp;<br><sub>USD/audio&nbsp;hour</sub></th>
       <th width="170" nowrap="nowrap">&nbsp;&nbsp;레&#8288;이&#8288;턴&#8288;시&nbsp;&nbsp;<br><sub>실시간성</sub></th>
       <th width="170" nowrap="nowrap">&nbsp;&nbsp;안&#8288;정&#8288;성&nbsp;&nbsp;<br><sub>운영&nbsp;신뢰도</sub></th>
       <th width="190" nowrap="nowrap">&nbsp;&nbsp;턴&nbsp;분&#8288;리&nbsp;&nbsp;<br><sub>발화&nbsp;단위</sub></th>
@@ -47,12 +45,11 @@ Last reviewed: 2026-04-27
       <td>Soniox</td>
       <td><code>stt-rt-v4</code></td>
       <td>2026-02-05</td>
-      <td>품질 최고급·무료가 없음·발화 분리가 500ms 이하가 안됨</td>
+      <td>$0.12/h RT<br>$0.10/h async</td>
       <td>O (발화자 분리를 시켜야함)</td>
       <td align="center">◎</td>
       <td align="center">X</td>
       <td align="center">X</td>
-      <td>$0.12/h RT<br>$0.10/h async</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -63,12 +60,11 @@ Last reviewed: 2026-04-27
       <td>Gladia</td>
       <td><code>solaria-1</code></td>
       <td>2025-04-02</td>
-      <td>기능 조건 최강·성능 아쉬움</td>
+      <td>$0.75/h RT<br>$0.61/h async</td>
       <td>◎ (3+ 언어)</td>
       <td>△ (영어 외 언어 약함)</td>
       <td>△ (언어별 불안정)</td>
       <td>◎ (월 10h)</td>
-      <td>$0.75/h RT<br>$0.61/h async</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">O</td>
@@ -79,12 +75,11 @@ Last reviewed: 2026-04-27
       <td>Deepgram</td>
       <td><code>nova-3</code></td>
       <td>2025-02-12</td>
-      <td>STT 성능 우수</td>
+      <td>$0.462/h mono<br>$0.552/h multi</td>
       <td>O (한국어는 안됨. 10개 언어만.)</td>
       <td align="center">◎</td>
       <td align="center">X</td>
       <td>◎ (대량 크레딧)</td>
-      <td>$0.462/h mono<br>$0.552/h multi</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -95,12 +90,11 @@ Last reviewed: 2026-04-27
       <td>Fireworks</td>
       <td><code>fireworks-asr-v2</code></td>
       <td>2025-09-24</td>
-      <td>실험 성공한 적 없음</td>
+      <td>$0.054/h turbo<br>$0.09/h large</td>
       <td align="center">△</td>
       <td align="center">X</td>
       <td align="center">X</td>
       <td>○ (18h)</td>
-      <td>$0.054/h turbo<br>$0.09/h large</td>
       <td align="center">○</td>
       <td align="center">○</td>
       <td align="center">△</td>
@@ -111,12 +105,11 @@ Last reviewed: 2026-04-27
       <td>Google Translate 음성</td>
       <td>공개 모델명 없음</td>
       <td>공식 미공개</td>
-      <td>지속번역·자동감지 부족</td>
+      <td>$0/h (소비자 앱)</td>
       <td align="center">X</td>
       <td align="center">△</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
-      <td>$0/h (소비자 앱)</td>
       <td align="center">◎</td>
       <td align="center">◎</td>
       <td align="center">X</td>
@@ -127,12 +120,11 @@ Last reviewed: 2026-04-27
       <td>OpenAI</td>
       <td><code>gpt-4o-transcribe</code></td>
       <td>2025-03-20</td>
-      <td>정확도 기준 후보·언어 태그/발화자 분리 약함</td>
+      <td>$0.36/h</td>
       <td align="center">O</td>
       <td align="center">◎</td>
       <td align="center">X</td>
       <td align="center">X</td>
-      <td>$0.36/h</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -143,12 +135,11 @@ Last reviewed: 2026-04-27
       <td>Google Cloud Speech-to-Text</td>
       <td><code>chirp_3</code></td>
       <td>2025-10-13</td>
-      <td>클라우드 표준 후보·Mingle 연결은 아직 미구현</td>
+      <td>$0.96/h standard<br>$0.18/h dynamic batch</td>
       <td align="center">O</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>$0.96/h standard<br>$0.18/h dynamic batch</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -159,12 +150,11 @@ Last reviewed: 2026-04-27
       <td>ElevenLabs</td>
       <td><code>scribe_v2_realtime</code></td>
       <td>2025-11-11</td>
-      <td>저지연 실시간 후보·Mingle 실측 평가 필요</td>
+      <td>$0.39/h RT<br>$0.22/h async</td>
       <td align="center">◎</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>$0.39/h RT<br>$0.22/h async</td>
       <td align="center">◎</td>
       <td align="center">○</td>
       <td align="center">O</td>
@@ -175,12 +165,11 @@ Last reviewed: 2026-04-27
       <td>Speechmatics</td>
       <td><code>Ursa 2</code> / Enhanced Operating Point</td>
       <td>2024-10-11</td>
-      <td>엔터프라이즈/온프렘 후보·언어 조합 제약 확인 필요</td>
+      <td>$0.24/h부터<br>Enhanced/RT 추산 $0.24-$0.60/h</td>
       <td align="center">△</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">X</td>
-      <td>$0.24/h부터<br>Enhanced/RT 추산 $0.24-$0.60/h</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">O</td>
@@ -191,12 +180,11 @@ Last reviewed: 2026-04-27
       <td>AssemblyAI</td>
       <td>Universal-3 Pro Streaming (<code>u3-rt-pro</code>)</td>
       <td>2026-03-25</td>
-      <td>프롬프트 가능한 STT 후보·최신 스트리밍은 6개 언어 중심</td>
+      <td>$0.45/h RT<br>$0.21/h async</td>
       <td>O (6개 언어 중심)</td>
       <td align="center">X</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>$0.45/h RT<br>$0.21/h async</td>
       <td align="center">○</td>
       <td align="center">○</td>
       <td align="center">O</td>
@@ -207,12 +195,11 @@ Last reviewed: 2026-04-27
       <td>Amazon</td>
       <td>Amazon Nova Sonic</td>
       <td>2025-04-08</td>
-      <td>AWS 음성 에이전트 후보·순수 Transcribe 최신 내부 모델명은 비공개</td>
+      <td>추산 $0.24/h STT</td>
       <td align="center">O</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>추산 $0.24/h STT</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -223,12 +210,11 @@ Last reviewed: 2026-04-27
       <td>Microsoft Azure Speech / Foundry</td>
       <td><code>MAI-Transcribe-1</code></td>
       <td>2026-04-02</td>
-      <td>최신 Azure 후보·현재 public preview라 운영 안정성 확인 필요</td>
+      <td>$0.36/h</td>
       <td align="center">O</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>$0.36/h</td>
       <td align="center">○</td>
       <td align="center">△</td>
       <td align="center">△</td>
@@ -239,12 +225,11 @@ Last reviewed: 2026-04-27
       <td>IBM</td>
       <td>Granite Speech 3.3 8B</td>
       <td>2025-04-16</td>
-      <td>오픈/엔터프라이즈 후보·실시간 제품화 검증 필요</td>
+      <td>추산 $0.10-$0.30/h 자체호스팅</td>
       <td align="center">△</td>
       <td>미평가</td>
       <td align="center">O</td>
       <td align="center">○</td>
-      <td>추산 $0.10-$0.30/h 자체호스팅</td>
       <td align="center">△</td>
       <td align="center">△</td>
       <td align="center">X</td>
@@ -255,12 +240,11 @@ Last reviewed: 2026-04-27
       <td>Rev AI</td>
       <td>Reverb ASR / Reverb Turbo</td>
       <td>2024-10-03</td>
-      <td>장문 전사/diarization 후보·라이선스와 한국어 품질 확인 필요</td>
+      <td>$0.20/h Reverb<br>$0.10/h Turbo</td>
       <td align="center">O</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>$0.20/h Reverb<br>$0.10/h Turbo</td>
       <td align="center">○</td>
       <td align="center">◎</td>
       <td align="center">△</td>
@@ -271,12 +255,11 @@ Last reviewed: 2026-04-27
       <td>NVIDIA Speech NIM / Riva</td>
       <td>Nemotron ASR Streaming, Parakeet TDT/RNNT family</td>
       <td>2026-02-01</td>
-      <td>자체 인프라 후보·GPU 운영 부담 큼</td>
+      <td>추산 $0.02-$0.03/h 고동시성<br>저사용률은 $1/GPU-h+인스턴스 비용</td>
       <td align="center">△</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">X</td>
-      <td>추산 $0.02-$0.03/h 고동시성<br>저사용률은 $1/GPU-h+인스턴스 비용</td>
       <td align="center">◎</td>
       <td align="center">○</td>
       <td align="center">O</td>
@@ -287,12 +270,11 @@ Last reviewed: 2026-04-27
       <td>Picovoice</td>
       <td>Cheetah Streaming STT / Leopard STT</td>
       <td>2026-04-13</td>
-      <td>온디바이스 후보·지원 언어와 라이선스 확인 필요</td>
+      <td>추산 $0.00-$0.02/h + 상용 라이선스</td>
       <td align="center">△</td>
       <td align="center">○</td>
       <td align="center">X</td>
       <td align="center">○</td>
-      <td>추산 $0.00-$0.02/h + 상용 라이선스</td>
       <td align="center">◎</td>
       <td align="center">○</td>
       <td align="center">O</td>
@@ -303,12 +285,11 @@ Last reviewed: 2026-04-27
       <td>OpenAI Whisper</td>
       <td><code>large-v3-turbo</code></td>
       <td>2024-09-30</td>
-      <td>로컬/오픈소스 기준선·실시간 제품화는 직접 구성 필요</td>
+      <td>추산 $0.01-$0.05/h 자체호스팅</td>
       <td align="center">O</td>
       <td align="center">○</td>
       <td align="center">O</td>
       <td align="center">◎</td>
-      <td>추산 $0.01-$0.05/h 자체호스팅</td>
       <td align="center">△</td>
       <td align="center">○</td>
       <td align="center">X</td>
@@ -319,12 +300,11 @@ Last reviewed: 2026-04-27
       <td>Vosk</td>
       <td>Vosk API <code>v0.3.50</code></td>
       <td>2024-04-22</td>
-      <td>초경량 오프라인 후보·최신 neural STT 대비 품질 한계</td>
+      <td>추산 $0.00-$0.03/h 자체호스팅</td>
       <td align="center">X</td>
       <td align="center">X</td>
       <td align="center">X</td>
       <td align="center">◎</td>
-      <td>추산 $0.00-$0.03/h 자체호스팅</td>
       <td align="center">◎</td>
       <td align="center">○</td>
       <td align="center">△</td>
@@ -335,12 +315,11 @@ Last reviewed: 2026-04-27
       <td>Meta Omnilingual ASR</td>
       <td>Omnilingual ASR 7B family</td>
       <td>2025-11-11</td>
-      <td>초다국어/저자원 언어 연구 후보·실시간 운영은 무거움</td>
+      <td>추산 $0.10-$0.40/h 자체호스팅</td>
       <td align="center">◎</td>
       <td>미평가</td>
       <td align="center">X</td>
       <td align="center">◎</td>
-      <td>추산 $0.10-$0.40/h 자체호스팅</td>
       <td align="center">△</td>
       <td align="center">△</td>
       <td align="center">X</td>
@@ -351,12 +330,11 @@ Last reviewed: 2026-04-27
       <td>NVIDIA NeMo</td>
       <td>Parakeet-TDT-0.6B-v3</td>
       <td>2026-02-01</td>
-      <td>오픈웨이트 고속 ASR 후보·한국어와 diarization은 별도 구성 필요</td>
+      <td>추산 $0.005-$0.03/h 자체호스팅</td>
       <td align="center">△</td>
       <td align="center">X</td>
       <td align="center">X</td>
       <td align="center">◎</td>
-      <td>추산 $0.005-$0.03/h 자체호스팅</td>
       <td align="center">◎</td>
       <td align="center">△</td>
       <td align="center">O</td>
