@@ -3447,6 +3447,38 @@ export default function useRealtimeSTT({
     }
   }, [visualize])
 
+  const finalizePendingTurnsLocallyForStop = useCallback((reason: string) => {
+    const localFinalizeResults: LocalFinalizeResult[] = []
+    for (const pendingTurn of getPendingTurnsForLocalFinalize()) {
+      const { options } = buildLocalFinalizeOptionsForSpeaker(pendingTurn.speaker, pendingTurn.language)
+      const result = finalizePendingLocally(
+        pendingTurn.rawText,
+        pendingTurn.language,
+        options,
+      )
+      if (result) {
+        localFinalizeResults.push(result)
+      }
+    }
+    if (localFinalizeResults.length === 0) return
+
+    const sttDurationMs = turnStartedAtRef.current ? Math.max(0, Date.now() - turnStartedAtRef.current) : undefined
+    clearPartialBuffers()
+    turnStartedAtRef.current = null
+    for (const result of localFinalizeResults) {
+      finalizeTurnWithTranslation(result, {
+        sttDurationMs,
+        reason,
+      })
+    }
+  }, [
+    buildLocalFinalizeOptionsForSpeaker,
+    clearPartialBuffers,
+    finalizePendingLocally,
+    finalizeTurnWithTranslation,
+    getPendingTurnsForLocalFinalize,
+  ])
+
   const handleSttTransportError = useCallback((details?: Record<string, unknown>) => {
     logSttDebug('transport.error', details)
     console.error('[MingleSTT] transport.error', details || {})
@@ -3578,6 +3610,9 @@ export default function useRealtimeSTT({
     }
 
     if (message.type === 'stop_recording_ack') {
+      if (nativeStopRequestedRef.current) {
+        finalizePendingTurnsLocallyForStop('native_stop_ack')
+      }
       return
     }
 
@@ -3776,6 +3811,7 @@ export default function useRealtimeSTT({
   }, [
     buildLocalFinalizeOptionsForSpeaker,
     bumpPendingTurnRenderVersion,
+    finalizePendingTurnsLocallyForStop,
     finalizeTurnWithTranslation,
     getCurrentTargetLanguages,
     logClientEvent,
@@ -4036,6 +4072,7 @@ export default function useRealtimeSTT({
         }
         logSttDebug('native.error', { message: detail.message })
         if (nativeStopRequestedRef.current) {
+          finalizePendingTurnsLocallyForStop('native_stop_error')
           nativeStopRequestedRef.current = false
           releaseCurrentNativeSttOwner()
           resolvePendingNativeStopAck()
@@ -4063,6 +4100,7 @@ export default function useRealtimeSTT({
         }
         logSttDebug('native.close', { reason: detail.reason })
         if (nativeStopRequestedRef.current) {
+          finalizePendingTurnsLocallyForStop('native_stop_close')
           nativeStopRequestedRef.current = false
           releaseCurrentNativeSttOwner()
           resolvePendingNativeStopAck()
@@ -4077,7 +4115,7 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
 
   useEffect(() => {
     if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {

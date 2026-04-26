@@ -1017,8 +1017,10 @@ wss.on('connection', (clientWs) => {
 
             finalizePendingTurnFromProvider = async () => {
                 const payload = await forceProviderFinalizeAllSpeakerTurns();
+                // Stop finalize can split off a carry turn; flush it before sending the ack.
+                const flushedPayload = flushAllSpeakerTurns();
                 resetGlobalFinalizeScheduler();
-                return payload;
+                return flushedPayload || payload;
             };
 
             sttWs.onopen = () => {
