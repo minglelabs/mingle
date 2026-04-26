@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-04-27 Android WebView Timestamp Update Loop
+
+### `2026-04-27-android-chat-timestamp-update-depth` | UI/UX issues found
+
+1. **Android WebView could show the Next.js error overlay while the room was otherwise still usable**
+   Problem: `ChatBubbleTimestamp` scheduled its next relative-time refresh from the exact millisecond remainder before the next second/minute/hour boundary. If an utterance `createdAtMs` included a fractional millisecond or landed just before a boundary, `getNextChatBubbleTimestampUpdateDelayMs()` could return a sub-millisecond delay such as `0.25`. Android WebView can effectively run that as an immediate timeout; because the timestamp effect depends on `tick` and increments `tick`, the component could immediately reschedule itself until React showed `Maximum update depth exceeded`. The user-facing symptom was a red Next.js `1 Issue` badge and overlay in the conversation room, even though STT and the transcript UI could still be running underneath.
+   Reproduction: Run the Android devbox app against the local/devbox Next server in development mode so the Next.js overlay is visible. Open a conversation containing at least one rendered chat bubble timestamp whose `createdAtMs` is fractional and just short of a relative-time boundary; the minimal logic case is `getNextChatBubbleTimestampUpdateDelayMs(nowMs - 10_999.75, nowMs)`, which returned `0.25` before the fix. In the real device path, that appears as a red `1 Issue` badge; opening it shows the stack at `src/components/LivePhoneDemo/ChatBubbleTimestamp.tsx:34`, where `setTick(current => current + 1)` runs inside the timestamp timeout. The same condition can be verified without a device by adding/running a unit assertion for the fractional-boundary case in `chat-bubble.timestamp.test.ts`.
+   Fix: The timestamp scheduler now rounds the next delay up with `Math.ceil()` and clamps relative timestamp refreshes to a minimum of `50ms`, so Android WebView cannot turn a nearly-zero refresh into a synchronous render loop. A regression test covers the fractional-boundary input and expects the clamped delay.
+   Status: Fixed in-thread on 2026-04-27 in commit `35ec7cdd`.
+
 ## 2026-04-20 Translator Landing Social Route Follow-Up
 
 ### `2026-04-20-translator-landing-social-route` | UI/UX issues found
