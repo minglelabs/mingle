@@ -28,8 +28,20 @@ export type SonioxFinalizeRequestSpeaker = {
     detectedLang: string;
 };
 
+export type SonioxSpeakerChurnTurnLike = {
+    speaker: string;
+    text: string;
+    language: string;
+    endMs?: number;
+    progressAtMs?: number;
+};
+
 const ENDPOINT_MARKER_RE = /<\/?(?:end|fin)>/i;
 const ENDPOINT_MARKER_RE_GLOBAL = /<\/?(?:end|fin)>/gi;
+const SPEAKER_CHURN_MIN_NORMALIZED_TEXT_LENGTH = 24;
+const SPEAKER_CHURN_MIN_WORD_COUNT = 5;
+const SPEAKER_CHURN_DEFAULT_END_WINDOW_MS = 2500;
+const SPEAKER_CHURN_DEFAULT_PROGRESS_WINDOW_MS = 2500;
 
 export function normalizeDetectedLang(rawLanguage: unknown): string {
     return typeof rawLanguage === 'string' && rawLanguage.trim()
@@ -147,6 +159,63 @@ export function buildSonioxFinalizeRequestCohort(
         }));
 }
 
+export function isLikelySonioxSpeakerChurnDuplicate(
+    candidate: SonioxSpeakerChurnTurnLike,
+    owner: SonioxSpeakerChurnTurnLike,
+    opts: { endWindowMs?: number; progressWindowMs?: number } = {},
+): boolean {
+    if (normalizeSpeaker(candidate.speaker) === normalizeSpeaker(owner.speaker)) {
+        return false;
+    }
+
+    const candidateText = normalizeSpeakerChurnText(candidate.text);
+    const ownerText = normalizeSpeakerChurnText(owner.text);
+    if (!hasEnoughSpeakerChurnText(candidateText)) return false;
+    if (ownerText.length < candidateText.length) return false;
+    if (ownerText !== candidateText && !ownerText.startsWith(candidateText)) {
+        return false;
+    }
+
+    const candidateLang = normalizeDetectedLang(candidate.language);
+    const ownerLang = normalizeDetectedLang(owner.language);
+    if (candidateLang !== 'unknown' && ownerLang !== 'unknown' && candidateLang !== ownerLang) {
+        return false;
+    }
+
+    const endWindowMs = opts.endWindowMs ?? SPEAKER_CHURN_DEFAULT_END_WINDOW_MS;
+    if (areFiniteNumbers(candidate.endMs, owner.endMs)) {
+        return Math.abs(candidate.endMs! - owner.endMs!) <= endWindowMs;
+    }
+
+    const progressWindowMs = opts.progressWindowMs ?? SPEAKER_CHURN_DEFAULT_PROGRESS_WINDOW_MS;
+    if (areFiniteNumbers(candidate.progressAtMs, owner.progressAtMs)) {
+        return Math.abs(candidate.progressAtMs! - owner.progressAtMs!) <= progressWindowMs;
+    }
+
+    return false;
+}
+
 function stripEndpointMarkersForSignature(text: string): string {
     return text.replace(ENDPOINT_MARKER_RE_GLOBAL, '');
+}
+
+function normalizeSpeakerChurnText(text: string): string {
+    return stripEndpointMarkersForSignature(text)
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201c\u201d]/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function hasEnoughSpeakerChurnText(text: string): boolean {
+    if (text.length < SPEAKER_CHURN_MIN_NORMALIZED_TEXT_LENGTH) return false;
+    return text.split(/\s+/).filter(Boolean).length >= SPEAKER_CHURN_MIN_WORD_COUNT;
+}
+
+function areFiniteNumbers(left: unknown, right: unknown): boolean {
+    return typeof left === 'number'
+        && Number.isFinite(left)
+        && typeof right === 'number'
+        && Number.isFinite(right);
 }

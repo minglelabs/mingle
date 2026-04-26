@@ -7,6 +7,7 @@ import {
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
+    isLikelySonioxSpeakerChurnDuplicate,
     mergeDetectedLang,
     shouldUseTokenLanguageForCurrentTurn,
 } from '../soniox-language';
@@ -164,4 +165,56 @@ test('global finalize cohort can target only speakers idle long enough', () => {
             detectedLang: 'ko',
         },
     ]);
+});
+
+test('speaker churn duplicate detection catches same audio reassigned to another speaker', () => {
+    assert.equal(isLikelySonioxSpeakerChurnDuplicate(
+        {
+            speaker: '2',
+            text: 'One of my favorite phrases is, "Screw it, let\'s do it," and',
+            language: 'en',
+            endMs: 12_000,
+            progressAtMs: 20_000,
+        },
+        {
+            speaker: '1',
+            text: 'One of my favorite phrases is, "Screw it, let\'s do it," and I.',
+            language: 'en',
+            endMs: 12_600,
+            progressAtMs: 20_200,
+        },
+    ), true);
+});
+
+test('speaker churn duplicate detection keeps distant repeats and short overlaps', () => {
+    assert.equal(isLikelySonioxSpeakerChurnDuplicate(
+        {
+            speaker: '2',
+            text: 'One of my favorite phrases is, "Screw it, let\'s do it," and',
+            language: 'en',
+            endMs: 12_000,
+            progressAtMs: 20_000,
+        },
+        {
+            speaker: '1',
+            text: 'One of my favorite phrases is, "Screw it, let\'s do it," and I.',
+            language: 'en',
+            endMs: 20_000,
+            progressAtMs: 28_500,
+        },
+    ), false);
+    assert.equal(isLikelySonioxSpeakerChurnDuplicate(
+        {
+            speaker: '2',
+            text: 'And Genji',
+            language: 'en',
+            endMs: 12_000,
+        },
+        {
+            speaker: '1',
+            text: 'And Genji now',
+            language: 'en',
+            endMs: 12_300,
+        },
+    ), false);
 });
