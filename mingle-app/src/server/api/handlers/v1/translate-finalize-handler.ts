@@ -13,6 +13,7 @@ import { decodeAudioContent, detectAudioMime } from '@/server/api/shared/audio-u
 import { resolveVoiceId, INWORLD_API_BASE } from '@/server/api/shared/inworld-voice'
 import {
   buildFallbackTranslationsFromCurrentTurnPreviousState,
+  isBlankTranslationJson,
   normalizeLang,
   normalizeSelectedLanguages,
   normalizeTargetLanguages,
@@ -65,6 +66,7 @@ type TranslationUsage = {
 
 type TranslationEngineResult = {
   translations: Record<string, string>
+  emptyReason?: 'blank_translations'
   sourceLanguage?: string
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
@@ -1145,7 +1147,8 @@ async function translateWithGemini(
     : ''
 
   if (Object.keys(translations).length === 0) {
-    logTranslateFinalizeError('gemini_unparseable_json', {
+    const isBlankTranslations = isBlankTranslationJson(content, ctx.targetLanguages)
+    logTranslateFinalizeError(isBlankTranslations ? 'gemini_blank_translations' : 'gemini_unparseable_json', {
       ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
@@ -1157,6 +1160,20 @@ async function translateWithGemini(
         total_tokens: totalTokens,
       },
     })
+    if (isBlankTranslations && !ctx.isFinal) {
+      return {
+        provider: config.provider,
+        infrastructureProvider: config.infrastructureProvider,
+        model: config.model,
+        translations: {},
+        emptyReason: 'blank_translations',
+        usage: {
+          promptTokens,
+          completionTokens,
+          totalTokens,
+        },
+      }
+    }
     return null
   }
 
@@ -1778,6 +1795,19 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           error: summarizeUnknownError(error),
         })
       }
+    }
+
+    if (
+      selectedResult?.emptyReason === 'blank_translations'
+      && !ctx.isFinal
+      && !providerRequestFailureReason
+    ) {
+      return await buildResponseWithOptionalTts({}, {
+        provider: selectedResult.provider,
+        infrastructureProvider: selectedResult.infrastructureProvider,
+        model: selectedResult.model,
+        usage: selectedResult.usage,
+      })
     }
 
     if (!selectedResult || Object.keys(selectedResult.translations).length === 0) {

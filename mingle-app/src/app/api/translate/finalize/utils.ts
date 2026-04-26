@@ -113,6 +113,27 @@ export function parseTranslations(raw: string): Record<string, string> {
   return output
 }
 
+export function isBlankTranslationJson(raw: string, targetLanguages: string[]): boolean {
+  const parsed = parseTranslationJson(raw)
+  if (!parsed) return false
+
+  const normalizedTargets = new Set(targetLanguages.map(normalizeLang).filter(Boolean))
+  let sawBlankTranslation = false
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string') continue
+    const normalizedKey = normalizeLang(key)
+    if (!normalizedKey) continue
+    if (normalizedTargets.size > 0 && !normalizedTargets.has(normalizedKey)) continue
+
+    const cleaned = sanitizeMarkerText(value)
+    if (cleaned) return false
+    sawBlankTranslation = true
+  }
+
+  return sawBlankTranslation
+}
+
 export function parseDetectedSourceLanguage(raw: string): string {
   const parsed = parseTranslationJson(raw)
   if (!parsed) return ''
