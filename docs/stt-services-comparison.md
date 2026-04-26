@@ -2,27 +2,367 @@
 
 Last reviewed: 2026-04-27
 
-아래 표는 사용자 평가표에 최신/최고 모델명과 최신 모델 출시일을 추가하고, 조사한 STT 서비스/오픈웨이트 후보를 같은 형식으로 확장한 것입니다. 가격은 USD 기준의 오디오 1시간당 비용으로 정리했습니다. 공식 시간당 과금이 없는 오픈웨이트/자체호스팅 항목은 고동시성 또는 배치 처리 시의 추론 인프라 비용만 추산했으며, 유휴 GPU, 엔지니어링, 저장소, 네트워크, 엔터프라이즈 라이선스 비용은 제외했습니다. 사용자 평가가 없는 항목은 아직 Mingle 실측 전이므로 `미평가` 또는 `공식 확인 필요`로 남겼습니다.
+아래 표는 사용자 평가표에 최신/최고 모델명, 최신 모델 출시일, 시간당 가격을 추가하고, 조사한 STT 서비스/오픈웨이트 후보를 같은 형식으로 확장한 것입니다. 가격은 USD 기준의 오디오 1시간당 비용입니다. 공식 시간당 과금이 없는 오픈웨이트/자체호스팅 항목은 고동시성 또는 배치 처리 시의 추론 인프라 비용만 추산했으며, 유휴 GPU, 엔지니어링, 저장소, 네트워크, 엔터프라이즈 라이선스 비용은 제외했습니다.
 
-| 모델 | 최신/최고 모델명 | 최신 모델 출시일 | 결론 | 다중언어 자동감지/스위칭 | 한국어 STT 품질 | 번역 | 무료 티어 | 가격 | 레이턴시 | 안정성 | 발화 턴 분리 | 발화자 분리 | 비고 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Soniox | `stt-rt-v4` | 2026-02-05 | 품질 최고급·무료가 없음·발화 분리가 500ms 이하가 안됨 | O (발화자 분리를 시켜야함) | ◎ | X | X | $0.12/h RT, $0.10/h async | ◎ | ◎ | △ | △ | [공식 가격표](https://soniox.com/pricing), [공식 모델 문서](https://soniox.com/docs/stt/models) |
-| Gladia | `solaria-1` | 2025-04-02 | 기능 조건 최강·성능 아쉬움 | ◎ (3+ 언어) | △ (영어 외 언어 약함) | △ (언어별 불안정) | ◎ (월 10h) | $0.75/h RT, $0.61/h async | ◎ | ◎ | O | X | [공식 가격표](https://www.gladia.io/pricing), [Solaria 출시 공지](https://www.prnewswire.com/news-releases/gladia-launches-solaria-the-first-fully-multilingual-next-generation-speech-to-text-model-for-global-scalability-302417497.html) |
-| Deepgram | `nova-3` | 2025-02-12 | STT 성능 우수 | O (한국어는 안됨. 10개 언어만.) | ◎ | X | ◎ (대량 크레딧) | $0.462/h mono, $0.552/h multi | ◎ | ◎ | △ | X | [공식 가격표](https://deepgram.com/pricing), [Nova-3 changelog](https://developers.deepgram.com/changelog/2025/2/12). diarization은 +$0.12/h |
-| Fireworks | `fireworks-asr-v2` | 2025-09-24 | 실험 성공한 적 없음 | △ | X | X | ○ (18h) | $0.054/h turbo, $0.09/h large | ○ | ○ | △ | X | [공식 가격표](https://fireworks.ai/pricing), [ASR v2 모델 페이지](https://fireworks.ai/models/fireworks/fireworks-asr-v2). 가격표의 STT 항목은 Whisper v3 계열 기준, diarization은 +40% |
-| Google Translate 음성 | 공개 모델명 없음 | 공식 미공개 | 지속번역·자동감지 부족 | X | △ | ◎ | ◎ | $0/h (소비자 앱) | ◎ | ◎ | X | X | 소비자용 Google Translate 음성 기능 기준. STT API 모델명/출시일은 공개되어 있지 않음 |
-| OpenAI | `gpt-4o-transcribe` | 2025-03-20 | 정확도 기준 후보·언어 태그/발화자 분리 약함 | O | ◎ | X | X | $0.36/h | ○ | ◎ | △ | X | [공식 가격표](https://platform.openai.com/docs/pricing/), [차세대 오디오 모델 출시](https://openai.com/index/introducing-our-next-generation-audio-models/). `mingle-model-test`는 `gpt-4o-mini-transcribe` 경로 사용 |
-| Google Cloud Speech-to-Text | `chirp_3` | 2025-10-13 | 클라우드 표준 후보·Mingle 연결은 아직 미구현 | O | 미평가 | X | ○ | $0.96/h standard, $0.18/h dynamic batch | ○ | ◎ | △ | O | [공식 가격표](https://cloud.google.com/speech-to-text/pricing), [Speech-to-Text release notes](https://docs.cloud.google.com/speech-to-text/docs/release-notes). 멀티채널은 채널별 과금 |
-| ElevenLabs | `scribe_v2_realtime` | 2025-11-11 | 저지연 실시간 후보·Mingle 실측 평가 필요 | ◎ | 미평가 | X | ○ | $0.39/h RT, $0.22/h async | ◎ | ○ | O | △ | [공식 가격표](https://elevenlabs.io/pricing/api?price.section=speech_to_text), [Scribe v2 Realtime 출시 공지](https://elevenlabs.io/blog/introducing-scribe-v2-realtime) |
-| Speechmatics | `Ursa 2` / Enhanced Operating Point | 2024-10-11 | 엔터프라이즈/온프렘 후보·언어 조합 제약 확인 필요 | △ | 미평가 | X | X | $0.24/h부터, Enhanced/RT 추산 $0.24-$0.60/h | ○ | ◎ | O | △ | [공식 가격표](https://www.speechmatics.com/pricing), [Ursa 2 출시 공지](https://www.speechmatics.com/company/articles-and-news/ursa-2-elevating-speech-recognition-across-52-languages). 공개 가격표는 Pro 시작가 중심 |
-| AssemblyAI | Universal-3 Pro Streaming (`u3-rt-pro`) | 2026-03-25 | 프롬프트 가능한 STT 후보·최신 스트리밍은 6개 언어 중심 | O (6개 언어 중심) | X | X | ○ | $0.45/h RT, $0.21/h async | ○ | ○ | O | O | [공식 가격표](https://www.assemblyai.com/pricing/), [AssemblyAI changelog](https://www.assemblyai.com/changelog). streaming diarization은 +$0.12/h |
-| Amazon | Amazon Nova Sonic | 2025-04-08 | AWS 음성 에이전트 후보·순수 Transcribe 최신 내부 모델명은 비공개 | O | 미평가 | X | ○ | 추산 $0.24/h STT | ○ | ◎ | △ | O | [Amazon Nova Sonic 공지](https://press.aboutamazon.com/2025/4/introducing-amazon-nova-sonic-a-new-gen-ai-model-for-building-voice-applications-and-agents), [Amazon Bedrock 가격표](https://aws.amazon.com/bedrock/pricing/). $3.40/M audio input + $2.40/M text output 기준으로 1h ~= 60K audio tokens + 15K text tokens 가정 |
-| Microsoft Azure Speech / Foundry | `MAI-Transcribe-1` | 2026-04-02 | 최신 Azure 후보·현재 public preview라 운영 안정성 확인 필요 | O | 미평가 | X | ○ | $0.36/h | ○ | △ | △ | △ | [MAI-Transcribe-1 model card](https://microsoft.ai/pdf/MAI-Transcribe-1-Model-Card.pdf), [Microsoft Learn](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe) |
-| IBM | Granite Speech 3.3 8B | 2025-04-16 | 오픈/엔터프라이즈 후보·실시간 제품화 검증 필요 | △ | 미평가 | O | ○ | 추산 $0.10-$0.30/h 자체호스팅 | △ | △ | X | X | [IBM Granite 3.3 공지](https://community.ibm.com/community/user/blogs/nickolus-plowden/2025/04/16/ibm-granite-33-speech-recognition-refined-reasonin). 공개 API 단가 없음; L4/A10G급 GPU에서 4-10x realtime 배치 처리 가정 |
-| Rev AI | Reverb ASR / Reverb Turbo | 2024-10-03 | 장문 전사/diarization 후보·라이선스와 한국어 품질 확인 필요 | O | 미평가 | X | ○ | $0.20/h Reverb, $0.10/h Turbo | ○ | ◎ | △ | O | [공식 가격표](https://www.rev.ai/pricing). 외국어 Reverb는 $0.30/h |
-| NVIDIA Speech NIM / Riva | Nemotron ASR Streaming, Parakeet TDT/RNNT family | 2026-02-01 | 자체 인프라 후보·GPU 운영 부담 큼 | △ | 미평가 | X | X | 추산 $0.02-$0.03/h 고동시성, 저사용률은 $1/GPU-h+인스턴스 비용 | ◎ | ○ | O | O | [NVIDIA AI Enterprise 가격표](https://docs.nvidia.com/ai-enterprise/planning-resource/licensing-guide/latest/pricing.html), [ASR NIM 성능표](https://docs.nvidia.com/nim/speech/latest/reference/performances/asr/performance.html), [Speech NIM 26.02.0 release notes](https://docs.nvidia.com/nim/speech/latest/about/release-notes.html). H100 254x RTFX, GPU $4-$6/h 가정 |
-| Picovoice | Cheetah Streaming STT / Leopard STT | 2026-04-13 | 온디바이스 후보·지원 언어와 라이선스 확인 필요 | △ | ○ | X | ○ | 추산 $0.00-$0.02/h + 상용 라이선스 | ◎ | ○ | O | △ | [Picovoice package list](https://pypi.org/org/Picovoice/), [Leopard docs](https://picovoice.ai/docs/leopard/). 공개 시간당 API 단가 없음; 온디바이스 CPU 비용만 반영 |
-| OpenAI Whisper | `large-v3-turbo` | 2024-09-30 | 로컬/오픈소스 기준선·실시간 제품화는 직접 구성 필요 | O | ○ | O | ◎ | 추산 $0.01-$0.05/h 자체호스팅 | △ | ○ | X | X | [Whisper model card](https://github.com/openai/whisper/blob/main/model-card.md). 공식 모델카드는 2024-09 월 단위, GitHub PR 기준 2024-09-30. GPU 배치 처리 기준 |
-| Vosk | Vosk API `v0.3.50` | 2024-04-22 | 초경량 오프라인 후보·최신 neural STT 대비 품질 한계 | X | X | X | ◎ | 추산 $0.00-$0.03/h 자체호스팅 | ◎ | ○ | △ | △ | [Vosk GitHub](https://github.com/alphacep/vosk-api). CPU 로컬 처리 기준, 전용 서버 유휴 비용 제외 |
-| Meta Omnilingual ASR | Omnilingual ASR 7B family | 2025-11-11 | 초다국어/저자원 언어 연구 후보·실시간 운영은 무거움 | ◎ | 미평가 | X | ◎ | 추산 $0.10-$0.40/h 자체호스팅 | △ | △ | X | X | [GitHub](https://github.com/facebookresearch/omnilingual-asr), [Meta research article](https://ai.meta.com/blog/omnilingual-asr-advancing-automatic-speech-recognition/). 7B급 GPU 배치 추론 기준 |
-| NVIDIA NeMo | Parakeet-TDT-0.6B-v3 | 2026-02-01 | 오픈웨이트 고속 ASR 후보·한국어와 diarization은 별도 구성 필요 | △ | X | X | ◎ | 추산 $0.005-$0.03/h 자체호스팅 | ◎ | △ | O | X | [Speech NIM 26.02.0 release notes](https://docs.nvidia.com/nim/speech/latest/about/release-notes.html). NIM 문서 기준 최신 배포 모델, 0.6B급 GPU 고처리량 가정 |
+표는 가로 스크롤을 전제로 한 넓은 비교표입니다. 각 헤더의 작은 설명은 해당 칼럼이 무엇을 뜻하는지 나타냅니다.
+
+<div style="max-width: 100%; overflow-x: auto;">
+<table width="3040" style="min-width: 3040px; table-layout: fixed;">
+  <colgroup>
+    <col width="170">
+    <col width="270">
+    <col width="130">
+    <col width="330">
+    <col width="210">
+    <col width="140">
+    <col width="90">
+    <col width="150">
+    <col width="300">
+    <col width="100">
+    <col width="100">
+    <col width="120">
+    <col width="120">
+    <col width="810">
+  </colgroup>
+  <thead>
+    <tr>
+      <th width="170">모델<br><sub>서비스/모델군</sub></th>
+      <th width="270">최신/최고 모델<br><sub>대표 모델명</sub></th>
+      <th width="130">출시일<br><sub>YYYY-MM-DD</sub></th>
+      <th width="330">결론<br><sub>Mingle 관점 요약</sub></th>
+      <th width="210">언어 감지/스위칭<br><sub>다국어 자동 처리</sub></th>
+      <th width="140">한국어 품질<br><sub>STT 정확도</sub></th>
+      <th width="90">번역<br><sub>내장</sub></th>
+      <th width="150">무료 티어<br><sub>체험/크레딧</sub></th>
+      <th width="300">시간당 가격<br><sub>USD/audio hour</sub></th>
+      <th width="100">레이턴시<br><sub>실시간성</sub></th>
+      <th width="100">안정성<br><sub>운영 신뢰도</sub></th>
+      <th width="120">턴 분리<br><sub>발화 단위</sub></th>
+      <th width="120">화자 분리<br><sub>diarization</sub></th>
+      <th width="810">비고<br><sub>근거/가정</sub></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Soniox</td>
+      <td><code>stt-rt-v4</code></td>
+      <td>2026-02-05</td>
+      <td>품질 최고급·무료가 없음·발화 분리가 500ms 이하가 안됨</td>
+      <td>O (발화자 분리를 시켜야함)</td>
+      <td align="center">◎</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>$0.12/h RT<br>$0.10/h async</td>
+      <td align="center">◎</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td><a href="https://soniox.com/pricing">공식 가격표</a>, <a href="https://soniox.com/docs/stt/models">공식 모델 문서</a></td>
+    </tr>
+    <tr>
+      <td>Gladia</td>
+      <td><code>solaria-1</code></td>
+      <td>2025-04-02</td>
+      <td>기능 조건 최강·성능 아쉬움</td>
+      <td>◎ (3+ 언어)</td>
+      <td>△ (영어 외 언어 약함)</td>
+      <td>△ (언어별 불안정)</td>
+      <td>◎ (월 10h)</td>
+      <td>$0.75/h RT<br>$0.61/h async</td>
+      <td align="center">◎</td>
+      <td align="center">◎</td>
+      <td align="center">O</td>
+      <td align="center">X</td>
+      <td><a href="https://www.gladia.io/pricing">공식 가격표</a>, <a href="https://www.prnewswire.com/news-releases/gladia-launches-solaria-the-first-fully-multilingual-next-generation-speech-to-text-model-for-global-scalability-302417497.html">Solaria 출시 공지</a></td>
+    </tr>
+    <tr>
+      <td>Deepgram</td>
+      <td><code>nova-3</code></td>
+      <td>2025-02-12</td>
+      <td>STT 성능 우수</td>
+      <td>O (한국어는 안됨. 10개 언어만.)</td>
+      <td align="center">◎</td>
+      <td align="center">X</td>
+      <td>◎ (대량 크레딧)</td>
+      <td>$0.462/h mono<br>$0.552/h multi</td>
+      <td align="center">◎</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td><a href="https://deepgram.com/pricing">공식 가격표</a>, <a href="https://developers.deepgram.com/changelog/2025/2/12">Nova-3 changelog</a>. diarization은 +$0.12/h</td>
+    </tr>
+    <tr>
+      <td>Fireworks</td>
+      <td><code>fireworks-asr-v2</code></td>
+      <td>2025-09-24</td>
+      <td>실험 성공한 적 없음</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>○ (18h)</td>
+      <td>$0.054/h turbo<br>$0.09/h large</td>
+      <td align="center">○</td>
+      <td align="center">○</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td><a href="https://fireworks.ai/pricing">공식 가격표</a>, <a href="https://fireworks.ai/models/fireworks/fireworks-asr-v2">ASR v2 모델 페이지</a>. 가격표의 STT 항목은 Whisper v3 계열 기준, diarization은 +40%</td>
+    </tr>
+    <tr>
+      <td>Google Translate 음성</td>
+      <td>공개 모델명 없음</td>
+      <td>공식 미공개</td>
+      <td>지속번역·자동감지 부족</td>
+      <td align="center">X</td>
+      <td align="center">△</td>
+      <td align="center">◎</td>
+      <td align="center">◎</td>
+      <td>$0/h (소비자 앱)</td>
+      <td align="center">◎</td>
+      <td align="center">◎</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>소비자용 Google Translate 음성 기능 기준. STT API 모델명/출시일은 공개되어 있지 않음</td>
+    </tr>
+    <tr>
+      <td>OpenAI</td>
+      <td><code>gpt-4o-transcribe</code></td>
+      <td>2025-03-20</td>
+      <td>정확도 기준 후보·언어 태그/발화자 분리 약함</td>
+      <td align="center">O</td>
+      <td align="center">◎</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>$0.36/h</td>
+      <td align="center">○</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td><a href="https://platform.openai.com/docs/pricing/">공식 가격표</a>, <a href="https://openai.com/index/introducing-our-next-generation-audio-models/">차세대 오디오 모델 출시</a>. <code>mingle-model-test</code>는 <code>gpt-4o-mini-transcribe</code> 경로 사용</td>
+    </tr>
+    <tr>
+      <td>Google Cloud Speech-to-Text</td>
+      <td><code>chirp_3</code></td>
+      <td>2025-10-13</td>
+      <td>클라우드 표준 후보·Mingle 연결은 아직 미구현</td>
+      <td align="center">O</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>$0.96/h standard<br>$0.18/h dynamic batch</td>
+      <td align="center">○</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">O</td>
+      <td><a href="https://cloud.google.com/speech-to-text/pricing">공식 가격표</a>, <a href="https://docs.cloud.google.com/speech-to-text/docs/release-notes">Speech-to-Text release notes</a>. 멀티채널은 채널별 과금</td>
+    </tr>
+    <tr>
+      <td>ElevenLabs</td>
+      <td><code>scribe_v2_realtime</code></td>
+      <td>2025-11-11</td>
+      <td>저지연 실시간 후보·Mingle 실측 평가 필요</td>
+      <td align="center">◎</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>$0.39/h RT<br>$0.22/h async</td>
+      <td align="center">◎</td>
+      <td align="center">○</td>
+      <td align="center">O</td>
+      <td align="center">△</td>
+      <td><a href="https://elevenlabs.io/pricing/api?price.section=speech_to_text">공식 가격표</a>, <a href="https://elevenlabs.io/blog/introducing-scribe-v2-realtime">Scribe v2 Realtime 출시 공지</a></td>
+    </tr>
+    <tr>
+      <td>Speechmatics</td>
+      <td><code>Ursa 2</code> / Enhanced Operating Point</td>
+      <td>2024-10-11</td>
+      <td>엔터프라이즈/온프렘 후보·언어 조합 제약 확인 필요</td>
+      <td align="center">△</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>$0.24/h부터<br>Enhanced/RT 추산 $0.24-$0.60/h</td>
+      <td align="center">○</td>
+      <td align="center">◎</td>
+      <td align="center">O</td>
+      <td align="center">△</td>
+      <td><a href="https://www.speechmatics.com/pricing">공식 가격표</a>, <a href="https://www.speechmatics.com/company/articles-and-news/ursa-2-elevating-speech-recognition-across-52-languages">Ursa 2 출시 공지</a>. 공개 가격표는 Pro 시작가 중심</td>
+    </tr>
+    <tr>
+      <td>AssemblyAI</td>
+      <td>Universal-3 Pro Streaming (<code>u3-rt-pro</code>)</td>
+      <td>2026-03-25</td>
+      <td>프롬프트 가능한 STT 후보·최신 스트리밍은 6개 언어 중심</td>
+      <td>O (6개 언어 중심)</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>$0.45/h RT<br>$0.21/h async</td>
+      <td align="center">○</td>
+      <td align="center">○</td>
+      <td align="center">O</td>
+      <td align="center">O</td>
+      <td><a href="https://www.assemblyai.com/pricing/">공식 가격표</a>, <a href="https://www.assemblyai.com/changelog">AssemblyAI changelog</a>. streaming diarization은 +$0.12/h</td>
+    </tr>
+    <tr>
+      <td>Amazon</td>
+      <td>Amazon Nova Sonic</td>
+      <td>2025-04-08</td>
+      <td>AWS 음성 에이전트 후보·순수 Transcribe 최신 내부 모델명은 비공개</td>
+      <td align="center">O</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>추산 $0.24/h STT</td>
+      <td align="center">○</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">O</td>
+      <td><a href="https://press.aboutamazon.com/2025/4/introducing-amazon-nova-sonic-a-new-gen-ai-model-for-building-voice-applications-and-agents">Amazon Nova Sonic 공지</a>, <a href="https://aws.amazon.com/bedrock/pricing/">Amazon Bedrock 가격표</a>. $3.40/M audio input + $2.40/M text output 기준으로 1h 약 60K audio tokens + 15K text tokens 가정</td>
+    </tr>
+    <tr>
+      <td>Microsoft Azure Speech / Foundry</td>
+      <td><code>MAI-Transcribe-1</code></td>
+      <td>2026-04-02</td>
+      <td>최신 Azure 후보·현재 public preview라 운영 안정성 확인 필요</td>
+      <td align="center">O</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>$0.36/h</td>
+      <td align="center">○</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td><a href="https://microsoft.ai/pdf/MAI-Transcribe-1-Model-Card.pdf">MAI-Transcribe-1 model card</a>, <a href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe">Microsoft Learn</a></td>
+    </tr>
+    <tr>
+      <td>IBM</td>
+      <td>Granite Speech 3.3 8B</td>
+      <td>2025-04-16</td>
+      <td>오픈/엔터프라이즈 후보·실시간 제품화 검증 필요</td>
+      <td align="center">△</td>
+      <td>미평가</td>
+      <td align="center">O</td>
+      <td align="center">○</td>
+      <td>추산 $0.10-$0.30/h 자체호스팅</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td><a href="https://community.ibm.com/community/user/blogs/nickolus-plowden/2025/04/16/ibm-granite-33-speech-recognition-refined-reasonin">IBM Granite 3.3 공지</a>. 공개 API 단가 없음; L4/A10G급 GPU에서 4-10x realtime 배치 처리 가정</td>
+    </tr>
+    <tr>
+      <td>Rev AI</td>
+      <td>Reverb ASR / Reverb Turbo</td>
+      <td>2024-10-03</td>
+      <td>장문 전사/diarization 후보·라이선스와 한국어 품질 확인 필요</td>
+      <td align="center">O</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>$0.20/h Reverb<br>$0.10/h Turbo</td>
+      <td align="center">○</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">O</td>
+      <td><a href="https://www.rev.ai/pricing">공식 가격표</a>. 외국어 Reverb는 $0.30/h</td>
+    </tr>
+    <tr>
+      <td>NVIDIA Speech NIM / Riva</td>
+      <td>Nemotron ASR Streaming, Parakeet TDT/RNNT family</td>
+      <td>2026-02-01</td>
+      <td>자체 인프라 후보·GPU 운영 부담 큼</td>
+      <td align="center">△</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td>추산 $0.02-$0.03/h 고동시성<br>저사용률은 $1/GPU-h+인스턴스 비용</td>
+      <td align="center">◎</td>
+      <td align="center">○</td>
+      <td align="center">O</td>
+      <td align="center">O</td>
+      <td><a href="https://docs.nvidia.com/ai-enterprise/planning-resource/licensing-guide/latest/pricing.html">NVIDIA AI Enterprise 가격표</a>, <a href="https://docs.nvidia.com/nim/speech/latest/reference/performances/asr/performance.html">ASR NIM 성능표</a>, <a href="https://docs.nvidia.com/nim/speech/latest/about/release-notes.html">Speech NIM 26.02.0 release notes</a>. H100 254x RTFX, GPU $4-$6/h 가정</td>
+    </tr>
+    <tr>
+      <td>Picovoice</td>
+      <td>Cheetah Streaming STT / Leopard STT</td>
+      <td>2026-04-13</td>
+      <td>온디바이스 후보·지원 언어와 라이선스 확인 필요</td>
+      <td align="center">△</td>
+      <td align="center">○</td>
+      <td align="center">X</td>
+      <td align="center">○</td>
+      <td>추산 $0.00-$0.02/h + 상용 라이선스</td>
+      <td align="center">◎</td>
+      <td align="center">○</td>
+      <td align="center">O</td>
+      <td align="center">△</td>
+      <td><a href="https://pypi.org/org/Picovoice/">Picovoice package list</a>, <a href="https://picovoice.ai/docs/leopard/">Leopard docs</a>. 공개 시간당 API 단가 없음; 온디바이스 CPU 비용만 반영</td>
+    </tr>
+    <tr>
+      <td>OpenAI Whisper</td>
+      <td><code>large-v3-turbo</code></td>
+      <td>2024-09-30</td>
+      <td>로컬/오픈소스 기준선·실시간 제품화는 직접 구성 필요</td>
+      <td align="center">O</td>
+      <td align="center">○</td>
+      <td align="center">O</td>
+      <td align="center">◎</td>
+      <td>추산 $0.01-$0.05/h 자체호스팅</td>
+      <td align="center">△</td>
+      <td align="center">○</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td><a href="https://github.com/openai/whisper/blob/main/model-card.md">Whisper model card</a>. 공식 모델카드는 2024-09 월 단위, GitHub PR 기준 2024-09-30. GPU 배치 처리 기준</td>
+    </tr>
+    <tr>
+      <td>Vosk</td>
+      <td>Vosk API <code>v0.3.50</code></td>
+      <td>2024-04-22</td>
+      <td>초경량 오프라인 후보·최신 neural STT 대비 품질 한계</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td align="center">◎</td>
+      <td>추산 $0.00-$0.03/h 자체호스팅</td>
+      <td align="center">◎</td>
+      <td align="center">○</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td><a href="https://github.com/alphacep/vosk-api">Vosk GitHub</a>. CPU 로컬 처리 기준, 전용 서버 유휴 비용 제외</td>
+    </tr>
+    <tr>
+      <td>Meta Omnilingual ASR</td>
+      <td>Omnilingual ASR 7B family</td>
+      <td>2025-11-11</td>
+      <td>초다국어/저자원 언어 연구 후보·실시간 운영은 무거움</td>
+      <td align="center">◎</td>
+      <td>미평가</td>
+      <td align="center">X</td>
+      <td align="center">◎</td>
+      <td>추산 $0.10-$0.40/h 자체호스팅</td>
+      <td align="center">△</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td><a href="https://github.com/facebookresearch/omnilingual-asr">GitHub</a>, <a href="https://ai.meta.com/blog/omnilingual-asr-advancing-automatic-speech-recognition/">Meta research article</a>. 7B급 GPU 배치 추론 기준</td>
+    </tr>
+    <tr>
+      <td>NVIDIA NeMo</td>
+      <td>Parakeet-TDT-0.6B-v3</td>
+      <td>2026-02-01</td>
+      <td>오픈웨이트 고속 ASR 후보·한국어와 diarization은 별도 구성 필요</td>
+      <td align="center">△</td>
+      <td align="center">X</td>
+      <td align="center">X</td>
+      <td align="center">◎</td>
+      <td>추산 $0.005-$0.03/h 자체호스팅</td>
+      <td align="center">◎</td>
+      <td align="center">△</td>
+      <td align="center">O</td>
+      <td align="center">X</td>
+      <td><a href="https://docs.nvidia.com/nim/speech/latest/about/release-notes.html">Speech NIM 26.02.0 release notes</a>. NIM 문서 기준 최신 배포 모델, 0.6B급 GPU 고처리량 가정</td>
+    </tr>
+  </tbody>
+</table>
+</div>
