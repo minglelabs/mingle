@@ -4,6 +4,7 @@ import { getAuthOptions } from "@/lib/auth-options";
 import {
   APP_CONVERSATION_STATUS_ACTIVE,
   APP_CONVERSATION_STATUS_PAUSED,
+  type ConversationHydrationCursor,
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   normalizeConversationChannelStatus,
@@ -35,6 +36,34 @@ function applyTrackingCookies(
     externalUserIdHint: externalUserId || null,
     sessionKeyHint: sessionKey || null,
   });
+}
+
+function readConversationHydrationCursor(
+  request: NextRequest,
+): { cursor: ConversationHydrationCursor | null; errorResponse: NextResponse | null } {
+  const beforeCreatedAtMsRaw = request.nextUrl.searchParams.get("beforeCreatedAtMs");
+  const beforeMessageIdRaw = request.nextUrl.searchParams.get("beforeMessageId");
+
+  if (!beforeCreatedAtMsRaw && !beforeMessageIdRaw) {
+    return { cursor: null, errorResponse: null };
+  }
+
+  const beforeCreatedAtMs = Number(beforeCreatedAtMsRaw);
+  const beforeMessageId = (beforeMessageIdRaw || "").trim();
+  if (!Number.isFinite(beforeCreatedAtMs) || beforeCreatedAtMs <= 0 || !beforeMessageId) {
+    return {
+      cursor: null,
+      errorResponse: NextResponse.json({ error: "invalid_cursor" }, { status: 400 }),
+    };
+  }
+
+  return {
+    cursor: {
+      createdAtMs: Math.floor(beforeCreatedAtMs),
+      messageId: beforeMessageId,
+    },
+    errorResponse: null,
+  };
 }
 
 export async function patchConversationResponse(
@@ -195,9 +224,15 @@ export async function getConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const { cursor, errorResponse } = readConversationHydrationCursor(request);
+  if (errorResponse) {
+    return errorResponse;
+  }
+
   const conversationState = await getConversationHydrationStateForUser({
     conversationId,
     userId: resolvedUser.userId,
+    ...(cursor ? { before: cursor } : {}),
   });
 
   if (!conversationState) {

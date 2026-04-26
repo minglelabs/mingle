@@ -185,7 +185,7 @@ describe("app-conversations", () => {
         { createdAt: "desc" },
         { id: "desc" },
       ],
-      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT,
+      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
       select: expect.objectContaining({
         contents: expect.objectContaining({
           where: {
@@ -200,6 +200,73 @@ describe("app-conversations", () => {
     expect(state?.usageSec).toBe(42);
     expect(state?.utterances.map((utterance) => utterance.id)).toEqual(["u-old", "u-new"]);
     expect(state?.utterances[0]?.translations).toEqual({ ko: "이전 번역" });
+    expect(state?.hasMoreUtterances).toBe(false);
+    expect(state?.oldestMessageCursor).toEqual({
+      createdAtMs: new Date("2026-04-12T09:00:00.000Z").getTime(),
+      messageId: "msg-old",
+    });
+  });
+
+  it("applies the before cursor when hydrating older server messages", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "session-a",
+      selectedLanguages: ["en", "ko"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T12:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T12:00:00.000Z"),
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageFindMany.mockResolvedValue(
+      Array.from({ length: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1 }, (_, index) => ({
+        id: `msg-${String(index).padStart(3, "0")}`,
+        clientMessageId: `u-${index}`,
+        sourceLanguage: "en",
+        createdAt: new Date(1_712_916_000_000 - index),
+        contents: [
+          { contentType: "SOURCE", language: "en", text: `source ${index}` },
+        ],
+      })),
+    );
+
+    const beforeCreatedAtMs = new Date("2026-04-12T09:00:00.000Z").getTime();
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-a",
+      userId: "user-1",
+      before: {
+        createdAtMs: beforeCreatedAtMs,
+        messageId: "msg-cursor",
+      },
+    });
+
+    expect(mockAppMessageFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        sessionKey: "session-a",
+        AND: [
+          {
+            OR: [
+              { createdAt: { lt: new Date(beforeCreatedAtMs) } },
+              {
+                createdAt: new Date(beforeCreatedAtMs),
+                id: { lt: "msg-cursor" },
+              },
+            ],
+          },
+        ],
+      }),
+      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
+    }));
+    expect(state?.hasMoreUtterances).toBe(true);
+    expect(state?.utterances).toHaveLength(CONVERSATION_HYDRATION_MESSAGE_LIMIT);
+    expect(state?.oldestMessageCursor).toEqual({
+      createdAtMs: new Date(1_712_916_000_000 - (CONVERSATION_HYDRATION_MESSAGE_LIMIT - 1)).getTime(),
+      messageId: "msg-099",
+    });
   });
 
   it("marks deleted conversations as paused and soft-deleted", async () => {

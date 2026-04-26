@@ -40,10 +40,17 @@ export type ConversationHydrationUtterance = {
   createdAtMs: number;
 };
 
+export type ConversationHydrationCursor = {
+  createdAtMs: number;
+  messageId: string;
+};
+
 export type ConversationHydrationState = {
   conversation: ConversationChannelSummary;
   usageSec: number;
   utterances: ConversationHydrationUtterance[];
+  hasMoreUtterances: boolean;
+  oldestMessageCursor: ConversationHydrationCursor | null;
 };
 
 type ConversationChannelRecord = {
@@ -576,6 +583,7 @@ export async function updateConversationChannelTitle(args: {
 export async function getConversationHydrationStateForUser(args: {
   conversationId: string;
   userId: string;
+  before?: ConversationHydrationCursor | null;
 }): Promise<ConversationHydrationState | null> {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
@@ -590,7 +598,33 @@ export async function getConversationHydrationStateForUser(args: {
     return null;
   }
 
-  const [latestUsageEvent, messages] = await prisma.$transaction([
+  const beforeDate = typeof args.before?.createdAtMs === "number"
+    && Number.isFinite(args.before.createdAtMs)
+    && args.before.createdAtMs > 0
+    ? new Date(args.before.createdAtMs)
+    : null;
+  const beforeMessageId = (args.before?.messageId || "").trim();
+  const messageWhere: Prisma.AppMessageWhereInput = {
+    sessionKey: conversationRecord.sessionKey,
+    ...buildVisibleMessageWhere(),
+    ...(beforeDate && beforeMessageId
+      ? {
+          AND: [
+            {
+              OR: [
+                { createdAt: { lt: beforeDate } },
+                {
+                  createdAt: beforeDate,
+                  id: { lt: beforeMessageId },
+                },
+              ],
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const [latestUsageEvent, messagesWithLookahead] = await prisma.$transaction([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -600,15 +634,12 @@ export async function getConversationHydrationStateForUser(args: {
       select: { usageSec: true },
     }),
     prisma.appMessage.findMany({
-      where: {
-        sessionKey: conversationRecord.sessionKey,
-        ...buildVisibleMessageWhere(),
-      },
+      where: messageWhere,
       orderBy: [
         { createdAt: "desc" },
         { id: "desc" },
       ],
-      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT,
+      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
       select: {
         id: true,
         clientMessageId: true,
@@ -627,6 +658,9 @@ export async function getConversationHydrationStateForUser(args: {
     }),
   ]);
 
+  const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
+  const messages = messagesWithLookahead.slice(0, CONVERSATION_HYDRATION_MESSAGE_LIMIT);
+  const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
@@ -662,6 +696,13 @@ export async function getConversationHydrationStateForUser(args: {
     conversation: serializeConversationChannel(conversationRecord),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     utterances,
+    hasMoreUtterances,
+    oldestMessageCursor: oldestMessage
+      ? {
+          createdAtMs: oldestMessage.createdAt.getTime(),
+          messageId: oldestMessage.id,
+        }
+      : null,
   };
 }
 
