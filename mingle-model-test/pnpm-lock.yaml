@@ -17,6 +17,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.1(react@19.1.0))
+      '@picovoice/cheetah-node':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@prisma/client':
         specifier: ^6.16.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
@@ -615,6 +618,11 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@picovoice/cheetah-node@4.0.1':
+    resolution: {integrity: sha512-ClDXxzSDokEMRjTDrmvHRXnJRNHXE8SNI1j9UhuXHawRE5ayOfLlQToDv1Zfu40B27C5a9lTgaQPaT1lWHWItA==}
+    engines: {node: '>=18.0.0'}
+    cpu: ['!ia32', '!mips', '!ppc', '!ppc64']
 
   '@prisma/client@6.19.2':
     resolution: {integrity: sha512-gR2EMvfK/aTxsuooaDA32D8v+us/8AAet+C3J1cc04SW35FPdZYgLF+iN4NDLUgAaUGTKdAB0CYenu1TAgGdMg==}
@@ -2871,6 +2879,8 @@ snapshots:
       fastq: 1.20.1
 
   '@nolyfill/is-core-module@1.0.39': {}
+
+  '@picovoice/cheetah-node@4.0.1': {}
 
   '@prisma/client@6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)':
     optionalDependencies:

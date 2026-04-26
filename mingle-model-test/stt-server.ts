@@ -11,6 +11,7 @@ import {
     type AddPartialTranscript,
     type AddTranscript,
 } from '@speechmatics/real-time-client';
+import { Cheetah } from '@picovoice/cheetah-node';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
@@ -37,7 +38,8 @@ type SttModel =
     | 'chirp-3'
     | 'soniox'
     | 'elevenlabs'
-    | 'speechmatics';
+    | 'speechmatics'
+    | 'picovoice-cheetah';
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
 
@@ -155,6 +157,7 @@ const OPENAI_MIN_SERVER_COMMIT_AUDIO_MS = 120;
 const OPENAI_FINAL_SILENCE_MS = 420;
 const OPENAI_VOICE_RMS_THRESHOLD = 0.018;
 const OPENAI_PREROLL_MAX_MS = 240;
+const PICOVOICE_ENDPOINT_DURATION_SEC = 0.6;
 
 const resolveElevenLabsAudioFormat = (sampleRate: number) => {
     const rounded = Math.round(sampleRate);
@@ -259,6 +262,9 @@ wss.on('connection', (clientWs) => {
     let sttWs: WebSocket | null = null;
     let openAIRealtimeWs: WebSocket | null = null;
     let speechmaticsClient: RealtimeClient | null = null;
+    let picovoiceCheetah: Cheetah | null = null;
+    let handlePicovoiceAudioChunk: ((pcmData: Buffer) => void) | null = null;
+    let finishPicovoiceStream: (() => void) | null = null;
     let isClientConnected = true;
     let abortController: AbortController | null = null;
     let currentModel: SttModel = 'gladia';
@@ -276,6 +282,9 @@ wss.on('connection', (clientWs) => {
     const speechmaticsApiKey = process.env.SPEECHMATICS_API_KEY;
     const speechmaticsRegion = process.env.SPEECHMATICS_REGION as 'eu' | 'usa' | 'au' | undefined;
     const speechmaticsRtUrl = process.env.SPEECHMATICS_RT_URL;
+    const picovoiceAccessKey = process.env.PICOVOICE_ACCESS_KEY;
+    const picovoiceCheetahModelPath = process.env.PICOVOICE_CHEETAH_MODEL_PATH;
+    const picovoiceCheetahLanguage = process.env.PICOVOICE_CHEETAH_LANGUAGE;
 
     const cleanup = () => {
         isClientConnected = false;
@@ -308,6 +317,18 @@ wss.on('connection', (clientWs) => {
             void speechmaticsClient.stopRecognition({ noTimeout: true }).catch(() => undefined);
             speechmaticsClient = null;
         }
+
+        if (picovoiceCheetah) {
+            try {
+                finishPicovoiceStream?.();
+                picovoiceCheetah.release();
+            } catch (error) {
+                console.warn('[Picovoice] failed to release Cheetah instance:', error);
+            }
+            picovoiceCheetah = null;
+        }
+        handlePicovoiceAudioChunk = null;
+        finishPicovoiceStream = null;
 
         delete (clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void }).__handleOpenAIAudioChunk;
     };
@@ -1300,6 +1321,134 @@ wss.on('connection', (clientWs) => {
         }
     };
 
+    // ===== PICOVOICE CHEETAH 연결 (온디바이스 실시간 STT) =====
+    const startPicovoiceCheetahConnection = (config: ClientConfig) => {
+        if (!picovoiceAccessKey) {
+            console.error("PICOVOICE_ACCESS_KEY environment variable not set!");
+            clientWs.close(1011, "Server configuration error: Picovoice AccessKey not found.");
+            return;
+        }
+
+        try {
+            const modelPath = picovoiceCheetahModelPath?.trim();
+            const cheetah = new Cheetah(picovoiceAccessKey, {
+                endpointDurationSec: PICOVOICE_ENDPOINT_DURATION_SEC,
+                enableAutomaticPunctuation: true,
+                enableTextNormalization: true,
+                ...(modelPath ? { modelPath } : {}),
+            });
+            picovoiceCheetah = cheetah;
+
+            const transcriptLanguage = (
+                picovoiceCheetahLanguage?.trim()
+                || (modelPath ? config.languages[0] : 'en')
+                || 'en'
+            );
+            if (!modelPath && config.languages.some((language) => language !== 'en')) {
+                console.warn(
+                    '[Picovoice] Cheetah Node SDK default model is English. Set PICOVOICE_CHEETAH_MODEL_PATH and PICOVOICE_CHEETAH_LANGUAGE to test another language model.',
+                );
+            }
+
+            let pendingPcm: Int16Array<ArrayBufferLike> = new Int16Array(0);
+            let currentUtterance = '';
+
+            const appendPendingPcm = (pcm: Int16Array) => {
+                if (pendingPcm.length === 0) {
+                    pendingPcm = pcm;
+                    return;
+                }
+
+                const merged = new Int16Array(pendingPcm.length + pcm.length);
+                merged.set(pendingPcm, 0);
+                merged.set(pcm, pendingPcm.length);
+                pendingPcm = merged;
+            };
+
+            const sendTranscript = (text: string, isFinal: boolean) => {
+                const cleanText = text.trim();
+                if (!cleanText || clientWs.readyState !== WebSocket.OPEN) return;
+
+                clientWs.send(JSON.stringify({
+                    type: 'transcript',
+                    data: {
+                        is_final: isFinal,
+                        utterance: {
+                            text: cleanText,
+                            language: transcriptLanguage,
+                        },
+                    },
+                }));
+
+                if (isFinal && translationEnabled && selectedLanguages.length > 0) {
+                    translateText(cleanText, transcriptLanguage, selectedLanguages, clientWs);
+                }
+            };
+
+            const processAvailableFrames = () => {
+                while (pendingPcm.length >= cheetah.frameLength) {
+                    const frame = pendingPcm.slice(0, cheetah.frameLength);
+                    pendingPcm = pendingPcm.slice(cheetah.frameLength);
+
+                    const [partialText, isEndpoint] = cheetah.process(frame);
+                    if (partialText.trim()) {
+                        currentUtterance = joinTranscriptParts(currentUtterance, partialText);
+                        sendTranscript(currentUtterance, false);
+                    }
+
+                    if (isEndpoint) {
+                        const flushedText = cheetah.flush();
+                        if (flushedText.trim()) {
+                            currentUtterance = joinTranscriptParts(currentUtterance, flushedText);
+                        }
+                        sendTranscript(currentUtterance, true);
+                        currentUtterance = '';
+                    }
+                }
+            };
+
+            finishPicovoiceStream = () => {
+                const flushedText = cheetah.flush();
+                if (flushedText.trim()) {
+                    currentUtterance = joinTranscriptParts(currentUtterance, flushedText);
+                }
+                sendTranscript(currentUtterance, true);
+                currentUtterance = '';
+                pendingPcm = new Int16Array(0);
+            };
+
+            handlePicovoiceAudioChunk = (pcmData: Buffer) => {
+                if (!picovoiceCheetah) return;
+
+                const input = new Int16Array(
+                    pcmData.buffer,
+                    pcmData.byteOffset,
+                    Math.floor(pcmData.byteLength / Int16Array.BYTES_PER_ELEMENT),
+                );
+                const resampled = resamplePcm16Mono(input, currentSampleRate, cheetah.sampleRate);
+                appendPendingPcm(resampled);
+                processAvailableFrames();
+            };
+
+            if (isClientConnected) {
+                console.log(
+                    `[Picovoice] Cheetah ready version=${cheetah.version} sampleRate=${cheetah.sampleRate} frameLength=${cheetah.frameLength} language=${transcriptLanguage}`,
+                );
+                clientWs.send(JSON.stringify({ status: 'ready' }));
+            } else {
+                cheetah.release();
+                picovoiceCheetah = null;
+                handlePicovoiceAudioChunk = null;
+                finishPicovoiceStream = null;
+            }
+        } catch (error) {
+            console.error('Error starting Picovoice Cheetah connection:', error);
+            if (isClientConnected) {
+                clientWs.close(1011, 'Failed to start Picovoice Cheetah transcription service.');
+            }
+        }
+    };
+
     // ===== SONIOX 연결 (다국어 실시간, 토큰 기반, 발화자 분리) =====
     const startSonioxConnection = async (config: ClientConfig) => {
         if (!sonioxApiKey) {
@@ -1590,6 +1739,8 @@ wss.on('connection', (clientWs) => {
                 startElevenLabsConnection(data as ClientConfig);
             } else if (currentModel === 'speechmatics') {
                 startSpeechmaticsConnection(data as ClientConfig);
+            } else if (currentModel === 'picovoice-cheetah') {
+                startPicovoiceCheetahConnection(data as ClientConfig);
             } else if (currentModel === 'soniox') {
                 startSonioxConnection(data as ClientConfig);
             } else if (currentModel === 'gladia-stt') {
@@ -1615,6 +1766,11 @@ wss.on('connection', (clientWs) => {
                 const pcmData = Buffer.from(data.data.chunk, 'base64');
                 const openAIClientWs = clientWs as WebSocket & { __handleOpenAIAudioChunk?: (pcmData: Buffer) => void };
                 openAIClientWs.__handleOpenAIAudioChunk?.(pcmData);
+            }
+        } else if (currentModel === 'picovoice-cheetah' && handlePicovoiceAudioChunk) {
+            if (data.type === 'audio_chunk' && data.data?.chunk) {
+                const pcmData = Buffer.from(data.data.chunk, 'base64');
+                handlePicovoiceAudioChunk(pcmData);
             }
         } else if (sttWs && sttWs.readyState === WebSocket.OPEN) {
             // 오디오 프레임 전송

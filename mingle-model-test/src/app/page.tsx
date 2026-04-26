@@ -38,6 +38,7 @@ type SttModel =
   | 'soniox'
   | 'elevenlabs'
   | 'speechmatics'
+  | 'picovoice-cheetah'
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English' },
@@ -379,6 +380,7 @@ export default function Home() {
             <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
+            <option value="picovoice-cheetah">Picovoice Cheetah (온디바이스 STT, 영어 기본 모델)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
           {sttModel === 'chirp-3' && (
@@ -404,6 +406,11 @@ export default function Home() {
           {sttModel === 'elevenlabs' && (
             <p className="mt-1 text-xs text-amber-600">
               언어 선택은 번역 대상 위주입니다. STT는 Scribe v2 Realtime의 자동 언어 감지와 VAD 세그먼트를 사용합니다.
+            </p>
+          )}
+          {sttModel === 'picovoice-cheetah' && (
+            <p className="mt-1 text-xs text-amber-600">
+              기본 Node SDK는 영어 Cheetah 모델입니다. 다른 언어는 서버에 PICOVOICE_CHEETAH_MODEL_PATH와 PICOVOICE_CHEETAH_LANGUAGE를 지정해 테스트하세요.
             </p>
           )}
           {sttModel === 'soniox' && (
