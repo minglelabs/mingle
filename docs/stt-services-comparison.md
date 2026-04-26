@@ -7,39 +7,39 @@ Last reviewed: 2026-04-27
 표는 가로 스크롤을 전제로 한 넓은 비교표입니다. 각 헤더의 작은 설명은 해당 칼럼이 무엇을 뜻하는지 나타냅니다.
 
 <div style="max-width: 100%; overflow-x: auto;">
-<table width="3040" style="min-width: 3040px; table-layout: fixed;">
+<table width="4200" style="min-width: 4200px; table-layout: fixed;">
   <colgroup>
-    <col width="170">
-    <col width="270">
-    <col width="130">
+    <col width="220">
     <col width="330">
-    <col width="210">
-    <col width="140">
-    <col width="90">
-    <col width="150">
-    <col width="300">
-    <col width="100">
-    <col width="100">
-    <col width="120">
-    <col width="120">
-    <col width="810">
+    <col width="160">
+    <col width="420">
+    <col width="320">
+    <col width="230">
+    <col width="160">
+    <col width="220">
+    <col width="340">
+    <col width="170">
+    <col width="170">
+    <col width="190">
+    <col width="190">
+    <col width="1280">
   </colgroup>
   <thead>
     <tr>
-      <th width="170">모델<br><sub>서비스/모델군</sub></th>
-      <th width="270">최신/최고 모델<br><sub>대표 모델명</sub></th>
-      <th width="130">출시일<br><sub>YYYY-MM-DD</sub></th>
-      <th width="330">결론<br><sub>Mingle 관점 요약</sub></th>
-      <th width="210">언어 감지/스위칭<br><sub>다국어 자동 처리</sub></th>
-      <th width="140">한국어 품질<br><sub>STT 정확도</sub></th>
-      <th width="90">번역<br><sub>내장</sub></th>
-      <th width="150">무료 티어<br><sub>체험/크레딧</sub></th>
-      <th width="300">시간당 가격<br><sub>USD/audio hour</sub></th>
-      <th width="100">레이턴시<br><sub>실시간성</sub></th>
-      <th width="100">안정성<br><sub>운영 신뢰도</sub></th>
-      <th width="120">턴 분리<br><sub>발화 단위</sub></th>
-      <th width="120">화자 분리<br><sub>diarization</sub></th>
-      <th width="810">비고<br><sub>근거/가정</sub></th>
+      <th width="220" nowrap="nowrap">&nbsp;&nbsp;모&#8288;델&nbsp;&nbsp;<br><sub>서비스/모델군</sub></th>
+      <th width="330" nowrap="nowrap">&nbsp;&nbsp;최&#8288;신/최&#8288;고&nbsp;모&#8288;델&nbsp;&nbsp;<br><sub>대표&nbsp;모델명</sub></th>
+      <th width="160" nowrap="nowrap">&nbsp;&nbsp;출&#8288;시&#8288;일&nbsp;&nbsp;<br><sub>YYYY-MM-DD</sub></th>
+      <th width="420" nowrap="nowrap">&nbsp;&nbsp;결&#8288;론&nbsp;&nbsp;<br><sub>Mingle&nbsp;관점&nbsp;요약</sub></th>
+      <th width="320" nowrap="nowrap">&nbsp;&nbsp;언&#8288;어&nbsp;감&#8288;지/스&#8288;위&#8288;칭&nbsp;&nbsp;<br><sub>다국어&nbsp;자동&nbsp;처리</sub></th>
+      <th width="230" nowrap="nowrap">&nbsp;&nbsp;한&#8288;국&#8288;어&nbsp;품&#8288;질&nbsp;&nbsp;<br><sub>STT&nbsp;정확도</sub></th>
+      <th width="160" nowrap="nowrap">&nbsp;&nbsp;번&#8288;역&nbsp;&nbsp;<br><sub>내장</sub></th>
+      <th width="220" nowrap="nowrap">&nbsp;&nbsp;무&#8288;료&nbsp;티&#8288;어&nbsp;&nbsp;<br><sub>체험/크레딧</sub></th>
+      <th width="340" nowrap="nowrap">&nbsp;&nbsp;시&#8288;간&#8288;당&nbsp;가&#8288;격&nbsp;&nbsp;<br><sub>USD/audio&nbsp;hour</sub></th>
+      <th width="170" nowrap="nowrap">&nbsp;&nbsp;레&#8288;이&#8288;턴&#8288;시&nbsp;&nbsp;<br><sub>실시간성</sub></th>
+      <th width="170" nowrap="nowrap">&nbsp;&nbsp;안&#8288;정&#8288;성&nbsp;&nbsp;<br><sub>운영&nbsp;신뢰도</sub></th>
+      <th width="190" nowrap="nowrap">&nbsp;&nbsp;턴&nbsp;분&#8288;리&nbsp;&nbsp;<br><sub>발화&nbsp;단위</sub></th>
+      <th width="190" nowrap="nowrap">&nbsp;&nbsp;화&#8288;자&nbsp;분&#8288;리&nbsp;&nbsp;<br><sub>diarization</sub></th>
+      <th width="1280" nowrap="nowrap">&nbsp;&nbsp;비&#8288;고&nbsp;&nbsp;<br><sub>근거/가정</sub></th>
     </tr>
   </thead>
   <tbody>
