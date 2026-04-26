@@ -15,7 +15,6 @@ import {
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
-    isLikelySonioxSpeakerChurnDuplicate,
     mergeDetectedLang,
     normalizeDetectedLang,
     normalizeSpeaker,
@@ -693,6 +692,13 @@ wss.on('connection', (clientWs) => {
                     idleBeforeMs: now - sonioxManualFinalizeSilenceMs,
                 })
             );
+            const hasPendingTurnOutsideFinalizeCohort = (cohort: Array<{ speaker: string }>): boolean => {
+                const cohortSpeakers = new Set(cohort.map((entry) => entry.speaker));
+                return buildPendingTurnSnapshots().some((snapshot) => (
+                    !cohortSpeakers.has(snapshot.speaker)
+                    && hasPendingSonioxTurnText(snapshot.currentSnapshotText)
+                ));
+            };
             const nextGlobalFinalizeDelayMs = (now: number): number | null => {
                 const pendingProgressAtTimes = buildPendingTurnSnapshots()
                     .filter((snapshot) => hasPendingSonioxTurnText(snapshot.currentSnapshotText))
@@ -738,6 +744,17 @@ wss.on('connection', (clientWs) => {
                     const nextWait = nextGlobalFinalizeDelayMs(now);
                     if (nextWait === null) clearGlobalFinalizeTimer();
                     else scheduleGlobalFinalizeCheck(nextWait);
+                    return;
+                }
+                if (hasPendingTurnOutsideFinalizeCohort(cohort)) {
+                    // Soniox finalize is global; don't cut active speakers just to close idle ones.
+                    globalFinalizeLastSentAtMs = now;
+                    finalizeRequestedSpeakerSnapshots?.({
+                        requestId: ++finalizeRequestSeq,
+                        requestedAtMs: now,
+                        speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
+                    });
+                    refreshGlobalFinalizeScheduling();
                     return;
                 }
 
@@ -866,20 +883,6 @@ wss.on('connection', (clientWs) => {
                     speaker: cleanedSpeaker,
                 };
             };
-            const emitTranscriptRetraction = (language: string, speaker?: string) => {
-                if (clientWs.readyState !== WebSocket.OPEN) return;
-                clientWs.send(JSON.stringify({
-                    type: 'transcript',
-                    data: {
-                        is_final: true,
-                        utterance: {
-                            text: '',
-                            language: (language || '').trim() || 'unknown',
-                            speaker: (speaker || '').trim() || 'unknown',
-                        },
-                    },
-                }));
-            };
 
             const disposeSpeakerState = (state: SonioxSpeakerState) => {
                 state.strategy.resetState();
@@ -918,48 +921,6 @@ wss.on('connection', (clientWs) => {
                 }
                 resetSpeakerTurn(state);
                 return payload;
-            };
-            const retractSupersededSpeakerChurnTurns = (ownerState: SonioxSpeakerState): Set<string> => {
-                const retractedSpeakers = new Set<string>();
-                const ownerText = ownerState.currentSnapshotText;
-                if (!hasPendingSonioxTurnText(ownerText)) return retractedSpeakers;
-
-                for (const candidateState of speakerStates.values()) {
-                    if (candidateState.speaker === ownerState.speaker) continue;
-                    if (!hasPendingSonioxTurnText(candidateState.currentSnapshotText)) continue;
-                    if (!isLikelySonioxSpeakerChurnDuplicate(
-                        {
-                            speaker: candidateState.speaker,
-                            text: candidateState.currentSnapshotText,
-                            language: candidateState.detectedLang,
-                            endMs: candidateState.currentSnapshotEndMs,
-                            progressAtMs: candidateState.lastProgressAtMs,
-                        },
-                        {
-                            speaker: ownerState.speaker,
-                            text: ownerText,
-                            language: ownerState.detectedLang,
-                            endMs: ownerState.currentSnapshotEndMs,
-                            progressAtMs: ownerState.lastProgressAtMs,
-                        },
-                    )) {
-                        continue;
-                    }
-
-                    const retractedSpeaker = candidateState.speaker;
-                    const retractedLanguage = candidateState.detectedLang;
-                    if (candidateState.currentSnapshotEndMs > candidateState.lastConsumedEndMs) {
-                        candidateState.lastConsumedEndMs = candidateState.currentSnapshotEndMs;
-                    }
-                    if (activeFinalizeRequest?.speakers.delete(retractedSpeaker) && activeFinalizeRequest.speakers.size === 0) {
-                        completeActiveFinalizeRequest(null);
-                    }
-                    resetSpeakerTurn(candidateState);
-                    emitTranscriptRetraction(retractedLanguage, retractedSpeaker);
-                    retractedSpeakers.add(retractedSpeaker);
-                }
-
-                return retractedSpeakers;
             };
 
             const flushAllSpeakerTurns = (): MingleSttFinalTurnPayload => {
@@ -1272,11 +1233,7 @@ wss.on('connection', (clientWs) => {
                     }
 
                     let lastFinalizedPayloadForFrame: MingleSttFinalTurnPayload = null;
-                    const retractedSpeakersForFrame = new Set<string>();
                     for (const frameUpdate of speakerFrameUpdates.values()) {
-                        if (retractedSpeakersForFrame.has(frameUpdate.speaker)) {
-                            continue;
-                        }
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
                         const previousNonFinalText = speakerState.latestNonFinalText;
@@ -1348,9 +1305,6 @@ wss.on('connection', (clientWs) => {
                             speakerState.lastProgressAtMs = Date.now();
                         } else if (!mergedTextForIdle.trim()) {
                             speakerState.lastProgressAtMs = 0;
-                        }
-                        for (const retractedSpeaker of retractSupersededSpeakerChurnTurns(speakerState)) {
-                            retractedSpeakersForFrame.add(retractedSpeaker);
                         }
 
                         const requestSpeaker = finalizeRequestForFrame?.speakers.get(frameUpdate.speaker) || null;
