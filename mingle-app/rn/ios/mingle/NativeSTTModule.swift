@@ -237,6 +237,7 @@ class NativeSTTModule: RCTEventEmitter {
     private var lastChunkCountSnapshot: Int64 = 0
     private var gracefulStopWorkItem: DispatchWorkItem?
     private var gracefulStopPending = false
+    private let gracefulStopTimeoutMs = 5_000
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -673,7 +674,7 @@ class NativeSTTModule: RCTEventEmitter {
             self?.finishGracefulStop()
         }
         gracefulStopWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1500), execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(gracefulStopTimeoutMs), execute: workItem)
     }
 
     private func finishGracefulStop() {

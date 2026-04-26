@@ -931,6 +931,6 @@ class NativeSTTModule(
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L
-    private const val GRACEFUL_STOP_TIMEOUT_MS = 1_500L
+    private const val GRACEFUL_STOP_TIMEOUT_MS = 5_000L
   }
 }

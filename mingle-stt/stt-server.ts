@@ -51,6 +51,8 @@ const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3000;
+const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS = 1200;
+const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS = 700;
 const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     const raw = Number(process.env.SONIOX_MANUAL_FINALIZE_COOLDOWN_MS || '1200');
     if (!Number.isFinite(raw)) return 1200;
@@ -80,6 +82,13 @@ function classifySonioxUpstreamError(errorCode: unknown, errorMessage: unknown):
     if (code === '400' && message.includes('audio is too long')) return 'audio_too_long';
     if (code === '400') return 'bad_request';
     return 'upstream_error';
+}
+
+function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
+    return Math.max(
+        SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS,
+        silenceMs + SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS,
+    );
 }
 
 wss.on('connection', (clientWs) => {
@@ -620,6 +629,7 @@ wss.on('connection', (clientWs) => {
             let globalFinalizeLastSentAtMs = 0;
             let activeFinalizeRequest: SonioxFinalizeRequest | null = null;
             let finalizeRequestSeq = 0;
+            let finalizeRequestedSpeakerSnapshots: ((request: SonioxFinalizeRequest) => MingleSttFinalTurnPayload) | null = null;
             sonioxStopRequested = false;
 
             const parseTokenTimeMs = (raw: unknown): number | null => {
@@ -735,11 +745,25 @@ wss.on('connection', (clientWs) => {
                     requestedAtMs: now,
                     speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
                 };
+                const requestId = activeFinalizeRequest.requestId;
+                activeFinalizeRequest.timeout = setTimeout(() => {
+                    const request = activeFinalizeRequest;
+                    if (!request || request.requestId !== requestId) return;
+                    activeFinalizeRequest = null;
+                    console.warn(
+                        `Soniox manual finalize timed out after ${Date.now() - request.requestedAtMs}ms; flushing requested speaker snapshots`,
+                    );
+                    finalizeRequestedSpeakerSnapshots?.(request);
+                    refreshGlobalFinalizeScheduling();
+                }, getSonioxManualFinalizeResponseTimeoutMs(sonioxManualFinalizeSilenceMs));
                 globalFinalizeLastSentAtMs = now;
 
                 try {
                     sttWs.send(JSON.stringify({ type: 'finalize' }));
                 } catch (error) {
+                    if (activeFinalizeRequest?.timeout) {
+                        clearTimeout(activeFinalizeRequest.timeout);
+                    }
                     activeFinalizeRequest = null;
                     console.error('Soniox manual finalize send failed:', error);
                     scheduleGlobalFinalizeCheck(SONIOX_MANUAL_FINALIZE_COOLDOWN_MS);
@@ -773,7 +797,7 @@ wss.on('connection', (clientWs) => {
                         if (activeFinalizeRequest?.requestId !== requestId) return;
                         activeFinalizeRequest = null;
                         resolve(flushAllSpeakerTurns());
-                    }, Math.max(1200, sonioxManualFinalizeSilenceMs + 700));
+                    }, getSonioxManualFinalizeResponseTimeoutMs(sonioxManualFinalizeSilenceMs));
 
                     activeFinalizeRequest = {
                         requestId,
@@ -887,6 +911,57 @@ wss.on('connection', (clientWs) => {
                     const payload = finalizeSpeakerTurn(speaker);
                     if (payload) {
                         lastPayload = payload;
+                    }
+                }
+                return lastPayload;
+            };
+
+            finalizeRequestedSpeakerSnapshots = (request: SonioxFinalizeRequest): MingleSttFinalTurnPayload => {
+                let lastPayload: MingleSttFinalTurnPayload = null;
+                for (const requestSpeaker of request.speakers.values()) {
+                    const state = speakerStates.get(requestSpeaker.speaker);
+                    if (!state) continue;
+
+                    const currentSnapshotBeforeReset = composeTurnText(
+                        state.providerFinalizedText,
+                        state.latestNonFinalText,
+                    );
+                    const finalizedDetectedLang = requestSpeaker.detectedLang || state.detectedLang;
+                    const finalizedText = stripEndpointMarkers(requestSpeaker.snapshotText).trim();
+                    const carryEndMs = state.currentSnapshotEndMs;
+                    const carryText = stripEndpointMarkers(
+                        currentSnapshotBeforeReset.slice(requestSpeaker.snapshotTextLen),
+                    ).trim();
+
+                    const payload = finalizedText
+                        ? emitTranscript(
+                            finalizedText,
+                            finalizedDetectedLang,
+                            true,
+                            state.speaker,
+                        )
+                        : null;
+                    if (payload) {
+                        lastPayload = payload;
+                    }
+                    if (requestSpeaker.snapshotEndMs > state.lastConsumedEndMs) {
+                        state.lastConsumedEndMs = requestSpeaker.snapshotEndMs;
+                    }
+                    resetSpeakerTurn(state);
+
+                    if (carryText) {
+                        state.detectedLang = getNextTurnDetectedLang(finalizedDetectedLang, carryText);
+                        state.latestNonFinalText = carryText;
+                        state.latestNonFinalIsProvisionalCarry = true;
+                        state.currentSnapshotText = composeTurnText('', carryText);
+                        state.currentSnapshotEndMs = carryEndMs;
+                        state.strategy.scheduleCarryExpiry();
+                        emitTranscript(
+                            carryText,
+                            state.detectedLang,
+                            false,
+                            state.speaker,
+                        );
                     }
                 }
                 return lastPayload;
