@@ -1,0 +1,63 @@
+# STT Services and Models Comparison
+
+Last reviewed: 2026-04-26
+
+이 문서는 `mingle-model-test`에서 확인되는 STT 테스트 후보와, Mingle의 실시간 다국어 번역/전사 후보로 검토할 만한 전세계 STT 서비스 및 오픈웨이트 모델 20개를 정리합니다. 아래 장단점은 공식 문서와 현재 코드 통합 상태 기준의 제품/기술 비교이며, Mingle 자체 음성 샘플로 동일 조건 벤치마크를 수행한 결과는 아닙니다.
+
+## `mingle-model-test` STT Candidates
+
+현재 테스트 UI와 STT 프록시에는 아래 10개 선택지가 있습니다. `chirp-3`는 UI 선택지는 있지만 서버 코드에서 아직 실제 Google Cloud Speech-to-Text V2 연결이 구현되지 않은 상태입니다.
+
+| UI option | Provider / model | Integration status in `mingle-model-test` | Pros for Mingle | Cons / risks |
+| --- | --- | --- | --- | --- |
+| `gladia` | Gladia `solaria-1` with built-in translation | Wired through Gladia live API with `realtime_processing.translation` enabled. | 자체 번역까지 한 번에 테스트할 수 있고, 코드 스위칭과 partial transcript를 함께 확인하기 쉽습니다. | STT 품질과 Gladia 번역 품질이 한 테스트 경로에 섞여 순수 STT 비교가 어려울 수 있습니다. |
+| `gladia-stt` | Gladia `solaria-1` STT-only path | Wired through the same Gladia live API, but Mingle-side AI translation is used. | Gladia STT와 Mingle 번역 모델을 분리해 평가할 수 있습니다. | 관리형 API 비용/쿼터와 외부 지연 시간에 의존합니다. |
+| `deepgram` | Deepgram `nova-3` single primary language | Wired through Deepgram WebSocket. | WebSocket 통합이 단순하고 interim, punctuation, smart format을 바로 받을 수 있습니다. | 현재 코드는 첫 번째 언어만 지정합니다. 스트리밍 `detect_language`가 400 오류를 유발한다고 주석 처리되어 있어 코드 스위칭 평가는 제한적입니다. |
+| `deepgram-multi` | Deepgram `nova-3` with `language=multi` | Wired through Deepgram WebSocket. | 다국어 자동 감지 모드를 따로 비교할 수 있습니다. | UI 안내상 선택 언어를 무시하고 10개 언어 자동 감지 경로로 동작하므로 Mingle의 선택 언어 정책과 어긋날 수 있습니다. |
+| `gpt-4o-mini-transcribe` | OpenAI Realtime transcription session, `gpt-4o-mini-transcribe` | Wired through OpenAI Realtime transcription sessions. | 최신 OpenAI STT 계열을 실시간 partial/final 흐름으로 검증할 수 있습니다. | Realtime transcription 이벤트에서 언어 코드가 노출되지 않아 Mingle 원본 언어 태그가 `auto`로 처리됩니다. |
+| `fireworks` | Fireworks `fireworks-asr-large` | Wired through Fireworks streaming ASR WebSocket. | 실시간 WebSocket ASR와 Whisper 계열 호스팅을 비교할 수 있습니다. | 현재 언어 매핑이 일부 언어 중심이고, 다국어 코드 스위칭 경로는 별도 검증이 필요합니다. |
+| `chirp-3` | Google Cloud Speech-to-Text V2 `chirp_3` | UI option exists, but server currently closes with "not yet connected". | Google Cloud의 Chirp 3 정확도, 자동 언어 감지, diarization을 후보군에 둘 수 있습니다. | ADC/service account 기반 V2 인증과 recognizer 설정을 별도로 구현해야 합니다. |
+| `elevenlabs` | ElevenLabs `scribe_v2_realtime` | Wired through ElevenLabs realtime WebSocket. | 자동 언어 감지, VAD segment, timestamps를 실시간으로 테스트할 수 있습니다. | Mingle UI의 선택 언어는 번역 대상 위주이고 STT는 자동 감지에 맡기는 구조입니다. |
+| `speechmatics` | Speechmatics Realtime, enhanced operating point | Wired through Speechmatics realtime client and JWT. | partial/final transcript, enhanced mode, 일부 bilingual pack을 검증할 수 있습니다. | 공개 realtime 조합은 EN+AR, EN+ES, EN+ZH, EN+MS 예외를 제외하면 첫 번째 언어 fallback 경로가 됩니다. |
+| `soniox` | Soniox `stt-rt-v4` | Wired through Soniox WebSocket. | 언어 힌트, strict mode, language identification, speaker diarization, endpoint detection을 한 번에 테스트할 수 있습니다. | 토큰 단위 응답을 Mingle utterance 구조로 안정적으로 합치는 로직과 사용량/비용 관리가 중요합니다. |
+
+## Global STT Services / Models
+
+| # | Service / model | Type | Pros | Cons / risks | Fit for Mingle |
+| --- | --- | --- | --- | --- | --- |
+| 1 | [Gladia Solaria-1](https://docs.gladia.io/chapters/introduction) | Managed API | Real-time and async transcription, built-in audio intelligence, simple live API, code-switching-friendly product direction. | Cloud dependency, vendor pricing/limits, and Mingle-specific WER/latency still need in-house testing. | Already wired. Keep as a primary managed baseline, especially for multilingual live calls. |
+| 2 | [Soniox `stt-rt-v4`](https://soniox.com/docs/stt/models) | Managed API | Real-time/async v4 models, language ID, speaker diarization, translation, stronger mid-sentence language switching claims, 60+ language direction. | Vendor model aliases/deprecations need tracking, and token-based streaming output requires careful finalization logic. | Already wired. Strong candidate for Mingle's multilingual code-switching default. |
+| 3 | [Deepgram Nova-3 / Flux](https://deepgram.com/product/speech-to-text) | Managed API | Mature low-latency STT API, Nova transcription, Flux for conversational turn detection, custom vocabulary/keyterm tooling, broad production use. | Streaming multi-language behavior can be product-specific; selected-language control and `language=multi` coverage need local validation. | Already wired. Keep both single-language and multi-language test paths. |
+| 4 | [OpenAI GPT-4o Transcribe / GPT-4o mini Transcribe](https://developers.openai.com/api/docs/models/gpt-4o-transcribe) | Managed API | Newer OpenAI STT models improve language recognition and accuracy over original Whisper; easy pairing with OpenAI translation/LLM stack. | No self-hosting, token pricing/limits, and current Mingle realtime path lacks explicit detected language metadata. | Already wired for `gpt-4o-mini-transcribe`; useful as a high-accuracy API baseline. |
+| 5 | [Google Cloud Speech-to-Text V2 Chirp 3](https://docs.cloud.google.com/speech-to-text/docs/models/chirp-3) | Managed API | Supports streaming, sync, and batch in STT V2; includes automatic language detection and diarization. | Requires GCP project, ADC/service account auth, region/feature checks, and recognizer setup. | UI option exists but is not wired. Good next integration if Google Cloud auth is acceptable. |
+| 6 | [ElevenLabs Scribe v2 Realtime](https://elevenlabs.io/speech-to-text) | Managed API | Realtime-first STT, under-150ms positioning, 90+ language support, VAD/commit-control-oriented API. | Newer STT surface, vendor benchmark claims need independent validation, and integration behavior may change quickly. | Already wired. Good candidate for voice-agent latency testing. |
+| 7 | [Speechmatics Realtime](https://docs.speechmatics.com/) | Managed API / on-prem option | Realtime and batch STT, managed SaaS or on-prem deployment, enterprise-friendly privacy options. | Language/domain pack configuration is nuanced; public bilingual support may not match arbitrary Mingle language pairs. | Already wired. Useful for enterprise/privacy comparisons and selected bilingual pairs. |
+| 8 | [Fireworks AI ASR](https://docs.fireworks.ai/guides/querying-asr-models) | Managed API | Streaming transcription over WebSocket plus prerecorded Whisper-family transcription/translation; 95+ language support stated for ASR features. | Streaming models and reliability should be validated under real Mingle mobile audio; language coverage differs by mode/model. | Already wired with `fireworks-asr-large`; keep as a cost/performance comparison path. |
+| 9 | [AssemblyAI Universal-Streaming / Universal-3 Pro](https://www.assemblyai.com/docs/streaming/universal-streaming) | Managed API | Streaming STT with turn objects, keyterms, formatted final transcripts, and strong async transcript intelligence ecosystem. | Streaming sessions are billed by open WebSocket duration; multilingual streaming is more constrained than async. | Not wired. Worth testing for English-heavy voice-agent UX and transcript formatting. |
+| 10 | [Amazon Transcribe Streaming](https://docs.aws.amazon.com/transcribe/latest/dg/streaming.html) | Managed API | AWS-native streaming/batch STT, WebSocket/HTTP2/SDK options, good enterprise procurement and call-center fit. | AWS setup complexity, streaming can trade accuracy for speed, and code-switching behavior needs direct validation. | Not wired. Good fallback for AWS-heavy deployments, less obvious as the first Mingle default. |
+| 11 | [Azure AI Speech to text](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-to-text) | Managed API / edge options | Real-time, fast, and batch transcription; custom speech models; SDK, CLI, and REST support. | Azure resource setup and custom model workflow add operational overhead; feature coverage varies by locale. | Not wired. Good candidate for enterprise/custom vocabulary scenarios. |
+| 12 | [IBM Watson Speech to Text](https://cloud.ibm.com/catalog/services/speech-to-text?taxonomyNavigation=watson) | Managed API | Low-latency streaming transcription and enterprise IBM Cloud fit. | Less voice-agent-first than newer STT vendors; model/language options need project-specific checks. | Not wired. Consider only if IBM Cloud or enterprise procurement is required. |
+| 13 | [Rev AI](https://www.rev.ai/speech-to-text) | Managed API | Async and streaming modes, 57+ language coverage, compliance options, human transcription ecosystem adjacency. | Pricing can be less attractive for high-volume live calls; some features vary by language. | Not wired. Useful as a quality/compliance benchmark, especially for recorded audio. |
+| 14 | [NVIDIA Riva / NIM speech AI](https://developer.nvidia.com/topics/ai/generative-ai/riva) | Self-hosted / enterprise containers | Real-time ASR on controlled infrastructure, GPU acceleration, ASR/TTS/NMT stack, stronger data-control posture. | Requires NVIDIA GPU ops, deployment maintenance, and smaller out-of-box language set than large cloud APIs. | Not wired. Consider for privacy-sensitive or high-scale self-hosted deployments. |
+| 15 | [Picovoice Cheetah / Leopard](https://picovoice.ai/docs/cheetah/) | On-device SDK | Local processing, low-latency streaming Cheetah, batch Leopard, cross-platform SDKs, custom vocabulary. | Cheetah streaming language coverage is limited; commercial access key/licensing applies. | Not wired. Good for offline/privacy experiments, not enough alone for broad Mingle languages. |
+| 16 | [OpenAI Whisper](https://openai.com/index/whisper/) | Open weights / open-source inference | Robust multilingual ASR trained on large diverse data, offline-capable, broad ecosystem via whisper.cpp/faster-whisper. | Not true realtime by default, larger models need compute, and newer managed STT models may outperform it. | Not wired in this repo. Good local baseline and fallback for batch/offline tests. |
+| 17 | [Vosk](https://github.com/alphacep/vosk-api) | Open-source offline toolkit | Small offline models, streaming API, many language bindings, 20+ languages, runs from mobile/Raspberry Pi to servers. | Accuracy and punctuation can lag modern neural STT; model quality varies by language. | Not wired. Useful for very constrained offline mode experiments. |
+| 18 | [Meta Omnilingual ASR](https://github.com/facebookresearch/omnilingual-asr) | Open-source / open weights | 1,600+ language coverage goal, Apache 2.0, useful for low-resource languages and research/fine-tuning. | Research-oriented setup, large model memory requirements, and current inference limits make live production harder. | Not wired. Best for long-term low-resource language exploration, not immediate realtime default. |
+| 19 | [NVIDIA NeMo Parakeet TDT](https://docs.nvidia.com/nemo/curator/v26.02/curate-audio/process-data/asr-inference/nemo-models) | Open weights / self-hosted | Fast GPU ASR models through NeMo and Hugging Face; good for offline/server-side English transcription pipelines. | Mostly English-oriented for practical use, needs NeMo/GPU stack, and realtime service wrapper must be built. | Not wired. Consider for self-hosted English-heavy batch or near-realtime experiments. |
+| 20 | [Meta wav2vec2 XLS-R](https://huggingface.co/facebook/wav2vec2-xls-r-2b) | Open weights / fine-tuning base | Large multilingual speech representation model across 128 languages; strong base for fine-tuned ASR in low-data settings. | It is a pretrained representation model, not a ready-to-use production STT service without fine-tuning. | Not wired. Useful if Mingle builds custom ASR for specific languages/domains later. |
+
+## Shortlist for Mingle
+
+| Priority | Candidate | Why |
+| --- | --- | --- |
+| 1 | Soniox `stt-rt-v4` | 현재 이미 연결되어 있고, Mingle 핵심 요구인 실시간 다국어 자동 감지, 코드 스위칭, speaker diarization과 가장 잘 맞습니다. |
+| 2 | Gladia Solaria-1 | 이미 연결되어 있으며, STT-only와 built-in translation 경로를 모두 비교할 수 있어 회귀 테스트 기준점으로 좋습니다. |
+| 3 | Deepgram Nova-3 / multi | WebSocket 통합이 단순하고 상용 안정성이 높습니다. 다만 Mingle 선택 언어 정책과 `language=multi` 제약은 별도 확인해야 합니다. |
+| 4 | ElevenLabs Scribe v2 Realtime | 지연 시간 후보로 가치가 큽니다. 실제 모바일 마이크/통화 오디오에서 언어 감지와 finalization 품질을 검증해야 합니다. |
+| 5 | Google Chirp 3 | 아직 미연결이지만 Google Cloud STT V2의 streaming, auto language detection, diarization을 비교군에 넣을 가치가 있습니다. |
+
+## Source Notes
+
+- Local code references: `mingle-model-test/src/app/page.tsx`, `mingle-model-test/stt-server.ts`.
+- Official product/docs references are linked in each service/model row.
+- This file intentionally avoids ranking by WER because providers publish different benchmarks and conditions. For deployment decisions, run the same Mingle audio set across candidates with identical language hints, sample rate, endpointing, and translation settings.
