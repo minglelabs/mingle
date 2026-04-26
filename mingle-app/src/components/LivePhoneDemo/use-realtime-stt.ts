@@ -3292,7 +3292,6 @@ export default function useRealtimeSTT({
           }, NATIVE_STOP_ACK_TIMEOUT_MS)
         })
         setConnectionStatus('idle')
-        isStoppingRef.current = false
         const wasActiveSession = hasActiveSessionRef.current
         hasActiveSessionRef.current = false
         clearSpeakerAvatarSession()
@@ -3320,7 +3319,11 @@ export default function useRealtimeSTT({
           })
         }
 
-        await nativeStopAckPromise
+        try {
+          await nativeStopAckPromise
+        } finally {
+          isStoppingRef.current = false
+        }
         return
       } else {
         nativeStopRequestedRef.current = false

@@ -1398,6 +1398,9 @@ wss.on('connection', (clientWs) => {
                             clientWs.close();
                         }
                     })();
+                } else if (isClientConnected && sonioxStopRequested && activeFinalizeRequest) {
+                    const payload = flushAllSpeakerTurns();
+                    completeActiveFinalizeRequest(payload);
                 }
                 disposeSonioxSpeakerStates?.();
                 disposeSonioxSpeakerStates = null;
