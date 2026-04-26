@@ -90,3 +90,10 @@
 - Issue: `Continuous note-style translation` and `Live captions + transcript` were placed later in the table, after detection and multilingual routing features.
 - User impact: Two core live-output criteria were harder to compare immediately after basic language support.
 - Resolution: Moved both columns to immediately follow `Supported languages` across the header and all translator rows, without changing the feature values.
+
+## 2026-04-26 - Mobile WebView Swipe-To-Close Removal
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
+- Issue: The mobile WebView conversation root and menu panel had custom left-to-right swipe close handlers that overlapped with iOS system edge-swipe back and could make horizontal touches inside a conversation feel like accidental navigation.
+- User impact: Users could unintentionally leave a conversation or close the menu while attempting horizontal gestures inside the WebView, especially on iOS where the OS already owns the edge back gesture.
+- Resolution: Removed the app-level swipe-to-close pointer handlers, drag state, thresholds, and swipe-specific touch-action styling while keeping explicit back/close buttons, backdrop tap close, browser/native history back handling, and OS back gestures.

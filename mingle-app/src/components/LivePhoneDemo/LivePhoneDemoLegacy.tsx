@@ -123,8 +123,6 @@ const NATIVE_INSET_QUERY_MAX_PX = 240
 const SILENCE_SLIDER_UPGRADE_TOAST_COOLDOWN_MS = 5000
 const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const LANG_SELECTOR_IOS_HISTORY_SETTLE_WINDOW_MS = 300
-const MENU_PANEL_CLOSE_DRAG_DISTANCE_PX = 88
-const MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS = 0.45
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
 const EMPTY_STATE_ARROW_END_Y = 78
@@ -676,15 +674,6 @@ function buildMenuHistoryState(depth: number): Record<string, unknown> {
   }
 }
 
-function shouldIgnoreMenuSwipeTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) return false
-  return Boolean(
-    target.closest(
-      'button, input, select, textarea, a, label, [role="button"], [data-menu-swipe-ignore="true"]',
-    ),
-  )
-}
-
 export interface LivePhoneDemoRef {
   startRecording: () => void
 }
@@ -930,11 +919,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const langSelectorHistoryTargetOpenRef = useRef<boolean | null>(null)
   const langSelectorIosHistorySettleRef = useRef<{ open: boolean, expiresAt: number } | null>(null)
   const langSelectorOpenRef = useRef(false)
-  const menuSwipeSessionRef = useRef<{
-    pointerId: number
-    startX: number
-    startedAt: number
-  } | null>(null)
   const deleteAccountCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -947,8 +931,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
-  const [menuDragOffsetX, setMenuDragOffsetX] = useState(0)
-  const [isMenuDragging, setIsMenuDragging] = useState(false)
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
@@ -2009,66 +1991,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (isDeletingConversation) return
     setDeleteConversationDialogOpen(false)
   }, [isDeletingConversation])
-
-  const finishMenuSwipe = useCallback((pointerId: number, currentX: number) => {
-    const swipeSession = menuSwipeSessionRef.current
-    if (!swipeSession || swipeSession.pointerId !== pointerId) return
-
-    const offsetX = Math.max(0, currentX - swipeSession.startX)
-    const elapsedMs = Math.max(1, performance.now() - swipeSession.startedAt)
-    const velocityPxPerMs = offsetX / elapsedMs
-
-    menuSwipeSessionRef.current = null
-    setIsMenuDragging(false)
-
-    if (
-      offsetX >= MENU_PANEL_CLOSE_DRAG_DISTANCE_PX
-      || velocityPxPerMs >= MENU_PANEL_CLOSE_DRAG_VELOCITY_PX_PER_MS
-    ) {
-      requestMenuBackStep()
-      return
-    }
-
-    setMenuDragOffsetX(0)
-  }, [requestMenuBackStep])
-
-  const handleMenuPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === 'mouse') return
-    if (shouldIgnoreMenuSwipeTarget(event.target)) return
-
-    menuSwipeSessionRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startedAt: performance.now(),
-    }
-    setIsMenuDragging(true)
-    setMenuDragOffsetX(0)
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }, [])
-
-  const handleMenuPanelPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const swipeSession = menuSwipeSessionRef.current
-    if (!swipeSession || swipeSession.pointerId !== event.pointerId) return
-
-    const nextOffset = Math.max(0, event.clientX - swipeSession.startX)
-    setMenuDragOffsetX(nextOffset)
-  }, [])
-
-  const handleMenuPanelPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    finishMenuSwipe(event.pointerId, event.clientX)
-  }, [finishMenuSwipe])
-
-  const handleMenuPanelPointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    menuSwipeSessionRef.current = null
-    setIsMenuDragging(false)
-    setMenuDragOffsetX(0)
-  }, [])
 
   const handleDeleteAccountConfirm = useCallback(() => {
     if (isAuthActionPending) return
@@ -3518,24 +3440,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   aria-label={menuLabel}
                   tabIndex={-1}
                   initial={{ x: '100%' }}
-                  animate={{ x: isMenuDragging ? menuDragOffsetX : 0 }}
+                  animate={{ x: 0 }}
                   exit={{ x: '100%' }}
-                  transition={
-                    isMenuDragging
-                      ? { duration: 0 }
-                      : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }
-                  }
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   onClick={(event) => event.stopPropagation()}
-                  onPointerDown={handleMenuPanelPointerDown}
-                  onPointerMove={handleMenuPanelPointerMove}
-                  onPointerUp={handleMenuPanelPointerUp}
-                  onPointerCancel={handleMenuPanelPointerCancel}
                   className={`relative flex h-full w-full flex-col overflow-hidden will-change-transform ${navSurfaceClassName} sm:max-w-[400px] sm:border-x sm:border-gray-200`}
                   style={{
                     boxShadow: isCenteredMenuLayout
                       ? '0 22px 64px rgba(15, 23, 42, 0.24)'
                       : '-18px 0 40px rgba(15, 23, 42, 0.22)',
-                    touchAction: 'pan-y',
                   }}
                 >
                   <motion.div
