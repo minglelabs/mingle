@@ -212,3 +212,78 @@ test('release runtime owns soniox stop lifecycle handling', async () => {
         final_turn: null,
     });
 });
+
+test('release runtime waits for soniox provider finalization before ack', async () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+    let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
+    let providerClosed = false;
+
+    runtime.handleStopRecording({
+        pendingText: '',
+        pendingLanguage: 'unknown',
+        currentModel: 'soniox',
+        lifecycle: {
+            setSonioxStopRequested: () => undefined,
+            finalizePendingTurnFromProvider: async () => {
+                await new Promise((resolve) => setImmediate(resolve));
+                return { text: 'final words', language: 'en', speaker: '1' };
+            },
+            sendForcedFinalTurn: () => null,
+            closeProviderSocket: () => {
+                providerClosed = true;
+            },
+            sendStopRecordingAck: (data) => {
+                ackData = data;
+            },
+            scheduleClientCloseAfterAck: () => undefined,
+            disposeSpeakerStates: () => undefined,
+        },
+    });
+
+    assert.equal(ackData, null);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(providerClosed, true);
+    assert.deepEqual(ackData, {
+        release_variant: 'ios_v1_1_0',
+        behavior_profile: 'v1_1_0',
+        finalized: true,
+        final_turn: { text: 'final words', language: 'en', speaker: '1' },
+    });
+});
+
+test('release runtime falls back to client pending text when soniox provider has no turn', async () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+    let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
+
+    runtime.handleStopRecording({
+        pendingText: ' fallback words ',
+        pendingLanguage: 'en',
+        currentModel: 'soniox',
+        lifecycle: {
+            setSonioxStopRequested: () => undefined,
+            finalizePendingTurnFromProvider: async () => null,
+            sendForcedFinalTurn: (rawText, rawLanguage) => ({
+                text: rawText.trim(),
+                language: rawLanguage,
+            }),
+            closeProviderSocket: () => undefined,
+            sendStopRecordingAck: (data) => {
+                ackData = data;
+            },
+            scheduleClientCloseAfterAck: () => undefined,
+            disposeSpeakerStates: () => undefined,
+        },
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(ackData, {
+        release_variant: 'ios_v1_1_0',
+        behavior_profile: 'v1_1_0',
+        finalized: true,
+        final_turn: { text: 'fallback words', language: 'en' },
+    });
+});

@@ -235,6 +235,8 @@ class NativeSTTModule: RCTEventEmitter {
     private var wsPingTimer: DispatchSourceTimer?
     private var healthCheckTimer: DispatchSourceTimer?
     private var lastChunkCountSnapshot: Int64 = 0
+    private var gracefulStopWorkItem: DispatchWorkItem?
+    private var gracefulStopPending = false
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -611,6 +613,9 @@ class NativeSTTModule: RCTEventEmitter {
     private func stopAndCleanup(reason: String?) {
         NSLog("[NativeSTTModule] stopAndCleanup reason=%@ chunks=%lld wsMessages=%lld",
               reason ?? "nil", audioChunkCount, wsMessageCount)
+        gracefulStopWorkItem?.cancel()
+        gracefulStopWorkItem = nil
+        gracefulStopPending = false
         isRunning = false
         stopWsPing()
         stopHealthCheck()
@@ -642,6 +647,50 @@ class NativeSTTModule: RCTEventEmitter {
         if let reason {
             emitClose(reason)
         }
+    }
+
+    private func beginGracefulStop() {
+        guard !gracefulStopPending else { return }
+        gracefulStopPending = true
+        stopWsPing()
+        stopHealthCheck()
+        removeAudioObserversIfNeeded()
+        removeTapIfNeeded()
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if sttSessionTokenAcquired {
+            MingleAudioSessionCoordinator.shared.releaseSTT()
+            sttSessionTokenAcquired = false
+        }
+        MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(
+            trigger: "stt_stop_graceful"
+        )
+
+        gracefulStopWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.finishGracefulStop()
+        }
+        gracefulStopWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1500), execute: workItem)
+    }
+
+    private func finishGracefulStop() {
+        guard gracefulStopPending || isRunning else { return }
+        gracefulStopWorkItem?.cancel()
+        gracefulStopWorkItem = nil
+        gracefulStopPending = false
+        stopAndCleanup(reason: "stopped")
+    }
+
+    private func isStopRecordingAck(_ raw: String) -> Bool {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return false
+        }
+        return json["type"] as? String == "stop_recording_ack"
     }
 
     private func sendJson(_ payload: [String: Any]) {
@@ -692,9 +741,17 @@ class NativeSTTModule: RCTEventEmitter {
                               count, text.count, String(preview))
                     }
                     self.emitMessage(raw: text)
+                    if self.gracefulStopPending && self.isStopRecordingAck(text) {
+                        self.finishGracefulStop()
+                        return
+                    }
                 case .data(let data):
                     if let text = String(data: data, encoding: .utf8) {
                         self.emitMessage(raw: text)
+                        if self.gracefulStopPending && self.isStopRecordingAck(text) {
+                            self.finishGracefulStop()
+                            return
+                        }
                     }
                 @unknown default:
                     break
@@ -1002,10 +1059,12 @@ class NativeSTTModule: RCTEventEmitter {
                     "pending_language": pendingLanguage,
                 ],
             ])
+            beginGracefulStop()
+            resolve(["ok": true])
+            return
         }
 
         stopAndCleanup(reason: "stopped")
-        emitStatus("stopped")
         NSLog("[NativeSTTModule] stopped")
         resolve(["ok": true])
     }

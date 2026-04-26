@@ -12,6 +12,8 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
@@ -91,6 +93,9 @@ class NativeSTTModule(
   @Volatile private var foregroundServiceActive = false
   @Volatile private var lastAudioChunkAtMs: Long = 0L
   @Volatile private var lastAudioRecoveryAtMs: Long = 0L
+  @Volatile private var gracefulStopPending = false
+  private val gracefulStopHandler = Handler(Looper.getMainLooper())
+  private var gracefulStopTimeoutRunnable: Runnable? = null
   private val isRecoveringAudio = AtomicBoolean(false)
 
   override fun getName(): String = "NativeSTTModule"
@@ -192,10 +197,12 @@ class NativeSTTModule(
           )
           .toString(),
       )
+      beginGracefulStop()
+      promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
+      return
     }
 
     cleanup(reason = "stopped", emitClose = true)
-    emitStatus("stopped")
     promise.resolve(Arguments.createMap().apply { putBoolean("ok", true) })
   }
 
@@ -327,6 +334,9 @@ class NativeSTTModule(
 
         override fun onMessage(webSocket: WebSocket, text: String) {
           emitMessage(text)
+          if (gracefulStopPending && isStopRecordingAck(text)) {
+            finishGracefulStop()
+          }
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -737,10 +747,65 @@ class NativeSTTModule(
     }
   }
 
+  private fun beginGracefulStop() {
+    if (gracefulStopPending) return
+    gracefulStopPending = true
+    webSocketReady = false
+
+    stopAudioThread()
+    stopStallMonitor()
+    unregisterAudioDeviceCallback()
+    unregisterRecordingCallback()
+    releaseAudioEffects()
+
+    val record = audioRecord
+    audioRecord = null
+    if (record != null) {
+      record.stopSafely()
+      record.release()
+    }
+
+    restoreAudioMode()
+    setForegroundServiceEnabled(false)
+    currentProfile = null
+    isRecoveringAudio.set(false)
+
+    clearGracefulStopTimeout()
+    val timeout = Runnable {
+      finishGracefulStop()
+    }
+    gracefulStopTimeoutRunnable = timeout
+    gracefulStopHandler.postDelayed(timeout, GRACEFUL_STOP_TIMEOUT_MS)
+  }
+
+  private fun finishGracefulStop() {
+    if (!gracefulStopPending && !isRunning.get()) return
+    gracefulStopPending = false
+    clearGracefulStopTimeout()
+    cleanup(reason = "stopped", emitClose = true)
+  }
+
+  private fun clearGracefulStopTimeout() {
+    val timeout = gracefulStopTimeoutRunnable
+    if (timeout != null) {
+      gracefulStopHandler.removeCallbacks(timeout)
+      gracefulStopTimeoutRunnable = null
+    }
+  }
+
+  private fun isStopRecordingAck(raw: String): Boolean =
+    try {
+      JSONObject(raw).optString("type") == "stop_recording_ack"
+    } catch (_: Throwable) {
+      false
+    }
+
   private fun cleanup(
     reason: String?,
     emitClose: Boolean,
   ) {
+    clearGracefulStopTimeout()
+    gracefulStopPending = false
     val wasRunning = isRunning.getAndSet(false)
     webSocketReady = false
 
@@ -866,5 +931,6 @@ class NativeSTTModule(
     private const val AUDIO_STALL_THRESHOLD_MS = 4_000L
     private const val AUDIO_STALL_CHECK_INTERVAL_MS = 2_000L
     private const val AUDIO_RECOVERY_COOLDOWN_MS = 1_500L
+    private const val GRACEFUL_STOP_TIMEOUT_MS = 1_500L
   }
 }
