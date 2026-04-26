@@ -287,3 +287,26 @@ test('release runtime falls back to client pending text when soniox provider has
         final_turn: { text: 'fallback words', language: 'en' },
     });
 });
+
+test('release runtime preserves finalize source metadata in stop ack', () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+
+    assert.deepEqual(runtime.buildStopRecordingAckData({
+        finalizedTurn: {
+            text: 'final words',
+            language: 'en',
+            speaker: '1',
+            finalize_source: 'server_stop_fallback',
+        },
+    }), {
+        release_variant: 'ios_v1_1_0',
+        behavior_profile: 'v1_1_0',
+        finalized: true,
+        final_turn: {
+            text: 'final words',
+            language: 'en',
+            speaker: '1',
+            finalize_source: 'server_stop_fallback',
+        },
+    });
+});

@@ -217,6 +217,23 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
+  it('preserves STT finalize source metadata when present', () => {
+    const parsed = parseSttTranscriptMessage({
+      type: 'transcript',
+      data: {
+        is_final: true,
+        finalize_source: 'server_idle_snapshot',
+        utterance: {
+          text: 'Hello there',
+          language: 'en-US',
+          speaker: 'speaker-2',
+        },
+      },
+    })
+
+    expect(parsed?.finalizeSource).toBe('server_idle_snapshot')
+  })
+
   it('promotes generic Chinese transcript language to zh-CN by default', () => {
     const parsed = parseSttTranscriptMessage({
       type: 'transcript',

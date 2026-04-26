@@ -643,6 +643,7 @@ export interface ParsedSttTranscriptMessage {
   language: string
   isFinal: boolean
   speaker: string
+  finalizeSource?: string
 }
 
 export function parseSttTranscriptMessage(
@@ -662,6 +663,9 @@ export function parseSttTranscriptMessage(
     text || rawText,
   ) || 'unknown'
   const isFinal = data.is_final === true
+  const finalizeSource = typeof data.finalize_source === 'string' && data.finalize_source.trim()
+    ? data.finalize_source.trim()
+    : ''
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
@@ -672,6 +676,7 @@ export function parseSttTranscriptMessage(
     language,
     isFinal,
     speaker,
+    ...(finalizeSource ? { finalizeSource } : {}),
   }
 }
 
@@ -3621,11 +3626,12 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
         language: lang,
+        finalizeSource: finalizeSource || null,
         rawTextPreview: buildDebugTextPreview(rawText),
         textPreview: buildDebugTextPreview(text),
       })
@@ -3757,7 +3763,7 @@ export default function useRealtimeSTT({
           },
           {
             sttDurationMs,
-            reason: 'stt_server_final',
+            reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
           },
         )
         removePendingTurn(speaker)

@@ -11,6 +11,14 @@ export type MingleSttModel =
     | 'fireworks'
     | 'soniox';
 
+export type MingleSttFinalizeSource =
+    | 'soniox_manual'
+    | 'server_idle_snapshot'
+    | 'server_stop_fallback'
+    | 'server_timeout_fallback'
+    | 'server_provider_close_fallback'
+    | 'server_carry_expiry';
+
 export type MingleSttClientConfig = {
     sample_rate: number;
     languages: string[];
@@ -27,6 +35,7 @@ export type MingleSttFinalTurnPayload = {
     text: string;
     language: string;
     speaker?: string;
+    finalize_source?: MingleSttFinalizeSource;
 } | null;
 
 type ReadyPayloadInput = {
@@ -61,7 +70,7 @@ export type MingleSttConnectionStarters = {
 
 export type MingleSttStopRecordingLifecycle = {
     setSonioxStopRequested: (nextValue: boolean) => void;
-    finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null;
+    finalizePendingTurnFromProvider: ((fallbackSource?: MingleSttFinalizeSource) => Promise<MingleSttFinalTurnPayload>) | null;
     sendForcedFinalTurn: (
         rawText: string,
         rawLanguage: string,

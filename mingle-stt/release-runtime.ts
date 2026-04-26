@@ -15,6 +15,7 @@ import androidV112Runtime from './runtime/android/v1.1.2';
 export type {
     MingleSttClientConfig,
     MingleSttConnectionStarters,
+    MingleSttFinalizeSource,
     MingleSttFinalTurnPayload,
     MingleSttModel,
     MingleSttReleaseRuntime,
