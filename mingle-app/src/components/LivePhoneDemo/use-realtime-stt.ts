@@ -45,6 +45,7 @@ const LS_KEY_USAGE = 'mingle_demo_usage_sec'
 const LS_KEY_SESSION = 'mingle_demo_session_key'
 const LS_KEY_TRACKING_USER = 'mingle_demo_tracking_user_id'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
+export const LOCAL_UTTERANCE_CACHE_LIMIT = 100
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
 const NATIVE_STT_EVENT = 'mingle:native-stt'
 const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
@@ -104,17 +105,35 @@ function resolveSttRuntimeBehaviorContext(): {
   }
 }
 
-export function persistUtterancesSnapshot(utterances: Utterance[], namespace?: string): void {
+export function buildPersistedUtteranceCache<T>(
+  utterances: T[],
+  maxItems?: number | null,
+): T[] {
+  if (typeof maxItems !== 'number' || !Number.isFinite(maxItems) || maxItems <= 0) {
+    return utterances
+  }
+
+  const normalizedMaxItems = Math.floor(maxItems)
+  if (utterances.length <= normalizedMaxItems) return utterances
+  return utterances.slice(-normalizedMaxItems)
+}
+
+export function persistUtterancesSnapshot(
+  utterances: Utterance[],
+  namespace?: string,
+  options?: { maxItems?: number | null },
+): void {
   if (typeof window === 'undefined') return
 
   try {
     const storageKey = buildStorageKey(LS_KEY_UTTERANCES, namespace)
-    if (utterances.length === 0) {
+    const persistedUtterances = buildPersistedUtteranceCache(utterances, options?.maxItems)
+    if (persistedUtterances.length === 0) {
       window.localStorage.removeItem(storageKey)
       return
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(utterances))
+    window.localStorage.setItem(storageKey, JSON.stringify(persistedUtterances))
   } catch {
     // Ignore local persistence failures.
   }
@@ -1856,7 +1875,7 @@ function buildDebugTextPreview(rawText: string): string {
   return normalized.slice(0, 120)
 }
 
-const LOAD_BATCH_SIZE = 100
+const LOAD_BATCH_SIZE = LOCAL_UTTERANCE_CACHE_LIMIT
 
 export default function useRealtimeSTT({
   languages,
@@ -1886,7 +1905,7 @@ export default function useRealtimeSTT({
   const connectionStatusRef = useRef<ConnectionStatus>(connectionStatus)
   connectionStatusRef.current = connectionStatus
 
-  // All utterances from localStorage (used as pagination source + merge base for persist)
+  // Cached utterances from localStorage. Conversation rooms keep only a latest-message warm cache.
   const storedUtterancesRef = useRef<Utterance[]>([])
   const storageLoadedCountRef = useRef(0)
   const [hasOlderUtterances, setHasOlderUtterances] = useState(false)
@@ -1906,6 +1925,13 @@ export default function useRealtimeSTT({
   const [partialTranslateTick, setPartialTranslateTick] = useState(0)
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(0)
+  const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
+  const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
+    buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
+  ), [localUtteranceCacheLimit])
+  const persistLocalUtterancesSnapshot = useCallback((items: Utterance[]) => {
+    persistUtterancesSnapshot(items, storageNamespace, { maxItems: localUtteranceCacheLimit })
+  }, [localUtteranceCacheLimit, storageNamespace])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1919,11 +1945,15 @@ export default function useRealtimeSTT({
           seen.add(u.id)
           return true
         }).map(normalizeStoredUtterance)
-        storedUtterancesRef.current = all
-        const initial = all.slice(-LOAD_BATCH_SIZE)
+        const cached = buildLocalUtteranceCache(all)
+        storedUtterancesRef.current = cached
+        const initial = cached.slice(-LOAD_BATCH_SIZE)
         storageLoadedCountRef.current = initial.length
         setUtteranceStore(createUtteranceStoreState(initial))
-        setHasOlderUtterances(all.length > initial.length)
+        setHasOlderUtterances(cached.length > initial.length)
+        if (cached.length !== all.length) {
+          persistLocalUtterancesSnapshot(cached)
+        }
       }
     } catch {
       storedUtterancesRef.current = []
@@ -1944,7 +1974,7 @@ export default function useRealtimeSTT({
 
     storageHydratedRef.current = true
     setIsStorageHydrated(true)
-  }, [storageNamespace])
+  }, [buildLocalUtteranceCache, persistLocalUtterancesSnapshot, storageNamespace])
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const utterancesRef = useRef<Utterance[]>(utterances)
@@ -2272,8 +2302,8 @@ export default function useRealtimeSTT({
     setHasOlderUtterances(hasOlderUtterancesFromRefs())
   }, [applyPendingHasOlderUtterances, hasOlderUtterancesFromRefs, utterances])
 
-  // Merge current state with stored utterances for persistence.
-  // Keeps older items not yet loaded via pagination + current state (loaded historical + new session).
+  // Merge current state with cached utterances for persistence.
+  // Conversation-room persistence is trimmed on write so localStorage stays a warm cache, not history SoT.
   const buildMergedUtterances = useCallback((current: Utterance[]) => {
     const stored = storedUtterancesRef.current
     if (stored.length === 0) return current
@@ -2343,7 +2373,7 @@ export default function useRealtimeSTT({
 
       setUtteranceStore((current) => {
         const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
-        const nextStoredUtterances = buildMergedUtterances(nextStore.utterances)
+        const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
         storedUtterancesRef.current = nextStoredUtterances
         storageLoadedCountRef.current = nextStore.utterances.length
         pendingHasOlderUtterancesRef.current = hasOlderUtterancesFromRefs()
@@ -2358,6 +2388,7 @@ export default function useRealtimeSTT({
     }
   }, [
     buildConversationHydrationHeaders,
+    buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
     hasOlderUtterancesFromRefs,
@@ -2381,12 +2412,12 @@ export default function useRealtimeSTT({
     clearUtterancePersistTimer()
     utterancePersistTimerRef.current = setTimeout(() => {
       utterancePersistTimerRef.current = null
-      persistUtterancesSnapshot(buildMergedUtterances(utterances), storageNamespace)
+      persistLocalUtterancesSnapshot(buildMergedUtterances(utterances))
     }, 1000)
     return () => {
       clearUtterancePersistTimer()
     }
-  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
+  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer, persistLocalUtterancesSnapshot])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
@@ -2394,11 +2425,11 @@ export default function useRealtimeSTT({
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
       clearUtterancePersistTimer()
-      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current), storageNamespace)
+      persistLocalUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
+  }, [buildMergedUtterances, clearUtterancePersistTimer, persistLocalUtterancesSnapshot])
 
   // Persist usage to localStorage
   useEffect(() => {
@@ -2452,7 +2483,7 @@ export default function useRealtimeSTT({
 
         setUtteranceStore((current) => {
           const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
-          const nextStoredUtterances = buildMergedUtterances(nextStore.utterances)
+          const nextStoredUtterances = buildLocalUtteranceCache(buildMergedUtterances(nextStore.utterances))
           storedUtterancesRef.current = nextStoredUtterances
           storageLoadedCountRef.current = nextStore.utterances.length
           pendingHasOlderUtterancesRef.current = hasOlderUtterancesFromRefs()
@@ -2469,6 +2500,7 @@ export default function useRealtimeSTT({
     }
   }, [
     buildConversationHydrationHeaders,
+    buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
     hasOlderUtterancesFromRefs,
@@ -3302,7 +3334,7 @@ export default function useRealtimeSTT({
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     utteranceIdRef.current = 0
-    persistUtterancesSnapshot([], storageNamespace)
+    persistLocalUtterancesSnapshot([])
     setHasOlderUtterances(false)
     setUtteranceStore(createUtteranceStoreState([]))
 
@@ -3321,9 +3353,9 @@ export default function useRealtimeSTT({
     clearUtterancePersistTimer,
     clearPartialBuffers,
     logClientEvent,
+    persistLocalUtterancesSnapshot,
     resetToIdle,
     sendNativeSttCommand,
-    storageNamespace,
   ])
 
   const replaceConversationHistoryForQa = useCallback((items: Utterance[]) => {
@@ -3339,8 +3371,9 @@ export default function useRealtimeSTT({
       })
       .map(normalizeStoredUtterance)
 
-    storedUtterancesRef.current = normalized
-    const initial = normalized.slice(-LOAD_BATCH_SIZE)
+    const cached = buildLocalUtteranceCache(normalized)
+    storedUtterancesRef.current = cached
+    const initial = cached.slice(-LOAD_BATCH_SIZE)
     storageLoadedCountRef.current = initial.length
     utterancesRef.current = initial
     recentFinalizedUtteranceRef.current = initial.at(-1)
@@ -3355,10 +3388,10 @@ export default function useRealtimeSTT({
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
-    setHasOlderUtterances(normalized.length > initial.length)
+    setHasOlderUtterances(cached.length > initial.length || hasOlderServerUtterancesRef.current)
     setUtteranceStore(createUtteranceStoreState(initial))
-    persistUtterancesSnapshot(normalized, storageNamespace)
-  }, [clearUtterancePersistTimer, storageNamespace])
+    persistLocalUtterancesSnapshot(normalized)
+  }, [buildLocalUtteranceCache, clearUtterancePersistTimer, persistLocalUtterancesSnapshot])
   const prepareForDeletion = useCallback(() => {
     conversationClearSequenceRef.current += 1
     clearConnectionErrorResetTimer()

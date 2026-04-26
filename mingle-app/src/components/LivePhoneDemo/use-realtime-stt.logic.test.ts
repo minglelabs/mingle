@@ -8,6 +8,7 @@ import {
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
+  buildPersistedUtteranceCache,
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
@@ -16,6 +17,7 @@ import {
   filterTranslationsToTargetLanguages,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
+  LOCAL_UTTERANCE_CACHE_LIMIT,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
@@ -221,6 +223,37 @@ describe('use-realtime-stt pure logic', () => {
         translations: {},
       },
     ]))
+  })
+
+  it('trims persisted conversation-room utterances to the latest cache window', () => {
+    const localStorage = createLocalStorageMock()
+    vi.stubGlobal('window', { localStorage })
+    const utterances = Array.from({ length: LOCAL_UTTERANCE_CACHE_LIMIT + 1 }, (_, index) => ({
+      id: `u-${index}`,
+      originalText: `text ${index}`,
+      originalLang: 'en',
+      targetLanguages: [],
+      translations: {},
+      createdAtMs: index,
+    }))
+
+    persistUtterancesSnapshot(utterances, 'conv_room_1', {
+      maxItems: LOCAL_UTTERANCE_CACHE_LIMIT,
+    })
+
+    const persisted = JSON.parse(localStorage.getItem('mingle_demo_utterances__conv_room_1') || '[]')
+    expect(persisted).toHaveLength(LOCAL_UTTERANCE_CACHE_LIMIT)
+    expect(persisted[0].id).toBe('u-1')
+    expect(persisted.at(-1).id).toBe(`u-${LOCAL_UTTERANCE_CACHE_LIMIT}`)
+  })
+
+  it('keeps the full persisted utterance snapshot when no cache limit is provided', () => {
+    const utterances = [
+      { id: 'u-1', originalText: 'one', originalLang: 'en', targetLanguages: [], translations: {} },
+      { id: 'u-2', originalText: 'two', originalLang: 'en', targetLanguages: [], translations: {} },
+    ]
+
+    expect(buildPersistedUtteranceCache(utterances)).toBe(utterances)
   })
 
   it('parses transcript message payload and normalizes text', () => {
