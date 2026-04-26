@@ -1048,6 +1048,33 @@ function normalizeFinalizeReuseText(rawText: string): string {
     .trim()
 }
 
+function normalizeFinalizeExpansionText(rawText: string): string {
+  return normalizeSttTurnText(rawText)
+    .toLowerCase()
+    .replace(/[“”]/gu, '"')
+    .replace(/[‘’]/gu, "'")
+    .replace(/[\s.,!?;:，。、…—–-]+/gu, ' ')
+    .trim()
+}
+
+function hasCjkOrHangulText(text: string): boolean {
+  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(text)
+}
+
+function isFinalizeExpansionCompatible(recentTextRaw: string, nextTextRaw: string): boolean {
+  const recentText = normalizeFinalizeExpansionText(recentTextRaw)
+  const nextText = normalizeFinalizeExpansionText(nextTextRaw)
+  if (!recentText || !nextText || recentText === nextText) return false
+  if (!nextText.startsWith(recentText)) return false
+
+  const nextChar = nextText[recentText.length] || ''
+  if (!nextChar || /\s/u.test(nextChar)) return true
+
+  const recentLength = Array.from(recentText).length
+  if (recentLength >= 6) return true
+  return recentLength >= 3 && hasCjkOrHangulText(recentText)
+}
+
 export function classifyRecentFinalizedUtteranceMatch(input: {
   pendingUtteranceId?: string | null
   finalizedUtteranceId: string
@@ -1060,13 +1087,16 @@ export function classifyRecentFinalizedUtteranceMatch(input: {
   const recentFinalizedUtterance = input.recentFinalizedUtterance
   if (!recentFinalizedUtterance) return { kind: 'none' }
   if (input.nowMs >= recentFinalizedUtterance.expiresAt) return { kind: 'none' }
-  if (normalizeFinalizeReuseText(recentFinalizedUtterance.text) !== normalizeFinalizeReuseText(input.text)) {
-    return { kind: 'none' }
-  }
   if (normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language) !== normalizeSourceLanguageMatchKey(input.language)) {
     return { kind: 'none' }
   }
   if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return { kind: 'none' }
+  const sameText = normalizeFinalizeReuseText(recentFinalizedUtterance.text) === normalizeFinalizeReuseText(input.text)
+  const compatibleLocalExpansion = recentFinalizedUtterance.source === 'local'
+    && isFinalizeExpansionCompatible(recentFinalizedUtterance.text, input.text)
+  if (!sameText && !compatibleLocalExpansion) {
+    return { kind: 'none' }
+  }
   if (recentFinalizedUtterance.source === 'local') {
     return { kind: 'reuse_local', utteranceId: recentFinalizedUtterance.id }
   }
@@ -1588,6 +1618,50 @@ export function applyTranslationToUtteranceStoreState(input: {
     utterances: nextUtterances,
     translationPriorities: merged.priorities,
     pendingTranslationUpdates: nextPendingTranslationUpdates,
+  }
+}
+
+export function replaceFinalizedUtteranceSourceInStoreState(input: {
+  store: UtteranceStoreState
+  utteranceId: string
+  sourceText: string
+  sourceLanguage: string
+  selectedLanguages: string[]
+}): UtteranceStoreState {
+  const sourceText = normalizeSttTurnText(input.sourceText)
+  if (!sourceText) return input.store
+
+  const idx = input.store.utterances.findIndex((utterance) => utterance.id === input.utteranceId)
+  if (idx < 0) return input.store
+
+  const target = input.store.utterances[idx]
+  const normalizedSourceLanguage = normalizeIncomingSourceLanguage(input.sourceLanguage, sourceText)
+  const reconciled = normalizedSourceLanguage
+    ? reconcileUtteranceTranslationBase({
+      utterance: target,
+      currentPriorities: input.store.translationPriorities,
+      detectedSourceLanguage: normalizedSourceLanguage,
+      selectedLanguages: input.selectedLanguages,
+      sourceText,
+    })
+    : {
+      utterance: {
+        ...target,
+        originalText: sourceText,
+      },
+      priorities: input.store.translationPriorities,
+    }
+
+  const nextUtterances = [
+    ...input.store.utterances.slice(0, idx),
+    reconciled.utterance,
+    ...input.store.utterances.slice(idx + 1),
+  ]
+
+  return {
+    ...input.store,
+    utterances: nextUtterances,
+    translationPriorities: reconciled.priorities,
   }
 }
 
@@ -3731,6 +3805,13 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             language: finalizedPayload.language,
           })
+          setUtteranceStore((prev) => replaceFinalizedUtteranceSourceInStoreState({
+            store: prev,
+            utteranceId: recentLocalReuseUtteranceId,
+            sourceText: finalizedPayload.text,
+            sourceLanguage: finalizedPayload.language,
+            selectedLanguages: targetLanguages,
+          }))
         } else {
           utteranceIdRef.current = nextUtteranceSerial
         }

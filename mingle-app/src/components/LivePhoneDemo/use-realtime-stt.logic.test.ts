@@ -22,6 +22,7 @@ import {
   parsePositiveIntWithFallback,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  replaceFinalizedUtteranceSourceInStoreState,
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
@@ -1616,6 +1617,74 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({
       kind: 'skip_duplicate_server',
       utteranceId: 'u-server-prev',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-expanded',
+      recentFinalizedUtterance: {
+        id: 'u-local',
+        text: "Actually ready right now, so let's th",
+        language: 'en',
+        expiresAt: 5_000,
+        source: 'local',
+      },
+      nowMs: 1_000,
+      text: "Actually ready right now, so let's throw it on over.",
+      language: 'en',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-expanded',
+      recentFinalizedUtterance: {
+        id: 'u-server-prev',
+        text: 'Actually ready',
+        language: 'en',
+        expiresAt: 5_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+      text: 'Actually ready now',
+      language: 'en',
+    })).toEqual({ kind: 'none' })
+  })
+
+  it('updates a reused local final with the later server final source text', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-local',
+        speaker: '1',
+        originalText: "Actually ready right now, so let's th",
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '아직 부분 번역',
+        },
+        translationFinalized: {
+          ko: false,
+        },
+        createdAtMs: 1_700_000_000_000,
+      },
+    ])
+
+    const nextStore = replaceFinalizedUtteranceSourceInStoreState({
+      store,
+      utteranceId: 'u-local',
+      sourceText: "Actually ready right now, so let's throw it on over.",
+      sourceLanguage: 'en',
+      selectedLanguages: ['en', 'ko', 'ja'],
+    })
+
+    expect(nextStore.utterances).toHaveLength(1)
+    expect(nextStore.utterances[0]?.originalText).toBe("Actually ready right now, so let's throw it on over.")
+    expect(nextStore.utterances[0]?.originalLang).toBe('en')
+    expect(nextStore.utterances[0]?.targetLanguages).toEqual(['ko', 'ja'])
+    expect(nextStore.utterances[0]?.translations).toEqual({
+      ko: '아직 부분 번역',
     })
   })
 
