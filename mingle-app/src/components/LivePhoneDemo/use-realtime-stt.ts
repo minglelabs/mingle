@@ -104,16 +104,17 @@ function resolveSttRuntimeBehaviorContext(): {
   }
 }
 
-export function persistUtterancesSnapshot(utterances: Utterance[]): void {
+export function persistUtterancesSnapshot(utterances: Utterance[], namespace?: string): void {
   if (typeof window === 'undefined') return
 
   try {
+    const storageKey = buildStorageKey(LS_KEY_UTTERANCES, namespace)
     if (utterances.length === 0) {
-      window.localStorage.removeItem(LS_KEY_UTTERANCES)
+      window.localStorage.removeItem(storageKey)
       return
     }
 
-    window.localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(utterances))
+    window.localStorage.setItem(storageKey, JSON.stringify(utterances))
   } catch {
     // Ignore local persistence failures.
   }
@@ -1823,6 +1824,7 @@ export default function useRealtimeSTT({
   const [hasOlderUtterances, setHasOlderUtterances] = useState(false)
   const [isStorageHydrated, setIsStorageHydrated] = useState(false)
   const storageHydratedRef = useRef(false)
+  const pendingHasOlderUtterancesRef = useRef<boolean | null>(null)
 
   const [utteranceStore, setUtteranceStore] = useState<UtteranceStoreState>(() => createUtteranceStoreState([]))
   const utterances = utteranceStore.utterances
@@ -2152,8 +2154,15 @@ export default function useRealtimeSTT({
 
   // Initialize hasOlderUtterances after mount
   useEffect(() => {
+    const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
+    if (pendingHasOlderUtterances !== null) {
+      pendingHasOlderUtterancesRef.current = null
+      setHasOlderUtterances(pendingHasOlderUtterances)
+      return
+    }
+
     setHasOlderUtterances(storedUtterancesRef.current.length > storageLoadedCountRef.current)
-  }, [])
+  }, [utterances])
 
   const loadOlderUtterances = useCallback(() => {
     const stored = storedUtterancesRef.current
@@ -2210,12 +2219,12 @@ export default function useRealtimeSTT({
     clearUtterancePersistTimer()
     utterancePersistTimerRef.current = setTimeout(() => {
       utterancePersistTimerRef.current = null
-      persistUtterancesSnapshot(buildMergedUtterances(utterances))
+      persistUtterancesSnapshot(buildMergedUtterances(utterances), storageNamespace)
     }, 1000)
     return () => {
       clearUtterancePersistTimer()
     }
-  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer])
+  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
@@ -2223,11 +2232,11 @@ export default function useRealtimeSTT({
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
       clearUtterancePersistTimer()
-      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
+      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current), storageNamespace)
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances, clearUtterancePersistTimer])
+  }, [buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
 
   // Persist usage to localStorage
   useEffect(() => {
@@ -2321,11 +2330,18 @@ export default function useRealtimeSTT({
 
         setUtteranceStore((current) => {
           const nextStore = mergeServerHydrationUtterances(current, utterancesFromServer)
-          storedUtterancesRef.current = nextStore.utterances
+          const nextStoredUtterances = buildMergedUtterances(nextStore.utterances)
+          storedUtterancesRef.current = nextStoredUtterances
           storageLoadedCountRef.current = nextStore.utterances.length
+          pendingHasOlderUtterancesRef.current = nextStoredUtterances.length > nextStore.utterances.length
           return nextStore
         })
-        setHasOlderUtterances(false)
+        void Promise.resolve().then(() => {
+          const pendingHasOlderUtterances = pendingHasOlderUtterancesRef.current
+          if (pendingHasOlderUtterances === null) return
+          pendingHasOlderUtterancesRef.current = null
+          setHasOlderUtterances(pendingHasOlderUtterances)
+        })
       })
       .catch(() => {
         // Keep local state when server hydration fails.
@@ -2334,7 +2350,13 @@ export default function useRealtimeSTT({
     return () => {
       cancelled = true
     }
-  }, [conversationId, isStorageHydrated, mergeServerHydrationUtterances, sessionKeyOverride])
+  }, [
+    buildMergedUtterances,
+    conversationId,
+    isStorageHydrated,
+    mergeServerHydrationUtterances,
+    sessionKeyOverride,
+  ])
 
   useEffect(() => {
     utterancesRef.current = utterances
@@ -3160,7 +3182,7 @@ export default function useRealtimeSTT({
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     utteranceIdRef.current = 0
-    persistUtterancesSnapshot([])
+    persistUtterancesSnapshot([], storageNamespace)
     setHasOlderUtterances(false)
     setUtteranceStore(createUtteranceStoreState([]))
 
@@ -3181,6 +3203,7 @@ export default function useRealtimeSTT({
     logClientEvent,
     resetToIdle,
     sendNativeSttCommand,
+    storageNamespace,
   ])
 
   const replaceConversationHistoryForQa = useCallback((items: Utterance[]) => {
@@ -3214,8 +3237,8 @@ export default function useRealtimeSTT({
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
     setHasOlderUtterances(normalized.length > initial.length)
     setUtteranceStore(createUtteranceStoreState(initial))
-    persistUtterancesSnapshot(normalized)
-  }, [clearUtterancePersistTimer])
+    persistUtterancesSnapshot(normalized, storageNamespace)
+  }, [clearUtterancePersistTimer, storageNamespace])
   const prepareForDeletion = useCallback(() => {
     conversationClearSequenceRef.current += 1
     clearConnectionErrorResetTimer()

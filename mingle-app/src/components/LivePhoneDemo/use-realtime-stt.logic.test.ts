@@ -195,6 +195,34 @@ describe('use-realtime-stt pure logic', () => {
     ]))
   })
 
+  it('persists conversation-room utterances under the room namespace', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_utterances: '[{"id":"legacy"}]',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([
+      {
+        id: 'u-room-1',
+        originalText: 'room text',
+        originalLang: 'en',
+        targetLanguages: [],
+        translations: {},
+      },
+    ], 'conv_room_1')
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
+    expect(localStorage.getItem('mingle_demo_utterances__conv_room_1')).toBe(JSON.stringify([
+      {
+        id: 'u-room-1',
+        originalText: 'room text',
+        originalLang: 'en',
+        targetLanguages: [],
+        translations: {},
+      },
+    ]))
+  })
+
   it('parses transcript message payload and normalizes text', () => {
     const parsed = parseSttTranscriptMessage({
       type: 'transcript',
