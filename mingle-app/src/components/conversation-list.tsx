@@ -717,26 +717,30 @@ function useNativeInsetPx(queryKey: string, initialValue = 0): number {
   );
 }
 
-function parseNativeBannerPositionFromSearch(search: string): LivePhoneDemoAdBannerPosition | null {
+function parseNativeBannerPositionFromSearch(
+  search: string,
+  queryKey: string,
+): LivePhoneDemoAdBannerPosition | null {
   try {
     const params = new URLSearchParams(search);
-    return normalizeLivePhoneDemoAdBannerPosition(params.get("nativeBannerPosition"));
+    return normalizeLivePhoneDemoAdBannerPosition(params.get(queryKey));
   } catch {
     return null;
   }
 }
 
-function readNativeBannerPositionFromWindow(): LivePhoneDemoAdBannerPosition | null {
+function readNativeBannerPositionFromWindow(queryKey: string): LivePhoneDemoAdBannerPosition | null {
   if (typeof window === "undefined") return null;
-  return parseNativeBannerPositionFromSearch(window.location.search || "");
+  return parseNativeBannerPositionFromSearch(window.location.search || "", queryKey);
 }
 
 function useNativeBannerPositionFromSearch(
+  queryKey: string,
   initialValue: LivePhoneDemoAdBannerPosition | null = null,
 ): LivePhoneDemoAdBannerPosition | null {
   return useSyncExternalStore(
     subscribeToLocationSearch,
-    readNativeBannerPositionFromWindow,
+    () => readNativeBannerPositionFromWindow(queryKey),
     () => initialValue,
   );
 }
@@ -1171,6 +1175,9 @@ type ConversationListProps = {
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
   initialNativeBottomInsetPx?: number;
+  initialNativeListTopInsetPx?: number;
+  initialNativeConversationBannerPosition?: string;
+  initialNativeConversationBottomInsetPx?: number;
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
 };
@@ -1184,6 +1191,9 @@ export default function ConversationList({
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
   initialNativeBottomInsetPx = 0,
+  initialNativeListTopInsetPx = 0,
+  initialNativeConversationBannerPosition,
+  initialNativeConversationBottomInsetPx = 0,
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
@@ -1252,34 +1262,45 @@ export default function ConversationList({
   const pullRefreshStartYRef = useRef<number | null>(null);
   const pullRefreshTrackingRef = useRef(false);
   const viewportWidthPx = useViewportWidthPx();
-  const nativeBannerPositionFromQuery = useNativeBannerPositionFromSearch(
+  const legacyNativeBannerPositionFromQuery = useNativeBannerPositionFromSearch(
+    "nativeBannerPosition",
     normalizeLivePhoneDemoAdBannerPosition(initialNativeBannerPosition),
   );
-  const nativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx", initialNativeTopInsetPx);
-  const nativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx", initialNativeBottomInsetPx);
+  const nativeConversationBannerPositionFromQuery = useNativeBannerPositionFromSearch(
+    "nativeConversationBannerPosition",
+    normalizeLivePhoneDemoAdBannerPosition(initialNativeConversationBannerPosition),
+  );
+  const legacyNativeTopInsetPx = useNativeInsetPx("nativeTopInsetPx", initialNativeTopInsetPx);
+  const legacyNativeBottomInsetPx = useNativeInsetPx("nativeBottomInsetPx", initialNativeBottomInsetPx);
+  const nativeListTopInsetPx = useNativeInsetPx("nativeListTopInsetPx", initialNativeListTopInsetPx);
+  const nativeConversationBottomInsetPx = useNativeInsetPx("nativeConversationBottomInsetPx", initialNativeConversationBottomInsetPx);
   const routeConversationId = useConversationIdFromSearch();
   const hasNativeBannerLayout = nativeBannerLayout !== null;
   const hasNativeRuntimeInsets = initialNativeUi || isNativeRuntime;
-  // Prefer the URL query's banner position over a transient layout event so
-  // the list-zone 'top' emit cannot mask a conversation room that configures
-  // the banner at the bottom. Inset fallbacks likewise require a positive
-  // layout value so a zero-for-this-edge emit does not zero out the query.
-  const runtimeNativeBannerPosition = nativeBannerPositionFromQuery ?? nativeBannerLayout?.position ?? null;
-  const runtimeNativeTopInsetPx = (nativeBannerLayout?.topInsetPx ?? 0) > 0
+  const runtimeNativeListTopInsetPx = nativeBannerLayout?.position === "top" && (nativeBannerLayout.topInsetPx ?? 0) > 0
     ? (nativeBannerLayout!.topInsetPx)
-    : nativeTopInsetPx;
-  const runtimeNativeBottomInsetPx = (nativeBannerLayout?.bottomInsetPx ?? 0) > 0
+    : (nativeListTopInsetPx > 0
+        ? nativeListTopInsetPx
+        : (legacyNativeBannerPositionFromQuery === "top" ? legacyNativeTopInsetPx : 0));
+  const runtimeNativeConversationBannerPosition =
+    nativeBannerLayout?.position === "bottom" || nativeBannerLayout?.position === "top"
+      ? nativeBannerLayout.position
+      : nativeConversationBannerPositionFromQuery ?? legacyNativeBannerPositionFromQuery;
+  const runtimeNativeConversationBottomInsetPx = nativeBannerLayout?.position === "bottom" && (nativeBannerLayout.bottomInsetPx ?? 0) > 0
     ? (nativeBannerLayout!.bottomInsetPx)
-    : nativeBottomInsetPx;
+    : (nativeConversationBottomInsetPx > 0
+        ? nativeConversationBottomInsetPx
+        : (legacyNativeBannerPositionFromQuery === "bottom" ? legacyNativeBottomInsetPx : 0));
   const estimatedNativeBannerInsetPx = resolveEstimatedNativeBannerInsetPx(viewportWidthPx);
   const effectiveNativeTopInsetPx = hasNativeRuntimeInsets
-    ? resolveEffectiveNativeBannerInsetPx(runtimeNativeTopInsetPx, estimatedNativeBannerInsetPx)
-    : runtimeNativeTopInsetPx;
-  const effectiveNativeBottomInsetPx = hasNativeRuntimeInsets && runtimeNativeBannerPosition === "bottom"
-    ? (hasNativeBannerLayout
-        ? runtimeNativeBottomInsetPx
-        : resolveEffectiveNativeBannerInsetPx(runtimeNativeBottomInsetPx, estimatedNativeBannerInsetPx))
-    : runtimeNativeBottomInsetPx;
+    ? resolveEffectiveNativeBannerInsetPx(runtimeNativeListTopInsetPx, estimatedNativeBannerInsetPx)
+    : runtimeNativeListTopInsetPx;
+  const effectiveNativeBottomInsetPx = activeConversation && hasNativeRuntimeInsets && runtimeNativeConversationBannerPosition === "bottom"
+    ? (hasNativeBannerLayout && runtimeNativeConversationBottomInsetPx > 0
+        ? runtimeNativeConversationBottomInsetPx
+        : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
+    : 0;
+  const conversationListFooterPaddingBottom = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -2760,9 +2781,7 @@ export default function ConversationList({
           aria-label={copy.newConversationButtonLabel}
           style={{
             minHeight: "72px",
-            paddingBottom: effectiveNativeBottomInsetPx > 0
-              ? `calc(env(safe-area-inset-bottom, 0px) + ${effectiveNativeBottomInsetPx + 16}px)`
-              : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            paddingBottom: conversationListFooterPaddingBottom,
             backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
           }}
         >

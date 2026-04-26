@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { Providers } from '@/app/providers'
 import { PRIMARY_UI_LOCALES } from '../../../../shared/i18n/mingle-locales'
 
-const versions = ['normal', 'flirting', 'working', 'gaming']
+const versions = ['normal', 'flirting', 'working', 'social', 'gaming']
 const localeSet = new Set(PRIMARY_UI_LOCALES)
 
 type VersionPageProps = {

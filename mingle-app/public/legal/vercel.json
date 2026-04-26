@@ -67,6 +67,34 @@
   ],
   "rewrites": [
     {
+      "source": "/landing/:version(normal|social|gaming)",
+      "destination": "https://mingle-landing.vercel.app/landing/:version"
+    },
+    {
+      "source": "/landing/:version(normal|social|gaming)/:path*",
+      "destination": "https://mingle-landing.vercel.app/landing/:version/:path*"
+    },
+    {
+      "source": "/_next/:path*",
+      "destination": "https://mingle-landing.vercel.app/_next/:path*"
+    },
+    {
+      "source": "/api/web/landing/v1/:path*",
+      "destination": "https://mingle-landing.vercel.app/api/web/landing/v1/:path*"
+    },
+    {
+      "source": "/:asset(chat_by_bear.png|chat_by_cat.png|demo_app.mp4|demo_conversation.mp4|favicon.ico|gaming-hero.png|horizontal1.png|horizontal2.png|image.png|og-image.png|social-hero.jpeg|world-map.png)",
+      "destination": "https://mingle-landing.vercel.app/:asset"
+    },
+    {
+      "source": "/blogs",
+      "destination": "/blogs/index.html"
+    },
+    {
+      "source": "/blogs/:slug",
+      "destination": "/blogs/:slug.html"
+    },
+    {
       "source": "/legal",
       "destination": "/legal-index"
     },
@@ -87,8 +115,12 @@
       "destination": "/legal-index"
     },
     {
-      "source": "/",
-      "destination": "/index.html"
+      "source": "/landing",
+      "destination": "/"
+    },
+    {
+      "source": "/landing/:locale(ar|de|en|es|fr|hi|it|ja|ko|pt|ru|th|vi|zh-CN|zh-TW|zh-cn|zh-tw)",
+      "destination": "/"
     }
   ]
 }

@@ -257,33 +257,34 @@ class NativeSTTModule: RCTEventEmitter {
         return value
     }
 
+    fileprivate static func normalizeRuntimeConfigURL(_ rawValue: String) -> String {
+        if rawValue.isEmpty {
+            return ""
+        }
+        if let parsed = URLComponents(string: rawValue),
+           let parsedScheme = parsed.scheme,
+           let parsedHost = parsed.host,
+           !parsedScheme.isEmpty,
+           !parsedHost.isEmpty {
+            return rawValue
+        }
+        return ""
+    }
+
     fileprivate static func readRuntimeConfigURL(
         schemeKey: String,
         hostKey: String,
         legacyKey: String
     ) -> String {
+        let legacy = Self.normalizeRuntimeConfigURL(Self.readRuntimeConfigValue(legacyKey))
+        if !legacy.isEmpty {
+            return legacy
+        }
+
         let scheme = Self.readRuntimeConfigValue(schemeKey)
         let host = Self.readRuntimeConfigValue(hostKey)
         if !scheme.isEmpty && !host.isEmpty {
-            let combined = "\(scheme)://\(host)"
-            if let parsed = URLComponents(string: combined),
-               let parsedScheme = parsed.scheme,
-               let parsedHost = parsed.host,
-               !parsedScheme.isEmpty,
-               !parsedHost.isEmpty {
-                return combined
-            }
-        }
-        let legacy = Self.readRuntimeConfigValue(legacyKey)
-        if legacy.isEmpty {
-            return ""
-        }
-        if let parsed = URLComponents(string: legacy),
-           let parsedScheme = parsed.scheme,
-           let parsedHost = parsed.host,
-           !parsedScheme.isEmpty,
-           !parsedHost.isEmpty {
-            return legacy
+            return Self.normalizeRuntimeConfigURL("\(scheme)://\(host)")
         }
         return ""
     }

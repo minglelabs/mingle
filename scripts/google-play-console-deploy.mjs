@@ -31,6 +31,10 @@ const DEFAULT_AAB_PATH = path.join(
   "app/build/outputs/bundle/release/app-release.aab",
 );
 const DEFAULT_SYNC_SCRIPT = path.join(REPO_ROOT, "scripts/google-play-console-sync.mjs");
+const LEGACY_PRODUCTION_WEB_APP_BASE_URL = "https://mingle-app-xi.vercel.app";
+const LEGACY_PRODUCTION_WS_URL = "wss://mingle-stt.fly.dev";
+const RAILWAY_WEB_APP_BASE_URL = "https://mingle.up.railway.app";
+const RAILWAY_WS_URL = "wss://mingle.up.railway.app/stt";
 
 function printUsage() {
   console.log(`Usage: scripts/google-play-console-deploy.mjs [options]
@@ -161,6 +165,38 @@ function readJson(filePath) {
 
 function isNonEmptyString(value) {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function parseSemver3(value) {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(
+    typeof value === "string" ? value.trim() : "",
+  );
+  if (!match) return null;
+  return match.slice(1).map((part) => Number(part));
+}
+
+function isReleaseAtLeast(value, minimum) {
+  const parsed = parseSemver3(value);
+  if (!parsed) return false;
+  for (let index = 0; index < minimum.length; index += 1) {
+    if (parsed[index] > minimum[index]) return true;
+    if (parsed[index] < minimum[index]) return false;
+  }
+  return true;
+}
+
+function resolveDefaultReleaseRuntimeUrls(plan) {
+  if (isReleaseAtLeast(plan.releaseVersion, [1, 1, 2])) {
+    return {
+      siteUrl: RAILWAY_WEB_APP_BASE_URL,
+      wsUrl: RAILWAY_WS_URL,
+    };
+  }
+
+  return {
+    siteUrl: LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+    wsUrl: LEGACY_PRODUCTION_WS_URL,
+  };
 }
 
 function base64UrlEncode(value) {
@@ -443,12 +479,25 @@ function runMetadataSync(configJsonPath, options) {
 }
 
 function buildReleaseAab(plan) {
+  const defaultRuntimeUrls = resolveDefaultReleaseRuntimeUrls(plan);
   const buildEnv = {
     ...process.env,
     NEXT_PUBLIC_SITE_URL:
-      process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://mingle-app-xi.vercel.app",
+      process.env.NEXT_PUBLIC_SITE_URL?.trim() || defaultRuntimeUrls.siteUrl,
     NEXT_PUBLIC_WS_URL:
-      process.env.NEXT_PUBLIC_WS_URL?.trim() || "wss://mingle.up.railway.app",
+      process.env.NEXT_PUBLIC_WS_URL?.trim() || defaultRuntimeUrls.wsUrl,
+    MINGLE_API_FALLBACK_SITE_URL:
+      process.env.MINGLE_API_FALLBACK_SITE_URL?.trim() || LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+    MINGLE_STT_FALLBACK_WS_URL:
+      process.env.MINGLE_STT_FALLBACK_WS_URL?.trim() || LEGACY_PRODUCTION_WS_URL,
+    MINGLE_LEGACY_SITE_URL:
+      process.env.MINGLE_LEGACY_SITE_URL?.trim()
+      || process.env.MINGLE_API_FALLBACK_SITE_URL?.trim()
+      || LEGACY_PRODUCTION_WEB_APP_BASE_URL,
+    MINGLE_LEGACY_WS_URL:
+      process.env.MINGLE_LEGACY_WS_URL?.trim()
+      || process.env.MINGLE_STT_FALLBACK_WS_URL?.trim()
+      || LEGACY_PRODUCTION_WS_URL,
     NEXT_PUBLIC_API_NAMESPACE: plan.runtimeApiNamespace,
     RN_API_NAMESPACE: plan.runtimeApiNamespace,
   };

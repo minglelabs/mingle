@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  appendNativeRuntimeWebViewParams,
   isLiveDemoPathname,
   parseWebPathname,
   resolveNativeBannerContentHeightPx,
@@ -157,5 +158,17 @@ describe('RN WebView layout helpers', () => {
       bannerContentInsetPx: 50,
       safeAreaInsetBottomPx: 16,
     })).toBe(66)
+  })
+
+  it('appends zone-specific native banner fallback query params', () => {
+    expect(appendNativeRuntimeWebViewParams('https://example.com/ko?nativeUi=1', {
+      nativeListTopInsetPx: 50,
+      nativeConversationBannerPosition: 'bottom',
+      nativeConversationBannerInsetPx: 50,
+      clientVersion: '1.1.1',
+      clientBuild: '54',
+    })).toBe(
+      'https://example.com/ko?nativeUi=1&nativeListTopInsetPx=50&nativeConversationBannerPosition=bottom&nativeConversationBottomInsetPx=50&nativeClientVersion=1.1.1&nativeClientBuild=54',
+    )
   })
 })
