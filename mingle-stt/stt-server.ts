@@ -72,6 +72,16 @@ const wss = new WebSocketServer({ server });
 
 let connectionCounter = 0;
 
+function classifySonioxUpstreamError(errorCode: unknown, errorMessage: unknown): string {
+    const code = String(errorCode || '').trim();
+    const message = String(errorMessage || '').trim().toLowerCase();
+
+    if (code === '408') return 'upstream_timeout';
+    if (code === '400' && message.includes('audio is too long')) return 'audio_too_long';
+    if (code === '400') return 'bad_request';
+    return 'upstream_error';
+}
+
 wss.on('connection', (clientWs) => {
     const connId = ++connectionCounter;
     const connectedAt = Date.now();
@@ -84,7 +94,9 @@ wss.on('connection', (clientWs) => {
     let behaviorProfile: MingleSttBehaviorProfile = 'legacy_1_0_11';
     let releaseVariant: MingleSttReleaseVariant = 'legacy_default_v1_0_11';
     let releaseRuntime = resolveMingleSttReleaseRuntime(releaseVariant);
+    let apiNamespace = '';
     let selectedLanguages: string[] = [];
+    let lastSonioxUpstreamError: { code: string; category: string } | null = null;
     let finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null = null;
     let sonioxStopRequested = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
@@ -933,7 +945,14 @@ wss.on('connection', (clientWs) => {
                     const msg = JSON.parse(event.data.toString());
 
                     if (msg.error_code) {
-                        console.error(`[Soniox] Error: ${msg.error_code} - ${msg.error_message}`);
+                        const errorCode = String(msg.error_code || '').trim();
+                        const errorMessage = String(msg.error_message || '').trim();
+                        const errorCategory = classifySonioxUpstreamError(errorCode, errorMessage);
+                        lastSonioxUpstreamError = { code: errorCode, category: errorCategory };
+                        const durationSec = ((Date.now() - connectedAt) / 1000).toFixed(1);
+                        console.error(
+                            `[conn:${connId}] soniox_upstream_error code=${errorCode || '-'} category=${errorCategory} duration=${durationSec}s namespace=${apiNamespace || '-'} message=${JSON.stringify(errorMessage)}`,
+                        );
                         return;
                     }
 
@@ -1349,21 +1368,21 @@ wss.on('connection', (clientWs) => {
                     .map((language) => language.trim())
                     .filter(Boolean)
                 : [];
-            const apiNamespace = typeof data.api_namespace === 'string'
+            const nextApiNamespace = typeof data.api_namespace === 'string'
                 ? data.api_namespace.trim()
                 : '';
             const requestedReleaseVariant = typeof data.release_variant === 'string'
                 ? parseMingleSttReleaseVariant(data.release_variant)
                 : null;
-            const resolvedReleaseVariant = apiNamespace
-                ? resolveMingleSttReleaseVariant(apiNamespace)
+            const resolvedReleaseVariant = nextApiNamespace
+                ? resolveMingleSttReleaseVariant(nextApiNamespace)
                 : requestedReleaseVariant || 'legacy_default_v1_0_11';
             const resolvedReleaseRuntime = resolveMingleSttReleaseRuntime(resolvedReleaseVariant);
             const clientConfig = {
                 ...data,
-                api_namespace: apiNamespace,
-                behavior_profile: apiNamespace
-                    ? resolveMingleSttBehaviorProfile(apiNamespace)
+                api_namespace: nextApiNamespace,
+                behavior_profile: nextApiNamespace
+                    ? resolveMingleSttBehaviorProfile(nextApiNamespace)
                     : resolvedReleaseRuntime.behaviorLine,
                 release_variant: resolvedReleaseVariant,
                 languages: normalizedLanguages,
@@ -1373,7 +1392,9 @@ wss.on('connection', (clientWs) => {
             behaviorProfile = clientConfig.behavior_profile || 'legacy_1_0_11';
             releaseVariant = clientConfig.release_variant || 'legacy_default_v1_0_11';
             releaseRuntime = resolvedReleaseRuntime;
+            apiNamespace = nextApiNamespace;
             selectedLanguages = normalizedLanguages;
+            lastSonioxUpstreamError = null;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
             console.log(
@@ -1401,7 +1422,10 @@ wss.on('connection', (clientWs) => {
 
     clientWs.onclose = (event) => {
         const durationSec = ((Date.now() - connectedAt) / 1000).toFixed(1);
-        console.log(`[conn:${connId}] client disconnected code=${event.code} duration=${durationSec}s model=${currentModel} langs=${selectedLanguages.join(',')}`);
+        const sonioxErrorFields = lastSonioxUpstreamError
+            ? ` soniox_error_code=${lastSonioxUpstreamError.code || '-'} soniox_error_category=${lastSonioxUpstreamError.category}`
+            : '';
+        console.log(`[conn:${connId}] client disconnected code=${event.code} duration=${durationSec}s model=${currentModel} namespace=${apiNamespace || '-'} langs=${selectedLanguages.join(',')}${sonioxErrorFields}`);
         cleanup();
     };
 });

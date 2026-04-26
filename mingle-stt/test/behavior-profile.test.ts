@@ -17,23 +17,28 @@ test('legacy namespaces stay on the 1.0.11 STT profile', () => {
     assert.equal(resolveMingleSttBehaviorProfile(''), 'legacy_1_0_11');
 });
 
-test('1.1.0 namespaces use the new STT profile', () => {
+test('modern namespaces use the matching STT profile label', () => {
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.0'), 'v1_1_0');
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.1'), 'v1_1_1');
     assert.equal(resolveMingleSttBehaviorProfile('android/v1.1.1'), 'v1_1_1');
-    assert.equal(resolveMingleSttBehaviorProfile('android/v1.2.0'), 'v1_1_1');
+    assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.2'), 'v1_1_2');
+    assert.equal(resolveMingleSttBehaviorProfile('android/v1.1.2'), 'v1_1_2');
+    assert.equal(resolveMingleSttBehaviorProfile('android/v1.2.0'), 'v1_1_2');
 });
 
-test('release variants stay explicit for ios/android 1.0.11 and 1.1.0', () => {
+test('release variants stay explicit for ios/android namespace releases', () => {
     assert.equal(resolveMingleSttReleaseVariant(''), 'legacy_default_v1_0_11');
     assert.equal(parseMingleSttReleaseVariant('default_v1_1_0'), 'default_v1_1_0');
     assert.equal(parseMingleSttReleaseVariant('default_v1_1_1'), 'default_v1_1_1');
+    assert.equal(parseMingleSttReleaseVariant('default_v1_1_2'), 'default_v1_1_2');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.0.11'), 'ios_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.0.7'), 'android_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.0'), 'ios_v1_1_0');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.0'), 'android_v1_1_0');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.1'), 'ios_v1_1_1');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.1'), 'android_v1_1_1');
+    assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.2'), 'ios_v1_1_2');
+    assert.equal(resolveMingleSttReleaseVariant('android/v1.1.2'), 'android_v1_1_2');
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_0_11'), true);
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_1_0'), false);
 });
@@ -72,6 +77,21 @@ test('release runtimes stay pinned to the resolved release variant', () => {
     const defaultV111Runtime = resolveMingleSttReleaseRuntime('default_v1_1_1');
     assert.equal(defaultV111Runtime.behaviorLine, 'v1_1_1');
     assert.equal(resolveMingleSttBehaviorProfileForReleaseVariant('default_v1_1_1'), 'v1_1_1');
+
+    const iosV112Runtime = resolveMingleSttReleaseRuntime('ios_v1_1_2');
+    assert.equal(iosV112Runtime.behaviorLine, 'v1_1_2');
+    assert.deepEqual(
+        iosV112Runtime.buildReadyPayload({
+            sonioxLanguageHintsEnabled: false,
+        }),
+        {
+            status: 'ready',
+            release_variant: 'ios_v1_1_2',
+            behavior_profile: 'v1_1_2',
+            soniox_language_hints_enabled: false,
+        },
+    );
+    assert.equal(resolveMingleSttBehaviorProfileForReleaseVariant('ios_v1_1_2'), 'v1_1_2');
 });
 
 test('release runtime owns provider startup dispatch', () => {

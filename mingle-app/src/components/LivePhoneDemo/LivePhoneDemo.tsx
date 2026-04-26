@@ -157,6 +157,7 @@ const EMPTY_STATE_ARROW_HEAD_Y = 72
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
+const KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX = 2
 const COMPOSER_SHELL_MIN_HEIGHT_PX = 37
 const VOICE_MODE_TOP_MARGIN_PX = 8
 const VOICE_MODE_BOTTOM_MARGIN_PX = 0
@@ -494,6 +495,20 @@ export function resizeComposerTextarea(textarea: HTMLTextAreaElement | null): nu
   textarea.style.height = `${nextHeight}px`
   textarea.style.overflowY = nextHeight >= COMPOSER_TEXTAREA_MAX_HEIGHT_PX ? 'auto' : 'hidden'
   return nextHeight
+}
+
+export function resolveStableKeyboardViewportInsetPx(currentInsetPx: number, nextInsetPx: number): number {
+  const safeCurrentInsetPx = Number.isFinite(currentInsetPx) && currentInsetPx > 0
+    ? Math.round(currentInsetPx)
+    : 0
+  const safeNextInsetPx = Number.isFinite(nextInsetPx) && nextInsetPx > 0
+    ? Math.round(nextInsetPx)
+    : 0
+
+  if (safeCurrentInsetPx === 0 || safeNextInsetPx === 0) return safeNextInsetPx
+  return Math.abs(safeCurrentInsetPx - safeNextInsetPx) < KEYBOARD_VIEWPORT_INSET_STABILITY_THRESHOLD_PX
+    ? safeCurrentInsetPx
+    : safeNextInsetPx
 }
 
 function readPersistedComposerDraft(): string {
@@ -1182,7 +1197,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null)
   const [nativeBottomBarClearancePx, setNativeBottomBarClearancePx] = useState<number | null>(null)
   const [isComposerOpen, setIsComposerOpen] = useState(false)
-  const [composerDraft, setComposerDraft] = useState('')
+  const [composerHasDraft, setComposerHasDraft] = useState(false)
   const [composerTextareaHeightPx, setComposerTextareaHeightPx] = useState(COMPOSER_TEXTAREA_MIN_HEIGHT_PX)
   const [keyboardViewportInsetPx, setKeyboardViewportInsetPx] = useState(0)
   const [floatingToastMessage, setFloatingToastMessage] = useState('')
@@ -1243,6 +1258,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const deleteConversationCancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const renameConversationInputRef = useRef<HTMLInputElement | null>(null)
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const composerDraftRef = useRef('')
   const bottomBarRef = useRef<HTMLDivElement | null>(null)
   const persistedInputModeRef = useRef<LivePhoneDemoInputMode | null>(null)
   const lastNativeBottomBarClearancePxRef = useRef<number | null>(null)
@@ -1402,7 +1418,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         currentIsComposerOpen: current,
         persistedInputMode: next.inputMode,
       }))
-      setComposerDraft(readPersistedComposerDraft())
+      const persistedComposerDraft = readPersistedComposerDraft()
+      composerDraftRef.current = persistedComposerDraft
+      setComposerHasDraft(persistedComposerDraft.trim().length > 0)
       setHasHydratedLocalUiPreferences(true)
       setHasHydratedComposerDraft(true)
 
@@ -1516,7 +1534,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!viewport) return
 
     const syncKeyboardInset = () => {
-      setKeyboardViewportInsetPx(resolveKeyboardViewportInsetPx(viewport))
+      const nextInsetPx = resolveKeyboardViewportInsetPx(viewport)
+      setKeyboardViewportInsetPx((currentInsetPx) => resolveStableKeyboardViewportInsetPx(currentInsetPx, nextInsetPx))
     }
 
     syncKeyboardInset()
@@ -1622,6 +1641,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const timerId = window.setTimeout(() => {
       const textarea = composerTextareaRef.current
       if (!textarea) return
+      if (textarea.value !== composerDraftRef.current) {
+        textarea.value = composerDraftRef.current
+      }
       syncComposerTextareaHeight(textarea)
       textarea.focus({ preventScroll: true })
       const cursor = textarea.value.length
@@ -1633,9 +1655,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [isComposerOpen, syncComposerTextareaHeight])
 
+  useEffect(() => {
+    const textarea = composerTextareaRef.current
+    if (!textarea) return
+    if (textarea.value === composerDraftRef.current) return
+    textarea.value = composerDraftRef.current
+    syncComposerTextareaHeight(textarea)
+  }, [hasHydratedComposerDraft, syncComposerTextareaHeight])
+
   useLayoutEffect(() => {
     syncComposerTextareaHeight(composerTextareaRef.current)
-  }, [composerDraft, isComposerOpen, syncComposerTextareaHeight])
+  }, [isComposerOpen, syncComposerTextareaHeight])
 
   useEffect(() => {
     if (isComposerOpen) return
@@ -1688,11 +1718,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       localStorage.setItem(LS_KEY_INPUT_MODE, isComposerOpen ? 'text' : 'voice')
     } catch { /* ignore */ }
   }, [hasHydratedLocalUiPreferences, isComposerOpen])
-
-  useEffect(() => {
-    if (!hasHydratedComposerDraft) return
-    persistComposerDraft(composerDraft)
-  }, [composerDraft, hasHydratedComposerDraft])
 
   useEffect(() => {
     if (!hasHydratedFeedbackDraft) return
@@ -3691,17 +3716,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
-    setComposerDraft(nextDraft)
+    composerDraftRef.current = nextDraft
     persistComposerDraft(nextDraft)
+    const nextHasDraft = nextDraft.trim().length > 0
+    setComposerHasDraft((current) => current === nextHasDraft ? current : nextHasDraft)
     syncComposerTextareaHeight(event.currentTarget)
   }, [syncComposerTextareaHeight])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    const nextText = composerDraft.trim()
+    const textarea = composerTextareaRef.current
+    const nextText = (textarea?.value ?? composerDraftRef.current).trim()
     if (!nextText) {
-      composerTextareaRef.current?.focus({ preventScroll: true })
+      textarea?.focus({ preventScroll: true })
       return
     }
 
@@ -3711,7 +3739,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       speaker: composerCopy.manualSpeakerLabel,
     })
     if (!submittedUtteranceId) return
-    setComposerDraft('')
+    composerDraftRef.current = ''
+    if (textarea) {
+      textarea.value = ''
+    }
+    setComposerHasDraft(false)
     persistComposerDraft('')
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
@@ -3720,7 +3752,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, composerDraft, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, submitExternalUtterance, syncComposerTextareaHeight])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -4243,7 +4275,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? COMPOSER_MODE_BOTTOM_MARGIN_PX
     : VOICE_MODE_BOTTOM_MARGIN_PX
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom, 0px) + ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px), ${bottomBarBottomMarginPx + activeKeyboardInsetPx}px)`
-  const composerCanSend = composerDraft.trim().length > 0
+  const composerCanSend = composerHasDraft
   // Hidden by default to avoid exposing account actions in demo/review builds.
   const showAccountMenuItems = showAccountActions && process.env.NEXT_PUBLIC_ENABLE_ACCOUNT_MENU_ACTIONS === 'true'
   const handleSilenceFinalizeLockedInteraction = useCallback(() => {
@@ -4336,7 +4368,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         hasInitialBottomAnchorRef.current = false
         allowAutoTopPaginationRef.current = false
         clearConversationHistory()
-        setComposerDraft('')
+        composerDraftRef.current = ''
+        if (composerTextareaRef.current) {
+          composerTextareaRef.current.value = ''
+          syncComposerTextareaHeight(composerTextareaRef.current)
+        }
+        setComposerHasDraft(false)
         persistComposerDraft('')
         persistedInputModeRef.current = 'voice'
         setIsComposerOpen(false)
@@ -4409,6 +4446,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     clearConversationHistory,
     closeMenuPanel,
+    syncComposerTextareaHeight,
     composerTextareaHeightPx,
     composerTextareaRef,
     conversationId,
@@ -4428,11 +4466,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     nativeBottomBarClearancePx,
     nativeChatBottomSpacerPx,
     nativeChatTopSpacerPx,
-    persistComposerDraft,
     persistedUtteranceCount,
     pushMenuHistoryEntry,
     setAdBannerPosition,
-    setComposerDraft,
     setIsComposerOpen,
     replaceConversationHistoryForQa,
     showScrollToBottom,
@@ -5831,7 +5867,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
           {/* Bottom Bar with STT / Text Composer Toggle */}
           <motion.div
-            layout
+            layout={!isComposerOpen}
             layoutDependency={isComposerOpen}
             onLayoutAnimationComplete={syncNativeBottomBarClearance}
             ref={bottomBarRef}
@@ -5849,7 +5885,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               {isComposerOpen ? (
                 <motion.div
                   key="composer-bottom-bar"
-                  layout
+                  layout={false}
                   layoutDependency={isComposerOpen}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -5914,18 +5950,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="flex min-w-0 flex-1 items-end gap-1.5 self-end"
                   >
                     <div
-                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none transition-[height] duration-150 ease-out motion-reduce:transition-none"
+                      className="flex min-w-0 flex-1 items-end overflow-hidden rounded-[0.95rem] border border-gray-200 bg-white px-1 shadow-none"
                       style={{ height: `${Math.max(COMPOSER_SHELL_MIN_HEIGHT_PX, composerTextareaHeightPx)}px` }}
                     >
                       <div className="flex min-w-0 flex-1 items-end px-1">
                         <textarea
                           ref={composerTextareaRef}
                           data-qa="live-demo-composer-textarea"
-                          value={composerDraft}
+                          defaultValue={composerDraftRef.current}
                           onChange={handleComposerDraftChange}
                           rows={1}
                           placeholder={composerCopy.composerPlaceholder}
-                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none transition-[height] duration-150 ease-out motion-reduce:transition-none placeholder:text-gray-400"
+                          className="block box-border h-full min-h-0 flex-1 resize-none self-end bg-transparent px-0.5 py-[7px] text-[16px] leading-[22px] text-gray-900 outline-none placeholder:text-gray-400"
                           style={{ height: `${composerTextareaHeightPx}px` }}
                         />
                       </div>
