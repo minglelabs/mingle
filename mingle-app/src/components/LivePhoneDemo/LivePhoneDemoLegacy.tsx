@@ -1526,8 +1526,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     menuHistoryDepthRef.current = boundedDepth
     setTextSizeMenuOpen(false)
     setTranslationModelMenuOpen(false)
-    setMenuDragOffsetX(0)
-    setIsMenuDragging(false)
 
     if (boundedDepth === 0) {
       setDeleteAccountDialogOpen(false)
@@ -3412,8 +3410,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         <AnimatePresence
           onExitComplete={() => {
-            setMenuDragOffsetX(0)
-            setIsMenuDragging(false)
             if (!deleteAccountDialogOpen && !deleteConversationDialogOpen) {
               try {
                 menuButtonRef.current?.focus({ preventScroll: true })
