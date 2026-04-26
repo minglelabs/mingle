@@ -694,6 +694,71 @@ function logParsedTranslations(event: string, payload: {
   console.info(`[translate/finalize] ${event}`, payload)
 }
 
+function parseJsonObjectForTranslateDiagnostics(raw: string): Record<string, unknown> | null {
+  const withoutThinking = raw
+    .replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '')
+    .trim()
+  const base = withoutThinking.replace(/^```json?\n?/, '').replace(/\n?```$/, '')
+
+  try {
+    const parsed = JSON.parse(base) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    const start = base.indexOf('{')
+    const end = base.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      try {
+        const parsed = JSON.parse(base.slice(start, end + 1)) as unknown
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>
+        }
+      } catch {
+        return null
+      }
+    }
+  }
+
+  return null
+}
+
+function buildBlankTranslationDiagnostics(
+  raw: string,
+  targetLanguages: string[],
+): {
+  isBlankTranslationPayload: boolean
+  blankTargetLanguages: string[]
+  returnedLanguages: string[]
+} {
+  const parsed = parseJsonObjectForTranslateDiagnostics(raw)
+  if (!parsed) {
+    return {
+      isBlankTranslationPayload: false,
+      blankTargetLanguages: [],
+      returnedLanguages: [],
+    }
+  }
+
+  const blankTargetLanguages: string[] = []
+  const returnedLanguages: string[] = []
+  for (const [language, value] of Object.entries(parsed)) {
+    const normalizedLanguage = normalizeLang(language)
+    if (!normalizedLanguage) continue
+    returnedLanguages.push(normalizedLanguage)
+    if (!targetLanguages.includes(normalizedLanguage)) continue
+    if (typeof value === 'string' && value.trim() === '') {
+      blankTargetLanguages.push(normalizedLanguage)
+    }
+  }
+
+  return {
+    isBlankTranslationPayload: blankTargetLanguages.length > 0,
+    blankTargetLanguages,
+    returnedLanguages,
+  }
+}
+
 function formatPromptConsoleLog(payload: {
   sourceLanguage: string
   targetLanguages: string[]
@@ -1145,18 +1210,31 @@ async function translateWithGemini(
     : ''
 
   if (Object.keys(translations).length === 0) {
-    logTranslateFinalizeError('gemini_unparseable_json', {
+    const blankTranslationDiagnostics = buildBlankTranslationDiagnostics(content, ctx.targetLanguages)
+    const event = blankTranslationDiagnostics.isBlankTranslationPayload
+      ? 'gemini_blank_translations'
+      : 'gemini_unparseable_json'
+    const failurePayload = {
       ...buildTranslateFinalizeLogContext(ctx),
       promptFeedback: response.promptFeedback ?? null,
       candidates: candidateMeta,
       responseTextLength: content.length,
       responseTextPreview: content.slice(0, 2000),
+      ...(blankTranslationDiagnostics.isBlankTranslationPayload ? {
+        blankTargetLanguages: blankTranslationDiagnostics.blankTargetLanguages,
+        returnedLanguages: blankTranslationDiagnostics.returnedLanguages,
+      } : {}),
       usage: {
         input_tokens: promptTokens,
         output_tokens: completionTokens,
         total_tokens: totalTokens,
       },
-    })
+    }
+    if (ctx.isFinal) {
+      logTranslateFinalizeError(event, failurePayload)
+    } else {
+      console.warn(`[translate/finalize] ${event}`, failurePayload)
+    }
     return null
   }
 
@@ -1465,17 +1543,30 @@ async function translateWithOpenAICompatible(
     : ''
 
   if (Object.keys(translations).length === 0) {
-    logTranslateFinalizeError(`${config.provider}_unparseable_json`, {
+    const blankTranslationDiagnostics = buildBlankTranslationDiagnostics(content, ctx.targetLanguages)
+    const event = blankTranslationDiagnostics.isBlankTranslationPayload
+      ? `${config.provider}_blank_translations`
+      : `${config.provider}_unparseable_json`
+    const failurePayload = {
       ...buildTranslateFinalizeLogContext(ctx),
       responseTextLength: content.length,
       responseTextPreview: content.slice(0, 2000),
+      ...(blankTranslationDiagnostics.isBlankTranslationPayload ? {
+        blankTargetLanguages: blankTranslationDiagnostics.blankTargetLanguages,
+        returnedLanguages: blankTranslationDiagnostics.returnedLanguages,
+      } : {}),
       usage: {
         input_tokens: promptTokens,
         output_tokens: completionTokens,
         reasoning_tokens: reasoningTokens,
         total_tokens: totalTokens,
       },
-    })
+    }
+    if (ctx.isFinal) {
+      logTranslateFinalizeError(event, failurePayload)
+    } else {
+      console.warn(`[translate/finalize] ${event}`, failurePayload)
+    }
     return null
   }
 
@@ -1781,12 +1872,6 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     }
 
     if (!selectedResult || Object.keys(selectedResult.translations).length === 0) {
-      logTranslateFinalizeError('provider_empty_response', {
-        ...buildTranslateFinalizeLogContext(ctx),
-        provider: providerConfig.provider,
-        reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
-        responseStatus: 502,
-      })
       if (
         !ctx.isFinal
         && shouldUsePreviousStateFallback(providerConfig.provider)
@@ -1804,6 +1889,25 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           usedFallbackFromPreviousState: true,
         })
       }
+      if (!ctx.isFinal && providerRequestFailureReason === null) {
+        console.warn('[translate/finalize] provider_empty_interim_response', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          provider: providerConfig.provider,
+          reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
+          responseStatus: 200,
+        })
+        return await buildResponseWithOptionalTts({}, {
+          provider: providerConfig.provider,
+          infrastructureProvider: providerConfig.infrastructureProvider,
+          model: providerConfig.model,
+        })
+      }
+      logTranslateFinalizeError('provider_empty_response', {
+        ...buildTranslateFinalizeLogContext(ctx),
+        provider: providerConfig.provider,
+        reason: providerRequestFailureReason || 'provider_empty_or_unparseable',
+        responseStatus: 502,
+      })
       const response = NextResponse.json({ error: 'empty_translation_response' }, { status: 502 })
       ensureTrackingContext(request, response, { sessionKeyHint })
       return response
@@ -1864,6 +1968,20 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
           model: selectedResult.model,
           usage: selectedResult.usage,
           usedFallbackFromPreviousState: true,
+        })
+      }
+      if (!ctx.isFinal) {
+        console.warn('[translate/finalize] target_language_miss_interim_response', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          provider: selectedResult.provider,
+          returnedLanguages: Object.keys(selectedResult.translations),
+          responseStatus: 200,
+        })
+        return await buildResponseWithOptionalTts({}, {
+          provider: selectedResult.provider,
+          infrastructureProvider: selectedResult.infrastructureProvider,
+          model: selectedResult.model,
+          usage: selectedResult.usage,
         })
       }
       const response = NextResponse.json({ error: 'empty_translation_response' }, { status: 502 })

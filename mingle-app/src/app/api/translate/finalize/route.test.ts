@@ -293,6 +293,99 @@ describe('/api/translate/finalize route', () => {
     expect(json.ttsAudioMime).toBe('audio/mpeg')
   })
 
+  it('returns an empty 200 response for interim blank translation JSON without previous-state fallback', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{\n  "en": " ",\n  "ko": " "\n}',
+        usageMetadata: {
+          promptTokenCount: 131,
+          candidatesTokenCount: 17,
+          totalTokenCount: 148,
+        },
+        candidates: [
+          { finishReason: 'STOP', safetyRatings: null },
+        ],
+      },
+    })
+
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: 'だ',
+        sourceLanguage: 'ja',
+        targetLanguages: ['en', 'ko'],
+        isFinal: false,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.translations).toEqual({})
+      expect(json.provider).toBe('gemini')
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[translate/finalize] gemini_blank_translations',
+        expect.objectContaining({
+          blankTargetLanguages: ['en', 'ko'],
+          isFinal: false,
+        }),
+      )
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[translate/finalize] provider_empty_interim_response',
+        expect.objectContaining({
+          provider: 'gemini',
+          responseStatus: 200,
+        }),
+      )
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] provider_empty_response',
+      ))
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleWarnSpy.mockRestore()
+      consoleErrorSpy.mockRestore()
+    }
+  })
+
+  it('keeps final blank translation JSON as a provider failure', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"en":" ","ko":" "}',
+        usageMetadata: {},
+      },
+    })
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: 'だ',
+        sourceLanguage: 'ja',
+        targetLanguages: ['en', 'ko'],
+        isFinal: true,
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(502)
+      expect(json).toEqual({ error: 'empty_translation_response' })
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] gemini_blank_translations',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] provider_empty_response',
+      ))
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
+  })
+
   it('retries once on transient provider errors before succeeding', async () => {
     mockGenerateContent
       .mockRejectedValueOnce(new Error(
