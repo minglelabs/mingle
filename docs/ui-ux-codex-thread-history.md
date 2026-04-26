@@ -14,6 +14,13 @@
 - User impact: Readers could incorrectly interpret Transync as supporting external app audio capture in the same comparison category.
 - Resolution: Updated the Transync `External app audio capture` cell to `No` and clarified that meeting integrations do not make it an external app audio capture layer.
 
+## 2026-04-26 - Mingle App Composer Jitter During STT/TTS Playback
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`
+- Issue: In long conversations, switching to keyboard mode while STT/TTS was active could make the composer subtly flicker and move the caret away from the expected typing position. The risky paths were controlled textarea draft updates re-rendering the full live demo on every keystroke, animated textarea/container height changes, Framer layout measurement on the active bottom bar, and 1px-level `visualViewport` inset jitter feeding bottom padding.
+- User impact: Text entry felt unreliable because the input area and caret could visually shift while the user was typing, especially with a large transcript and concurrent playback/recognition updates.
+- Resolution: Moved the composer text draft to a ref-backed uncontrolled textarea, kept React state only for send-button availability and actual height changes, removed height transitions from the composer shell/textarea, disabled bottom-bar layout animation while text mode is open, and added a small stability threshold for keyboard viewport inset updates.
+
 ## 2026-04-20 - Blog Felo Price Copy
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`

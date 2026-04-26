@@ -4,6 +4,7 @@ import {
   resolveHydratedComposerOpenState,
   resolveNativeBottomBannerOverlayInsetPx,
   resolveScrollToBottomButtonBottomPx,
+  resolveStableKeyboardViewportInsetPx,
   resizeComposerTextarea,
 } from './LivePhoneDemo'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
@@ -42,6 +43,13 @@ describe('live phone demo composer logic', () => {
       height: 620,
       offsetTop: 12,
     } as VisualViewport)).toBe(268)
+  })
+
+  it('keeps tiny visual viewport jitter from moving the composer', () => {
+    expect(resolveStableKeyboardViewportInsetPx(268, 269)).toBe(268)
+    expect(resolveStableKeyboardViewportInsetPx(268, 272)).toBe(272)
+    expect(resolveStableKeyboardViewportInsetPx(268, 0)).toBe(0)
+    expect(resolveStableKeyboardViewportInsetPx(0, 268)).toBe(268)
   })
 
   it('keeps the current composer state when no persisted input mode exists', () => {
