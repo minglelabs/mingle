@@ -131,3 +131,37 @@ test('global finalize cohort captures request-time pending speakers only', () =>
         },
     ]);
 });
+
+test('global finalize cohort can target only speakers idle long enough', () => {
+    assert.deepEqual(buildSonioxFinalizeRequestCohort([
+        {
+            speaker: '2',
+            currentSnapshotText: ' 비가 내',
+            currentSnapshotEndMs: 120,
+            detectedLang: 'ko',
+            lastProgressAtMs: 9_000,
+        },
+        {
+            speaker: '1',
+            currentSnapshotText: '夜の空が',
+            currentSnapshotEndMs: 220,
+            detectedLang: 'ja',
+            lastProgressAtMs: 9_700,
+        },
+        {
+            speaker: '3',
+            currentSnapshotText: 'actively changing',
+            currentSnapshotEndMs: 330,
+            detectedLang: 'en',
+            lastProgressAtMs: 10_100,
+        },
+    ], { idleBeforeMs: 9_500 }), [
+        {
+            speaker: '2',
+            snapshotText: ' 비가 내',
+            snapshotTextLen: ' 비가 내'.length,
+            snapshotEndMs: 120,
+            detectedLang: 'ko',
+        },
+    ]);
+});

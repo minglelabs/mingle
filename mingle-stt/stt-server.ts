@@ -12,9 +12,9 @@ import {
 import {
     buildSonioxFinalizeRequestCohort,
     buildSonioxDebugTokenRuns,
-    buildSonioxPendingSignature,
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
+    hasPendingSonioxTurnText,
     mergeDetectedLang,
     normalizeDetectedLang,
     normalizeSpeaker,
@@ -586,6 +586,7 @@ wss.on('connection', (clientWs) => {
                 latestNonFinalIsProvisionalCarry: boolean;
                 currentSnapshotText: string;
                 currentSnapshotEndMs: number;
+                lastProgressAtMs: number;
                 lastConsumedEndMs: number;
                 detectedLang: string;
                 strategy: SilenceTimerStrategy;
@@ -614,9 +615,7 @@ wss.on('connection', (clientWs) => {
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             let globalFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
-            let globalFinalizeLastProgressAtMs = 0;
             let globalFinalizeLastSentAtMs = 0;
-            let lastGlobalPendingSignature = '';
             let activeFinalizeRequest: SonioxFinalizeRequest | null = null;
             let finalizeRequestSeq = 0;
             sonioxStopRequested = false;
@@ -650,6 +649,7 @@ wss.on('connection', (clientWs) => {
                     speaker: state.speaker,
                     currentSnapshotText: state.currentSnapshotText,
                     currentSnapshotEndMs: state.currentSnapshotEndMs,
+                    lastProgressAtMs: state.lastProgressAtMs,
                     detectedLang: state.detectedLang,
                 }))
             );
@@ -661,26 +661,8 @@ wss.on('connection', (clientWs) => {
             };
             const resetGlobalFinalizeScheduler = () => {
                 clearGlobalFinalizeTimer();
-                globalFinalizeLastProgressAtMs = 0;
                 globalFinalizeLastSentAtMs = 0;
-                lastGlobalPendingSignature = '';
                 activeFinalizeRequest = null;
-            };
-            const updateGlobalPendingSignature = () => {
-                const nextSignature = buildSonioxPendingSignature(buildPendingTurnSnapshots());
-                if (!nextSignature) {
-                    lastGlobalPendingSignature = '';
-                    globalFinalizeLastProgressAtMs = 0;
-                    return { hasPending: false, changed: false };
-                }
-
-                const changed = nextSignature !== lastGlobalPendingSignature;
-                if (changed) {
-                    lastGlobalPendingSignature = nextSignature;
-                    globalFinalizeLastProgressAtMs = Date.now();
-                }
-
-                return { hasPending: true, changed };
             };
             const scheduleGlobalFinalizeCheck = (delayMs: number) => {
                 clearGlobalFinalizeTimer();
@@ -689,39 +671,56 @@ wss.on('connection', (clientWs) => {
                     maybeTriggerGlobalFinalize();
                 }, Math.max(1, delayMs));
             };
+            const buildIdleFinalizeCohort = (now: number) => (
+                buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots(), {
+                    idleBeforeMs: now - sonioxManualFinalizeSilenceMs,
+                })
+            );
+            const nextGlobalFinalizeDelayMs = (now: number): number | null => {
+                const pendingProgressAtTimes = buildPendingTurnSnapshots()
+                    .filter((snapshot) => hasPendingSonioxTurnText(snapshot.currentSnapshotText))
+                    .map((snapshot) => snapshot.lastProgressAtMs)
+                    .filter((value): value is number => (
+                        typeof value === 'number'
+                        && Number.isFinite(value)
+                        && value > 0
+                    ));
+                if (pendingProgressAtTimes.length === 0) return null;
+
+                const waitForSpeakerSilence = Math.min(
+                    ...pendingProgressAtTimes.map((lastProgressAtMs) => (
+                        Math.max(0, sonioxManualFinalizeSilenceMs - (now - lastProgressAtMs))
+                    )),
+                );
+                const waitForCooldown = globalFinalizeLastSentAtMs > 0
+                    ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - (now - globalFinalizeLastSentAtMs))
+                    : 0;
+
+                return Math.max(waitForSpeakerSilence, waitForCooldown);
+            };
             const maybeTriggerGlobalFinalize = () => {
                 if (sonioxStopRequested) return;
 
-                const { hasPending } = updateGlobalPendingSignature();
-                if (!hasPending) {
+                const now = Date.now();
+                const wait = nextGlobalFinalizeDelayMs(now);
+                if (wait === null) {
                     clearGlobalFinalizeTimer();
                     return;
                 }
 
                 if (activeFinalizeRequest) return;
-
-                const now = Date.now();
-                if (globalFinalizeLastProgressAtMs <= 0) {
-                    globalFinalizeLastProgressAtMs = now;
-                }
-
-                const elapsedSinceProgress = now - globalFinalizeLastProgressAtMs;
-                if (elapsedSinceProgress < sonioxManualFinalizeSilenceMs) {
-                    scheduleGlobalFinalizeCheck(sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
-                    return;
-                }
-
-                const elapsedSinceLastFinalize = now - globalFinalizeLastSentAtMs;
-                if (globalFinalizeLastSentAtMs > 0 && elapsedSinceLastFinalize < SONIOX_MANUAL_FINALIZE_COOLDOWN_MS) {
-                    scheduleGlobalFinalizeCheck(SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - elapsedSinceLastFinalize);
+                if (wait > 0) {
+                    scheduleGlobalFinalizeCheck(wait);
                     return;
                 }
 
                 if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
 
-                const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
+                const cohort = buildIdleFinalizeCohort(now);
                 if (cohort.length === 0) {
-                    clearGlobalFinalizeTimer();
+                    const nextWait = nextGlobalFinalizeDelayMs(now);
+                    if (nextWait === null) clearGlobalFinalizeTimer();
+                    else scheduleGlobalFinalizeCheck(nextWait);
                     return;
                 }
 
@@ -741,33 +740,20 @@ wss.on('connection', (clientWs) => {
                 }
             };
             const refreshGlobalFinalizeScheduling = () => {
-                const { hasPending } = updateGlobalPendingSignature();
-                if (!hasPending) {
+                const now = Date.now();
+                const wait = nextGlobalFinalizeDelayMs(now);
+                if (wait === null) {
                     clearGlobalFinalizeTimer();
                     return;
                 }
 
                 if (activeFinalizeRequest) return;
-
-                const now = Date.now();
-                if (globalFinalizeLastProgressAtMs <= 0) {
-                    globalFinalizeLastProgressAtMs = now;
-                }
-                const elapsedSinceProgress = now - globalFinalizeLastProgressAtMs;
-                const elapsedSinceLastFinalize = globalFinalizeLastSentAtMs > 0
-                    ? now - globalFinalizeLastSentAtMs
-                    : Number.POSITIVE_INFINITY;
-                const waitForProgress = Math.max(0, sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
-                const waitForCooldown = Number.isFinite(elapsedSinceLastFinalize)
-                    ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - elapsedSinceLastFinalize)
-                    : 0;
-
-                if (waitForProgress === 0 && waitForCooldown === 0) {
+                if (wait === 0) {
                     maybeTriggerGlobalFinalize();
                     return;
                 }
 
-                scheduleGlobalFinalizeCheck(Math.max(waitForProgress, waitForCooldown));
+                scheduleGlobalFinalizeCheck(wait);
             };
 
             const emitTranscript = (
@@ -814,6 +800,7 @@ wss.on('connection', (clientWs) => {
                 state.latestNonFinalIsProvisionalCarry = false;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
+                state.lastProgressAtMs = 0;
                 state.detectedLang = 'unknown';
                 state.strategy.resetState();
             };
@@ -882,6 +869,7 @@ wss.on('connection', (clientWs) => {
                     latestNonFinalIsProvisionalCarry: false,
                     currentSnapshotText: '',
                     currentSnapshotEndMs: -1,
+                    lastProgressAtMs: 0,
                     lastConsumedEndMs: -1,
                     detectedLang: 'unknown',
                     strategy,
@@ -1163,6 +1151,11 @@ wss.on('connection', (clientWs) => {
                         const transcriptChanged = mergedTextForIdle !== previousMergedTextForIdle;
                         const hasPendingTranscript = mergedSnapshot.length > 0
                             && !(speakerState.latestNonFinalIsProvisionalCarry && !speakerState.providerFinalizedText.trim());
+                        if (hasPendingTranscript && (transcriptChanged || speakerState.lastProgressAtMs <= 0)) {
+                            speakerState.lastProgressAtMs = Date.now();
+                        } else if (!mergedTextForIdle.trim()) {
+                            speakerState.lastProgressAtMs = 0;
+                        }
 
                         const requestSpeaker = finalizeRequestForFrame?.speakers.get(frameUpdate.speaker) || null;
                         const decision = requestSpeaker
