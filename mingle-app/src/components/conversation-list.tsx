@@ -706,7 +706,7 @@ function mapConversationSummaryToItem(
     timeLabel: timeLabelsReady
       ? formatConversationTime(conversation.latestMessageAt || conversation.createdAt, locale)
       : "",
-    statsLabel: `STT ${usageDurationLabel} · ${messageCountLabel}`,
+    statsLabel: `${usageDurationLabel} · ${messageCountLabel}`,
     statsFullLabel: `STT ${usageDurationLabel}, ${messageCountLabel}`,
     status: conversation.status,
     statusLabel,
