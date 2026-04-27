@@ -702,6 +702,7 @@ wss.on('connection', (clientWs) => {
                     && hasPendingSonioxTurnText(snapshot.currentSnapshotText)
                 ));
             };
+            const usesPerSpeakerIdleFinalize = () => behaviorProfile === 'v1_1_3';
             const nextGlobalFinalizeDelayMs = (now: number): number | null => {
                 const pendingProgressAtTimes = buildPendingTurnSnapshots()
                     .filter((snapshot) => hasPendingSonioxTurnText(snapshot.currentSnapshotText))
@@ -713,11 +714,12 @@ wss.on('connection', (clientWs) => {
                     ));
                 if (pendingProgressAtTimes.length === 0) return null;
 
-                const waitForSpeakerSilence = Math.min(
-                    ...pendingProgressAtTimes.map((lastProgressAtMs) => (
-                        Math.max(0, sonioxManualFinalizeSilenceMs - (now - lastProgressAtMs))
-                    )),
-                );
+                const speakerSilenceWaits = pendingProgressAtTimes.map((lastProgressAtMs) => (
+                    Math.max(0, sonioxManualFinalizeSilenceMs - (now - lastProgressAtMs))
+                ));
+                const waitForSpeakerSilence = usesPerSpeakerIdleFinalize()
+                    ? Math.min(...speakerSilenceWaits)
+                    : Math.max(...speakerSilenceWaits);
                 const waitForCooldown = globalFinalizeLastSentAtMs > 0
                     ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - (now - globalFinalizeLastSentAtMs))
                     : 0;
@@ -749,7 +751,7 @@ wss.on('connection', (clientWs) => {
                     else scheduleGlobalFinalizeCheck(nextWait);
                     return;
                 }
-                if (hasPendingTurnOutsideFinalizeCohort(cohort)) {
+                if (usesPerSpeakerIdleFinalize() && hasPendingTurnOutsideFinalizeCohort(cohort)) {
                     // Soniox finalize is global; don't cut active speakers just to close idle ones.
                     globalFinalizeLastSentAtMs = now;
                     finalizeRequestedSpeakerSnapshots?.({
