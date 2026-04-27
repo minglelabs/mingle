@@ -6047,7 +6047,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     transition={{ duration: 0.09, ease: 'easeOut' }}
                     className="self-end justify-self-start pl-2"
                   >
-                    <div className="flex flex-col items-start gap-0.5">
+                    <div className="flex h-[33px] flex-col items-start justify-end gap-0">
                       <div className="flex items-center gap-1.5">
                         {isUsageLimited ? (
                           <>
@@ -6057,17 +6057,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 style={{ width: `${usagePercent}%` }}
                               />
                             </div>
-                            <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
                               {formatLivePhoneDemoUsageDuration(remainingSec)}
                             </span>
                           </>
                         ) : (
-                          <span className="text-sm tabular-nums text-gray-400">
+                          <span className="text-sm leading-4 tabular-nums text-gray-400">
                             {formatLivePhoneDemoUsageDuration(usageSec)}
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] leading-none tabular-nums text-gray-400">
+                      <span className="text-sm leading-4 tabular-nums text-gray-400">
                         {storedMessageCountLabel}
                       </span>
                     </div>
