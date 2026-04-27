@@ -8,6 +8,7 @@ describe('live-phone-demo.feedback-copy', () => {
 
   it('falls back to English for unsupported locales', () => {
     expect(resolveLivePhoneDemoFeedbackCopy('sv-SE').pageTitle).toBe('Feedback')
+    expect(resolveLivePhoneDemoFeedbackCopy('sv-SE').instagramContactButtonLabel).toBe('Contact us on Instagram')
   })
 
   it('resolves traditional Chinese copy for Hant locales', () => {
@@ -26,5 +27,9 @@ describe('live-phone-demo.feedback-copy', () => {
     const copy = resolveLivePhoneDemoFeedbackCopy('ru-RU')
     expect(copy.pageTitle).toBe('Обратная связь')
     expect(copy.sendButtonLabel).toBe('Отправить')
+  })
+
+  it('resolves Thai Instagram contact copy', () => {
+    expect(resolveLivePhoneDemoFeedbackCopy('th-TH').instagramContactButtonLabel).toBe('ติดต่อผ่าน Instagram')
   })
 })

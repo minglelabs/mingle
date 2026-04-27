@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -91,6 +91,7 @@ import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
+import { LivePhoneDemoFeedbackMessageText } from './live-phone-demo.feedback-links'
 import {
   LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA,
   LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA,
@@ -122,6 +123,7 @@ import {
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
+const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
@@ -5164,6 +5166,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onBack={requestMenuBackStep}
                       />
 
+                      <div className="shrink-0 border-b border-gray-100 px-4 py-3">
+                        <a
+                          href={FEEDBACK_INSTAGRAM_CONTACT_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-pink-200 bg-white px-3 py-2.5 text-[0.95rem] font-semibold leading-tight text-gray-900 shadow-sm transition hover:border-pink-300 hover:bg-pink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
+                        >
+                          <Instagram size={18} strokeWidth={2.2} aria-hidden="true" />
+                          <span className="min-w-0 text-center">{feedbackCopy.instagramContactButtonLabel}</span>
+                        </a>
+                      </div>
+
                       <div className="flex shrink-0 border-b border-gray-100 px-4">
                         {([
                           { value: 'compose', label: feedbackCopy.composeTabLabel },
@@ -5377,7 +5391,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                               </span>
                                             </div>
                                             <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.98rem] leading-5 text-gray-800">
-                                              {message.message}
+                                              <LivePhoneDemoFeedbackMessageText message={message.message} />
                                             </p>
                                             {index === 0 && thread.contactEmail ? (
                                               <p className="mt-2 text-[0.8rem] text-gray-500">
