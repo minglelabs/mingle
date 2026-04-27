@@ -104,16 +104,17 @@ function resolveSttRuntimeBehaviorContext(): {
   }
 }
 
-export function persistUtterancesSnapshot(utterances: Utterance[]): void {
+export function persistUtterancesSnapshot(utterances: Utterance[], storageNamespace?: string): void {
   if (typeof window === 'undefined') return
 
   try {
+    const storageKey = buildStorageKey(LS_KEY_UTTERANCES, storageNamespace)
     if (utterances.length === 0) {
-      window.localStorage.removeItem(LS_KEY_UTTERANCES)
+      window.localStorage.removeItem(storageKey)
       return
     }
 
-    window.localStorage.setItem(LS_KEY_UTTERANCES, JSON.stringify(utterances))
+    window.localStorage.setItem(storageKey, JSON.stringify(utterances))
   } catch {
     // Ignore local persistence failures.
   }
@@ -2210,12 +2211,12 @@ export default function useRealtimeSTT({
     clearUtterancePersistTimer()
     utterancePersistTimerRef.current = setTimeout(() => {
       utterancePersistTimerRef.current = null
-      persistUtterancesSnapshot(buildMergedUtterances(utterances))
+      persistUtterancesSnapshot(buildMergedUtterances(utterances), storageNamespace)
     }, 1000)
     return () => {
       clearUtterancePersistTimer()
     }
-  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer])
+  }, [utterances, buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
 
   // Flush pending localStorage write when app goes to background
   useEffect(() => {
@@ -2223,11 +2224,11 @@ export default function useRealtimeSTT({
     const flushUtterances = () => {
       if (!utterancePersistTimerRef.current) return
       clearUtterancePersistTimer()
-      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current))
+      persistUtterancesSnapshot(buildMergedUtterances(utterancesRef.current), storageNamespace)
     }
     document.addEventListener('visibilitychange', flushUtterances)
     return () => document.removeEventListener('visibilitychange', flushUtterances)
-  }, [buildMergedUtterances, clearUtterancePersistTimer])
+  }, [buildMergedUtterances, clearUtterancePersistTimer, storageNamespace])
 
   // Persist usage to localStorage
   useEffect(() => {
@@ -2412,6 +2413,10 @@ export default function useRealtimeSTT({
     && usageLimitSec > 0
   ) ? usageLimitSec : null
   const isLimitReached = normalizedUsageLimitSec !== null && usageSec >= normalizedUsageLimitSec
+  const persistedUtteranceCount = useMemo(
+    () => buildMergedUtterances(utterances).length,
+    [buildMergedUtterances, utterances],
+  )
 
   const stopAudioPipeline = useCallback((options?: { closeContext?: boolean }) => {
     const shouldCloseContext = options?.closeContext === true
@@ -3160,7 +3165,7 @@ export default function useRealtimeSTT({
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     utteranceIdRef.current = 0
-    persistUtterancesSnapshot([])
+    persistUtterancesSnapshot([], storageNamespace)
     setHasOlderUtterances(false)
     setUtteranceStore(createUtteranceStoreState([]))
 
@@ -3181,6 +3186,7 @@ export default function useRealtimeSTT({
     logClientEvent,
     resetToIdle,
     sendNativeSttCommand,
+    storageNamespace,
   ])
 
   const replaceConversationHistoryForQa = useCallback((items: Utterance[]) => {
@@ -3214,8 +3220,8 @@ export default function useRealtimeSTT({
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
     setHasOlderUtterances(normalized.length > initial.length)
     setUtteranceStore(createUtteranceStoreState(initial))
-    persistUtterancesSnapshot(normalized)
-  }, [clearUtterancePersistTimer])
+    persistUtterancesSnapshot(normalized, storageNamespace)
+  }, [clearUtterancePersistTimer, storageNamespace])
   const prepareForDeletion = useCallback(() => {
     conversationClearSequenceRef.current += 1
     clearConnectionErrorResetTimer()
@@ -4451,7 +4457,7 @@ export default function useRealtimeSTT({
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
-    persistedUtteranceCount: storedUtterancesRef.current.length,
+    persistedUtteranceCount,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,

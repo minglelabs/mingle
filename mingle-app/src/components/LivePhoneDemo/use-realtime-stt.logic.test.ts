@@ -195,6 +195,43 @@ describe('use-realtime-stt pure logic', () => {
     ]))
   })
 
+  it('persists utterance snapshots under a storage namespace when provided', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_utterances: '[{"id":"legacy"}]',
+      mingle_demo_utterances__conv_1: '[{"id":"old"}]',
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    persistUtterancesSnapshot([
+      {
+        id: 'u-2-1',
+        originalText: 'bonjour',
+        originalLang: 'fr',
+        targetLanguages: ['en'],
+        translations: {
+          en: 'hello',
+        },
+      },
+    ], 'conv_1')
+
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
+    expect(localStorage.getItem('mingle_demo_utterances__conv_1')).toBe(JSON.stringify([
+      {
+        id: 'u-2-1',
+        originalText: 'bonjour',
+        originalLang: 'fr',
+        targetLanguages: ['en'],
+        translations: {
+          en: 'hello',
+        },
+      },
+    ]))
+
+    persistUtterancesSnapshot([], 'conv_1')
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
+    expect(localStorage.getItem('mingle_demo_utterances__conv_1')).toBeNull()
+  })
+
   it('parses transcript message payload and normalizes text', () => {
     const parsed = parseSttTranscriptMessage({
       type: 'transcript',

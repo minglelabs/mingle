@@ -17,3 +17,12 @@ export function formatLivePhoneDemoUsageDuration(totalSeconds: number | null): s
 
   return `${seconds}s`
 }
+
+export function formatLivePhoneDemoMessageCount(totalMessages: number | null): string {
+  const safeTotalMessages = typeof totalMessages === 'number' ? totalMessages : Number.NaN
+  const normalizedTotalMessages = Number.isFinite(safeTotalMessages)
+    ? Math.max(0, Math.floor(safeTotalMessages))
+    : 0
+
+  return `${normalizedTotalMessages} msg${normalizedTotalMessages === 1 ? '' : 's'}`
+}
