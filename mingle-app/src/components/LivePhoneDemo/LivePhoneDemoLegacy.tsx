@@ -90,6 +90,7 @@ import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
+import { LivePhoneDemoFeedbackMessageText } from './live-phone-demo.feedback-links'
 import { COPY_SUCCESS_EVENT } from './live-phone-demo.copy'
 import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actions'
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
@@ -4195,7 +4196,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                               </span>
                                             </div>
                                             <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.98rem] leading-5 text-gray-800">
-                                              {message.message}
+                                              <LivePhoneDemoFeedbackMessageText message={message.message} />
                                             </p>
                                             {index === 0 && thread.contactEmail ? (
                                               <p className="mt-2 text-[0.8rem] text-gray-500">
