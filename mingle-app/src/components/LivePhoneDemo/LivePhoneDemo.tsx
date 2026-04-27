@@ -107,7 +107,10 @@ import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actio
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
-import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
+import {
+  formatLivePhoneDemoMessageCount,
+  formatLivePhoneDemoUsageDuration,
+} from './live-phone-demo.usage-format'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
@@ -953,6 +956,10 @@ interface LivePhoneDemoProps {
     speakerAvatarSeed?: string
     speakerAvatarIndex?: number
   }) => void
+  onConversationStatsChange?: (payload: {
+    usageSec: number
+    messageCount: number
+  }) => void
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void
@@ -1126,6 +1133,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onStartRecordingRequested,
   onSttSessionRunningChange,
   onLatestUtteranceChange,
+  onConversationStatsChange,
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
@@ -3134,6 +3142,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onSttSessionRunningChange?.(isSttSessionRunning)
   }, [isSttSessionRunning, onSttSessionRunningChange])
 
+  useEffect(() => {
+    onConversationStatsChange?.({
+      usageSec,
+      messageCount: persistedUtteranceCount,
+    })
+  }, [onConversationStatsChange, persistedUtteranceCount, usageSec])
+
   const lastReportedUtteranceIdRef = useRef('')
   useEffect(() => {
     if (!onLatestUtteranceChange) return
@@ -4212,6 +4227,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const usagePercent = isUsageLimited
     ? Math.min(100, (usageSec / usageLimitSec) * 100)
     : null
+  const storedMessageCountLabel = formatLivePhoneDemoMessageCount(persistedUtteranceCount)
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
   const scrollDateTop = Math.max(
     16,
@@ -6040,24 +6056,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     transition={{ duration: 0.09, ease: 'easeOut' }}
                     className="self-end justify-self-start pl-2"
                   >
-                    <div className="flex items-center gap-1.5">
-                      {isUsageLimited ? (
-                        <>
-                          <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </div>
-                          <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                    <div className="flex h-[33px] flex-col items-start justify-end gap-0">
+                      <div className="flex items-center gap-1.5">
+                        {isUsageLimited ? (
+                          <>
+                            <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                style={{ width: `${usagePercent}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                              {formatLivePhoneDemoUsageDuration(remainingSec)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm leading-4 tabular-nums text-gray-400">
+                            {formatLivePhoneDemoUsageDuration(usageSec)}
                           </span>
-                        </>
-                      ) : (
-                        <span className="text-sm tabular-nums text-gray-400">
-                          {formatLivePhoneDemoUsageDuration(usageSec)}
-                        </span>
-                      )}
+                        )}
+                      </div>
+                      <span className="text-sm leading-4 tabular-nums text-gray-400">
+                        {storedMessageCountLabel}
+                      </span>
                     </div>
                   </motion.div>
 

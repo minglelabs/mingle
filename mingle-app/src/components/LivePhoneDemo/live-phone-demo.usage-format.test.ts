@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
+import {
+  formatLivePhoneDemoMessageCount,
+  formatLivePhoneDemoUsageDuration,
+} from './live-phone-demo.usage-format'
 
 describe('formatLivePhoneDemoUsageDuration', () => {
   it('keeps second-only output below one minute', () => {
@@ -20,5 +23,13 @@ describe('formatLivePhoneDemoUsageDuration', () => {
     expect(formatLivePhoneDemoUsageDuration(-5)).toBe('0s')
     expect(formatLivePhoneDemoUsageDuration(Number.NaN)).toBe('0s')
     expect(formatLivePhoneDemoUsageDuration(null)).toBe('0s')
+  })
+
+  it('formats compact saved message counts', () => {
+    expect(formatLivePhoneDemoMessageCount(0)).toBe('0 msgs')
+    expect(formatLivePhoneDemoMessageCount(1)).toBe('1 msg')
+    expect(formatLivePhoneDemoMessageCount(3.9)).toBe('3 msgs')
+    expect(formatLivePhoneDemoMessageCount(-1)).toBe('0 msgs')
+    expect(formatLivePhoneDemoMessageCount(null)).toBe('0 msgs')
   })
 })

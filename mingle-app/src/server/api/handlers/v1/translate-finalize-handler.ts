@@ -1539,6 +1539,17 @@ async function translateWithOpenAICompatible(
   }
 }
 
+async function requestTranslationFromProvider(
+  ctx: TranslateContext,
+  config: TranslationProviderConfig,
+): Promise<TranslationEngineResult | null> {
+  if (isGoogleGenerativeProviderConfig(config)) {
+    return await translateWithGemini(ctx, config)
+  }
+
+  return await translateWithOpenAICompatible(ctx, config)
+}
+
 
 
 async function synthesizeTtsInline(args: {
@@ -1772,11 +1783,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         } else if (testFaultMode === 'provider_error') {
           throw new Error('forced_provider_error_for_e2e')
         } else {
-          if (isGoogleGenerativeProviderConfig(providerConfig)) {
-            selectedResult = await translateWithGemini(ctx, providerConfig)
-          } else {
-            selectedResult = await translateWithOpenAICompatible(ctx, providerConfig)
-          }
+          selectedResult = await requestTranslationFromProvider(ctx, providerConfig)
         }
       } catch (error) {
         providerRequestFailureReason = 'provider_error'
@@ -1802,6 +1809,23 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       && !ctx.isFinal
       && !providerRequestFailureReason
     ) {
+      if (
+        shouldUsePreviousStateFallback(selectedResult.provider)
+        && Object.keys(fallbackTranslations).length > 0
+      ) {
+        console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
+          ...buildTranslateFinalizeLogContext(ctx),
+          fallbackLanguages: Object.keys(fallbackTranslations),
+          reason: 'blank_translations',
+        })
+        return await buildResponseWithOptionalTts(fallbackTranslations, {
+          provider: selectedResult.provider,
+          infrastructureProvider: selectedResult.infrastructureProvider,
+          model: selectedResult.model,
+          usage: selectedResult.usage,
+          usedFallbackFromPreviousState: true,
+        })
+      }
       return await buildResponseWithOptionalTts({}, {
         provider: selectedResult.provider,
         infrastructureProvider: selectedResult.infrastructureProvider,
@@ -1862,12 +1886,38 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
 
     const missingTargetLanguages = targetLanguages.filter((lang) => !translations[lang])
     if (missingTargetLanguages.length > 0) {
-      console.warn('[translate/finalize] missing_target_languages', {
+      logTranslateFinalizeError('missing_target_languages', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: selectedResult.provider,
         missingTargetLanguages,
         returnedLanguages: Object.keys(selectedResult.translations),
       })
+
+      if (!ctx.isFinal) {
+        if (
+          shouldUsePreviousStateFallback(selectedResult.provider)
+          && Object.keys(fallbackTranslations).length > 0
+        ) {
+          const mergedTranslations = {
+            ...fallbackTranslations,
+            ...translations,
+          }
+          logTranslateFinalizeInfo('fallback_from_current_turn_previous_state', {
+            ...buildTranslateFinalizeLogContext(ctx),
+            fallbackLanguages: Object.keys(fallbackTranslations),
+            reason: 'missing_target_languages',
+            missingTargetLanguages,
+            returnedLanguages: Object.keys(selectedResult.translations),
+          })
+          return await buildResponseWithOptionalTts(mergedTranslations, {
+            provider: selectedResult.provider,
+            infrastructureProvider: selectedResult.infrastructureProvider,
+            model: selectedResult.model,
+            usage: selectedResult.usage,
+            usedFallbackFromPreviousState: true,
+          })
+        }
+      }
     }
 
     if (Object.keys(translations).length === 0) {

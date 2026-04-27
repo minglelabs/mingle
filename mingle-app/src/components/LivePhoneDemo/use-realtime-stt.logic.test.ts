@@ -198,32 +198,41 @@ describe('use-realtime-stt pure logic', () => {
     ]))
   })
 
-  it('persists conversation-room utterances under the room namespace', () => {
+  it('persists utterance snapshots under a storage namespace when provided', () => {
     const localStorage = createLocalStorageMock({
       mingle_demo_utterances: '[{"id":"legacy"}]',
+      mingle_demo_utterances__conv_1: '[{"id":"old"}]',
     })
     vi.stubGlobal('window', { localStorage })
 
     persistUtterancesSnapshot([
       {
-        id: 'u-room-1',
-        originalText: 'room text',
-        originalLang: 'en',
-        targetLanguages: [],
-        translations: {},
+        id: 'u-2-1',
+        originalText: 'bonjour',
+        originalLang: 'fr',
+        targetLanguages: ['en'],
+        translations: {
+          en: 'hello',
+        },
       },
-    ], 'conv_room_1')
+    ], 'conv_1')
 
     expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
-    expect(localStorage.getItem('mingle_demo_utterances__conv_room_1')).toBe(JSON.stringify([
+    expect(localStorage.getItem('mingle_demo_utterances__conv_1')).toBe(JSON.stringify([
       {
-        id: 'u-room-1',
-        originalText: 'room text',
-        originalLang: 'en',
-        targetLanguages: [],
-        translations: {},
+        id: 'u-2-1',
+        originalText: 'bonjour',
+        originalLang: 'fr',
+        targetLanguages: ['en'],
+        translations: {
+          en: 'hello',
+        },
       },
     ]))
+
+    persistUtterancesSnapshot([], 'conv_1')
+    expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
+    expect(localStorage.getItem('mingle_demo_utterances__conv_1')).toBeNull()
   })
 
   it('trims persisted conversation-room utterances to the latest cache window', () => {

@@ -59,6 +59,10 @@ type MingleHomeProps = {
     speakerAvatarSeed?: string;
     speakerAvatarIndex?: number;
   }) => void;
+  onConversationStatsChange?: (payload: {
+    usageSec: number;
+    messageCount: number;
+  }) => void;
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void;
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void;
@@ -1792,6 +1796,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
+          onConversationStatsChange={props.onConversationStatsChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
           onSpeechLanguagesChange={props.onSpeechLanguagesChange}
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}

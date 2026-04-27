@@ -120,13 +120,13 @@ export function buildPersistedUtteranceCache<T>(
 
 export function persistUtterancesSnapshot(
   utterances: Utterance[],
-  namespace?: string,
+  storageNamespace?: string,
   options?: { maxItems?: number | null },
 ): void {
   if (typeof window === 'undefined') return
 
   try {
-    const storageKey = buildStorageKey(LS_KEY_UTTERANCES, namespace)
+    const storageKey = buildStorageKey(LS_KEY_UTTERANCES, storageNamespace)
     const persistedUtterances = buildPersistedUtteranceCache(utterances, options?.maxItems)
     if (persistedUtterances.length === 0) {
       window.localStorage.removeItem(storageKey)
@@ -2640,6 +2640,10 @@ export default function useRealtimeSTT({
     && usageLimitSec > 0
   ) ? usageLimitSec : null
   const isLimitReached = normalizedUsageLimitSec !== null && usageSec >= normalizedUsageLimitSec
+  const persistedUtteranceCount = useMemo(
+    () => buildMergedUtterances(utterances).length,
+    [buildMergedUtterances, utterances],
+  )
 
   const stopAudioPipeline = useCallback((options?: { closeContext?: boolean }) => {
     const shouldCloseContext = options?.closeContext === true
@@ -4681,7 +4685,7 @@ export default function useRealtimeSTT({
     loadOlderUtterances,
     hasOlderUtterances,
     isStorageHydrated,
-    persistedUtteranceCount: storedUtterancesRef.current.length,
+    persistedUtteranceCount,
     replaceConversationHistoryForQa,
     ensureSessionKey,
     startRecording,
