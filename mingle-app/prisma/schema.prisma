@@ -138,6 +138,7 @@ model AppEventLog {
   @@index([sessionKey], map: "app_event_logs_session_key_idx")
   @@index([sessionKey, createdAt(sort: Desc)], map: "app_event_logs_session_created_at_desc_idx")
   @@index([messageId], map: "app_event_logs_message_id_idx")
+  @@index([eventType, ipAddress, createdAt, messageId], map: "app_event_logs_event_ip_created_message_idx")
   @@map("app_event_logs")
 }
 
