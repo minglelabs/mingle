@@ -1119,9 +1119,21 @@ class NativeSTTModule: RCTEventEmitter {
 
 @objc(NativeRuntimeConfigModule)
 class NativeRuntimeConfigModule: NSObject {
+    private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
+    private static let conversationRestoreConversationIdKey = "mingle.nativeConversationRestore.conversationId"
+    private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
+
     @objc
     static func requiresMainQueueSetup() -> Bool {
         false
+    }
+
+    private static func readConversationRestoreCreatedAtMs() -> NSNumber {
+        let value = UserDefaults.standard.double(forKey: conversationRestoreCreatedAtMsKey)
+        if value <= 0 || !value.isFinite {
+            return 0
+        }
+        return NSNumber(value: value)
     }
 
     private static func runtimeConfigPayload() -> [String: Any] {
@@ -1147,6 +1159,9 @@ class NativeRuntimeConfigModule: NSObject {
             "adBannerUnitIdIos": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
             "deviceLocaleTag": NativeSTTModule.readDeviceLocaleTag(),
             "devicePreferredLanguages": NativeSTTModule.readDevicePreferredLanguages(),
+            "conversationRestoreUrl": UserDefaults.standard.string(forKey: conversationRestoreUrlKey) ?? "",
+            "conversationRestoreConversationId": UserDefaults.standard.string(forKey: conversationRestoreConversationIdKey) ?? "",
+            "conversationRestoreCreatedAtMs": readConversationRestoreCreatedAtMs(),
         ]
     }
 
@@ -1163,5 +1178,40 @@ class NativeRuntimeConfigModule: NSObject {
         rejecter reject: RCTPromiseRejectBlock
     ) {
         resolve(Self.runtimeConfigPayload())
+    }
+
+    @objc(rememberConversationRestoreUrl:conversationId:createdAtMs:resolver:rejecter:)
+    func rememberConversationRestoreUrl(
+        _ url: String,
+        conversationId: String,
+        createdAtMs: NSNumber,
+        resolver resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let normalizedUrl = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedConversationId = conversationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let createdAtValue = createdAtMs.doubleValue
+        if normalizedUrl.isEmpty || normalizedConversationId.isEmpty || createdAtValue <= 0 || !createdAtValue.isFinite {
+            clearConversationRestoreUrl(resolve, rejecter: reject)
+            return
+        }
+
+        let defaults = UserDefaults.standard
+        defaults.set(normalizedUrl, forKey: Self.conversationRestoreUrlKey)
+        defaults.set(normalizedConversationId, forKey: Self.conversationRestoreConversationIdKey)
+        defaults.set(createdAtValue, forKey: Self.conversationRestoreCreatedAtMsKey)
+        resolve(true)
+    }
+
+    @objc(clearConversationRestoreUrl:rejecter:)
+    func clearConversationRestoreUrl(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.conversationRestoreUrlKey)
+        defaults.removeObject(forKey: Self.conversationRestoreConversationIdKey)
+        defaults.removeObject(forKey: Self.conversationRestoreCreatedAtMsKey)
+        resolve(true)
     }
 }

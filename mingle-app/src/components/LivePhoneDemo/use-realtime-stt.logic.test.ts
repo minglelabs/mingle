@@ -20,6 +20,7 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  parseRecentStoredUtterances,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
   replaceFinalizedUtteranceSourceInStoreState,
@@ -104,6 +105,27 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('parses only recent stored utterances without full-history parsing', () => {
+    const raw = JSON.stringify(Array.from({ length: 4 }, (_, index) => ({
+      id: `u-${index}`,
+      originalText: index === 3 ? "He said \"screw it, let's do it\" and kept going." : `message ${index}`,
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: `메시지 ${index}` },
+      translationFinalized: { ko: true },
+      createdAtMs: 1700000000000 + index,
+    })))
+
+    expect(parseRecentStoredUtterances(raw, 2)).toEqual({
+      utterances: [
+        expect.objectContaining({ id: 'u-2', originalText: 'message 2' }),
+        expect.objectContaining({ id: 'u-3', originalText: "He said \"screw it, let's do it\" and kept going." }),
+      ],
+      hasOlder: true,
+    })
+    expect(parseRecentStoredUtterances('[]', 2)).toEqual({ utterances: [], hasOlder: false })
   })
 
   it('uses same-origin websocket path when NEXT_PUBLIC_WS_PATH is set', () => {

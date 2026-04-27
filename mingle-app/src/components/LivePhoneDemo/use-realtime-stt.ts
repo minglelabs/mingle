@@ -438,6 +438,80 @@ function normalizeStoredUtterance(utterance: Utterance): Utterance {
   }
 }
 
+function normalizeStoredUtteranceList(utterances: Utterance[]): Utterance[] {
+  const seen = new Set<string>()
+  return utterances
+    .filter((utterance) => {
+      if (!utterance || typeof utterance.id !== 'string' || !utterance.id.trim()) return false
+      if (seen.has(utterance.id)) return false
+      seen.add(utterance.id)
+      return true
+    })
+    .map(normalizeStoredUtterance)
+}
+
+function parseStoredUtterances(rawValue: string): Utterance[] {
+  return normalizeStoredUtteranceList(JSON.parse(rawValue) as Utterance[])
+}
+
+function isJsonQuoteEscaped(rawValue: string, quoteIndex: number): boolean {
+  let backslashCount = 0
+  for (let index = quoteIndex - 1; index >= 0 && rawValue[index] === '\\'; index -= 1) {
+    backslashCount += 1
+  }
+  return backslashCount % 2 === 1
+}
+
+export function parseRecentStoredUtterances(rawValue: string, limit: number): {
+  utterances: Utterance[]
+  hasOlder: boolean
+} | null {
+  const raw = rawValue.trim()
+  if (!raw.startsWith('[') || !raw.endsWith(']') || limit <= 0) return null
+
+  const objectJsons: string[] = []
+  let firstObjectStart = raw.length
+  let objectEnd = -1
+  let depth = 0
+  let inString = false
+
+  for (let index = raw.length - 1; index >= 0; index -= 1) {
+    const char = raw[index]
+    if (char === '"') {
+      if (!isJsonQuoteEscaped(raw, index)) {
+        inString = !inString
+      }
+      continue
+    }
+    if (inString) {
+      continue
+    }
+    if (char === '}') {
+      if (depth === 0) objectEnd = index
+      depth += 1
+      continue
+    }
+    if (char !== '{' || depth === 0) continue
+
+    depth -= 1
+    if (depth !== 0 || objectEnd < index) continue
+    firstObjectStart = index
+    objectJsons.unshift(raw.slice(index, objectEnd + 1))
+    objectEnd = -1
+    if (objectJsons.length >= limit) break
+  }
+
+  if (objectJsons.length === 0) {
+    return raw === '[]' ? { utterances: [], hasOlder: false } : null
+  }
+
+  const parsed = normalizeStoredUtteranceList(JSON.parse(`[${objectJsons.join(',')}]`) as Utterance[])
+  return {
+    utterances: parsed,
+    hasOlder: raw.slice(0, firstObjectStart).includes('{'),
+  }
+}
+
 export function normalizeSttTurnText(rawText: string): string {
   // Strip endpoint markers at the client boundary so downstream paths
   // (bubble/render/log/translate) all operate on marker-free text.
@@ -1915,21 +1989,38 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let cancelled = false
+    let fullStorageParseTimer: ReturnType<typeof setTimeout> | null = null
+
+    const applyStoredUtterances = (all: Utterance[]) => {
+      if (cancelled) return
+      storedUtterancesRef.current = all
+      const initial = all.slice(-LOAD_BATCH_SIZE)
+      storageLoadedCountRef.current = initial.length
+      setUtteranceStore(createUtteranceStoreState(initial))
+      setHasOlderUtterances(all.length > initial.length)
+    }
+
     try {
       const stored = localStorage.getItem(buildStorageKey(LS_KEY_UTTERANCES, storageNamespace))
       if (stored) {
-        const parsed: Utterance[] = JSON.parse(stored)
-        const seen = new Set<string>()
-        const all = parsed.filter(u => {
-          if (seen.has(u.id)) return false
-          seen.add(u.id)
-          return true
-        }).map(normalizeStoredUtterance)
-        storedUtterancesRef.current = all
-        const initial = all.slice(-LOAD_BATCH_SIZE)
-        storageLoadedCountRef.current = initial.length
-        setUtteranceStore(createUtteranceStoreState(initial))
-        setHasOlderUtterances(all.length > initial.length)
+        const recent = parseRecentStoredUtterances(stored, LOAD_BATCH_SIZE)
+        if (recent) {
+          storedUtterancesRef.current = recent.utterances
+          storageLoadedCountRef.current = recent.utterances.length
+          setUtteranceStore(createUtteranceStoreState(recent.utterances))
+          setHasOlderUtterances(recent.hasOlder)
+          fullStorageParseTimer = setTimeout(() => {
+            fullStorageParseTimer = null
+            try {
+              applyStoredUtterances(parseStoredUtterances(stored))
+            } catch {
+              // Keep the already-rendered recent batch when full history parsing fails.
+            }
+          }, 0)
+        } else {
+          applyStoredUtterances(parseStoredUtterances(stored))
+        }
       }
     } catch {
       storedUtterancesRef.current = []
@@ -1950,6 +2041,13 @@ export default function useRealtimeSTT({
 
     storageHydratedRef.current = true
     setIsStorageHydrated(true)
+
+    return () => {
+      cancelled = true
+      if (fullStorageParseTimer) {
+        clearTimeout(fullStorageParseTimer)
+      }
+    }
   }, [storageNamespace])
 
   const audioContextRef = useRef<AudioContext | null>(null)

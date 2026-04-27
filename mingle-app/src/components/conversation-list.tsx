@@ -1961,6 +1961,20 @@ export default function ConversationList({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!initialConversationIdToOpen) return;
+    if (activeConversation || isHydratingConversations) return;
+    if (conversations.some((conversation) => conversation.id === initialConversationIdToOpen)) return;
+    if (readConversationIdFromLocation() !== initialConversationIdToOpen) return;
+    replaceConversationOverlayUrl(null);
+  }, [
+    activeConversation,
+    conversations,
+    initialConversationIdToOpen,
+    isHydratingConversations,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!isNativeAppRuntime()) return;
     const cachedNativeSttStatus = nativeSttStatus ?? readCachedNativeSttStatus();
     if (activeConversation || liveConversationId) {

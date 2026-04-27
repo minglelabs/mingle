@@ -75,6 +75,13 @@ import {
   resolveDistinctFallbackTarget,
   shouldFallbackHttpStatus,
 } from './src/fallbackTargets';
+import {
+  buildConversationRestoreWebUrl,
+  classifyConversationWebUrl,
+  readNativeConversationRestorePayload,
+  resolveConversationRestorePayloadFromUrl,
+  type NativeConversationRestorePayload,
+} from './src/webViewRestore';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -94,6 +101,17 @@ type NativeRuntimeConfig = {
   adBannerUnitIdIos?: string;
   adBannerUnitIdAndroid?: string;
   adBannerHeightPx?: string | number;
+  conversationRestoreUrl?: string;
+  conversationRestoreConversationId?: string;
+  conversationRestoreCreatedAtMs?: string | number;
+};
+type NativeConversationRestoreStorageModule = {
+  rememberConversationRestoreUrl?: (
+    url: string,
+    conversationId: string,
+    createdAtMs: number,
+  ) => Promise<unknown> | void;
+  clearConversationRestoreUrl?: () => Promise<unknown> | void;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -326,6 +344,7 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
 
 const RN_RUNTIME_OS = Platform.OS;
 const NATIVE_RUNTIME_CONFIG = readNativeRuntimeConfig();
+const NATIVE_CONVERSATION_RESTORE_STORAGE = (NativeModules.NativeRuntimeConfigModule || {}) as NativeConversationRestoreStorageModule;
 const RUNTIME_WEB_APP_BASE_URL = readPreferredRuntimeValue(
   NATIVE_RUNTIME_CONFIG.webAppBaseUrl,
   readRuntimeEnvValue(['NEXT_PUBLIC_SITE_URL', 'RN_WEB_APP_BASE_URL']),
@@ -1166,30 +1185,96 @@ function AppInner(): React.JSX.Element {
     });
   }, [activeWebAppBaseUrl, defaultNativeBannerPosition, nativeAvailable, nativeInitialBannerInsetPx, webLocale]);
   const [debugRemountWebUrl, setDebugRemountWebUrl] = useState('');
+  const initialConversationRestorePayloadRef = useRef<NativeConversationRestorePayload | null>(
+    readNativeConversationRestorePayload(NATIVE_RUNTIME_CONFIG),
+  );
+  const [conversationRestoreUrlHint, setConversationRestoreUrlHint] = useState(
+    () => initialConversationRestorePayloadRef.current?.url || '',
+  );
+  const lastConversationRestoreUrlRef = useRef(conversationRestoreUrlHint);
+  const persistConversationRestoreUrl = useCallback((payload: NativeConversationRestorePayload) => {
+    lastConversationRestoreUrlRef.current = payload.url;
+    setConversationRestoreUrlHint((current) => (current === payload.url ? current : payload.url));
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.rememberConversationRestoreUrl?.(
+        payload.url,
+        payload.conversationId,
+        payload.createdAtMs,
+      );
+    } catch {
+      // Ignore native persistence failures; the current RN process still keeps the restore hint.
+    }
+  }, []);
+  const clearConversationRestoreUrl = useCallback(() => {
+    if (!lastConversationRestoreUrlRef.current && !conversationRestoreUrlHint) return;
+    lastConversationRestoreUrlRef.current = '';
+    setConversationRestoreUrlHint('');
+    try {
+      void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
+    } catch {
+      // Ignore native persistence failures.
+    }
+  }, [conversationRestoreUrlHint]);
+  const syncConversationRestoreFromUrl = useCallback((nextUrl?: string) => {
+    const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
+    if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return null;
+    const webUrlKind = classifyConversationWebUrl(normalizedUrl);
+    if (webUrlKind === 'room') {
+      const payload = resolveConversationRestorePayloadFromUrl(normalizedUrl);
+      if (payload) {
+        persistConversationRestoreUrl(payload);
+      }
+      return payload;
+    }
+    if (webUrlKind === 'list') {
+      clearConversationRestoreUrl();
+    }
+    return null;
+  }, [clearConversationRestoreUrl, persistConversationRestoreUrl]);
   const rememberCurrentWebUrl = useCallback((nextUrl?: string) => {
     const normalizedUrl = typeof nextUrl === 'string' ? nextUrl.trim() : '';
     if (!normalizedUrl || normalizedUrl.startsWith('about:') || normalizedUrl.startsWith('data:')) return;
     lastWebViewUrlRef.current = normalizedUrl;
-  }, []);
+    syncConversationRestoreFromUrl(normalizedUrl);
+  }, [syncConversationRestoreFromUrl]);
   useEffect(() => {
-    lastWebViewUrlRef.current = baseWebUrl;
     setDebugRemountWebUrl('');
   }, [baseWebUrl]);
+  useEffect(() => {
+    if (
+      NATIVE_RUNTIME_CONFIG.conversationRestoreUrl
+      && !initialConversationRestorePayloadRef.current
+    ) {
+      try {
+        void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
+      } catch {
+        // Ignore native persistence failures.
+      }
+    }
+  }, []);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],
   );
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
+  const conversationRestoreWebUrl = useMemo(
+    () => buildConversationRestoreWebUrl(baseWebUrl, conversationRestoreUrlHint),
+    [baseWebUrl, conversationRestoreUrlHint],
+  );
   const webUrl = useMemo(() => {
-    const requestedWebUrl = debugRemountWebUrl || baseWebUrl;
+    const requestedWebUrl = debugRemountWebUrl || conversationRestoreWebUrl || baseWebUrl;
     if (!requestedWebUrl) return '';
     if (!shouldDisableWebViewCache) return requestedWebUrl;
     return appendNativeWebViewSession(
       requestedWebUrl,
       `${devWebViewRequestScopeRef.current}-${webViewMountToken}`,
     );
-  }, [baseWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  }, [baseWebUrl, conversationRestoreWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  useEffect(() => {
+    if (!webUrl) return;
+    lastWebViewUrlRef.current = webUrl;
+  }, [webUrl]);
   const nativeQaBridgeBootstrapScript = useMemo(
     () => buildNativeQaBridgeBootstrapScript(RUNTIME_QA_BRIDGE_ENABLED),
     [],
@@ -1389,6 +1474,20 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
     };
   }, [nativeBannerPosition, nativeBannerUnitId]);
+
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const leavingActive = previousState === 'active' && nextState !== 'active';
+      previousState = nextState;
+      if (!leavingActive) return;
+      syncConversationRestoreFromUrl(lastWebViewUrlRef.current);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [syncConversationRestoreFromUrl]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
