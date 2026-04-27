@@ -5,6 +5,7 @@ import {
   buildHydratedAccountPreferences,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
+  shouldSendTranslationModelPreference,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
 
@@ -148,6 +149,53 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       },
       lastSyncedStateKey: null,
     })).toBe(false)
+  })
+})
+
+describe('shouldSendTranslationModelPreference', () => {
+  it('does not send the local default before server preferences hydrate', () => {
+    expect(shouldSendTranslationModelPreference({
+      allowSync: true,
+      requestedHydrationGeneration: 1,
+      successfulHydrationGeneration: 0,
+      userSelectedSinceHydrationStart: false,
+    })).toBe(false)
+  })
+
+  it('sends the hydrated server model after a successful preference fetch', () => {
+    expect(shouldSendTranslationModelPreference({
+      allowSync: true,
+      requestedHydrationGeneration: 2,
+      successfulHydrationGeneration: 2,
+      userSelectedSinceHydrationStart: false,
+    })).toBe(true)
+  })
+
+  it('keeps the DB fallback when preference fetching completes with an error', () => {
+    expect(shouldSendTranslationModelPreference({
+      allowSync: true,
+      requestedHydrationGeneration: 2,
+      successfulHydrationGeneration: 1,
+      userSelectedSinceHydrationStart: false,
+    })).toBe(false)
+  })
+
+  it('sends a model selected by the user even before server hydration succeeds', () => {
+    expect(shouldSendTranslationModelPreference({
+      allowSync: true,
+      requestedHydrationGeneration: 2,
+      successfulHydrationGeneration: 1,
+      userSelectedSinceHydrationStart: true,
+    })).toBe(true)
+  })
+
+  it('sends the current model when account preference sync is disabled', () => {
+    expect(shouldSendTranslationModelPreference({
+      allowSync: false,
+      requestedHydrationGeneration: 0,
+      successfulHydrationGeneration: 0,
+      userSelectedSinceHydrationStart: false,
+    })).toBe(true)
   })
 })
 

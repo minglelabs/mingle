@@ -52,6 +52,7 @@ import {
   DEFAULT_SPEAKER_ENABLED,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
+  shouldSendTranslationModelPreference,
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
@@ -1283,6 +1284,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const accountPreferencesHydrationGenerationRef = useRef(0)
   const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
+  const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
+  const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
@@ -1334,15 +1337,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [translationModel],
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
-    if (!enableAccountPreferencesSync) return translationModel
-    if (accountPreferencesRequestedHydrationGeneration === 0) return undefined
-    if (accountPreferencesHydratedGeneration !== accountPreferencesRequestedHydrationGeneration) return undefined
-    return translationModel
+    return shouldSendTranslationModelPreference({
+      allowSync: enableAccountPreferencesSync,
+      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
+      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
+      userSelectedSinceHydrationStart: translationModelUserSelectedSinceHydrationStart,
+    }) ? translationModel : undefined
   }, [
-    accountPreferencesHydratedGeneration,
     accountPreferencesRequestedHydrationGeneration,
+    accountPreferencesSuccessfulHydrationGeneration,
     enableAccountPreferencesSync,
     translationModel,
+    translationModelUserSelectedSinceHydrationStart,
   ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
@@ -1771,6 +1777,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
       setAccountPreferencesRequestedHydrationGeneration(0)
+      setAccountPreferencesSuccessfulHydrationGeneration(0)
+      setTranslationModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -1779,6 +1787,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
     setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
+    setTranslationModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -1812,6 +1821,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
+        setAccountPreferencesSuccessfulHydrationGeneration(hydrationGeneration)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
       .catch(() => {
@@ -2205,6 +2215,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
+    setTranslationModelUserSelectedSinceHydrationStart(true)
     setTranslationModel(nextTranslationModel)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride({
