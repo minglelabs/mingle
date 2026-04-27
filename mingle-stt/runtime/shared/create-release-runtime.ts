@@ -150,8 +150,34 @@ export function createReleaseRuntime(
             currentModel,
             lifecycle,
         }) => {
+            const cleanedPendingText = pendingText.trim();
+            const usesGracefulProviderFinalize = behaviorLine === 'v1_1_3';
+
+            if (!usesGracefulProviderFinalize) {
+                lifecycle.setSonioxStopRequested(currentModel === 'soniox');
+
+                let finalizedTurn: MingleSttFinalTurnPayload = null;
+
+                if (currentModel === 'soniox' && lifecycle.finalizePendingTurnFromProvider) {
+                    void lifecycle.finalizePendingTurnFromProvider();
+                } else if (cleanedPendingText) {
+                    finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                } else if (lifecycle.finalizePendingTurnFromProvider) {
+                    void lifecycle.finalizePendingTurnFromProvider();
+                }
+
+                lifecycle.closeProviderSocket();
+                lifecycle.sendStopRecordingAck(
+                    buildStopRecordingAckData({ finalizedTurn }),
+                );
+                lifecycle.scheduleClientCloseAfterAck();
+                if (currentModel !== 'soniox') {
+                    lifecycle.disposeSpeakerStates();
+                }
+                return;
+            }
+
             void (async () => {
-                const cleanedPendingText = pendingText.trim();
                 lifecycle.setSonioxStopRequested(currentModel === 'soniox');
 
                 let finalizedTurn: MingleSttFinalTurnPayload = null;

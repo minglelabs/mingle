@@ -938,13 +938,16 @@ function buildPendingSpeakerTurnSignature(
     .join('\u001e')
 }
 
-type RecentFinalizedUtterance = {
+export type RecentFinalizedUtterance = {
   id: string
   text: string
   language: string
+  speaker?: string
   expiresAt: number
   source: 'local' | 'server'
 }
+
+const RECENT_FINALIZED_UTTERANCE_LIMIT = 12
 
 type RecentFinalizedUtteranceMatch =
   | { kind: 'none' }
@@ -1149,32 +1152,65 @@ function isFinalizeExpansionCompatible(recentTextRaw: string, nextTextRaw: strin
   return recentLength >= 3 && hasCjkOrHangulText(recentText)
 }
 
+function normalizeRecentFinalizedSpeaker(rawSpeaker?: string | null): string {
+  return (rawSpeaker || '').trim() || 'unknown'
+}
+
+function isRecentFinalizedSpeakerCompatible(
+  recentFinalizedUtterance: RecentFinalizedUtterance,
+  speaker?: string | null,
+): boolean {
+  if (!recentFinalizedUtterance.speaker || !speaker) return true
+  return normalizeRecentFinalizedSpeaker(recentFinalizedUtterance.speaker) === normalizeRecentFinalizedSpeaker(speaker)
+}
+
+export function rememberRecentFinalizedUtterance(input: {
+  recentFinalizedUtterances: RecentFinalizedUtterance[]
+  utterance: RecentFinalizedUtterance
+  nowMs: number
+  limit?: number
+}): RecentFinalizedUtterance[] {
+  const limit = Math.max(1, input.limit ?? RECENT_FINALIZED_UTTERANCE_LIMIT)
+  return [
+    ...input.recentFinalizedUtterances.filter((utterance) => (
+      utterance.expiresAt > input.nowMs
+      && utterance.id !== input.utterance.id
+    )),
+    input.utterance,
+  ].slice(-limit)
+}
+
 export function classifyRecentFinalizedUtteranceMatch(input: {
   pendingUtteranceId?: string | null
   finalizedUtteranceId: string
-  recentFinalizedUtterance: RecentFinalizedUtterance | null
+  recentFinalizedUtterance?: RecentFinalizedUtterance | null
+  recentFinalizedUtterances?: RecentFinalizedUtterance[]
   nowMs: number
   text: string
   language: string
+  speaker?: string | null
 }): RecentFinalizedUtteranceMatch {
   if (input.pendingUtteranceId) return { kind: 'none' }
-  const recentFinalizedUtterance = input.recentFinalizedUtterance
-  if (!recentFinalizedUtterance) return { kind: 'none' }
-  if (input.nowMs >= recentFinalizedUtterance.expiresAt) return { kind: 'none' }
-  if (normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language) !== normalizeSourceLanguageMatchKey(input.language)) {
-    return { kind: 'none' }
+  const candidates = input.recentFinalizedUtterances?.length
+    ? input.recentFinalizedUtterances
+    : (input.recentFinalizedUtterance ? [input.recentFinalizedUtterance] : [])
+  for (const recentFinalizedUtterance of [...candidates].reverse()) {
+    if (input.nowMs >= recentFinalizedUtterance.expiresAt) continue
+    if (!isRecentFinalizedSpeakerCompatible(recentFinalizedUtterance, input.speaker)) continue
+    if (normalizeSourceLanguageMatchKey(recentFinalizedUtterance.language) !== normalizeSourceLanguageMatchKey(input.language)) {
+      continue
+    }
+    if (recentFinalizedUtterance.id === input.finalizedUtteranceId) continue
+    const sameText = normalizeFinalizeReuseText(recentFinalizedUtterance.text) === normalizeFinalizeReuseText(input.text)
+    const compatibleLocalExpansion = recentFinalizedUtterance.source === 'local'
+      && isFinalizeExpansionCompatible(recentFinalizedUtterance.text, input.text)
+    if (!sameText && !compatibleLocalExpansion) continue
+    if (recentFinalizedUtterance.source === 'local') {
+      return { kind: 'reuse_local', utteranceId: recentFinalizedUtterance.id }
+    }
+    return { kind: 'skip_duplicate_server', utteranceId: recentFinalizedUtterance.id }
   }
-  if (recentFinalizedUtterance.id === input.finalizedUtteranceId) return { kind: 'none' }
-  const sameText = normalizeFinalizeReuseText(recentFinalizedUtterance.text) === normalizeFinalizeReuseText(input.text)
-  const compatibleLocalExpansion = recentFinalizedUtterance.source === 'local'
-    && isFinalizeExpansionCompatible(recentFinalizedUtterance.text, input.text)
-  if (!sameText && !compatibleLocalExpansion) {
-    return { kind: 'none' }
-  }
-  if (recentFinalizedUtterance.source === 'local') {
-    return { kind: 'reuse_local', utteranceId: recentFinalizedUtterance.id }
-  }
-  return { kind: 'skip_duplicate_server', utteranceId: recentFinalizedUtterance.id }
+  return { kind: 'none' }
 }
 
 export function shouldApplyPartialTranslationResponse(input: {
@@ -2093,7 +2129,7 @@ export default function useRealtimeSTT({
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
   const conversationClearSequenceRef = useRef(0)
-  const recentFinalizedUtteranceRef = useRef<RecentFinalizedUtterance | null>(null)
+  const recentFinalizedUtterancesRef = useRef<RecentFinalizedUtterance[]>([])
   const sessionKeyRef = useRef('')
   const speakerAvatarSessionSeedRef = useRef('')
   const speakerAvatarAssignmentsRef = useRef<Record<string, number>>({})
@@ -3083,13 +3119,18 @@ export default function useRealtimeSTT({
       localPayload.utterance,
       seedTranslationState,
     ))
-    recentFinalizedUtteranceRef.current = {
-      id: localPayload.utteranceId,
-      text: localPayload.text,
-      language: localPayload.language,
-      expiresAt: now + 5_000,
-      source: 'local',
-    }
+    recentFinalizedUtterancesRef.current = rememberRecentFinalizedUtterance({
+      recentFinalizedUtterances: recentFinalizedUtterancesRef.current,
+      utterance: {
+        id: localPayload.utteranceId,
+        text: localPayload.text,
+        language: localPayload.language,
+        speaker: localPayload.utterance.speaker,
+        expiresAt: now + 5_000,
+        source: 'local',
+      },
+      nowMs: now,
+    })
     return {
       utteranceId: localPayload.utteranceId,
       text: localPayload.text,
@@ -3333,7 +3374,7 @@ export default function useRealtimeSTT({
     storedUtterancesRef.current = []
     storageLoadedCountRef.current = 0
     utterancesRef.current = []
-    recentFinalizedUtteranceRef.current = null
+    recentFinalizedUtterancesRef.current = []
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     utteranceIdRef.current = 0
@@ -3377,15 +3418,7 @@ export default function useRealtimeSTT({
     const initial = normalized.slice(-LOAD_BATCH_SIZE)
     storageLoadedCountRef.current = initial.length
     utterancesRef.current = initial
-    recentFinalizedUtteranceRef.current = initial.at(-1)
-      ? {
-          id: initial.at(-1)?.id || '',
-          text: initial.at(-1)?.originalText || '',
-          language: initial.at(-1)?.originalLang || 'unknown',
-          expiresAt: 0,
-          source: 'server',
-        }
-      : null
+    recentFinalizedUtterancesRef.current = []
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
@@ -3400,7 +3433,7 @@ export default function useRealtimeSTT({
     clearPartialBuffers()
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
     turnStartedAtRef.current = null
-    recentFinalizedUtteranceRef.current = null
+    recentFinalizedUtterancesRef.current = []
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     finalizedTtsSignatureRef.current.clear()
   }, [
@@ -3877,10 +3910,11 @@ export default function useRealtimeSTT({
         const recentFinalizedMatch = classifyRecentFinalizedUtteranceMatch({
           pendingUtteranceId: pendingTurn?.utteranceId || null,
           finalizedUtteranceId: finalizedPayload.utteranceId,
-          recentFinalizedUtterance: recentFinalizedUtteranceRef.current,
+          recentFinalizedUtterances: recentFinalizedUtterancesRef.current,
           nowMs: now,
           text: finalizedPayload.text,
           language: finalizedPayload.language,
+          speaker,
         })
         if (recentFinalizedMatch.kind === 'skip_duplicate_server') {
           logSttDebug('finalize.skip_duplicate_server', {
@@ -3925,13 +3959,18 @@ export default function useRealtimeSTT({
             seedTranslationState,
           ))
         }
-        recentFinalizedUtteranceRef.current = {
-          id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
-          text: finalizedPayload.text,
-          language: finalizedPayload.language,
-          expiresAt: now + 2_000,
-          source: 'server',
-        }
+        recentFinalizedUtterancesRef.current = rememberRecentFinalizedUtterance({
+          recentFinalizedUtterances: recentFinalizedUtterancesRef.current,
+          utterance: {
+            id: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
+            text: finalizedPayload.text,
+            language: finalizedPayload.language,
+            speaker: finalizedPayload.utterance.speaker || speaker,
+            expiresAt: now + 2_000,
+            source: 'server',
+          },
+          nowMs: now,
+        })
 
         finalizeTurnWithTranslation(
           {
@@ -4054,7 +4093,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('connecting')
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
-      recentFinalizedUtteranceRef.current = null
+      recentFinalizedUtterancesRef.current = []
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
       clearAllPendingTurnTranslationRuntime()

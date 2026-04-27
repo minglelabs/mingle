@@ -23,6 +23,7 @@ import {
   parseRecentStoredUtterances,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  rememberRecentFinalizedUtterance,
   replaceFinalizedUtteranceSourceInStoreState,
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
@@ -772,7 +773,7 @@ describe('use-realtime-stt pure logic', () => {
       createUtteranceStoreState([]),
       finalized.utterance,
       {
-        translations: finalized.currentTurnPreviousState.translations,
+        translations: finalized.currentTurnPreviousState?.translations ?? {},
         priorities: new Map([
           ['ko', { kind: 'final', seq: 1 }],
         ]),
@@ -1673,6 +1674,97 @@ describe('use-realtime-stt pure logic', () => {
       text: 'Actually ready now',
       language: 'en',
     })).toEqual({ kind: 'none' })
+  })
+
+  it('matches stop-time local finals independently by speaker', () => {
+    const recent = [
+      {
+        id: 'u-local-speaker-1',
+        text: 'Actually ready right now, so lets th',
+        language: 'en',
+        speaker: '1',
+        expiresAt: 5_000,
+        source: 'local' as const,
+      },
+      {
+        id: 'u-local-speaker-2',
+        text: '준비됐어',
+        language: 'ko',
+        speaker: '2',
+        expiresAt: 5_000,
+        source: 'local' as const,
+      },
+    ]
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-1',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: 'Actually ready right now, so lets throw it on over.',
+      language: 'en',
+      speaker: '1',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-speaker-1',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-2',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: '준비됐어.',
+      language: 'ko',
+      speaker: '2',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-speaker-2',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-3',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: '준비됐어.',
+      language: 'ko',
+      speaker: '3',
+    })).toEqual({ kind: 'none' })
+  })
+
+  it('keeps multiple recent finalized utterances while pruning expired entries', () => {
+    const nextRecent = rememberRecentFinalizedUtterance({
+      recentFinalizedUtterances: [
+        {
+          id: 'u-expired',
+          text: 'old',
+          language: 'en',
+          speaker: '1',
+          expiresAt: 900,
+          source: 'local',
+        },
+        {
+          id: 'u-live',
+          text: 'still recent',
+          language: 'en',
+          speaker: '2',
+          expiresAt: 5_000,
+          source: 'local',
+        },
+      ],
+      utterance: {
+        id: 'u-next',
+        text: 'next',
+        language: 'en',
+        speaker: '3',
+        expiresAt: 6_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+    })
+
+    expect(nextRecent.map((utterance) => utterance.id)).toEqual(['u-live', 'u-next'])
   })
 
   it('updates a reused local final with the later server final source text', () => {

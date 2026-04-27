@@ -233,8 +233,47 @@ test('release runtime owns soniox stop lifecycle handling', async () => {
     });
 });
 
-test('release runtime waits for soniox provider finalization before ack', async () => {
-    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+test('release runtime keeps pre-1.1.3 soniox stop ack compatible with old native clients', () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_2');
+    let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
+    let providerClosed = false;
+    let finalizeCalls = 0;
+
+    runtime.handleStopRecording({
+        pendingText: '',
+        pendingLanguage: 'unknown',
+        currentModel: 'soniox',
+        lifecycle: {
+            setSonioxStopRequested: () => undefined,
+            finalizePendingTurnFromProvider: async () => {
+                finalizeCalls += 1;
+                await new Promise(() => undefined);
+                return { text: 'late final words', language: 'en', speaker: '1' };
+            },
+            sendForcedFinalTurn: () => null,
+            closeProviderSocket: () => {
+                providerClosed = true;
+            },
+            sendStopRecordingAck: (data) => {
+                ackData = data;
+            },
+            scheduleClientCloseAfterAck: () => undefined,
+            disposeSpeakerStates: () => undefined,
+        },
+    });
+
+    assert.equal(finalizeCalls, 1);
+    assert.equal(providerClosed, true);
+    assert.deepEqual(ackData, {
+        release_variant: 'ios_v1_1_2',
+        behavior_profile: 'v1_1_2',
+        finalized: false,
+        final_turn: null,
+    });
+});
+
+test('release runtime waits for 1.1.3 soniox provider finalization before ack', async () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_3');
     let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
     let providerClosed = false;
 
@@ -267,15 +306,15 @@ test('release runtime waits for soniox provider finalization before ack', async 
 
     assert.equal(providerClosed, true);
     assert.deepEqual(ackData, {
-        release_variant: 'ios_v1_1_0',
-        behavior_profile: 'v1_1_0',
+        release_variant: 'ios_v1_1_3',
+        behavior_profile: 'v1_1_3',
         finalized: true,
         final_turn: { text: 'final words', language: 'en', speaker: '1' },
     });
 });
 
-test('release runtime falls back to client pending text when soniox provider has no turn', async () => {
-    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_0');
+test('release runtime falls back to client pending text when 1.1.3 soniox provider has no turn', async () => {
+    const runtime = resolveMingleSttReleaseRuntime('ios_v1_1_3');
     let ackData: ReturnType<typeof runtime.buildStopRecordingAckData> | null = null;
 
     runtime.handleStopRecording({
@@ -301,8 +340,8 @@ test('release runtime falls back to client pending text when soniox provider has
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.deepEqual(ackData, {
-        release_variant: 'ios_v1_1_0',
-        behavior_profile: 'v1_1_0',
+        release_variant: 'ios_v1_1_3',
+        behavior_profile: 'v1_1_3',
         finalized: true,
         final_turn: { text: 'fallback words', language: 'en' },
     });
