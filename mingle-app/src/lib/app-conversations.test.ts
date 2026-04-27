@@ -5,12 +5,14 @@ const {
   mockFindConversationFirst,
   mockUpdateConversation,
   mockAppMessageFindMany,
+  mockAppMessageCount,
   mockAppEventLogFindFirst,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
   mockUpdateConversation: vi.fn(),
   mockAppMessageFindMany: vi.fn(),
+  mockAppMessageCount: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
 }));
 
@@ -23,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
+      count: mockAppMessageCount,
     },
     appEventLog: {
       findFirst: mockAppEventLogFindFirst,
@@ -138,6 +141,7 @@ describe("app-conversations", () => {
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
     });
     mockAppEventLogFindFirst.mockResolvedValue({ usageSec: 42 });
+    mockAppMessageCount.mockResolvedValue(250);
     mockAppMessageFindMany.mockResolvedValue([
       {
         id: "msg-new",
@@ -197,7 +201,17 @@ describe("app-conversations", () => {
         }),
       }),
     }));
+    expect(mockAppMessageCount).toHaveBeenCalledWith({
+      where: {
+        sessionKey: "session-a",
+        OR: [
+          { isDeleted: false },
+          { isDeleted: null },
+        ],
+      },
+    });
     expect(state?.usageSec).toBe(42);
+    expect(state?.messageCount).toBe(250);
     expect(state?.utterances.map((utterance) => utterance.id)).toEqual(["u-old", "u-new"]);
     expect(state?.utterances[0]?.translations).toEqual({ ko: "이전 번역" });
     expect(state?.hasMoreUtterances).toBe(false);
@@ -222,6 +236,7 @@ describe("app-conversations", () => {
       pausedAt: new Date("2026-04-12T12:00:00.000Z"),
     });
     mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(101);
     mockAppMessageFindMany.mockResolvedValue(
       Array.from({ length: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1 }, (_, index) => ({
         id: `msg-${String(index).padStart(3, "0")}`,
@@ -261,6 +276,7 @@ describe("app-conversations", () => {
       }),
       take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
     }));
+    expect(state?.messageCount).toBe(101);
     expect(state?.hasMoreUtterances).toBe(true);
     expect(state?.utterances).toHaveLength(CONVERSATION_HYDRATION_MESSAGE_LIMIT);
     expect(state?.oldestMessageCursor).toEqual({

@@ -42,6 +42,7 @@ const NATIVE_STOP_ACK_TIMEOUT_MS = 1_500
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
+const LS_KEY_MESSAGE_COUNT = 'mingle_demo_message_count'
 const LS_KEY_SESSION = 'mingle_demo_session_key'
 const LS_KEY_TRACKING_USER = 'mingle_demo_tracking_user_id'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
@@ -134,6 +135,39 @@ export function persistUtterancesSnapshot(
     }
 
     window.localStorage.setItem(storageKey, JSON.stringify(persistedUtterances))
+  } catch {
+    // Ignore local persistence failures.
+  }
+}
+
+export function normalizePersistedMessageCount(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
+}
+
+export function countPersistedUtterances(utterances: Utterance[]): number {
+  const seenIds = new Set<string>()
+  let count = 0
+  for (const utterance of utterances) {
+    const id = typeof utterance.id === 'string' ? utterance.id.trim() : ''
+    const originalText = typeof utterance.originalText === 'string' ? utterance.originalText.trim() : ''
+    if (!id || !originalText || seenIds.has(id)) continue
+    seenIds.add(id)
+    count += 1
+  }
+  return count
+}
+
+export function persistMessageCountSnapshot(
+  messageCount: number,
+  storageNamespace?: string,
+): void {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(
+      buildStorageKey(LS_KEY_MESSAGE_COUNT, storageNamespace),
+      String(normalizePersistedMessageCount(messageCount)),
+    )
   } catch {
     // Ignore local persistence failures.
   }
@@ -460,6 +494,7 @@ function normalizeStoredUtterance(utterance: Utterance): Utterance {
 
 type ConversationHydrationPayload = {
   usageSec?: number
+  messageCount?: number
   utterances?: ConversationHydrationUtterance[]
   hasMoreUtterances?: boolean
   oldestMessageCursor?: ConversationHydrationCursor | null
@@ -1979,6 +2014,7 @@ export default function useRealtimeSTT({
   const [partialTranslateTick, setPartialTranslateTick] = useState(0)
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(0)
+  const [messageCount, setMessageCount] = useState(0)
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -1989,6 +2025,7 @@ export default function useRealtimeSTT({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let messageCountFromUtteranceSnapshot = 0
     try {
       const stored = localStorage.getItem(buildStorageKey(LS_KEY_UTTERANCES, storageNamespace))
       if (stored) {
@@ -1999,6 +2036,7 @@ export default function useRealtimeSTT({
           seen.add(u.id)
           return true
         }).map(normalizeStoredUtterance)
+        messageCountFromUtteranceSnapshot = countPersistedUtterances(all)
         const cached = buildLocalUtteranceCache(all)
         storedUtterancesRef.current = cached
         const initial = cached.slice(-LOAD_BATCH_SIZE)
@@ -2024,6 +2062,19 @@ export default function useRealtimeSTT({
       setUsageSec(Number.isFinite(parsedUsage) && parsedUsage >= 0 ? parsedUsage : 0)
     } catch {
       setUsageSec(0)
+    }
+
+    try {
+      const parsedMessageCount = Number.parseInt(
+        localStorage.getItem(buildStorageKey(LS_KEY_MESSAGE_COUNT, storageNamespace)) || '0',
+        10,
+      )
+      setMessageCount(Math.max(
+        normalizePersistedMessageCount(parsedMessageCount),
+        messageCountFromUtteranceSnapshot,
+      ))
+    } catch {
+      setMessageCount(messageCountFromUtteranceSnapshot)
     }
 
     storageHydratedRef.current = true
@@ -2366,6 +2417,18 @@ export default function useRealtimeSTT({
     return [...olderNotLoaded, ...current]
   }, [])
 
+  const bumpMessageCountForNewUtterance = useCallback((utterance: Utterance) => {
+    const id = typeof utterance.id === 'string' ? utterance.id.trim() : ''
+    const originalText = typeof utterance.originalText === 'string' ? utterance.originalText.trim() : ''
+    if (!id || !originalText) return
+    const isKnownUtterance = utterancesRef.current.some((item) => item.id === id)
+      || storedUtterancesRef.current.some((item) => item.id === id)
+    if (isKnownUtterance) return
+
+    const visibleMessageCount = countPersistedUtterances(buildMergedUtterances(utterancesRef.current))
+    setMessageCount((current) => Math.max(normalizePersistedMessageCount(current), visibleMessageCount) + 1)
+  }, [buildMergedUtterances])
+
   const mergeServerHydrationUtterances = useCallback((
     store: UtteranceStoreState,
     utterancesFromServer: Utterance[],
@@ -2415,6 +2478,12 @@ export default function useRealtimeSTT({
       if (!response.ok) return false
 
       const payload = await response.json() as ConversationHydrationPayload
+      const nextMessageCount = normalizePersistedMessageCount(
+        typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
+      )
+      if (nextMessageCount > 0) {
+        setMessageCount((current) => Math.max(current, nextMessageCount))
+      }
       const nextServerCursor = normalizeConversationHydrationCursor(payload.oldestMessageCursor)
       hasOlderServerUtterancesRef.current = payload.hasMoreUtterances === true && nextServerCursor !== null
       serverOlderCursorRef.current = nextServerCursor
@@ -2493,6 +2562,12 @@ export default function useRealtimeSTT({
     } catch { /* ignore */ }
   }, [storageNamespace, usageSec])
 
+  // Persist message count separately from the utterance warm cache.
+  useEffect(() => {
+    if (!storageHydratedRef.current) return
+    persistMessageCountSnapshot(messageCount, storageNamespace)
+  }, [messageCount, storageNamespace])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!conversationId) return
@@ -2523,6 +2598,13 @@ export default function useRealtimeSTT({
 
         if (nextUsageSec > 0) {
           setUsageSec((current) => Math.max(current, nextUsageSec))
+        }
+
+        const nextMessageCount = normalizePersistedMessageCount(
+          typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
+        )
+        if (nextMessageCount > 0) {
+          setMessageCount((current) => Math.max(current, nextMessageCount))
         }
 
         const nextServerCursor = normalizeConversationHydrationCursor(payload.oldestMessageCursor)
@@ -2641,8 +2723,8 @@ export default function useRealtimeSTT({
   ) ? usageLimitSec : null
   const isLimitReached = normalizedUsageLimitSec !== null && usageSec >= normalizedUsageLimitSec
   const persistedUtteranceCount = useMemo(
-    () => buildMergedUtterances(utterances).length,
-    [buildMergedUtterances, utterances],
+    () => Math.max(messageCount, countPersistedUtterances(buildMergedUtterances(utterances))),
+    [buildMergedUtterances, messageCount, utterances],
   )
 
   const stopAudioPipeline = useCallback((options?: { closeContext?: boolean }) => {
@@ -3133,6 +3215,7 @@ export default function useRealtimeSTT({
       && Object.keys(localPayload.currentTurnPreviousState.translations).length > 0
     ) ? localPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || localPayload.currentTurnPreviousState)
 
+    bumpMessageCountForNewUtterance(localPayload.utterance)
     setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
       prev,
       localPayload.utterance,
@@ -3151,7 +3234,7 @@ export default function useRealtimeSTT({
       lang: localPayload.language,
       currentTurnPreviousState,
     }
-  }, [getCurrentTargetLanguages])
+  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -3393,6 +3476,7 @@ export default function useRealtimeSTT({
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     utteranceIdRef.current = 0
     persistLocalUtterancesSnapshot([])
+    setMessageCount(0)
     setHasOlderUtterances(false)
     setUtteranceStore(createUtteranceStoreState([]))
 
@@ -3448,6 +3532,7 @@ export default function useRealtimeSTT({
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
     setHasOlderUtterances(cached.length > initial.length || hasOlderServerUtterancesRef.current)
     setUtteranceStore(createUtteranceStoreState(initial))
+    setMessageCount(countPersistedUtterances(normalized))
     persistLocalUtterancesSnapshot(normalized)
   }, [buildLocalUtteranceCache, clearUtterancePersistTimer, persistLocalUtterancesSnapshot])
   const prepareForDeletion = useCallback(() => {
@@ -3930,6 +4015,7 @@ export default function useRealtimeSTT({
           && Object.keys(finalizedPayload.currentTurnPreviousState.translations).length > 0
         ) ? finalizedPayload.currentTurnPreviousState : (fallbackCurrentTurnPreviousState || finalizedPayload.currentTurnPreviousState)
         if (!recentLocalReuseUtteranceId) {
+          bumpMessageCountForNewUtterance(finalizedPayload.utterance)
           setUtteranceStore((prev) => appendFinalizedUtteranceToStoreState(
             prev,
             finalizedPayload.utterance,
@@ -4009,6 +4095,7 @@ export default function useRealtimeSTT({
     }
   }, [
     buildLocalFinalizeOptionsForSpeaker,
+    bumpMessageCountForNewUtterance,
     bumpPendingTurnRenderVersion,
     finalizeTurnWithTranslation,
     getCurrentTargetLanguages,
