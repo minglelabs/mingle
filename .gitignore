@@ -42,6 +42,10 @@ mingle-app/rn/ios/devbox.runtime.xcconfig
 # vercel
 .vercel
 
+# local database backups and CLI state
+.db-backups/
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
