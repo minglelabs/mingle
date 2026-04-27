@@ -208,6 +208,61 @@ describe("/api/conversations/[conversationId] route", () => {
     });
   });
 
+  it("passes the older-message cursor to conversation hydration", async () => {
+    mockGetConversationHydrationStateForUser.mockResolvedValue({
+      conversation: {
+        id: "conv_1",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "conv_session_1",
+        selectedLanguages: ["en", "ko", "ja"],
+        createdAt: "2026-04-02T00:00:00.000Z",
+        updatedAt: "2026-04-02T00:03:00.000Z",
+        pausedAt: "2026-04-02T00:03:00.000Z",
+      },
+      usageSec: 12,
+      utterances: [],
+      hasMoreUtterances: false,
+      oldestMessageCursor: null,
+    });
+
+    const response = await GET(
+      new NextRequest("https://example.com/api/conversations/conv_1?beforeCreatedAtMs=1712016000000&beforeMessageId=msg_1", {
+        headers: {
+          "x-mingle-user-id": "anon_local_storage_user",
+        },
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetConversationHydrationStateForUser).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      before: {
+        createdAtMs: 1712016000000,
+        messageId: "msg_1",
+      },
+    });
+  });
+
+  it("rejects invalid older-message cursors", async () => {
+    const response = await GET(
+      new NextRequest("https://example.com/api/conversations/conv_1?beforeCreatedAtMs=nope&beforeMessageId=msg_1", {
+        headers: {
+          "x-mingle-user-id": "anon_local_storage_user",
+        },
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json).toEqual({ error: "invalid_cursor" });
+    expect(mockGetConversationHydrationStateForUser).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid statuses", async () => {
     const response = await PATCH(
       new NextRequest("https://example.com/api/conversations/conv_1", {

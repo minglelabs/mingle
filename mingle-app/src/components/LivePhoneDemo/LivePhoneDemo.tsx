@@ -3815,7 +3815,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     shouldAutoScroll.current = false
     isPaginatingRef.current = true
     prevScrollHeightRef.current = chatRef.current.scrollHeight
-    loadOlderUtterances()
+    void loadOlderUtterances().then((didLoad) => {
+      if (didLoad) return
+      prevScrollHeightRef.current = null
+      isPaginatingRef.current = false
+      isLoadingOlderRef.current = false
+    }).catch(() => {
+      prevScrollHeightRef.current = null
+      isPaginatingRef.current = false
+      isLoadingOlderRef.current = false
+    })
   }, [hasOlderUtterances, loadOlderUtterances])
 
   const markUserScrollIntent = useCallback(() => {

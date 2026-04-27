@@ -8,6 +8,7 @@ import {
   applyTranslationToUtteranceStoreState,
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
+  buildPersistedUtteranceCache,
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
@@ -16,6 +17,8 @@ import {
   filterTranslationsToTargetLanguages,
   getOrCreateTrackingUserId,
   mergeDisplayUtterances,
+  mergeServerHydrationUtteranceIntoStoreState,
+  LOCAL_UTTERANCE_CACHE_LIMIT,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
@@ -230,6 +233,122 @@ describe('use-realtime-stt pure logic', () => {
     persistUtterancesSnapshot([], 'conv_1')
     expect(localStorage.getItem('mingle_demo_utterances')).toBe('[{"id":"legacy"}]')
     expect(localStorage.getItem('mingle_demo_utterances__conv_1')).toBeNull()
+  })
+
+  it('trims persisted conversation-room utterances to the latest cache window', () => {
+    const localStorage = createLocalStorageMock()
+    vi.stubGlobal('window', { localStorage })
+    const utterances = Array.from({ length: LOCAL_UTTERANCE_CACHE_LIMIT + 1 }, (_, index) => ({
+      id: `u-${index}`,
+      originalText: `text ${index}`,
+      originalLang: 'en',
+      targetLanguages: [],
+      translations: {},
+      createdAtMs: index,
+    }))
+
+    persistUtterancesSnapshot(utterances, 'conv_room_1', {
+      maxItems: LOCAL_UTTERANCE_CACHE_LIMIT,
+    })
+
+    const persisted = JSON.parse(localStorage.getItem('mingle_demo_utterances__conv_room_1') || '[]')
+    expect(persisted).toHaveLength(LOCAL_UTTERANCE_CACHE_LIMIT)
+    expect(persisted[0].id).toBe('u-1')
+    expect(persisted.at(-1).id).toBe(`u-${LOCAL_UTTERANCE_CACHE_LIMIT}`)
+  })
+
+  it('keeps the full persisted utterance snapshot when no cache limit is provided', () => {
+    const utterances = [
+      { id: 'u-1', originalText: 'one', originalLang: 'en', targetLanguages: [], translations: {} },
+      { id: 'u-2', originalText: 'two', originalLang: 'en', targetLanguages: [], translations: {} },
+    ]
+
+    expect(buildPersistedUtteranceCache(utterances)).toBe(utterances)
+  })
+
+  it('replaces stale cached utterance fields with server hydration values', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-local-only',
+        originalText: 'local only',
+        originalLang: 'en',
+        targetLanguages: [],
+        translations: {},
+        createdAtMs: 1,
+      },
+      {
+        id: 'u-server',
+        originalText: 'stale source',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: { ko: 'stale translation' },
+        translationFinalized: { ko: true },
+        createdAtMs: 2,
+      },
+    ])
+
+    const merged = mergeServerHydrationUtteranceIntoStoreState(store, {
+      id: 'u-server',
+      originalText: 'server source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'server translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 2,
+    })
+
+    expect(merged.utterances).toEqual([
+      {
+        id: 'u-local-only',
+        originalText: 'local only',
+        originalLang: 'en',
+        targetLanguages: [],
+        translations: {},
+        createdAtMs: 1,
+      },
+      {
+        id: 'u-server',
+        originalText: 'server source',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: { ko: 'server translation' },
+        translationFinalized: { ko: true },
+        createdAtMs: 2,
+      },
+    ])
+  })
+
+  it('applies pending translation updates on top of a server hydrated utterance', () => {
+    const storeWithPending = applyTranslationToUtteranceStoreState({
+      store: createUtteranceStoreState([]),
+      utteranceId: 'u-server',
+      translations: { ko: 'pending translation' },
+      priority: { kind: 'final', seq: 1 },
+      markFinalized: true,
+    })
+
+    const merged = mergeServerHydrationUtteranceIntoStoreState(storeWithPending, {
+      id: 'u-server',
+      originalText: 'server source',
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: 'server translation' },
+      translationFinalized: { ko: true },
+      createdAtMs: 1,
+    })
+
+    expect(merged.utterances).toEqual([
+      {
+        id: 'u-server',
+        originalText: 'server source',
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: { ko: 'pending translation' },
+        translationFinalized: { ko: true },
+        createdAtMs: 1,
+      },
+    ])
+    expect(merged.pendingTranslationUpdates.size).toBe(0)
   })
 
   it('parses transcript message payload and normalizes text', () => {
