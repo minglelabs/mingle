@@ -19,6 +19,7 @@ import {
   readRequestedApiNamespaceFromSearch,
   resolveNativeAppTrackingContext,
 } from './live-phone-demo.app-update.logic'
+import type { UserSelectableTranslationModel } from '@/lib/translation-models'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -718,6 +719,7 @@ interface UseRealtimeSTTOptions {
   enableAec?: boolean
   sonioxManualFinalizeSilenceMs?: number
   usageLimitSec?: number | null
+  translationModel?: UserSelectableTranslationModel
 }
 
 interface SubmitExternalUtteranceInput {
@@ -1736,6 +1738,7 @@ export default function useRealtimeSTT({
   enableAec = false,
   sonioxManualFinalizeSilenceMs = DEFAULT_SONIOX_SILENCE_MS,
   usageLimitSec = DEFAULT_USAGE_LIMIT_SEC,
+  translationModel,
 }: UseRealtimeSTTOptions) {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
   const connectionStatusRef = useRef<ConnectionStatus>(connectionStatus)
@@ -2325,6 +2328,9 @@ export default function useRealtimeSTT({
         body.currentTurnPreviousState = options.currentTurnPreviousState
       }
       body.clientBundleRev = LIVE_TRANSLATE_CLIENT_BUNDLE_REV
+      if (translationModel) {
+        body.translationModel = translationModel
+      }
       const normalizedTtsLang = (options?.ttsLanguage || '').trim()
       if (normalizedTtsLang && options?.isFinal !== true) {
         body.tts = { language: normalizedTtsLang, enabled: options?.enableTts === true }
@@ -2363,7 +2369,7 @@ export default function useRealtimeSTT({
     } catch {
       return { translations: {} }
     }
-  }, [buildRecentTurnContextPayload, ensureSessionKey, usageSec])
+  }, [buildRecentTurnContextPayload, ensureSessionKey, translationModel, usageSec])
 
   const logClientEvent = useCallback(async (payload: ClientEventLogPayload) => {
     try {
