@@ -84,6 +84,7 @@ const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
+const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
 const CONVERSATION_OVERLAY_TRANSITION = {
   duration: 0.28,
@@ -247,15 +248,10 @@ function readPersistedConversationUsageSec(conversationId: string): number {
   }
 }
 
-function readPersistedConversationMessageCount(conversationId: string): number {
-  if (typeof window === "undefined") return 0;
+function countPersistedConversationUtterances(rawValue: string | null): number {
+  if (!rawValue) return 0;
 
   try {
-    const rawValue = window.localStorage.getItem(
-      buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
-    );
-    if (!rawValue) return 0;
-
     const parsed = JSON.parse(rawValue) as unknown;
     if (!Array.isArray(parsed)) return 0;
 
@@ -274,6 +270,24 @@ function readPersistedConversationMessageCount(conversationId: string): number {
       messageCount += 1;
     }
     return messageCount;
+  } catch {
+    return 0;
+  }
+}
+
+function readPersistedConversationMessageCount(conversationId: string): number {
+  if (typeof window === "undefined") return 0;
+
+  try {
+    const persistedMessageCount = Number.parseInt(
+      window.localStorage.getItem(buildStorageKey(LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY, conversationId)) || "0",
+      10,
+    );
+    const normalizedPersistedMessageCount = normalizeConversationStatsValue(persistedMessageCount);
+    const snapshotMessageCount = countPersistedConversationUtterances(window.localStorage.getItem(
+      buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
+    ));
+    return Math.max(normalizedPersistedMessageCount, snapshotMessageCount);
   } catch {
     return 0;
   }
@@ -456,6 +470,10 @@ function copyLegacySingleRoomSnapshotToConversation(
       window.localStorage.setItem(
         buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
         snapshot.utterancesRaw,
+      );
+      window.localStorage.setItem(
+        buildStorageKey(LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY, conversationId),
+        String(countPersistedConversationUtterances(snapshot.utterancesRaw)),
       );
     }
     if (snapshot.usageRaw) {

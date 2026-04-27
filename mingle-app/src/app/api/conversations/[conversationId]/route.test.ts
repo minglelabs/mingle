@@ -153,6 +153,7 @@ describe("/api/conversations/[conversationId] route", () => {
         pausedAt: "2026-04-02T00:03:00.000Z",
       },
       usageSec: 12,
+      messageCount: 123,
       utterances: [
         {
           id: "u-1",
@@ -190,6 +191,7 @@ describe("/api/conversations/[conversationId] route", () => {
         pausedAt: "2026-04-02T00:03:00.000Z",
       },
       usageSec: 12,
+      messageCount: 123,
       utterances: [
         {
           id: "u-1",
@@ -222,6 +224,7 @@ describe("/api/conversations/[conversationId] route", () => {
         pausedAt: "2026-04-02T00:03:00.000Z",
       },
       usageSec: 12,
+      messageCount: 123,
       utterances: [],
       hasMoreUtterances: false,
       oldestMessageCursor: null,
