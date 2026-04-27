@@ -1545,6 +1545,60 @@ export function appendFinalizedUtteranceToStoreState(
   }
 }
 
+function removeTranslationPrioritiesForUtterance(
+  priorities: Map<string, TranslationPriority>,
+  utteranceId: string,
+): Map<string, TranslationPriority> {
+  let nextPriorities = priorities
+  const prefix = `${utteranceId}:`
+  for (const bubbleKey of priorities.keys()) {
+    if (!bubbleKey.startsWith(prefix)) continue
+    if (nextPriorities === priorities) {
+      nextPriorities = new Map(priorities)
+    }
+    nextPriorities.delete(bubbleKey)
+  }
+  return nextPriorities
+}
+
+export function mergeServerHydrationUtteranceIntoStoreState(
+  store: UtteranceStoreState,
+  utterance: Utterance,
+): UtteranceStoreState {
+  const serverUtterance = normalizeStoredUtterance(utterance)
+  const pendingUpdate = store.pendingTranslationUpdates.get(serverUtterance.id)
+  const basePriorities = removeTranslationPrioritiesForUtterance(
+    store.translationPriorities,
+    serverUtterance.id,
+  )
+  const resolvedPendingState = pendingUpdate
+    ? applyPendingTranslationUpdateToUtteranceState({
+        utterance: serverUtterance,
+        currentPriorities: basePriorities,
+        pendingUpdate,
+      })
+    : null
+  const nextUtterance = resolvedPendingState?.utterance || serverUtterance
+  const nextUtterances = appendOrReplaceUtterance(store.utterances, nextUtterance)
+
+  if (!pendingUpdate) {
+    return {
+      ...store,
+      utterances: nextUtterances,
+      translationPriorities: basePriorities,
+    }
+  }
+
+  const nextPendingTranslationUpdates = new Map(store.pendingTranslationUpdates)
+  nextPendingTranslationUpdates.delete(serverUtterance.id)
+
+  return {
+    utterances: nextUtterances,
+    translationPriorities: resolvedPendingState?.priorities || basePriorities,
+    pendingTranslationUpdates: nextPendingTranslationUpdates,
+  }
+}
+
 export function applyTranslationToUtteranceStoreState(input: {
   store: UtteranceStoreState
   utteranceId: string
@@ -2318,7 +2372,7 @@ export default function useRealtimeSTT({
   ): UtteranceStoreState => {
     let nextStore = store
     for (const utterance of utterancesFromServer) {
-      nextStore = appendFinalizedUtteranceToStoreState(nextStore, normalizeStoredUtterance(utterance))
+      nextStore = mergeServerHydrationUtteranceIntoStoreState(nextStore, utterance)
     }
     return nextStore
   }, [])
