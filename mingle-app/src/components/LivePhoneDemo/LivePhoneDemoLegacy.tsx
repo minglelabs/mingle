@@ -934,6 +934,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [isIosTopTapEnabled, setIsIosTopTapEnabled] = useState(false)
   const accountPreferencesHydrationGenerationRef = useRef(0)
+  const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
@@ -975,10 +976,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     if (!enableAccountPreferencesSync) return translationModel
-    if (accountPreferencesHydratedGeneration === 0) return undefined
-    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return undefined
+    if (accountPreferencesRequestedHydrationGeneration === 0) return undefined
+    if (accountPreferencesHydratedGeneration !== accountPreferencesRequestedHydrationGeneration) return undefined
     return translationModel
-  }, [accountPreferencesHydratedGeneration, enableAccountPreferencesSync, translationModel])
+  }, [
+    accountPreferencesHydratedGeneration,
+    accountPreferencesRequestedHydrationGeneration,
+    enableAccountPreferencesSync,
+    translationModel,
+  ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen === 'feedback'
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
@@ -1302,6 +1308,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
+      setAccountPreferencesRequestedHydrationGeneration(0)
       return () => {
         cancelled = true
       }
@@ -1309,6 +1316,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+    setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     const sessionKey = getOrCreateSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 

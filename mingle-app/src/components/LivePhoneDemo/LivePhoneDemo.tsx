@@ -1281,6 +1281,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
+  const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
@@ -1334,10 +1335,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
     if (!enableAccountPreferencesSync) return translationModel
-    if (accountPreferencesHydratedGeneration === 0) return undefined
-    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return undefined
+    if (accountPreferencesRequestedHydrationGeneration === 0) return undefined
+    if (accountPreferencesHydratedGeneration !== accountPreferencesRequestedHydrationGeneration) return undefined
     return translationModel
-  }, [accountPreferencesHydratedGeneration, enableAccountPreferencesSync, translationModel])
+  }, [
+    accountPreferencesHydratedGeneration,
+    accountPreferencesRequestedHydrationGeneration,
+    enableAccountPreferencesSync,
+    translationModel,
+  ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
     enterMode: menuEnterMode,
@@ -1764,6 +1770,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
+      setAccountPreferencesRequestedHydrationGeneration(0)
       return () => {
         cancelled = true
       }
@@ -1771,6 +1778,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+    setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
