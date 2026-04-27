@@ -9,6 +9,7 @@ import {
   buildLiveTranslateRequestSignature,
   buildFinalizedUtterancePayload,
   buildPersistedUtteranceCache,
+  countPersistedUtterances,
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
@@ -23,6 +24,7 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  persistMessageCountSnapshot,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
   resolveCachedNativeMicPermissionRecoveryAction,
@@ -264,6 +266,29 @@ describe('use-realtime-stt pure logic', () => {
     ]
 
     expect(buildPersistedUtteranceCache(utterances)).toBe(utterances)
+  })
+
+  it('persists message count separately from utterance cache snapshots', () => {
+    const localStorage = createLocalStorageMock({
+      mingle_demo_utterances__conv_room_1: JSON.stringify([{ id: 'u-1', originalText: 'one' }]),
+    })
+    vi.stubGlobal('window', { localStorage })
+
+    persistMessageCountSnapshot(250, 'conv_room_1')
+
+    expect(localStorage.getItem('mingle_demo_message_count__conv_room_1')).toBe('250')
+    expect(localStorage.getItem('mingle_demo_utterances__conv_room_1')).toBe(JSON.stringify([
+      { id: 'u-1', originalText: 'one' },
+    ]))
+  })
+
+  it('counts persisted utterances by unique non-empty message id for legacy stat fallback', () => {
+    expect(countPersistedUtterances([
+      { id: 'u-1', originalText: 'one', originalLang: 'en', targetLanguages: [], translations: {} },
+      { id: 'u-1', originalText: 'duplicate', originalLang: 'en', targetLanguages: [], translations: {} },
+      { id: 'u-2', originalText: '   ', originalLang: 'en', targetLanguages: [], translations: {} },
+      { id: 'u-3', originalText: 'three', originalLang: 'en', targetLanguages: [], translations: {} },
+    ])).toBe(2)
   })
 
   it('replaces stale cached utterance fields with server hydration values', () => {
