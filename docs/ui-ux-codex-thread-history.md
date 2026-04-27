@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-27 - Feedback Page Instagram Contact Button
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.feedback-copy.ts`
+- Issue: The in-app feedback page only exposed the compose/history tabs, so users who found the feedback form inconvenient or needed a clearer support path had no obvious alternate contact route.
+- User impact: Users could leave terse or repeated feedback because the current UI did not make the team's Instagram support channel discoverable at the point where they were already trying to contact Mingle.
+- Resolution: Added a localized full-width Instagram contact button above the feedback send/history tabs, linking to `https://www.instagram.com/mingle.labs/`, and added Thai copy coverage for the new label.
+
 ## 2026-04-26 - Mobile WebView Swipe-To-Close Removal
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
