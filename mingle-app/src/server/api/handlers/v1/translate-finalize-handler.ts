@@ -1894,17 +1894,25 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
       })
 
       if (!ctx.isFinal) {
+        const fallbackTranslationsForMissingTargets: Record<string, string> = {}
+        for (const language of missingTargetLanguages) {
+          const fallbackTranslation = fallbackTranslations[language]
+          if (fallbackTranslation) {
+            fallbackTranslationsForMissingTargets[language] = fallbackTranslation
+          }
+        }
+
         if (
           shouldUsePreviousStateFallback(selectedResult.provider)
-          && Object.keys(fallbackTranslations).length > 0
+          && Object.keys(fallbackTranslationsForMissingTargets).length > 0
         ) {
           const mergedTranslations = {
-            ...fallbackTranslations,
+            ...fallbackTranslationsForMissingTargets,
             ...translations,
           }
           logTranslateFinalizeInfo('fallback_from_current_turn_previous_state', {
             ...buildTranslateFinalizeLogContext(ctx),
-            fallbackLanguages: Object.keys(fallbackTranslations),
+            fallbackLanguages: Object.keys(fallbackTranslationsForMissingTargets),
             reason: 'missing_target_languages',
             missingTargetLanguages,
             returnedLanguages: Object.keys(selectedResult.translations),
