@@ -5,6 +5,7 @@ import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
+export const CONVERSATION_HYDRATION_MESSAGE_LIMIT = 100;
 
 export type AppConversationChannelStatus =
   | typeof APP_CONVERSATION_STATUS_ACTIVE
@@ -39,10 +40,18 @@ export type ConversationHydrationUtterance = {
   createdAtMs: number;
 };
 
+export type ConversationHydrationCursor = {
+  createdAtMs: number;
+  messageId: string;
+};
+
 export type ConversationHydrationState = {
   conversation: ConversationChannelSummary;
   usageSec: number;
+  messageCount: number;
   utterances: ConversationHydrationUtterance[];
+  hasMoreUtterances: boolean;
+  oldestMessageCursor: ConversationHydrationCursor | null;
 };
 
 type ConversationChannelRecord = {
@@ -74,6 +83,24 @@ const conversationChannelSelect = {
 } satisfies Prisma.AppConversationChannelSelect;
 
 function buildVisibleConversationWhere(): Prisma.AppConversationChannelWhereInput {
+  return {
+    OR: [
+      { isDeleted: false },
+      { isDeleted: null },
+    ],
+  };
+}
+
+function buildVisibleMessageWhere(): Prisma.AppMessageWhereInput {
+  return {
+    OR: [
+      { isDeleted: false },
+      { isDeleted: null },
+    ],
+  };
+}
+
+function buildVisibleMessageContentWhere(): Prisma.AppMessageContentWhereInput {
   return {
     OR: [
       { isDeleted: false },
@@ -189,6 +216,7 @@ async function listLatestMessageSummaryBySessionKey(
       sessionKey: {
         in: sessionKeys,
       },
+      ...buildVisibleMessageWhere(),
     },
     orderBy: [
       { sessionKey: "asc" },
@@ -203,6 +231,7 @@ async function listLatestMessageSummaryBySessionKey(
       contents: {
         where: {
           contentType: "SOURCE",
+          ...buildVisibleMessageContentWhere(),
         },
         orderBy: { createdAt: "asc" },
         select: {
@@ -555,6 +584,7 @@ export async function updateConversationChannelTitle(args: {
 export async function getConversationHydrationStateForUser(args: {
   conversationId: string;
   userId: string;
+  before?: ConversationHydrationCursor | null;
 }): Promise<ConversationHydrationState | null> {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
@@ -569,7 +599,33 @@ export async function getConversationHydrationStateForUser(args: {
     return null;
   }
 
-  const [latestUsageEvent, messages] = await prisma.$transaction([
+  const beforeDate = typeof args.before?.createdAtMs === "number"
+    && Number.isFinite(args.before.createdAtMs)
+    && args.before.createdAtMs > 0
+    ? new Date(args.before.createdAtMs)
+    : null;
+  const beforeMessageId = (args.before?.messageId || "").trim();
+  const messageWhere: Prisma.AppMessageWhereInput = {
+    sessionKey: conversationRecord.sessionKey,
+    ...buildVisibleMessageWhere(),
+    ...(beforeDate && beforeMessageId
+      ? {
+          AND: [
+            {
+              OR: [
+                { createdAt: { lt: beforeDate } },
+                {
+                  createdAt: beforeDate,
+                  id: { lt: beforeMessageId },
+                },
+              ],
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const [latestUsageEvent, totalMessageCount, messagesWithLookahead] = await prisma.$transaction([
     prisma.appEventLog.findFirst({
       where: {
         sessionKey: conversationRecord.sessionKey,
@@ -578,17 +634,27 @@ export async function getConversationHydrationStateForUser(args: {
       orderBy: { createdAt: "desc" },
       select: { usageSec: true },
     }),
-    prisma.appMessage.findMany({
+    prisma.appMessage.count({
       where: {
         sessionKey: conversationRecord.sessionKey,
+        ...buildVisibleMessageWhere(),
       },
-      orderBy: { createdAt: "asc" },
+    }),
+    prisma.appMessage.findMany({
+      where: messageWhere,
+      orderBy: [
+        { createdAt: "desc" },
+        { id: "desc" },
+      ],
+      take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
       select: {
         id: true,
         clientMessageId: true,
         sourceLanguage: true,
         createdAt: true,
         contents: {
+          where: buildVisibleMessageContentWhere(),
+          orderBy: { createdAt: "asc" },
           select: {
             contentType: true,
             language: true,
@@ -599,7 +665,11 @@ export async function getConversationHydrationStateForUser(args: {
     }),
   ]);
 
-  const utterances: ConversationHydrationUtterance[] = messages.map((message) => {
+  const hasMoreUtterances = messagesWithLookahead.length > CONVERSATION_HYDRATION_MESSAGE_LIMIT;
+  const messages = messagesWithLookahead.slice(0, CONVERSATION_HYDRATION_MESSAGE_LIMIT);
+  const oldestMessage = messages.at(-1) ?? null;
+  const orderedMessages = [...messages].reverse();
+  const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
       || sourceContents[0]
@@ -632,7 +702,15 @@ export async function getConversationHydrationStateForUser(args: {
   return {
     conversation: serializeConversationChannel(conversationRecord),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
+    messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,
     utterances,
+    hasMoreUtterances,
+    oldestMessageCursor: oldestMessage
+      ? {
+          createdAtMs: oldestMessage.createdAt.getTime(),
+          messageId: oldestMessage.id,
+        }
+      : null,
   };
 }
 

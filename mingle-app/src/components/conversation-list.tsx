@@ -21,6 +21,10 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
+import {
+  formatLivePhoneDemoMessageCount,
+  formatLivePhoneDemoUsageDuration,
+} from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import {
   LS_KEY_LANGUAGES,
@@ -80,6 +84,7 @@ const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
+const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
 const LEGACY_SINGLE_ROOM_SESSION_KEY = "mingle_demo_session_key";
 const CONVERSATION_OVERLAY_TRANSITION = {
   duration: 0.28,
@@ -132,6 +137,11 @@ type ConversationListQaEnsureRoomResult = {
   action: "active" | "opened-existing" | "created";
 };
 
+type ConversationLocalStats = {
+  usageSec: number;
+  messageCount: number;
+};
+
 declare global {
   interface Window {
     __MINGLE_CONVERSATION_LIST_QA__?: {
@@ -172,6 +182,8 @@ interface ConversationItem {
   preview: string;
   previewFullText: string;
   timeLabel: string;
+  statsLabel: string;
+  statsFullLabel: string;
   status: "active" | "paused";
   statusLabel: string;
   avatarSrc: string;
@@ -212,6 +224,118 @@ type LegacySingleRoomSnapshot = {
   speechLanguages: string[];
   translationLanguagesLinked: boolean;
 };
+
+const EMPTY_CONVERSATION_LOCAL_STATS: ConversationLocalStats = {
+  usageSec: 0,
+  messageCount: 0,
+};
+
+function normalizeConversationStatsValue(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function readPersistedConversationUsageSec(conversationId: string): number {
+  if (typeof window === "undefined") return 0;
+
+  try {
+    const parsed = Number.parseInt(
+      window.localStorage.getItem(buildStorageKey(LEGACY_SINGLE_ROOM_USAGE_KEY, conversationId)) || "0",
+      10,
+    );
+    return normalizeConversationStatsValue(parsed);
+  } catch {
+    return 0;
+  }
+}
+
+function countPersistedConversationUtterances(rawValue: string | null): number {
+  if (!rawValue) return 0;
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!Array.isArray(parsed)) return 0;
+
+    const seenIds = new Set<string>();
+    let messageCount = 0;
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const id = typeof (item as { id?: unknown }).id === "string"
+        ? (item as { id: string }).id.trim()
+        : "";
+      const originalText = typeof (item as { originalText?: unknown }).originalText === "string"
+        ? (item as { originalText: string }).originalText.trim()
+        : "";
+      if (!id || !originalText || seenIds.has(id)) continue;
+      seenIds.add(id);
+      messageCount += 1;
+    }
+    return messageCount;
+  } catch {
+    return 0;
+  }
+}
+
+function readPersistedConversationMessageCount(conversationId: string): number {
+  if (typeof window === "undefined") return 0;
+
+  try {
+    const persistedMessageCount = Number.parseInt(
+      window.localStorage.getItem(buildStorageKey(LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY, conversationId)) || "0",
+      10,
+    );
+    const normalizedPersistedMessageCount = normalizeConversationStatsValue(persistedMessageCount);
+    const snapshotMessageCount = countPersistedConversationUtterances(window.localStorage.getItem(
+      buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
+    ));
+    return Math.max(normalizedPersistedMessageCount, snapshotMessageCount);
+  } catch {
+    return 0;
+  }
+}
+
+function readPersistedConversationLocalStats(conversationId: string): ConversationLocalStats {
+  return {
+    usageSec: readPersistedConversationUsageSec(conversationId),
+    messageCount: readPersistedConversationMessageCount(conversationId),
+  };
+}
+
+function areConversationLocalStatsEqual(
+  left: ConversationLocalStats | undefined,
+  right: ConversationLocalStats | undefined,
+): boolean {
+  const leftStats = left ?? EMPTY_CONVERSATION_LOCAL_STATS;
+  const rightStats = right ?? EMPTY_CONVERSATION_LOCAL_STATS;
+  return leftStats.usageSec === rightStats.usageSec
+    && leftStats.messageCount === rightStats.messageCount;
+}
+
+function buildConversationLocalStatsSnapshot(
+  conversations: ConversationChannelSummary[],
+): Record<string, ConversationLocalStats> {
+  const snapshot: Record<string, ConversationLocalStats> = {};
+  for (const conversation of conversations) {
+    snapshot[conversation.id] = readPersistedConversationLocalStats(conversation.id);
+  }
+  return snapshot;
+}
+
+function areConversationLocalStatsSnapshotsEqual(
+  left: Record<string, ConversationLocalStats>,
+  right: Record<string, ConversationLocalStats>,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  for (const key of leftKeys) {
+    if (!areConversationLocalStatsEqual(left[key], right[key])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
@@ -346,6 +470,10 @@ function copyLegacySingleRoomSnapshotToConversation(
       window.localStorage.setItem(
         buildStorageKey(LEGACY_SINGLE_ROOM_UTTERANCES_KEY, conversationId),
         snapshot.utterancesRaw,
+      );
+      window.localStorage.setItem(
+        buildStorageKey(LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY, conversationId),
+        String(countPersistedConversationUtterances(snapshot.utterancesRaw)),
       );
     }
     if (snapshot.usageRaw) {
@@ -563,11 +691,14 @@ function mapConversationSummaryToItem(
     activeStatusLabel: string;
     pausedStatusLabel: string;
   },
+  localStats: ConversationLocalStats = EMPTY_CONVERSATION_LOCAL_STATS,
 ): ConversationItem {
   const title = conversation.title;
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
     : "";
+  const usageDurationLabel = formatLivePhoneDemoUsageDuration(localStats.usageSec);
+  const messageCountLabel = formatLivePhoneDemoMessageCount(localStats.messageCount);
   const selectedLanguages = sanitizeSttLanguageSelection(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
@@ -593,6 +724,8 @@ function mapConversationSummaryToItem(
     timeLabel: timeLabelsReady
       ? formatConversationTime(conversation.latestMessageAt || conversation.createdAt, locale)
       : "",
+    statsLabel: `${usageDurationLabel} · ${messageCountLabel}`,
+    statsFullLabel: `STT ${usageDurationLabel}, ${messageCountLabel}`,
     status: conversation.status,
     statusLabel,
     avatarSrc: avatar.src,
@@ -895,7 +1028,15 @@ function ConversationRow({
               </span>
             ) : null}
           </div>
-          <span className="shrink-0 text-[12px] text-gray-400">{item.timeLabel}</span>
+          <div className="flex shrink-0 flex-col items-end leading-none">
+            <span className="text-[12px] text-gray-400">{item.timeLabel}</span>
+            <span
+              className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
+              title={item.statsFullLabel}
+            >
+              {item.statsLabel}
+            </span>
+          </div>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
           <p
@@ -1224,6 +1365,7 @@ export default function ConversationList({
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
+  const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>({});
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
@@ -1304,9 +1446,15 @@ export default function ConversationList({
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
-      mapConversationSummaryToItem(conversation, locale, timeLabelsReady, copy)
+      mapConversationSummaryToItem(
+        conversation,
+        locale,
+        timeLabelsReady,
+        copy,
+        conversationLocalStats[conversation.id],
+      )
     )),
-    [conversations, copy, locale, timeLabelsReady],
+    [conversationLocalStats, conversations, copy, locale, timeLabelsReady],
   );
   const mountedConversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1337,6 +1485,35 @@ export default function ConversationList({
     1,
     effectivePullRefreshOffsetPx / LIST_PULL_REFRESH_TRIGGER_PX,
   );
+
+  const refreshConversationLocalStats = useCallback((sourceConversations: ConversationChannelSummary[]) => {
+    if (typeof window === "undefined") return;
+    const nextSnapshot = buildConversationLocalStatsSnapshot(sourceConversations);
+    setConversationLocalStats((current) => (
+      areConversationLocalStatsSnapshotsEqual(current, nextSnapshot)
+        ? current
+        : nextSnapshot
+    ));
+  }, []);
+
+  const handleConversationStatsChange = useCallback((
+    conversationId: string,
+    payload: ConversationLocalStats,
+  ) => {
+    const nextStats: ConversationLocalStats = {
+      usageSec: normalizeConversationStatsValue(payload.usageSec),
+      messageCount: normalizeConversationStatsValue(payload.messageCount),
+    };
+
+    setConversationLocalStats((current) => (
+      areConversationLocalStatsEqual(current[conversationId], nextStats)
+        ? current
+        : {
+            ...current,
+            [conversationId]: nextStats,
+          }
+    ));
+  }, []);
 
   const resetPullRefresh = useCallback(() => {
     pullRefreshStartYRef.current = null;
@@ -1958,6 +2135,28 @@ export default function ConversationList({
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  useEffect(() => {
+    refreshConversationLocalStats(conversations);
+  }, [conversations, refreshConversationLocalStats]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const refreshCurrentConversationLocalStats = () => {
+      refreshConversationLocalStats(conversationsRef.current);
+    };
+
+    window.addEventListener("focus", refreshCurrentConversationLocalStats);
+    window.addEventListener("storage", refreshCurrentConversationLocalStats);
+    document.addEventListener("visibilitychange", refreshCurrentConversationLocalStats);
+
+    return () => {
+      window.removeEventListener("focus", refreshCurrentConversationLocalStats);
+      window.removeEventListener("storage", refreshCurrentConversationLocalStats);
+      document.removeEventListener("visibilitychange", refreshCurrentConversationLocalStats);
+    };
+  }, [refreshConversationLocalStats]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2922,6 +3121,9 @@ export default function ConversationList({
                       }}
                       onLatestUtteranceChange={(payload) => {
                         handleConversationLatestUtteranceChange(conversation.id, payload);
+                      }}
+                      onConversationStatsChange={(payload) => {
+                        handleConversationStatsChange(conversation.id, payload);
                       }}
                       onSelectedLanguagesChange={(selectedLanguages) => {
                         handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);

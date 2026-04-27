@@ -134,3 +134,16 @@ export function shouldScheduleAccountPreferencesSync(args: {
 
   return serializeAccountPreferencesSyncState(args.currentPreferences) !== args.lastSyncedStateKey
 }
+
+export function shouldSendTranslationModelPreference(args: {
+  allowSync: boolean
+  requestedHydrationGeneration: number
+  successfulHydrationGeneration: number
+  userSelectedSinceHydrationStart: boolean
+}): boolean {
+  if (!args.allowSync) return true
+  if (args.userSelectedSinceHydrationStart) return true
+  if (args.requestedHydrationGeneration === 0) return false
+
+  return args.successfulHydrationGeneration === args.requestedHydrationGeneration
+}

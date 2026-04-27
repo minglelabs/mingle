@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard } from 'lucide-react'
+import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -52,6 +52,7 @@ import {
   DEFAULT_SPEAKER_ENABLED,
   serializeAccountPreferencesSyncState,
   shouldScheduleAccountPreferencesSync,
+  shouldSendTranslationModelPreference,
   type AccountPreferencesResponse,
   type LivePhoneDemoAccountPreferences,
 } from './live-phone-demo.account-preferences'
@@ -91,6 +92,7 @@ import {
   resolveLivePhoneDemoFeedbackCopy,
   type LivePhoneDemoFeedbackCategory,
 } from './live-phone-demo.feedback-copy'
+import { LivePhoneDemoFeedbackMessageText } from './live-phone-demo.feedback-links'
 import {
   LIVE_DEMO_LANGUAGE_BUTTON_DATA_QA,
   LIVE_DEMO_LANGUAGE_CHEVRON_DATA_QA,
@@ -107,7 +109,10 @@ import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actio
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
-import { formatLivePhoneDemoUsageDuration } from './live-phone-demo.usage-format'
+import {
+  formatLivePhoneDemoMessageCount,
+  formatLivePhoneDemoUsageDuration,
+} from './live-phone-demo.usage-format'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
@@ -119,6 +124,7 @@ import {
 const VOLUME_THRESHOLD = 0.05
 const ACCOUNT_PREFERENCES_API_PATH = buildClientApiPath('/account/preferences')
 const FEEDBACK_API_PATH = buildClientApiPath('/feedback')
+const FEEDBACK_INSTAGRAM_CONTACT_URL = 'https://www.instagram.com/mingle.labs/'
 const TTS_API_PATH = buildClientApiPath('/tts/inworld')
 const ACCOUNT_PREFERENCES_SYNC_DEBOUNCE_MS = 1500
 const FEEDBACK_MIN_MESSAGE_LENGTH = 5
@@ -953,6 +959,10 @@ interface LivePhoneDemoProps {
     speakerAvatarSeed?: string
     speakerAvatarIndex?: number
   }) => void
+  onConversationStatsChange?: (payload: {
+    usageSec: number
+    messageCount: number
+  }) => void
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void
@@ -1126,6 +1136,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onStartRecordingRequested,
   onSttSessionRunningChange,
   onLatestUtteranceChange,
+  onConversationStatsChange,
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
@@ -1271,7 +1282,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuScreenTransitionMode, setMenuScreenTransitionMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const accountPreferencesHydrationGenerationRef = useRef(0)
+  const [accountPreferencesRequestedHydrationGeneration, setAccountPreferencesRequestedHydrationGeneration] = useState(0)
   const [accountPreferencesHydratedGeneration, setAccountPreferencesHydratedGeneration] = useState(0)
+  const [accountPreferencesSuccessfulHydrationGeneration, setAccountPreferencesSuccessfulHydrationGeneration] = useState(0)
+  const [translationModelUserSelectedSinceHydrationStart, setTranslationModelUserSelectedSinceHydrationStart] = useState(false)
   const accountPreferencesLastSyncedStateKeyRef = useRef<string | null>(null)
   const silenceFinalizeLockedDescriptionId = useId()
   const textSizeListboxId = useId()
@@ -1322,6 +1336,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
+  const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
+    return shouldSendTranslationModelPreference({
+      allowSync: enableAccountPreferencesSync,
+      requestedHydrationGeneration: accountPreferencesRequestedHydrationGeneration,
+      successfulHydrationGeneration: accountPreferencesSuccessfulHydrationGeneration,
+      userSelectedSinceHydrationStart: translationModelUserSelectedSinceHydrationStart,
+    }) ? translationModel : undefined
+  }, [
+    accountPreferencesRequestedHydrationGeneration,
+    accountPreferencesSuccessfulHydrationGeneration,
+    enableAccountPreferencesSync,
+    translationModel,
+    translationModelUserSelectedSinceHydrationStart,
+  ])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
     enterMode: menuEnterMode,
@@ -1748,6 +1776,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (!enableAccountPreferencesSync) {
       accountPreferencesLastSyncedStateKeyRef.current = null
+      setAccountPreferencesRequestedHydrationGeneration(0)
+      setAccountPreferencesSuccessfulHydrationGeneration(0)
+      setTranslationModelUserSelectedSinceHydrationStart(false)
       return () => {
         cancelled = true
       }
@@ -1755,6 +1786,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const hydrationGeneration = accountPreferencesHydrationGenerationRef.current + 1
     accountPreferencesHydrationGenerationRef.current = hydrationGeneration
+    setAccountPreferencesRequestedHydrationGeneration(hydrationGeneration)
+    setTranslationModelUserSelectedSinceHydrationStart(false)
     const sessionKey = resolveConversationSessionKey()
     const trackingUserId = getOrCreateTrackingUserId()
 
@@ -1788,6 +1821,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         }
         accountPreferencesLastSyncedStateKeyRef.current =
           serializeAccountPreferencesSyncState(hydratedPreferences)
+        setAccountPreferencesSuccessfulHydrationGeneration(hydrationGeneration)
         setAccountPreferencesHydratedGeneration(hydrationGeneration)
       })
       .catch(() => {
@@ -2181,6 +2215,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const handleTranslationModelSelect = useCallback((nextTranslationModel: UserSelectableTranslationModel) => {
     setTranslationModelMenuOpen(false)
+    setTranslationModelUserSelectedSinceHydrationStart(true)
     setTranslationModel(nextTranslationModel)
     clearAccountPreferencesSyncTimer()
     syncAccountPreferencesOverride({
@@ -3124,6 +3159,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationId,
     sessionKeyOverride,
     storageNamespace,
+    translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
@@ -3133,6 +3169,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   useEffect(() => {
     onSttSessionRunningChange?.(isSttSessionRunning)
   }, [isSttSessionRunning, onSttSessionRunningChange])
+
+  useEffect(() => {
+    onConversationStatsChange?.({
+      usageSec,
+      messageCount: persistedUtteranceCount,
+    })
+  }, [onConversationStatsChange, persistedUtteranceCount, usageSec])
 
   const lastReportedUtteranceIdRef = useRef('')
   useEffect(() => {
@@ -3800,7 +3843,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     shouldAutoScroll.current = false
     isPaginatingRef.current = true
     prevScrollHeightRef.current = chatRef.current.scrollHeight
-    loadOlderUtterances()
+    void loadOlderUtterances().then((didLoad) => {
+      if (didLoad) return
+      prevScrollHeightRef.current = null
+      isPaginatingRef.current = false
+      isLoadingOlderRef.current = false
+    }).catch(() => {
+      prevScrollHeightRef.current = null
+      isPaginatingRef.current = false
+      isLoadingOlderRef.current = false
+    })
   }, [hasOlderUtterances, loadOlderUtterances])
 
   const markUserScrollIntent = useCallback(() => {
@@ -4203,6 +4255,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const usagePercent = isUsageLimited
     ? Math.min(100, (usageSec / usageLimitSec) * 100)
     : null
+  const storedMessageCountLabel = formatLivePhoneDemoMessageCount(persistedUtteranceCount)
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
   const scrollDateTop = Math.max(
     16,
@@ -5139,6 +5192,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         onBack={requestMenuBackStep}
                       />
 
+                      <div className="shrink-0 border-b border-gray-100 px-4 py-3">
+                        <a
+                          href={FEEDBACK_INSTAGRAM_CONTACT_URL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-pink-200 bg-white px-3 py-2.5 text-[0.95rem] font-semibold leading-tight text-gray-900 shadow-sm transition hover:border-pink-300 hover:bg-pink-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300"
+                        >
+                          <Instagram size={18} strokeWidth={2.2} aria-hidden="true" />
+                          <span className="min-w-0 text-center">{feedbackCopy.instagramContactButtonLabel}</span>
+                        </a>
+                      </div>
+
                       <div className="flex shrink-0 border-b border-gray-100 px-4">
                         {([
                           { value: 'compose', label: feedbackCopy.composeTabLabel },
@@ -5352,7 +5417,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                               </span>
                                             </div>
                                             <p className="mt-1.5 whitespace-pre-wrap break-words text-[0.98rem] leading-5 text-gray-800">
-                                              {message.message}
+                                              <LivePhoneDemoFeedbackMessageText message={message.message} />
                                             </p>
                                             {index === 0 && thread.contactEmail ? (
                                               <p className="mt-2 text-[0.8rem] text-gray-500">
@@ -6031,24 +6096,29 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     transition={{ duration: 0.09, ease: 'easeOut' }}
                     className="self-end justify-self-start pl-2"
                   >
-                    <div className="flex items-center gap-1.5">
-                      {isUsageLimited ? (
-                        <>
-                          <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
-                              style={{ width: `${usagePercent}%` }}
-                            />
-                          </div>
-                          <span className={`text-sm tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
-                            {formatLivePhoneDemoUsageDuration(remainingSec)}
+                    <div className="flex h-[33px] flex-col items-start justify-end gap-0">
+                      <div className="flex items-center gap-1.5">
+                        {isUsageLimited ? (
+                          <>
+                            <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${usageSec >= 25 ? 'bg-red-400' : 'bg-amber-400'}`}
+                                style={{ width: `${usagePercent}%` }}
+                              />
+                            </div>
+                            <span className={`text-sm leading-4 tabular-nums ${isLimitReached ? 'font-semibold text-red-400' : 'text-gray-400'}`}>
+                              {formatLivePhoneDemoUsageDuration(remainingSec)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm leading-4 tabular-nums text-gray-400">
+                            {formatLivePhoneDemoUsageDuration(usageSec)}
                           </span>
-                        </>
-                      ) : (
-                        <span className="text-sm tabular-nums text-gray-400">
-                          {formatLivePhoneDemoUsageDuration(usageSec)}
-                        </span>
-                      )}
+                        )}
+                      </div>
+                      <span className="text-sm leading-4 tabular-nums text-gray-400">
+                        {storedMessageCountLabel}
+                      </span>
                     </div>
                   </motion.div>
 

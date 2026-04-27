@@ -84,6 +84,7 @@ model AppMessage {
   @@unique([sessionKey, clientMessageId], map: "app_messages_session_client_message_uidx")
   @@index([userId, createdAt], map: "app_messages_user_created_at_idx")
   @@index([sessionKey, createdAt], map: "app_messages_session_created_at_idx")
+  @@index([sessionKey, createdAt(sort: Desc)], map: "app_messages_session_created_at_desc_idx")
   @@index([createdAt], map: "app_messages_created_at_idx")
   @@map("app_messages")
 }
@@ -135,7 +136,9 @@ model AppEventLog {
   @@index([createdAt], map: "app_event_logs_created_at_idx")
   @@index([userId], map: "app_event_logs_user_id_idx")
   @@index([sessionKey], map: "app_event_logs_session_key_idx")
+  @@index([sessionKey, createdAt(sort: Desc)], map: "app_event_logs_session_created_at_desc_idx")
   @@index([messageId], map: "app_event_logs_message_id_idx")
+  @@index([eventType, ipAddress, createdAt, messageId], map: "app_event_logs_event_ip_created_message_idx")
   @@map("app_event_logs")
 }
 
