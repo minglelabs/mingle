@@ -13,9 +13,12 @@ const {
 }))
 
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn(() => ({
-  generateContent: mockGenerateContent,
-}))
+const mockGetGenerativeModel = vi.fn((config?: unknown) => {
+  void config
+  return {
+    generateContent: mockGenerateContent,
+  }
+})
 const ensureTrackingContextMock = vi.fn()
 
 vi.mock('next-auth', () => ({
@@ -922,12 +925,18 @@ describe('/api/translate/finalize route', () => {
     expect(mockGenerateContent).toHaveBeenCalledTimes(1)
     expect(fetchMock).not.toHaveBeenCalled()
 
-    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as { model?: string }
+    const modelConfig = mockGetGenerativeModel.mock.calls[0]?.[0] as unknown as { model?: string }
     expect(modelConfig.model).toBe('gemma-4-31b-it')
   })
 
-  it('uses the authenticated user translation model from DB even when the request body says otherwise', async () => {
+  it('uses the request translation model before falling back to the DB preference lookup', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ko":"안녕하세요"}',
+        usageMetadata: {},
+      },
+    })
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(
         JSON.stringify({
@@ -964,11 +973,13 @@ describe('/api/translate/finalize route', () => {
     const json = await res.json()
 
     expect(res.status).toBe(200)
-    expect(json.provider).toBe('qwen')
-    expect(json.infrastructureProvider).toBe('openrouter')
-    expect(json.model).toBe('qwen/qwen3.5-9b')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(json.provider).toBe('gemini')
+    expect(json.infrastructureProvider).toBe('google')
+    expect(json.model).toBe('gemini-2.5-flash-lite')
+    expect(mockGetServerSession).not.toHaveBeenCalled()
+    expect(mockUserFindUnique).not.toHaveBeenCalled()
+    expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('uses the authenticated user gemini translation model from DB even when env prefers qwen', async () => {

@@ -971,6 +971,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
+  const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
+    if (!enableAccountPreferencesSync) return translationModel
+    if (accountPreferencesHydratedGeneration === 0) return undefined
+    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return undefined
+    return translationModel
+  }, [accountPreferencesHydratedGeneration, enableAccountPreferencesSync, translationModel])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen === 'feedback'
   const shouldShowDebugWebViewRemountMenuItem = isNativeAppRuntime && shouldEnableNativeDebugWebViewRemount({
     rawUrl: typeof window === 'undefined' ? '' : window.location.href,
@@ -2440,6 +2446,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     enableTts: enableAutoTTS && isSoundEnabled,
     enableAec: aecEnabled,
     sonioxManualFinalizeSilenceMs,
+    translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isConnecting || isReady || isActive
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked

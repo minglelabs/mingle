@@ -1624,7 +1624,9 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
   })
   const sourceLanguageRaw = normalizeLang(typeof body.sourceLanguage === 'string' ? body.sourceLanguage : '')
   const sourceLanguage = sourceLanguageRaw || 'unknown'
-  const selectedTranslationModel = await resolveSelectedTranslationModel(request, sessionKeyHint)
+  const requestedTranslationModel = normalizeSelectableTranslationModel(body.translationModel)
+  const selectedTranslationModel = requestedTranslationModel
+    ?? await resolveSelectedTranslationModel(request, sessionKeyHint)
   const providerResolution = resolveTranslationProviderConfig(selectedTranslationModel)
 
   if (!providerResolution.ok) {

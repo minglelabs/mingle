@@ -1330,6 +1330,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => TRANSLATION_MODEL_OPTIONS.find((option) => option.value === translationModel) || TRANSLATION_MODEL_OPTIONS[0],
     [translationModel],
   )
+  const requestTranslationModel = useMemo<UserSelectableTranslationModel | undefined>(() => {
+    if (!enableAccountPreferencesSync) return translationModel
+    if (accountPreferencesHydratedGeneration === 0) return undefined
+    if (accountPreferencesHydratedGeneration !== accountPreferencesHydrationGenerationRef.current) return undefined
+    return translationModel
+  }, [accountPreferencesHydratedGeneration, enableAccountPreferencesSync, translationModel])
   const isNativeMenuOverlayVisible = langSelectorOpen || menuOpen || menuScreen !== 'root'
   const menuMotionState = useMemo<LivePhoneDemoMenuMotionState>(() => ({
     enterMode: menuEnterMode,
@@ -3132,6 +3138,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     conversationId,
     sessionKeyOverride,
     storageNamespace,
+    translationModel: requestTranslationModel,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
