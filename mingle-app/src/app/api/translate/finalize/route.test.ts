@@ -449,6 +449,56 @@ describe('/api/translate/finalize route', () => {
     }
   })
 
+  it('does not mark missing interim targets as fallback when previous state cannot fill them', async () => {
+    mockGenerateContent.mockResolvedValue({
+      response: {
+        text: () => '{"ja":"こんにちは"}',
+        usageMetadata: {},
+      },
+    })
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const POST = await importRouteWithEnv()
+
+    try {
+      const res = await POST(makeJsonRequest({
+        text: '今日は長めの途中テキスト',
+        sourceLanguage: 'ko',
+        targetLanguages: ['en', 'ja'],
+        isFinal: false,
+        currentTurnPreviousState: {
+          sourceLanguage: 'ko',
+          sourceText: '今日は長めの途中テキスト',
+          translations: {
+            ja: '前の日本語',
+          },
+        },
+      }) as never)
+      const json = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(json.usedFallbackFromPreviousState).toBeUndefined()
+      expect(json.translations).toEqual({
+        ja: 'こんにちは',
+      })
+      expect(mockGenerateContent).toHaveBeenCalledTimes(1)
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '[translate/finalize] missing_target_languages',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '"missingTargetLanguages":["en"]',
+      ))
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
+        '"returnedLanguages":["ja"]',
+      ))
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      consoleErrorSpy.mockRestore()
+    }
+  })
+
   it('does not issue a second provider request for missing final target languages', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
