@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Native Conversation Back Navigation Stability
+
+- Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/rn/App.tsx`, iOS/Android native WebView conversation routes
+- Issue: Opening an existing conversation could show the Korean "could not open room" alert even though the room actually opened, because a later running-status sync failure reused the room-open failure copy. Closing a conversation inside the native app could also follow WebView history back to a previous bottom-tab route such as My Page instead of returning to the conversation list.
+- User impact: Users saw a false failure dialog, then landed in the room after confirming it; repeated back/open cycles felt broken, and iOS could unexpectedly jump from a conversation back to My Page.
+- Resolution: Kept native conversation close in-place by removing only the `conversation` query instead of using browser history back, disabled iOS WebView back-forward gestures on native live/conversation paths, and stopped treating a failed `active` status sync as a user-facing room-open failure.
+
 ## 2026-04-30 - Android Dev Ad Banner Visibility
 
 - Surface: `mingle-app/rn/App.tsx`, Android RN devbox installs

@@ -1825,6 +1825,9 @@ export default function ConversationList({
       if (deletingConversationIdsRef.current.has(conversationId)) {
         return;
       }
+      if (isRunning) {
+        return;
+      }
       setConversations((current) => {
         const conversation = current.find((item) => item.id === conversationId);
         if (!conversation) return current;
@@ -1836,16 +1839,9 @@ export default function ConversationList({
           ),
         );
       });
-      if (isRunning) {
-        setLiveConversationId((current) => (
-          current === conversationId ? null : current
-        ));
-      }
-      window.alert(
-        isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
-      );
+      window.alert(copy.pauseErrorMessage);
     });
-  }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
+  }, [applyRunningConversationState, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
   const handleConversationSelectedLanguagesChange = useCallback((
     conversationId: string,
@@ -2697,6 +2693,7 @@ export default function ConversationList({
     const currentConversationId = readConversationIdFromLocation();
     if (
       typeof window !== "undefined"
+      && !isNativeAppRuntime()
       && currentConversationId === activeConversation.id
       && window.history.length > 1
     ) {

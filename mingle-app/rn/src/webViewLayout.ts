@@ -52,8 +52,16 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
   isIosPlatform: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  pathname?: string;
 }): boolean {
-  return params.isIosPlatform && (params.canGoBack || params.canGoForward);
+  if (!params.isIosPlatform || (!params.canGoBack && !params.canGoForward)) {
+    return false;
+  }
+  const pathname = params.pathname?.trim() || '';
+  if (pathname && isLiveDemoPathname(pathname)) {
+    return false;
+  }
+  return true;
 }
 
 export function shouldEnableNativeWebViewDebugging(params: {

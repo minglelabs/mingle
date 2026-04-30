@@ -1,4 +1,7 @@
-import { appendNativeRuntimeWebViewParams } from '../src/webViewLayout';
+import {
+  appendNativeRuntimeWebViewParams,
+  shouldEnableIosWebViewBackForwardNavigation,
+} from '../src/webViewLayout';
 
 describe('appendNativeRuntimeWebViewParams', () => {
   it('adds zone-specific banner fallbacks and client build query params', () => {
@@ -23,5 +26,48 @@ describe('appendNativeRuntimeWebViewParams', () => {
         nativeConversationBannerInsetPx: 50,
       }),
     ).toBe('https://example.com/ko?nativeListTopInsetPx=50&nativeConversationBannerPosition=top&nativeConversationTopInsetPx=50');
+  });
+});
+
+describe('shouldEnableIosWebViewBackForwardNavigation', () => {
+  it('keeps iOS WebView history gestures disabled on native live views', () => {
+    expect(
+      shouldEnableIosWebViewBackForwardNavigation({
+        isIosPlatform: true,
+        canGoBack: true,
+        canGoForward: false,
+        pathname: '/ko/conversations',
+      }),
+    ).toBe(false);
+  });
+
+  it('allows iOS WebView history gestures away from native live views', () => {
+    expect(
+      shouldEnableIosWebViewBackForwardNavigation({
+        isIosPlatform: true,
+        canGoBack: true,
+        canGoForward: false,
+        pathname: '/ko/mypage',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not enable gestures on Android or without WebView history', () => {
+    expect(
+      shouldEnableIosWebViewBackForwardNavigation({
+        isIosPlatform: false,
+        canGoBack: true,
+        canGoForward: false,
+        pathname: '/ko/mypage',
+      }),
+    ).toBe(false);
+    expect(
+      shouldEnableIosWebViewBackForwardNavigation({
+        isIosPlatform: true,
+        canGoBack: false,
+        canGoForward: false,
+        pathname: '/ko/mypage',
+      }),
+    ).toBe(false);
   });
 });

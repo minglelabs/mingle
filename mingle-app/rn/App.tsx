@@ -2682,6 +2682,7 @@ function AppInner(): React.JSX.Element {
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,
+              pathname: currentWebPathname,
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
