@@ -477,6 +477,52 @@ export function deriveLateMessageHeightChangeEffectAboveViewportAnchor(
   }
 }
 
+export interface ResolveLateMessageHeightChangeAnchorScrollTopInput {
+  viewportAnchor: ScrollViewportAnchorSnapshot | null
+  nextAnchors: readonly ScrollDateLabelAnchor[]
+  currentScrollTop: number
+  deltaAboveAnchorPx: number
+  maxScrollTop?: number
+  heightTolerancePx?: number
+}
+
+export function resolveLateMessageHeightChangeAnchorScrollTop(
+  input: ResolveLateMessageHeightChangeAnchorScrollTopInput,
+): number | null {
+  const anchorUtteranceId = input.viewportAnchor?.utteranceId
+  if (!anchorUtteranceId || !input.viewportAnchor) return null
+
+  const heightTolerancePx = typeof input.heightTolerancePx === 'number' && Number.isFinite(input.heightTolerancePx)
+    ? Math.max(0, input.heightTolerancePx)
+    : 1
+  if (!Number.isFinite(input.deltaAboveAnchorPx) || Math.abs(input.deltaAboveAnchorPx) <= heightTolerancePx) {
+    return null
+  }
+
+  const nextAnchor = input.nextAnchors.find((anchor) => anchor.utteranceId === anchorUtteranceId)
+  if (!nextAnchor || !Number.isFinite(nextAnchor.offsetTop) || !Number.isFinite(input.viewportAnchor.topOffsetPx)) {
+    return null
+  }
+
+  const currentScrollTop = Number.isFinite(input.currentScrollTop)
+    ? Math.max(0, input.currentScrollTop)
+    : 0
+  const targetScrollTop = nextAnchor.offsetTop - input.viewportAnchor.topOffsetPx
+  if (!Number.isFinite(targetScrollTop)) return null
+
+  const maxScrollTop = typeof input.maxScrollTop === 'number' && Number.isFinite(input.maxScrollTop)
+    ? Math.max(0, input.maxScrollTop)
+    : null
+  const boundedScrollTop = Math.max(0, targetScrollTop)
+  const adjustedScrollTop = maxScrollTop === null
+    ? boundedScrollTop
+    : Math.min(maxScrollTop, boundedScrollTop)
+
+  return Math.abs(adjustedScrollTop - currentScrollTop) > heightTolerancePx
+    ? adjustedScrollTop
+    : null
+}
+
 export function shouldUpdateScrollDateLabelState(
   currentDateLabel: string,
   nextDateLabel: string,

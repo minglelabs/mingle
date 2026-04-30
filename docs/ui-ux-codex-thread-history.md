@@ -5,7 +5,7 @@
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.scroll.logic.ts`
 - Issue: Late per-message height changes can shift content above the current viewport anchor after cached chat offsets have already been used for scroll-derived state.
 - User impact: In long iOS WebView demo chats, delayed translation or bubble layout changes above the visible anchor could otherwise create subtle transcript drift during review.
-- Resolution: During measured anchor refresh, compared previous and next per-message heights, detected changed messages above the viewport anchor, and stored their combined height delta for the follow-up anchor-preservation step without adding DOM scans to the scroll event path.
+- Resolution: During measured anchor refresh, compared previous and next per-message heights, detected changed messages above the viewport anchor, and compensated the chat `scrollTop` from the saved anchor top offset so delayed layout changes preserve the visible message position without adding DOM scans to the scroll event path.
 
 ## 2026-04-30 - Live Demo Chat Viewport Anchor Snapshot
 

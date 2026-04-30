@@ -74,6 +74,7 @@ import {
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
+  resolveLateMessageHeightChangeAnchorScrollTop,
   resolveNewMessageAutoScrollTargetTop,
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
@@ -3950,7 +3951,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const refreshScrollDateLabelAnchors = useCallback(() => {
-    if (!chatRef.current) {
+    const node = chatRef.current
+    if (!node) {
       scrollDateLabelAnchorsRef.current = []
       lateMessageHeightChangeEffectAboveViewportAnchorRef.current = {
         anchorUtteranceId: null,
@@ -3961,12 +3963,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
 
     const previousAnchors = scrollDateLabelAnchorsRef.current
-    const nextAnchors = readScrollDateLabelAnchors(chatRef.current)
-    lateMessageHeightChangeEffectAboveViewportAnchorRef.current = deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+    const nextAnchors = readScrollDateLabelAnchors(node)
+    const lateMessageHeightChangeEffect = deriveLateMessageHeightChangeEffectAboveViewportAnchor({
       previousAnchors,
       nextAnchors,
       viewportAnchor: viewportAnchorSnapshotRef.current,
     })
+    lateMessageHeightChangeEffectAboveViewportAnchorRef.current = lateMessageHeightChangeEffect
+    const adjustedScrollTop = resolveLateMessageHeightChangeAnchorScrollTop({
+      viewportAnchor: viewportAnchorSnapshotRef.current,
+      nextAnchors,
+      currentScrollTop: node.scrollTop,
+      deltaAboveAnchorPx: lateMessageHeightChangeEffect.deltaAboveAnchorPx,
+      maxScrollTop: node.scrollHeight - node.clientHeight,
+    })
+    if (adjustedScrollTop !== null) {
+      node.scrollTop = adjustedScrollTop
+    }
     scrollDateLabelAnchorsRef.current = nextAnchors
   }, [])
 

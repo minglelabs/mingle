@@ -12,6 +12,7 @@ import {
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
+  resolveLateMessageHeightChangeAnchorScrollTop,
   resolveNewMessageAutoScrollTargetTop,
   resolvePrependScrollAnchorTop,
   resolveScrollViewportAnchorSnapshot,
@@ -158,12 +159,16 @@ describe('live-phone-demo scroll/platform logic', () => {
       )
 
       const calculateIndex = refreshSource.indexOf('deriveLateMessageHeightChangeEffectAboveViewportAnchor')
+      const adjustIndex = refreshSource.indexOf('resolveLateMessageHeightChangeAnchorScrollTop')
+      const assignIndex = refreshSource.indexOf('node.scrollTop = adjustedScrollTop')
       const replaceIndex = refreshSource.indexOf('scrollDateLabelAnchorsRef.current = nextAnchors')
 
       expect(refreshSource).toContain('lateMessageHeightChangeEffectAboveViewportAnchorRef')
       expect(refreshSource).toContain('viewportAnchorSnapshotRef.current')
       expect(calculateIndex).toBeGreaterThanOrEqual(0)
-      expect(replaceIndex).toBeGreaterThan(calculateIndex)
+      expect(adjustIndex).toBeGreaterThan(calculateIndex)
+      expect(assignIndex).toBeGreaterThan(adjustIndex)
+      expect(replaceIndex).toBeGreaterThan(assignIndex)
     })
   })
 
@@ -867,6 +872,84 @@ describe('live-phone-demo scroll/platform logic', () => {
         deltaAboveAnchorPx: 0,
         changedMessages: [],
       })
+    })
+  })
+
+  describe('resolveLateMessageHeightChangeAnchorScrollTop', () => {
+    it('keeps the viewport anchor at the same top offset after late height changes above it', () => {
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: -12 },
+        nextAnchors: [
+          { utteranceId: 'before', createdAtMs: 1, offsetTop: 0, offsetHeight: 84 },
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 145, offsetHeight: 90 },
+        ],
+        currentScrollTop: 146,
+        deltaAboveAnchorPx: 11,
+        maxScrollTop: 600,
+      })).toBe(157)
+    })
+
+    it('does not apply a duplicate adjustment when the current scrollTop already preserves the anchor', () => {
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: -12 },
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 145, offsetHeight: 90 },
+        ],
+        currentScrollTop: 156.5,
+        deltaAboveAnchorPx: 11,
+        maxScrollTop: 600,
+      })).toBeNull()
+    })
+
+    it('clamps the compensated scrollTop to the scrollable range', () => {
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: -20 },
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 220, offsetHeight: 90 },
+        ],
+        currentScrollTop: 190,
+        deltaAboveAnchorPx: 50,
+        maxScrollTop: 210,
+      })).toBe(210)
+
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: 24 },
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 12, offsetHeight: 90 },
+        ],
+        currentScrollTop: 12,
+        deltaAboveAnchorPx: -14,
+        maxScrollTop: 210,
+      })).toBe(0)
+    })
+
+    it('skips compensation without a measurable late height effect or anchor', () => {
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: 0 },
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 145, offsetHeight: 90 },
+        ],
+        currentScrollTop: 145,
+        deltaAboveAnchorPx: 1,
+      })).toBeNull()
+
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: { utteranceId: 'missing', topOffsetPx: 0 },
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 145, offsetHeight: 90 },
+        ],
+        currentScrollTop: 145,
+        deltaAboveAnchorPx: 10,
+      })).toBeNull()
+
+      expect(resolveLateMessageHeightChangeAnchorScrollTop({
+        viewportAnchor: null,
+        nextAnchors: [
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 145, offsetHeight: 90 },
+        ],
+        currentScrollTop: 145,
+        deltaAboveAnchorPx: 10,
+      })).toBeNull()
     })
   })
 
