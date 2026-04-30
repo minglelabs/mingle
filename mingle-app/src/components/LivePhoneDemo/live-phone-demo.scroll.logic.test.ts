@@ -199,6 +199,24 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(chatMessageMapSource).not.toContain('onPlayTranslation={()')
     })
 
+    it('keeps repeated chat message rows isolated without changing bubble visuals', () => {
+      const rowStyleSource = readSourceBetween(
+        'const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {',
+        'function buildQaSeededUtterances',
+      )
+      const chatMessageRowSource = readSourceBetween(
+        'type LivePhoneDemoChatMessageRowProps = {',
+        'function postNativeQaCommand',
+      )
+
+      expect(rowStyleSource).toContain("contain: 'layout style'")
+      expect(rowStyleSource).toContain("isolation: 'isolate'")
+      expect(chatMessageRowSource).toContain('style={CHAT_MESSAGE_ROW_STYLE}')
+      expect(rowStyleSource).not.toContain('contentVisibility')
+      expect(rowStyleSource).not.toContain('willChange')
+      expect(rowStyleSource).not.toContain('transform')
+    })
+
     it('keeps the native scroll handler synchronous work limited to anchor snapshots and rAF scheduling', () => {
       const handleScrollSource = readSourceBetween(
         'const handleScroll = useCallback(() => {',

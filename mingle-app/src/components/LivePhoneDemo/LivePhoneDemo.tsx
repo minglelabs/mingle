@@ -273,6 +273,11 @@ const SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS = [
   'QA Korean translation for continuing the clear connection demo.',
 ] as const
 
+const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
+  contain: 'layout style',
+  isolation: 'isolate',
+}
+
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
   const startedAtMs = Date.now() - 60_000
@@ -1200,6 +1205,7 @@ function LivePhoneDemoChatMessageRow({
     <div
       data-utterance-id={utterance.id}
       data-utterance-created-at={resolveUtteranceCreatedAtDataAttribute(utterance)}
+      style={CHAT_MESSAGE_ROW_STYLE}
     >
       <ChatBubble
         utterance={utterance}

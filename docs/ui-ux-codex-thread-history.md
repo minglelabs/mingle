@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Live Demo Chat Message Paint Isolation
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`
+- Issue: Each rendered chat message row contains bubble surfaces with borders, subtle shadows, badges, image avatars, and occasional inline playback animations. In a 500-utterance iOS WebView scroll, invalidation from those descendants can be more expensive if every row participates in the same unconstrained layout/style scope.
+- User impact: Long transcript scrolling could feel less stable on iPhone-class WebViews even though the chat list remains visually unchanged.
+- Resolution: Added a shared repeated-row style that isolates each message row with `contain: layout style` and `isolation: isolate`, avoiding paint clipping, per-row layer promotion, color changes, or bubble class changes so the existing chat appearance and interaction affordances remain intact.
+
 ## 2026-04-30 - Live Demo Chat iOS Scroll Viewport Styles
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`
