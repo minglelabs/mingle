@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
@@ -1159,6 +1159,82 @@ function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): 
 function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
   return `translation:${utteranceId}:${language.trim().toLowerCase()}`
 }
+
+type LivePhoneDemoChatMessageRowProps = {
+  utterance: Utterance
+  uiLocale: string
+  isDraft: boolean
+  onPlayOriginal: (utterance: Utterance) => void
+  onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
+  bubbleTextClassName: string
+  speakingPlaybackKey?: string
+  shouldAnimateEntrance: boolean
+}
+
+function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
+  return (typeof utterance.createdAtMs === 'number' && Number.isFinite(utterance.createdAtMs))
+    ? String(Math.floor(utterance.createdAtMs))
+    : ''
+}
+
+function isPlaybackKeyForUtterance(playbackKey: string | undefined, utteranceId: string): boolean {
+  if (!playbackKey) return false
+
+  return (
+    playbackKey.startsWith(`original:${utteranceId}:`)
+    || playbackKey.startsWith(`translation:${utteranceId}:`)
+  )
+}
+
+function LivePhoneDemoChatMessageRow({
+  utterance,
+  uiLocale,
+  isDraft,
+  onPlayOriginal,
+  onPlayTranslation,
+  bubbleTextClassName,
+  speakingPlaybackKey,
+  shouldAnimateEntrance,
+}: LivePhoneDemoChatMessageRowProps) {
+  return (
+    <div
+      data-utterance-id={utterance.id}
+      data-utterance-created-at={resolveUtteranceCreatedAtDataAttribute(utterance)}
+    >
+      <ChatBubble
+        utterance={utterance}
+        uiLocale={uiLocale}
+        isDraft={isDraft}
+        onPlayOriginal={onPlayOriginal}
+        onPlayTranslation={onPlayTranslation}
+        bubbleTextClassName={bubbleTextClassName}
+        speakingPlaybackKey={speakingPlaybackKey}
+        shouldAnimateEntrance={shouldAnimateEntrance}
+      />
+    </div>
+  )
+}
+
+const MemoizedLivePhoneDemoChatMessageRow = memo(
+  LivePhoneDemoChatMessageRow,
+  function areLivePhoneDemoChatMessageRowsEqual(prev, next) {
+    if (prev.utterance !== next.utterance) return false
+    if (prev.uiLocale !== next.uiLocale) return false
+    if (prev.isDraft !== next.isDraft) return false
+    if (prev.onPlayOriginal !== next.onPlayOriginal) return false
+    if (prev.onPlayTranslation !== next.onPlayTranslation) return false
+    if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
+    if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+
+    const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
+    const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
+    if (wasSpeakingThisUtterance || isSpeakingThisUtterance) {
+      return prev.speakingPlaybackKey === next.speakingPlaybackKey
+    }
+
+    return true
+  },
+)
 
 function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
   if (typeof window === 'undefined') return false
@@ -4675,6 +4751,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     : null
   const storedMessageCountLabel = formatLivePhoneDemoMessageCount(persistedUtteranceCount)
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
+  const activeBubblePlaybackKey = speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey
   const scrollDateTop = Math.max(
     16,
     Math.min(
@@ -5972,26 +6049,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </button>
               )}
               {displayUtterances.map((u) => (
-                <div
+                <MemoizedLivePhoneDemoChatMessageRow
                   key={u.id}
-                  data-utterance-id={u.id}
-                  data-utterance-created-at={
-                    (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
-                      ? String(Math.floor(u.createdAtMs))
-                      : ''
-                  }
-                >
-                  <ChatBubble
-                    utterance={u}
-                    uiLocale={uiLocale}
-                    isDraft={draftUtteranceIds.has(u.id)}
-                    onPlayOriginal={handlePlayOriginalBubbleTts}
-                    onPlayTranslation={handlePlayTranslationBubbleTts}
-                    bubbleTextClassName={chatBubbleTextClassName}
-                    speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
-                    shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
-                  />
-                </div>
+                  utterance={u}
+                  uiLocale={uiLocale}
+                  isDraft={draftUtteranceIds.has(u.id)}
+                  onPlayOriginal={handlePlayOriginalBubbleTts}
+                  onPlayTranslation={handlePlayTranslationBubbleTts}
+                  bubbleTextClassName={chatBubbleTextClassName}
+                  speakingPlaybackKey={activeBubblePlaybackKey}
+                  shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
+                />
               ))}
 
             {/* Demo typing animation */}
