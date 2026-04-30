@@ -18,6 +18,7 @@ import {
   resolveTopVisibleScrollDateLabelAnchor,
   shouldCapturePrependScrollTopSnapshot,
   shouldUpdateScrollDateLabelState,
+  type ScrollDateLabelAnchor,
 } from './live-phone-demo.scroll.logic'
 
 const livePhoneDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
@@ -30,6 +31,41 @@ function readSourceBetween(startMarker: string, endMarker: string): string {
   expect(endIndex).toBeGreaterThan(startIndex)
 
   return livePhoneDemoSource.slice(startIndex, endIndex)
+}
+
+function createStackedScrollAnchors(
+  messages: Array<{ id: string; heightPx: number }>,
+  options: { gapPx?: number; startCreatedAtMs?: number } = {},
+): ScrollDateLabelAnchor[] {
+  const gapPx = options.gapPx ?? 12
+  const startCreatedAtMs = options.startCreatedAtMs ?? 1_700_000_000_000
+  let offsetTop = 0
+
+  return messages.map((message, index) => {
+    const anchor: ScrollDateLabelAnchor = {
+      utteranceId: message.id,
+      createdAtMs: startCreatedAtMs + index * 1_000,
+      offsetTop,
+      offsetHeight: message.heightPx,
+    }
+    offsetTop += message.heightPx + gapPx
+    return anchor
+  })
+}
+
+function getStackedScrollHeight(anchors: readonly ScrollDateLabelAnchor[]): number {
+  const lastAnchor = anchors[anchors.length - 1]
+  return lastAnchor ? lastAnchor.offsetTop + lastAnchor.offsetHeight : 0
+}
+
+function getViewportTopOffsetForAnchor(
+  anchors: readonly ScrollDateLabelAnchor[],
+  utteranceId: string,
+  scrollTop: number,
+): number {
+  const anchor = anchors.find((candidate) => candidate.utteranceId === utteranceId)
+  expect(anchor).toBeDefined()
+  return (anchor?.offsetTop ?? 0) - scrollTop
 }
 
 describe('live-phone-demo scroll/platform logic', () => {
@@ -576,6 +612,96 @@ describe('live-phone-demo scroll/platform logic', () => {
 
       const nextVisibleMessageViewportTop = (visibleMessageDocumentTop + prependedHeight) - nextScrollTop
       expect(Math.abs(nextVisibleMessageViewportTop - visibleMessageViewportTop)).toBeLessThanOrEqual(1)
+    })
+
+    it('preserves the top-visible utterance viewport offset when older chat items are inserted before it', () => {
+      const existingMessages = Array.from({ length: 18 }, (_, index) => ({
+        id: `current-${index}`,
+        heightPx: 54 + (index % 4) * 17,
+      }))
+      const olderMessages = [
+        { id: 'older-0', heightPx: 92 },
+        { id: 'older-1', heightPx: 64 },
+        { id: 'older-2', heightPx: 118 },
+        { id: 'older-3', heightPx: 73 },
+      ]
+      const previousAnchors = createStackedScrollAnchors(existingMessages)
+      const nextAnchors = createStackedScrollAnchors([...olderMessages, ...existingMessages])
+      const anchorUtteranceId = 'current-8'
+      const previousAnchor = previousAnchors.find((anchor) => anchor.utteranceId === anchorUtteranceId)
+
+      expect(previousAnchor).toBeDefined()
+      const previousScrollTop = (previousAnchor?.offsetTop ?? 0) + 23.5
+      const previousSnapshot = resolveScrollViewportAnchorSnapshot({
+        anchors: previousAnchors,
+        scrollTop: previousScrollTop,
+      })
+
+      expect(previousSnapshot).toEqual({
+        utteranceId: anchorUtteranceId,
+        topOffsetPx: -23.5,
+      })
+      if (!previousSnapshot) throw new Error('Expected a viewport anchor snapshot')
+
+      const previousScrollHeight = getStackedScrollHeight(previousAnchors)
+      const nextScrollHeight = getStackedScrollHeight(nextAnchors)
+      const nextScrollTop = resolvePrependScrollAnchorTop({
+        previousScrollHeight,
+        nextScrollHeight,
+        previousScrollTop,
+        maxScrollTop: nextScrollHeight - 640,
+      })
+      const nextViewportTopOffset = getViewportTopOffsetForAnchor(
+        nextAnchors,
+        previousSnapshot.utteranceId,
+        nextScrollTop,
+      )
+
+      expect(Math.abs(nextViewportTopOffset - previousSnapshot.topOffsetPx)).toBeLessThanOrEqual(1)
+    })
+
+    it('keeps the selected anchor stable in a 500-utterance chat after a history page prepends', () => {
+      const existingMessages = Array.from({ length: 500 }, (_, index) => ({
+        id: `current-${index}`,
+        heightPx: 48 + (index % 7) * 9,
+      }))
+      const olderMessages = Array.from({ length: 25 }, (_, index) => ({
+        id: `older-${index}`,
+        heightPx: 52 + (index % 5) * 13,
+      }))
+      const previousAnchors = createStackedScrollAnchors(existingMessages)
+      const nextAnchors = createStackedScrollAnchors([...olderMessages, ...existingMessages])
+      const anchorUtteranceId = 'current-241'
+      const previousAnchor = previousAnchors.find((anchor) => anchor.utteranceId === anchorUtteranceId)
+
+      expect(previousAnchor).toBeDefined()
+      const previousScrollTop = (previousAnchor?.offsetTop ?? 0) + 31.25
+      const previousSnapshot = resolveScrollViewportAnchorSnapshot({
+        anchors: previousAnchors,
+        scrollTop: previousScrollTop,
+      })
+
+      expect(previousSnapshot).toEqual({
+        utteranceId: anchorUtteranceId,
+        topOffsetPx: -31.25,
+      })
+      if (!previousSnapshot) throw new Error('Expected a viewport anchor snapshot')
+
+      const previousScrollHeight = getStackedScrollHeight(previousAnchors)
+      const nextScrollHeight = getStackedScrollHeight(nextAnchors)
+      const nextScrollTop = resolvePrependScrollAnchorTop({
+        previousScrollHeight,
+        nextScrollHeight,
+        previousScrollTop,
+        maxScrollTop: nextScrollHeight - 640,
+      })
+      const nextViewportTopOffset = getViewportTopOffsetForAnchor(
+        nextAnchors,
+        previousSnapshot.utteranceId,
+        nextScrollTop,
+      )
+
+      expect(Math.abs(nextViewportTopOffset - previousSnapshot.topOffsetPx)).toBeLessThanOrEqual(1)
     })
 
     it('uses the latest pending scrollTop snapshot when the user scrolls before prepend applies', () => {
