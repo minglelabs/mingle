@@ -248,6 +248,31 @@ type LivePhoneDemoQaSnapshot = {
   micVisualState: 'idle' | 'connecting' | 'running' | 'error'
 }
 
+const SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT = 500
+const SCROLL_PERFORMANCE_CHAT_STARTED_AT_MS = Date.UTC(2026, 0, 15, 9, 0, 0)
+const SCROLL_PERFORMANCE_CHAT_TURN_INTERVAL_MS = 45_000
+const SCROLL_PERFORMANCE_CHAT_SPEAKERS = ['qa-alex', 'qa-mina', 'qa-sam', 'qa-ji'] as const
+const SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS = [
+  'We are checking the train platform and the meeting point before everyone arrives.',
+  'The hallway is busy, so I will repeat the room number and wait near the sign.',
+  'Please confirm whether the next update should be short or include the full context.',
+  'I heard the schedule changed, and I want to make sure the group has the same details.',
+  'The first option is faster, but the second option gives people more time to prepare.',
+  'Can you summarize the last decision and tell me what action is still open?',
+  'I will stay on this call while the rest of the team joins from the lobby.',
+  'The connection is clear now, so we can continue with the translation demo.',
+] as const
+const SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS = [
+  'QA Korean translation for the platform and meeting point check.',
+  'QA Korean translation for the busy hallway and room number update.',
+  'QA Korean translation for choosing a short or detailed update.',
+  'QA Korean translation for the schedule change confirmation.',
+  'QA Korean translation for comparing the faster and slower options.',
+  'QA Korean translation for summarizing the decision and open action.',
+  'QA Korean translation for waiting while the team joins.',
+  'QA Korean translation for continuing the clear connection demo.',
+] as const
+
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
   const startedAtMs = Date.now() - 60_000
@@ -271,11 +296,38 @@ function buildQaSeededUtterances(count: number): Utterance[] {
   })
 }
 
+function buildQaScrollPerformanceUtterances(): Utterance[] {
+  return Array.from({ length: SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT }, (_, index) => {
+    const turnNumber = index + 1
+    const textIndex = index % SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS.length
+    const speakerIndex = index % SCROLL_PERFORMANCE_CHAT_SPEAKERS.length
+    const createdAtMs = SCROLL_PERFORMANCE_CHAT_STARTED_AT_MS + (index * SCROLL_PERFORMANCE_CHAT_TURN_INTERVAL_MS)
+
+    return {
+      id: `scroll-perf-${String(turnNumber).padStart(3, '0')}`,
+      speaker: SCROLL_PERFORMANCE_CHAT_SPEAKERS[speakerIndex],
+      speakerAvatarSeed: `scroll-performance-speaker-${speakerIndex + 1}`,
+      speakerAvatarIndex: speakerIndex,
+      originalText: `${SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS[textIndex]} Turn ${turnNumber}.`,
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {
+        ko: `${SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS[textIndex]} Turn ${turnNumber}.`,
+      },
+      translationFinalized: {
+        ko: true,
+      },
+      createdAtMs,
+    }
+  })
+}
+
 declare global {
   interface Window {
     __MINGLE_QA__?: {
       getLiveDemoSnapshot: () => LivePhoneDemoQaSnapshot
       seedPersistedHistory: (count?: number) => number
+      seedScrollPerformanceHistory: () => number
       resetPersistedHistory: () => void
       resetUiState: () => void
       getLiveDemoChatScrollHandlerMeasurement: () => LivePhoneDemoScrollHandlerMeasurementSnapshot | null
@@ -4777,6 +4829,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         allowAutoTopPaginationRef.current = false
         replaceConversationHistoryForQa(buildQaSeededUtterances(count))
         return Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
+      },
+      seedScrollPerformanceHistory: () => {
+        const seededUtterances = buildQaScrollPerformanceUtterances()
+        hasInitialBottomAnchorRef.current = false
+        allowAutoTopPaginationRef.current = false
+        replaceConversationHistoryForQa(seededUtterances, { loadAll: true })
+        return seededUtterances.length
       },
       resetPersistedHistory: () => {
         hasInitialBottomAnchorRef.current = false

@@ -32,15 +32,24 @@ import {
 } from './live-phone-demo.scroll.logic'
 
 const livePhoneDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
+const useRealtimeSttSource = readFileSync(new URL('./use-realtime-stt.ts', import.meta.url), 'utf8')
 
-function readSourceBetween(startMarker: string, endMarker: string): string {
-  const startIndex = livePhoneDemoSource.indexOf(startMarker)
-  const endIndex = livePhoneDemoSource.indexOf(endMarker, startIndex + startMarker.length)
+function readTextBetween(source: string, startMarker: string, endMarker: string): string {
+  const startIndex = source.indexOf(startMarker)
+  const endIndex = source.indexOf(endMarker, startIndex + startMarker.length)
 
   expect(startIndex).toBeGreaterThanOrEqual(0)
   expect(endIndex).toBeGreaterThan(startIndex)
 
-  return livePhoneDemoSource.slice(startIndex, endIndex)
+  return source.slice(startIndex, endIndex)
+}
+
+function readSourceBetween(startMarker: string, endMarker: string): string {
+  return readTextBetween(livePhoneDemoSource, startMarker, endMarker)
+}
+
+function readUseRealtimeSttSourceBetween(startMarker: string, endMarker: string): string {
+  return readTextBetween(useRealtimeSttSource, startMarker, endMarker)
 }
 
 function createStackedScrollAnchors(
@@ -88,6 +97,41 @@ function createScrollHandlerMeasurementState(): LivePhoneDemoScrollHandlerMeasur
 }
 
 describe('live-phone-demo scroll/platform logic', () => {
+  describe('scroll performance QA scenario', () => {
+    it('exposes a deterministic 500-utterance scenario without changing the default QA seed', () => {
+      const scenarioSource = readSourceBetween(
+        'function buildQaScrollPerformanceUtterances()',
+        'declare global',
+      )
+      const defaultSeedSource = readSourceBetween(
+        'seedPersistedHistory: (count = 48) => {',
+        '      },\n      seedScrollPerformanceHistory',
+      )
+
+      expect(livePhoneDemoSource).toContain('const SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT = 500')
+      expect(livePhoneDemoSource).toContain('seedScrollPerformanceHistory: () => number')
+      expect(livePhoneDemoSource).toContain('seedScrollPerformanceHistory: () => {')
+      expect(livePhoneDemoSource).toContain('replaceConversationHistoryForQa(seededUtterances, { loadAll: true })')
+      expect(scenarioSource).toContain('SCROLL_PERFORMANCE_CHAT_STARTED_AT_MS')
+      expect(scenarioSource).not.toContain('Date.now(')
+      expect(scenarioSource).not.toContain('new Date(')
+      expect(defaultSeedSource).toContain('buildQaSeededUtterances(count)')
+      expect(defaultSeedSource).not.toContain('buildQaScrollPerformanceUtterances')
+      expect(defaultSeedSource).not.toContain('loadAll')
+    })
+
+    it('lets the QA performance scenario render the full seeded history instead of only the recent batch', () => {
+      const replaceQaSource = readUseRealtimeSttSourceBetween(
+        'const replaceConversationHistoryForQa = useCallback((items: Utterance[], options?: { loadAll?: boolean }) => {',
+        '  const prepareForDeletion = useCallback',
+      )
+
+      expect(replaceQaSource).toContain('const cached = options?.loadAll ? normalized : buildLocalUtteranceCache(normalized)')
+      expect(replaceQaSource).toContain('const initial = options?.loadAll ? cached : cached.slice(-LOAD_BATCH_SIZE)')
+      expect(replaceQaSource).toContain('setHasOlderUtterances(!options?.loadAll &&')
+    })
+  })
+
   describe('scroll event DOM scan contract', () => {
     const fullDomScanPatterns = [
       'querySelector',
