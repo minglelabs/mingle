@@ -57,7 +57,9 @@ import {
   normalizeRecentSearches,
   normalizeSearchTerm,
   replaceConversationLists,
+  releaseConversationCreateLock,
   type TooltipPos,
+  tryAcquireConversationCreateLock,
   upsertConversation,
   updateConversationSummaryStatus,
 } from "@/components/conversation-list.logic";
@@ -2287,7 +2289,9 @@ export default function ConversationList({
   }, [conversations]);
 
   useEffect(() => {
-    isCreatingConversationRef.current = isCreatingConversation;
+    if (isCreatingConversation) {
+      isCreatingConversationRef.current = true;
+    }
   }, [isCreatingConversation]);
 
   useEffect(() => {
@@ -2474,7 +2478,15 @@ export default function ConversationList({
   }, []);
 
   const handleCreateConversation = useCallback(async () => {
-    if (isCreatingConversation || isImportingLegacyConversation) return;
+    if (
+      isCreatingConversationRef.current
+      || isCreatingConversation
+      || isImportingLegacyConversationRef.current
+      || isImportingLegacyConversation
+    ) {
+      return;
+    }
+    if (!tryAcquireConversationCreateLock(isCreatingConversationRef)) return;
     setIsCreatingConversation(true);
     let shouldAutoStartNewConversation = true;
 
@@ -2520,6 +2532,7 @@ export default function ConversationList({
     } catch {
       window.alert(copy.createErrorMessage);
     } finally {
+      releaseConversationCreateLock(isCreatingConversationRef);
       setIsCreatingConversation(false);
     }
   }, [
@@ -2565,29 +2578,46 @@ export default function ConversationList({
       };
     }
 
-    const response = await fetch(buildConversationApiPath(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(),
-      },
-      body: JSON.stringify({
-        locale,
-        selectedLanguages: defaultSelectedLanguages,
-      }),
-    });
-    const nextConversation = await readConversationResponse(response);
-    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
-    setConversations((current) => upsertConversation(current, nextConversation));
-    setOverlayEnterMode("instant");
-    setOverlayExitMode("animate");
-    setAutoStartConversationId(null);
-    setActiveConversation(nextConversation);
+    if (!tryAcquireConversationCreateLock(isCreatingConversationRef)) {
+      const activeAfterLockAttempt = activeConversationRef.current;
+      if (activeAfterLockAttempt?.id) {
+        return {
+          conversationId: activeAfterLockAttempt.id,
+          action: "active",
+        };
+      }
+      throw new Error("conversation_create_in_progress");
+    }
 
-    return {
-      conversationId: nextConversation.id,
-      action: "created",
-    };
+    setIsCreatingConversation(true);
+    try {
+      const response = await fetch(buildConversationApiPath(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...buildConversationRequestHeaders(),
+        },
+        body: JSON.stringify({
+          locale,
+          selectedLanguages: defaultSelectedLanguages,
+        }),
+      });
+      const nextConversation = await readConversationResponse(response);
+      closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+      setConversations((current) => upsertConversation(current, nextConversation));
+      setOverlayEnterMode("instant");
+      setOverlayExitMode("animate");
+      setAutoStartConversationId(null);
+      setActiveConversation(nextConversation);
+
+      return {
+        conversationId: nextConversation.id,
+        action: "created",
+      };
+    } finally {
+      releaseConversationCreateLock(isCreatingConversationRef);
+      setIsCreatingConversation(false);
+    }
   }, [closeSearchOverlay, defaultSelectedLanguages, locale, openConversationSummary]);
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {

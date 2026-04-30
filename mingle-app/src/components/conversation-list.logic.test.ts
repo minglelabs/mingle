@@ -13,7 +13,9 @@ import {
   normalizeRecentSearches,
   normalizeSearchTerm,
   replaceConversationLists,
+  releaseConversationCreateLock,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
+  tryAcquireConversationCreateLock,
   upsertConversation,
   updateConversationSummaryStatus,
 } from "@/components/conversation-list.logic";
@@ -52,6 +54,19 @@ function buildConversationSummary(
 }
 
 describe("conversation-list logic", () => {
+  it("locks conversation creation synchronously before React state updates", () => {
+    const lockRef = { current: false };
+
+    expect(tryAcquireConversationCreateLock(lockRef)).toBe(true);
+    expect(lockRef.current).toBe(true);
+    expect(tryAcquireConversationCreateLock(lockRef)).toBe(false);
+
+    releaseConversationCreateLock(lockRef);
+
+    expect(lockRef.current).toBe(false);
+    expect(tryAcquireConversationCreateLock(lockRef)).toBe(true);
+  });
+
   it("normalizes search terms and recent searches case-insensitively", () => {
     expect(normalizeSearchTerm("  hello   world  ")).toBe("hello world");
     expect(normalizeRecentSearches([
