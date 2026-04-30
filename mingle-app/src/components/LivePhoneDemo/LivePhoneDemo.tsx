@@ -3822,6 +3822,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
+  const scrollStateFrameRef = useRef<{
+    frameId: number | null
+    fromUserScroll: boolean
+  }>({
+    frameId: null,
+    fromUserScroll: false,
+  })
   const openSmoothScrollTimerRef = useRef<number | null>(null)
   const openSmoothScrollDeadlineRef = useRef(0)
   const openSmoothScrollLastHeightRef = useRef(0)
@@ -3935,8 +3942,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     }
   }, [hasOlderUtterances, handleLoadOlder, uiLocale])
 
-  const handleScroll = useCallback(() => {
-    const fromUserScroll = isUserScrollIntentActive()
+  const processScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {
+    const { fromUserScroll } = options
     updateScrollDerivedState({ fromUserScroll })
 
     if (fromUserScroll && (!shouldAutoScroll.current || suppressAutoScrollRef.current)) {
@@ -3961,7 +3968,35 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         setScrollUiVisible(false)
       }, SCROLL_UI_HIDE_DELAY_MS)
     }
-  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer, isUserScrollIntentActive, updateScrollDerivedState])
+  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer, updateScrollDerivedState])
+
+  const cancelScheduledScrollEventDerivedState = useCallback(() => {
+    if (scrollStateFrameRef.current.frameId !== null) {
+      window.cancelAnimationFrame(scrollStateFrameRef.current.frameId)
+      scrollStateFrameRef.current.frameId = null
+    }
+    scrollStateFrameRef.current.fromUserScroll = false
+  }, [])
+
+  const scheduleScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {
+    scrollStateFrameRef.current.fromUserScroll = (
+      scrollStateFrameRef.current.fromUserScroll
+      || options.fromUserScroll
+    )
+
+    if (scrollStateFrameRef.current.frameId !== null) return
+
+    scrollStateFrameRef.current.frameId = window.requestAnimationFrame(() => {
+      const fromUserScroll = scrollStateFrameRef.current.fromUserScroll
+      scrollStateFrameRef.current.frameId = null
+      scrollStateFrameRef.current.fromUserScroll = false
+      processScrollEventDerivedState({ fromUserScroll })
+    })
+  }, [processScrollEventDerivedState])
+
+  const handleScroll = useCallback(() => {
+    scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
+  }, [isUserScrollIntentActive, scheduleScrollEventDerivedState])
 
   const handleScrollToBottom = useCallback(() => {
     if (!chatRef.current) return
@@ -4226,10 +4261,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     return () => {
+      cancelScheduledScrollEventDerivedState()
       clearPendingAutoScrollTimer()
       clearScrollUiHideTimer()
     }
-  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer])
+  }, [cancelScheduledScrollEventDerivedState, clearPendingAutoScrollTimer, clearScrollUiHideTimer])
 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
