@@ -167,8 +167,36 @@ describe('live-phone-demo scroll/platform logic', () => {
 
     it('keeps viewport anchor tracking on message ids and cached offsets', () => {
       expect(livePhoneDemoSource).toContain('viewportAnchorSnapshotRef')
-      expect(livePhoneDemoSource).toContain('data-utterance-id={u.id}')
+      expect(livePhoneDemoSource).toContain('data-utterance-id={utterance.id}')
       expect(livePhoneDemoSource).toContain('resolveScrollViewportAnchorSnapshot')
+    })
+
+    it('keeps long-chat message rendering behind memoized stable row props', () => {
+      const chatMessageRowSource = readSourceBetween(
+        'type LivePhoneDemoChatMessageRowProps = {',
+        'function postNativeQaCommand',
+      )
+      const chatMessageMapSource = readSourceBetween(
+        '{displayUtterances.map((u) => (',
+        '            {/* Demo typing animation */}',
+      )
+
+      expect(chatMessageRowSource).toContain('const MemoizedLivePhoneDemoChatMessageRow = memo(')
+      expect(chatMessageRowSource).toContain('if (prev.utterance !== next.utterance) return false')
+      expect(chatMessageRowSource).toContain('if (prev.onPlayOriginal !== next.onPlayOriginal) return false')
+      expect(chatMessageRowSource).toContain('if (prev.onPlayTranslation !== next.onPlayTranslation) return false')
+      expect(chatMessageRowSource).toContain('if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false')
+      expect(chatMessageRowSource).toContain('isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)')
+
+      expect(chatMessageMapSource).toContain('<MemoizedLivePhoneDemoChatMessageRow')
+      expect(chatMessageMapSource).toContain('utterance={u}')
+      expect(chatMessageMapSource).toContain('onPlayOriginal={handlePlayOriginalBubbleTts}')
+      expect(chatMessageMapSource).toContain('onPlayTranslation={handlePlayTranslationBubbleTts}')
+      expect(chatMessageMapSource).toContain('speakingPlaybackKey={activeBubblePlaybackKey}')
+      expect(chatMessageMapSource).not.toContain('<ChatBubble')
+      expect(chatMessageMapSource).not.toContain('style={{')
+      expect(chatMessageMapSource).not.toContain('onPlayOriginal={()')
+      expect(chatMessageMapSource).not.toContain('onPlayTranslation={()')
     })
 
     it('keeps the native scroll handler synchronous work limited to anchor snapshots and rAF scheduling', () => {
