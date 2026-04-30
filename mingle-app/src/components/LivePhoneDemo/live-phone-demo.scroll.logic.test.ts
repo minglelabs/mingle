@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   AUTO_SCROLL_MIN_INTERVAL_MS,
@@ -14,7 +15,53 @@ import {
   shouldUpdateScrollDateLabelState,
 } from './live-phone-demo.scroll.logic'
 
+const livePhoneDemoSource = readFileSync(new URL('./LivePhoneDemo.tsx', import.meta.url), 'utf8')
+
+function readSourceBetween(startMarker: string, endMarker: string): string {
+  const startIndex = livePhoneDemoSource.indexOf(startMarker)
+  const endIndex = livePhoneDemoSource.indexOf(endMarker, startIndex + startMarker.length)
+
+  expect(startIndex).toBeGreaterThanOrEqual(0)
+  expect(endIndex).toBeGreaterThan(startIndex)
+
+  return livePhoneDemoSource.slice(startIndex, endIndex)
+}
+
 describe('live-phone-demo scroll/platform logic', () => {
+  describe('scroll event DOM scan contract', () => {
+    const fullDomScanPatterns = [
+      'querySelector',
+      'querySelectorAll',
+      'getElementsBy',
+      'childNodes',
+      '.children',
+      'readScrollDateLabelAnchors',
+    ]
+
+    it('keeps the native scroll event handler free of full-DOM scans', () => {
+      const handleScrollSource = readSourceBetween(
+        'const handleScroll = useCallback(() => {',
+        'const handleScrollToBottom = useCallback',
+      )
+
+      for (const pattern of fullDomScanPatterns) {
+        expect(handleScrollSource).not.toContain(pattern)
+      }
+    })
+
+    it('keeps rAF-throttled scroll-derived state on cached date-label anchors', () => {
+      const updateScrollDerivedStateSource = readSourceBetween(
+        'const updateScrollDerivedState = useCallback((options?: { fromUserScroll?: boolean }) => {',
+        'const processScrollEventDerivedState = useCallback',
+      )
+
+      expect(updateScrollDerivedStateSource).toContain('scrollDateLabelAnchorsRef.current')
+      for (const pattern of fullDomScanPatterns) {
+        expect(updateScrollDerivedStateSource).not.toContain(pattern)
+      }
+    })
+  })
+
   describe('createAutoScrollScheduler', () => {
     beforeEach(() => {
       vi.useFakeTimers()
