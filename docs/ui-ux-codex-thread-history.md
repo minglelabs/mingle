@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Messenger Bottom Tab Height Tightening
+
+- Surface: `mingle-app/src/components/bottom-tab-bar.tsx`
+- Issue: The messenger bottom tab bar used a 72px base height before safe-area padding, leaving too much vertical margin around the tab icons on physical mobile devices.
+- User impact: The bottom navigation felt oversized and took more screen space than necessary in the revived mobile messenger view.
+- Resolution: Reduced the bottom tab bar base height to 60px while preserving safe-area padding, centered icon alignment, native query preservation, and the existing tab targets.
+
 ## 2026-04-30 - Android Ngrok WebView Styling Recovery
 
 - Surface: `mingle-app/rn/App.tsx`, Android RN WebView on the devbox ngrok device profile.
