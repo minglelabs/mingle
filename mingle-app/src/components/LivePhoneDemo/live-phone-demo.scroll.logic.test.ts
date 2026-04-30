@@ -6,6 +6,7 @@ import {
   CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+  LIVE_DEMO_SCROLL_HANDLER_MEDIAN_BUDGET_MS,
   LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM,
   createAutoScrollScheduler,
   deriveAutoScrollClockDelayMs,
@@ -310,6 +311,7 @@ describe('live-phone-demo scroll/platform logic', () => {
         representative: true,
         medianMs: 2,
       })
+      expect(representativeSnapshot.medianMs).toBeLessThanOrEqual(LIVE_DEMO_SCROLL_HANDLER_MEDIAN_BUDGET_MS)
     })
 
     it('keeps only the latest bounded sample window active', () => {
