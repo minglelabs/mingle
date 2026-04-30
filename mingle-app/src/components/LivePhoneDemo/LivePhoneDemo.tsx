@@ -86,6 +86,7 @@ import {
   resolveTopVisibleScrollDateLabelAnchor,
   resolvePrependScrollAnchorTop,
   shouldCapturePrependScrollTopSnapshot,
+  shouldReadPrependScrollHeightForSnapshot,
   shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
   type LateMessageHeightChangeEffectAboveViewportAnchor,
@@ -4191,14 +4192,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const measurementStartMs = scrollHandlerMeasurementRef.current ? readBrowserPerformanceNowMs() : null
     const node = chatRef.current
     if (node) {
-      captureCurrentViewportAnchorSnapshot(node.scrollTop)
-    }
-    if (node && shouldCapturePrependScrollTopSnapshot({
-      isPaginating: isPaginatingRef.current,
-      previousScrollHeight: prevScrollHeightRef.current,
-      currentScrollHeight: node.scrollHeight,
-    })) {
-      prevScrollTopRef.current = node.scrollTop
+      const scrollTop = node.scrollTop
+      captureCurrentViewportAnchorSnapshot(scrollTop)
+      const previousScrollHeight = prevScrollHeightRef.current
+
+      if (
+        shouldReadPrependScrollHeightForSnapshot({
+          isPaginating: isPaginatingRef.current,
+          previousScrollHeight,
+        })
+        && shouldCapturePrependScrollTopSnapshot({
+          isPaginating: true,
+          previousScrollHeight,
+          currentScrollHeight: node.scrollHeight,
+        })
+      ) {
+        prevScrollTopRef.current = scrollTop
+      }
     }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
     if (measurementStartMs !== null) {

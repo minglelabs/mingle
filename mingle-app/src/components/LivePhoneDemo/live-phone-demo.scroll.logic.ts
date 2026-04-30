@@ -342,13 +342,26 @@ export interface ShouldCapturePrependScrollTopSnapshotInput {
   heightTolerancePx?: number
 }
 
-export function shouldCapturePrependScrollTopSnapshot(
-  input: ShouldCapturePrependScrollTopSnapshotInput,
-): boolean {
+export interface ShouldReadPrependScrollHeightForSnapshotInput {
+  isPaginating: boolean
+  previousScrollHeight: number | null | undefined
+}
+
+export function shouldReadPrependScrollHeightForSnapshot(
+  input: ShouldReadPrependScrollHeightForSnapshotInput,
+): input is ShouldReadPrependScrollHeightForSnapshotInput & { previousScrollHeight: number } {
   if (!input.isPaginating) return false
   if (typeof input.previousScrollHeight !== 'number' || !Number.isFinite(input.previousScrollHeight)) {
     return false
   }
+
+  return true
+}
+
+export function shouldCapturePrependScrollTopSnapshot(
+  input: ShouldCapturePrependScrollTopSnapshotInput,
+): boolean {
+  if (!shouldReadPrependScrollHeightForSnapshot(input)) return false
 
   const currentScrollHeight = Number.isFinite(input.currentScrollHeight)
     ? input.currentScrollHeight

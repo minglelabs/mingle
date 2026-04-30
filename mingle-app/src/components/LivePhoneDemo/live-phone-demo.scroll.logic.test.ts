@@ -24,6 +24,7 @@ import {
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
   shouldCapturePrependScrollTopSnapshot,
+  shouldReadPrependScrollHeightForSnapshot,
   shouldUpdateScrollDateLabelState,
   type LivePhoneDemoScrollHandlerMeasurementState,
   type ScrollDateLabelAnchor,
@@ -132,15 +133,29 @@ describe('live-phone-demo scroll/platform logic', () => {
       )
 
       expect(handleScrollSource).toContain('const measurementStartMs = scrollHandlerMeasurementRef.current')
-      expect(handleScrollSource).toContain('captureCurrentViewportAnchorSnapshot(node.scrollTop)')
+      expect(handleScrollSource).toContain('captureCurrentViewportAnchorSnapshot(scrollTop)')
       expect(handleScrollSource).toContain('shouldCapturePrependScrollTopSnapshot')
-      expect(handleScrollSource).toContain('prevScrollTopRef.current = node.scrollTop')
+      expect(handleScrollSource).toContain('prevScrollTopRef.current = scrollTop')
       expect(handleScrollSource).toContain('scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })')
       expect(handleScrollSource).toContain('recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)')
       expect(handleScrollSource).not.toContain('updateScrollDerivedState({')
       expect(handleScrollSource).not.toContain('setScrollMetrics(')
       expect(handleScrollSource).not.toContain('setScrollDateLabel(')
       expect(handleScrollSource).not.toContain('setScrollUiVisible(')
+    })
+
+    it('keeps scrollHeight reads behind the pending-prepend guard in the native scroll handler', () => {
+      const handleScrollSource = readSourceBetween(
+        'const handleScroll = useCallback(() => {',
+        'const handleScrollToBottom = useCallback',
+      )
+
+      const guardIndex = handleScrollSource.indexOf('shouldReadPrependScrollHeightForSnapshot({')
+      const scrollHeightIndex = handleScrollSource.indexOf('currentScrollHeight: node.scrollHeight')
+
+      expect(handleScrollSource).toContain('const scrollTop = node.scrollTop')
+      expect(guardIndex).toBeGreaterThanOrEqual(0)
+      expect(scrollHeightIndex).toBeGreaterThan(guardIndex)
     })
 
     it('gates the chat scroll handler measurement to one dev-only counter', () => {
@@ -774,6 +789,11 @@ describe('live-phone-demo scroll/platform logic', () => {
 
   describe('resolvePrependScrollAnchorTop', () => {
     it('captures a pending scrollTop snapshot while prepend height has not applied yet', () => {
+      expect(shouldReadPrependScrollHeightForSnapshot({
+        isPaginating: true,
+        previousScrollHeight: 1_200,
+      })).toBe(true)
+
       expect(shouldCapturePrependScrollTopSnapshot({
         isPaginating: true,
         previousScrollHeight: 1_200,
@@ -790,6 +810,15 @@ describe('live-phone-demo scroll/platform logic', () => {
     })
 
     it('does not capture a pending scrollTop snapshot outside prepend pagination', () => {
+      expect(shouldReadPrependScrollHeightForSnapshot({
+        isPaginating: false,
+        previousScrollHeight: 1_200,
+      })).toBe(false)
+      expect(shouldReadPrependScrollHeightForSnapshot({
+        isPaginating: true,
+        previousScrollHeight: null,
+      })).toBe(false)
+
       expect(shouldCapturePrependScrollTopSnapshot({
         isPaginating: false,
         previousScrollHeight: 1_200,
