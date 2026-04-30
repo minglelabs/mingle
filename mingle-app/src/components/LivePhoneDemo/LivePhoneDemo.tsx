@@ -67,6 +67,9 @@ import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   INITIAL_SCROLL_METRICS,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+  LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
   areScrollMetricsEqual,
   createAutoScrollScheduler,
   deriveLateMessageHeightChangeEffectAboveViewportAnchor,
@@ -74,7 +77,10 @@ import {
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
+  readLivePhoneDemoScrollHandlerMeasurement,
+  recordLivePhoneDemoScrollHandlerMeasurement,
   resolveLateMessageHeightChangeAnchorScrollTop,
+  resolveLivePhoneDemoScrollMeasurementCounter,
   resolveNewMessageAutoScrollTargetTop,
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
@@ -83,6 +89,8 @@ import {
   shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
   type LateMessageHeightChangeEffectAboveViewportAnchor,
+  type LivePhoneDemoScrollHandlerMeasurementSnapshot,
+  type LivePhoneDemoScrollHandlerMeasurementState,
   type LivePhoneDemoScrollMetrics,
   type ScrollDateLabelAnchor,
   type ScrollViewportAnchorSnapshot,
@@ -269,6 +277,8 @@ declare global {
       seedPersistedHistory: (count?: number) => number
       resetPersistedHistory: () => void
       resetUiState: () => void
+      getLiveDemoChatScrollHandlerMeasurement: () => LivePhoneDemoScrollHandlerMeasurementSnapshot | null
+      resetLiveDemoChatScrollHandlerMeasurement: () => boolean
       setMenuOpen: (nextOpen: boolean) => void
       setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => void
       setComposerOpen: (nextOpen: boolean) => void
@@ -341,6 +351,22 @@ function isLikelyIOSPlatform(): boolean {
   }
 
   return /Mac/i.test(userAgent) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1
+}
+
+function readBrowserPerformanceNowMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now()
+}
+
+function readLiveDemoScrollMeasurementStorageValue(): string | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    return window.localStorage.getItem(LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY)
+  } catch {
+    return null
+  }
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -3889,9 +3915,57 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const scrollDateLabelRef = useRef('')
   const previousDisplayUtteranceIdsRef = useRef<string[] | null>(null)
   const scrollMetricsRef = useRef<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
+  const scrollHandlerMeasurementRef = useRef<LivePhoneDemoScrollHandlerMeasurementState | null>(null)
+  const scrollHandlerMeasurementLoggedSampleCountRef = useRef(0)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
+
+  const configureScrollHandlerMeasurement = useCallback(() => {
+    if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') {
+      scrollHandlerMeasurementRef.current = null
+      return
+    }
+
+    const activeCounter = resolveLivePhoneDemoScrollMeasurementCounter({
+      nodeEnv: process.env.NODE_ENV,
+      search: window.location.search || '',
+      storageValue: readLiveDemoScrollMeasurementStorageValue(),
+    })
+
+    scrollHandlerMeasurementLoggedSampleCountRef.current = 0
+    scrollHandlerMeasurementRef.current = activeCounter === LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER
+      ? {
+          counter: LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+          samplesMs: [],
+          latestMs: 0,
+          maxMs: 0,
+        }
+      : null
+  }, [])
+
+  const recordScrollHandlerMeasurement = useCallback((durationMs: number) => {
+    if (process.env.NODE_ENV === 'production') return
+
+    const measurementState = scrollHandlerMeasurementRef.current
+    if (!measurementState) return
+
+    const snapshot = recordLivePhoneDemoScrollHandlerMeasurement(measurementState, durationMs)
+    if (
+      !snapshot.representative
+      || snapshot.sampleCount % LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET !== 0
+      || scrollHandlerMeasurementLoggedSampleCountRef.current === snapshot.sampleCount
+    ) {
+      return
+    }
+
+    scrollHandlerMeasurementLoggedSampleCountRef.current = snapshot.sampleCount
+    console.info('[MingleLiveDemoScroll]', snapshot)
+  }, [])
+
+  useEffect(() => {
+    configureScrollHandlerMeasurement()
+  }, [configureScrollHandlerMeasurement])
 
   const captureCurrentViewportAnchorSnapshot = useCallback((scrollTop: number) => {
     viewportAnchorSnapshotRef.current = resolveScrollViewportAnchorSnapshot({
@@ -4114,6 +4188,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [processScrollEventDerivedState])
 
   const handleScroll = useCallback(() => {
+    const measurementStartMs = scrollHandlerMeasurementRef.current ? readBrowserPerformanceNowMs() : null
     const node = chatRef.current
     if (node) {
       captureCurrentViewportAnchorSnapshot(node.scrollTop)
@@ -4126,7 +4201,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       prevScrollTopRef.current = node.scrollTop
     }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
-  }, [captureCurrentViewportAnchorSnapshot, isUserScrollIntentActive, scheduleScrollEventDerivedState])
+    if (measurementStartMs !== null) {
+      recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)
+    }
+  }, [
+    captureCurrentViewportAnchorSnapshot,
+    isUserScrollIntentActive,
+    recordScrollHandlerMeasurement,
+    scheduleScrollEventDerivedState,
+  ])
 
   const handleScrollToBottom = useCallback(() => {
     if (!chatRef.current) return
@@ -4712,6 +4795,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         } catch {
           // Ignore persistence failures during QA-only state reset.
         }
+      },
+      getLiveDemoChatScrollHandlerMeasurement: () => {
+        const measurementState = scrollHandlerMeasurementRef.current
+        return measurementState ? readLivePhoneDemoScrollHandlerMeasurement(measurementState) : null
+      },
+      resetLiveDemoChatScrollHandlerMeasurement: () => {
+        const measurementState = scrollHandlerMeasurementRef.current
+        if (!measurementState) return false
+
+        measurementState.samplesMs = []
+        measurementState.latestMs = 0
+        measurementState.maxMs = 0
+        scrollHandlerMeasurementLoggedSampleCountRef.current = 0
+        return true
       },
       setMenuOpen: (nextOpen: boolean) => {
         if (nextOpen) {

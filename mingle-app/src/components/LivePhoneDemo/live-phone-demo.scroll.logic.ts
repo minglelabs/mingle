@@ -1,6 +1,120 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 100
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 export const CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
+export const LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM = 'mingleScrollMeasure'
+export const LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY = 'mingle_live_demo_scroll_measure'
+export const LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER = 'chat-scroll-handler'
+export const LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET = 120
+export const LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_MAX_SAMPLES = 240
+
+export type LivePhoneDemoScrollMeasurementCounter = typeof LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER
+
+export interface ResolveLivePhoneDemoScrollMeasurementCounterInput {
+  nodeEnv: string | undefined
+  search?: string
+  storageValue?: string | null
+}
+
+export interface LivePhoneDemoScrollHandlerMeasurementState {
+  counter: LivePhoneDemoScrollMeasurementCounter
+  samplesMs: number[]
+  latestMs: number
+  maxMs: number
+}
+
+export interface LivePhoneDemoScrollHandlerMeasurementSnapshot {
+  counter: LivePhoneDemoScrollMeasurementCounter
+  sampleCount: number
+  sampleTarget: number
+  representative: boolean
+  latestMs: number
+  medianMs: number
+  maxMs: number
+}
+
+function normalizeMeasurementDurationMs(durationMs: number): number {
+  return Number.isFinite(durationMs) ? Math.max(0, durationMs) : 0
+}
+
+function roundMeasurementDurationMs(durationMs: number): number {
+  return Math.round(durationMs * 1000) / 1000
+}
+
+function resolveMedianMeasurementDurationMs(samplesMs: readonly number[]): number {
+  if (samplesMs.length === 0) return 0
+
+  const sortedSamples = [...samplesMs].sort((a, b) => a - b)
+  const midpoint = Math.floor(sortedSamples.length / 2)
+
+  return sortedSamples.length % 2 === 0
+    ? (sortedSamples[midpoint - 1] + sortedSamples[midpoint]) / 2
+    : sortedSamples[midpoint]
+}
+
+function readRequestedScrollMeasurementCounter(rawValue: string | null | undefined): LivePhoneDemoScrollMeasurementCounter | null {
+  const requested = rawValue?.trim() ?? ''
+  return requested === LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER
+    ? LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER
+    : null
+}
+
+export function resolveLivePhoneDemoScrollMeasurementCounter(
+  input: ResolveLivePhoneDemoScrollMeasurementCounterInput,
+): LivePhoneDemoScrollMeasurementCounter | null {
+  if (input.nodeEnv === 'production') return null
+
+  const search = input.search ?? ''
+  let requestedFromSearch: string | null = null
+
+  try {
+    requestedFromSearch = new URLSearchParams(search).get(LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM)
+  } catch {
+    requestedFromSearch = null
+  }
+
+  return readRequestedScrollMeasurementCounter(requestedFromSearch)
+    ?? readRequestedScrollMeasurementCounter(input.storageValue)
+}
+
+export function readLivePhoneDemoScrollHandlerMeasurement(
+  state: LivePhoneDemoScrollHandlerMeasurementState,
+  sampleTarget = LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+): LivePhoneDemoScrollHandlerMeasurementSnapshot {
+  const safeSampleTarget = Number.isFinite(sampleTarget)
+    ? Math.max(1, Math.floor(sampleTarget))
+    : LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET
+  const sampleCount = state.samplesMs.length
+
+  return {
+    counter: state.counter,
+    sampleCount,
+    sampleTarget: safeSampleTarget,
+    representative: sampleCount >= safeSampleTarget,
+    latestMs: roundMeasurementDurationMs(state.latestMs),
+    medianMs: roundMeasurementDurationMs(resolveMedianMeasurementDurationMs(state.samplesMs)),
+    maxMs: roundMeasurementDurationMs(state.maxMs),
+  }
+}
+
+export function recordLivePhoneDemoScrollHandlerMeasurement(
+  state: LivePhoneDemoScrollHandlerMeasurementState,
+  durationMs: number,
+  maxSamples = LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_MAX_SAMPLES,
+): LivePhoneDemoScrollHandlerMeasurementSnapshot {
+  const safeMaxSamples = Number.isFinite(maxSamples)
+    ? Math.max(1, Math.floor(maxSamples))
+    : LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_MAX_SAMPLES
+  const normalizedDurationMs = normalizeMeasurementDurationMs(durationMs)
+
+  state.latestMs = normalizedDurationMs
+  state.samplesMs.push(normalizedDurationMs)
+  if (state.samplesMs.length > safeMaxSamples) {
+    state.samplesMs.splice(0, state.samplesMs.length - safeMaxSamples)
+  }
+  state.maxMs = state.samplesMs.reduce((maxMs, sampleMs) => Math.max(maxMs, sampleMs), 0)
+
+  return readLivePhoneDemoScrollHandlerMeasurement(state)
+}
 
 export interface LivePhoneDemoScrollMetrics {
   thumbTop: number

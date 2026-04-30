@@ -4,6 +4,9 @@ import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   AUTO_SCROLL_MIN_INTERVAL_MS,
   CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+  LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM,
   createAutoScrollScheduler,
   deriveAutoScrollClockDelayMs,
   deriveLateMessageHeightChangeEffectAboveViewportAnchor,
@@ -12,13 +15,17 @@ import {
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
+  readLivePhoneDemoScrollHandlerMeasurement,
+  recordLivePhoneDemoScrollHandlerMeasurement,
   resolveLateMessageHeightChangeAnchorScrollTop,
+  resolveLivePhoneDemoScrollMeasurementCounter,
   resolveNewMessageAutoScrollTargetTop,
   resolvePrependScrollAnchorTop,
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
   shouldCapturePrependScrollTopSnapshot,
   shouldUpdateScrollDateLabelState,
+  type LivePhoneDemoScrollHandlerMeasurementState,
   type ScrollDateLabelAnchor,
 } from './live-phone-demo.scroll.logic'
 
@@ -69,6 +76,15 @@ function getViewportTopOffsetForAnchor(
   return (anchor?.offsetTop ?? 0) - scrollTop
 }
 
+function createScrollHandlerMeasurementState(): LivePhoneDemoScrollHandlerMeasurementState {
+  return {
+    counter: LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+    samplesMs: [],
+    latestMs: 0,
+    maxMs: 0,
+  }
+}
+
 describe('live-phone-demo scroll/platform logic', () => {
   describe('scroll event DOM scan contract', () => {
     const fullDomScanPatterns = [
@@ -115,14 +131,29 @@ describe('live-phone-demo scroll/platform logic', () => {
         'const handleScrollToBottom = useCallback',
       )
 
+      expect(handleScrollSource).toContain('const measurementStartMs = scrollHandlerMeasurementRef.current')
       expect(handleScrollSource).toContain('captureCurrentViewportAnchorSnapshot(node.scrollTop)')
       expect(handleScrollSource).toContain('shouldCapturePrependScrollTopSnapshot')
       expect(handleScrollSource).toContain('prevScrollTopRef.current = node.scrollTop')
       expect(handleScrollSource).toContain('scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })')
+      expect(handleScrollSource).toContain('recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)')
       expect(handleScrollSource).not.toContain('updateScrollDerivedState({')
       expect(handleScrollSource).not.toContain('setScrollMetrics(')
       expect(handleScrollSource).not.toContain('setScrollDateLabel(')
       expect(handleScrollSource).not.toContain('setScrollUiVisible(')
+    })
+
+    it('gates the chat scroll handler measurement to one dev-only counter', () => {
+      const measurementSource = readSourceBetween(
+        'const configureScrollHandlerMeasurement = useCallback(() => {',
+        'const captureCurrentViewportAnchorSnapshot = useCallback',
+      )
+
+      expect(measurementSource).toContain("process.env.NODE_ENV === 'production'")
+      expect(measurementSource).toContain('resolveLivePhoneDemoScrollMeasurementCounter')
+      expect(measurementSource).toContain('LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER')
+      expect(measurementSource).toContain('recordLivePhoneDemoScrollHandlerMeasurement')
+      expect(measurementSource).toContain('console.info')
     })
 
     it('coalesces repeated scroll events into one animation frame while preserving user-scroll intent', () => {
@@ -215,6 +246,72 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(earlyReturnIndex).toBeGreaterThanOrEqual(0)
       expect(clearSuppressIndex).toBeGreaterThan(earlyReturnIndex)
       expect(forceFollowIndex).toBeGreaterThan(earlyReturnIndex)
+    })
+  })
+
+  describe('live demo scroll handler measurement', () => {
+    it('enables exactly one development counter when explicitly requested', () => {
+      expect(resolveLivePhoneDemoScrollMeasurementCounter({
+        nodeEnv: 'development',
+        search: `?${LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM}=${LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER}`,
+      })).toBe(LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER)
+
+      expect(resolveLivePhoneDemoScrollMeasurementCounter({
+        nodeEnv: 'development',
+        storageValue: LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+      })).toBe(LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER)
+
+      expect(resolveLivePhoneDemoScrollMeasurementCounter({
+        nodeEnv: 'production',
+        search: `?${LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM}=${LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER}`,
+      })).toBeNull()
+
+      expect(resolveLivePhoneDemoScrollMeasurementCounter({
+        nodeEnv: 'development',
+        search: `?${LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM}=${LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER},fps`,
+      })).toBeNull()
+    })
+
+    it('reports median handler time after representative scroll samples', () => {
+      const state = createScrollHandlerMeasurementState()
+
+      recordLivePhoneDemoScrollHandlerMeasurement(state, 3)
+      recordLivePhoneDemoScrollHandlerMeasurement(state, 1)
+      const earlySnapshot = recordLivePhoneDemoScrollHandlerMeasurement(state, 2)
+
+      expect(earlySnapshot).toMatchObject({
+        sampleCount: 3,
+        sampleTarget: LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+        representative: false,
+        latestMs: 2,
+        medianMs: 2,
+        maxMs: 3,
+      })
+
+      const representativeSnapshot = readLivePhoneDemoScrollHandlerMeasurement(state, 3)
+      expect(representativeSnapshot).toMatchObject({
+        sampleCount: 3,
+        sampleTarget: 3,
+        representative: true,
+        medianMs: 2,
+      })
+    })
+
+    it('keeps only the latest bounded sample window active', () => {
+      const state = createScrollHandlerMeasurementState()
+
+      recordLivePhoneDemoScrollHandlerMeasurement(state, 10, 3)
+      recordLivePhoneDemoScrollHandlerMeasurement(state, 20, 3)
+      recordLivePhoneDemoScrollHandlerMeasurement(state, 30, 3)
+      const snapshot = recordLivePhoneDemoScrollHandlerMeasurement(state, 40, 3)
+
+      expect(state.samplesMs).toEqual([20, 30, 40])
+      expect(snapshot).toMatchObject({
+        sampleCount: 3,
+        latestMs: 40,
+        medianMs: 30,
+        maxMs: 40,
+      })
     })
   })
 
