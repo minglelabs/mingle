@@ -1,5 +1,77 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 100
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
+export const CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
+
+export interface LivePhoneDemoScrollMetrics {
+  thumbTop: number
+  thumbHeight: number
+  clientHeight: number
+  scrollable: boolean
+  distanceToBottom: number
+}
+
+export const INITIAL_SCROLL_METRICS: LivePhoneDemoScrollMetrics = {
+  thumbTop: 0,
+  thumbHeight: 0,
+  clientHeight: 0,
+  scrollable: false,
+  distanceToBottom: 0,
+}
+
+export function areScrollMetricsEqual(
+  current: LivePhoneDemoScrollMetrics,
+  next: LivePhoneDemoScrollMetrics,
+): boolean {
+  return (
+    current.thumbTop === next.thumbTop
+    && current.thumbHeight === next.thumbHeight
+    && current.clientHeight === next.clientHeight
+    && current.scrollable === next.scrollable
+    && current.distanceToBottom === next.distanceToBottom
+  )
+}
+
+export interface DeriveLivePhoneDemoScrollMetricsInput {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  minThumbHeightPx?: number
+}
+
+export function deriveLivePhoneDemoScrollMetrics(
+  input: DeriveLivePhoneDemoScrollMetricsInput,
+): LivePhoneDemoScrollMetrics {
+  const { scrollTop, scrollHeight, clientHeight } = input
+  const minThumbHeightPx = input.minThumbHeightPx ?? CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX
+  const distanceToBottom = Math.max(0, scrollHeight - scrollTop - clientHeight)
+
+  if (scrollHeight > clientHeight + 1) {
+    const thumbHeight = Math.max(
+      minThumbHeightPx,
+      Math.round((clientHeight / scrollHeight) * clientHeight),
+    )
+    const maxThumbTop = Math.max(0, clientHeight - thumbHeight)
+    const denominator = scrollHeight - clientHeight
+    const ratio = denominator > 0 ? Math.min(1, Math.max(0, scrollTop / denominator)) : 0
+    const thumbTop = ratio * maxThumbTop
+
+    return {
+      thumbTop,
+      thumbHeight,
+      clientHeight,
+      scrollable: true,
+      distanceToBottom,
+    }
+  }
+
+  return {
+    thumbTop: 0,
+    thumbHeight: 0,
+    clientHeight,
+    scrollable: false,
+    distanceToBottom,
+  }
+}
 
 export interface NavigatorLikeForIosCheck {
   userAgent?: string

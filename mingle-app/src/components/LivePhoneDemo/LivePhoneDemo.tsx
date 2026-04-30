@@ -66,7 +66,10 @@ import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-versio
 import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  INITIAL_SCROLL_METRICS,
+  areScrollMetricsEqual,
   createAutoScrollScheduler,
+  deriveLivePhoneDemoScrollMetrics,
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
@@ -76,6 +79,7 @@ import {
   resolvePrependScrollAnchorTop,
   shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
+  type LivePhoneDemoScrollMetrics,
   type ScrollDateLabelAnchor,
   type ScrollViewportAnchorSnapshot,
 } from './live-phone-demo.scroll.logic'
@@ -149,7 +153,6 @@ const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = 400
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
-const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
@@ -191,35 +194,6 @@ const VOICE_MODE_START_LABEL = 'Start'
 const VOICE_MODE_STOP_LABEL = 'Stop'
 const LS_KEY_COMPOSER_DRAFT = 'mingle_live_phone_demo_composer_draft_v1'
 const SAFE_AREA_BOTTOM_ENV_MEASURER_ID = '__mingle_live_phone_demo_safe_area_bottom_probe'
-
-type LivePhoneDemoScrollMetrics = {
-  thumbTop: number
-  thumbHeight: number
-  clientHeight: number
-  scrollable: boolean
-  distanceToBottom: number
-}
-
-const INITIAL_SCROLL_METRICS: LivePhoneDemoScrollMetrics = {
-  thumbTop: 0,
-  thumbHeight: 0,
-  clientHeight: 0,
-  scrollable: false,
-  distanceToBottom: 0,
-}
-
-function areScrollMetricsEqual(
-  current: LivePhoneDemoScrollMetrics,
-  next: LivePhoneDemoScrollMetrics,
-): boolean {
-  return (
-    current.thumbTop === next.thumbTop
-    && current.thumbHeight === next.thumbHeight
-    && current.clientHeight === next.clientHeight
-    && current.scrollable === next.scrollable
-    && current.distanceToBottom === next.distanceToBottom
-  )
-}
 
 type PersistedFeedbackDraft = {
   category: LivePhoneDemoFeedbackCategory
@@ -4019,32 +3993,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     suppressAutoScrollRef.current = nextScrollState.suppressAutoScroll
     shouldAutoScroll.current = nextScrollState.shouldAutoScroll
 
-    let nextScrollMetrics: LivePhoneDemoScrollMetrics
-    if (scrollHeight > clientHeight + 1) {
-      const thumbHeight = Math.max(
-        SCROLLBAR_MIN_THUMB_HEIGHT_PX,
-        Math.round((clientHeight / scrollHeight) * clientHeight),
-      )
-      const maxThumbTop = Math.max(0, clientHeight - thumbHeight)
-      const denominator = scrollHeight - clientHeight
-      const ratio = denominator > 0 ? Math.min(1, Math.max(0, scrollTop / denominator)) : 0
-      const thumbTop = ratio * maxThumbTop
-      nextScrollMetrics = {
-        thumbTop,
-        thumbHeight,
-        clientHeight,
-        scrollable: true,
-        distanceToBottom,
-      }
-    } else {
-      nextScrollMetrics = {
-        thumbTop: 0,
-        thumbHeight: 0,
-        clientHeight,
-        scrollable: false,
-        distanceToBottom,
-      }
-    }
+    const nextScrollMetrics = deriveLivePhoneDemoScrollMetrics({
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+    })
     applyScrollMetricsState(nextScrollMetrics)
 
     applyScrollDateLabelState(findTopVisibleUtteranceDateLabel(

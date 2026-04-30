@@ -3,8 +3,10 @@ import { readFileSync } from 'node:fs'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   AUTO_SCROLL_MIN_INTERVAL_MS,
+  CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
   createAutoScrollScheduler,
   deriveAutoScrollClockDelayMs,
+  deriveLivePhoneDemoScrollMetrics,
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
@@ -66,6 +68,64 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(livePhoneDemoSource).toContain('viewportAnchorSnapshotRef')
       expect(livePhoneDemoSource).toContain('data-utterance-id={u.id}')
       expect(livePhoneDemoSource).toContain('resolveScrollViewportAnchorSnapshot')
+    })
+  })
+
+  describe('deriveLivePhoneDemoScrollMetrics', () => {
+    it('calculates scroll thumb geometry and distance from the current DOM metrics', () => {
+      expect(deriveLivePhoneDemoScrollMetrics({
+        scrollTop: 300,
+        scrollHeight: 1_200,
+        clientHeight: 400,
+      })).toEqual({
+        thumbTop: 100.125,
+        thumbHeight: 133,
+        clientHeight: 400,
+        scrollable: true,
+        distanceToBottom: 500,
+      })
+    })
+
+    it('uses the minimum thumb size and clamps the thumb at the bottom for large chats', () => {
+      expect(deriveLivePhoneDemoScrollMetrics({
+        scrollTop: 19_500,
+        scrollHeight: 20_000,
+        clientHeight: 700,
+      })).toEqual({
+        thumbTop: 700 - CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
+        thumbHeight: CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
+        clientHeight: 700,
+        scrollable: true,
+        distanceToBottom: 0,
+      })
+    })
+
+    it('treats content within the one-pixel overflow tolerance as non-scrollable', () => {
+      expect(deriveLivePhoneDemoScrollMetrics({
+        scrollTop: 0,
+        scrollHeight: 401,
+        clientHeight: 400,
+      })).toEqual({
+        thumbTop: 0,
+        thumbHeight: 0,
+        clientHeight: 400,
+        scrollable: false,
+        distanceToBottom: 1,
+      })
+    })
+
+    it('keeps iOS top rubber-band distance while pinning the thumb to the top', () => {
+      expect(deriveLivePhoneDemoScrollMetrics({
+        scrollTop: -24,
+        scrollHeight: 1_200,
+        clientHeight: 400,
+      })).toEqual({
+        thumbTop: 0,
+        thumbHeight: 133,
+        clientHeight: 400,
+        scrollable: true,
+        distanceToBottom: 824,
+      })
     })
   })
 
