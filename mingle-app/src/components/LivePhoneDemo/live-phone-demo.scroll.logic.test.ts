@@ -11,6 +11,7 @@ import {
   isLikelyIOSNavigator,
   resolveNewMessageAutoScrollTargetTop,
   resolvePrependScrollAnchorTop,
+  resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
   shouldUpdateScrollDateLabelState,
 } from './live-phone-demo.scroll.logic'
@@ -59,6 +60,12 @@ describe('live-phone-demo scroll/platform logic', () => {
       for (const pattern of fullDomScanPatterns) {
         expect(updateScrollDerivedStateSource).not.toContain(pattern)
       }
+    })
+
+    it('keeps viewport anchor tracking on message ids and cached offsets', () => {
+      expect(livePhoneDemoSource).toContain('viewportAnchorSnapshotRef')
+      expect(livePhoneDemoSource).toContain('data-utterance-id={u.id}')
+      expect(livePhoneDemoSource).toContain('resolveScrollViewportAnchorSnapshot')
     })
   })
 
@@ -486,6 +493,30 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(resolveTopVisibleScrollDateLabelAnchor({
         anchors,
         scrollTop: 200,
+      })).toBeNull()
+    })
+  })
+
+  describe('resolveScrollViewportAnchorSnapshot', () => {
+    it('tracks the top-visible message id and viewport-relative top offset', () => {
+      expect(resolveScrollViewportAnchorSnapshot({
+        anchors: [
+          { utteranceId: 'oldest-visible', createdAtMs: 1_700_000_010_000, offsetTop: 16, offsetHeight: 160 },
+          { utteranceId: 'next-visible', createdAtMs: 1_700_000_011_000, offsetTop: 188, offsetHeight: 44 },
+        ],
+        scrollTop: 132,
+      })).toEqual({
+        utteranceId: 'oldest-visible',
+        topOffsetPx: -116,
+      })
+    })
+
+    it('does not create a viewport anchor snapshot without a message id', () => {
+      expect(resolveScrollViewportAnchorSnapshot({
+        anchors: [
+          { createdAtMs: 1_700_000_010_000, offsetTop: 16, offsetHeight: 160 },
+        ],
+        scrollTop: 132,
       })).toBeNull()
     })
   })

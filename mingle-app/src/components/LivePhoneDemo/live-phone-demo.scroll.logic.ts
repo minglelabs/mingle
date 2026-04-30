@@ -279,9 +279,21 @@ export function deriveScrollUiVisibility(
 }
 
 export interface ScrollDateLabelAnchor {
+  utteranceId?: string
   createdAtMs: number
   offsetTop: number
   offsetHeight: number
+}
+
+export interface ScrollViewportAnchorSnapshot {
+  utteranceId: string
+  topOffsetPx: number
+}
+
+export interface ResolveScrollViewportAnchorSnapshotInput {
+  anchors: readonly ScrollDateLabelAnchor[]
+  scrollTop: number
+  topTolerancePx?: number
 }
 
 export function shouldUpdateScrollDateLabelState(
@@ -335,4 +347,22 @@ export function resolveTopVisibleScrollDateLabelAnchor(
   }
 
   return null
+}
+
+export function resolveScrollViewportAnchorSnapshot(
+  input: ResolveScrollViewportAnchorSnapshotInput,
+): ScrollViewportAnchorSnapshot | null {
+  const anchor = resolveTopVisibleScrollDateLabelAnchor(input)
+  if (!anchor?.utteranceId) return null
+
+  const safeScrollTop = Number.isFinite(input.scrollTop)
+    ? Math.max(0, input.scrollTop)
+    : 0
+  const topOffsetPx = anchor.offsetTop - safeScrollTop
+  if (!Number.isFinite(topOffsetPx)) return null
+
+  return {
+    utteranceId: anchor.utteranceId,
+    topOffsetPx,
+  }
 }

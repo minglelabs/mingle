@@ -71,11 +71,13 @@ import {
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   resolveNewMessageAutoScrollTargetTop,
+  resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
   resolvePrependScrollAnchorTop,
   shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
   type ScrollDateLabelAnchor,
+  type ScrollViewportAnchorSnapshot,
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
@@ -752,6 +754,7 @@ function readScrollDateLabelAnchors(container: HTMLDivElement): ScrollDateLabelA
     if (!Number.isFinite(offsetTop) || !Number.isFinite(offsetHeight)) continue
 
     anchors.push({
+      utteranceId: child.dataset.utteranceId || undefined,
       createdAtMs,
       offsetTop,
       offsetHeight,
@@ -3871,6 +3874,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
+  const viewportAnchorSnapshotRef = useRef<ScrollViewportAnchorSnapshot | null>(null)
   const lastDistanceToBottomRef = useRef(0)
   const renderedMessageCountsRef = useRef<ChatScrollMessageCountSnapshot>({
     utteranceCount: utterances.length,
@@ -3906,14 +3910,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [scrollDateLabel, setScrollDateLabel] = useState('')
   const [scrollMetrics, setScrollMetrics] = useState<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
 
+  const captureCurrentViewportAnchorSnapshot = useCallback((scrollTop: number) => {
+    viewportAnchorSnapshotRef.current = resolveScrollViewportAnchorSnapshot({
+      anchors: scrollDateLabelAnchorsRef.current,
+      scrollTop,
+    })
+  }, [])
+
   const handleLoadOlder = useCallback(() => {
-    if (isLoadingOlderRef.current || !hasOlderUtterances || !chatRef.current) return
+    const node = chatRef.current
+    if (isLoadingOlderRef.current || !hasOlderUtterances || !node) return
     isLoadingOlderRef.current = true
     suppressAutoScrollRef.current = true
     shouldAutoScroll.current = false
     isPaginatingRef.current = true
-    prevScrollHeightRef.current = chatRef.current.scrollHeight
-    prevScrollTopRef.current = chatRef.current.scrollTop
+    captureCurrentViewportAnchorSnapshot(node.scrollTop)
+    prevScrollHeightRef.current = node.scrollHeight
+    prevScrollTopRef.current = node.scrollTop
     void loadOlderUtterances().then((didLoad) => {
       if (didLoad) return
       prevScrollHeightRef.current = null
@@ -3926,7 +3939,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       isPaginatingRef.current = false
       isLoadingOlderRef.current = false
     })
-  }, [hasOlderUtterances, loadOlderUtterances])
+  }, [captureCurrentViewportAnchorSnapshot, hasOlderUtterances, loadOlderUtterances])
 
   const markUserScrollIntent = useCallback(() => {
     userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_WINDOW_MS
@@ -3985,6 +3998,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (!chatRef.current) return
     const fromUserScroll = options?.fromUserScroll === true
     const { scrollTop, scrollHeight, clientHeight } = chatRef.current
+    captureCurrentViewportAnchorSnapshot(scrollTop)
     if (
       isPaginatingRef.current
       && prevScrollHeightRef.current !== null
@@ -4047,7 +4061,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ) {
       handleLoadOlder()
     }
-  }, [applyScrollDateLabelState, applyScrollMetricsState, hasOlderUtterances, handleLoadOlder, uiLocale])
+  }, [
+    applyScrollDateLabelState,
+    applyScrollMetricsState,
+    captureCurrentViewportAnchorSnapshot,
+    hasOlderUtterances,
+    handleLoadOlder,
+    uiLocale,
+  ])
 
   const processScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {
     const { fromUserScroll } = options
@@ -4107,8 +4128,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [processScrollEventDerivedState])
 
   const handleScroll = useCallback(() => {
+    const node = chatRef.current
+    if (node) {
+      captureCurrentViewportAnchorSnapshot(node.scrollTop)
+    }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
-  }, [isUserScrollIntentActive, scheduleScrollEventDerivedState])
+  }, [captureCurrentViewportAnchorSnapshot, isUserScrollIntentActive, scheduleScrollEventDerivedState])
 
   const handleScrollToBottom = useCallback(() => {
     if (!chatRef.current) return
@@ -4236,6 +4261,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const node = chatRef.current
     let rafId: number | null = null
     const scheduleRefresh = () => {
+      captureCurrentViewportAnchorSnapshot(node.scrollTop)
       if (rafId !== null) return
       rafId = window.requestAnimationFrame(() => {
         rafId = null
@@ -4257,7 +4283,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         window.cancelAnimationFrame(rafId)
       }
     }
-  }, [refreshScrollDateLabelAnchors, updateScrollDerivedState])
+  }, [captureCurrentViewportAnchorSnapshot, refreshScrollDateLabelAnchors, updateScrollDerivedState])
 
   // Wait for stored conversation hydration, then pin to the latest messages once.
   // This prevents initial top-pagination from running before we settle at bottom.
@@ -5789,6 +5815,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               {displayUtterances.map((u) => (
                 <div
                   key={u.id}
+                  data-utterance-id={u.id}
                   data-utterance-created-at={
                     (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
                       ? String(Math.floor(u.createdAtMs))
