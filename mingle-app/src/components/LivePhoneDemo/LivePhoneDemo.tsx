@@ -73,6 +73,7 @@ import {
   resolveNewMessageAutoScrollTargetTop,
   resolveTopVisibleScrollDateLabelAnchor,
   resolvePrependScrollAnchorTop,
+  shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
   type ScrollDateLabelAnchor,
 } from './live-phone-demo.scroll.logic'
@@ -3969,7 +3970,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [])
 
   const applyScrollDateLabelState = useCallback((nextDateLabel: string) => {
-    if (scrollDateLabelRef.current === nextDateLabel) return
+    if (!shouldUpdateScrollDateLabelState(scrollDateLabelRef.current, nextDateLabel)) return
     scrollDateLabelRef.current = nextDateLabel
     setScrollDateLabel(nextDateLabel)
   }, [])

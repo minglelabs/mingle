@@ -11,6 +11,7 @@ import {
   resolveNewMessageAutoScrollTargetTop,
   resolvePrependScrollAnchorTop,
   resolveTopVisibleScrollDateLabelAnchor,
+  shouldUpdateScrollDateLabelState,
 } from './live-phone-demo.scroll.logic'
 
 describe('live-phone-demo scroll/platform logic', () => {
@@ -428,6 +429,16 @@ describe('live-phone-demo scroll/platform logic', () => {
         anchors,
         scrollTop: 200,
       })).toBeNull()
+    })
+  })
+
+  describe('shouldUpdateScrollDateLabelState', () => {
+    it('skips state updates when the computed date label is unchanged', () => {
+      expect(shouldUpdateScrollDateLabelState('today', 'today')).toBe(false)
+    })
+
+    it('allows state updates when the computed date label changes', () => {
+      expect(shouldUpdateScrollDateLabelState('today', 'yesterday')).toBe(true)
     })
   })
 })

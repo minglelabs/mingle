@@ -284,6 +284,13 @@ export interface ScrollDateLabelAnchor {
   offsetHeight: number
 }
 
+export function shouldUpdateScrollDateLabelState(
+  currentDateLabel: string,
+  nextDateLabel: string,
+): boolean {
+  return currentDateLabel !== nextDateLabel
+}
+
 export interface ResolveTopVisibleScrollDateLabelAnchorInput {
   anchors: readonly ScrollDateLabelAnchor[]
   scrollTop: number
