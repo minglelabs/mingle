@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
@@ -4807,6 +4807,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
   const chatPaddingTop = '0.625rem'
   const chatPaddingBottom = '0.625rem'
+  const chatViewportStyle = useMemo<CSSProperties>(() => ({
+    WebkitOverflowScrolling: 'touch',
+    overscrollBehaviorY: 'contain',
+    touchAction: 'pan-y',
+    willChange: 'scroll-position',
+    paddingTop: chatPaddingTop,
+    paddingBottom: chatPaddingBottom,
+    paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
+    paddingRight: 'max(calc(env(safe-area-inset-right) + 6px), 10px)',
+  }), [chatPaddingBottom, chatPaddingTop])
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -6026,12 +6036,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onTouchMove={markUserScrollIntent}
               onPointerDown={markUserScrollIntent}
               className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
-              style={{
-                paddingTop: chatPaddingTop,
-                paddingBottom: chatPaddingBottom,
-                paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
-                paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
-              }}
+              style={chatViewportStyle}
             >
               {nativeChatTopSpacerPx > 0 && (
                 <div
