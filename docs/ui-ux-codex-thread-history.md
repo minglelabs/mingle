@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Conversation List Bottom Tab Clearance
+
+- Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`
+- Issue: After adding the messenger bottom tab, the first tab's conversation-list scroll area still only kept its old 20px bottom padding, so scrolled list content did not reserve visual clearance for the new tab height.
+- User impact: The end of the conversation list could feel cramped against the fixed first-tab controls, especially on mobile where the bottom tab consumes meaningful vertical space.
+- Resolution: Exported the bottom tab base height as a shared constant and added that height to the conversation-list scroll container's bottom padding, keeping the previous 20px breathing room on top.
+
 ## 2026-04-30 - Messenger Tab Height And My Page Navigation Follow-Up
 
 - Surface: `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/app/[locale]/mypage/page.tsx`

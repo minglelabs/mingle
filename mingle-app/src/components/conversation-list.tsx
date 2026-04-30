@@ -73,7 +73,7 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
-import BottomTabBar from "@/components/bottom-tab-bar";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -1446,6 +1446,7 @@ export default function ConversationList({
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
   const conversationListFooterPaddingBottom = "16px";
+  const conversationListScrollPaddingBottomPx = BOTTOM_TAB_BAR_HEIGHT_PX + 20;
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -2891,7 +2892,7 @@ export default function ConversationList({
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
-          paddingBottom: "20px",
+          paddingBottom: `${conversationListScrollPaddingBottomPx}px`,
         }}
         onTouchStart={(event) => {
           if (showSearch || activeConversation || isRefreshingConversations) return;
