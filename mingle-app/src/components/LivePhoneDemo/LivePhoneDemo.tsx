@@ -119,6 +119,7 @@ import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
 } from './live-phone-demo.usage-format'
+import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
@@ -3898,6 +3899,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const openSmoothScrollStableTicksRef = useRef(0)
   const scrollUiVisibleRef = useRef(false)
   const scrollDateLabelRef = useRef('')
+  const previousDisplayUtteranceIdsRef = useRef<string[] | null>(null)
   const scrollMetricsRef = useRef<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
@@ -4482,6 +4484,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+  const displayUtteranceIds = useMemo(
+    () => displayUtterances.map((utterance) => utterance.id),
+    [displayUtterances],
+  )
+  const animatedDisplayUtteranceIds = useMemo(
+    () => resolveAnimatedLiveDemoMessageIds({
+      previousIds: previousDisplayUtteranceIdsRef.current,
+      nextIds: displayUtteranceIds,
+      maxAnimatedMessages: 1,
+    }),
+    [displayUtteranceIds],
+  )
+
+  useEffect(() => {
+    previousDisplayUtteranceIdsRef.current = displayUtteranceIds
+  }, [displayUtteranceIds])
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -5767,28 +5785,27 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
-              <AnimatePresence mode="popLayout">
-                {displayUtterances.map((u) => (
-                  <div
-                    key={u.id}
-                    data-utterance-created-at={
-                      (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
-                        ? String(Math.floor(u.createdAtMs))
-                        : ''
-                    }
-                  >
-                    <ChatBubble
-                      utterance={u}
-                      uiLocale={uiLocale}
-                      isDraft={draftUtteranceIds.has(u.id)}
-                      onPlayOriginal={handlePlayOriginalBubbleTts}
-                      onPlayTranslation={handlePlayTranslationBubbleTts}
-                      bubbleTextClassName={chatBubbleTextClassName}
-                      speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
-                    />
-                  </div>
-                ))}
-              </AnimatePresence>
+              {displayUtterances.map((u) => (
+                <div
+                  key={u.id}
+                  data-utterance-created-at={
+                    (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
+                      ? String(Math.floor(u.createdAtMs))
+                      : ''
+                  }
+                >
+                  <ChatBubble
+                    utterance={u}
+                    uiLocale={uiLocale}
+                    isDraft={draftUtteranceIds.has(u.id)}
+                    onPlayOriginal={handlePlayOriginalBubbleTts}
+                    onPlayTranslation={handlePlayTranslationBubbleTts}
+                    bubbleTextClassName={chatBubbleTextClassName}
+                    speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
+                    shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
+                  />
+                </div>
+              ))}
 
             {/* Demo typing animation */}
             {demoTypingLang && (
