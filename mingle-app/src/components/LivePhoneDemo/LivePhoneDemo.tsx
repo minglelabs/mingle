@@ -273,6 +273,11 @@ const SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS = [
   'QA Korean translation for continuing the clear connection demo.',
 ] as const
 
+const CHAT_SCROLL_SURFACE_STYLE: CSSProperties = {
+  contain: 'layout paint style',
+  isolation: 'isolate',
+}
+
 const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
   contain: 'layout style',
   isolation: 'isolate',
@@ -6033,7 +6038,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           {/* Chat Area */}
-          <div className="relative min-h-0 flex-1 bg-gray-50/50">
+          <div
+            className="relative min-h-0 flex-1 bg-gray-50/50"
+            style={CHAT_SCROLL_SURFACE_STYLE}
+          >
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"

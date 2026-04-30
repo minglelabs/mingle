@@ -217,6 +217,28 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(rowStyleSource).not.toContain('transform')
     })
 
+    it('keeps the static chat surface isolated outside the scrollable transcript', () => {
+      const surfaceStyleSource = readSourceBetween(
+        'const CHAT_SCROLL_SURFACE_STYLE: CSSProperties = {',
+        'const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {',
+      )
+      const chatSurfaceSource = readSourceBetween(
+        '<div className="relative flex min-h-0 flex-1 flex-col">',
+        '<AnimatePresence>\n              {scrollUiVisible',
+      )
+
+      const surfaceStyleIndex = chatSurfaceSource.indexOf('style={CHAT_SCROLL_SURFACE_STYLE}')
+      const scrollContainerIndex = chatSurfaceSource.indexOf('data-qa="live-demo-chat-scroll"')
+
+      expect(surfaceStyleSource).toContain("contain: 'layout paint style'")
+      expect(surfaceStyleSource).toContain("isolation: 'isolate'")
+      expect(surfaceStyleSource).not.toContain('overflow')
+      expect(surfaceStyleSource).not.toContain('transform')
+      expect(surfaceStyleIndex).toBeGreaterThanOrEqual(0)
+      expect(scrollContainerIndex).toBeGreaterThan(surfaceStyleIndex)
+      expect(chatSurfaceSource).toContain('className="relative min-h-0 flex-1 bg-gray-50/50"')
+    })
+
     it('keeps the native scroll handler synchronous work limited to anchor snapshots and rAF scheduling', () => {
       const handleScrollSource = readSourceBetween(
         'const handleScroll = useCallback(() => {',

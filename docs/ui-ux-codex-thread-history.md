@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Live Demo Chat Scroll Surface Paint Boundary
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`
+- Issue: The chat transcript scroller sits inside the same phone screen tree as static background chrome, scroll overlays, and bottom controls. During 500-utterance iOS WebView touch scrolling, repaint invalidation from the moving transcript should stay bounded to the chat surface instead of leaking into surrounding decorative phone UI.
+- User impact: Long transcript scrolling could feel less stable on iPhone-class WebViews while preserving the same visible phone frame, chat background, date label, scrollbar, and scroll-to-bottom affordance.
+- Resolution: Added a shared chat surface style with `contain: layout paint style` and `isolation: isolate` on the non-scrolling chat area wrapper outside the inner DOM scroller. The inner WebView-owned scroll container, native WebView scroll-disabled contract, padding, overlays, and message visuals remain unchanged.
+
 ## 2026-04-30 - Live Demo Chat Message Paint Isolation
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`
