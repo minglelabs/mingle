@@ -77,6 +77,13 @@
 - User impact: Text entry felt unreliable because the input area and caret could visually shift while the user was typing, especially with a large transcript and concurrent playback/recognition updates.
 - Resolution: Moved the composer text draft to a ref-backed uncontrolled textarea, kept React state only for send-button availability and actual height changes, removed height transitions from the composer shell/textarea, disabled bottom-bar layout animation while text mode is open, and added a small stability threshold for keyboard viewport inset updates.
 
+## 2026-04-30 - Native Ad Banner Tab Scope
+
+- Surface: `mingle-app/rn/App.tsx`
+- Issue: The native AdMob banner could stay visible after moving from the first bottom tab to other tab surfaces such as My Page because non-conversation URLs did not explicitly clear the active banner zone.
+- User impact: Ads appeared on screens where the user expected a cleaner profile/settings experience, and the banner could look like leaked state from the conversation tab.
+- Resolution: Updated native URL-to-banner-zone inference so only `/[locale]/conversations` keeps the banner available, while My Page and other routes resolve to `hidden`. WebView navigation state changes now run the same banner-zone transition logic, and RN tests cover the first-tab-only policy.
+
 ## 2026-04-20 - Blog Felo Price Copy
 
 - Surface: `mingle-app/public/legal/blogs/ai-translators-comparison.html`

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
-import { NativeAdBanner } from '../App';
+import { NativeAdBanner, resolveBannerZoneForUrl } from '../App';
 
 function BannerAdMock(props: Record<string, unknown>) {
   return React.createElement('BannerAd', props);
@@ -103,5 +103,19 @@ describe('NativeAdBanner', () => {
       consoleErrorSpy.mockRestore();
       consoleWarnSpy.mockRestore();
     }
+  });
+});
+
+describe('resolveBannerZoneForUrl', () => {
+  it('keeps banners available only on the first bottom tab', () => {
+    expect(resolveBannerZoneForUrl('https://example.com/ko/conversations')).toBe('list');
+    expect(resolveBannerZoneForUrl('https://example.com/ko/conversations?conversation=abc')).toBe('conversation');
+    expect(resolveBannerZoneForUrl('https://example.com/ko/mypage')).toBe('hidden');
+    expect(resolveBannerZoneForUrl('https://example.com/ko/translator')).toBe('hidden');
+  });
+
+  it('leaves malformed URLs unchanged', () => {
+    expect(resolveBannerZoneForUrl('')).toBeNull();
+    expect(resolveBannerZoneForUrl('not-a-url')).toBeNull();
   });
 });

@@ -509,7 +509,7 @@ const VERSION_POLICY_SUPPORTED_LOCALES = new Set<VersionPolicyLocale>([
   'vi',
 ]);
 
-function resolveBannerZoneForUrl(rawUrl: string): Exclude<BannerZone, 'hidden'> | null {
+export function resolveBannerZoneForUrl(rawUrl: string): BannerZone | null {
   if (!rawUrl) return null;
 
   let parsedUrl: URL;
@@ -520,8 +520,8 @@ function resolveBannerZoneForUrl(rawUrl: string): Exclude<BannerZone, 'hidden'> 
   }
 
   const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-  if (pathSegments.length < 2) return null;
-  if (pathSegments[1] !== 'conversations') return null;
+  if (pathSegments.length < 2) return 'hidden';
+  if (pathSegments[1] !== 'conversations') return 'hidden';
 
   return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
 }
@@ -1399,7 +1399,7 @@ function AppInner(): React.JSX.Element {
   const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
   const activeBannerZoneRef = useRef<BannerZone>('list');
   const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
-  const pendingNavigationBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'> | null>(null);
+  const pendingNavigationBannerZoneRef = useRef<BannerZone | null>(null);
   const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
     position: nativeBannerPosition,
@@ -1872,7 +1872,6 @@ function AppInner(): React.JSX.Element {
 
     if (
       activeBannerZoneRef.current === 'hidden'
-      && pendingNavigationBannerZoneRef.current
       && inferredZone === stableZone
     ) {
       pendingNavigationBannerZoneRef.current = null;
@@ -2593,6 +2592,7 @@ function AppInner(): React.JSX.Element {
   const handleNavigationStateChange = useCallback((navigationState: { url: string; canGoBack?: boolean }) => {
     rememberCurrentWebUrl(navigationState.url);
     setCurrentWebPathname(parseWebPathname(navigationState.url));
+    prepareBannerZoneTransition(navigationState.url);
     updateSafeAreaPalette(navigationState.url);
   }, [prepareBannerZoneTransition, rememberCurrentWebUrl, updateSafeAreaPalette]);
 
