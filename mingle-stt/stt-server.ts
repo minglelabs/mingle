@@ -702,7 +702,8 @@ wss.on('connection', (clientWs) => {
                     && hasPendingSonioxTurnText(snapshot.currentSnapshotText)
                 ));
             };
-            const usesPerSpeakerIdleFinalize = () => behaviorProfile === 'v1_1_3';
+            const usesPerSpeakerIdleFinalize = () => behaviorProfile === 'v1_1_3'
+                || behaviorProfile === 'v2_0_0';
             const nextGlobalFinalizeDelayMs = (now: number): number | null => {
                 const pendingProgressAtTimes = buildPendingTurnSnapshots()
                     .filter((snapshot) => hasPendingSonioxTurnText(snapshot.currentSnapshotText))

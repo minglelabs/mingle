@@ -19,13 +19,11 @@ export default async function MyPageRoute({ params }: MyPageRouteProps) {
   }
 
   const session = await getServerSession(getAuthOptions());
-  if (!session?.user) {
-    redirect(`/${locale}/conversations`);
-  }
-
-  const preferredLocale = await getUserPreferredLocale(session.user.id);
-  if (preferredLocale && preferredLocale !== locale) {
-    redirect(`/${preferredLocale}/mypage`);
+  if (session?.user) {
+    const preferredLocale = await getUserPreferredLocale(session.user.id);
+    if (preferredLocale && preferredLocale !== locale) {
+      redirect(`/${preferredLocale}/mypage`);
+    }
   }
 
   return (

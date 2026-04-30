@@ -6,6 +6,7 @@ import {
   isV1_1_1MingleClientReleaseVariant,
   isV1_1_2MingleClientReleaseVariant,
   isV1_1_3MingleClientReleaseVariant,
+  isV2_0_0MingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
@@ -30,6 +31,8 @@ describe('resolveMingleBehaviorProfile', () => {
     expect(resolveMingleBehaviorProfile('android/v1.1.2')).toBe('v1_1_2')
     expect(resolveMingleBehaviorProfile('ios/v1.1.3')).toBe('v1_1_3')
     expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_3')
+    expect(resolveMingleBehaviorProfile('ios/v2.0.0')).toBe('v2_0_0')
+    expect(resolveMingleBehaviorProfile('android/v2.0.0')).toBe('v2_0_0')
   })
 })
 
@@ -60,6 +63,12 @@ describe('resolveMingleClientReleaseVariant', () => {
     expect(resolveMingleClientReleaseVariant('android/v1.2.3')).toBe('android_v1_1_3')
   })
 
+  it('keeps explicit ios and android 2.0.0 targets separate', () => {
+    expect(resolveMingleClientReleaseVariant('ios/v2.0.0')).toBe('ios_v2_0_0')
+    expect(resolveMingleClientReleaseVariant('android/v2.0.0')).toBe('android_v2_0_0')
+    expect(resolveMingleClientReleaseVariant('android/v2.0.1')).toBe('android_v2_0_0')
+  })
+
   it('defaults unknown namespaces to the safe legacy release line', () => {
     expect(resolveMingleClientReleaseVariant('')).toBe('legacy_default_v1_0_11')
   })
@@ -71,6 +80,7 @@ describe('resolveMingleReleaseTarget', () => {
     expect(resolveMingleReleaseTarget('v1_1_1')).toBe('v1_1_1')
     expect(resolveMingleReleaseTarget('v1_1_2')).toBe('v1_1_2')
     expect(resolveMingleReleaseTarget('v1_1_3')).toBe('v1_1_3')
+    expect(resolveMingleReleaseTarget('v2_0_0')).toBe('v2_0_0')
     expect(resolveMingleReleaseTarget('')).toBe('unknown')
   })
 })
@@ -141,6 +151,14 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
     expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_3')
     expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_3')
   })
+
+  it('uses the dedicated 2.0.0 release target when the namespace is intentionally blank', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v2_0_0'
+
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v2_0_0')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v2_0_0')
+  })
 })
 
 describe('release-variant feature flags', () => {
@@ -176,5 +194,12 @@ describe('release-variant feature flags', () => {
     expect(isV1_1_3MingleClientReleaseVariant('ios_v1_1_3')).toBe(true)
     expect(isV1_1_3MingleClientReleaseVariant('android_v1_1_3')).toBe(true)
     expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_3')).toBe('v1_1_3')
+  })
+
+  it('keeps 2.0.0 variants on the 2.0.0 release line', () => {
+    expect(isV2_0_0MingleClientReleaseVariant('default_v2_0_0')).toBe(true)
+    expect(isV2_0_0MingleClientReleaseVariant('ios_v2_0_0')).toBe(true)
+    expect(isV2_0_0MingleClientReleaseVariant('android_v2_0_0')).toBe(true)
+    expect(resolveMingleBehaviorProfileForReleaseVariant('default_v2_0_0')).toBe('v2_0_0')
   })
 })

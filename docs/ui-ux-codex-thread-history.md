@@ -1,5 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Messenger Tab Height And My Page Navigation Follow-Up
+
+- Surface: `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/app/[locale]/mypage/page.tsx`
+- Issue: The tightened messenger bottom tab still felt too tall on device, and tapping the My Page tab from the conversation list appeared to reload back into the conversation list.
+- User impact: The revived messenger shell still consumed too much vertical space, and the second bottom tab could not be judged because unauthenticated native WebView sessions were redirected away from My Page.
+- Resolution: Reduced the bottom tab base height further to 52px and allowed the My Page route to render its anonymous/profile shell when there is no NextAuth session, while still applying preferred-locale redirects for authenticated users.
+
+## 2026-04-30 - Native 2.0.0 Namespace Split
+
+- Surface: `mingle-app/src/app/api/{ios,android}/v2.0.0`, `mingle-app/src/web/{default,ios,android}/v2.0.0`, `mingle-stt/runtime/{default,ios,android}/v2.0.0`, RN/devbox runtime config
+- Issue: The native devbox install still used app version/API namespace `1.1.3`, but the current PR validation target is `2.0.0` and needs independently addressable API, web frontend, and STT versioning.
+- User impact: Device requests were routed through the wrong namespace, making local validation inconsistent with the intended 2.0.0 app release line.
+- Resolution: Added dedicated 2.0.0 API route/controller wiring, web entrypoints, STT behavior/runtime variants, RN namespace validation, and devbox runtime defaults without removing the existing 1.1.3 namespace.
+
 ## 2026-04-30 - Messenger Bottom Tab Height Tightening
 
 - Surface: `mingle-app/src/components/bottom-tab-bar.tsx`

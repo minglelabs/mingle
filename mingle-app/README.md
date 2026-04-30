@@ -76,8 +76,8 @@ The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without run
 For dedicated mobile rollouts, the deployment target is separated from the legacy 1.0.11 production servers.
 
 - Default (legacy): empty value (`''`) -> `/api/{existing-path}`
-- iOS versioned: `ios/v1.1.3` -> `/api/ios/v1.1.3/{existing-path}`
-- Android versioned: `android/v1.1.3` -> `/api/android/v1.1.3/{existing-path}`
+- iOS versioned: `ios/v2.0.0` -> `/api/ios/v2.0.0/{existing-path}`
+- Android versioned: `android/v2.0.0` -> `/api/android/v2.0.0/{existing-path}`
 - Previous mobile namespaces remain allow-listed for backward compatibility.
 
 Release build commands:
@@ -90,7 +90,7 @@ pnpm build:release:android
 
 Release target safety:
 
-- `build:release:*` now runs with `MINGLE_RELEASE_TARGET=v1_1_0`.
+- `build:release:*` now runs with `MINGLE_RELEASE_TARGET=v2_0_0`.
 - When that target is active, `NEXT_PUBLIC_SITE_URL` and `NEXT_PUBLIC_WS_URL` must not match the legacy 1.0.11 production hosts.
 - Legacy host anchors default to:
   - `MINGLE_LEGACY_SITE_URL=https://mingle-app-xi.vercel.app`
@@ -100,8 +100,8 @@ Release target safety:
 URL override (optional):
 
 - The browser URL query `apiNamespace` (or `apiNs`) is applied only when it matches the allow-list.
-- Allowed values: `''`, `ios/v1.0.0`, `android/v1.0.0`, `ios/v1.0.2`, `android/v1.0.2`, `ios/v1.0.3`, `android/v1.0.3`, `ios/v1.0.4`, `android/v1.0.4`, `ios/v1.0.5`, `android/v1.0.5`, `ios/v1.0.7`, `android/v1.0.7`, `ios/v1.0.8`, `android/v1.0.8`, `ios/v1.0.9`, `android/v1.0.9`, `ios/v1.0.11`, `android/v1.0.11`, `ios/v1.1.0`, `android/v1.1.0`
-- Example: `https://your-app/ko?apiNamespace=android/v1.1.0`
+- Allowed values include the legacy empty namespace, the existing `1.0.x`/`1.1.x` mobile namespaces, and the current `ios/v2.0.0` / `android/v2.0.0` namespace.
+- Example: `https://your-app/ko?apiNamespace=android/v2.0.0`
 - Unsupported values are ignored, and the env/default value is used instead.
 
 ### Client Version Policy
@@ -376,8 +376,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Fly deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional override, defaults to the current 1.0.11 production web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional override, defaults to the current 1.0.11 production STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.3`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.1.3`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v2.0.0`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v2.0.0`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -413,8 +413,8 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 ```
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
-`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.3` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.3` validation before launch.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v2.0.0` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v2.0.0` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

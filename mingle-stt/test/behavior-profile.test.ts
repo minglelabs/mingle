@@ -26,6 +26,8 @@ test('modern namespaces use the matching STT profile label', () => {
     assert.equal(resolveMingleSttBehaviorProfile('ios/v1.1.3'), 'v1_1_3');
     assert.equal(resolveMingleSttBehaviorProfile('android/v1.1.3'), 'v1_1_3');
     assert.equal(resolveMingleSttBehaviorProfile('android/v1.2.0'), 'v1_1_3');
+    assert.equal(resolveMingleSttBehaviorProfile('ios/v2.0.0'), 'v2_0_0');
+    assert.equal(resolveMingleSttBehaviorProfile('android/v2.0.0'), 'v2_0_0');
 });
 
 test('release variants stay explicit for ios/android namespace releases', () => {
@@ -34,6 +36,7 @@ test('release variants stay explicit for ios/android namespace releases', () => 
     assert.equal(parseMingleSttReleaseVariant('default_v1_1_1'), 'default_v1_1_1');
     assert.equal(parseMingleSttReleaseVariant('default_v1_1_2'), 'default_v1_1_2');
     assert.equal(parseMingleSttReleaseVariant('default_v1_1_3'), 'default_v1_1_3');
+    assert.equal(parseMingleSttReleaseVariant('default_v2_0_0'), 'default_v2_0_0');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.0.11'), 'ios_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.0.7'), 'android_v1_0_11');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.0'), 'ios_v1_1_0');
@@ -44,6 +47,8 @@ test('release variants stay explicit for ios/android namespace releases', () => 
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.2'), 'android_v1_1_2');
     assert.equal(resolveMingleSttReleaseVariant('ios/v1.1.3'), 'ios_v1_1_3');
     assert.equal(resolveMingleSttReleaseVariant('android/v1.1.3'), 'android_v1_1_3');
+    assert.equal(resolveMingleSttReleaseVariant('ios/v2.0.0'), 'ios_v2_0_0');
+    assert.equal(resolveMingleSttReleaseVariant('android/v2.0.0'), 'android_v2_0_0');
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_0_11'), true);
     assert.equal(isLegacyMingleSttReleaseVariant('ios_v1_1_0'), false);
 });
@@ -112,6 +117,21 @@ test('release runtimes stay pinned to the resolved release variant', () => {
         },
     );
     assert.equal(resolveMingleSttBehaviorProfileForReleaseVariant('android_v1_1_3'), 'v1_1_3');
+
+    const iosV200Runtime = resolveMingleSttReleaseRuntime('ios_v2_0_0');
+    assert.equal(iosV200Runtime.behaviorLine, 'v2_0_0');
+    assert.deepEqual(
+        iosV200Runtime.buildReadyPayload({
+            sonioxLanguageHintsEnabled: true,
+        }),
+        {
+            status: 'ready',
+            release_variant: 'ios_v2_0_0',
+            behavior_profile: 'v2_0_0',
+            soniox_language_hints_enabled: true,
+        },
+    );
+    assert.equal(resolveMingleSttBehaviorProfileForReleaseVariant('ios_v2_0_0'), 'v2_0_0');
 });
 
 test('release runtime owns provider startup dispatch', () => {

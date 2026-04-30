@@ -26,10 +26,16 @@ describe('releaseTargets', () => {
     expect(resolveMingleReleaseTarget('android/v1.1.2')).toBe('v1_1_2');
   });
 
-  it('maps 1.1.3 and later namespaces to the 1.1.3 release target', () => {
+  it('maps 1.1.3 namespaces to the 1.1.3 release target', () => {
     expect(resolveMingleReleaseTarget('ios/v1.1.3')).toBe('v1_1_3');
     expect(resolveMingleReleaseTarget('android/v1.1.3')).toBe('v1_1_3');
     expect(resolveMingleReleaseTarget('android/v1.2.0')).toBe('v1_1_3');
+  });
+
+  it('maps 2.0.0 and later namespaces to the 2.0.0 release target', () => {
+    expect(resolveMingleReleaseTarget('ios/v2.0.0')).toBe('v2_0_0');
+    expect(resolveMingleReleaseTarget('android/v2.0.0')).toBe('v2_0_0');
+    expect(resolveMingleReleaseTarget('android/v2.0.1')).toBe('v2_0_0');
   });
 
   it('rejects the legacy production web host for a 1.1.0 release target', () => {
@@ -84,6 +90,17 @@ describe('releaseTargets', () => {
     })).toEqual({
       ok: false,
       error: `NEXT_PUBLIC_WS_URL must point to a dedicated 1.1.3 STT deployment, not the legacy production host (${DEFAULT_LEGACY_PRODUCTION_WS_URL}).`,
+    });
+  });
+
+  it('rejects legacy production targets for a 2.0.0 release target', () => {
+    expect(validateDedicatedReleaseTargetConfig({
+      apiNamespace: 'android/v2.0.0',
+      webAppBaseUrl: 'https://mingle-app-v200.vercel.app',
+      wsUrl: DEFAULT_LEGACY_PRODUCTION_WS_URL,
+    })).toEqual({
+      ok: false,
+      error: `NEXT_PUBLIC_WS_URL must point to a dedicated 2.0.0 STT deployment, not the legacy production host (${DEFAULT_LEGACY_PRODUCTION_WS_URL}).`,
     });
   });
 

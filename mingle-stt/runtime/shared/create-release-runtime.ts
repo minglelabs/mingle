@@ -151,7 +151,8 @@ export function createReleaseRuntime(
             lifecycle,
         }) => {
             const cleanedPendingText = pendingText.trim();
-            const usesGracefulProviderFinalize = behaviorLine === 'v1_1_3';
+            const usesGracefulProviderFinalize = behaviorLine === 'v1_1_3'
+                || behaviorLine === 'v2_0_0';
 
             if (!usesGracefulProviderFinalize) {
                 lifecycle.setSonioxStopRequested(currentModel === 'soniox');

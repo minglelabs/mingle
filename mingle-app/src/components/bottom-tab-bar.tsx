@@ -133,7 +133,7 @@ export default function BottomTabBar({
       aria-label={dictionary.navigation.bottomTabBarLabel}
       className="flex w-full shrink-0 items-stretch border-t border-gray-100 bg-white"
       style={{
-        height: "calc(60px + env(safe-area-inset-bottom, 0px))",
+        height: "calc(52px + env(safe-area-inset-bottom, 0px))",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >

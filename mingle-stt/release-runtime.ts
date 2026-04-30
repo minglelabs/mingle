@@ -4,6 +4,7 @@ import defaultV110Runtime from './runtime/default/v1.1.0';
 import defaultV111Runtime from './runtime/default/v1.1.1';
 import defaultV112Runtime from './runtime/default/v1.1.2';
 import defaultV113Runtime from './runtime/default/v1.1.3';
+import defaultV200Runtime from './runtime/default/v2.0.0';
 import iosV1011Runtime from './runtime/ios/v1.0.11';
 import androidV1011Runtime from './runtime/android/v1.0.11';
 import iosV110Runtime from './runtime/ios/v1.1.0';
@@ -14,6 +15,8 @@ import iosV112Runtime from './runtime/ios/v1.1.2';
 import androidV112Runtime from './runtime/android/v1.1.2';
 import iosV113Runtime from './runtime/ios/v1.1.3';
 import androidV113Runtime from './runtime/android/v1.1.3';
+import iosV200Runtime from './runtime/ios/v2.0.0';
+import androidV200Runtime from './runtime/android/v2.0.0';
 
 export type {
     MingleSttClientConfig,
@@ -31,6 +34,7 @@ const releaseRuntimes = {
     default_v1_1_1: defaultV111Runtime,
     default_v1_1_2: defaultV112Runtime,
     default_v1_1_3: defaultV113Runtime,
+    default_v2_0_0: defaultV200Runtime,
     ios_v1_0_11: iosV1011Runtime,
     android_v1_0_11: androidV1011Runtime,
     ios_v1_1_0: iosV110Runtime,
@@ -41,6 +45,8 @@ const releaseRuntimes = {
     android_v1_1_2: androidV112Runtime,
     ios_v1_1_3: iosV113Runtime,
     android_v1_1_3: androidV113Runtime,
+    ios_v2_0_0: iosV200Runtime,
+    android_v2_0_0: androidV200Runtime,
 } satisfies Record<MingleSttReleaseVariant, typeof legacyV1011Runtime>;
 
 export function resolveMingleSttReleaseRuntime(
