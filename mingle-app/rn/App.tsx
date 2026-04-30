@@ -764,6 +764,23 @@ function resolveRuntimeClientInfo(): RuntimeClientInfo {
 
 const RUNTIME_CLIENT_INFO = resolveRuntimeClientInfo();
 
+function buildNativeDevelopmentTunnelUserAgent(platform: string, clientVersion: string): string {
+  const normalizedVersion = clientVersion.trim() || 'unknown';
+  return `MingleNativeWebView/${normalizedVersion} (${platform})`;
+}
+
+function resolveWebViewUserAgent(rawUrl: string): string | undefined {
+  if (shouldApplyNgrokBrowserWarningBypass(rawUrl)) {
+    return buildNativeDevelopmentTunnelUserAgent(Platform.OS, RUNTIME_CLIENT_INFO.clientVersion);
+  }
+
+  if (Platform.OS === 'ios') {
+    return IOS_SAFE_BROWSER_USER_AGENT;
+  }
+
+  return undefined;
+}
+
 function resolveIosTopTapOverlayHeight(rawStatusBarHeight: unknown): number {
   const numeric = typeof rawStatusBarHeight === 'number'
     ? rawStatusBarHeight
@@ -1293,6 +1310,7 @@ function AppInner(): React.JSX.Element {
       headers: { 'ngrok-skip-browser-warning': '1' },
     };
   }, [webUrl]);
+  const webViewUserAgent = useMemo(() => resolveWebViewUserAgent(webUrl), [webUrl]);
   const shouldUseAggressiveWebViewCacheBypass = shouldDisableWebViewCache && Platform.OS === 'android';
   const [safeAreaPalette, setSafeAreaPalette] = useState<SafeAreaPalette>(() => resolveSafeAreaPaletteForUrl(webUrl));
   const initialLoadSettledRef = useRef(false);
@@ -2617,7 +2635,7 @@ function AppInner(): React.JSX.Element {
             ref={webViewRef}
             source={webViewSource}
             originWhitelist={['*']}
-            userAgent={Platform.OS === 'ios' ? IOS_SAFE_BROWSER_USER_AGENT : undefined}
+            userAgent={webViewUserAgent}
             javaScriptEnabled
             domStorageEnabled
             cacheEnabled={!shouldUseAggressiveWebViewCacheBypass}

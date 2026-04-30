@@ -51,4 +51,13 @@ describe('runtime fallback contract', () => {
       ].join('\n'),
     );
   });
+
+  it('uses an app-specific WebView user agent for ngrok development tunnels', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+
+    expect(appSource).toContain('function resolveWebViewUserAgent(rawUrl: string): string | undefined {');
+    expect(appSource).toContain('shouldApplyNgrokBrowserWarningBypass(rawUrl)');
+    expect(appSource).toContain('MingleNativeWebView/${normalizedVersion}');
+    expect(appSource).toContain('userAgent={webViewUserAgent}');
+  });
 });

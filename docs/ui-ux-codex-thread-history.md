@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Android Ngrok WebView Styling Recovery
+
+- Surface: `mingle-app/rn/App.tsx`, Android RN WebView on the devbox ngrok device profile.
+- Issue: The Android app loaded the ngrok-backed conversation page but rendered it with mostly unstyled HTML, causing the Mingle header, search button, start button, and bottom tabs to appear as default browser controls instead of the intended mobile UI.
+- User impact: The messenger view looked broken on the physical Android device even though the ngrok web server was reachable, making the revived bottom-tab PR impossible to judge visually on-device.
+- Resolution: Added a dev-tunnel-only native WebView user agent for ngrok URLs while preserving the existing iOS Safari user agent on non-ngrok URLs. The main request still sends the explicit ngrok bypass header, and ngrok subresource requests now avoid the browser warning path consistently.
+
 ## 2026-04-30 - PR 92 Messenger Bottom Tab Recovery
 
 - Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/components/my-page.tsx`, `mingle-app/src/app/[locale]/mypage/page.tsx`
