@@ -8,6 +8,7 @@ import {
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
+  resolveNewMessageAutoScrollTargetTop,
   resolvePrependScrollAnchorTop,
   resolveTopVisibleScrollDateLabelAnchor,
 } from './live-phone-demo.scroll.logic'
@@ -263,6 +264,29 @@ describe('live-phone-demo scroll/platform logic', () => {
 
       expect(state.hasNewMessage).toBe(true)
       expect(state.shouldAutoScroll).toBe(false)
+    })
+
+    it('keeps scrollTop unchanged for a new message when the user was more than 100px from bottom', () => {
+      const previousScrollTop = 560
+      const state = deriveNewMessageAutoScrollState({
+        previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+        nextCounts: { utteranceCount: 25, liveUtteranceCount: 0 },
+        previousDistanceToBottom: 101,
+        isPaginating: false,
+        isLoadingOlder: false,
+      })
+      const autoScrollTargetTop = resolveNewMessageAutoScrollTargetTop({
+        shouldAutoScroll: state.shouldAutoScroll,
+        currentScrollTop: previousScrollTop,
+        currentScrollHeight: 1_240,
+        currentClientHeight: 420,
+      })
+      const nextScrollTop = autoScrollTargetTop ?? previousScrollTop
+
+      expect(state.hasNewMessage).toBe(true)
+      expect(state.shouldAutoScroll).toBe(false)
+      expect(autoScrollTargetTop).toBeNull()
+      expect(nextScrollTop).toBe(previousScrollTop)
     })
 
     it('does not treat older-message pagination as a new-message auto-scroll trigger', () => {
