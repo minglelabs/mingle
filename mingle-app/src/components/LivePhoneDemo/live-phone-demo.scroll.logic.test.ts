@@ -152,6 +152,33 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(processScrollEventDerivedStateSource).toContain('scrollUiHideTimerRef.current = window.setTimeout')
     })
 
+    it('keeps date-label updates inside the next scroll animation frame', () => {
+      const scheduleScrollEventDerivedStateSource = readSourceBetween(
+        'const scheduleScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {',
+        'const handleScroll = useCallback',
+      )
+      const processScrollEventDerivedStateSource = readSourceBetween(
+        'const processScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {',
+        'const cancelScheduledScrollEventDerivedState = useCallback',
+      )
+      const updateScrollDerivedStateSource = readSourceBetween(
+        'const updateScrollDerivedState = useCallback((options?: { fromUserScroll?: boolean }) => {',
+        'const processScrollEventDerivedState = useCallback',
+      )
+
+      const processIndex = scheduleScrollEventDerivedStateSource.indexOf('processScrollEventDerivedState({ fromUserScroll })')
+      const dateLabelIndex = updateScrollDerivedStateSource.indexOf('applyScrollDateLabelState(findTopVisibleUtteranceDateLabel(')
+      const overlayTimerIndex = processScrollEventDerivedStateSource.indexOf('scrollUiHideTimerRef.current = window.setTimeout')
+
+      expect(scheduleScrollEventDerivedStateSource.match(/window\.requestAnimationFrame/g)).toHaveLength(1)
+      expect(scheduleScrollEventDerivedStateSource).not.toContain('window.setTimeout')
+      expect(processIndex).toBeGreaterThanOrEqual(0)
+      expect(processScrollEventDerivedStateSource.indexOf('updateScrollDerivedState({ fromUserScroll })')).toBeLessThan(overlayTimerIndex)
+      expect(dateLabelIndex).toBeGreaterThanOrEqual(0)
+      expect(updateScrollDerivedStateSource).not.toContain('window.requestAnimationFrame')
+      expect(updateScrollDerivedStateSource).not.toContain('window.setTimeout')
+    })
+
     it('calculates late height effects before replacing measured anchor offsets', () => {
       const refreshSource = readSourceBetween(
         'const refreshScrollDateLabelAnchors = useCallback(() => {',
