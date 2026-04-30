@@ -4,9 +4,12 @@ import {
   AUTO_SCROLL_MIN_INTERVAL_MS,
   createAutoScrollScheduler,
   deriveAutoScrollClockDelayMs,
+  deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
   isLikelyIOSNavigator,
+  resolvePrependScrollAnchorTop,
+  resolveTopVisibleScrollDateLabelAnchor,
 } from './live-phone-demo.scroll.logic'
 
 describe('live-phone-demo scroll/platform logic', () => {
@@ -139,6 +142,10 @@ describe('live-phone-demo scroll/platform logic', () => {
   })
 
   describe('deriveScrollAutoFollowState', () => {
+    it('uses a 100px default near-bottom threshold', () => {
+      expect(AUTO_SCROLL_BOTTOM_THRESHOLD_PX).toBe(100)
+    })
+
     it('suppresses auto-follow when user manually scrolls away from bottom', () => {
       const state = deriveScrollAutoFollowState({
         distanceToBottom: AUTO_SCROLL_BOTTOM_THRESHOLD_PX + 1,
@@ -218,6 +225,60 @@ describe('live-phone-demo scroll/platform logic', () => {
     })
   })
 
+  describe('deriveNewMessageAutoScrollState', () => {
+    it('auto-scrolls a new committed message when the user was within 100px of bottom before append', () => {
+      const state = deriveNewMessageAutoScrollState({
+        previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+        nextCounts: { utteranceCount: 25, liveUtteranceCount: 0 },
+        previousDistanceToBottom: 100,
+        isPaginating: false,
+        isLoadingOlder: false,
+      })
+
+      expect(state.hasNewMessage).toBe(true)
+      expect(state.shouldAutoScroll).toBe(true)
+    })
+
+    it('auto-scrolls a new live message when the user was within 100px of bottom before append', () => {
+      const state = deriveNewMessageAutoScrollState({
+        previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+        nextCounts: { utteranceCount: 24, liveUtteranceCount: 1 },
+        previousDistanceToBottom: 99.5,
+        isPaginating: false,
+        isLoadingOlder: false,
+      })
+
+      expect(state.hasNewMessage).toBe(true)
+      expect(state.shouldAutoScroll).toBe(true)
+    })
+
+    it('does not auto-scroll a new message when the user was more than 100px from bottom', () => {
+      const state = deriveNewMessageAutoScrollState({
+        previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+        nextCounts: { utteranceCount: 25, liveUtteranceCount: 0 },
+        previousDistanceToBottom: 100.5,
+        isPaginating: false,
+        isLoadingOlder: false,
+      })
+
+      expect(state.hasNewMessage).toBe(true)
+      expect(state.shouldAutoScroll).toBe(false)
+    })
+
+    it('does not treat older-message pagination as a new-message auto-scroll trigger', () => {
+      const state = deriveNewMessageAutoScrollState({
+        previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+        nextCounts: { utteranceCount: 25, liveUtteranceCount: 0 },
+        previousDistanceToBottom: 0,
+        isPaginating: true,
+        isLoadingOlder: true,
+      })
+
+      expect(state.hasNewMessage).toBe(true)
+      expect(state.shouldAutoScroll).toBe(false)
+    })
+  })
+
   describe('deriveScrollUiVisibility', () => {
     it('hides overlay during pure auto-follow momentum scroll', () => {
       const ui = deriveScrollUiVisibility({
@@ -267,6 +328,82 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(deriveAutoScrollClockDelayMs({
         nowMs: 11_250,
       })).toBe(AUTO_SCROLL_MIN_INTERVAL_MS - 250)
+    })
+  })
+
+  describe('resolvePrependScrollAnchorTop', () => {
+    it('keeps the visible message at the same viewport offset after older utterances prepend', () => {
+      const previousScrollHeight = 1_200
+      const previousScrollTop = 420.5
+      const visibleMessageDocumentTop = 455.25
+      const visibleMessageViewportTop = visibleMessageDocumentTop - previousScrollTop
+      const prependedHeight = 284.75
+
+      const nextScrollTop = resolvePrependScrollAnchorTop({
+        previousScrollHeight,
+        nextScrollHeight: previousScrollHeight + prependedHeight,
+        previousScrollTop,
+        maxScrollTop: 1_600,
+      })
+
+      const nextVisibleMessageViewportTop = (visibleMessageDocumentTop + prependedHeight) - nextScrollTop
+      expect(Math.abs(nextVisibleMessageViewportTop - visibleMessageViewportTop)).toBeLessThanOrEqual(1)
+    })
+
+    it('uses the latest pending scrollTop snapshot when the user scrolls before prepend applies', () => {
+      const previousScrollHeight = 1_800
+      const latestPendingScrollTop = 260
+      const currentVisibleMessageDocumentTop = 318
+      const currentVisibleMessageViewportTop = currentVisibleMessageDocumentTop - latestPendingScrollTop
+      const prependedHeight = 96
+
+      const nextScrollTop = resolvePrependScrollAnchorTop({
+        previousScrollHeight,
+        nextScrollHeight: previousScrollHeight + prependedHeight,
+        previousScrollTop: latestPendingScrollTop,
+        maxScrollTop: 1_500,
+      })
+
+      const nextVisibleMessageViewportTop = (currentVisibleMessageDocumentTop + prependedHeight) - nextScrollTop
+      expect(Math.abs(nextVisibleMessageViewportTop - currentVisibleMessageViewportTop)).toBeLessThanOrEqual(1)
+    })
+
+    it('clamps the corrected scrollTop to the scrollable range', () => {
+      expect(resolvePrependScrollAnchorTop({
+        previousScrollHeight: 400,
+        nextScrollHeight: 900,
+        previousScrollTop: 700,
+        maxScrollTop: 600,
+      })).toBe(600)
+    })
+  })
+
+  describe('resolveTopVisibleScrollDateLabelAnchor', () => {
+    const anchors = [
+      { createdAtMs: 1_700_000_000_000, offsetTop: 10, offsetHeight: 40 },
+      { createdAtMs: 1_700_000_001_000, offsetTop: 62, offsetHeight: 40 },
+      { createdAtMs: 1_700_000_002_000, offsetTop: 114, offsetHeight: 40 },
+    ]
+
+    it('uses cached offsets to pick the first message whose bottom is still visible', () => {
+      expect(resolveTopVisibleScrollDateLabelAnchor({
+        anchors,
+        scrollTop: 48,
+      })?.createdAtMs).toBe(1_700_000_000_000)
+    })
+
+    it('moves to the next message at the same one-pixel top tolerance as the DOM rect path', () => {
+      expect(resolveTopVisibleScrollDateLabelAnchor({
+        anchors,
+        scrollTop: 49,
+      })?.createdAtMs).toBe(1_700_000_001_000)
+    })
+
+    it('returns null when no cached message crosses the visible top edge', () => {
+      expect(resolveTopVisibleScrollDateLabelAnchor({
+        anchors,
+        scrollTop: 200,
+      })).toBeNull()
     })
   })
 })

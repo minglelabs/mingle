@@ -1,4 +1,4 @@
-export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 400
+export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 100
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 
 export interface NavigatorLikeForIosCheck {
@@ -58,6 +58,119 @@ export function deriveScrollAutoFollowState(
     suppressAutoScroll: nextSuppressAutoScroll,
     shouldAutoScroll,
   }
+}
+
+export interface ChatScrollMessageCountSnapshot {
+  utteranceCount: number
+  liveUtteranceCount: number
+}
+
+export interface DeriveNewMessageAutoScrollStateInput {
+  previousCounts: ChatScrollMessageCountSnapshot
+  nextCounts: ChatScrollMessageCountSnapshot
+  previousDistanceToBottom: number
+  isPaginating: boolean
+  isLoadingOlder: boolean
+  nearBottomThresholdPx?: number
+}
+
+export interface DeriveNewMessageAutoScrollStateResult {
+  hasNewMessage: boolean
+  shouldAutoScroll: boolean
+}
+
+export interface ResolveNewMessageAutoScrollTargetTopInput {
+  shouldAutoScroll: boolean
+  currentScrollTop: number
+  currentScrollHeight: number
+  currentClientHeight: number
+  bottomTolerancePx?: number
+}
+
+function normalizeMessageCount(count: number): number {
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+}
+
+export function deriveNewMessageAutoScrollState(
+  input: DeriveNewMessageAutoScrollStateInput,
+): DeriveNewMessageAutoScrollStateResult {
+  const previousUtteranceCount = normalizeMessageCount(input.previousCounts.utteranceCount)
+  const nextUtteranceCount = normalizeMessageCount(input.nextCounts.utteranceCount)
+  const previousLiveUtteranceCount = normalizeMessageCount(input.previousCounts.liveUtteranceCount)
+  const nextLiveUtteranceCount = normalizeMessageCount(input.nextCounts.liveUtteranceCount)
+  const hasNewMessage = (
+    nextUtteranceCount > previousUtteranceCount
+    || nextLiveUtteranceCount > previousLiveUtteranceCount
+  )
+  const threshold = input.nearBottomThresholdPx ?? AUTO_SCROLL_BOTTOM_THRESHOLD_PX
+  const previousDistanceToBottom = Number.isFinite(input.previousDistanceToBottom)
+    ? Math.max(0, input.previousDistanceToBottom)
+    : Number.POSITIVE_INFINITY
+
+  return {
+    hasNewMessage,
+    shouldAutoScroll: (
+      hasNewMessage
+      && previousDistanceToBottom <= threshold
+      && !input.isPaginating
+      && !input.isLoadingOlder
+    ),
+  }
+}
+
+export function resolveNewMessageAutoScrollTargetTop(
+  input: ResolveNewMessageAutoScrollTargetTopInput,
+): number | null {
+  if (!input.shouldAutoScroll) return null
+
+  const currentScrollTop = Number.isFinite(input.currentScrollTop)
+    ? Math.max(0, input.currentScrollTop)
+    : 0
+  const currentScrollHeight = Number.isFinite(input.currentScrollHeight)
+    ? Math.max(0, input.currentScrollHeight)
+    : 0
+  const currentClientHeight = Number.isFinite(input.currentClientHeight)
+    ? Math.max(0, input.currentClientHeight)
+    : 0
+  const bottomTolerancePx = typeof input.bottomTolerancePx === 'number' && Number.isFinite(input.bottomTolerancePx)
+    ? Math.max(0, input.bottomTolerancePx)
+    : 1
+  const distanceToBottom = Math.abs(currentScrollHeight - currentScrollTop - currentClientHeight)
+
+  return distanceToBottom > bottomTolerancePx
+    ? currentScrollHeight
+    : null
+}
+
+export interface ResolvePrependScrollAnchorTopInput {
+  previousScrollHeight: number
+  nextScrollHeight: number
+  previousScrollTop: number
+  maxScrollTop?: number
+}
+
+export function resolvePrependScrollAnchorTop(
+  input: ResolvePrependScrollAnchorTopInput,
+): number {
+  const previousScrollHeight = Number.isFinite(input.previousScrollHeight)
+    ? Math.max(0, input.previousScrollHeight)
+    : 0
+  const nextScrollHeight = Number.isFinite(input.nextScrollHeight)
+    ? Math.max(0, input.nextScrollHeight)
+    : previousScrollHeight
+  const previousScrollTop = Number.isFinite(input.previousScrollTop)
+    ? Math.max(0, input.previousScrollTop)
+    : 0
+  const maxScrollTop = typeof input.maxScrollTop === 'number' && Number.isFinite(input.maxScrollTop)
+    ? Math.max(0, input.maxScrollTop)
+    : null
+
+  const targetScrollTop = previousScrollTop + (nextScrollHeight - previousScrollHeight)
+  const lowerBoundedScrollTop = Math.max(0, targetScrollTop)
+
+  return maxScrollTop === null
+    ? lowerBoundedScrollTop
+    : Math.min(maxScrollTop, lowerBoundedScrollTop)
 }
 
 export interface DeriveAutoScrollClockDelayMsInput {
@@ -163,4 +276,56 @@ export function deriveScrollUiVisibility(
 
   // User scroll or non-auto-follow momentum: keep visible for a short window.
   return { visible: true, scheduleHideTimer: true }
+}
+
+export interface ScrollDateLabelAnchor {
+  createdAtMs: number
+  offsetTop: number
+  offsetHeight: number
+}
+
+export interface ResolveTopVisibleScrollDateLabelAnchorInput {
+  anchors: readonly ScrollDateLabelAnchor[]
+  scrollTop: number
+  topTolerancePx?: number
+}
+
+export function resolveTopVisibleScrollDateLabelAnchor(
+  input: ResolveTopVisibleScrollDateLabelAnchorInput,
+): ScrollDateLabelAnchor | null {
+  if (input.anchors.length === 0) return null
+
+  const topTolerancePx = input.topTolerancePx ?? 1
+  const safeScrollTop = Number.isFinite(input.scrollTop)
+    ? Math.max(0, input.scrollTop)
+    : 0
+  const topEdgePx = safeScrollTop + topTolerancePx
+
+  let low = 0
+  let high = input.anchors.length
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    const anchor = input.anchors[mid]
+    const anchorBottomPx = anchor.offsetTop + anchor.offsetHeight
+
+    if (!Number.isFinite(anchorBottomPx) || anchorBottomPx <= topEdgePx) {
+      low = mid + 1
+    } else {
+      high = mid
+    }
+  }
+
+  for (let index = low; index < input.anchors.length; index += 1) {
+    const anchor = input.anchors[index]
+    if (
+      Number.isFinite(anchor.createdAtMs)
+      && anchor.createdAtMs > 0
+      && Number.isFinite(anchor.offsetTop)
+      && Number.isFinite(anchor.offsetHeight)
+    ) {
+      return anchor
+    }
+  }
+
+  return null
 }
