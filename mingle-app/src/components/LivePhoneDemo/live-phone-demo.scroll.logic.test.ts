@@ -410,6 +410,17 @@ describe('live-phone-demo scroll/platform logic', () => {
       { createdAtMs: 1_700_000_002_000, offsetTop: 114, offsetHeight: 40 },
     ]
 
+    it('keeps the date label anchored to the topmost message crossing the container top edge', () => {
+      expect(resolveTopVisibleScrollDateLabelAnchor({
+        anchors: [
+          { createdAtMs: 1_700_000_010_000, offsetTop: 16, offsetHeight: 160 },
+          { createdAtMs: 1_700_000_011_000, offsetTop: 188, offsetHeight: 44 },
+          { createdAtMs: 1_700_000_012_000, offsetTop: 244, offsetHeight: 44 },
+        ],
+        scrollTop: 132,
+      })?.createdAtMs).toBe(1_700_000_010_000)
+    })
+
     it('uses cached offsets to pick the first message whose bottom is still visible', () => {
       expect(resolveTopVisibleScrollDateLabelAnchor({
         anchors,
