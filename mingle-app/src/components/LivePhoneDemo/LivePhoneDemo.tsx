@@ -69,6 +69,7 @@ import {
   INITIAL_SCROLL_METRICS,
   areScrollMetricsEqual,
   createAutoScrollScheduler,
+  deriveLateMessageHeightChangeEffectAboveViewportAnchor,
   deriveLivePhoneDemoScrollMetrics,
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
@@ -77,8 +78,10 @@ import {
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
   resolvePrependScrollAnchorTop,
+  shouldCapturePrependScrollTopSnapshot,
   shouldUpdateScrollDateLabelState,
   type ChatScrollMessageCountSnapshot,
+  type LateMessageHeightChangeEffectAboveViewportAnchor,
   type LivePhoneDemoScrollMetrics,
   type ScrollDateLabelAnchor,
   type ScrollViewportAnchorSnapshot,
@@ -3849,6 +3852,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const chatRef = useRef<HTMLDivElement>(null)
   const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
   const viewportAnchorSnapshotRef = useRef<ScrollViewportAnchorSnapshot | null>(null)
+  const lateMessageHeightChangeEffectAboveViewportAnchorRef = useRef<LateMessageHeightChangeEffectAboveViewportAnchor>({
+    anchorUtteranceId: null,
+    deltaAboveAnchorPx: 0,
+    changedMessages: [],
+  })
   const lastDistanceToBottomRef = useRef(0)
   const renderedMessageCountsRef = useRef<ChatScrollMessageCountSnapshot>({
     utteranceCount: utterances.length,
@@ -3944,10 +3952,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const refreshScrollDateLabelAnchors = useCallback(() => {
     if (!chatRef.current) {
       scrollDateLabelAnchorsRef.current = []
+      lateMessageHeightChangeEffectAboveViewportAnchorRef.current = {
+        anchorUtteranceId: null,
+        deltaAboveAnchorPx: 0,
+        changedMessages: [],
+      }
       return
     }
 
-    scrollDateLabelAnchorsRef.current = readScrollDateLabelAnchors(chatRef.current)
+    const previousAnchors = scrollDateLabelAnchorsRef.current
+    const nextAnchors = readScrollDateLabelAnchors(chatRef.current)
+    lateMessageHeightChangeEffectAboveViewportAnchorRef.current = deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+      previousAnchors,
+      nextAnchors,
+      viewportAnchor: viewportAnchorSnapshotRef.current,
+    })
+    scrollDateLabelAnchorsRef.current = nextAnchors
   }, [])
 
   const applyScrollMetricsState = useCallback((nextMetrics: LivePhoneDemoScrollMetrics) => {
@@ -3973,11 +3993,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const fromUserScroll = options?.fromUserScroll === true
     const { scrollTop, scrollHeight, clientHeight } = chatRef.current
     captureCurrentViewportAnchorSnapshot(scrollTop)
-    if (
-      isPaginatingRef.current
-      && prevScrollHeightRef.current !== null
-      && Math.abs(scrollHeight - prevScrollHeightRef.current) <= 1
-    ) {
+    if (shouldCapturePrependScrollTopSnapshot({
+      isPaginating: isPaginatingRef.current,
+      previousScrollHeight: prevScrollHeightRef.current,
+      currentScrollHeight: scrollHeight,
+    })) {
       prevScrollTopRef.current = scrollTop
     }
     const distanceToBottom = Math.max(0, scrollHeight - scrollTop - clientHeight)
@@ -4084,6 +4104,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const node = chatRef.current
     if (node) {
       captureCurrentViewportAnchorSnapshot(node.scrollTop)
+    }
+    if (node && shouldCapturePrependScrollTopSnapshot({
+      isPaginating: isPaginatingRef.current,
+      previousScrollHeight: prevScrollHeightRef.current,
+      currentScrollHeight: node.scrollHeight,
+    })) {
+      prevScrollTopRef.current = node.scrollTop
     }
     scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
   }, [captureCurrentViewportAnchorSnapshot, isUserScrollIntentActive, scheduleScrollEventDerivedState])

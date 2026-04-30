@@ -6,6 +6,7 @@ import {
   CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
   createAutoScrollScheduler,
   deriveAutoScrollClockDelayMs,
+  deriveLateMessageHeightChangeEffectAboveViewportAnchor,
   deriveLivePhoneDemoScrollMetrics,
   deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
@@ -15,6 +16,7 @@ import {
   resolvePrependScrollAnchorTop,
   resolveScrollViewportAnchorSnapshot,
   resolveTopVisibleScrollDateLabelAnchor,
+  shouldCapturePrependScrollTopSnapshot,
   shouldUpdateScrollDateLabelState,
 } from './live-phone-demo.scroll.logic'
 
@@ -68,6 +70,64 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(livePhoneDemoSource).toContain('viewportAnchorSnapshotRef')
       expect(livePhoneDemoSource).toContain('data-utterance-id={u.id}')
       expect(livePhoneDemoSource).toContain('resolveScrollViewportAnchorSnapshot')
+    })
+
+    it('keeps the native scroll handler synchronous work limited to anchor snapshots and rAF scheduling', () => {
+      const handleScrollSource = readSourceBetween(
+        'const handleScroll = useCallback(() => {',
+        'const handleScrollToBottom = useCallback',
+      )
+
+      expect(handleScrollSource).toContain('captureCurrentViewportAnchorSnapshot(node.scrollTop)')
+      expect(handleScrollSource).toContain('shouldCapturePrependScrollTopSnapshot')
+      expect(handleScrollSource).toContain('prevScrollTopRef.current = node.scrollTop')
+      expect(handleScrollSource).toContain('scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })')
+      expect(handleScrollSource).not.toContain('updateScrollDerivedState({')
+      expect(handleScrollSource).not.toContain('setScrollMetrics(')
+      expect(handleScrollSource).not.toContain('setScrollDateLabel(')
+      expect(handleScrollSource).not.toContain('setScrollUiVisible(')
+    })
+
+    it('coalesces repeated scroll events into one animation frame while preserving user-scroll intent', () => {
+      const scheduleScrollEventDerivedStateSource = readSourceBetween(
+        'const scheduleScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {',
+        'const handleScroll = useCallback',
+      )
+
+      expect(scheduleScrollEventDerivedStateSource).toContain('scrollStateFrameRef.current.fromUserScroll = (')
+      expect(scheduleScrollEventDerivedStateSource).toContain('|| options.fromUserScroll')
+      expect(scheduleScrollEventDerivedStateSource).toContain('if (scrollStateFrameRef.current.frameId !== null) return')
+      expect(scheduleScrollEventDerivedStateSource).toContain('window.requestAnimationFrame')
+      expect(scheduleScrollEventDerivedStateSource).toContain('processScrollEventDerivedState({ fromUserScroll })')
+    })
+
+    it('processes rAF scroll state before overlay visibility and cancels pending auto-scroll only after user scroll-away', () => {
+      const processScrollEventDerivedStateSource = readSourceBetween(
+        'const processScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {',
+        'const cancelScheduledScrollEventDerivedState = useCallback',
+      )
+
+      expect(processScrollEventDerivedStateSource).toContain('updateScrollDerivedState({ fromUserScroll })')
+      expect(processScrollEventDerivedStateSource).toContain('if (fromUserScroll && (!shouldAutoScroll.current || suppressAutoScrollRef.current))')
+      expect(processScrollEventDerivedStateSource).toContain('clearPendingAutoScrollTimer()')
+      expect(processScrollEventDerivedStateSource).toContain('deriveScrollUiVisibility({')
+      expect(processScrollEventDerivedStateSource).toContain('shouldAutoScroll: shouldAutoScroll.current')
+      expect(processScrollEventDerivedStateSource).toContain('scrollUiHideTimerRef.current = window.setTimeout')
+    })
+
+    it('calculates late height effects before replacing measured anchor offsets', () => {
+      const refreshSource = readSourceBetween(
+        'const refreshScrollDateLabelAnchors = useCallback(() => {',
+        'const applyScrollMetricsState = useCallback',
+      )
+
+      const calculateIndex = refreshSource.indexOf('deriveLateMessageHeightChangeEffectAboveViewportAnchor')
+      const replaceIndex = refreshSource.indexOf('scrollDateLabelAnchorsRef.current = nextAnchors')
+
+      expect(refreshSource).toContain('lateMessageHeightChangeEffectAboveViewportAnchorRef')
+      expect(refreshSource).toContain('viewportAnchorSnapshotRef.current')
+      expect(calculateIndex).toBeGreaterThanOrEqual(0)
+      expect(replaceIndex).toBeGreaterThan(calculateIndex)
     })
   })
 
@@ -471,6 +531,35 @@ describe('live-phone-demo scroll/platform logic', () => {
   })
 
   describe('resolvePrependScrollAnchorTop', () => {
+    it('captures a pending scrollTop snapshot while prepend height has not applied yet', () => {
+      expect(shouldCapturePrependScrollTopSnapshot({
+        isPaginating: true,
+        previousScrollHeight: 1_200,
+        currentScrollHeight: 1_200.5,
+      })).toBe(true)
+    })
+
+    it('stops capturing the pending scrollTop snapshot after prepend height applies', () => {
+      expect(shouldCapturePrependScrollTopSnapshot({
+        isPaginating: true,
+        previousScrollHeight: 1_200,
+        currentScrollHeight: 1_340,
+      })).toBe(false)
+    })
+
+    it('does not capture a pending scrollTop snapshot outside prepend pagination', () => {
+      expect(shouldCapturePrependScrollTopSnapshot({
+        isPaginating: false,
+        previousScrollHeight: 1_200,
+        currentScrollHeight: 1_200,
+      })).toBe(false)
+      expect(shouldCapturePrependScrollTopSnapshot({
+        isPaginating: true,
+        previousScrollHeight: null,
+        currentScrollHeight: 1_200,
+      })).toBe(false)
+    })
+
     it('keeps the visible message at the same viewport offset after older utterances prepend', () => {
       const previousScrollHeight = 1_200
       const previousScrollTop = 420.5
@@ -578,6 +667,80 @@ describe('live-phone-demo scroll/platform logic', () => {
         ],
         scrollTop: 132,
       })).toBeNull()
+    })
+  })
+
+  describe('deriveLateMessageHeightChangeEffectAboveViewportAnchor', () => {
+    it('detects per-message height changes above the viewport anchor and sums their effect', () => {
+      expect(deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: -12 },
+        previousAnchors: [
+          { utteranceId: 'before-a', createdAtMs: 1, offsetTop: 0, offsetHeight: 40 },
+          { utteranceId: 'before-b', createdAtMs: 2, offsetTop: 52, offsetHeight: 70 },
+          { utteranceId: 'anchor', createdAtMs: 3, offsetTop: 134, offsetHeight: 80 },
+          { utteranceId: 'after', createdAtMs: 4, offsetTop: 226, offsetHeight: 60 },
+        ],
+        nextAnchors: [
+          { utteranceId: 'before-a', createdAtMs: 1, offsetTop: 0, offsetHeight: 55 },
+          { utteranceId: 'before-b', createdAtMs: 2, offsetTop: 67, offsetHeight: 66 },
+          { utteranceId: 'anchor', createdAtMs: 3, offsetTop: 145, offsetHeight: 96 },
+          { utteranceId: 'after', createdAtMs: 4, offsetTop: 253, offsetHeight: 120 },
+        ],
+      })).toEqual({
+        anchorUtteranceId: 'anchor',
+        deltaAboveAnchorPx: 11,
+        changedMessages: [
+          {
+            utteranceId: 'before-a',
+            previousHeightPx: 40,
+            nextHeightPx: 55,
+            deltaPx: 15,
+          },
+          {
+            utteranceId: 'before-b',
+            previousHeightPx: 70,
+            nextHeightPx: 66,
+            deltaPx: -4,
+          },
+        ],
+      })
+    })
+
+    it('ignores anchor, below-anchor, missing, and one-pixel height changes', () => {
+      expect(deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+        viewportAnchor: { utteranceId: 'anchor', topOffsetPx: 0 },
+        previousAnchors: [
+          { utteranceId: 'tiny-change', createdAtMs: 1, offsetTop: 0, offsetHeight: 40 },
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 52, offsetHeight: 80 },
+          { utteranceId: 'after', createdAtMs: 3, offsetTop: 144, offsetHeight: 60 },
+        ],
+        nextAnchors: [
+          { utteranceId: 'new-before', createdAtMs: 0, offsetTop: 0, offsetHeight: 22 },
+          { utteranceId: 'tiny-change', createdAtMs: 1, offsetTop: 34, offsetHeight: 40.5 },
+          { utteranceId: 'anchor', createdAtMs: 2, offsetTop: 86, offsetHeight: 120 },
+          { utteranceId: 'after', createdAtMs: 3, offsetTop: 218, offsetHeight: 100 },
+        ],
+      })).toEqual({
+        anchorUtteranceId: 'anchor',
+        deltaAboveAnchorPx: 0,
+        changedMessages: [],
+      })
+    })
+
+    it('returns an empty effect when the viewport anchor is unavailable', () => {
+      expect(deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+        viewportAnchor: null,
+        previousAnchors: [
+          { utteranceId: 'before', createdAtMs: 1, offsetTop: 0, offsetHeight: 40 },
+        ],
+        nextAnchors: [
+          { utteranceId: 'before', createdAtMs: 1, offsetTop: 0, offsetHeight: 80 },
+        ],
+      })).toEqual({
+        anchorUtteranceId: null,
+        deltaAboveAnchorPx: 0,
+        changedMessages: [],
+      })
     })
   })
 

@@ -221,6 +221,31 @@ export interface ResolvePrependScrollAnchorTopInput {
   maxScrollTop?: number
 }
 
+export interface ShouldCapturePrependScrollTopSnapshotInput {
+  isPaginating: boolean
+  previousScrollHeight: number | null | undefined
+  currentScrollHeight: number
+  heightTolerancePx?: number
+}
+
+export function shouldCapturePrependScrollTopSnapshot(
+  input: ShouldCapturePrependScrollTopSnapshotInput,
+): boolean {
+  if (!input.isPaginating) return false
+  if (typeof input.previousScrollHeight !== 'number' || !Number.isFinite(input.previousScrollHeight)) {
+    return false
+  }
+
+  const currentScrollHeight = Number.isFinite(input.currentScrollHeight)
+    ? input.currentScrollHeight
+    : Number.POSITIVE_INFINITY
+  const heightTolerancePx = typeof input.heightTolerancePx === 'number' && Number.isFinite(input.heightTolerancePx)
+    ? Math.max(0, input.heightTolerancePx)
+    : 1
+
+  return Math.abs(currentScrollHeight - input.previousScrollHeight) <= heightTolerancePx
+}
+
 export function resolvePrependScrollAnchorTop(
   input: ResolvePrependScrollAnchorTopInput,
 ): number {
@@ -366,6 +391,90 @@ export interface ResolveScrollViewportAnchorSnapshotInput {
   anchors: readonly ScrollDateLabelAnchor[]
   scrollTop: number
   topTolerancePx?: number
+}
+
+export interface LateMessageHeightChangeAboveViewportAnchor {
+  utteranceId: string
+  previousHeightPx: number
+  nextHeightPx: number
+  deltaPx: number
+}
+
+export interface LateMessageHeightChangeEffectAboveViewportAnchor {
+  anchorUtteranceId: string | null
+  deltaAboveAnchorPx: number
+  changedMessages: LateMessageHeightChangeAboveViewportAnchor[]
+}
+
+export interface DeriveLateMessageHeightChangeEffectAboveViewportAnchorInput {
+  previousAnchors: readonly ScrollDateLabelAnchor[]
+  nextAnchors: readonly ScrollDateLabelAnchor[]
+  viewportAnchor: ScrollViewportAnchorSnapshot | null
+  heightTolerancePx?: number
+}
+
+export function deriveLateMessageHeightChangeEffectAboveViewportAnchor(
+  input: DeriveLateMessageHeightChangeEffectAboveViewportAnchorInput,
+): LateMessageHeightChangeEffectAboveViewportAnchor {
+  const anchorUtteranceId = input.viewportAnchor?.utteranceId
+  if (!anchorUtteranceId) {
+    return {
+      anchorUtteranceId: null,
+      deltaAboveAnchorPx: 0,
+      changedMessages: [],
+    }
+  }
+
+  const anchorIndex = input.nextAnchors.findIndex((anchor) => anchor.utteranceId === anchorUtteranceId)
+  if (anchorIndex < 0) {
+    return {
+      anchorUtteranceId: null,
+      deltaAboveAnchorPx: 0,
+      changedMessages: [],
+    }
+  }
+
+  const heightTolerancePx = typeof input.heightTolerancePx === 'number' && Number.isFinite(input.heightTolerancePx)
+    ? Math.max(0, input.heightTolerancePx)
+    : 1
+  const previousById = new Map<string, ScrollDateLabelAnchor>()
+
+  for (const anchor of input.previousAnchors) {
+    if (!anchor.utteranceId || previousById.has(anchor.utteranceId)) continue
+    previousById.set(anchor.utteranceId, anchor)
+  }
+
+  const changedMessages: LateMessageHeightChangeAboveViewportAnchor[] = []
+  let deltaAboveAnchorPx = 0
+
+  for (let index = 0; index < anchorIndex; index += 1) {
+    const nextAnchor = input.nextAnchors[index]
+    const utteranceId = nextAnchor.utteranceId
+    if (!utteranceId) continue
+
+    const previousAnchor = previousById.get(utteranceId)
+    if (!previousAnchor) continue
+    if (!Number.isFinite(previousAnchor.offsetHeight) || !Number.isFinite(nextAnchor.offsetHeight)) continue
+
+    const previousHeightPx = previousAnchor.offsetHeight
+    const nextHeightPx = nextAnchor.offsetHeight
+    const deltaPx = nextHeightPx - previousHeightPx
+    if (Math.abs(deltaPx) <= heightTolerancePx) continue
+
+    deltaAboveAnchorPx += deltaPx
+    changedMessages.push({
+      utteranceId,
+      previousHeightPx,
+      nextHeightPx,
+      deltaPx,
+    })
+  }
+
+  return {
+    anchorUtteranceId,
+    deltaAboveAnchorPx,
+    changedMessages,
+  }
 }
 
 export function shouldUpdateScrollDateLabelState(
