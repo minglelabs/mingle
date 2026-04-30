@@ -170,6 +170,25 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(assignIndex).toBeGreaterThan(adjustIndex)
       expect(replaceIndex).toBeGreaterThan(assignIndex)
     })
+
+    it('keeps new-message append from clearing user scroll-away suppression before eligibility is known', () => {
+      const newMessageAutoScrollEffectSource = readSourceBetween(
+        'useLayoutEffect(() => {\n    const nextCounts: ChatScrollMessageCountSnapshot = {',
+        '  useLayoutEffect(() => {\n    refreshScrollDateLabelAnchors()',
+      )
+
+      const earlyReturnIndex = newMessageAutoScrollEffectSource.indexOf(
+        'if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return',
+      )
+      const clearSuppressIndex = newMessageAutoScrollEffectSource.indexOf('suppressAutoScrollRef.current = false')
+      const forceFollowIndex = newMessageAutoScrollEffectSource.indexOf('shouldAutoScroll.current = true')
+
+      expect(newMessageAutoScrollEffectSource).toContain('previousDistanceToBottom: lastDistanceToBottomRef.current')
+      expect(newMessageAutoScrollEffectSource).toContain('resolveNewMessageAutoScrollTargetTop')
+      expect(earlyReturnIndex).toBeGreaterThanOrEqual(0)
+      expect(clearSuppressIndex).toBeGreaterThan(earlyReturnIndex)
+      expect(forceFollowIndex).toBeGreaterThan(earlyReturnIndex)
+    })
   })
 
   describe('deriveLivePhoneDemoScrollMetrics', () => {
@@ -503,6 +522,64 @@ describe('live-phone-demo scroll/platform logic', () => {
       expect(state.shouldAutoScroll).toBe(false)
       expect(autoScrollTargetTop).toBeNull()
       expect(nextScrollTop).toBe(previousScrollTop)
+    })
+
+    it('preserves user-scrolled-away position when committed or live chat items arrive', () => {
+      const previousScrollTop = 560
+      const previousDistanceToBottom = AUTO_SCROLL_BOTTOM_THRESHOLD_PX + 240
+      const scrolledAwayState = deriveScrollAutoFollowState({
+        distanceToBottom: previousDistanceToBottom,
+        fromUserScroll: true,
+        suppressAutoScroll: false,
+        isPaginating: false,
+        isLoadingOlder: false,
+      })
+
+      expect(scrolledAwayState.isNearBottom).toBe(false)
+      expect(scrolledAwayState.suppressAutoScroll).toBe(true)
+      expect(scrolledAwayState.shouldAutoScroll).toBe(false)
+
+      const newChatItemCases = [
+        {
+          name: 'committed item',
+          previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+          nextCounts: { utteranceCount: 25, liveUtteranceCount: 0 },
+        },
+        {
+          name: 'live item',
+          previousCounts: { utteranceCount: 24, liveUtteranceCount: 0 },
+          nextCounts: { utteranceCount: 24, liveUtteranceCount: 1 },
+        },
+      ]
+
+      for (const testCase of newChatItemCases) {
+        const state = deriveNewMessageAutoScrollState({
+          previousCounts: testCase.previousCounts,
+          nextCounts: testCase.nextCounts,
+          previousDistanceToBottom,
+          isPaginating: false,
+          isLoadingOlder: false,
+        })
+        const autoScrollTargetTop = resolveNewMessageAutoScrollTargetTop({
+          shouldAutoScroll: state.shouldAutoScroll,
+          currentScrollTop: previousScrollTop,
+          currentScrollHeight: 1_420,
+          currentClientHeight: 420,
+        })
+        const followStateAfterAppend = deriveScrollAutoFollowState({
+          distanceToBottom: previousDistanceToBottom + 120,
+          fromUserScroll: false,
+          suppressAutoScroll: scrolledAwayState.suppressAutoScroll,
+          isPaginating: false,
+          isLoadingOlder: false,
+        })
+
+        expect(state.hasNewMessage, testCase.name).toBe(true)
+        expect(state.shouldAutoScroll, testCase.name).toBe(false)
+        expect(autoScrollTargetTop, testCase.name).toBeNull()
+        expect(followStateAfterAppend.suppressAutoScroll, testCase.name).toBe(true)
+        expect(followStateAfterAppend.shouldAutoScroll, testCase.name).toBe(false)
+      }
     })
 
     it('does not treat older-message pagination as a new-message auto-scroll trigger', () => {
