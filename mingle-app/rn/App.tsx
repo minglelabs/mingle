@@ -942,6 +942,22 @@ function normalizeServerBannerUnitId(rawValue: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+export function resolveServerBannerUnitIdOverride(params: {
+  defaultUnitId: string;
+  serverUnitId: unknown;
+}): string | null {
+  const serverUnitId = normalizeServerBannerUnitId(params.serverUnitId);
+  if (!serverUnitId) return null;
+
+  // Dev/test builds use Google's sample AdMob publisher prefix. Keep that
+  // deterministic test unit even if the version-policy server has prod env.
+  if (params.defaultUnitId.trim().startsWith('ca-app-pub-3940256099942544/')) {
+    return null;
+  }
+
+  return serverUnitId;
+}
+
 function resolveNativeBannerHeightPx(rawValue: string | number | undefined): number {
   const numeric = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? '');
   if (!Number.isFinite(numeric)) return NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX;
@@ -1663,7 +1679,10 @@ function AppInner(): React.JSX.Element {
         }
 
         if (!active || settled) return;
-        setServerBannerUnitIdOverride(normalizeServerBannerUnitId(policy.adMob?.bannerUnitId));
+        setServerBannerUnitIdOverride(resolveServerBannerUnitIdOverride({
+          defaultUnitId: defaultNativeBannerUnitId,
+          serverUnitId: policy.adMob?.bannerUnitId,
+        }));
         setNativeAppUpdateSnapshot(resolveNativeAppUpdateSnapshot(policy, clientVersion));
 
         if (policy.action === 'force_update') {
@@ -1732,7 +1751,14 @@ function AppInner(): React.JSX.Element {
       abortController?.abort();
       pendingRecommendPromptRef.current = null;
     };
-  }, [activateWebFallback, presentRecommendPrompt, setNativeAppUpdateSnapshot, versionPolicyFallback, versionPolicyLocale]);
+  }, [
+    activateWebFallback,
+    defaultNativeBannerUnitId,
+    presentRecommendPrompt,
+    setNativeAppUpdateSnapshot,
+    versionPolicyFallback,
+    versionPolicyLocale,
+  ]);
 
   const handleForceUpdatePress = useCallback(() => {
     if (versionGate.status !== 'force_update') return;

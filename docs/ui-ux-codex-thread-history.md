@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - Android Dev Ad Banner Visibility
+
+- Surface: `mingle-app/rn/App.tsx`, Android RN devbox installs
+- Issue: Android local testing made it look like the first-tab AdMob banner disappeared because the running version-policy server could override a dev/test APK's Google sample ad unit with the production Android banner unit, which then returned AdMob `no-fill`.
+- User impact: The first tab's banner behavior was ambiguous on device: it was unclear whether the banner was intentionally hidden, delayed, or simply failing to receive inventory.
+- Resolution: Kept server-provided production banner overrides for production builds, but preserved Google sample AdMob units in dev/test builds so Android device testing consistently shows a visible test banner. Verified the banner appears on the first tab and disappears on My Page.
+
 ## 2026-04-30 - Conversation List Bottom Tab Clearance
 
 - Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 
-import { NativeAdBanner, resolveBannerZoneForUrl } from '../App';
+import { NativeAdBanner, resolveBannerZoneForUrl, resolveServerBannerUnitIdOverride } from '../App';
 
 function BannerAdMock(props: Record<string, unknown>) {
   return React.createElement('BannerAd', props);
@@ -117,5 +117,21 @@ describe('resolveBannerZoneForUrl', () => {
   it('leaves malformed URLs unchanged', () => {
     expect(resolveBannerZoneForUrl('')).toBeNull();
     expect(resolveBannerZoneForUrl('not-a-url')).toBeNull();
+  });
+});
+
+describe('resolveServerBannerUnitIdOverride', () => {
+  it('keeps Google sample ad units stable for dev builds', () => {
+    expect(resolveServerBannerUnitIdOverride({
+      defaultUnitId: 'ca-app-pub-3940256099942544/6300978111',
+      serverUnitId: 'ca-app-pub-7057041881494735/6522262692',
+    })).toBeNull();
+  });
+
+  it('allows server ad unit overrides for production builds', () => {
+    expect(resolveServerBannerUnitIdOverride({
+      defaultUnitId: 'ca-app-pub-7057041881494735/3768106846',
+      serverUnitId: 'ca-app-pub-7057041881494735/6522262692',
+    })).toBe('ca-app-pub-7057041881494735/6522262692');
   });
 });
