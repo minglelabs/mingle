@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-04-30 - PR 92 Messenger Bottom Tab Recovery
+
+- Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/components/my-page.tsx`, `mingle-app/src/app/[locale]/mypage/page.tsx`
+- Issue: PR #92's messenger-view work was based on an old branch that would have overwritten current main behavior and no longer fit the latest conversation stack, while the mobile webview still needed a bottom-tab path into conversations and My Page.
+- User impact: Reviving the old branch directly would risk losing newer conversation, native WebView, API namespace, and release behavior; leaving it stale would keep the mobile messenger shell incomplete.
+- Resolution: Rebuilt the bottom-tab messenger surface on top of current main, kept the existing conversation list and release routing intact, added a localized My Page route with profile name/language persistence, and preserved native query parameters while switching tabs.
+
 ## 2026-04-27 - Feedback History Clickable Links
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`, `mingle-app/src/components/LivePhoneDemo/live-phone-demo.feedback-links.tsx`

@@ -4,6 +4,7 @@ import { resolveNativeAppUpdateCopy } from "@/components/LivePhoneDemo/live-phon
 import { resolveLivePhoneDemoTtsActionCopy } from "@/components/LivePhoneDemo/live-phone-demo.tts-actions";
 import { type AppLocale } from "@/i18n/config";
 import { getConversationCopy } from "@/i18n/conversations";
+import { getDraftScreenCopy } from "@/i18n/draft-screen-copy";
 import { getVersionPolicyCopy } from "@/i18n/get-version-policy-copy";
 import { resolveLivePhoneDemoComposerCopy } from "@/i18n/live-phone-demo-composer-copy";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
@@ -11,8 +12,12 @@ import type { AppDictionary } from "@/i18n/types";
 
 export function getSupplementalDictionary(
   locale: AppLocale,
-): Pick<AppDictionary, "conversations" | "livePhoneDemo" | "versionPolicy"> {
+): Pick<AppDictionary, "conversations" | "livePhoneDemo" | "myPage" | "navigation" | "versionPolicy"> {
+  const draftScreenCopy = getDraftScreenCopy(locale);
+
   return {
+    navigation: draftScreenCopy.navigation,
+    myPage: draftScreenCopy.myPage,
     conversations: getConversationCopy(locale),
     livePhoneDemo: {
       composer: resolveLivePhoneDemoComposerCopy(locale),

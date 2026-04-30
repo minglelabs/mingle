@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { getDictionary, isSupportedLocale } from "@/i18n";
+import { getUserPreferredLocale } from "@/lib/user-preferred-locale";
 
 type AccountPageProps = {
   params: Promise<{
@@ -22,6 +23,11 @@ export default async function AccountPage({ params }: AccountPageProps) {
     redirect(`/${locale}`);
   }
   const dictionary = getDictionary(locale);
+
+  const preferredLocale = await getUserPreferredLocale(session.user.id);
+  if (preferredLocale && preferredLocale !== locale) {
+    redirect(`/${preferredLocale}/account`);
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-[40rem] bg-[#f8fafc] px-6 py-10 text-slate-900">
@@ -43,7 +49,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
 
       <Link
         className="mt-6 inline-flex rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-        href={`/${locale}`}
+        href={`/${locale}/mypage`}
       >
         {dictionary.account.backHome}
       </Link>

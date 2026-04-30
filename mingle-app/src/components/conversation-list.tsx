@@ -73,6 +73,7 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
+import BottomTabBar from "@/components/bottom-tab-bar";
 import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -1444,7 +1445,7 @@ export default function ConversationList({
         ? runtimeNativeConversationBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
-  const conversationListFooterPaddingBottom = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+  const conversationListFooterPaddingBottom = "16px";
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -3045,6 +3046,11 @@ export default function ConversationList({
           ) : null}
         </button>
       </footer>
+      <BottomTabBar
+        activeRoute="conversations"
+        dictionary={dictionary}
+        locale={locale}
+      />
 
       {isClientReady && typeof document !== "undefined"
         ? createPortal(

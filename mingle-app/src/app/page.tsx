@@ -16,40 +16,45 @@ import IosV111HomeEntry from "@/web/ios/v1.1.1/home-entry";
 import IosV112HomeEntry from "@/web/ios/v1.1.2/home-entry";
 import IosV113HomeEntry from "@/web/ios/v1.1.3/home-entry";
 
-export default function Page() {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function Page({ searchParams }: PageProps) {
   const locale = DEFAULT_LOCALE;
+  const resolvedSearchParams = await searchParams;
   const releaseVariant = resolveDefaultMingleClientReleaseVariant();
 
   switch (releaseVariant) {
     case "legacy_default_v1_0_11":
       return LegacyHomeEntry({ locale });
     case "default_v1_1_0":
-      return DefaultV110HomeEntry({ locale, searchParams: {} });
+      return DefaultV110HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "default_v1_1_1":
-      return DefaultV111HomeEntry({ locale, searchParams: {} });
+      return DefaultV111HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "default_v1_1_2":
-      return DefaultV112HomeEntry({ locale, searchParams: {} });
+      return DefaultV112HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "default_v1_1_3":
-      return DefaultV113HomeEntry({ locale, searchParams: {} });
+      return DefaultV113HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_0_11":
       return IosV1011HomeEntry({ locale });
     case "android_v1_0_11":
       return AndroidV1011HomeEntry({ locale });
     case "ios_v1_1_0":
-      return IosV110HomeEntry({ locale, searchParams: {} });
+      return IosV110HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_1_1":
-      return IosV111HomeEntry({ locale, searchParams: {} });
+      return IosV111HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_1_2":
-      return IosV112HomeEntry({ locale, searchParams: {} });
+      return IosV112HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "ios_v1_1_3":
-      return IosV113HomeEntry({ locale, searchParams: {} });
+      return IosV113HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_0":
-      return AndroidV110HomeEntry({ locale, searchParams: {} });
+      return AndroidV110HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_1":
-      return AndroidV111HomeEntry({ locale, searchParams: {} });
+      return AndroidV111HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_2":
-      return AndroidV112HomeEntry({ locale, searchParams: {} });
+      return AndroidV112HomeEntry({ locale, searchParams: resolvedSearchParams });
     case "android_v1_1_3":
-      return AndroidV113HomeEntry({ locale, searchParams: {} });
+      return AndroidV113HomeEntry({ locale, searchParams: resolvedSearchParams });
   }
 }

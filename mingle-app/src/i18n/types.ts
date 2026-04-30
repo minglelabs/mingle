@@ -172,7 +172,38 @@ export type BaseAppDictionarySource = {
 
 export type LivePhoneDemoFeedbackCategory = "feedback" | "suggestion" | "inquiry";
 
-export type AppDictionary = Omit<BaseAppDictionarySource, "demo"> & {
+export type NavigationDictionary = {
+  bottomTabBarLabel: string;
+  conversationsTab: string;
+  myPageTab: string;
+  profileImageAlt: string;
+};
+
+export type MyPageDictionary = {
+  languageSettings: string;
+  accountSettings: string;
+  comingSoonTitle: string;
+  comingSoonDescription: string;
+  confirmAction: string;
+  editProfileTitle: string;
+  cancelAction: string;
+  doneAction: string;
+  usernameLabel: string;
+  usernamePlaceholder: string;
+  addPostButtonLabel: string;
+  backButtonLabel: string;
+  profileImageAlt: string;
+  sharePostsTitle: string;
+  sharePostsDescription: string;
+  anonymousUser: string;
+  savedToast: string;
+  saveFailedToast: string;
+};
+
+export type AppDictionary = Omit<BaseAppDictionarySource, "conversations" | "demo"> & {
+  conversations: NonNullable<BaseAppDictionarySource["conversations"]>;
+  navigation: NavigationDictionary;
+  myPage: MyPageDictionary;
   demo: {
     tapPlayToStart: string;
     usageLimitReached: string;
