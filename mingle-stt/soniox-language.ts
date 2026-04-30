@@ -17,6 +17,7 @@ export type SonioxPendingTurnLike = {
     currentSnapshotText: string;
     currentSnapshotEndMs: number;
     detectedLang: string;
+    lastProgressAtMs?: number;
 };
 
 export type SonioxFinalizeRequestSpeaker = {
@@ -125,9 +126,17 @@ export function buildSonioxPendingSignature(turns: SonioxPendingTurnLike[]): str
 
 export function buildSonioxFinalizeRequestCohort(
     turns: SonioxPendingTurnLike[],
+    opts: { idleBeforeMs?: number } = {},
 ): SonioxFinalizeRequestSpeaker[] {
     return [...turns]
         .filter((turn) => hasPendingSonioxTurnText(turn.currentSnapshotText))
+        .filter((turn) => {
+            if (opts.idleBeforeMs === undefined) return true;
+            return typeof turn.lastProgressAtMs === 'number'
+                && Number.isFinite(turn.lastProgressAtMs)
+                && turn.lastProgressAtMs > 0
+                && turn.lastProgressAtMs <= opts.idleBeforeMs;
+        })
         .sort((left, right) => normalizeSpeaker(left.speaker).localeCompare(normalizeSpeaker(right.speaker)))
         .map((turn) => ({
             speaker: normalizeSpeaker(turn.speaker),

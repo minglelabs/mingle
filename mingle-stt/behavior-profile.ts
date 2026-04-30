@@ -1,9 +1,10 @@
-export type MingleSttBehaviorProfile = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'v1_1_2'
+export type MingleSttBehaviorProfile = 'legacy_1_0_11' | 'v1_1_0' | 'v1_1_1' | 'v1_1_2' | 'v1_1_3'
 export type MingleSttReleaseVariant =
     | 'legacy_default_v1_0_11'
     | 'default_v1_1_0'
     | 'default_v1_1_1'
     | 'default_v1_1_2'
+    | 'default_v1_1_3'
     | 'ios_v1_0_11'
     | 'android_v1_0_11'
     | 'ios_v1_1_0'
@@ -12,6 +13,8 @@ export type MingleSttReleaseVariant =
     | 'android_v1_1_1'
     | 'ios_v1_1_2'
     | 'android_v1_1_2'
+    | 'ios_v1_1_3'
+    | 'android_v1_1_3'
 
 type ApiNamespaceVersion = {
   platform: 'android' | 'ios'
@@ -21,6 +24,7 @@ type ApiNamespaceVersion = {
 const FIRST_V1_1_0_VERSION: readonly [number, number, number] = [1, 1, 0]
 const FIRST_V1_1_1_VERSION: readonly [number, number, number] = [1, 1, 1]
 const FIRST_V1_1_2_VERSION: readonly [number, number, number] = [1, 1, 2]
+const FIRST_V1_1_3_VERSION: readonly [number, number, number] = [1, 1, 3]
 
 function normalizeApiNamespace(raw: string): string {
   return raw.trim().replace(/^\/+/, '').replace(/\/+$/, '')
@@ -62,20 +66,24 @@ export function resolveMingleSttReleaseVariant(apiNamespace: string): MingleSttR
         return 'legacy_default_v1_0_11'
     }
 
-    const versionLine = compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_2_VERSION) >= 0
-        ? 'v1_1_2'
-        : compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_1_VERSION) >= 0
-            ? 'v1_1_1'
-            : compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_0_VERSION) >= 0
-                ? 'v1_1_0'
-                : 'v1_0_11'
+    const versionLine = compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_3_VERSION) >= 0
+        ? 'v1_1_3'
+        : compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_2_VERSION) >= 0
+            ? 'v1_1_2'
+            : compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_1_VERSION) >= 0
+                ? 'v1_1_1'
+                : compareApiNamespaceVersions(parsedNamespace.version, FIRST_V1_1_0_VERSION) >= 0
+                    ? 'v1_1_0'
+                    : 'v1_0_11'
 
     if (parsedNamespace.platform === 'ios') {
+        if (versionLine === 'v1_1_3') return 'ios_v1_1_3'
         if (versionLine === 'v1_1_2') return 'ios_v1_1_2'
         if (versionLine === 'v1_1_1') return 'ios_v1_1_1'
         return versionLine === 'v1_1_0' ? 'ios_v1_1_0' : 'ios_v1_0_11'
     }
 
+    if (versionLine === 'v1_1_3') return 'android_v1_1_3'
     if (versionLine === 'v1_1_2') return 'android_v1_1_2'
     if (versionLine === 'v1_1_1') return 'android_v1_1_1'
     return versionLine === 'v1_1_0' ? 'android_v1_1_0' : 'android_v1_0_11'
@@ -88,6 +96,7 @@ export function parseMingleSttReleaseVariant(rawReleaseVariant: string): MingleS
         case 'default_v1_1_0':
         case 'default_v1_1_1':
         case 'default_v1_1_2':
+        case 'default_v1_1_3':
         case 'ios_v1_0_11':
         case 'android_v1_0_11':
         case 'ios_v1_1_0':
@@ -96,6 +105,8 @@ export function parseMingleSttReleaseVariant(rawReleaseVariant: string): MingleS
         case 'android_v1_1_1':
         case 'ios_v1_1_2':
         case 'android_v1_1_2':
+        case 'ios_v1_1_3':
+        case 'android_v1_1_3':
             return normalizedReleaseVariant
         default:
             return null
@@ -105,6 +116,14 @@ export function parseMingleSttReleaseVariant(rawReleaseVariant: string): MingleS
 export function resolveMingleSttBehaviorProfileForReleaseVariant(
     releaseVariant: MingleSttReleaseVariant,
 ): MingleSttBehaviorProfile {
+    if (
+        releaseVariant === 'default_v1_1_3'
+        || releaseVariant === 'ios_v1_1_3'
+        || releaseVariant === 'android_v1_1_3'
+    ) {
+        return 'v1_1_3'
+    }
+
     if (
         releaseVariant === 'default_v1_1_2'
         || releaseVariant === 'ios_v1_1_2'

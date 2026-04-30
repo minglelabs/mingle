@@ -4,6 +4,8 @@ import {
   isLegacyMingleClientReleaseVariant,
   isV1_1_0MingleClientReleaseVariant,
   isV1_1_1MingleClientReleaseVariant,
+  isV1_1_2MingleClientReleaseVariant,
+  isV1_1_3MingleClientReleaseVariant,
   readRequestedApiNamespaceFromSearchParams,
   resolveDefaultMingleClientReleaseVariant,
   resolveDefaultMingleBehaviorProfile,
@@ -20,12 +22,14 @@ describe('resolveMingleBehaviorProfile', () => {
     expect(resolveMingleBehaviorProfile('')).toBe('legacy_1_0_11')
   })
 
-  it('routes 1.1.0 and above to the new profile', () => {
+  it('routes modern namespaces to their matching profile labels', () => {
     expect(resolveMingleBehaviorProfile('ios/v1.1.0')).toBe('v1_1_0')
     expect(resolveMingleBehaviorProfile('ios/v1.1.1')).toBe('v1_1_1')
     expect(resolveMingleBehaviorProfile('android/v1.1.1')).toBe('v1_1_1')
-    expect(resolveMingleBehaviorProfile('ios/v1.1.2')).toBe('v1_1_1')
-    expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_1')
+    expect(resolveMingleBehaviorProfile('ios/v1.1.2')).toBe('v1_1_2')
+    expect(resolveMingleBehaviorProfile('android/v1.1.2')).toBe('v1_1_2')
+    expect(resolveMingleBehaviorProfile('ios/v1.1.3')).toBe('v1_1_3')
+    expect(resolveMingleBehaviorProfile('android/v1.2.3')).toBe('v1_1_3')
   })
 })
 
@@ -43,8 +47,17 @@ describe('resolveMingleClientReleaseVariant', () => {
   it('keeps explicit ios and android 1.1.1 targets separate', () => {
     expect(resolveMingleClientReleaseVariant('ios/v1.1.1')).toBe('ios_v1_1_1')
     expect(resolveMingleClientReleaseVariant('android/v1.1.1')).toBe('android_v1_1_1')
-    expect(resolveMingleClientReleaseVariant('ios/v1.1.2')).toBe('ios_v1_1_1')
-    expect(resolveMingleClientReleaseVariant('android/v1.1.2')).toBe('android_v1_1_1')
+  })
+
+  it('keeps explicit ios and android 1.1.2 targets separate', () => {
+    expect(resolveMingleClientReleaseVariant('ios/v1.1.2')).toBe('ios_v1_1_2')
+    expect(resolveMingleClientReleaseVariant('android/v1.1.2')).toBe('android_v1_1_2')
+  })
+
+  it('keeps explicit ios and android 1.1.3 targets separate', () => {
+    expect(resolveMingleClientReleaseVariant('ios/v1.1.3')).toBe('ios_v1_1_3')
+    expect(resolveMingleClientReleaseVariant('android/v1.1.3')).toBe('android_v1_1_3')
+    expect(resolveMingleClientReleaseVariant('android/v1.2.3')).toBe('android_v1_1_3')
   })
 
   it('defaults unknown namespaces to the safe legacy release line', () => {
@@ -57,6 +70,7 @@ describe('resolveMingleReleaseTarget', () => {
     expect(resolveMingleReleaseTarget('v1_1_0')).toBe('v1_1_0')
     expect(resolveMingleReleaseTarget('v1_1_1')).toBe('v1_1_1')
     expect(resolveMingleReleaseTarget('v1_1_2')).toBe('v1_1_2')
+    expect(resolveMingleReleaseTarget('v1_1_3')).toBe('v1_1_3')
     expect(resolveMingleReleaseTarget('')).toBe('unknown')
   })
 })
@@ -112,12 +126,20 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
     expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_1')
   })
 
-  it('uses the 1.1.1 behavior profile for the dedicated 1.1.2 release target', () => {
+  it('uses the dedicated 1.1.2 release target when the namespace is intentionally blank', () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
     process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_2'
 
-    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_1')
-    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_1')
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_2')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_2')
+  })
+
+  it('uses the dedicated 1.1.3 release target when the namespace is intentionally blank', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_3'
+
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_3')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_3')
   })
 })
 
@@ -140,5 +162,19 @@ describe('release-variant feature flags', () => {
     expect(isV1_1_1MingleClientReleaseVariant('ios_v1_1_1')).toBe(true)
     expect(isV1_1_1MingleClientReleaseVariant('android_v1_1_1')).toBe(true)
     expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_1')).toBe('v1_1_1')
+  })
+
+  it('keeps 1.1.2 variants on the 1.1.2 release line', () => {
+    expect(isV1_1_2MingleClientReleaseVariant('default_v1_1_2')).toBe(true)
+    expect(isV1_1_2MingleClientReleaseVariant('ios_v1_1_2')).toBe(true)
+    expect(isV1_1_2MingleClientReleaseVariant('android_v1_1_2')).toBe(true)
+    expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_2')).toBe('v1_1_2')
+  })
+
+  it('keeps 1.1.3 variants on the 1.1.3 release line', () => {
+    expect(isV1_1_3MingleClientReleaseVariant('default_v1_1_3')).toBe(true)
+    expect(isV1_1_3MingleClientReleaseVariant('ios_v1_1_3')).toBe(true)
+    expect(isV1_1_3MingleClientReleaseVariant('android_v1_1_3')).toBe(true)
+    expect(resolveMingleBehaviorProfileForReleaseVariant('default_v1_1_3')).toBe('v1_1_3')
   })
 })

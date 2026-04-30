@@ -24,9 +24,12 @@ import {
   parseSttTranscriptMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
+  parseRecentStoredUtterances,
   persistMessageCountSnapshot,
   persistUtterancesSnapshot,
   pruneUnresolvedTranslationTargets,
+  rememberRecentFinalizedUtterance,
+  replaceFinalizedUtteranceSourceInStoreState,
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
@@ -108,6 +111,27 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('parses only recent stored utterances without full-history parsing', () => {
+    const raw = JSON.stringify(Array.from({ length: 4 }, (_, index) => ({
+      id: `u-${index}`,
+      originalText: index === 3 ? "He said \"screw it, let's do it\" and kept going." : `message ${index}`,
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: { ko: `메시지 ${index}` },
+      translationFinalized: { ko: true },
+      createdAtMs: 1700000000000 + index,
+    })))
+
+    expect(parseRecentStoredUtterances(raw, 2)).toEqual({
+      utterances: [
+        expect.objectContaining({ id: 'u-2', originalText: 'message 2' }),
+        expect.objectContaining({ id: 'u-3', originalText: "He said \"screw it, let's do it\" and kept going." }),
+      ],
+      hasOlder: true,
+    })
+    expect(parseRecentStoredUtterances('[]', 2)).toEqual({ utterances: [], hasOlder: false })
   })
 
   it('uses same-origin websocket path when NEXT_PUBLIC_WS_PATH is set', () => {
@@ -396,6 +420,23 @@ describe('use-realtime-stt pure logic', () => {
       isFinal: true,
       speaker: 'speaker-2',
     })
+  })
+
+  it('preserves STT finalize source metadata when present', () => {
+    const parsed = parseSttTranscriptMessage({
+      type: 'transcript',
+      data: {
+        is_final: true,
+        finalize_source: 'server_idle_snapshot',
+        utterance: {
+          text: 'Hello there',
+          language: 'en-US',
+          speaker: 'speaker-2',
+        },
+      },
+    })
+
+    expect(parsed?.finalizeSource).toBe('server_idle_snapshot')
   })
 
   it('promotes generic Chinese transcript language to zh-CN by default', () => {
@@ -913,7 +954,7 @@ describe('use-realtime-stt pure logic', () => {
       createUtteranceStoreState([]),
       finalized.utterance,
       {
-        translations: finalized.currentTurnPreviousState.translations,
+        translations: finalized.currentTurnPreviousState?.translations ?? {},
         priorities: new Map([
           ['ko', { kind: 'final', seq: 1 }],
         ]),
@@ -1780,6 +1821,165 @@ describe('use-realtime-stt pure logic', () => {
     })).toEqual({
       kind: 'skip_duplicate_server',
       utteranceId: 'u-server-prev',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-expanded',
+      recentFinalizedUtterance: {
+        id: 'u-local',
+        text: "Actually ready right now, so let's th",
+        language: 'en',
+        expiresAt: 5_000,
+        source: 'local',
+      },
+      nowMs: 1_000,
+      text: "Actually ready right now, so let's throw it on over.",
+      language: 'en',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-expanded',
+      recentFinalizedUtterance: {
+        id: 'u-server-prev',
+        text: 'Actually ready',
+        language: 'en',
+        expiresAt: 5_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+      text: 'Actually ready now',
+      language: 'en',
+    })).toEqual({ kind: 'none' })
+  })
+
+  it('matches stop-time local finals independently by speaker', () => {
+    const recent = [
+      {
+        id: 'u-local-speaker-1',
+        text: 'Actually ready right now, so lets th',
+        language: 'en',
+        speaker: '1',
+        expiresAt: 5_000,
+        source: 'local' as const,
+      },
+      {
+        id: 'u-local-speaker-2',
+        text: '준비됐어',
+        language: 'ko',
+        speaker: '2',
+        expiresAt: 5_000,
+        source: 'local' as const,
+      },
+    ]
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-1',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: 'Actually ready right now, so lets throw it on over.',
+      language: 'en',
+      speaker: '1',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-speaker-1',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-2',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: '준비됐어.',
+      language: 'ko',
+      speaker: '2',
+    })).toEqual({
+      kind: 'reuse_local',
+      utteranceId: 'u-local-speaker-2',
+    })
+
+    expect(classifyRecentFinalizedUtteranceMatch({
+      pendingUtteranceId: null,
+      finalizedUtteranceId: 'u-server-speaker-3',
+      recentFinalizedUtterances: recent,
+      nowMs: 1_000,
+      text: '준비됐어.',
+      language: 'ko',
+      speaker: '3',
+    })).toEqual({ kind: 'none' })
+  })
+
+  it('keeps multiple recent finalized utterances while pruning expired entries', () => {
+    const nextRecent = rememberRecentFinalizedUtterance({
+      recentFinalizedUtterances: [
+        {
+          id: 'u-expired',
+          text: 'old',
+          language: 'en',
+          speaker: '1',
+          expiresAt: 900,
+          source: 'local',
+        },
+        {
+          id: 'u-live',
+          text: 'still recent',
+          language: 'en',
+          speaker: '2',
+          expiresAt: 5_000,
+          source: 'local',
+        },
+      ],
+      utterance: {
+        id: 'u-next',
+        text: 'next',
+        language: 'en',
+        speaker: '3',
+        expiresAt: 6_000,
+        source: 'server',
+      },
+      nowMs: 1_000,
+    })
+
+    expect(nextRecent.map((utterance) => utterance.id)).toEqual(['u-live', 'u-next'])
+  })
+
+  it('updates a reused local final with the later server final source text', () => {
+    const store = createUtteranceStoreState([
+      {
+        id: 'u-local',
+        speaker: '1',
+        originalText: "Actually ready right now, so let's th",
+        originalLang: 'en',
+        targetLanguages: ['ko'],
+        translations: {
+          ko: '아직 부분 번역',
+        },
+        translationFinalized: {
+          ko: false,
+        },
+        createdAtMs: 1_700_000_000_000,
+      },
+    ])
+
+    const nextStore = replaceFinalizedUtteranceSourceInStoreState({
+      store,
+      utteranceId: 'u-local',
+      sourceText: "Actually ready right now, so let's throw it on over.",
+      sourceLanguage: 'en',
+      selectedLanguages: ['en', 'ko', 'ja'],
+    })
+
+    expect(nextStore.utterances).toHaveLength(1)
+    expect(nextStore.utterances[0]?.originalText).toBe("Actually ready right now, so let's throw it on over.")
+    expect(nextStore.utterances[0]?.originalLang).toBe('en')
+    expect(nextStore.utterances[0]?.targetLanguages).toEqual(['ko', 'ja'])
+    expect(nextStore.utterances[0]?.translations).toEqual({
+      ko: '아직 부분 번역',
     })
   })
 

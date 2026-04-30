@@ -73,11 +73,11 @@ MINGLE_TEST_TTS_OUTPUT_DIR=/absolute/path/to/tts-output
 ## API Namespace (Release Routing)
 
 The client determines API routes through `NEXT_PUBLIC_API_NAMESPACE` without runtime branching.
-For the 1.1.0 rollout, the deployment target is now separated from the legacy 1.0.11 production servers.
+For dedicated mobile rollouts, the deployment target is separated from the legacy 1.0.11 production servers.
 
 - Default (legacy): empty value (`''`) -> `/api/{existing-path}`
-- iOS versioned: `ios/v1.1.0` -> `/api/ios/v1.1.0/{existing-path}`
-- Android versioned: `android/v1.1.0` -> `/api/android/v1.1.0/{existing-path}`
+- iOS versioned: `ios/v1.1.3` -> `/api/ios/v1.1.3/{existing-path}`
+- Android versioned: `android/v1.1.3` -> `/api/android/v1.1.3/{existing-path}`
 - Previous mobile namespaces remain allow-listed for backward compatibility.
 
 Release build commands:
@@ -376,8 +376,8 @@ RN app URLs are never hardcoded and are read only from environment variables.
 - `MINGLE_STT_FALLBACK_WS_URL` (optional fallback STT target, defaults to the current Fly deployment)
 - `MINGLE_LEGACY_SITE_URL` (optional override, defaults to the current 1.0.11 production web deployment)
 - `MINGLE_LEGACY_WS_URL` (optional override, defaults to the current 1.0.11 production STT deployment)
-- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.0`)
-- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.1.0`, the app shows an error instead of loading the WebView.
+- `NEXT_PUBLIC_API_NAMESPACE` (required on iOS: `ios/v1.1.3`)
+- On iOS, if `NEXT_PUBLIC_API_NAMESPACE` does not match `ios/v1.1.3`, the app shows an error instead of loading the WebView.
 - `RN_CLIENT_VERSION` (optional, fallback: `CFBundleShortVersionString`)
 - `RN_CLIENT_BUILD` (optional, fallback: `CFBundleVersion`)
 
@@ -413,8 +413,8 @@ ANDROID_PLAYSTORE_URL=https://play.google.com/store/apps/details?id=com.minglela
 ```
 
 The root `pnpm rn:start|ios|android` scripts load `.env.local` first and then run the RN CLI.
-`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.0` validation before launch.
-`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.0` validation before launch.
+`pnpm rn:ios` enforces `NEXT_PUBLIC_API_NAMESPACE=ios/v1.1.3` validation before launch.
+`pnpm rn:android` enforces `NEXT_PUBLIC_API_NAMESPACE=android/v1.1.3` validation before launch.
 
 - iOS native STT bridge lives in:
   - `rn/ios/mingle/NativeSTTModule.swift`

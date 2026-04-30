@@ -11,6 +11,14 @@ export type MingleSttModel =
     | 'fireworks'
     | 'soniox';
 
+export type MingleSttFinalizeSource =
+    | 'soniox_manual'
+    | 'server_idle_snapshot'
+    | 'server_stop_fallback'
+    | 'server_timeout_fallback'
+    | 'server_provider_close_fallback'
+    | 'server_carry_expiry';
+
 export type MingleSttClientConfig = {
     sample_rate: number;
     languages: string[];
@@ -27,6 +35,7 @@ export type MingleSttFinalTurnPayload = {
     text: string;
     language: string;
     speaker?: string;
+    finalize_source?: MingleSttFinalizeSource;
 } | null;
 
 type ReadyPayloadInput = {
@@ -61,7 +70,7 @@ export type MingleSttConnectionStarters = {
 
 export type MingleSttStopRecordingLifecycle = {
     setSonioxStopRequested: (nextValue: boolean) => void;
-    finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null;
+    finalizePendingTurnFromProvider: ((fallbackSource?: MingleSttFinalizeSource) => Promise<MingleSttFinalTurnPayload>) | null;
     sendForcedFinalTurn: (
         rawText: string,
         rawLanguage: string,
@@ -142,26 +151,63 @@ export function createReleaseRuntime(
             lifecycle,
         }) => {
             const cleanedPendingText = pendingText.trim();
-            lifecycle.setSonioxStopRequested(currentModel === 'soniox');
+            const usesGracefulProviderFinalize = behaviorLine === 'v1_1_3';
 
-            let finalizedTurn: MingleSttFinalTurnPayload = null;
+            if (!usesGracefulProviderFinalize) {
+                lifecycle.setSonioxStopRequested(currentModel === 'soniox');
 
-            if (currentModel === 'soniox' && lifecycle.finalizePendingTurnFromProvider) {
-                void lifecycle.finalizePendingTurnFromProvider();
-            } else if (cleanedPendingText) {
-                finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
-            } else if (lifecycle.finalizePendingTurnFromProvider) {
-                void lifecycle.finalizePendingTurnFromProvider();
+                let finalizedTurn: MingleSttFinalTurnPayload = null;
+
+                if (currentModel === 'soniox' && lifecycle.finalizePendingTurnFromProvider) {
+                    void lifecycle.finalizePendingTurnFromProvider();
+                } else if (cleanedPendingText) {
+                    finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                } else if (lifecycle.finalizePendingTurnFromProvider) {
+                    void lifecycle.finalizePendingTurnFromProvider();
+                }
+
+                lifecycle.closeProviderSocket();
+                lifecycle.sendStopRecordingAck(
+                    buildStopRecordingAckData({ finalizedTurn }),
+                );
+                lifecycle.scheduleClientCloseAfterAck();
+                if (currentModel !== 'soniox') {
+                    lifecycle.disposeSpeakerStates();
+                }
+                return;
             }
 
-            lifecycle.closeProviderSocket();
-            lifecycle.sendStopRecordingAck(
-                buildStopRecordingAckData({ finalizedTurn }),
-            );
-            lifecycle.scheduleClientCloseAfterAck();
-            if (currentModel !== 'soniox') {
-                lifecycle.disposeSpeakerStates();
-            }
+            void (async () => {
+                lifecycle.setSonioxStopRequested(currentModel === 'soniox');
+
+                let finalizedTurn: MingleSttFinalTurnPayload = null;
+
+                try {
+                    if (currentModel === 'soniox' && lifecycle.finalizePendingTurnFromProvider) {
+                        finalizedTurn = await lifecycle.finalizePendingTurnFromProvider();
+                        if (!finalizedTurn && cleanedPendingText) {
+                            finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                        }
+                    } else if (cleanedPendingText) {
+                        finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                    } else if (lifecycle.finalizePendingTurnFromProvider) {
+                        finalizedTurn = await lifecycle.finalizePendingTurnFromProvider();
+                    }
+                } catch {
+                    if (cleanedPendingText) {
+                        finalizedTurn = lifecycle.sendForcedFinalTurn(pendingText, pendingLanguage);
+                    }
+                }
+
+                lifecycle.closeProviderSocket();
+                lifecycle.sendStopRecordingAck(
+                    buildStopRecordingAckData({ finalizedTurn }),
+                );
+                lifecycle.scheduleClientCloseAfterAck();
+                if (currentModel !== 'soniox') {
+                    lifecycle.disposeSpeakerStates();
+                }
+            })();
         },
     };
 }

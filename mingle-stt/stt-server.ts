@@ -12,9 +12,9 @@ import {
 import {
     buildSonioxFinalizeRequestCohort,
     buildSonioxDebugTokenRuns,
-    buildSonioxPendingSignature,
     formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
+    hasPendingSonioxTurnText,
     mergeDetectedLang,
     normalizeDetectedLang,
     normalizeSpeaker,
@@ -31,6 +31,7 @@ import {
     resolveMingleSttReleaseRuntime,
     type MingleSttClientConfig,
     type MingleSttConnectionStarters,
+    type MingleSttFinalizeSource,
     type MingleSttFinalTurnPayload,
     type MingleSttModel,
     type MingleSttStopRecordingLifecycle,
@@ -51,6 +52,8 @@ const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3000;
+const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS = 1200;
+const SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS = 700;
 const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     const raw = Number(process.env.SONIOX_MANUAL_FINALIZE_COOLDOWN_MS || '1200');
     if (!Number.isFinite(raw)) return 1200;
@@ -82,6 +85,13 @@ function classifySonioxUpstreamError(errorCode: unknown, errorMessage: unknown):
     return 'upstream_error';
 }
 
+function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
+    return Math.max(
+        SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_MIN_MS,
+        silenceMs + SONIOX_MANUAL_FINALIZE_RESPONSE_TIMEOUT_BUFFER_MS,
+    );
+}
+
 wss.on('connection', (clientWs) => {
     const connId = ++connectionCounter;
     const connectedAt = Date.now();
@@ -97,7 +107,9 @@ wss.on('connection', (clientWs) => {
     let apiNamespace = '';
     let selectedLanguages: string[] = [];
     let lastSonioxUpstreamError: { code: string; category: string } | null = null;
-    let finalizePendingTurnFromProvider: (() => Promise<MingleSttFinalTurnPayload>) | null = null;
+    let finalizePendingTurnFromProvider: ((
+        fallbackSource?: MingleSttFinalizeSource,
+    ) => Promise<MingleSttFinalTurnPayload>) | null = null;
     let sonioxStopRequested = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
@@ -586,6 +598,7 @@ wss.on('connection', (clientWs) => {
                 latestNonFinalIsProvisionalCarry: boolean;
                 currentSnapshotText: string;
                 currentSnapshotEndMs: number;
+                lastProgressAtMs: number;
                 lastConsumedEndMs: number;
                 detectedLang: string;
                 strategy: SilenceTimerStrategy;
@@ -600,6 +613,8 @@ wss.on('connection', (clientWs) => {
                     snapshotEndMs: number;
                     detectedLang: string;
                 }>;
+                timeout?: ReturnType<typeof setTimeout>;
+                resolve?: (payload: MingleSttFinalTurnPayload) => void;
             };
             type SonioxSpeakerFrameUpdate = {
                 speaker: string;
@@ -614,11 +629,10 @@ wss.on('connection', (clientWs) => {
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
             let globalFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
-            let globalFinalizeLastProgressAtMs = 0;
             let globalFinalizeLastSentAtMs = 0;
-            let lastGlobalPendingSignature = '';
             let activeFinalizeRequest: SonioxFinalizeRequest | null = null;
             let finalizeRequestSeq = 0;
+            let finalizeRequestedSpeakerSnapshots: ((request: SonioxFinalizeRequest, finalizeSource: MingleSttFinalizeSource) => MingleSttFinalTurnPayload) | null = null;
             sonioxStopRequested = false;
 
             const parseTokenTimeMs = (raw: unknown): number | null => {
@@ -650,6 +664,7 @@ wss.on('connection', (clientWs) => {
                     speaker: state.speaker,
                     currentSnapshotText: state.currentSnapshotText,
                     currentSnapshotEndMs: state.currentSnapshotEndMs,
+                    lastProgressAtMs: state.lastProgressAtMs,
                     detectedLang: state.detectedLang,
                 }))
             );
@@ -661,26 +676,12 @@ wss.on('connection', (clientWs) => {
             };
             const resetGlobalFinalizeScheduler = () => {
                 clearGlobalFinalizeTimer();
-                globalFinalizeLastProgressAtMs = 0;
                 globalFinalizeLastSentAtMs = 0;
-                lastGlobalPendingSignature = '';
+                if (activeFinalizeRequest?.timeout) {
+                    clearTimeout(activeFinalizeRequest.timeout);
+                }
+                activeFinalizeRequest?.resolve?.(null);
                 activeFinalizeRequest = null;
-            };
-            const updateGlobalPendingSignature = () => {
-                const nextSignature = buildSonioxPendingSignature(buildPendingTurnSnapshots());
-                if (!nextSignature) {
-                    lastGlobalPendingSignature = '';
-                    globalFinalizeLastProgressAtMs = 0;
-                    return { hasPending: false, changed: false };
-                }
-
-                const changed = nextSignature !== lastGlobalPendingSignature;
-                if (changed) {
-                    lastGlobalPendingSignature = nextSignature;
-                    globalFinalizeLastProgressAtMs = Date.now();
-                }
-
-                return { hasPending: true, changed };
             };
             const scheduleGlobalFinalizeCheck = (delayMs: number) => {
                 clearGlobalFinalizeTimer();
@@ -689,39 +690,76 @@ wss.on('connection', (clientWs) => {
                     maybeTriggerGlobalFinalize();
                 }, Math.max(1, delayMs));
             };
+            const buildIdleFinalizeCohort = (now: number) => (
+                buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots(), {
+                    idleBeforeMs: now - sonioxManualFinalizeSilenceMs,
+                })
+            );
+            const hasPendingTurnOutsideFinalizeCohort = (cohort: Array<{ speaker: string }>): boolean => {
+                const cohortSpeakers = new Set(cohort.map((entry) => entry.speaker));
+                return buildPendingTurnSnapshots().some((snapshot) => (
+                    !cohortSpeakers.has(snapshot.speaker)
+                    && hasPendingSonioxTurnText(snapshot.currentSnapshotText)
+                ));
+            };
+            const usesPerSpeakerIdleFinalize = () => behaviorProfile === 'v1_1_3';
+            const nextGlobalFinalizeDelayMs = (now: number): number | null => {
+                const pendingProgressAtTimes = buildPendingTurnSnapshots()
+                    .filter((snapshot) => hasPendingSonioxTurnText(snapshot.currentSnapshotText))
+                    .map((snapshot) => snapshot.lastProgressAtMs)
+                    .filter((value): value is number => (
+                        typeof value === 'number'
+                        && Number.isFinite(value)
+                        && value > 0
+                    ));
+                if (pendingProgressAtTimes.length === 0) return null;
+
+                const speakerSilenceWaits = pendingProgressAtTimes.map((lastProgressAtMs) => (
+                    Math.max(0, sonioxManualFinalizeSilenceMs - (now - lastProgressAtMs))
+                ));
+                const waitForSpeakerSilence = usesPerSpeakerIdleFinalize()
+                    ? Math.min(...speakerSilenceWaits)
+                    : Math.max(...speakerSilenceWaits);
+                const waitForCooldown = globalFinalizeLastSentAtMs > 0
+                    ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - (now - globalFinalizeLastSentAtMs))
+                    : 0;
+
+                return Math.max(waitForSpeakerSilence, waitForCooldown);
+            };
             const maybeTriggerGlobalFinalize = () => {
                 if (sonioxStopRequested) return;
 
-                const { hasPending } = updateGlobalPendingSignature();
-                if (!hasPending) {
+                const now = Date.now();
+                const wait = nextGlobalFinalizeDelayMs(now);
+                if (wait === null) {
                     clearGlobalFinalizeTimer();
                     return;
                 }
 
                 if (activeFinalizeRequest) return;
-
-                const now = Date.now();
-                if (globalFinalizeLastProgressAtMs <= 0) {
-                    globalFinalizeLastProgressAtMs = now;
-                }
-
-                const elapsedSinceProgress = now - globalFinalizeLastProgressAtMs;
-                if (elapsedSinceProgress < sonioxManualFinalizeSilenceMs) {
-                    scheduleGlobalFinalizeCheck(sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
-                    return;
-                }
-
-                const elapsedSinceLastFinalize = now - globalFinalizeLastSentAtMs;
-                if (globalFinalizeLastSentAtMs > 0 && elapsedSinceLastFinalize < SONIOX_MANUAL_FINALIZE_COOLDOWN_MS) {
-                    scheduleGlobalFinalizeCheck(SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - elapsedSinceLastFinalize);
+                if (wait > 0) {
+                    scheduleGlobalFinalizeCheck(wait);
                     return;
                 }
 
                 if (!sttWs || sttWs.readyState !== WebSocket.OPEN) return;
 
-                const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
+                const cohort = buildIdleFinalizeCohort(now);
                 if (cohort.length === 0) {
-                    clearGlobalFinalizeTimer();
+                    const nextWait = nextGlobalFinalizeDelayMs(now);
+                    if (nextWait === null) clearGlobalFinalizeTimer();
+                    else scheduleGlobalFinalizeCheck(nextWait);
+                    return;
+                }
+                if (usesPerSpeakerIdleFinalize() && hasPendingTurnOutsideFinalizeCohort(cohort)) {
+                    // Soniox finalize is global; don't cut active speakers just to close idle ones.
+                    globalFinalizeLastSentAtMs = now;
+                    finalizeRequestedSpeakerSnapshots?.({
+                        requestId: ++finalizeRequestSeq,
+                        requestedAtMs: now,
+                        speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
+                    }, 'server_idle_snapshot');
+                    refreshGlobalFinalizeScheduling();
                     return;
                 }
 
@@ -730,44 +768,95 @@ wss.on('connection', (clientWs) => {
                     requestedAtMs: now,
                     speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
                 };
+                const requestId = activeFinalizeRequest.requestId;
+                activeFinalizeRequest.timeout = setTimeout(() => {
+                    const request = activeFinalizeRequest;
+                    if (!request || request.requestId !== requestId) return;
+                    activeFinalizeRequest = null;
+                    console.warn(
+                        `Soniox manual finalize timed out after ${Date.now() - request.requestedAtMs}ms; flushing requested speaker snapshots`,
+                    );
+                    finalizeRequestedSpeakerSnapshots?.(request, 'server_timeout_fallback');
+                    refreshGlobalFinalizeScheduling();
+                }, getSonioxManualFinalizeResponseTimeoutMs(sonioxManualFinalizeSilenceMs));
                 globalFinalizeLastSentAtMs = now;
 
                 try {
                     sttWs.send(JSON.stringify({ type: 'finalize' }));
                 } catch (error) {
+                    if (activeFinalizeRequest?.timeout) {
+                        clearTimeout(activeFinalizeRequest.timeout);
+                    }
                     activeFinalizeRequest = null;
                     console.error('Soniox manual finalize send failed:', error);
                     scheduleGlobalFinalizeCheck(SONIOX_MANUAL_FINALIZE_COOLDOWN_MS);
                 }
             };
+            const completeActiveFinalizeRequest = (payload: MingleSttFinalTurnPayload) => {
+                const request = activeFinalizeRequest;
+                if (!request) return;
+                if (request.timeout) {
+                    clearTimeout(request.timeout);
+                }
+                activeFinalizeRequest = null;
+                request.resolve?.(payload);
+            };
+            const forceProviderFinalizeAllSpeakerTurns = async (
+                fallbackSource: MingleSttFinalizeSource = 'server_stop_fallback',
+            ): Promise<MingleSttFinalTurnPayload> => {
+                const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
+                if (cohort.length === 0) return null;
+                if (!sttWs || sttWs.readyState !== WebSocket.OPEN) {
+                    return flushAllSpeakerTurns(fallbackSource);
+                }
+
+                const now = Date.now();
+                if (activeFinalizeRequest?.timeout) {
+                    clearTimeout(activeFinalizeRequest.timeout);
+                }
+                globalFinalizeLastSentAtMs = now;
+
+                return await new Promise<MingleSttFinalTurnPayload>((resolve) => {
+                    const requestId = ++finalizeRequestSeq;
+                    const timeout = setTimeout(() => {
+                        if (activeFinalizeRequest?.requestId !== requestId) return;
+                        activeFinalizeRequest = null;
+                        resolve(flushAllSpeakerTurns('server_timeout_fallback'));
+                    }, getSonioxManualFinalizeResponseTimeoutMs(sonioxManualFinalizeSilenceMs));
+
+                    activeFinalizeRequest = {
+                        requestId,
+                        requestedAtMs: now,
+                        speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
+                        timeout,
+                        resolve,
+                    };
+
+                    try {
+                        sttWs!.send(JSON.stringify({ type: 'finalize' }));
+                    } catch (error) {
+                        clearTimeout(timeout);
+                        activeFinalizeRequest = null;
+                        console.error('Soniox stop finalize send failed:', error);
+                        resolve(flushAllSpeakerTurns(fallbackSource));
+                    }
+                });
+            };
             const refreshGlobalFinalizeScheduling = () => {
-                const { hasPending } = updateGlobalPendingSignature();
-                if (!hasPending) {
+                const now = Date.now();
+                const wait = nextGlobalFinalizeDelayMs(now);
+                if (wait === null) {
                     clearGlobalFinalizeTimer();
                     return;
                 }
 
                 if (activeFinalizeRequest) return;
-
-                const now = Date.now();
-                if (globalFinalizeLastProgressAtMs <= 0) {
-                    globalFinalizeLastProgressAtMs = now;
-                }
-                const elapsedSinceProgress = now - globalFinalizeLastProgressAtMs;
-                const elapsedSinceLastFinalize = globalFinalizeLastSentAtMs > 0
-                    ? now - globalFinalizeLastSentAtMs
-                    : Number.POSITIVE_INFINITY;
-                const waitForProgress = Math.max(0, sonioxManualFinalizeSilenceMs - elapsedSinceProgress);
-                const waitForCooldown = Number.isFinite(elapsedSinceLastFinalize)
-                    ? Math.max(0, SONIOX_MANUAL_FINALIZE_COOLDOWN_MS - elapsedSinceLastFinalize)
-                    : 0;
-
-                if (waitForProgress === 0 && waitForCooldown === 0) {
+                if (wait === 0) {
                     maybeTriggerGlobalFinalize();
                     return;
                 }
 
-                scheduleGlobalFinalizeCheck(Math.max(waitForProgress, waitForCooldown));
+                scheduleGlobalFinalizeCheck(wait);
             };
 
             const emitTranscript = (
@@ -775,17 +864,22 @@ wss.on('connection', (clientWs) => {
                 language: string,
                 isFinal: boolean,
                 speaker?: string,
+                options?: {
+                    finalizeSource?: MingleSttFinalizeSource;
+                },
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
                 const cleanedLang = (language || '').trim() || 'unknown';
                 const cleanedSpeaker = (speaker || '').trim() || 'unknown';
                 if (!cleanedText) return null;
+                const finalizeSource = isFinal ? options?.finalizeSource : undefined;
 
                 if (clientWs.readyState === WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
                         type: 'transcript',
                         data: {
                             is_final: isFinal,
+                            ...(finalizeSource ? { finalize_source: finalizeSource } : {}),
                             utterance: {
                                 text: cleanedText,
                                 language: cleanedLang,
@@ -794,11 +888,17 @@ wss.on('connection', (clientWs) => {
                         },
                     }));
                 }
+                if (isFinal) {
+                    console.log(
+                        `[conn:${connId}] stt_final source=${finalizeSource || '-'} speaker=${cleanedSpeaker} language=${cleanedLang} text=${JSON.stringify(cleanedText)}`,
+                    );
+                }
 
                 return {
                     text: cleanedText,
                     language: cleanedLang,
                     speaker: cleanedSpeaker,
+                    ...(finalizeSource ? { finalize_source: finalizeSource } : {}),
                 };
             };
 
@@ -814,11 +914,15 @@ wss.on('connection', (clientWs) => {
                 state.latestNonFinalIsProvisionalCarry = false;
                 state.currentSnapshotText = '';
                 state.currentSnapshotEndMs = -1;
+                state.lastProgressAtMs = 0;
                 state.detectedLang = 'unknown';
                 state.strategy.resetState();
             };
 
-            const finalizeSpeakerTurn = (speaker: string): MingleSttFinalTurnPayload => {
+            const finalizeSpeakerTurn = (
+                speaker: string,
+                finalizeSource: MingleSttFinalizeSource,
+            ): MingleSttFinalTurnPayload => {
                 const state = speakerStates.get(speaker);
                 if (!state) return null;
                 const merged = composeTurnText(state.providerFinalizedText, state.latestNonFinalText);
@@ -832,6 +936,7 @@ wss.on('connection', (clientWs) => {
                     state.detectedLang,
                     true,
                     state.speaker,
+                    { finalizeSource },
                 );
                 if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
                     state.lastConsumedEndMs = state.currentSnapshotEndMs;
@@ -840,12 +945,67 @@ wss.on('connection', (clientWs) => {
                 return payload;
             };
 
-            const flushAllSpeakerTurns = (): MingleSttFinalTurnPayload => {
+            const flushAllSpeakerTurns = (finalizeSource: MingleSttFinalizeSource): MingleSttFinalTurnPayload => {
                 let lastPayload: MingleSttFinalTurnPayload = null;
                 for (const speaker of Array.from(speakerStates.keys())) {
-                    const payload = finalizeSpeakerTurn(speaker);
+                    const payload = finalizeSpeakerTurn(speaker, finalizeSource);
                     if (payload) {
                         lastPayload = payload;
+                    }
+                }
+                return lastPayload;
+            };
+
+            finalizeRequestedSpeakerSnapshots = (
+                request: SonioxFinalizeRequest,
+                finalizeSource: MingleSttFinalizeSource,
+            ): MingleSttFinalTurnPayload => {
+                let lastPayload: MingleSttFinalTurnPayload = null;
+                for (const requestSpeaker of request.speakers.values()) {
+                    const state = speakerStates.get(requestSpeaker.speaker);
+                    if (!state) continue;
+
+                    const currentSnapshotBeforeReset = composeTurnText(
+                        state.providerFinalizedText,
+                        state.latestNonFinalText,
+                    );
+                    const finalizedDetectedLang = requestSpeaker.detectedLang || state.detectedLang;
+                    const finalizedText = stripEndpointMarkers(requestSpeaker.snapshotText).trim();
+                    const carryEndMs = state.currentSnapshotEndMs;
+                    const carryText = stripEndpointMarkers(
+                        currentSnapshotBeforeReset.slice(requestSpeaker.snapshotTextLen),
+                    ).trim();
+
+                    const payload = finalizedText
+                        ? emitTranscript(
+                            finalizedText,
+                            finalizedDetectedLang,
+                            true,
+                            state.speaker,
+                            { finalizeSource },
+                        )
+                        : null;
+                    if (payload) {
+                        lastPayload = payload;
+                    }
+                    if (requestSpeaker.snapshotEndMs > state.lastConsumedEndMs) {
+                        state.lastConsumedEndMs = requestSpeaker.snapshotEndMs;
+                    }
+                    resetSpeakerTurn(state);
+
+                    if (carryText) {
+                        state.detectedLang = getNextTurnDetectedLang(finalizedDetectedLang, carryText);
+                        state.latestNonFinalText = carryText;
+                        state.latestNonFinalIsProvisionalCarry = true;
+                        state.currentSnapshotText = composeTurnText('', carryText);
+                        state.currentSnapshotEndMs = carryEndMs;
+                        state.strategy.scheduleCarryExpiry();
+                        emitTranscript(
+                            carryText,
+                            state.detectedLang,
+                            false,
+                            state.speaker,
+                        );
                     }
                 }
                 return lastPayload;
@@ -869,7 +1029,7 @@ wss.on('connection', (clientWs) => {
                             && state.latestNonFinalText.trim()
                             && !state.providerFinalizedText.trim()
                         ) {
-                            finalizeSpeakerTurn(speaker);
+                            finalizeSpeakerTurn(speaker, 'server_carry_expiry');
                             refreshGlobalFinalizeScheduling();
                         }
                     },
@@ -882,6 +1042,7 @@ wss.on('connection', (clientWs) => {
                     latestNonFinalIsProvisionalCarry: false,
                     currentSnapshotText: '',
                     currentSnapshotEndMs: -1,
+                    lastProgressAtMs: 0,
                     lastConsumedEndMs: -1,
                     detectedLang: 'unknown',
                     strategy,
@@ -898,10 +1059,14 @@ wss.on('connection', (clientWs) => {
                 speakerStates.clear();
             };
 
-            finalizePendingTurnFromProvider = async () => {
-                const payload = flushAllSpeakerTurns();
+            finalizePendingTurnFromProvider = async (
+                fallbackSource: MingleSttFinalizeSource = 'server_stop_fallback',
+            ) => {
+                const payload = await forceProviderFinalizeAllSpeakerTurns(fallbackSource);
+                // Stop finalize can split off a carry turn; flush it before sending the ack.
+                const flushedPayload = flushAllSpeakerTurns(fallbackSource);
                 resetGlobalFinalizeScheduler();
-                return payload;
+                return flushedPayload || payload;
             };
 
             sttWs.onopen = () => {
@@ -1095,6 +1260,7 @@ wss.on('connection', (clientWs) => {
                         }
                     }
 
+                    let lastFinalizedPayloadForFrame: MingleSttFinalTurnPayload = null;
                     for (const frameUpdate of speakerFrameUpdates.values()) {
                         const speakerState = getSpeakerState(frameUpdate.speaker);
                         const previousMergedSnapshot = speakerState.currentSnapshotText;
@@ -1163,6 +1329,11 @@ wss.on('connection', (clientWs) => {
                         const transcriptChanged = mergedTextForIdle !== previousMergedTextForIdle;
                         const hasPendingTranscript = mergedSnapshot.length > 0
                             && !(speakerState.latestNonFinalIsProvisionalCarry && !speakerState.providerFinalizedText.trim());
+                        if (hasPendingTranscript && (transcriptChanged || speakerState.lastProgressAtMs <= 0)) {
+                            speakerState.lastProgressAtMs = Date.now();
+                        } else if (!mergedTextForIdle.trim()) {
+                            speakerState.lastProgressAtMs = 0;
+                        }
 
                         const requestSpeaker = finalizeRequestForFrame?.speakers.get(frameUpdate.speaker) || null;
                         const decision = requestSpeaker
@@ -1184,12 +1355,16 @@ wss.on('connection', (clientWs) => {
                             const finalizedEndMs = requestSpeaker?.snapshotEndMs ?? speakerState.currentSnapshotEndMs;
                             const carryEndMs = speakerState.currentSnapshotEndMs;
                             if (finalizedText) {
-                                emitTranscript(
+                                const payload = emitTranscript(
                                     decision.text,
                                     finalizedDetectedLang,
                                     true,
                                     speakerState.speaker,
+                                    { finalizeSource: 'soniox_manual' },
                                 );
+                                if (payload) {
+                                    lastFinalizedPayloadForFrame = payload;
+                                }
                             }
                             if (finalizedEndMs > speakerState.lastConsumedEndMs) {
                                 speakerState.lastConsumedEndMs = finalizedEndMs;
@@ -1227,7 +1402,7 @@ wss.on('connection', (clientWs) => {
                     }
 
                     if (finalizeRequestForFrame) {
-                        activeFinalizeRequest = null;
+                        completeActiveFinalizeRequest(lastFinalizedPayloadForFrame);
                     }
                     refreshGlobalFinalizeScheduling();
 
@@ -1247,11 +1422,14 @@ wss.on('connection', (clientWs) => {
                 // stop_recording 경로가 아니면 남은 텍스트를 마지막 발화로 플러시
                 if (isClientConnected && !sonioxStopRequested) {
                     void (async () => {
-                        await finalizePendingTurnFromProvider?.();
+                        await finalizePendingTurnFromProvider?.('server_provider_close_fallback');
                         if (clientWs.readyState === WebSocket.OPEN) {
                             clientWs.close();
                         }
                     })();
+                } else if (isClientConnected && sonioxStopRequested && activeFinalizeRequest) {
+                    const payload = flushAllSpeakerTurns('server_stop_fallback');
+                    completeActiveFinalizeRequest(payload);
                 }
                 disposeSonioxSpeakerStates?.();
                 disposeSonioxSpeakerStates = null;

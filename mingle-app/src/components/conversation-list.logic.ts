@@ -30,6 +30,20 @@ export type TooltipAnchorRect = {
   width: number;
 };
 
+export type ConversationCreateLockRef = {
+  current: boolean;
+};
+
+export function tryAcquireConversationCreateLock(lockRef: ConversationCreateLockRef): boolean {
+  if (lockRef.current) return false;
+  lockRef.current = true;
+  return true;
+}
+
+export function releaseConversationCreateLock(lockRef: ConversationCreateLockRef): void {
+  lockRef.current = false;
+}
+
 export function normalizeSearchTerm(rawValue: string): string {
   return rawValue.trim().replace(/\s+/g, " ");
 }

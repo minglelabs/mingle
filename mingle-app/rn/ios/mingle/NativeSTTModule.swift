@@ -235,6 +235,9 @@ class NativeSTTModule: RCTEventEmitter {
     private var wsPingTimer: DispatchSourceTimer?
     private var healthCheckTimer: DispatchSourceTimer?
     private var lastChunkCountSnapshot: Int64 = 0
+    private var gracefulStopWorkItem: DispatchWorkItem?
+    private var gracefulStopPending = false
+    private let gracefulStopTimeoutMs = 5_000
 
     override static func requiresMainQueueSetup() -> Bool {
         false
@@ -611,6 +614,9 @@ class NativeSTTModule: RCTEventEmitter {
     private func stopAndCleanup(reason: String?) {
         NSLog("[NativeSTTModule] stopAndCleanup reason=%@ chunks=%lld wsMessages=%lld",
               reason ?? "nil", audioChunkCount, wsMessageCount)
+        gracefulStopWorkItem?.cancel()
+        gracefulStopWorkItem = nil
+        gracefulStopPending = false
         isRunning = false
         stopWsPing()
         stopHealthCheck()
@@ -642,6 +648,50 @@ class NativeSTTModule: RCTEventEmitter {
         if let reason {
             emitClose(reason)
         }
+    }
+
+    private func beginGracefulStop() {
+        guard !gracefulStopPending else { return }
+        gracefulStopPending = true
+        stopWsPing()
+        stopHealthCheck()
+        removeAudioObserversIfNeeded()
+        removeTapIfNeeded()
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if sttSessionTokenAcquired {
+            MingleAudioSessionCoordinator.shared.releaseSTT()
+            sttSessionTokenAcquired = false
+        }
+        MingleAudioSessionCoordinator.shared.scheduleDeactivateAudioSessionIfIdle(
+            trigger: "stt_stop_graceful"
+        )
+
+        gracefulStopWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.finishGracefulStop()
+        }
+        gracefulStopWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(gracefulStopTimeoutMs), execute: workItem)
+    }
+
+    private func finishGracefulStop() {
+        guard gracefulStopPending || isRunning else { return }
+        gracefulStopWorkItem?.cancel()
+        gracefulStopWorkItem = nil
+        gracefulStopPending = false
+        stopAndCleanup(reason: "stopped")
+    }
+
+    private func isStopRecordingAck(_ raw: String) -> Bool {
+        guard let data = raw.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return false
+        }
+        return json["type"] as? String == "stop_recording_ack"
     }
 
     private func sendJson(_ payload: [String: Any]) {
@@ -692,9 +742,17 @@ class NativeSTTModule: RCTEventEmitter {
                               count, text.count, String(preview))
                     }
                     self.emitMessage(raw: text)
+                    if self.gracefulStopPending && self.isStopRecordingAck(text) {
+                        self.finishGracefulStop()
+                        return
+                    }
                 case .data(let data):
                     if let text = String(data: data, encoding: .utf8) {
                         self.emitMessage(raw: text)
+                        if self.gracefulStopPending && self.isStopRecordingAck(text) {
+                            self.finishGracefulStop()
+                            return
+                        }
                     }
                 @unknown default:
                     break
@@ -1002,10 +1060,12 @@ class NativeSTTModule: RCTEventEmitter {
                     "pending_language": pendingLanguage,
                 ],
             ])
+            beginGracefulStop()
+            resolve(["ok": true])
+            return
         }
 
         stopAndCleanup(reason: "stopped")
-        emitStatus("stopped")
         NSLog("[NativeSTTModule] stopped")
         resolve(["ok": true])
     }
@@ -1059,9 +1119,21 @@ class NativeSTTModule: RCTEventEmitter {
 
 @objc(NativeRuntimeConfigModule)
 class NativeRuntimeConfigModule: NSObject {
+    private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
+    private static let conversationRestoreConversationIdKey = "mingle.nativeConversationRestore.conversationId"
+    private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
+
     @objc
     static func requiresMainQueueSetup() -> Bool {
         false
+    }
+
+    private static func readConversationRestoreCreatedAtMs() -> NSNumber {
+        let value = UserDefaults.standard.double(forKey: conversationRestoreCreatedAtMsKey)
+        if value <= 0 || !value.isFinite {
+            return 0
+        }
+        return NSNumber(value: value)
     }
 
     private static func runtimeConfigPayload() -> [String: Any] {
@@ -1087,6 +1159,9 @@ class NativeRuntimeConfigModule: NSObject {
             "adBannerUnitIdIos": NativeSTTModule.readRuntimeConfigValue("MingleAdBannerUnitIdIos"),
             "deviceLocaleTag": NativeSTTModule.readDeviceLocaleTag(),
             "devicePreferredLanguages": NativeSTTModule.readDevicePreferredLanguages(),
+            "conversationRestoreUrl": UserDefaults.standard.string(forKey: conversationRestoreUrlKey) ?? "",
+            "conversationRestoreConversationId": UserDefaults.standard.string(forKey: conversationRestoreConversationIdKey) ?? "",
+            "conversationRestoreCreatedAtMs": readConversationRestoreCreatedAtMs(),
         ]
     }
 
@@ -1103,5 +1178,40 @@ class NativeRuntimeConfigModule: NSObject {
         rejecter reject: RCTPromiseRejectBlock
     ) {
         resolve(Self.runtimeConfigPayload())
+    }
+
+    @objc(rememberConversationRestoreUrl:conversationId:createdAtMs:resolver:rejecter:)
+    func rememberConversationRestoreUrl(
+        _ url: String,
+        conversationId: String,
+        createdAtMs: NSNumber,
+        resolver resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let normalizedUrl = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedConversationId = conversationId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let createdAtValue = createdAtMs.doubleValue
+        if normalizedUrl.isEmpty || normalizedConversationId.isEmpty || createdAtValue <= 0 || !createdAtValue.isFinite {
+            clearConversationRestoreUrl(resolve, rejecter: reject)
+            return
+        }
+
+        let defaults = UserDefaults.standard
+        defaults.set(normalizedUrl, forKey: Self.conversationRestoreUrlKey)
+        defaults.set(normalizedConversationId, forKey: Self.conversationRestoreConversationIdKey)
+        defaults.set(createdAtValue, forKey: Self.conversationRestoreCreatedAtMsKey)
+        resolve(true)
+    }
+
+    @objc(clearConversationRestoreUrl:rejecter:)
+    func clearConversationRestoreUrl(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.conversationRestoreUrlKey)
+        defaults.removeObject(forKey: Self.conversationRestoreConversationIdKey)
+        defaults.removeObject(forKey: Self.conversationRestoreCreatedAtMsKey)
+        resolve(true)
     }
 }

@@ -2,6 +2,7 @@ const SECOND_MS = 1000;
 const MINUTE_MS = 60 * SECOND_MS;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
+const MIN_RELATIVE_TIMESTAMP_REFRESH_DELAY_MS = 50;
 
 function normalizeLocale(locale: string): string {
   const trimmed = locale.trim();
@@ -106,8 +107,9 @@ export function getNextChatBubbleTimestampUpdateDelayMs(
       ? MINUTE_MS
       : HOUR_MS;
   const remainder = elapsedMs % unitMs;
+  const nextDelayMs = remainder === 0 ? unitMs : unitMs - remainder;
 
-  return remainder === 0 ? unitMs : unitMs - remainder;
+  return Math.max(MIN_RELATIVE_TIMESTAMP_REFRESH_DELAY_MS, Math.ceil(nextDelayMs));
 }
 
 export function formatChatBubbleTimestamp(

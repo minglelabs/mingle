@@ -88,6 +88,12 @@ describe("formatChatBubbleTimestamp", () => {
     expect(getNextChatBubbleTimestampUpdateDelayMs(nowMs - (2 * 60 * 60_000 + 10_250), nowMs)).toBe(59 * 60_000 + 49_750);
   });
 
+  it("clamps sub-millisecond refresh delays away from immediate update loops", () => {
+    const nowMs = new Date("2026-03-11T13:06:10.250+09:00").getTime();
+
+    expect(getNextChatBubbleTimestampUpdateDelayMs(nowMs - 10_999.75, nowMs)).toBe(50);
+  });
+
   it("stops refreshing once the timestamp becomes absolute", () => {
     const nowMs = new Date("2026-03-11T13:06:10+09:00").getTime();
     const oldCreatedAtMs = new Date("2026-03-10T13:06:10+09:00").getTime();
