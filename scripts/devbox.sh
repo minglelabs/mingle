@@ -5300,12 +5300,15 @@ cmd_test() {
 
   if [[ "$run_app" -eq 1 ]]; then
     require_cmd pnpm
-    local app_test_script="test:unit"
+    local app_test_script="test"
     if [[ "$with_live" -eq 1 ]]; then
       app_test_script="test:live"
       log "running mingle-app live integration tests (--with-live)"
+    elif ((${#app_test_args[@]} > 0)); then
+      app_test_script="test:unit"
+      log "running mingle-app vitest with passthrough args (test:scripts skipped)"
     else
-      log "running mingle-app unit tests (live tests are disabled by default; add --with-live to enable)"
+      log "running mingle-app unit + scripts tests (live tests are disabled by default; add --with-live to enable)"
     fi
     (
       cd "$ROOT_DIR/mingle-app"
