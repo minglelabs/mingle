@@ -37,7 +37,7 @@
     "start": "node scripts/run-with-env-local.mjs next start",
     "test": "pnpm test:unit && pnpm test:scripts",
     "test:unit": "vitest run --exclude \"src/integration/live/**/*.test.ts\"",
-    "test:scripts": "node --test scripts/*.test.mjs",
+    "test:scripts": "node --test scripts/*.logic.test.mjs",
     "test:all": "pnpm test && pnpm test:live",
     "test:watch": "vitest",
     "test:live": "vitest run src/integration/live",
