@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
   AUTO_SCROLL_MIN_INTERVAL_MS,
+  SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX,
   CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
@@ -1304,6 +1305,31 @@ describe('live-phone-demo scroll/platform logic', () => {
 
     it('allows state updates when the computed date label changes', () => {
       expect(shouldUpdateScrollDateLabelState('today', 'yesterday')).toBe(true)
+    })
+  })
+
+  describe('latest-message affordance threshold parity', () => {
+    // PR-review regression guard: see codex/chat-scroll-performance-plan.
+    // If new-message auto-follow stops at AUTO_SCROLL_BOTTOM_THRESHOLD_PX but the
+    // scroll-to-bottom button only appears past a different (larger) threshold,
+    // the band between them is a UX dead zone where new content sits below the
+    // viewport with no visible recovery affordance.
+    it('mirrors the scroll-to-bottom button threshold to the auto-follow threshold', () => {
+      expect(SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX).toBe(AUTO_SCROLL_BOTTOM_THRESHOLD_PX)
+    })
+
+    it('keeps the scroll-to-bottom button visible across the entire user-scrolled-away band', () => {
+      const justInsideAutoFollow = AUTO_SCROLL_BOTTOM_THRESHOLD_PX - 1
+      const justOutsideAutoFollow = AUTO_SCROLL_BOTTOM_THRESHOLD_PX + 1
+      const farOutsideAutoFollow = AUTO_SCROLL_BOTTOM_THRESHOLD_PX + 300
+
+      // Within the auto-follow band → no button needed (auto-scroll handles it).
+      expect(justInsideAutoFollow > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX).toBe(false)
+
+      // The instant we are outside the auto-follow band, the button must already
+      // be visible — there should be no dead zone.
+      expect(justOutsideAutoFollow > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX).toBe(true)
+      expect(farOutsideAutoFollow > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX).toBe(true)
     })
   })
 })

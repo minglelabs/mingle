@@ -49,11 +49,13 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  createMutationVersionTracker,
   findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   MAX_RECENT_SEARCHES,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
+  type MutationVersionTracker,
   normalizeRecentSearches,
   normalizeSearchTerm,
   replaceConversationLists,
@@ -63,6 +65,7 @@ import {
   upsertConversation,
   updateConversationSummaryStatus,
 } from "@/components/conversation-list.logic";
+import { logConversationMutationFailure } from "@/components/conversation-list.diagnostics";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
@@ -1391,6 +1394,12 @@ export default function ConversationList({
   // Speech, translation, and link PATCHes all mutate one language setting surface.
   // Share a version counter so stale responses from any one kind cannot clobber another.
   const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
+  // Status PATCH (active/paused) is much slower on devbox (3-5s) than App Store; without
+  // a per-conversation guard, an in-flight active response can land after a paused
+  // response and re-flip local state. Track the latest mutation version + abort the
+  // previous controller so stale responses are dropped instead of overwriting state.
+  const statusMutationVersionRef = useRef<MutationVersionTracker<string>>(createMutationVersionTracker<string>());
+  const statusMutationAbortRef = useRef(new Map<string, AbortController>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
@@ -1611,6 +1620,7 @@ export default function ConversationList({
   const updateConversationStatus = useCallback(async (
     conversationId: string,
     status: "active" | "paused",
+    options?: { signal?: AbortSignal },
   ) => {
     setMutatingConversationId(conversationId);
     try {
@@ -1621,13 +1631,14 @@ export default function ConversationList({
           ...buildConversationRequestHeaders(),
         },
         body: JSON.stringify({ status }),
+        signal: options?.signal,
       });
       if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
         return null;
       }
-      const nextConversation = await readConversationResponse(response);
-      setConversations((current) => upsertConversation(current, nextConversation));
-      return nextConversation;
+      // Caller is responsible for the version-guarded state write so that a stale
+      // response cannot overwrite local state set by a newer mutation.
+      return await readConversationResponse(response);
     } finally {
       setMutatingConversationId((current) => (
         current === conversationId ? null : current
@@ -1819,30 +1830,84 @@ export default function ConversationList({
     }
 
     const nextStatus = isRunning ? "active" : "paused";
-    void updateConversationStatus(conversationId, nextStatus).catch(() => {
-      if (deletingConversationIdsRef.current.has(conversationId)) {
-        return;
+    const previousController = statusMutationAbortRef.current.get(conversationId);
+    if (previousController) {
+      previousController.abort();
+    }
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    if (controller) {
+      statusMutationAbortRef.current.set(conversationId, controller);
+    }
+    const version = statusMutationVersionRef.current.next(conversationId);
+    const apiPath = buildConversationApiPath(`/${conversationId}`);
+    const releaseAbort = () => {
+      if (controller && statusMutationAbortRef.current.get(conversationId) === controller) {
+        statusMutationAbortRef.current.delete(conversationId);
       }
-      setConversations((current) => {
-        const conversation = current.find((item) => item.id === conversationId);
-        if (!conversation) return current;
-        return upsertConversation(
-          current,
-          updateConversationSummaryStatus(
-            conversation,
-            isRunning ? "paused" : "active",
-          ),
+    };
+
+    void updateConversationStatus(conversationId, nextStatus, controller ? { signal: controller.signal } : undefined)
+      .then((nextConversation) => {
+        releaseAbort();
+        if (!nextConversation) return;
+        if (!statusMutationVersionRef.current.isLatest(conversationId, version)) {
+          // Stale success: a newer status mutation has been issued; do not let this
+          // older response clobber local state set by the newer mutation.
+          return;
+        }
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch((error: unknown) => {
+        releaseAbort();
+        const aborted = error instanceof Error
+          && (error.name === "AbortError" || (error as { code?: string }).code === "ABORT_ERR");
+        const stale = !statusMutationVersionRef.current.isLatest(conversationId, version);
+        if (aborted) {
+          // A newer status mutation already replaced this one — silent on purpose.
+          return;
+        }
+        if (stale) {
+          logConversationMutationFailure({
+            label: "status-change",
+            conversationId,
+            method: "PATCH",
+            path: apiPath,
+            error,
+            stale: true,
+          });
+          return;
+        }
+        if (deletingConversationIdsRef.current.has(conversationId)) {
+          return;
+        }
+        setConversations((current) => {
+          const conversation = current.find((item) => item.id === conversationId);
+          if (!conversation) return current;
+          return upsertConversation(
+            current,
+            updateConversationSummaryStatus(
+              conversation,
+              isRunning ? "paused" : "active",
+            ),
+          );
+        });
+        if (isRunning) {
+          setLiveConversationId((current) => (
+            current === conversationId ? null : current
+          ));
+        }
+        logConversationMutationFailure({
+          label: "status-change",
+          conversationId,
+          method: "PATCH",
+          path: apiPath,
+          error,
+          stale: false,
+        });
+        window.alert(
+          isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
         );
       });
-      if (isRunning) {
-        setLiveConversationId((current) => (
-          current === conversationId ? null : current
-        ));
-      }
-      window.alert(
-        isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
-      );
-    });
   }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
   const handleConversationSelectedLanguagesChange = useCallback((
@@ -1894,8 +1959,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "selected-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1905,9 +1979,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,
@@ -1964,8 +2039,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "speech-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1977,9 +2061,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationTranslationLanguagesLinkedChange = useCallback((
     conversationId: string,
@@ -2030,8 +2115,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "translation-linked",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -2041,9 +2135,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
@@ -2631,7 +2726,15 @@ export default function ConversationList({
 
     try {
       await openConversationSummary(matchedConversation);
-    } catch {
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      logConversationMutationFailure({
+        label: "route-open",
+        conversationId: matchedConversation.id,
+        error,
+        aborted,
+      });
+      if (aborted) return;
       window.alert(copy.openErrorMessage);
     }
   }, [
@@ -2742,11 +2845,19 @@ export default function ConversationList({
     routeSyncConversationIdRef.current = routeConversationId;
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
-    }).catch(() => {
+    }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
         replaceConversationOverlayUrl(null);
       }
+      const aborted = error instanceof Error && error.name === "AbortError";
+      logConversationMutationFailure({
+        label: "route-open",
+        conversationId: routeConversationId,
+        error,
+        aborted,
+      });
+      if (aborted) return;
       window.alert(copy.openErrorMessage);
     });
   }, [
@@ -2830,11 +2941,19 @@ export default function ConversationList({
       routeSyncConversationIdRef.current = currentRouteConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
-      }).catch(() => {
+      }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === currentRouteConversationId) {
           replaceConversationOverlayUrl(null);
         }
+        const aborted = error instanceof Error && error.name === "AbortError";
+        logConversationMutationFailure({
+          label: "popstate-open",
+          conversationId: currentRouteConversationId,
+          error,
+          aborted,
+        });
+        if (aborted) return;
         window.alert(copy.openErrorMessage);
       });
     };

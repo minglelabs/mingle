@@ -1,4 +1,8 @@
 export const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 100
+// Latest-message affordance must mirror the auto-follow threshold so the user always
+// has a clear signal in the same band. Decoupling these creates a "no follow + no
+// button" dead zone (see PR review on the scroll perf branch).
+export const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 export const AUTO_SCROLL_MIN_INTERVAL_MS = 1000
 export const CHAT_SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 export const LIVE_DEMO_SCROLL_MEASUREMENT_SEARCH_PARAM = 'mingleScrollMeasure'

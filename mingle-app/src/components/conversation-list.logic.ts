@@ -207,3 +207,30 @@ export function calculateConversationRowTooltipPosForRect(
     left,
   };
 }
+
+export type MutationVersionTracker<TKey> = {
+  next: (key: TKey) => number;
+  isLatest: (key: TKey, version: number) => boolean;
+  current: (key: TKey) => number;
+  reset: (key: TKey) => void;
+};
+
+export function createMutationVersionTracker<TKey>(): MutationVersionTracker<TKey> {
+  const versions = new Map<TKey, number>();
+  return {
+    next(key) {
+      const next = (versions.get(key) ?? 0) + 1;
+      versions.set(key, next);
+      return next;
+    },
+    isLatest(key, version) {
+      return versions.get(key) === version;
+    },
+    current(key) {
+      return versions.get(key) ?? 0;
+    },
+    reset(key) {
+      versions.delete(key);
+    },
+  };
+}

@@ -70,6 +70,7 @@ import {
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
   LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
   LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
+  SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX,
   areScrollMetricsEqual,
   createAutoScrollScheduler,
   deriveLateMessageHeightChangeEffectAboveViewportAnchor,
@@ -162,7 +163,6 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 // iOS .playAndRecord reduces speaker output; this compensates in software.
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
-const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
@@ -3370,10 +3370,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+  const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
-    onSttSessionRunningChange?.(isSttSessionRunning)
-  }, [isSttSessionRunning, onSttSessionRunningChange])
+    onSttSessionRunningChangeRef.current = onSttSessionRunningChange
+  }, [onSttSessionRunningChange])
+
+  useEffect(() => {
+    onSttSessionRunningChangeRef.current?.(isSttSessionRunning)
+  }, [isSttSessionRunning])
 
   useEffect(() => {
     onConversationStatsChange?.({
