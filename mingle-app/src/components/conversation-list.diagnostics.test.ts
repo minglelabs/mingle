@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildConversationMutationFailureSummary,
   isConversationDiagnosticsEnabled,
+  isAbortLikeMutationError,
   logConversationMutationFailure,
   summarizeMutationBody,
   summarizeMutationError,
@@ -63,6 +64,25 @@ describe("summarizeMutationBody", () => {
     expect(summarizeMutationBody(cyclic)).toBeNull();
     expect(summarizeMutationBody(null)).toBeNull();
     expect(summarizeMutationBody(undefined)).toBeNull();
+  });
+});
+
+describe("isAbortLikeMutationError", () => {
+  it("recognizes standard AbortError instances", () => {
+    expect(isAbortLikeMutationError(new DOMException("Aborted", "AbortError"))).toBe(true);
+  });
+
+  it("recognizes non-Error abort shapes used by WebKit/fetch wrappers", () => {
+    expect(isAbortLikeMutationError({ name: "AbortError" })).toBe(true);
+    expect(isAbortLikeMutationError({ code: "ABORT_ERR" })).toBe(true);
+    expect(isAbortLikeMutationError({ message: "The operation was aborted." })).toBe(true);
+    expect(isAbortLikeMutationError("request aborted")).toBe(true);
+  });
+
+  it("does not classify ordinary failures as aborts", () => {
+    expect(isAbortLikeMutationError(new TypeError("Failed to fetch"))).toBe(false);
+    expect(isAbortLikeMutationError({ message: "server unavailable" })).toBe(false);
+    expect(isAbortLikeMutationError(null)).toBe(false);
   });
 });
 

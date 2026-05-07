@@ -48,6 +48,26 @@ export function summarizeMutationError(error: unknown): { name?: string; message
   return { message: "non-error thrown value" };
 }
 
+export function isAbortLikeMutationError(error: unknown): boolean {
+  if (error == null) return false;
+  if (typeof error === "object") {
+    const record = error as {
+      name?: unknown;
+      code?: unknown;
+      message?: unknown;
+    };
+    if (record.name === "AbortError") return true;
+    if (record.code === "ABORT_ERR") return true;
+    if (
+      typeof record.message === "string"
+      && /\babort(?:ed)?\b/i.test(record.message)
+    ) {
+      return true;
+    }
+  }
+  return typeof error === "string" && /\babort(?:ed)?\b/i.test(error);
+}
+
 export function summarizeMutationBody(body: unknown): unknown {
   if (body == null) return null;
   if (typeof body === "string") {

@@ -65,7 +65,10 @@ import {
   upsertConversation,
   updateConversationSummaryStatus,
 } from "@/components/conversation-list.logic";
-import { logConversationMutationFailure } from "@/components/conversation-list.diagnostics";
+import {
+  isAbortLikeMutationError,
+  logConversationMutationFailure,
+} from "@/components/conversation-list.diagnostics";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
@@ -1859,8 +1862,7 @@ export default function ConversationList({
       })
       .catch((error: unknown) => {
         releaseAbort();
-        const aborted = error instanceof Error
-          && (error.name === "AbortError" || (error as { code?: string }).code === "ABORT_ERR");
+        const aborted = isAbortLikeMutationError(error);
         const stale = !statusMutationVersionRef.current.isLatest(conversationId, version);
         if (aborted) {
           // A newer status mutation already replaced this one — silent on purpose.
@@ -2727,7 +2729,7 @@ export default function ConversationList({
     try {
       await openConversationSummary(matchedConversation);
     } catch (error) {
-      const aborted = error instanceof Error && error.name === "AbortError";
+      const aborted = isAbortLikeMutationError(error);
       logConversationMutationFailure({
         label: "route-open",
         conversationId: matchedConversation.id,
@@ -2850,7 +2852,7 @@ export default function ConversationList({
       if (readConversationIdFromLocation() === routeConversationId) {
         replaceConversationOverlayUrl(null);
       }
-      const aborted = error instanceof Error && error.name === "AbortError";
+      const aborted = isAbortLikeMutationError(error);
       logConversationMutationFailure({
         label: "route-open",
         conversationId: routeConversationId,
@@ -2946,7 +2948,7 @@ export default function ConversationList({
         if (readConversationIdFromLocation() === currentRouteConversationId) {
           replaceConversationOverlayUrl(null);
         }
-        const aborted = error instanceof Error && error.name === "AbortError";
+        const aborted = isAbortLikeMutationError(error);
         logConversationMutationFailure({
           label: "popstate-open",
           conversationId: currentRouteConversationId,
