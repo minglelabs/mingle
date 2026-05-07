@@ -603,6 +603,24 @@ function buildConversationApiPath(suffix = ""): string {
   return buildClientApiPath(`/conversations${suffix}` as `/${string}`);
 }
 
+// Browsers fire `popstate` only for back/forward navigation. `pushState` and
+// `replaceState` mutate the URL silently, which means anything subscribed to
+// the location store via `subscribeToLocationSearch` does not re-read until
+// the next user-triggered popstate. We dispatch this event right after every
+// programmatic history mutation so the location store stays in sync. Without
+// it, `routeConversationId` lags behind `activeConversation` after a close
+// and the route-sync effect re-opens the room (auto-reentry loop).
+const LOCATION_SEARCH_SYNC_EVENT = "mingle:conversation-location-sync";
+
+function notifyLocationSearchSync(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new Event(LOCATION_SEARCH_SYNC_EVENT));
+  } catch {
+    // CustomEvent may not be available in restricted environments.
+  }
+}
+
 function replaceConversationOverlayUrl(conversationId: string | null): void {
   if (typeof window === "undefined") return;
 
@@ -614,6 +632,7 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
       nextUrl.searchParams.delete(CONVERSATION_QUERY_KEY);
     }
     window.history.replaceState(window.history.state, "", nextUrl.toString());
+    notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
   }
@@ -800,9 +819,14 @@ function subscribeToLocationSearch(onStoreChange: () => void): () => void {
 
   window.addEventListener("popstate", onStoreChange);
   window.addEventListener("hashchange", onStoreChange);
+  // Also listen to programmatic history mutations dispatched by
+  // notifyLocationSearchSync so subscribers see pushState/replaceState
+  // changes on the same render cycle as the call site.
+  window.addEventListener(LOCATION_SEARCH_SYNC_EVENT, onStoreChange);
   return () => {
     window.removeEventListener("popstate", onStoreChange);
     window.removeEventListener("hashchange", onStoreChange);
+    window.removeEventListener(LOCATION_SEARCH_SYNC_EVENT, onStoreChange);
   };
 }
 
@@ -1627,15 +1651,42 @@ export default function ConversationList({
   ) => {
     setMutatingConversationId(conversationId);
     try {
-      const response = await fetch(buildConversationApiPath(`/${conversationId}`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
-        },
-        body: JSON.stringify({ status }),
-        signal: options?.signal,
-      });
+      // Retry transient read-after-write/5xx failures once. On devbox a brand
+      // new conversation can return 404 on its first status PATCH because the
+      // create write has not yet propagated to read replicas; without this
+      // retry the user sees a misleading "failed to open" alert after pressing
+      // "start new conversation" even though the conversation exists.
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        response = await fetch(buildConversationApiPath(`/${conversationId}`), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...buildConversationRequestHeaders(),
+          },
+          body: JSON.stringify({ status }),
+          signal: options?.signal,
+        });
+        const transient = response.status === 404 || response.status >= 500;
+        if (!transient || attempt === 1) break;
+        if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
+          // Conversation is being deleted; do not retry. Caller treats this as a no-op.
+          break;
+        }
+        await new Promise<void>((resolve) => {
+          const handle = window.setTimeout(resolve, 500);
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              window.clearTimeout(handle);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+        if (options?.signal?.aborted) break;
+      }
+      if (!response) return null;
       if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
         return null;
       }
@@ -2882,6 +2933,9 @@ export default function ConversationList({
     const nextUrl = buildConversationOverlayUrl(activeConversation.id);
     if (!nextUrl) return;
     window.history.pushState({ conversationId: activeConversation.id }, "", nextUrl);
+    // pushState does not fire popstate; notify the location store so
+    // routeConversationId converges to the new URL on the next render.
+    notifyLocationSearchSync();
   }, [activeConversation]);
 
   useEffect(() => {
