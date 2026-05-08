@@ -71,6 +71,7 @@ describe('resolveMingleReleaseTarget', () => {
     expect(resolveMingleReleaseTarget('v1_1_1')).toBe('v1_1_1')
     expect(resolveMingleReleaseTarget('v1_1_2')).toBe('v1_1_2')
     expect(resolveMingleReleaseTarget('v1_1_3')).toBe('v1_1_3')
+    expect(resolveMingleReleaseTarget('v1_1_4')).toBe('v1_1_4')
     expect(resolveMingleReleaseTarget('')).toBe('unknown')
   })
 })
@@ -137,6 +138,14 @@ describe('resolveDefaultMingleBehaviorProfile', () => {
   it('uses the dedicated 1.1.3 release target when the namespace is intentionally blank', () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = ''
     process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_3'
+
+    expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_3')
+    expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_3')
+  })
+
+  it('uses the 1.1.3 behavior line for the 1.1.4 release target', () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_4'
 
     expect(resolveDefaultMingleBehaviorProfile()).toBe('v1_1_3')
     expect(resolveDefaultMingleClientReleaseVariant()).toBe('default_v1_1_3')

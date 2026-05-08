@@ -47,6 +47,9 @@ function buildConversationSummary(
     latestSpeakerAvatarIndex: Object.prototype.hasOwnProperty.call(overrides, "latestSpeakerAvatarIndex")
       ? overrides.latestSpeakerAvatarIndex
       : 1,
+    messageCount: Object.prototype.hasOwnProperty.call(overrides, "messageCount")
+      ? overrides.messageCount
+      : undefined,
     createdAt: overrides.createdAt || "2026-04-12T09:00:00.000Z",
     updatedAt: overrides.updatedAt || "2026-04-12T10:00:00.000Z",
     pausedAt: Object.prototype.hasOwnProperty.call(overrides, "pausedAt")
