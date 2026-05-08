@@ -2650,6 +2650,9 @@ export default function ConversationList({
     // Mark this conversation as manually closed so native STT restore,
     // route-sync open, and popstate-open do not re-open it automatically.
     suppressNativeSttRestoreConversationIdRef.current = conversation.id;
+    if (activeConversationRef.current?.id === conversation.id) {
+      activeConversationRef.current = null;
+    }
 
     postNativeBannerZone("hidden");
 
@@ -2694,6 +2697,7 @@ export default function ConversationList({
     // The create-conversation flow sets autoStart before calling openConversationSummary;
     // clearing it here would immediately cancel the auto-start.
     // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    activeConversationRef.current = conversation;
     setActiveConversation(conversation);
 
     // Perform history sync here (not in an effect) so that restore / popstate-open
@@ -2940,6 +2944,7 @@ export default function ConversationList({
     ) {
       postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
+      closeConversationOverlay(activeConversation, { animateExit: true });
       window.history.back();
       return;
     }
