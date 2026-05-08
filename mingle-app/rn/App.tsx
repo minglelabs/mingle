@@ -1211,6 +1211,10 @@ function AppInner(): React.JSX.Element {
     if (!lastConversationRestoreUrlRef.current && !conversationRestoreUrlHint) return;
     lastConversationRestoreUrlRef.current = '';
     setConversationRestoreUrlHint('');
+    // Also clear the initial-restore latch so that subsequent fallback/remount
+    // does not reload the old ?conversation=... source URL.  This is a ref-only
+    // write: no state change, no re-render, no WebView reload.
+    initialRestoreUrlRef.current = '';
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
     } catch {
@@ -1261,7 +1265,8 @@ function AppInner(): React.JSX.Element {
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
   // Latch the initial restore URL once at mount time.
-  // This ref never changes after mount — it is the only input allowed to affect
+  // This ref is only cleared after the WebView reaches the conversation list.
+  // It is the only restore input allowed to affect
   // webViewSource.uri for restore purposes.  Post-mount room/list navigation
   // updates native storage/ref only and must NOT reach webViewSource to avoid
   // triggering full WebView reloads.
@@ -2682,7 +2687,10 @@ function AppInner(): React.JSX.Element {
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,
-              currentUrl: webUrl,
+              // Use the live WebView URL tracked via onNavigationStateChange/onMessage,
+              // not the static source webUrl; after in-page SPA navigation the
+              // source URL no longer reflects the current room/list state.
+              currentUrl: lastWebViewUrlRef.current || webUrl,
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}

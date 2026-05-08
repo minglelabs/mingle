@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "1.1.4 (65)",
+      "releaseName": "1.1.4 (66)",
       "releaseNotes": {
         "en-US": "Version 1.1.4 fixes conversation navigation for live STT rooms, prevents WebView reload flicker when moving between the list and a room, improves long-chat scrolling, and keeps conversation message counts consistent after relaunch.",
         "ar": "Version 1.1.4 fixes conversation navigation for live STT rooms, prevents WebView reload flicker when moving between the list and a room, improves long-chat scrolling, and keeps conversation message counts consistent after relaunch.",
