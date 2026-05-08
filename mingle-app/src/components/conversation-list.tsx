@@ -2391,17 +2391,24 @@ export default function ConversationList({
     }
 
     if (isNativeSttStatusLive(cachedNativeSttStatus)) {
-      if (nativeSttRestoreAttemptedRef.current) return;
+      // Check manual-close suppression BEFORE the "already attempted" guard.
+      // If the user manually closed the room, suppress re-entry even when native
+      // STT status is still reporting "running" (e.g. stop ACK not yet received).
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
       );
-      if (!restoreConversation) return;
-      // User manually closed this conversation — skip native STT restore.
-      if (suppressNativeSttRestoreConversationIdRef.current === restoreConversation.id) {
+      if (
+        restoreConversation
+        && suppressNativeSttRestoreConversationIdRef.current === restoreConversation.id
+      ) {
+        // Mark as attempted so subsequent effect runs skip immediately.
         nativeSttRestoreAttemptedRef.current = true;
         return;
       }
+
+      if (nativeSttRestoreAttemptedRef.current) return;
+      if (!restoreConversation) return;
 
       nativeSttRestoreAttemptedRef.current = true;
       conversationRunningStateRef.current.set(restoreConversation.id, true);
