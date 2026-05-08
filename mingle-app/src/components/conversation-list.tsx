@@ -1434,6 +1434,9 @@ export default function ConversationList({
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
   const nativeSttRestoreAttemptedRef = useRef(false);
+  // Track the last conversation ID manually closed by the user (conversationId-scoped).
+  // native STT restore, route-sync open, and popstate-open will not re-open this ID.
+  const suppressNativeSttRestoreConversationIdRef = useRef<string | null>(null);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -1936,6 +1939,26 @@ export default function ConversationList({
         if (deletingConversationIdsRef.current.has(conversationId)) {
           return;
         }
+
+        // Native runtime principle: "actual native STT state takes priority over PATCH responses".
+        // Rolling back UI/STT state on a PATCH failure causes a mismatch with the native layer,
+        // which triggers the restore-loop / re-entry bug. In native runtime, do not flip
+        // status or clear liveConversationId — only log the failure.
+        const isNativeRuntime = isNativeAppRuntime();
+        if (isNativeRuntime) {
+          logConversationMutationFailure({
+            label: "status-change",
+            conversationId,
+            method: "PATCH",
+            path: apiPath,
+            error,
+            stale: false,
+          });
+          // Silent — no alert. Server sync will naturally converge on the next status change.
+          return;
+        }
+
+        // Non-native (direct browser) environments keep the original rollback behaviour.
         setConversations((current) => {
           const conversation = current.find((item) => item.id === conversationId);
           if (!conversation) return current;
@@ -2346,6 +2369,10 @@ export default function ConversationList({
         )) ?? null
       : null;
     if (explicitRestoreConversation) {
+      // User manually closed this conversation — skip explicit restore.
+      if (suppressNativeSttRestoreConversationIdRef.current === explicitRestoreConversation.id) {
+        return;
+      }
       nativeSttRestoreAttemptedRef.current = true;
       conversationRunningStateRef.current.set(
         explicitRestoreConversation.id,
@@ -2370,6 +2397,11 @@ export default function ConversationList({
         deletingConversationIdsRef.current,
       );
       if (!restoreConversation) return;
+      // User manually closed this conversation — skip native STT restore.
+      if (suppressNativeSttRestoreConversationIdRef.current === restoreConversation.id) {
+        nativeSttRestoreAttemptedRef.current = true;
+        return;
+      }
 
       nativeSttRestoreAttemptedRef.current = true;
       conversationRunningStateRef.current.set(restoreConversation.id, true);
@@ -2615,6 +2647,10 @@ export default function ConversationList({
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
+    // Mark this conversation as manually closed so native STT restore,
+    // route-sync open, and popstate-open do not re-open it automatically.
+    suppressNativeSttRestoreConversationIdRef.current = conversation.id;
+
     postNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
@@ -2627,6 +2663,57 @@ export default function ConversationList({
       current?.id === previousConversation.id ? null : current
     ));
   }, []);
+
+  // Declared before handleCreateConversation to avoid TDZ ReferenceError.
+  const openConversationSummary = useCallback(async (
+    conversation: ConversationChannelSummary,
+    options?: {
+      enterMode?: ConversationOverlayEnterMode;
+      // push  : push a new history entry (user tapping a room from the list)
+      // replace: replace the current history entry (restore / QA paths)
+      // none  : do not touch history (popstate already changed the URL)
+      syncHistory?: "push" | "replace" | "none";
+      // When true, clear the manual-close suppression flag for this conversation.
+      // Defaults to true when syncHistory is "push" (intentional user re-open).
+      clearManualCloseSuppression?: boolean;
+    },
+  ) => {
+    const enterMode = options?.enterMode ?? "animate";
+    const syncHistory = options?.syncHistory ?? "push";
+    const clearSuppression = options?.clearManualCloseSuppression ?? (syncHistory === "push");
+
+    if (clearSuppression) {
+      suppressNativeSttRestoreConversationIdRef.current = null;
+    }
+
+    postNativeBannerZone("hidden");
+    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+    setOverlayEnterMode(enterMode);
+    setOverlayExitMode("animate");
+    // NOTE: intentionally not calling setAutoStartConversationId(null) here.
+    // The create-conversation flow sets autoStart before calling openConversationSummary;
+    // clearing it here would immediately cancel the auto-start.
+    // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    setActiveConversation(conversation);
+
+    // Perform history sync here (not in an effect) so that restore / popstate-open
+    // paths do not redundantly push duplicate ?conversation= entries.
+    if (typeof window !== "undefined" && syncHistory !== "none") {
+      const currentConversationId = readConversationIdFromLocation();
+      const nextUrl = buildConversationOverlayUrl(conversation.id);
+      if (nextUrl && currentConversationId !== conversation.id) {
+        if (syncHistory === "push") {
+          window.history.pushState({ conversationId: conversation.id }, "", nextUrl);
+        } else {
+          window.history.replaceState(window.history.state, "", nextUrl);
+        }
+        notifyLocationSearchSync();
+      }
+    }
+
+    return conversation;
+  }, [closeSearchOverlay]);
+
 
   const handleCreateConversation = useCallback(async () => {
     if (
@@ -2676,10 +2763,14 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("animate");
-      setOverlayExitMode("animate");
+      // Set autoStart BEFORE calling openConversationSummary so that
+      // openConversationSummary does not clear it (it intentionally skips
+      // setAutoStartConversationId to preserve create-flow auto-start).
       setAutoStartConversationId(shouldAutoStartNewConversation ? nextConversation.id : null);
-      setActiveConversation(nextConversation);
+      await openConversationSummary(nextConversation, {
+        enterMode: "animate",
+        syncHistory: "push",
+      });
     } catch {
       window.alert(copy.createErrorMessage);
     } finally {
@@ -2693,23 +2784,8 @@ export default function ConversationList({
     isCreatingConversation,
     isImportingLegacyConversation,
     locale,
+    openConversationSummary,
   ]);
-
-  const openConversationSummary = useCallback(async (
-    conversation: ConversationChannelSummary,
-    options?: {
-      enterMode?: ConversationOverlayEnterMode;
-    },
-  ) => {
-    const enterMode = options?.enterMode ?? "animate";
-    postNativeBannerZone("hidden");
-    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
-    setOverlayEnterMode(enterMode);
-    setOverlayExitMode("animate");
-    setAutoStartConversationId(null);
-    setActiveConversation(conversation);
-    return conversation;
-  }, [closeSearchOverlay]);
 
   const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
     const currentActiveConversation = activeConversationRef.current;
@@ -2722,7 +2798,10 @@ export default function ConversationList({
 
     const mostRecentConversation = conversationsRef.current[0] ?? null;
     if (mostRecentConversation) {
-      await openConversationSummary(mostRecentConversation, { enterMode: "instant" });
+      await openConversationSummary(mostRecentConversation, {
+        enterMode: "instant",
+        syncHistory: "replace", // QA automation path: avoid unnecessary history pushes
+      });
       return {
         conversationId: mostRecentConversation.id,
         action: "opened-existing",
@@ -2756,10 +2835,11 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("instant");
-      setOverlayExitMode("animate");
       setAutoStartConversationId(null);
-      setActiveConversation(nextConversation);
+      await openConversationSummary(nextConversation, {
+        enterMode: "instant",
+        syncHistory: "replace",
+      });
 
       return {
         conversationId: nextConversation.id,
@@ -2770,6 +2850,7 @@ export default function ConversationList({
       setIsCreatingConversation(false);
     }
   }, [closeSearchOverlay, defaultSelectedLanguages, locale, openConversationSummary]);
+
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
@@ -2898,9 +2979,17 @@ export default function ConversationList({
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
     if (!matchedConversation) return;
 
+    // User manually closed this conversation — clean up URL instead of re-opening via route-sync.
+    if (suppressNativeSttRestoreConversationIdRef.current === routeConversationId) {
+      routeSyncConversationIdRef.current = routeConversationId;
+      replaceConversationOverlayUrl(null);
+      return;
+    }
+
     routeSyncConversationIdRef.current = routeConversationId;
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
+      syncHistory: "none", // URL already reflects the route-sync target; no push needed
     }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
@@ -2927,19 +3016,8 @@ export default function ConversationList({
     routeConversationId,
   ]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !activeConversation) return;
-
-    const currentConversationId = readConversationIdFromLocation();
-    if (currentConversationId === activeConversation.id) return;
-
-    const nextUrl = buildConversationOverlayUrl(activeConversation.id);
-    if (!nextUrl) return;
-    window.history.pushState({ conversationId: activeConversation.id }, "", nextUrl);
-    // pushState does not fire popstate; notify the location store so
-    // routeConversationId converges to the new URL on the next render.
-    notifyLocationSearchSync();
-  }, [activeConversation]);
+  // The effect-based pushState has been moved into openConversationSummary (syncHistory option).
+  // Removing this effect prevents restore/popstate-open paths from stacking duplicate entries.
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2997,9 +3075,17 @@ export default function ConversationList({
       );
       if (!matchedConversation) return;
 
+      // User manually closed this conversation — clean up URL instead of re-opening via popstate.
+      if (suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId) {
+        routeSyncConversationIdRef.current = currentRouteConversationId;
+        replaceConversationOverlayUrl(null);
+        return;
+      }
+
       routeSyncConversationIdRef.current = currentRouteConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
+        syncHistory: "none", // popstate already updated the URL; no push needed
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === currentRouteConversationId) {
