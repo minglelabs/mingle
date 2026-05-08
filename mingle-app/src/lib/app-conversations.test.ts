@@ -6,6 +6,7 @@ const {
   mockUpdateConversation,
   mockAppMessageFindMany,
   mockAppMessageCount,
+  mockAppMessageGroupBy,
   mockAppEventLogFindFirst,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
@@ -13,6 +14,7 @@ const {
   mockUpdateConversation: vi.fn(),
   mockAppMessageFindMany: vi.fn(),
   mockAppMessageCount: vi.fn(),
+  mockAppMessageGroupBy: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
 }));
 
@@ -26,6 +28,7 @@ vi.mock("@/lib/prisma", () => ({
     appMessage: {
       findMany: mockAppMessageFindMany,
       count: mockAppMessageCount,
+      groupBy: mockAppMessageGroupBy,
     },
     appEventLog: {
       findFirst: mockAppEventLogFindFirst,
@@ -52,6 +55,7 @@ import {
 describe("app-conversations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAppMessageGroupBy.mockResolvedValue([]);
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -116,6 +120,16 @@ describe("app-conversations", () => {
         contents: [{ language: "en", text: "newest message" }],
       },
     ]);
+    mockAppMessageGroupBy.mockResolvedValue([
+      {
+        sessionKey: "session-a",
+        _count: { _all: 37 },
+      },
+      {
+        sessionKey: "session-b",
+        _count: { _all: 648 },
+      },
+    ]);
 
     const conversations = await listConversationChannelsForUser("user-1");
 
@@ -123,7 +137,26 @@ describe("app-conversations", () => {
     expect(conversations[0]).toEqual(expect.objectContaining({
       latestMessagePreview: "newest message",
       latestMessageAt: "2026-04-12T11:30:00.000Z",
+      messageCount: 648,
     }));
+    expect(conversations[1]).toEqual(expect.objectContaining({
+      messageCount: 37,
+    }));
+    expect(mockAppMessageGroupBy).toHaveBeenCalledWith({
+      by: ["sessionKey"],
+      where: {
+        sessionKey: {
+          in: ["session-a", "session-b"],
+        },
+        OR: [
+          { isDeleted: false },
+          { isDeleted: null },
+        ],
+      },
+      _count: {
+        _all: true,
+      },
+    });
   });
 
   it("hydrates only the latest visible message batch in chronological order", async () => {

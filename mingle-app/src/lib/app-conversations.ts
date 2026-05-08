@@ -17,6 +17,7 @@ export type ConversationChannelSummary = {
   title: string;
   status: AppConversationChannelStatus;
   sessionKey: string;
+  messageCount?: number;
   selectedLanguages?: string[];
   speechLanguages?: string[];
   translationLanguagesLinked?: boolean;
@@ -132,6 +133,10 @@ export function normalizeConversationChannelStatus(
     : APP_CONVERSATION_STATUS_ACTIVE;
 }
 
+function normalizeConversationMessageCount(value: number | null | undefined): number {
+  return Number.isFinite(value) && (value ?? 0) > 0 ? Math.floor(value ?? 0) : 0;
+}
+
 function serializeConversationChannel(
   record: ConversationChannelRecord,
   latestMessagePreview?: string,
@@ -139,6 +144,7 @@ function serializeConversationChannel(
   latestSpeaker?: string | null,
   latestSpeakerAvatarSeed?: string | null,
   latestSpeakerAvatarIndex?: number | null,
+  messageCount?: number,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
@@ -155,6 +161,9 @@ function serializeConversationChannel(
     title: record.title,
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
+    ...(typeof messageCount === "number"
+      ? { messageCount: normalizeConversationMessageCount(messageCount) }
+      : {}),
     selectedLanguages: effectiveSelectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
@@ -265,6 +274,35 @@ async function listLatestMessageSummaryBySessionKey(
   return summaryBySessionKey;
 }
 
+async function listVisibleMessageCountsBySessionKey(
+  sessionKeys: string[],
+): Promise<Map<string, number>> {
+  if (sessionKeys.length === 0) {
+    return new Map();
+  }
+
+  const counts = await prisma.appMessage.groupBy({
+    by: ["sessionKey"],
+    where: {
+      sessionKey: {
+        in: sessionKeys,
+      },
+      ...buildVisibleMessageWhere(),
+    },
+    _count: {
+      _all: true,
+    },
+  });
+
+  const countBySessionKey = new Map<string, number>();
+  for (const row of counts) {
+    if (!row.sessionKey) continue;
+    countBySessionKey.set(row.sessionKey, normalizeConversationMessageCount(row._count._all));
+  }
+
+  return countBySessionKey;
+}
+
 async function serializeConversationChannelWithPreview(
   record: ConversationChannelRecord,
 ): Promise<ConversationChannelSummary> {
@@ -299,9 +337,11 @@ export async function listConversationChannelsForUser(
     return [];
   }
 
-  const latestMessageSummaryBySessionKey = await listLatestMessageSummaryBySessionKey(
-    records.map((record) => record.sessionKey),
-  );
+  const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
+  const [latestMessageSummaryBySessionKey, messageCountBySessionKey] = await Promise.all([
+    listLatestMessageSummaryBySessionKey(sessionKeys),
+    listVisibleMessageCountsBySessionKey(sessionKeys),
+  ]);
 
   return records
     .map((record) => {
@@ -313,6 +353,7 @@ export async function listConversationChannelsForUser(
         latestMessage?.speaker,
         latestMessage?.speakerAvatarSeed,
         latestMessage?.speakerAvatarIndex,
+        messageCountBySessionKey.get(record.sessionKey) ?? 0,
       );
     })
     .sort((left, right) => {

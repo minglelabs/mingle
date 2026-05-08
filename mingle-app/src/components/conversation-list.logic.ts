@@ -93,6 +93,21 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
   return rightTimestamp - leftTimestamp;
 }
 
+function normalizeConversationMessageCount(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+}
+
+export function resolveConversationDisplayMessageCount(
+  conversation: ConversationChannelSummary,
+  localMessageCount: number,
+): number {
+  return Math.max(
+    normalizeConversationMessageCount(conversation.messageCount),
+    normalizeConversationMessageCount(localMessageCount),
+  );
+}
+
 export function upsertConversation(
   conversations: ConversationChannelSummary[],
   nextConversation: ConversationChannelSummary,

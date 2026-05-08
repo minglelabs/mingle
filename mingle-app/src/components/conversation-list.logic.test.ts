@@ -15,6 +15,7 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -117,6 +118,21 @@ describe("conversation-list logic", () => {
 
     expect(compareConversationRecency(newer, older)).toBeLessThan(0);
     expect(compareConversationRecency(older, newer)).toBeGreaterThan(0);
+  });
+
+  it("uses server message counts while preserving optimistic local counts", () => {
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary({ messageCount: 648 }),
+      100,
+    )).toBe(648);
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary({ messageCount: 648 }),
+      650,
+    )).toBe(650);
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary(),
+      37,
+    )).toBe(37);
   });
 
   it("upserts a single conversation without dropping preview metadata from partial patches", () => {

@@ -60,6 +60,7 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveConversationDisplayMessageCount,
   type TooltipPos,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -725,7 +726,9 @@ function mapConversationSummaryToItem(
     ? labels.activeStatusLabel
     : "";
   const usageDurationLabel = formatLivePhoneDemoUsageDuration(localStats.usageSec);
-  const messageCountLabel = formatLivePhoneDemoMessageCount(localStats.messageCount);
+  const messageCountLabel = formatLivePhoneDemoMessageCount(
+    resolveConversationDisplayMessageCount(conversation, localStats.messageCount),
+  );
   const selectedLanguages = sanitizeSttLanguageSelection(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
