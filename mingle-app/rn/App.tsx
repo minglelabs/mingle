@@ -1260,19 +1260,30 @@ function AppInner(): React.JSX.Element {
   );
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
-  const conversationRestoreWebUrl = useMemo(
-    () => buildConversationRestoreWebUrl(baseWebUrl, conversationRestoreUrlHint),
-    [baseWebUrl, conversationRestoreUrlHint],
+  // Latch the initial restore URL once at mount time.
+  // This ref never changes after mount — it is the only input allowed to affect
+  // webViewSource.uri for restore purposes.  Post-mount room/list navigation
+  // updates native storage/ref only and must NOT reach webViewSource to avoid
+  // triggering full WebView reloads.
+  const initialRestoreUrlRef = useRef(
+    initialConversationRestorePayloadRef.current?.url || '',
   );
   const webUrl = useMemo(() => {
-    const requestedWebUrl = debugRemountWebUrl || conversationRestoreWebUrl || baseWebUrl;
+    // Combine the fixed restore conversationId with the current baseWebUrl so that
+    // locale/host changes are still reflected while the restore target stays latched.
+    const initialRestoreWebUrl = buildConversationRestoreWebUrl(
+      baseWebUrl,
+      initialRestoreUrlRef.current,
+    );
+    const requestedWebUrl = debugRemountWebUrl || initialRestoreWebUrl || baseWebUrl;
     if (!requestedWebUrl) return '';
     if (!shouldDisableWebViewCache) return requestedWebUrl;
     return appendNativeWebViewSession(
       requestedWebUrl,
       `${devWebViewRequestScopeRef.current}-${webViewMountToken}`,
     );
-  }, [baseWebUrl, conversationRestoreWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  }, [baseWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+
   useEffect(() => {
     if (!webUrl) return;
     lastWebViewUrlRef.current = webUrl;
