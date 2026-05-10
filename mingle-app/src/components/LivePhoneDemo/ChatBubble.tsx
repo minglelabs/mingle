@@ -77,6 +77,7 @@ interface ChatBubbleProps {
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
   bubbleTextClassName?: string
   speakingPlaybackKey?: string
+  shouldAnimateEntrance?: boolean
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -150,6 +151,7 @@ function ChatBubble({
   onPlayTranslation,
   bubbleTextClassName = 'text-sm',
   speakingPlaybackKey,
+  shouldAnimateEntrance = true,
 }: ChatBubbleProps) {
   const flag = getSttLanguageFlag(utterance.originalLang)
   const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
@@ -184,13 +186,8 @@ function ChatBubble({
     translationEntries,
   )
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className="flex items-start gap-1.5"
-    >
+  const bubbleContent = (
+    <>
       <div data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
         <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
           <Image
@@ -299,6 +296,25 @@ function ChatBubble({
           </TranslationBubbleRow>
         ))}
       </div>
+    </>
+  )
+
+  if (!shouldAnimateEntrance) {
+    return (
+      <div className="flex items-start gap-1.5">
+        {bubbleContent}
+      </div>
+    )
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="flex items-start gap-1.5"
+    >
+      {bubbleContent}
     </motion.div>
   )
 }
@@ -308,6 +324,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
+  if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance

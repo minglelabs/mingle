@@ -49,20 +49,27 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  createMutationVersionTracker,
   findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   MAX_RECENT_SEARCHES,
   mergeConversationLists,
   mergeSearchOverlayHistoryState,
+  type MutationVersionTracker,
   normalizeRecentSearches,
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveConversationDisplayMessageCount,
   type TooltipPos,
   tryAcquireConversationCreateLock,
   upsertConversation,
   updateConversationSummaryStatus,
 } from "@/components/conversation-list.logic";
+import {
+  isAbortLikeMutationError,
+  logConversationMutationFailure,
+} from "@/components/conversation-list.diagnostics";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
@@ -597,6 +604,24 @@ function buildConversationApiPath(suffix = ""): string {
   return buildClientApiPath(`/conversations${suffix}` as `/${string}`);
 }
 
+// Browsers fire `popstate` only for back/forward navigation. `pushState` and
+// `replaceState` mutate the URL silently, which means anything subscribed to
+// the location store via `subscribeToLocationSearch` does not re-read until
+// the next user-triggered popstate. We dispatch this event right after every
+// programmatic history mutation so the location store stays in sync. Without
+// it, `routeConversationId` lags behind `activeConversation` after a close
+// and the route-sync effect re-opens the room (auto-reentry loop).
+const LOCATION_SEARCH_SYNC_EVENT = "mingle:conversation-location-sync";
+
+function notifyLocationSearchSync(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.dispatchEvent(new Event(LOCATION_SEARCH_SYNC_EVENT));
+  } catch {
+    // CustomEvent may not be available in restricted environments.
+  }
+}
+
 function replaceConversationOverlayUrl(conversationId: string | null): void {
   if (typeof window === "undefined") return;
 
@@ -608,6 +633,7 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
       nextUrl.searchParams.delete(CONVERSATION_QUERY_KEY);
     }
     window.history.replaceState(window.history.state, "", nextUrl.toString());
+    notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
   }
@@ -700,7 +726,9 @@ function mapConversationSummaryToItem(
     ? labels.activeStatusLabel
     : "";
   const usageDurationLabel = formatLivePhoneDemoUsageDuration(localStats.usageSec);
-  const messageCountLabel = formatLivePhoneDemoMessageCount(localStats.messageCount);
+  const messageCountLabel = formatLivePhoneDemoMessageCount(
+    resolveConversationDisplayMessageCount(conversation, localStats.messageCount),
+  );
   const selectedLanguages = sanitizeSttLanguageSelection(
     conversation.selectedLanguages,
     deriveDefaultSttLanguagesForLocale(locale),
@@ -794,9 +822,14 @@ function subscribeToLocationSearch(onStoreChange: () => void): () => void {
 
   window.addEventListener("popstate", onStoreChange);
   window.addEventListener("hashchange", onStoreChange);
+  // Also listen to programmatic history mutations dispatched by
+  // notifyLocationSearchSync so subscribers see pushState/replaceState
+  // changes on the same render cycle as the call site.
+  window.addEventListener(LOCATION_SEARCH_SYNC_EVENT, onStoreChange);
   return () => {
     window.removeEventListener("popstate", onStoreChange);
     window.removeEventListener("hashchange", onStoreChange);
+    window.removeEventListener(LOCATION_SEARCH_SYNC_EVENT, onStoreChange);
   };
 }
 
@@ -1391,10 +1424,19 @@ export default function ConversationList({
   // Speech, translation, and link PATCHes all mutate one language setting surface.
   // Share a version counter so stale responses from any one kind cannot clobber another.
   const languageSettingsSyncVersionRef = useRef(new Map<string, number>());
+  // Status PATCH (active/paused) is much slower on devbox (3-5s) than App Store; without
+  // a per-conversation guard, an in-flight active response can land after a paused
+  // response and re-flip local state. Track the latest mutation version + abort the
+  // previous controller so stale responses are dropped instead of overwriting state.
+  const statusMutationVersionRef = useRef<MutationVersionTracker<string>>(createMutationVersionTracker<string>());
+  const statusMutationAbortRef = useRef(new Map<string, AbortController>());
   const liveConversationIdRef = useRef<string | null>(null);
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
   const nativeSttRestoreAttemptedRef = useRef(false);
+  // Track the last conversation ID manually closed by the user (conversationId-scoped).
+  // native STT restore, route-sync open, and popstate-open will not re-open this ID.
+  const suppressNativeSttRestoreConversationIdRef = useRef<string | null>(null);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -1611,23 +1653,52 @@ export default function ConversationList({
   const updateConversationStatus = useCallback(async (
     conversationId: string,
     status: "active" | "paused",
+    options?: { signal?: AbortSignal },
   ) => {
     setMutatingConversationId(conversationId);
     try {
-      const response = await fetch(buildConversationApiPath(`/${conversationId}`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
-        },
-        body: JSON.stringify({ status }),
-      });
+      // Retry transient read-after-write/5xx failures once. On devbox a brand
+      // new conversation can return 404 on its first status PATCH because the
+      // create write has not yet propagated to read replicas; without this
+      // retry the user sees a misleading "failed to open" alert after pressing
+      // "start new conversation" even though the conversation exists.
+      let response: Response | undefined;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        response = await fetch(buildConversationApiPath(`/${conversationId}`), {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...buildConversationRequestHeaders(),
+          },
+          body: JSON.stringify({ status }),
+          signal: options?.signal,
+        });
+        const transient = response.status === 404 || response.status >= 500;
+        if (!transient || attempt === 1) break;
+        if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
+          // Conversation is being deleted; do not retry. Caller treats this as a no-op.
+          break;
+        }
+        await new Promise<void>((resolve) => {
+          const handle = window.setTimeout(resolve, 500);
+          options?.signal?.addEventListener(
+            "abort",
+            () => {
+              window.clearTimeout(handle);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+        if (options?.signal?.aborted) break;
+      }
+      if (!response) return null;
       if (response.status === 404 && deletingConversationIdsRef.current.has(conversationId)) {
         return null;
       }
-      const nextConversation = await readConversationResponse(response);
-      setConversations((current) => upsertConversation(current, nextConversation));
-      return nextConversation;
+      // Caller is responsible for the version-guarded state write so that a stale
+      // response cannot overwrite local state set by a newer mutation.
+      return await readConversationResponse(response);
     } finally {
       setMutatingConversationId((current) => (
         current === conversationId ? null : current
@@ -1819,30 +1890,103 @@ export default function ConversationList({
     }
 
     const nextStatus = isRunning ? "active" : "paused";
-    void updateConversationStatus(conversationId, nextStatus).catch(() => {
-      if (deletingConversationIdsRef.current.has(conversationId)) {
-        return;
+    const previousController = statusMutationAbortRef.current.get(conversationId);
+    if (previousController) {
+      previousController.abort();
+    }
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    if (controller) {
+      statusMutationAbortRef.current.set(conversationId, controller);
+    }
+    const version = statusMutationVersionRef.current.next(conversationId);
+    const apiPath = buildConversationApiPath(`/${conversationId}`);
+    const releaseAbort = () => {
+      if (controller && statusMutationAbortRef.current.get(conversationId) === controller) {
+        statusMutationAbortRef.current.delete(conversationId);
       }
-      setConversations((current) => {
-        const conversation = current.find((item) => item.id === conversationId);
-        if (!conversation) return current;
-        return upsertConversation(
-          current,
-          updateConversationSummaryStatus(
-            conversation,
-            isRunning ? "paused" : "active",
-          ),
+    };
+
+    void updateConversationStatus(conversationId, nextStatus, controller ? { signal: controller.signal } : undefined)
+      .then((nextConversation) => {
+        releaseAbort();
+        if (!nextConversation) return;
+        if (!statusMutationVersionRef.current.isLatest(conversationId, version)) {
+          // Stale success: a newer status mutation has been issued; do not let this
+          // older response clobber local state set by the newer mutation.
+          return;
+        }
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch((error: unknown) => {
+        releaseAbort();
+        const aborted = isAbortLikeMutationError(error);
+        const stale = !statusMutationVersionRef.current.isLatest(conversationId, version);
+        if (aborted) {
+          // A newer status mutation already replaced this one — silent on purpose.
+          return;
+        }
+        if (stale) {
+          logConversationMutationFailure({
+            label: "status-change",
+            conversationId,
+            method: "PATCH",
+            path: apiPath,
+            error,
+            stale: true,
+          });
+          return;
+        }
+        if (deletingConversationIdsRef.current.has(conversationId)) {
+          return;
+        }
+
+        // Native runtime principle: "actual native STT state takes priority over PATCH responses".
+        // Rolling back UI/STT state on a PATCH failure causes a mismatch with the native layer,
+        // which triggers the restore-loop / re-entry bug. In native runtime, do not flip
+        // status or clear liveConversationId — only log the failure.
+        const isNativeRuntime = isNativeAppRuntime();
+        if (isNativeRuntime) {
+          logConversationMutationFailure({
+            label: "status-change",
+            conversationId,
+            method: "PATCH",
+            path: apiPath,
+            error,
+            stale: false,
+          });
+          // Silent — no alert. Server sync will naturally converge on the next status change.
+          return;
+        }
+
+        // Non-native (direct browser) environments keep the original rollback behaviour.
+        setConversations((current) => {
+          const conversation = current.find((item) => item.id === conversationId);
+          if (!conversation) return current;
+          return upsertConversation(
+            current,
+            updateConversationSummaryStatus(
+              conversation,
+              isRunning ? "paused" : "active",
+            ),
+          );
+        });
+        if (isRunning) {
+          setLiveConversationId((current) => (
+            current === conversationId ? null : current
+          ));
+        }
+        logConversationMutationFailure({
+          label: "status-change",
+          conversationId,
+          method: "PATCH",
+          path: apiPath,
+          error,
+          stale: false,
+        });
+        window.alert(
+          isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
         );
       });
-      if (isRunning) {
-        setLiveConversationId((current) => (
-          current === conversationId ? null : current
-        ));
-      }
-      window.alert(
-        isRunning ? copy.openErrorMessage : copy.pauseErrorMessage,
-      );
-    });
   }, [applyRunningConversationState, copy.openErrorMessage, copy.pauseErrorMessage, getDerivedConversationRunningState, updateConversationStatus]);
 
   const handleConversationSelectedLanguagesChange = useCallback((
@@ -1894,8 +2038,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "selected-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1905,9 +2058,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationSpeechLanguagesChange = useCallback((
     conversationId: string,
@@ -1964,8 +2118,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "speech-languages",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -1977,9 +2140,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationTranslationLanguagesLinkedChange = useCallback((
     conversationId: string,
@@ -2030,8 +2194,17 @@ export default function ConversationList({
         if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
         setConversations((current) => upsertConversation(current, nextConversation));
       })
-      .catch(() => {
-        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "translation-linked",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
         setConversations((current) => current.map((conversation) => (
           conversation.id === conversationId
             ? {
@@ -2041,9 +2214,10 @@ export default function ConversationList({
               }
             : conversation
         )));
-        window.alert(copy.openErrorMessage);
+        // Language sync failures inside an already-open room must not surface as
+        // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [copy.openErrorMessage, defaultSelectedLanguages]);
+  }, [defaultSelectedLanguages]);
 
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
@@ -2195,6 +2369,10 @@ export default function ConversationList({
         )) ?? null
       : null;
     if (explicitRestoreConversation) {
+      // User manually closed this conversation — skip explicit restore.
+      if (suppressNativeSttRestoreConversationIdRef.current === explicitRestoreConversation.id) {
+        return;
+      }
       nativeSttRestoreAttemptedRef.current = true;
       conversationRunningStateRef.current.set(
         explicitRestoreConversation.id,
@@ -2213,11 +2391,23 @@ export default function ConversationList({
     }
 
     if (isNativeSttStatusLive(cachedNativeSttStatus)) {
-      if (nativeSttRestoreAttemptedRef.current) return;
+      // Check manual-close suppression BEFORE the "already attempted" guard.
+      // If the user manually closed the room, suppress re-entry even when native
+      // STT status is still reporting "running" (e.g. stop ACK not yet received).
       const restoreConversation = findNativeSttRestoreConversation(
         conversations,
         deletingConversationIdsRef.current,
       );
+      if (
+        restoreConversation
+        && suppressNativeSttRestoreConversationIdRef.current === restoreConversation.id
+      ) {
+        // Mark as attempted so subsequent effect runs skip immediately.
+        nativeSttRestoreAttemptedRef.current = true;
+        return;
+      }
+
+      if (nativeSttRestoreAttemptedRef.current) return;
       if (!restoreConversation) return;
 
       nativeSttRestoreAttemptedRef.current = true;
@@ -2464,6 +2654,13 @@ export default function ConversationList({
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
+    // Mark this conversation as manually closed so native STT restore,
+    // route-sync open, and popstate-open do not re-open it automatically.
+    suppressNativeSttRestoreConversationIdRef.current = conversation.id;
+    if (activeConversationRef.current?.id === conversation.id) {
+      activeConversationRef.current = null;
+    }
+
     postNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
@@ -2476,6 +2673,58 @@ export default function ConversationList({
       current?.id === previousConversation.id ? null : current
     ));
   }, []);
+
+  // Declared before handleCreateConversation to avoid TDZ ReferenceError.
+  const openConversationSummary = useCallback(async (
+    conversation: ConversationChannelSummary,
+    options?: {
+      enterMode?: ConversationOverlayEnterMode;
+      // push  : push a new history entry (user tapping a room from the list)
+      // replace: replace the current history entry (restore / QA paths)
+      // none  : do not touch history (popstate already changed the URL)
+      syncHistory?: "push" | "replace" | "none";
+      // When true, clear the manual-close suppression flag for this conversation.
+      // Defaults to true when syncHistory is "push" (intentional user re-open).
+      clearManualCloseSuppression?: boolean;
+    },
+  ) => {
+    const enterMode = options?.enterMode ?? "animate";
+    const syncHistory = options?.syncHistory ?? "push";
+    const clearSuppression = options?.clearManualCloseSuppression ?? (syncHistory === "push");
+
+    if (clearSuppression) {
+      suppressNativeSttRestoreConversationIdRef.current = null;
+    }
+
+    postNativeBannerZone("hidden");
+    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
+    setOverlayEnterMode(enterMode);
+    setOverlayExitMode("animate");
+    // NOTE: intentionally not calling setAutoStartConversationId(null) here.
+    // The create-conversation flow sets autoStart before calling openConversationSummary;
+    // clearing it here would immediately cancel the auto-start.
+    // autoStart is cleared by closeConversationOverlay and explicit call sites only.
+    activeConversationRef.current = conversation;
+    setActiveConversation(conversation);
+
+    // Perform history sync here (not in an effect) so that restore / popstate-open
+    // paths do not redundantly push duplicate ?conversation= entries.
+    if (typeof window !== "undefined" && syncHistory !== "none") {
+      const currentConversationId = readConversationIdFromLocation();
+      const nextUrl = buildConversationOverlayUrl(conversation.id);
+      if (nextUrl && currentConversationId !== conversation.id) {
+        if (syncHistory === "push") {
+          window.history.pushState({ conversationId: conversation.id }, "", nextUrl);
+        } else {
+          window.history.replaceState(window.history.state, "", nextUrl);
+        }
+        notifyLocationSearchSync();
+      }
+    }
+
+    return conversation;
+  }, [closeSearchOverlay]);
+
 
   const handleCreateConversation = useCallback(async () => {
     if (
@@ -2525,10 +2774,14 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("animate");
-      setOverlayExitMode("animate");
+      // Set autoStart BEFORE calling openConversationSummary so that
+      // openConversationSummary does not clear it (it intentionally skips
+      // setAutoStartConversationId to preserve create-flow auto-start).
       setAutoStartConversationId(shouldAutoStartNewConversation ? nextConversation.id : null);
-      setActiveConversation(nextConversation);
+      await openConversationSummary(nextConversation, {
+        enterMode: "animate",
+        syncHistory: "push",
+      });
     } catch {
       window.alert(copy.createErrorMessage);
     } finally {
@@ -2542,23 +2795,8 @@ export default function ConversationList({
     isCreatingConversation,
     isImportingLegacyConversation,
     locale,
+    openConversationSummary,
   ]);
-
-  const openConversationSummary = useCallback(async (
-    conversation: ConversationChannelSummary,
-    options?: {
-      enterMode?: ConversationOverlayEnterMode;
-    },
-  ) => {
-    const enterMode = options?.enterMode ?? "animate";
-    postNativeBannerZone("hidden");
-    closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
-    setOverlayEnterMode(enterMode);
-    setOverlayExitMode("animate");
-    setAutoStartConversationId(null);
-    setActiveConversation(conversation);
-    return conversation;
-  }, [closeSearchOverlay]);
 
   const ensureConversationRoomForQa = useCallback(async (): Promise<ConversationListQaEnsureRoomResult> => {
     const currentActiveConversation = activeConversationRef.current;
@@ -2571,7 +2809,10 @@ export default function ConversationList({
 
     const mostRecentConversation = conversationsRef.current[0] ?? null;
     if (mostRecentConversation) {
-      await openConversationSummary(mostRecentConversation, { enterMode: "instant" });
+      await openConversationSummary(mostRecentConversation, {
+        enterMode: "instant",
+        syncHistory: "replace", // QA automation path: avoid unnecessary history pushes
+      });
       return {
         conversationId: mostRecentConversation.id,
         action: "opened-existing",
@@ -2605,10 +2846,11 @@ export default function ConversationList({
       const nextConversation = await readConversationResponse(response);
       closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
       setConversations((current) => upsertConversation(current, nextConversation));
-      setOverlayEnterMode("instant");
-      setOverlayExitMode("animate");
       setAutoStartConversationId(null);
-      setActiveConversation(nextConversation);
+      await openConversationSummary(nextConversation, {
+        enterMode: "instant",
+        syncHistory: "replace",
+      });
 
       return {
         conversationId: nextConversation.id,
@@ -2619,6 +2861,7 @@ export default function ConversationList({
       setIsCreatingConversation(false);
     }
   }, [closeSearchOverlay, defaultSelectedLanguages, locale, openConversationSummary]);
+
 
   const handleOpenConversation = useCallback(async (item: ConversationItem) => {
     if (isCreatingConversation || isImportingLegacyConversation) return;
@@ -2631,7 +2874,15 @@ export default function ConversationList({
 
     try {
       await openConversationSummary(matchedConversation);
-    } catch {
+    } catch (error) {
+      const aborted = isAbortLikeMutationError(error);
+      logConversationMutationFailure({
+        label: "route-open",
+        conversationId: matchedConversation.id,
+        error,
+        aborted,
+      });
+      if (aborted) return;
       window.alert(copy.openErrorMessage);
     }
   }, [
@@ -2700,6 +2951,7 @@ export default function ConversationList({
     ) {
       postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
+      closeConversationOverlay(activeConversation, { animateExit: true });
       window.history.back();
       return;
     }
@@ -2739,14 +2991,30 @@ export default function ConversationList({
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
     if (!matchedConversation) return;
 
+    // User manually closed this conversation — clean up URL instead of re-opening via route-sync.
+    if (suppressNativeSttRestoreConversationIdRef.current === routeConversationId) {
+      routeSyncConversationIdRef.current = routeConversationId;
+      replaceConversationOverlayUrl(null);
+      return;
+    }
+
     routeSyncConversationIdRef.current = routeConversationId;
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
-    }).catch(() => {
+      syncHistory: "none", // URL already reflects the route-sync target; no push needed
+    }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
         replaceConversationOverlayUrl(null);
       }
+      const aborted = isAbortLikeMutationError(error);
+      logConversationMutationFailure({
+        label: "route-open",
+        conversationId: routeConversationId,
+        error,
+        aborted,
+      });
+      if (aborted) return;
       window.alert(copy.openErrorMessage);
     });
   }, [
@@ -2760,16 +3028,8 @@ export default function ConversationList({
     routeConversationId,
   ]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !activeConversation) return;
-
-    const currentConversationId = readConversationIdFromLocation();
-    if (currentConversationId === activeConversation.id) return;
-
-    const nextUrl = buildConversationOverlayUrl(activeConversation.id);
-    if (!nextUrl) return;
-    window.history.pushState({ conversationId: activeConversation.id }, "", nextUrl);
-  }, [activeConversation]);
+  // The effect-based pushState has been moved into openConversationSummary (syncHistory option).
+  // Removing this effect prevents restore/popstate-open paths from stacking duplicate entries.
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2827,14 +3087,30 @@ export default function ConversationList({
       );
       if (!matchedConversation) return;
 
+      // User manually closed this conversation — clean up URL instead of re-opening via popstate.
+      if (suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId) {
+        routeSyncConversationIdRef.current = currentRouteConversationId;
+        replaceConversationOverlayUrl(null);
+        return;
+      }
+
       routeSyncConversationIdRef.current = currentRouteConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
-      }).catch(() => {
+        syncHistory: "none", // popstate already updated the URL; no push needed
+      }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === currentRouteConversationId) {
           replaceConversationOverlayUrl(null);
         }
+        const aborted = isAbortLikeMutationError(error);
+        logConversationMutationFailure({
+          label: "popstate-open",
+          conversationId: currentRouteConversationId,
+          error,
+          aborted,
+        });
+        if (aborted) return;
         window.alert(copy.openErrorMessage);
       });
     };

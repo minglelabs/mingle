@@ -437,6 +437,8 @@ const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
 const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
+// Marks that a restored iOS room has received a synthetic list history entry.
+const IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG = '__MINGLE_IOS_ROOM_HISTORY_SEEDED__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
 type SafeAreaPalette = {
@@ -1209,6 +1211,10 @@ function AppInner(): React.JSX.Element {
     if (!lastConversationRestoreUrlRef.current && !conversationRestoreUrlHint) return;
     lastConversationRestoreUrlRef.current = '';
     setConversationRestoreUrlHint('');
+    // Also clear the initial-restore latch so that subsequent fallback/remount
+    // does not reload the old ?conversation=... source URL.  This is a ref-only
+    // write: no state change, no re-render, no WebView reload.
+    initialRestoreUrlRef.current = '';
     try {
       void NATIVE_CONVERSATION_RESTORE_STORAGE.clearConversationRestoreUrl?.();
     } catch {
@@ -1258,19 +1264,31 @@ function AppInner(): React.JSX.Element {
   );
   const shouldDisableWebViewCache = useMemo(() => shouldBypassWebViewCache(baseWebUrl), [baseWebUrl]);
   const devWebViewRequestScopeRef = useRef(`wv-${Date.now().toString(36)}`);
-  const conversationRestoreWebUrl = useMemo(
-    () => buildConversationRestoreWebUrl(baseWebUrl, conversationRestoreUrlHint),
-    [baseWebUrl, conversationRestoreUrlHint],
+  // Latch the initial restore URL once at mount time.
+  // This ref is only cleared after the WebView reaches the conversation list.
+  // It is the only restore input allowed to affect
+  // webViewSource.uri for restore purposes.  Post-mount room/list navigation
+  // updates native storage/ref only and must NOT reach webViewSource to avoid
+  // triggering full WebView reloads.
+  const initialRestoreUrlRef = useRef(
+    initialConversationRestorePayloadRef.current?.url || '',
   );
   const webUrl = useMemo(() => {
-    const requestedWebUrl = debugRemountWebUrl || conversationRestoreWebUrl || baseWebUrl;
+    // Combine the fixed restore conversationId with the current baseWebUrl so that
+    // locale/host changes are still reflected while the restore target stays latched.
+    const initialRestoreWebUrl = buildConversationRestoreWebUrl(
+      baseWebUrl,
+      initialRestoreUrlRef.current,
+    );
+    const requestedWebUrl = debugRemountWebUrl || initialRestoreWebUrl || baseWebUrl;
     if (!requestedWebUrl) return '';
     if (!shouldDisableWebViewCache) return requestedWebUrl;
     return appendNativeWebViewSession(
       requestedWebUrl,
       `${devWebViewRequestScopeRef.current}-${webViewMountToken}`,
     );
-  }, [baseWebUrl, conversationRestoreWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+  }, [baseWebUrl, debugRemountWebUrl, shouldDisableWebViewCache, webViewMountToken]);
+
   useEffect(() => {
     if (!webUrl) return;
     lastWebViewUrlRef.current = webUrl;
@@ -2549,6 +2567,37 @@ function AppInner(): React.JSX.Element {
     emitAppUpdateToWeb();
     flushPendingAuthToWeb();
     flushPendingRecommendPrompt();
+
+    // A restored iOS room can cold-start with no prior WebView history entry,
+    // which makes WKWebView ignore the native edge-swipe back gesture. Seed a
+    // list entry before the room entry so the gesture has a valid destination.
+    if (Platform.OS === 'ios' && classifyConversationWebUrl(nextUrl) === 'room') {
+      webViewRef.current?.injectJavaScript(`
+        (function () {
+          try {
+            if (window[${JSON.stringify(IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG)}]) return true;
+            if (window.history.length > 1) return true;
+            var currentHref = window.location.href;
+            var listUrl = currentHref;
+            try {
+              var parsed = new URL(currentHref);
+              parsed.searchParams.delete('conversation');
+              listUrl = parsed.toString();
+            } catch (urlError) {
+              listUrl = currentHref.replace(/[?&]conversation=[^&]*/g, '').replace(/[?&]$/, '');
+            }
+            window.history.replaceState(null, '', listUrl);
+            window.history.pushState(null, '', currentHref);
+            window[${JSON.stringify(IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG)}] = true;
+          } catch (e) {
+            // Ignore errors in history seed injection.
+          }
+          return true;
+        })();
+        true;
+      `);
+    }
+
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
@@ -2638,6 +2687,10 @@ function AppInner(): React.JSX.Element {
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,
+              // Use the live WebView URL tracked via onNavigationStateChange/onMessage,
+              // not the static source webUrl; after in-page SPA navigation the
+              // source URL no longer reflects the current room/list state.
+              currentUrl: lastWebViewUrlRef.current || webUrl,
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}

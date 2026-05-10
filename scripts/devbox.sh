@@ -13,8 +13,8 @@ RN_IOS_RUNTIME_XCCONFIG="$ROOT_DIR/mingle-app/rn/ios/devbox.runtime.xcconfig"
 RN_APP_JSON_FILE="$ROOT_DIR/mingle-app/rn/app.json"
 MANAGED_START="# >>> devbox managed (auto)"
 MANAGED_END="# <<< devbox managed (auto)"
-IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.3"
-ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.3"
+IOS_RN_REQUIRED_API_NAMESPACE="ios/v1.1.4"
+ANDROID_RN_REQUIRED_API_NAMESPACE="android/v1.1.4"
 DEVBOX_TEST_ADMOB_APP_ID_IOS="ca-app-pub-3940256099942544~1458002511"
 DEVBOX_TEST_ADMOB_APP_ID_ANDROID="ca-app-pub-3940256099942544~3347511713"
 DEVBOX_TEST_ADMOB_BANNER_UNIT_ID_IOS="ca-app-pub-3940256099942544/2435281174"
@@ -225,7 +225,7 @@ Usage:
   scripts/devbox up [--profile local|device] [--host HOST] [--with-metro] [--with-ios-install] [--with-android-install] [--with-mobile-install] [--with-ios-clean-install] [--qa-bridge] [--ios-udid UDID] [--android-serial SERIAL] [--ios-configuration Debug|Release] [--android-variant debug|release] [--tunnel-provider ngrok|cloudflare] [--device-app-env dev|prod] [--vault-app-path PATH] [--vault-stt-path PATH]
   scripts/devbox down
   scripts/devbox test [--target app] [--with-live] [vitest args...]
-  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
+  scripts/devbox qa [--platform ios|android|all] [--contracts] [--ios-regressions] [--android-regressions] [--ios-scroll-fps] [--ios-udid UDID] [--ios-real-udid UDID] [--ios-sim-udid UDID] [--android-serial SERIAL] [--qa-arg ARG...]
   scripts/devbox status
 
 Commands:
@@ -5300,12 +5300,15 @@ cmd_test() {
 
   if [[ "$run_app" -eq 1 ]]; then
     require_cmd pnpm
-    local app_test_script="test:unit"
+    local app_test_script="test"
     if [[ "$with_live" -eq 1 ]]; then
       app_test_script="test:live"
       log "running mingle-app live integration tests (--with-live)"
+    elif ((${#app_test_args[@]} > 0)); then
+      app_test_script="test:unit"
+      log "running mingle-app vitest with passthrough args (test:scripts skipped)"
     else
-      log "running mingle-app unit tests (live tests are disabled by default; add --with-live to enable)"
+      log "running mingle-app unit + scripts tests (live tests are disabled by default; add --with-live to enable)"
     fi
     (
       cd "$ROOT_DIR/mingle-app"
@@ -5341,18 +5344,23 @@ cmd_qa() {
     case "$1" in
       --platform) platform="${2:-}"; shift 2 ;;
       --contracts)
-        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, --android-regressions, or --ios-scroll-fps"
         mode="contracts"
         shift
         ;;
       --ios-regressions)
-        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, --android-regressions, or --ios-scroll-fps"
         mode="ios-regressions"
         shift
         ;;
       --android-regressions)
-        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, or --android-regressions"
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, --android-regressions, or --ios-scroll-fps"
         mode="android-regressions"
+        shift
+        ;;
+      --ios-scroll-fps)
+        [[ "$mode" == "platform" ]] || die "choose only one QA mode: --contracts, --ios-regressions, --android-regressions, or --ios-scroll-fps"
+        mode="ios-scroll-fps"
         shift
         ;;
       --ios-udid) ios_udid="${2:-}"; shift 2 ;;
@@ -5374,6 +5382,7 @@ Options:
   --contracts                  Run the fast contract gate only.
   --ios-regressions            Run the expanded iOS regression inventory.
   --android-regressions        Run the expanded Android regression inventory.
+  --ios-scroll-fps             Capture physical iPhone WebView touch-scroll FPS for the 500-utterance live demo.
   --ios-udid UDID              Physical iPhone or simulator UDID for the standard iOS QA runner.
   --ios-real-udid UDID         Physical iPhone UDID for the expanded iOS regression inventory.
   --ios-sim-udid UDID          Simulator UDID for the expanded iOS regression inventory.
@@ -5385,6 +5394,7 @@ Examples:
   scripts/devbox qa --platform ios --ios-udid <UDID>
   scripts/devbox qa --ios-regressions --ios-real-udid <REAL_UDID> --ios-sim-udid <SIM_UDID>
   scripts/devbox qa --android-regressions --android-serial <SERIAL>
+  scripts/devbox qa --ios-scroll-fps --ios-real-udid <REAL_UDID>
 EOF
         return 0
         ;;
@@ -5400,7 +5410,7 @@ EOF
     *) die "invalid --platform for qa: $platform (expected ios|android|all)" ;;
   esac
 
-  if [[ "$platform" == "ios" || "$platform" == "all" || "$mode" == "ios-regressions" ]]; then
+  if [[ "$platform" == "ios" || "$platform" == "all" || "$mode" == "ios-regressions" || "$mode" == "ios-scroll-fps" ]]; then
     if [[ -z "$ios_xcode_org_id" ]]; then
       ios_xcode_org_id="$(trim_whitespace "${DEVBOX_IOS_TEAM_ID:-}")"
     fi
@@ -5431,6 +5441,14 @@ EOF
     android-regressions)
       script_name="test:qa:ui:android:regressions"
       [[ -n "$android_serial" ]] && runner_args+=(--android-serial "$android_serial")
+      ;;
+    ios-scroll-fps)
+      script_name="test:qa:ui:ios:scroll-fps"
+      if [[ -n "$ios_real_udid" ]]; then
+        runner_args+=(--ios-udid "$ios_real_udid")
+      elif [[ -n "$ios_udid" ]]; then
+        runner_args+=(--ios-udid "$ios_udid")
+      fi
       ;;
     platform)
       case "$platform" in
@@ -5559,6 +5577,7 @@ Run:
 - scripts/devbox qa --platform ios --ios-udid <IOS_UDID>
 - scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
 - scripts/devbox qa --android-regressions --android-serial <ANDROID_SERIAL>
+- scripts/devbox qa --ios-scroll-fps --ios-real-udid <IOS_REAL_UDID>
 - scripts/devbox profile --profile local --host <LAN_IP>
 - scripts/devbox test
 EOF

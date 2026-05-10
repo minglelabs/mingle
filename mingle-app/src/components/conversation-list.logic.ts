@@ -93,6 +93,21 @@ export function compareConversationRecency(a: ConversationChannelSummary, b: Con
   return rightTimestamp - leftTimestamp;
 }
 
+function normalizeConversationMessageCount(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value ?? 0);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+}
+
+export function resolveConversationDisplayMessageCount(
+  conversation: ConversationChannelSummary,
+  localMessageCount: number,
+): number {
+  return Math.max(
+    normalizeConversationMessageCount(conversation.messageCount),
+    normalizeConversationMessageCount(localMessageCount),
+  );
+}
+
 export function upsertConversation(
   conversations: ConversationChannelSummary[],
   nextConversation: ConversationChannelSummary,
@@ -205,5 +220,32 @@ export function calculateConversationRowTooltipPosForRect(
     side: "below",
     top: rect.bottom + ROW_ACTION_TOOLTIP_GAP_PX,
     left,
+  };
+}
+
+export type MutationVersionTracker<TKey> = {
+  next: (key: TKey) => number;
+  isLatest: (key: TKey, version: number) => boolean;
+  current: (key: TKey) => number;
+  reset: (key: TKey) => void;
+};
+
+export function createMutationVersionTracker<TKey>(): MutationVersionTracker<TKey> {
+  const versions = new Map<TKey, number>();
+  return {
+    next(key) {
+      const next = (versions.get(key) ?? 0) + 1;
+      versions.set(key, next);
+      return next;
+    },
+    isLatest(key, version) {
+      return versions.get(key) === version;
+    },
+    current(key) {
+      return versions.get(key) ?? 0;
+    },
+    reset(key) {
+      versions.delete(key);
+    },
   };
 }

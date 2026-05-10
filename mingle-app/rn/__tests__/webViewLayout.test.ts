@@ -1,4 +1,4 @@
-import { appendNativeRuntimeWebViewParams } from '../src/webViewLayout';
+import { appendNativeRuntimeWebViewParams, shouldEnableIosWebViewBackForwardNavigation } from '../src/webViewLayout';
 
 describe('appendNativeRuntimeWebViewParams', () => {
   it('adds zone-specific banner fallbacks and client build query params', () => {
@@ -23,5 +23,53 @@ describe('appendNativeRuntimeWebViewParams', () => {
         nativeConversationBannerInsetPx: 50,
       }),
     ).toBe('https://example.com/ko?nativeListTopInsetPx=50&nativeConversationBannerPosition=top&nativeConversationTopInsetPx=50');
+  });
+});
+
+describe('shouldEnableIosWebViewBackForwardNavigation', () => {
+  const BASE = 'https://mingle-app-xi.vercel.app';
+
+  it('returns false on Android', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: false,
+      canGoBack: true,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/conversations?conversation=abc`,
+    })).toBe(false);
+  });
+
+  it('returns true for iOS conversation room URLs even without a history stack', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/conversations?conversation=abc123`,
+    })).toBe(true);
+  });
+
+  it('returns false for iOS conversation list URLs without a history stack', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/conversations`,
+    })).toBe(false);
+  });
+
+  it('returns true for iOS conversation list URLs when back history exists', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/conversations`,
+    })).toBe(true);
+  });
+
+  it('returns false on iOS without currentUrl or back history', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: false,
+      canGoForward: false,
+    })).toBe(false);
   });
 });

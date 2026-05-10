@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
@@ -66,9 +66,36 @@ import { isLegacySonioxSilenceSliderNamespace } from '@/lib/api-namespace-versio
 import { postNativeBannerZone } from '@/lib/native-banner-zone'
 import {
   AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+  INITIAL_SCROLL_METRICS,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+  LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET,
+  LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY,
+  SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX,
+  areScrollMetricsEqual,
   createAutoScrollScheduler,
+  deriveLateMessageHeightChangeEffectAboveViewportAnchor,
+  deriveLivePhoneDemoScrollMetrics,
+  deriveNewMessageAutoScrollState,
   deriveScrollAutoFollowState,
   deriveScrollUiVisibility,
+  readLivePhoneDemoScrollHandlerMeasurement,
+  recordLivePhoneDemoScrollHandlerMeasurement,
+  resolveLateMessageHeightChangeAnchorScrollTop,
+  resolveLivePhoneDemoScrollMeasurementCounter,
+  resolveNewMessageAutoScrollTargetTop,
+  resolveScrollViewportAnchorSnapshot,
+  resolveTopVisibleScrollDateLabelAnchor,
+  resolvePrependScrollAnchorTop,
+  shouldCapturePrependScrollTopSnapshot,
+  shouldReadPrependScrollHeightForSnapshot,
+  shouldUpdateScrollDateLabelState,
+  type ChatScrollMessageCountSnapshot,
+  type LateMessageHeightChangeEffectAboveViewportAnchor,
+  type LivePhoneDemoScrollHandlerMeasurementSnapshot,
+  type LivePhoneDemoScrollHandlerMeasurementState,
+  type LivePhoneDemoScrollMetrics,
+  type ScrollDateLabelAnchor,
+  type ScrollViewportAnchorSnapshot,
 } from './live-phone-demo.scroll.logic'
 import {
   NATIVE_UI_EVENT,
@@ -113,6 +140,7 @@ import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
 } from './live-phone-demo.usage-format'
+import { resolveAnimatedLiveDemoMessageIds } from './live-phone-demo.message-animation'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
 import { registerNativeBackHandler } from '@/lib/native-back-handler'
 import { readNativeQaBridgeAuthority, shouldExposeNativeQaBridge } from '@/lib/native-qa-bridge'
@@ -135,11 +163,9 @@ const SILENT_WAV_DATA_URI = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABA
 // iOS .playAndRecord reduces speaker output; this compensates in software.
 const TTS_STT_GAIN = 1.0
 const NATIVE_TTS_EVENT = 'mingle:native-tts'
-const SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX = AUTO_SCROLL_BOTTOM_THRESHOLD_PX
 const SCROLL_TO_BOTTOM_BUTTON_BOTTOM_PX = 24
 const SCROLL_TO_BOTTOM_BUTTON_SIZE_PX = 48
 const SCROLL_UI_HIDE_DELAY_MS = 1000
-const SCROLLBAR_MIN_THUMB_HEIGHT_PX = 28
 const USER_SCROLL_INTENT_WINDOW_MS = 2000
 const NATIVE_TTS_EVENT_TIMEOUT_MS = 15000
 const LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT = 1.25
@@ -222,6 +248,41 @@ type LivePhoneDemoQaSnapshot = {
   micVisualState: 'idle' | 'connecting' | 'running' | 'error'
 }
 
+const SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT = 500
+const SCROLL_PERFORMANCE_CHAT_STARTED_AT_MS = Date.UTC(2026, 0, 15, 9, 0, 0)
+const SCROLL_PERFORMANCE_CHAT_TURN_INTERVAL_MS = 45_000
+const SCROLL_PERFORMANCE_CHAT_SPEAKERS = ['qa-alex', 'qa-mina', 'qa-sam', 'qa-ji'] as const
+const SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS = [
+  'We are checking the train platform and the meeting point before everyone arrives.',
+  'The hallway is busy, so I will repeat the room number and wait near the sign.',
+  'Please confirm whether the next update should be short or include the full context.',
+  'I heard the schedule changed, and I want to make sure the group has the same details.',
+  'The first option is faster, but the second option gives people more time to prepare.',
+  'Can you summarize the last decision and tell me what action is still open?',
+  'I will stay on this call while the rest of the team joins from the lobby.',
+  'The connection is clear now, so we can continue with the translation demo.',
+] as const
+const SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS = [
+  'QA Korean translation for the platform and meeting point check.',
+  'QA Korean translation for the busy hallway and room number update.',
+  'QA Korean translation for choosing a short or detailed update.',
+  'QA Korean translation for the schedule change confirmation.',
+  'QA Korean translation for comparing the faster and slower options.',
+  'QA Korean translation for summarizing the decision and open action.',
+  'QA Korean translation for waiting while the team joins.',
+  'QA Korean translation for continuing the clear connection demo.',
+] as const
+
+const CHAT_SCROLL_SURFACE_STYLE: CSSProperties = {
+  contain: 'layout paint style',
+  isolation: 'isolate',
+}
+
+const CHAT_MESSAGE_ROW_STYLE: CSSProperties = {
+  contain: 'layout style',
+  isolation: 'isolate',
+}
+
 function buildQaSeededUtterances(count: number): Utterance[] {
   const safeCount = Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
   const startedAtMs = Date.now() - 60_000
@@ -245,13 +306,42 @@ function buildQaSeededUtterances(count: number): Utterance[] {
   })
 }
 
+function buildQaScrollPerformanceUtterances(): Utterance[] {
+  return Array.from({ length: SCROLL_PERFORMANCE_CHAT_UTTERANCE_COUNT }, (_, index) => {
+    const turnNumber = index + 1
+    const textIndex = index % SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS.length
+    const speakerIndex = index % SCROLL_PERFORMANCE_CHAT_SPEAKERS.length
+    const createdAtMs = SCROLL_PERFORMANCE_CHAT_STARTED_AT_MS + (index * SCROLL_PERFORMANCE_CHAT_TURN_INTERVAL_MS)
+
+    return {
+      id: `scroll-perf-${String(turnNumber).padStart(3, '0')}`,
+      speaker: SCROLL_PERFORMANCE_CHAT_SPEAKERS[speakerIndex],
+      speakerAvatarSeed: `scroll-performance-speaker-${speakerIndex + 1}`,
+      speakerAvatarIndex: speakerIndex,
+      originalText: `${SCROLL_PERFORMANCE_CHAT_ORIGINAL_TEXTS[textIndex]} Turn ${turnNumber}.`,
+      originalLang: 'en',
+      targetLanguages: ['ko'],
+      translations: {
+        ko: `${SCROLL_PERFORMANCE_CHAT_TRANSLATION_TEXTS[textIndex]} Turn ${turnNumber}.`,
+      },
+      translationFinalized: {
+        ko: true,
+      },
+      createdAtMs,
+    }
+  })
+}
+
 declare global {
   interface Window {
     __MINGLE_QA__?: {
       getLiveDemoSnapshot: () => LivePhoneDemoQaSnapshot
       seedPersistedHistory: (count?: number) => number
+      seedScrollPerformanceHistory: () => number
       resetPersistedHistory: () => void
       resetUiState: () => void
+      getLiveDemoChatScrollHandlerMeasurement: () => LivePhoneDemoScrollHandlerMeasurementSnapshot | null
+      resetLiveDemoChatScrollHandlerMeasurement: () => boolean
       setMenuOpen: (nextOpen: boolean) => void
       setAdBannerPosition: (nextPosition: LivePhoneDemoAdBannerPosition) => void
       setComposerOpen: (nextOpen: boolean) => void
@@ -324,6 +414,22 @@ function isLikelyIOSPlatform(): boolean {
   }
 
   return /Mac/i.test(userAgent) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1
+}
+
+function readBrowserPerformanceNowMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now()
+}
+
+function readLiveDemoScrollMeasurementStorageValue(): string | null {
+  if (typeof window === 'undefined') return null
+
+  try {
+    return window.localStorage.getItem(LIVE_DEMO_SCROLL_MEASUREMENT_STORAGE_KEY)
+  } catch {
+    return null
+  }
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -702,18 +808,40 @@ function formatScrollDateLabel(createdAtMs: number, locale: string): string {
   }
 }
 
-function findTopVisibleUtteranceDateLabel(container: HTMLDivElement, locale: string): string {
-  const containerRect = container.getBoundingClientRect()
-  const nodes = container.querySelectorAll<HTMLElement>('[data-utterance-created-at]')
-  for (const node of nodes) {
-    const rect = node.getBoundingClientRect()
-    if (rect.bottom <= containerRect.top + 1) continue
-    const raw = node.dataset.utteranceCreatedAt || ''
-    const createdAtMs = Number(raw)
+function readScrollDateLabelAnchors(container: HTMLDivElement): ScrollDateLabelAnchor[] {
+  const anchors: ScrollDateLabelAnchor[] = []
+
+  for (const child of Array.from(container.children)) {
+    if (!(child instanceof HTMLElement)) continue
+
+    const createdAtMs = Number(child.dataset.utteranceCreatedAt || '')
     if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) continue
-    return formatScrollDateLabel(createdAtMs, locale)
+
+    const { offsetTop, offsetHeight } = child
+    if (!Number.isFinite(offsetTop) || !Number.isFinite(offsetHeight)) continue
+
+    anchors.push({
+      utteranceId: child.dataset.utteranceId || undefined,
+      createdAtMs,
+      offsetTop,
+      offsetHeight,
+    })
   }
-  return ''
+
+  return anchors
+}
+
+function findTopVisibleUtteranceDateLabel(
+  anchors: readonly ScrollDateLabelAnchor[],
+  scrollTop: number,
+  locale: string,
+): string {
+  const anchor = resolveTopVisibleScrollDateLabelAnchor({
+    anchors,
+    scrollTop,
+  })
+  if (!anchor) return ''
+  return formatScrollDateLabel(anchor.createdAtMs, locale)
 }
 
 function deriveRangeValueFromPointer(
@@ -1041,6 +1169,83 @@ function buildOriginalBubblePlaybackKey(utteranceId: string, language: string): 
 function buildTranslationBubblePlaybackKey(utteranceId: string, language: string): string {
   return `translation:${utteranceId}:${language.trim().toLowerCase()}`
 }
+
+type LivePhoneDemoChatMessageRowProps = {
+  utterance: Utterance
+  uiLocale: string
+  isDraft: boolean
+  onPlayOriginal: (utterance: Utterance) => void
+  onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
+  bubbleTextClassName: string
+  speakingPlaybackKey?: string
+  shouldAnimateEntrance: boolean
+}
+
+function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
+  return (typeof utterance.createdAtMs === 'number' && Number.isFinite(utterance.createdAtMs))
+    ? String(Math.floor(utterance.createdAtMs))
+    : ''
+}
+
+function isPlaybackKeyForUtterance(playbackKey: string | undefined, utteranceId: string): boolean {
+  if (!playbackKey) return false
+
+  return (
+    playbackKey.startsWith(`original:${utteranceId}:`)
+    || playbackKey.startsWith(`translation:${utteranceId}:`)
+  )
+}
+
+function LivePhoneDemoChatMessageRow({
+  utterance,
+  uiLocale,
+  isDraft,
+  onPlayOriginal,
+  onPlayTranslation,
+  bubbleTextClassName,
+  speakingPlaybackKey,
+  shouldAnimateEntrance,
+}: LivePhoneDemoChatMessageRowProps) {
+  return (
+    <div
+      data-utterance-id={utterance.id}
+      data-utterance-created-at={resolveUtteranceCreatedAtDataAttribute(utterance)}
+      style={CHAT_MESSAGE_ROW_STYLE}
+    >
+      <ChatBubble
+        utterance={utterance}
+        uiLocale={uiLocale}
+        isDraft={isDraft}
+        onPlayOriginal={onPlayOriginal}
+        onPlayTranslation={onPlayTranslation}
+        bubbleTextClassName={bubbleTextClassName}
+        speakingPlaybackKey={speakingPlaybackKey}
+        shouldAnimateEntrance={shouldAnimateEntrance}
+      />
+    </div>
+  )
+}
+
+const MemoizedLivePhoneDemoChatMessageRow = memo(
+  LivePhoneDemoChatMessageRow,
+  function areLivePhoneDemoChatMessageRowsEqual(prev, next) {
+    if (prev.utterance !== next.utterance) return false
+    if (prev.uiLocale !== next.uiLocale) return false
+    if (prev.isDraft !== next.isDraft) return false
+    if (prev.onPlayOriginal !== next.onPlayOriginal) return false
+    if (prev.onPlayTranslation !== next.onPlayTranslation) return false
+    if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
+    if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+
+    const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
+    const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
+    if (wasSpeakingThisUtterance || isSpeakingThisUtterance) {
+      return prev.speakingPlaybackKey === next.speakingPlaybackKey
+    }
+
+    return true
+  },
+)
 
 function postNativeQaCommand(command: NativeRemountWebViewCommand | NativeQaSetSttStatusCommand): boolean {
   if (typeof window === 'undefined') return false
@@ -3165,10 +3370,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
     : (isConnecting || isReady || isActive)
   const isSilenceFinalizeSliderDisabled = isSttSessionRunning || isSilenceFinalizeSliderLocked
+  const onSttSessionRunningChangeRef = useRef(onSttSessionRunningChange)
 
   useEffect(() => {
-    onSttSessionRunningChange?.(isSttSessionRunning)
-  }, [isSttSessionRunning, onSttSessionRunningChange])
+    onSttSessionRunningChangeRef.current = onSttSessionRunningChange
+  }, [onSttSessionRunningChange])
+
+  useEffect(() => {
+    onSttSessionRunningChangeRef.current?.(isSttSessionRunning)
+  }, [isSttSessionRunning])
 
   useEffect(() => {
     onConversationStatsChange?.({
@@ -3812,6 +4022,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }), [handleStartRecording, handleStopRecording, isSttSessionRunning, prepareForDeletion])
 
   const chatRef = useRef<HTMLDivElement>(null)
+  const scrollDateLabelAnchorsRef = useRef<ScrollDateLabelAnchor[]>([])
+  const viewportAnchorSnapshotRef = useRef<ScrollViewportAnchorSnapshot | null>(null)
+  const lateMessageHeightChangeEffectAboveViewportAnchorRef = useRef<LateMessageHeightChangeEffectAboveViewportAnchor>({
+    anchorUtteranceId: null,
+    deltaAboveAnchorPx: 0,
+    changedMessages: [],
+  })
+  const lastDistanceToBottomRef = useRef(0)
+  const renderedMessageCountsRef = useRef<ChatScrollMessageCountSnapshot>({
+    utteranceCount: utterances.length,
+    liveUtteranceCount: liveUtterances.length,
+  })
   const shouldAutoScroll = useRef(true)
   const suppressAutoScrollRef = useRef(false)
   const userScrollIntentUntilRef = useRef(0)
@@ -3819,41 +4041,107 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const allowAutoTopPaginationRef = useRef(false)
   const isPaginatingRef = useRef(false)
   const prevScrollHeightRef = useRef<number | null>(null)
+  const prevScrollTopRef = useRef<number | null>(null)
   const isLoadingOlderRef = useRef(false)
   const autoScrollSchedulerRef = useRef(createAutoScrollScheduler())
   const scrollUiHideTimerRef = useRef<number | null>(null)
+  const scrollStateFrameRef = useRef<{
+    frameId: number | null
+    fromUserScroll: boolean
+  }>({
+    frameId: null,
+    fromUserScroll: false,
+  })
   const openSmoothScrollTimerRef = useRef<number | null>(null)
   const openSmoothScrollDeadlineRef = useRef(0)
   const openSmoothScrollLastHeightRef = useRef(0)
   const openSmoothScrollStableTicksRef = useRef(0)
+  const scrollUiVisibleRef = useRef(false)
+  const scrollDateLabelRef = useRef('')
+  const previousDisplayUtteranceIdsRef = useRef<string[] | null>(null)
+  const scrollMetricsRef = useRef<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
+  const scrollHandlerMeasurementRef = useRef<LivePhoneDemoScrollHandlerMeasurementState | null>(null)
+  const scrollHandlerMeasurementLoggedSampleCountRef = useRef(0)
   const [scrollUiVisible, setScrollUiVisible] = useState(false)
   const [scrollDateLabel, setScrollDateLabel] = useState('')
-  const [scrollMetrics, setScrollMetrics] = useState({
-    thumbTop: 0,
-    thumbHeight: 0,
-    clientHeight: 0,
-    scrollable: false,
-    distanceToBottom: 0,
-  })
+  const [scrollMetrics, setScrollMetrics] = useState<LivePhoneDemoScrollMetrics>(INITIAL_SCROLL_METRICS)
+
+  const configureScrollHandlerMeasurement = useCallback(() => {
+    if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') {
+      scrollHandlerMeasurementRef.current = null
+      return
+    }
+
+    const activeCounter = resolveLivePhoneDemoScrollMeasurementCounter({
+      nodeEnv: process.env.NODE_ENV,
+      search: window.location.search || '',
+      storageValue: readLiveDemoScrollMeasurementStorageValue(),
+    })
+
+    scrollHandlerMeasurementLoggedSampleCountRef.current = 0
+    scrollHandlerMeasurementRef.current = activeCounter === LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER
+      ? {
+          counter: LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_COUNTER,
+          samplesMs: [],
+          latestMs: 0,
+          maxMs: 0,
+        }
+      : null
+  }, [])
+
+  const recordScrollHandlerMeasurement = useCallback((durationMs: number) => {
+    if (process.env.NODE_ENV === 'production') return
+
+    const measurementState = scrollHandlerMeasurementRef.current
+    if (!measurementState) return
+
+    const snapshot = recordLivePhoneDemoScrollHandlerMeasurement(measurementState, durationMs)
+    if (
+      !snapshot.representative
+      || snapshot.sampleCount % LIVE_DEMO_SCROLL_HANDLER_MEASUREMENT_SAMPLE_TARGET !== 0
+      || scrollHandlerMeasurementLoggedSampleCountRef.current === snapshot.sampleCount
+    ) {
+      return
+    }
+
+    scrollHandlerMeasurementLoggedSampleCountRef.current = snapshot.sampleCount
+    console.info('[MingleLiveDemoScroll]', snapshot)
+  }, [])
+
+  useEffect(() => {
+    configureScrollHandlerMeasurement()
+  }, [configureScrollHandlerMeasurement])
+
+  const captureCurrentViewportAnchorSnapshot = useCallback((scrollTop: number) => {
+    viewportAnchorSnapshotRef.current = resolveScrollViewportAnchorSnapshot({
+      anchors: scrollDateLabelAnchorsRef.current,
+      scrollTop,
+    })
+  }, [])
 
   const handleLoadOlder = useCallback(() => {
-    if (isLoadingOlderRef.current || !hasOlderUtterances || !chatRef.current) return
+    const node = chatRef.current
+    if (isLoadingOlderRef.current || !hasOlderUtterances || !node) return
     isLoadingOlderRef.current = true
     suppressAutoScrollRef.current = true
     shouldAutoScroll.current = false
     isPaginatingRef.current = true
-    prevScrollHeightRef.current = chatRef.current.scrollHeight
+    captureCurrentViewportAnchorSnapshot(node.scrollTop)
+    prevScrollHeightRef.current = node.scrollHeight
+    prevScrollTopRef.current = node.scrollTop
     void loadOlderUtterances().then((didLoad) => {
       if (didLoad) return
       prevScrollHeightRef.current = null
+      prevScrollTopRef.current = null
       isPaginatingRef.current = false
       isLoadingOlderRef.current = false
     }).catch(() => {
       prevScrollHeightRef.current = null
+      prevScrollTopRef.current = null
       isPaginatingRef.current = false
       isLoadingOlderRef.current = false
     })
-  }, [hasOlderUtterances, loadOlderUtterances])
+  }, [captureCurrentViewportAnchorSnapshot, hasOlderUtterances, loadOlderUtterances])
 
   const markUserScrollIntent = useCallback(() => {
     userScrollIntentUntilRef.current = Date.now() + USER_SCROLL_INTENT_WINDOW_MS
@@ -3881,11 +4169,71 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     autoScrollSchedulerRef.current.cancel()
   }, [])
 
+  const refreshScrollDateLabelAnchors = useCallback(() => {
+    const node = chatRef.current
+    if (!node) {
+      scrollDateLabelAnchorsRef.current = []
+      lateMessageHeightChangeEffectAboveViewportAnchorRef.current = {
+        anchorUtteranceId: null,
+        deltaAboveAnchorPx: 0,
+        changedMessages: [],
+      }
+      return
+    }
+
+    const previousAnchors = scrollDateLabelAnchorsRef.current
+    const nextAnchors = readScrollDateLabelAnchors(node)
+    const lateMessageHeightChangeEffect = deriveLateMessageHeightChangeEffectAboveViewportAnchor({
+      previousAnchors,
+      nextAnchors,
+      viewportAnchor: viewportAnchorSnapshotRef.current,
+    })
+    lateMessageHeightChangeEffectAboveViewportAnchorRef.current = lateMessageHeightChangeEffect
+    const adjustedScrollTop = resolveLateMessageHeightChangeAnchorScrollTop({
+      viewportAnchor: viewportAnchorSnapshotRef.current,
+      nextAnchors,
+      currentScrollTop: node.scrollTop,
+      deltaAboveAnchorPx: lateMessageHeightChangeEffect.deltaAboveAnchorPx,
+      maxScrollTop: node.scrollHeight - node.clientHeight,
+    })
+    if (adjustedScrollTop !== null) {
+      node.scrollTop = adjustedScrollTop
+    }
+    scrollDateLabelAnchorsRef.current = nextAnchors
+  }, [])
+
+  const applyScrollMetricsState = useCallback((nextMetrics: LivePhoneDemoScrollMetrics) => {
+    if (areScrollMetricsEqual(scrollMetricsRef.current, nextMetrics)) return
+    scrollMetricsRef.current = nextMetrics
+    setScrollMetrics(nextMetrics)
+  }, [])
+
+  const applyScrollDateLabelState = useCallback((nextDateLabel: string) => {
+    if (!shouldUpdateScrollDateLabelState(scrollDateLabelRef.current, nextDateLabel)) return
+    scrollDateLabelRef.current = nextDateLabel
+    setScrollDateLabel(nextDateLabel)
+  }, [])
+
+  const applyScrollUiVisibleState = useCallback((nextVisible: boolean) => {
+    if (scrollUiVisibleRef.current === nextVisible) return
+    scrollUiVisibleRef.current = nextVisible
+    setScrollUiVisible(nextVisible)
+  }, [])
+
   const updateScrollDerivedState = useCallback((options?: { fromUserScroll?: boolean }) => {
     if (!chatRef.current) return
     const fromUserScroll = options?.fromUserScroll === true
     const { scrollTop, scrollHeight, clientHeight } = chatRef.current
+    captureCurrentViewportAnchorSnapshot(scrollTop)
+    if (shouldCapturePrependScrollTopSnapshot({
+      isPaginating: isPaginatingRef.current,
+      previousScrollHeight: prevScrollHeightRef.current,
+      currentScrollHeight: scrollHeight,
+    })) {
+      prevScrollTopRef.current = scrollTop
+    }
     const distanceToBottom = Math.max(0, scrollHeight - scrollTop - clientHeight)
+    lastDistanceToBottomRef.current = distanceToBottom
     const nextScrollState = deriveScrollAutoFollowState({
       distanceToBottom,
       fromUserScroll,
@@ -3897,33 +4245,18 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     suppressAutoScrollRef.current = nextScrollState.suppressAutoScroll
     shouldAutoScroll.current = nextScrollState.shouldAutoScroll
 
-    if (scrollHeight > clientHeight + 1) {
-      const thumbHeight = Math.max(
-        SCROLLBAR_MIN_THUMB_HEIGHT_PX,
-        Math.round((clientHeight / scrollHeight) * clientHeight),
-      )
-      const maxThumbTop = Math.max(0, clientHeight - thumbHeight)
-      const denominator = scrollHeight - clientHeight
-      const ratio = denominator > 0 ? Math.min(1, Math.max(0, scrollTop / denominator)) : 0
-      const thumbTop = ratio * maxThumbTop
-      setScrollMetrics({
-        thumbTop,
-        thumbHeight,
-        clientHeight,
-        scrollable: true,
-        distanceToBottom,
-      })
-    } else {
-      setScrollMetrics({
-        thumbTop: 0,
-        thumbHeight: 0,
-        clientHeight,
-        scrollable: false,
-        distanceToBottom,
-      })
-    }
+    const nextScrollMetrics = deriveLivePhoneDemoScrollMetrics({
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+    })
+    applyScrollMetricsState(nextScrollMetrics)
 
-    setScrollDateLabel(findTopVisibleUtteranceDateLabel(chatRef.current, uiLocale))
+    applyScrollDateLabelState(findTopVisibleUtteranceDateLabel(
+      scrollDateLabelAnchorsRef.current,
+      scrollTop,
+      uiLocale,
+    ))
 
     if (
       allowAutoTopPaginationRef.current
@@ -3933,10 +4266,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     ) {
       handleLoadOlder()
     }
-  }, [hasOlderUtterances, handleLoadOlder, uiLocale])
+  }, [
+    applyScrollDateLabelState,
+    applyScrollMetricsState,
+    captureCurrentViewportAnchorSnapshot,
+    hasOlderUtterances,
+    handleLoadOlder,
+    uiLocale,
+  ])
 
-  const handleScroll = useCallback(() => {
-    const fromUserScroll = isUserScrollIntentActive()
+  const processScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {
+    const { fromUserScroll } = options
     updateScrollDerivedState({ fromUserScroll })
 
     if (fromUserScroll && (!shouldAutoScroll.current || suppressAutoScrollRef.current)) {
@@ -3950,18 +4290,80 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     if (!scrollUi.visible) {
       clearScrollUiHideTimer()
-      setScrollUiVisible(false)
+      applyScrollUiVisibleState(false)
       return
     }
 
-    setScrollUiVisible(true)
+    applyScrollUiVisibleState(true)
     clearScrollUiHideTimer()
     if (scrollUi.scheduleHideTimer) {
       scrollUiHideTimerRef.current = window.setTimeout(() => {
-        setScrollUiVisible(false)
+        applyScrollUiVisibleState(false)
       }, SCROLL_UI_HIDE_DELAY_MS)
     }
-  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer, isUserScrollIntentActive, updateScrollDerivedState])
+  }, [
+    applyScrollUiVisibleState,
+    clearPendingAutoScrollTimer,
+    clearScrollUiHideTimer,
+    updateScrollDerivedState,
+  ])
+
+  const cancelScheduledScrollEventDerivedState = useCallback(() => {
+    if (scrollStateFrameRef.current.frameId !== null) {
+      window.cancelAnimationFrame(scrollStateFrameRef.current.frameId)
+      scrollStateFrameRef.current.frameId = null
+    }
+    scrollStateFrameRef.current.fromUserScroll = false
+  }, [])
+
+  const scheduleScrollEventDerivedState = useCallback((options: { fromUserScroll: boolean }) => {
+    scrollStateFrameRef.current.fromUserScroll = (
+      scrollStateFrameRef.current.fromUserScroll
+      || options.fromUserScroll
+    )
+
+    if (scrollStateFrameRef.current.frameId !== null) return
+
+    scrollStateFrameRef.current.frameId = window.requestAnimationFrame(() => {
+      const fromUserScroll = scrollStateFrameRef.current.fromUserScroll
+      scrollStateFrameRef.current.frameId = null
+      scrollStateFrameRef.current.fromUserScroll = false
+      processScrollEventDerivedState({ fromUserScroll })
+    })
+  }, [processScrollEventDerivedState])
+
+  const handleScroll = useCallback(() => {
+    const measurementStartMs = scrollHandlerMeasurementRef.current ? readBrowserPerformanceNowMs() : null
+    const node = chatRef.current
+    if (node) {
+      const scrollTop = node.scrollTop
+      captureCurrentViewportAnchorSnapshot(scrollTop)
+      const previousScrollHeight = prevScrollHeightRef.current
+
+      if (
+        shouldReadPrependScrollHeightForSnapshot({
+          isPaginating: isPaginatingRef.current,
+          previousScrollHeight,
+        })
+        && shouldCapturePrependScrollTopSnapshot({
+          isPaginating: true,
+          previousScrollHeight,
+          currentScrollHeight: node.scrollHeight,
+        })
+      ) {
+        prevScrollTopRef.current = scrollTop
+      }
+    }
+    scheduleScrollEventDerivedState({ fromUserScroll: isUserScrollIntentActive() })
+    if (measurementStartMs !== null) {
+      recordScrollHandlerMeasurement(readBrowserPerformanceNowMs() - measurementStartMs)
+    }
+  }, [
+    captureCurrentViewportAnchorSnapshot,
+    isUserScrollIntentActive,
+    recordScrollHandlerMeasurement,
+    scheduleScrollEventDerivedState,
+  ])
 
   const handleScrollToBottom = useCallback(() => {
     if (!chatRef.current) return
@@ -4030,6 +4432,89 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         : nativeAppUpdateCopy.unknownMessage
   const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl)
 
+  useLayoutEffect(() => {
+    const nextCounts: ChatScrollMessageCountSnapshot = {
+      utteranceCount: utterances.length,
+      liveUtteranceCount: liveUtterances.length,
+    }
+    const autoScrollState = deriveNewMessageAutoScrollState({
+      previousCounts: renderedMessageCountsRef.current,
+      nextCounts,
+      previousDistanceToBottom: lastDistanceToBottomRef.current,
+      isPaginating: isPaginatingRef.current,
+      isLoadingOlder: isLoadingOlderRef.current,
+      nearBottomThresholdPx: AUTO_SCROLL_BOTTOM_THRESHOLD_PX,
+    })
+
+    renderedMessageCountsRef.current = nextCounts
+
+    if (!autoScrollState.shouldAutoScroll || !hasInitialBottomAnchorRef.current || !chatRef.current) return
+
+    const node = chatRef.current
+    suppressAutoScrollRef.current = false
+    shouldAutoScroll.current = true
+
+    const autoScrollTargetTop = resolveNewMessageAutoScrollTargetTop({
+      shouldAutoScroll: autoScrollState.shouldAutoScroll,
+      currentScrollTop: node.scrollTop,
+      currentScrollHeight: node.scrollHeight,
+      currentClientHeight: node.clientHeight,
+    })
+
+    if (autoScrollTargetTop !== null) {
+      node.scrollTop = autoScrollTargetTop
+      autoScrollSchedulerRef.current.markPerformed()
+    }
+
+    updateScrollDerivedState()
+  }, [
+    liveUtterances.length,
+    updateScrollDerivedState,
+    utterances.length,
+  ])
+
+  useLayoutEffect(() => {
+    refreshScrollDateLabelAnchors()
+    updateScrollDerivedState()
+  }, [
+    chatBubbleTextClassName,
+    demoTypingText,
+    liveUtterances.length,
+    refreshScrollDateLabelAnchors,
+    updateScrollDerivedState,
+    utterances,
+  ])
+
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined' || !chatRef.current) return
+
+    const node = chatRef.current
+    let rafId: number | null = null
+    const scheduleRefresh = () => {
+      captureCurrentViewportAnchorSnapshot(node.scrollTop)
+      if (rafId !== null) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null
+        refreshScrollDateLabelAnchors()
+        updateScrollDerivedState()
+      })
+    }
+    const observer = new MutationObserver(scheduleRefresh)
+
+    observer.observe(node, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
+
+    return () => {
+      observer.disconnect()
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId)
+      }
+    }
+  }, [captureCurrentViewportAnchorSnapshot, refreshScrollDateLabelAnchors, updateScrollDerivedState])
+
   // Wait for stored conversation hydration, then pin to the latest messages once.
   // This prevents initial top-pagination from running before we settle at bottom.
   useLayoutEffect(() => {
@@ -4037,6 +4522,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const node = chatRef.current
     if (utterances.length > 0) {
       node.scrollTop = node.scrollHeight
+      lastDistanceToBottomRef.current = 0
       shouldAutoScroll.current = true
       suppressAutoScrollRef.current = false
       autoScrollSchedulerRef.current.markPerformed()
@@ -4056,6 +4542,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     const node = chatRef.current
     node.scrollTop = node.scrollHeight
+    lastDistanceToBottomRef.current = 0
     shouldAutoScroll.current = true
     suppressAutoScrollRef.current = false
     autoScrollSchedulerRef.current.markPerformed()
@@ -4152,9 +4639,15 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // Preserve scroll position after prepending older utterances
   useLayoutEffect(() => {
     if (!isPaginatingRef.current || prevScrollHeightRef.current === null || !chatRef.current) return
-    const delta = chatRef.current.scrollHeight - prevScrollHeightRef.current
-    chatRef.current.scrollTop += delta
+    const node = chatRef.current
+    node.scrollTop = resolvePrependScrollAnchorTop({
+      previousScrollHeight: prevScrollHeightRef.current,
+      nextScrollHeight: node.scrollHeight,
+      previousScrollTop: prevScrollTopRef.current ?? node.scrollTop,
+      maxScrollTop: node.scrollHeight - node.clientHeight,
+    })
     prevScrollHeightRef.current = null
+    prevScrollTopRef.current = null
     isPaginatingRef.current = false
     isLoadingOlderRef.current = false
     updateScrollDerivedState()
@@ -4226,10 +4719,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
   useEffect(() => {
     return () => {
+      cancelScheduledScrollEventDerivedState()
       clearPendingAutoScrollTimer()
       clearScrollUiHideTimer()
     }
-  }, [clearPendingAutoScrollTimer, clearScrollUiHideTimer])
+  }, [cancelScheduledScrollEventDerivedState, clearPendingAutoScrollTimer, clearScrollUiHideTimer])
 
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
@@ -4247,6 +4741,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     utterances,
     liveUtterances,
   }), [liveUtterances, utterances])
+  const displayUtteranceIds = useMemo(
+    () => displayUtterances.map((utterance) => utterance.id),
+    [displayUtterances],
+  )
+  const animatedDisplayUtteranceIds = useMemo(
+    () => resolveAnimatedLiveDemoMessageIds({
+      previousIds: previousDisplayUtteranceIdsRef.current,
+      nextIds: displayUtteranceIds,
+      maxAnimatedMessages: 1,
+    }),
+    [displayUtteranceIds],
+  )
+
+  useEffect(() => {
+    previousDisplayUtteranceIdsRef.current = displayUtteranceIds
+  }, [displayUtteranceIds])
 
   const isUsageLimited = typeof usageLimitSec === 'number'
   const remainingSec = isUsageLimited
@@ -4257,6 +4767,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     : null
   const storedMessageCountLabel = formatLivePhoneDemoMessageCount(persistedUtteranceCount)
   const showScrollToBottom = scrollMetrics.distanceToBottom > SCROLL_TO_BOTTOM_BUTTON_THRESHOLD_PX
+  const activeBubblePlaybackKey = speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey
   const scrollDateTop = Math.max(
     16,
     Math.min(
@@ -4312,6 +4823,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const nativeChatBottomSpacerPx = Math.max(0, Math.round(effectiveNativeBottomBannerInsetPx))
   const chatPaddingTop = '0.625rem'
   const chatPaddingBottom = '0.625rem'
+  const chatViewportStyle = useMemo<CSSProperties>(() => ({
+    WebkitOverflowScrolling: 'touch',
+    overscrollBehaviorY: 'contain',
+    touchAction: 'pan-y',
+    willChange: 'scroll-position',
+    paddingTop: chatPaddingTop,
+    paddingBottom: chatPaddingBottom,
+    paddingLeft: 'max(calc(env(safe-area-inset-left) + 6px), 10px)',
+    paddingRight: 'max(calc(env(safe-area-inset-right) + 6px), 10px)',
+  }), [chatPaddingBottom, chatPaddingTop])
   const showEmptyState = utterances.length === 0
     && liveUtterances.length === 0
     && !partialTranscript
@@ -4412,6 +4933,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         replaceConversationHistoryForQa(buildQaSeededUtterances(count))
         return Number.isFinite(count) ? Math.max(1, Math.floor(count)) : 48
       },
+      seedScrollPerformanceHistory: () => {
+        const seededUtterances = buildQaScrollPerformanceUtterances()
+        hasInitialBottomAnchorRef.current = false
+        allowAutoTopPaginationRef.current = false
+        replaceConversationHistoryForQa(seededUtterances, { loadAll: true })
+        return seededUtterances.length
+      },
       resetPersistedHistory: () => {
         hasInitialBottomAnchorRef.current = false
         allowAutoTopPaginationRef.current = false
@@ -4439,6 +4967,20 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         } catch {
           // Ignore persistence failures during QA-only state reset.
         }
+      },
+      getLiveDemoChatScrollHandlerMeasurement: () => {
+        const measurementState = scrollHandlerMeasurementRef.current
+        return measurementState ? readLivePhoneDemoScrollHandlerMeasurement(measurementState) : null
+      },
+      resetLiveDemoChatScrollHandlerMeasurement: () => {
+        const measurementState = scrollHandlerMeasurementRef.current
+        if (!measurementState) return false
+
+        measurementState.samplesMs = []
+        measurementState.latestMs = 0
+        measurementState.maxMs = 0
+        scrollHandlerMeasurementLoggedSampleCountRef.current = 0
+        return true
       },
       setMenuOpen: (nextOpen: boolean) => {
         if (nextOpen) {
@@ -5501,7 +6043,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           {/* Chat Area */}
-          <div className="relative min-h-0 flex-1 bg-gray-50/50">
+          <div
+            className="relative min-h-0 flex-1 bg-gray-50/50"
+            style={CHAT_SCROLL_SURFACE_STYLE}
+          >
             <div
               ref={chatRef}
               data-qa="live-demo-chat-scroll"
@@ -5509,13 +6054,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               onWheel={markUserScrollIntent}
               onTouchMove={markUserScrollIntent}
               onPointerDown={markUserScrollIntent}
-              className="min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
-              style={{
-                paddingTop: chatPaddingTop,
-                paddingBottom: chatPaddingBottom,
-                paddingLeft: "max(calc(env(safe-area-inset-left) + 6px), 10px)",
-                paddingRight: "max(calc(env(safe-area-inset-right) + 6px), 10px)",
-              }}
+              className="relative min-h-0 h-full overflow-y-auto no-scrollbar py-2.5 space-y-3"
+              style={chatViewportStyle}
             >
               {nativeChatTopSpacerPx > 0 && (
                 <div
@@ -5532,28 +6072,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   ···
                 </button>
               )}
-              <AnimatePresence mode="popLayout">
-                {displayUtterances.map((u) => (
-                  <div
-                    key={u.id}
-                    data-utterance-created-at={
-                      (typeof u.createdAtMs === 'number' && Number.isFinite(u.createdAtMs))
-                        ? String(Math.floor(u.createdAtMs))
-                        : ''
-                    }
-                  >
-                    <ChatBubble
-                      utterance={u}
-                      uiLocale={uiLocale}
-                      isDraft={draftUtteranceIds.has(u.id)}
-                      onPlayOriginal={handlePlayOriginalBubbleTts}
-                      onPlayTranslation={handlePlayTranslationBubbleTts}
-                      bubbleTextClassName={chatBubbleTextClassName}
-                      speakingPlaybackKey={speakingItem?.playbackKey ?? pendingManualTtsTarget?.playbackKey}
-                    />
-                  </div>
-                ))}
-              </AnimatePresence>
+              {displayUtterances.map((u) => (
+                <MemoizedLivePhoneDemoChatMessageRow
+                  key={u.id}
+                  utterance={u}
+                  uiLocale={uiLocale}
+                  isDraft={draftUtteranceIds.has(u.id)}
+                  onPlayOriginal={handlePlayOriginalBubbleTts}
+                  onPlayTranslation={handlePlayTranslationBubbleTts}
+                  bubbleTextClassName={chatBubbleTextClassName}
+                  speakingPlaybackKey={activeBubblePlaybackKey}
+                  shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
+                />
+              ))}
 
             {/* Demo typing animation */}
             {demoTypingLang && (

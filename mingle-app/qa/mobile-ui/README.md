@@ -107,6 +107,12 @@ Expanded iOS regression inventory:
 scripts/devbox qa --ios-regressions --ios-real-udid <IOS_REAL_UDID> --ios-sim-udid <IOS_SIM_UDID>
 ```
 
+iOS live-demo scroll FPS capture on a physical iPhone:
+
+```bash
+scripts/devbox qa --ios-scroll-fps --ios-real-udid <IOS_REAL_UDID>
+```
+
 Latest connected real-device note:
 
 - The 2026-04-12 connected iPhone pass reached the full physical-device suite after the QA bootstrap fixes and finished at `6 / 7 passed`.
@@ -130,6 +136,7 @@ Representative categories already automated today:
 - Conversation routes, versioned aliases, and soft-delete visibility.
 - Native safe-area/banner/chrome contracts.
 - Live-demo scroll, bubble, copy, locale, auth, menu, and avatar contracts.
+- Live-demo 500-utterance iOS WebView touch-scroll FPS capture, documented in [IOS_SCROLL_FPS_CAPTURE.md](IOS_SCROLL_FPS_CAPTURE.md).
 - Native STT recovery/reconcile/remount behavior.
 - Real-device hydration, bottom-anchor, composer, locale, and empty-state paths.
 

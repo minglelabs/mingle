@@ -86,6 +86,13 @@ describe('api-contract namespace guard', () => {
     expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v1.1.3/conversations')
   })
 
+  it('accepts 1.1.4 env namespace values without changing the default client namespace', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.1.4'
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.4')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/ios/v1.1.4/conversations')
+  })
+
   it('keeps v1.0.10 namespaces allow-listed for older installed apps', async () => {
     process.env.NEXT_PUBLIC_API_NAMESPACE = 'ios/v1.0.10'
     const contract = await loadApiContractModule()
@@ -105,6 +112,7 @@ describe('api-contract namespace guard', () => {
     '/api/android/v1.1.1/translate/finalize',
     '/api/android/v1.1.2/translate/finalize',
     '/api/android/v1.1.3/translate/finalize',
+    '/api/android/v1.1.4/translate/finalize',
     '/api/ios/v1.0.4/translate/finalize',
     '/api/ios/v1.0.5/translate/finalize',
     '/api/ios/v1.0.6/translate/finalize',
@@ -116,6 +124,7 @@ describe('api-contract namespace guard', () => {
     '/api/ios/v1.1.1/translate/finalize',
     '/api/ios/v1.1.2/translate/finalize',
     '/api/ios/v1.1.3/translate/finalize',
+    '/api/ios/v1.1.4/translate/finalize',
   ])('enables final source-language redetection for %s', async (pathname) => {
     const contract = await loadApiContractModule()
     expect(contract.shouldRedetectFinalizeSourceLanguage(pathname)).toBe(true)
@@ -273,5 +282,32 @@ describe('api-contract namespace guard', () => {
     const contract = await loadApiContractModule()
     expect(contract.clientApiNamespace).toBe('ios/v1.1.3')
     expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/ios/v1.1.3/translate/finalize')
+  })
+
+  it('defaults query-less dedicated 1.1.4 Android hosts to Android v1.1.4 APIs', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_4'
+    stubBrowserRuntime({
+      search: '',
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/123.0.0.0 Mobile Safari/537.36',
+      platform: 'Linux armv8l',
+    })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('android/v1.1.4')
+    expect(contract.buildClientApiPath('/conversations')).toBe('/api/android/v1.1.4/conversations')
+  })
+
+  it('defaults query-less dedicated 1.1.4 iOS hosts to iOS v1.1.4 APIs', async () => {
+    process.env.NEXT_PUBLIC_API_NAMESPACE = ''
+    process.env.NEXT_PUBLIC_MINGLE_RELEASE_TARGET = 'v1_1_4'
+    stubBrowserRuntime({
+      search: '',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
+      platform: 'iPhone',
+      maxTouchPoints: 5,
+    })
+    const contract = await loadApiContractModule()
+    expect(contract.clientApiNamespace).toBe('ios/v1.1.4')
+    expect(contract.buildClientApiPath('/translate/finalize')).toBe('/api/ios/v1.1.4/translate/finalize')
   })
 })

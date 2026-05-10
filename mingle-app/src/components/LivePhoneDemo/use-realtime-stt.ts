@@ -3733,7 +3733,7 @@ export default function useRealtimeSTT({
     sendNativeSttCommand,
   ])
 
-  const replaceConversationHistoryForQa = useCallback((items: Utterance[]) => {
+  const replaceConversationHistoryForQa = useCallback((items: Utterance[], options?: { loadAll?: boolean }) => {
     clearUtterancePersistTimer()
 
     const seen = new Set<string>()
@@ -3746,16 +3746,16 @@ export default function useRealtimeSTT({
       })
       .map(normalizeStoredUtterance)
 
-    const cached = buildLocalUtteranceCache(normalized)
+    const cached = options?.loadAll ? normalized : buildLocalUtteranceCache(normalized)
     storedUtterancesRef.current = cached
-    const initial = cached.slice(-LOAD_BATCH_SIZE)
+    const initial = options?.loadAll ? cached : cached.slice(-LOAD_BATCH_SIZE)
     storageLoadedCountRef.current = initial.length
     utterancesRef.current = initial
     recentFinalizedUtterancesRef.current = []
     finalizedTtsSignatureRef.current.clear()
     pendingFinalizedTtsUtteranceIdsRef.current.clear()
     stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
-    setHasOlderUtterances(cached.length > initial.length || hasOlderServerUtterancesRef.current)
+    setHasOlderUtterances(!options?.loadAll && (cached.length > initial.length || hasOlderServerUtterancesRef.current))
     setUtteranceStore(createUtteranceStoreState(initial))
     setMessageCount(countPersistedUtterances(normalized))
     persistLocalUtterancesSnapshot(normalized)

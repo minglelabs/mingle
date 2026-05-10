@@ -6,6 +6,7 @@ import {
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
+  createMutationVersionTracker,
   findNativeSttRestoreConversation,
   isSearchOverlayHistoryOpen,
   mergeConversationLists,
@@ -14,6 +15,7 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -45,6 +47,9 @@ function buildConversationSummary(
     latestSpeakerAvatarIndex: Object.prototype.hasOwnProperty.call(overrides, "latestSpeakerAvatarIndex")
       ? overrides.latestSpeakerAvatarIndex
       : 1,
+    messageCount: Object.prototype.hasOwnProperty.call(overrides, "messageCount")
+      ? overrides.messageCount
+      : undefined,
     createdAt: overrides.createdAt || "2026-04-12T09:00:00.000Z",
     updatedAt: overrides.updatedAt || "2026-04-12T10:00:00.000Z",
     pausedAt: Object.prototype.hasOwnProperty.call(overrides, "pausedAt")
@@ -116,6 +121,21 @@ describe("conversation-list logic", () => {
 
     expect(compareConversationRecency(newer, older)).toBeLessThan(0);
     expect(compareConversationRecency(older, newer)).toBeGreaterThan(0);
+  });
+
+  it("uses server message counts while preserving optimistic local counts", () => {
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary({ messageCount: 648 }),
+      100,
+    )).toBe(648);
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary({ messageCount: 648 }),
+      650,
+    )).toBe(650);
+    expect(resolveConversationDisplayMessageCount(
+      buildConversationSummary(),
+      37,
+    )).toBe(37);
   });
 
   it("upserts a single conversation without dropping preview metadata from partial patches", () => {
@@ -300,6 +320,141 @@ describe("conversation-list logic", () => {
       side: "above",
       bottom: 288,
       left: 180,
+    });
+  });
+});
+
+describe("createMutationVersionTracker", () => {
+  it("issues monotonically increasing versions per key", () => {
+    const tracker = createMutationVersionTracker<string>();
+    expect(tracker.next("a")).toBe(1);
+    expect(tracker.next("a")).toBe(2);
+    expect(tracker.next("b")).toBe(1);
+    expect(tracker.next("a")).toBe(3);
+    expect(tracker.next("b")).toBe(2);
+  });
+
+  it("isLatest reports true only for the most recently issued version", () => {
+    const tracker = createMutationVersionTracker<string>();
+    const v1 = tracker.next("conv-1");
+    const v2 = tracker.next("conv-1");
+    expect(tracker.isLatest("conv-1", v1)).toBe(false);
+    expect(tracker.isLatest("conv-1", v2)).toBe(true);
+  });
+
+  it("treats unknown keys as having no latest version", () => {
+    const tracker = createMutationVersionTracker<string>();
+    expect(tracker.isLatest("conv-x", 1)).toBe(false);
+    expect(tracker.current("conv-x")).toBe(0);
+  });
+
+  it("reset clears the version so the next issue starts at 1 again", () => {
+    const tracker = createMutationVersionTracker<string>();
+    tracker.next("conv-1");
+    tracker.next("conv-1");
+    tracker.reset("conv-1");
+    expect(tracker.current("conv-1")).toBe(0);
+    expect(tracker.next("conv-1")).toBe(1);
+  });
+
+  describe("status PATCH race scenarios", () => {
+    // The fixed handler must follow this pattern:
+    //   1. tracker.next(id) before issuing PATCH
+    //   2. on resolution, only commit/rollback/alert if tracker.isLatest(id, version)
+    // These tests document the exact behavior the production handler implements.
+
+    type LocalState = "active" | "paused";
+    type StatusOutcome =
+      | { kind: "commit"; status: LocalState }
+      | { kind: "rollback"; alert: boolean }
+      | { kind: "stale-success" }
+      | { kind: "stale-failure" }
+      | { kind: "aborted" };
+
+    function applyOutcome(
+      tracker: ReturnType<typeof createMutationVersionTracker<string>>,
+      conversationId: string,
+      version: number,
+      result:
+        | { kind: "success"; serverStatus: LocalState }
+        | { kind: "failure" }
+        | { kind: "abort" },
+    ): StatusOutcome {
+      if (result.kind === "abort") return { kind: "aborted" };
+      const latest = tracker.isLatest(conversationId, version);
+      if (result.kind === "success") {
+        if (!latest) return { kind: "stale-success" };
+        return { kind: "commit", status: result.serverStatus };
+      }
+      if (!latest) return { kind: "stale-failure" };
+      return { kind: "rollback", alert: true };
+    }
+
+    it("active starts, paused starts after, active resolves last → final state stays paused", () => {
+      const tracker = createMutationVersionTracker<string>();
+      const id = "conv-1";
+
+      const activeVersion = tracker.next(id);
+      const pausedVersion = tracker.next(id);
+
+      // Server happens to respond paused first (both succeeded server-side).
+      const pausedOutcome = applyOutcome(tracker, id, pausedVersion, {
+        kind: "success",
+        serverStatus: "paused",
+      });
+      // Then the older active response arrives.
+      const activeOutcome = applyOutcome(tracker, id, activeVersion, {
+        kind: "success",
+        serverStatus: "active",
+      });
+
+      expect(pausedOutcome).toEqual({ kind: "commit", status: "paused" });
+      expect(activeOutcome).toEqual({ kind: "stale-success" });
+    });
+
+    it("stale status PATCH failure does not rollback latest state and does not alert", () => {
+      const tracker = createMutationVersionTracker<string>();
+      const id = "conv-1";
+
+      const activeVersion = tracker.next(id);
+      tracker.next(id); // newer mutation supersedes the active one
+
+      const outcome = applyOutcome(tracker, id, activeVersion, { kind: "failure" });
+      expect(outcome).toEqual({ kind: "stale-failure" });
+    });
+
+    it("latest status PATCH failure rolls back and alerts once", () => {
+      const tracker = createMutationVersionTracker<string>();
+      const id = "conv-1";
+
+      const onlyVersion = tracker.next(id);
+      const outcome = applyOutcome(tracker, id, onlyVersion, { kind: "failure" });
+
+      expect(outcome).toEqual({ kind: "rollback", alert: true });
+    });
+
+    it("aborted requests are silent regardless of latest-ness", () => {
+      const tracker = createMutationVersionTracker<string>();
+      const id = "conv-1";
+
+      const abortedVersion = tracker.next(id);
+      tracker.next(id);
+
+      expect(applyOutcome(tracker, id, abortedVersion, { kind: "abort" })).toEqual({
+        kind: "aborted",
+      });
+    });
+
+    it("isolates versions per conversation so unrelated rooms do not invalidate each other", () => {
+      const tracker = createMutationVersionTracker<string>();
+      const v1A = tracker.next("conv-a");
+      const v1B = tracker.next("conv-b");
+
+      tracker.next("conv-a"); // newer mutation on A
+
+      // A's first version is stale; B's first version is still latest.
+      expect(tracker.isLatest("conv-a", v1A)).toBe(false);
+      expect(tracker.isLatest("conv-b", v1B)).toBe(true);
     });
   });
 });

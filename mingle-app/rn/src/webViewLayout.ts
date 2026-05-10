@@ -1,4 +1,5 @@
 import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
+import { classifyConversationWebUrl } from './webViewRestore';
 
 function splitPathname(pathname: string): string[] {
   return pathname
@@ -52,8 +53,15 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
   isIosPlatform: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  currentUrl?: string;
 }): boolean {
-  return params.isIosPlatform && (params.canGoBack || params.canGoForward);
+  if (!params.isIosPlatform) return false;
+  // Restored conversation URLs may have no prior WebView history entry after
+  // app relaunch, but iOS should still expose the edge-swipe affordance.
+  if (params.currentUrl && classifyConversationWebUrl(params.currentUrl) === 'room') {
+    return true;
+  }
+  return params.canGoBack || params.canGoForward;
 }
 
 export function shouldEnableNativeWebViewDebugging(params: {
