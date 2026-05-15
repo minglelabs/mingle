@@ -377,7 +377,7 @@ const WEB_APP_BASE_URL = normalizeConfiguredUrl(
 const DEFAULT_WS_URL = normalizeConfiguredUrl(
   RUNTIME_DEFAULT_WS_URL,
   ['ws:', 'wss:'],
-) || 'wss://mingle.up.railway.app/stt';
+) || 'wss://mingle-1-1-4-production.up.railway.app/stt';
 const FALLBACK_WEB_APP_BASE_URL = resolveDistinctFallbackTarget(
   WEB_APP_BASE_URL,
   normalizeHttpBaseUrl(RUNTIME_FALLBACK_WEB_APP_BASE_URL),

@@ -33,8 +33,8 @@ const DEFAULT_AAB_PATH = path.join(
 const DEFAULT_SYNC_SCRIPT = path.join(REPO_ROOT, "scripts/google-play-console-sync.mjs");
 const LEGACY_PRODUCTION_WEB_APP_BASE_URL = "https://mingle-app-xi.vercel.app";
 const LEGACY_PRODUCTION_WS_URL = "wss://mingle-stt.fly.dev";
-const RAILWAY_WEB_APP_BASE_URL = "https://mingle.up.railway.app";
-const RAILWAY_WS_URL = "wss://mingle.up.railway.app/stt";
+const RAILWAY_WEB_APP_BASE_URL = "https://mingle-1-1-4-production.up.railway.app";
+const RAILWAY_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";
 
 function printUsage() {
   console.log(`Usage: scripts/google-play-console-deploy.mjs [options]

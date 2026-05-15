@@ -140,12 +140,12 @@ describe('use-realtime-stt pure logic', () => {
 
     vi.stubGlobal('window', {
       location: {
-        hostname: 'mingle.up.railway.app',
+        hostname: 'mingle-1-1-4-production.up.railway.app',
         port: '',
         protocol: 'https:',
       },
     })
-    expect(getWsUrl()).toBe('wss://mingle.up.railway.app/stt')
+    expect(getWsUrl()).toBe('wss://mingle-1-1-4-production.up.railway.app/stt')
 
     vi.stubGlobal('window', {
       location: {

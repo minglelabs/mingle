@@ -24,7 +24,7 @@ describe('runtime fallback contract', () => {
     const infoPlist = readWorkspaceFile('ios/mingle/Info.plist');
     const nativeSttModule = readWorkspaceFile('ios/mingle/NativeSTTModule.swift');
 
-    expect(projectFile).toContain('NEXT_PUBLIC_WS_URL = "wss://mingle.up.railway.app/stt";');
+    expect(projectFile).toContain('NEXT_PUBLIC_WS_URL = "wss://mingle-1-1-4-production.up.railway.app/stt";');
     expect(infoPlist).toContain('<key>MingleDefaultWsURL</key>');
     expect(infoPlist).toContain('<string>$(NEXT_PUBLIC_WS_URL)</string>');
 

@@ -17,8 +17,8 @@ describe('fallbackTargets', () => {
     expect(normalizeWsUrl(' wss://mingle-stt.fly.dev ')).toBe(
       'wss://mingle-stt.fly.dev',
     );
-    expect(normalizeWsUrl(' wss://mingle.up.railway.app/stt/ ')).toBe(
-      'wss://mingle.up.railway.app/stt',
+    expect(normalizeWsUrl(' wss://mingle-1-1-4-production.up.railway.app/stt/ ')).toBe(
+      'wss://mingle-1-1-4-production.up.railway.app/stt',
     );
     expect(normalizeWsUrl('https://mingle.example.com')).toBe('');
   });
