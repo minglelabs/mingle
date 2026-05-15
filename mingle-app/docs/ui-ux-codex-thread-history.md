@@ -1,5 +1,27 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-05-08 STT 실행 중 뒤로가기 → 대화방 재진입 루프
+
+### `2026-05-08-stt-back-reentry-loop` | UI/UX issues found
+
+1. **STT 실행 중 뒤로가기 시 "대화방을 열지 못했습니다" alert와 함께 대화방이 자동으로 재오픈됨**
+   Problem: native STT가 실행 중인 상태에서 뒤로가기(또는 iOS edge swipe back)를 하면 세 가지 결함이 연쇄적으로 발생했다.
+   (1) `handleConversationRunningChange`의 status PATCH (active) `.catch` 블록이 native STT와 무관하게 `liveConversationId`를 null로 지우고 `window.alert(copy.openErrorMessage)`("대화방을 열지 못했습니다")를 띄웠다.
+   (2) `liveConversationId=null + activeConversation=null`이 되면서 native STT restore effect(`isNativeSttStatusLive`)가 조건을 충족하고 방을 다시 `setActiveConversation`했다.
+   (3) 재진입 때마다 `activeConversation pushState effect`가 또 `pushState`를 쌓아 `?conversation=abc` 항목이 history에 반복 적재됐다. 이후 popstate-open handler가 이 entry를 보고 또 방을 열어 루프가 반복됐다.
+   Fix:
+   - native runtime에서 status PATCH 실패 시 `liveConversationId`를 지우지 않고 alert도 띄우지 않으며 diagnostics log만 남긴다("native STT 실제 상태가 PATCH 응답보다 우선" 원칙).
+   - `suppressNativeSttRestoreConversationIdRef`(conversationId 단위)를 추가. `closeConversationOverlay` 호출 시 세팅되어 native STT restore, route-sync open, popstate-open이 해당 방을 재오픈하지 않는다. suppress된 방의 URL이 들어오면 open 없이 URL만 정리(`replaceConversationOverlayUrl(null)`)한다. `openConversationSummary`에 `clearManualCloseSuppression` 옵션을 추가해 사용자가 목록에서 같은 방을 직접 탭할 때 suppress를 해제한다.
+   - effect 기반 `activeConversation pushState`를 제거하고 `openConversationSummary`에 `syncHistory: "push" | "replace" | "none"` 옵션을 추가. restore/popstate-open 경로는 `none`, 사용자 클릭/새 방 생성은 `push`, QA 자동화는 `replace`를 사용해 history 중복 적재를 방지한다.
+   Status: Fixed in-thread on 2026-05-08. 수정 파일: `src/components/conversation-list.tsx`.
+
+2. **뒤로가기를 반복해도 대화목록으로 돌아가지 못하고 대화방이 또 나오는 증상**
+   Problem: 위 루프(이슈 1)로 인해 `?conversation=abc`가 history에 여러 번 쌓여 popstate back이 대화방 항목으로 계속 돌아갔다. 사용자가 "갑자기 검정화면"이 뜨는 증상도 이 rapid remount/reload 사이클이 원인이었다.
+   Fix: 이슈 1의 history 중복 적재 방지 및 suppress 플래그로 함께 해결됨.
+   Status: Fixed in-thread on 2026-05-08.
+
+
+
 ## 2026-04-27 Android WebView Timestamp Update Loop
 
 ### `2026-04-27-android-chat-timestamp-update-depth` | UI/UX issues found
