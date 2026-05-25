@@ -69,6 +69,10 @@ type ConversationChannelRecord = {
   pausedAt: Date | null;
 };
 
+type ListConversationChannelsForUserOptions = {
+  includeMessageSummaries?: boolean;
+};
+
 const conversationChannelSelect = {
   id: true,
   sequenceNumber: true,
@@ -320,6 +324,7 @@ async function serializeConversationChannelWithPreview(
 
 export async function listConversationChannelsForUser(
   userId: string,
+  options: ListConversationChannelsForUserOptions = {},
 ): Promise<ConversationChannelSummary[]> {
   const records = await prisma.appConversationChannel.findMany({
     where: {
@@ -335,6 +340,10 @@ export async function listConversationChannelsForUser(
 
   if (records.length === 0) {
     return [];
+  }
+
+  if (options.includeMessageSummaries === false) {
+    return records.map((record) => serializeConversationChannel(record));
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];

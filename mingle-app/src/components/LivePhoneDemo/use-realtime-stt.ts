@@ -20,7 +20,18 @@ import {
   readRequestedApiNamespaceFromSearch,
   resolveNativeAppTrackingContext,
 } from './live-phone-demo.app-update.logic'
+import {
+  buildStorageKey,
+  getOrCreateSessionKey,
+  getOrCreateTrackingUserId,
+} from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
+
+export {
+  buildStorageKey,
+  getOrCreateSessionKey,
+  getOrCreateTrackingUserId,
+} from './realtime-storage'
 
 const WS_PORT = process.env.NEXT_PUBLIC_WS_PORT || '3001'
 export const getWsUrl = (): string => {
@@ -44,8 +55,6 @@ const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
 const LS_KEY_MESSAGE_COUNT = 'mingle_demo_message_count'
-const LS_KEY_SESSION = 'mingle_demo_session_key'
-const LS_KEY_TRACKING_USER = 'mingle_demo_tracking_user_id'
 const LS_KEY_STT_DEBUG = 'mingle_stt_debug'
 export const LOCAL_UTTERANCE_CACHE_LIMIT = 100
 const NATIVE_STT_QUERY_KEY = 'nativeStt'
@@ -67,12 +76,6 @@ function releaseNativeSttOwner(ownerKey: string): void {
 
 function isNativeSttOwner(ownerKey: string): boolean {
   return activeNativeSttOwnerKey === ownerKey
-}
-
-export function buildStorageKey(baseKey: string, namespace?: string): string {
-  const normalizedNamespace = (namespace || '').trim()
-  if (!normalizedNamespace) return baseKey
-  return `${baseKey}__${normalizedNamespace}`
 }
 
 type NativeAppUpdateWindow = Window & {
@@ -2063,57 +2066,11 @@ interface ClientEventLogPayload {
   keepalive?: boolean
 }
 
-function createSessionKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `sess_${crypto.randomUUID().replace(/-/g, '')}`
-  }
-  return `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
-}
-
-function createTrackingUserId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `anon_${crypto.randomUUID().replace(/-/g, '')}`
-  }
-  return `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
-}
-
 function createSpeakerAvatarSeed(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `avatar_${crypto.randomUUID().replace(/-/g, '')}`
   }
   return `avatar_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
-}
-
-export function getOrCreateSessionKey(
-  storageNamespace?: string,
-  preferredSessionKey?: string,
-): string {
-  const normalizedPreferredSessionKey = (preferredSessionKey || '').trim()
-  if (normalizedPreferredSessionKey) return normalizedPreferredSessionKey
-  if (typeof window === 'undefined') return createSessionKey()
-  try {
-    const storageKey = buildStorageKey(LS_KEY_SESSION, storageNamespace)
-    const existing = window.localStorage.getItem(storageKey)?.trim()
-    if (existing) return existing
-    const generated = createSessionKey()
-    window.localStorage.setItem(storageKey, generated)
-    return generated
-  } catch {
-    return createSessionKey()
-  }
-}
-
-export function getOrCreateTrackingUserId(): string {
-  if (typeof window === 'undefined') return createTrackingUserId()
-  try {
-    const existing = window.localStorage.getItem(LS_KEY_TRACKING_USER)?.trim()
-    if (existing) return existing
-    const generated = createTrackingUserId()
-    window.localStorage.setItem(LS_KEY_TRACKING_USER, generated)
-    return generated
-  } catch {
-    return createTrackingUserId()
-  }
 }
 
 function buildClientContextPayload(usageSec: number): Record<string, unknown> {

@@ -38,6 +38,7 @@ export default async function V110ConversationsEntry({
   const session = await getServerSession(getAuthOptions());
   const requestHeaders = await headers();
   const cookieStore = await cookies();
+  const initialNativeUi = readSearchParamValue(searchParams, "nativeUi") === "1";
   const identity = {
     ...normalizeSessionUserIdentity(session),
     externalUserId: sanitizeRequestIdentityValue(
@@ -51,7 +52,9 @@ export default async function V110ConversationsEntry({
   };
   const userId = await findUserIdForIdentity(identity);
   const initialConversations = userId
-    ? await listConversationChannelsForUser(userId)
+    ? await listConversationChannelsForUser(userId, {
+        includeMessageSummaries: !initialNativeUi,
+      })
     : [];
 
   return (
@@ -59,8 +62,9 @@ export default async function V110ConversationsEntry({
       locale={locale as AppLocale}
       dictionary={getDictionary(locale as AppLocale)}
       initialConversations={initialConversations}
+      initialConversationsRequireRefresh={initialNativeUi}
       initialConversationIdToOpen={readSearchParamValue(searchParams, "conversation") || null}
-      initialNativeUi={readSearchParamValue(searchParams, "nativeUi") === "1"}
+      initialNativeUi={initialNativeUi}
       initialNativeBannerPosition={readSearchParamValue(searchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeTopInsetPx"))}
       initialNativeBottomInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeBottomInsetPx"))}

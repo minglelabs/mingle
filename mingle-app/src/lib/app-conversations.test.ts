@@ -75,6 +75,39 @@ describe("app-conversations", () => {
     }));
   });
 
+  it("can list conversation shells without scanning message tables", async () => {
+    mockFindConversationMany.mockResolvedValue([
+      {
+        id: "conv-a",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "session-a",
+        selectedLanguages: ["en", "ko"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        createdAt: new Date("2026-04-12T09:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T12:00:00.000Z"),
+        pausedAt: new Date("2026-04-12T12:00:00.000Z"),
+      },
+    ]);
+
+    const conversations = await listConversationChannelsForUser("user-1", {
+      includeMessageSummaries: false,
+    });
+
+    expect(conversations).toEqual([
+      expect.objectContaining({
+        id: "conv-a",
+        latestMessagePreview: undefined,
+        latestMessageAt: null,
+      }),
+    ]);
+    expect(conversations[0]).not.toHaveProperty("messageCount");
+    expect(mockAppMessageFindMany).not.toHaveBeenCalled();
+    expect(mockAppMessageGroupBy).not.toHaveBeenCalled();
+  });
+
   it("orders listed conversations by latest finalized message time instead of stale updatedAt", async () => {
     mockFindConversationMany.mockResolvedValue([
       {
