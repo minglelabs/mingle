@@ -420,10 +420,34 @@ export function resolveConnectionStatusFromNativeBridgeStatus(input: {
   return null
 }
 
+export function shouldApplyNativeBridgeConnectionStatus(input: {
+  nextConnectionStatus: ConnectionStatus | null
+  isStopping?: boolean
+  nativeStopRequested?: boolean
+}): boolean {
+  if (!input.nextConnectionStatus) return false
+  if (input.isStopping || input.nativeStopRequested) {
+    return input.nextConnectionStatus === 'idle'
+  }
+  return true
+}
+
 export function shouldPromoteConnectionStatusFromNativeActivity(input: {
   previousConnectionStatus: ConnectionStatus
+  isStopping?: boolean
+  nativeStopRequested?: boolean
 }): boolean {
+  if (input.isStopping || input.nativeStopRequested) return false
   return input.previousConnectionStatus !== 'ready'
+}
+
+export function shouldHandleNativeBridgeServerMessage(input: {
+  message: Record<string, unknown>
+  isStopping?: boolean
+  nativeStopRequested?: boolean
+}): boolean {
+  if (!(input.isStopping || input.nativeStopRequested)) return true
+  return input.message.status !== 'ready'
 }
 
 export function shouldTrackUsageForConnectionStatus(connectionStatus: ConnectionStatus): boolean {
@@ -4534,6 +4558,14 @@ export default function useRealtimeSTT({
           nativeStatus: detail.status,
           previousConnectionStatus: connectionStatusRef.current,
         })
+        if (!shouldApplyNativeBridgeConnectionStatus({
+          nextConnectionStatus,
+          isStopping: isStoppingRef.current,
+          nativeStopRequested: nativeStopRequestedRef.current,
+        })) {
+          logSttDebug('native.status.skip_stop_pending', { status: detail.status })
+          return
+        }
         if (nextConnectionStatus === 'connecting' || nextConnectionStatus === 'ready') {
           nativeMicPermissionRecoveryActionRef.current = 'none'
         }
@@ -4552,6 +4584,8 @@ export default function useRealtimeSTT({
         }
         if (shouldPromoteConnectionStatusFromNativeActivity({
           previousConnectionStatus: connectionStatusRef.current,
+          isStopping: isStoppingRef.current,
+          nativeStopRequested: nativeStopRequestedRef.current,
         })) {
           logSttDebug('native.message.promote_ready', {
             previousConnectionStatus: connectionStatusRef.current,
@@ -4562,6 +4596,14 @@ export default function useRealtimeSTT({
         }
         try {
           const message = JSON.parse(detail.raw) as Record<string, unknown>
+          if (!shouldHandleNativeBridgeServerMessage({
+            message,
+            isStopping: isStoppingRef.current,
+            nativeStopRequested: nativeStopRequestedRef.current,
+          })) {
+            logSttDebug('native.message.skip_stop_pending_ready')
+            return
+          }
           handleSttServerMessage(message)
         } catch {
           // ignore malformed payload
