@@ -33,6 +33,7 @@ import {
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
+  shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
   shouldTrackUsageForConnectionStatus,
@@ -746,6 +747,32 @@ describe('use-realtime-stt pure logic', () => {
     })).toBeNull()
   })
 
+  it('does not re-enter running UI state while a native stop is pending', () => {
+    expect(shouldApplyNativeBridgeConnectionStatus({
+      nextConnectionStatus: resolveConnectionStatusFromNativeBridgeStatus({
+        nativeStatus: 'running',
+        previousConnectionStatus: 'idle',
+      }),
+      nativeStopRequested: true,
+    })).toBe(false)
+
+    expect(shouldApplyNativeBridgeConnectionStatus({
+      nextConnectionStatus: resolveConnectionStatusFromNativeBridgeStatus({
+        nativeStatus: 'ready',
+        previousConnectionStatus: 'idle',
+      }),
+      isStopping: true,
+    })).toBe(false)
+
+    expect(shouldApplyNativeBridgeConnectionStatus({
+      nextConnectionStatus: resolveConnectionStatusFromNativeBridgeStatus({
+        nativeStatus: 'stopped',
+        previousConnectionStatus: 'ready',
+      }),
+      nativeStopRequested: true,
+    })).toBe(true)
+  })
+
   it('promotes native transcript activity back into ready state after unexpected web reloads', () => {
     expect(shouldPromoteConnectionStatusFromNativeActivity({
       previousConnectionStatus: 'idle',
@@ -761,6 +788,16 @@ describe('use-realtime-stt pure logic', () => {
 
     expect(shouldPromoteConnectionStatusFromNativeActivity({
       previousConnectionStatus: 'ready',
+    })).toBe(false)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'idle',
+      nativeStopRequested: true,
+    })).toBe(false)
+
+    expect(shouldPromoteConnectionStatusFromNativeActivity({
+      previousConnectionStatus: 'connecting',
+      isStopping: true,
     })).toBe(false)
   })
 
