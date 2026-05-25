@@ -8,6 +8,8 @@ import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
   forwardRef,
+  lazy,
+  Suspense,
   type FormEvent,
   useCallback,
   useEffect,
@@ -20,7 +22,7 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
-import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/use-realtime-stt";
+import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
@@ -80,9 +82,11 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
-import MingleHome, { type MingleHomeRef } from "@/components/mingle-home";
+import type { MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+
+const MingleHome = lazy(() => import("@/components/mingle-home"));
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
@@ -1346,6 +1350,7 @@ type ConversationListProps = {
   locale: AppLocale;
   dictionary: AppDictionary;
   initialConversations: ConversationChannelSummary[];
+  initialConversationsRequireRefresh?: boolean;
   initialConversationIdToOpen?: string | null;
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
@@ -1362,6 +1367,7 @@ export default function ConversationList({
   locale,
   dictionary,
   initialConversations,
+  initialConversationsRequireRefresh = false,
   initialConversationIdToOpen = null,
   initialNativeUi = false,
   initialNativeBannerPosition,
@@ -2520,24 +2526,51 @@ export default function ConversationList({
 
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: number | null = null;
 
-    void refreshConversationList()
-      .then((nextConversations) => {
-        if (cancelled) return;
-        return nextConversations;
-      })
-      .catch(() => {
-        // Keep the server-rendered or in-memory state when hydration fails.
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsHydratingConversations(false);
-      });
+    const shouldRefreshInitialConversations = initialConversationsRequireRefresh
+      || initialConversations.length === 0;
+    if (!shouldRefreshInitialConversations) {
+      refreshConversationLocalStats(conversationsRef.current);
+      setIsHydratingConversations(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const runRefresh = () => {
+      void refreshConversationList()
+        .then((nextConversations) => {
+          if (cancelled) return;
+          return nextConversations;
+        })
+        .catch(() => {
+          // Keep the server-rendered or in-memory state when hydration fails.
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setIsHydratingConversations(false);
+        });
+    };
+
+    if (initialConversationsRequireRefresh && initialConversations.length > 0) {
+      timeoutId = window.setTimeout(runRefresh, 250);
+    } else {
+      runRefresh();
+    }
 
     return () => {
       cancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
-  }, [refreshConversationList]);
+  }, [
+    initialConversations.length,
+    initialConversationsRequireRefresh,
+    refreshConversationList,
+    refreshConversationLocalStats,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3392,55 +3425,63 @@ export default function ConversationList({
                     }`}
                     aria-hidden={!isVisible}
                   >
-                    <MingleHome
-                      ref={(nextRef) => {
-                        setConversationRoomRef(conversation.id, nextRef);
-                      }}
-                      key={conversation.id}
-                      dictionary={dictionary}
-                      appleOAuthEnabled={appleOAuthEnabled}
-                      googleOAuthEnabled={googleOAuthEnabled}
-                      locale={locale}
-                      headerMode="conversation"
-                      onBack={handleCloseActiveConversation}
-                      onConversationDeleted={() => {
-                        handleConversationDeleted(conversation.id);
-                      }}
-                      conversationTitle={conversation.title}
-                      conversationId={conversation.id}
-                      sessionKeyOverride={conversation.sessionKey}
-                      storageNamespace={conversation.id}
-                      initialSelectedLanguages={conversation.selectedLanguages}
-                      initialSpeechLanguages={conversation.speechLanguages}
-                      initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
-                      autoStartOnMount={conversation.id === autoStartConversationId}
-                      onAutoStartHandled={() => {
-                        setAutoStartConversationId((current) => (
-                          current === conversation.id ? null : current
-                        ));
-                      }}
-                      isVisible={isVisible}
-                      enableNativeBannerBridge={isVisible}
-                      onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
-                      onSttSessionRunningChange={(isRunning) => {
-                        handleConversationRunningChange(conversation.id, isRunning);
-                      }}
-                      onLatestUtteranceChange={(payload) => {
-                        handleConversationLatestUtteranceChange(conversation.id, payload);
-                      }}
-                      onConversationStatsChange={(payload) => {
-                        handleConversationStatsChange(conversation.id, payload);
-                      }}
-                      onSelectedLanguagesChange={(selectedLanguages) => {
-                        handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
-                      }}
-                      onSpeechLanguagesChange={(speechLanguages) => {
-                        handleConversationSpeechLanguagesChange(conversation.id, speechLanguages);
-                      }}
-                      onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
-                        handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
-                      }}
-                    />
+                    <Suspense
+                      fallback={(
+                        <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+                          <Loader2 size={24} className="animate-spin" aria-hidden />
+                        </div>
+                      )}
+                    >
+                      <MingleHome
+                        ref={(nextRef) => {
+                          setConversationRoomRef(conversation.id, nextRef);
+                        }}
+                        key={conversation.id}
+                        dictionary={dictionary}
+                        appleOAuthEnabled={appleOAuthEnabled}
+                        googleOAuthEnabled={googleOAuthEnabled}
+                        locale={locale}
+                        headerMode="conversation"
+                        onBack={handleCloseActiveConversation}
+                        onConversationDeleted={() => {
+                          handleConversationDeleted(conversation.id);
+                        }}
+                        conversationTitle={conversation.title}
+                        conversationId={conversation.id}
+                        sessionKeyOverride={conversation.sessionKey}
+                        storageNamespace={conversation.id}
+                        initialSelectedLanguages={conversation.selectedLanguages}
+                        initialSpeechLanguages={conversation.speechLanguages}
+                        initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
+                        autoStartOnMount={conversation.id === autoStartConversationId}
+                        onAutoStartHandled={() => {
+                          setAutoStartConversationId((current) => (
+                            current === conversation.id ? null : current
+                          ));
+                        }}
+                        isVisible={isVisible}
+                        enableNativeBannerBridge={isVisible}
+                        onStartRecordingRequested={() => handleConversationStartRequested(conversation.id)}
+                        onSttSessionRunningChange={(isRunning) => {
+                          handleConversationRunningChange(conversation.id, isRunning);
+                        }}
+                        onLatestUtteranceChange={(payload) => {
+                          handleConversationLatestUtteranceChange(conversation.id, payload);
+                        }}
+                        onConversationStatsChange={(payload) => {
+                          handleConversationStatsChange(conversation.id, payload);
+                        }}
+                        onSelectedLanguagesChange={(selectedLanguages) => {
+                          handleConversationSelectedLanguagesChange(conversation.id, selectedLanguages);
+                        }}
+                        onSpeechLanguagesChange={(speechLanguages) => {
+                          handleConversationSpeechLanguagesChange(conversation.id, speechLanguages);
+                        }}
+                        onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
+                          handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
+                        }}
+                      />
+                    </Suspense>
                   </motion.div>
                 );
               })}
