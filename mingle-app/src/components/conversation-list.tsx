@@ -47,6 +47,7 @@ import {
   type NativeUiBannerLayoutEventDetail,
 } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import {
+  buildConversationRequestIdentityHeaders,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
@@ -798,14 +799,16 @@ async function readConversationListResponse(response: Response): Promise<Convers
   return body.conversations;
 }
 
-function buildConversationRequestHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "x-mingle-user-id": getOrCreateTrackingUserId(),
-  };
-  if (clientApiNamespace) {
-    headers["x-mingle-api-namespace"] = clientApiNamespace;
-  }
-  return headers;
+function buildConversationRequestHeaders(identity?: {
+  externalUserId?: string;
+  sessionKey?: string;
+}): Record<string, string> {
+  return buildConversationRequestIdentityHeaders({
+    initialExternalUserId: identity?.externalUserId,
+    initialSessionKey: identity?.sessionKey,
+    fallbackExternalUserId: getOrCreateTrackingUserId(),
+    clientApiNamespace,
+  });
 }
 
 function parseNativeInsetPxFromSearch(search: string, queryKey: string): number {
@@ -1359,6 +1362,8 @@ type ConversationListProps = {
   initialNativeListTopInsetPx?: number;
   initialNativeConversationBannerPosition?: string;
   initialNativeConversationBottomInsetPx?: number;
+  initialTrackingExternalUserId?: string;
+  initialTrackingSessionKey?: string;
   appleOAuthEnabled: boolean;
   googleOAuthEnabled: boolean;
 };
@@ -1376,6 +1381,8 @@ export default function ConversationList({
   initialNativeListTopInsetPx = 0,
   initialNativeConversationBannerPosition,
   initialNativeConversationBottomInsetPx = 0,
+  initialTrackingExternalUserId = "",
+  initialTrackingSessionKey = "",
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
@@ -1446,6 +1453,10 @@ export default function ConversationList({
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
+  const initialTrackingIdentityRef = useRef({
+    externalUserId: initialTrackingExternalUserId.trim(),
+    sessionKey: initialTrackingSessionKey.trim(),
+  });
   const isCreatingConversationRef = useRef(isCreatingConversation);
   const mutatingConversationIdRef = useRef<string | null>(mutatingConversationId);
   const isImportingLegacyConversationRef = useRef(false);
@@ -1623,7 +1634,7 @@ export default function ConversationList({
   const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
     const response = await fetch(buildConversationApiPath(), {
       cache: "no-store",
-      headers: buildConversationRequestHeaders(),
+      headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
     });
     const nextConversations = await readConversationListResponse(response);
     setConversations((current) => (
@@ -1674,7 +1685,7 @@ export default function ConversationList({
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            ...buildConversationRequestHeaders(),
+            ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
           },
           body: JSON.stringify({ status }),
           signal: options?.signal,
@@ -1747,7 +1758,7 @@ export default function ConversationList({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
+          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
         },
         body: JSON.stringify({ title: normalizedTitle }),
       });
@@ -1786,7 +1797,7 @@ export default function ConversationList({
 
       const response = await fetch(buildConversationApiPath(`/${deleteDialogConversationId}`), {
         method: "DELETE",
-        headers: buildConversationRequestHeaders(),
+        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
       });
       const body = await response.json().catch(() => ({})) as { deletedConversationId?: string; error?: string };
       if (response.status === 404) {
@@ -2035,7 +2046,7 @@ export default function ConversationList({
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(),
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
       },
       body: JSON.stringify({ selectedLanguages: normalizedSelectedLanguages }),
     })
@@ -2115,7 +2126,7 @@ export default function ConversationList({
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(),
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
       },
       body: JSON.stringify({ speechLanguages: normalizedSpeechLanguages }),
     })
@@ -2191,7 +2202,7 @@ export default function ConversationList({
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        ...buildConversationRequestHeaders(),
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
       },
       body: JSON.stringify({ translationLanguagesLinked: nextTranslationLanguagesLinked }),
     })
@@ -2454,7 +2465,7 @@ export default function ConversationList({
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
+          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
         },
         body: JSON.stringify({ status: "paused" }),
       }).catch(() => {
@@ -2593,7 +2604,7 @@ export default function ConversationList({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...buildConversationRequestHeaders(),
+            ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
           },
           body: JSON.stringify({
             locale,
@@ -2795,7 +2806,7 @@ export default function ConversationList({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
+          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
         },
         body: JSON.stringify({
           locale,
@@ -2869,7 +2880,7 @@ export default function ConversationList({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(),
+          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
         },
         body: JSON.stringify({
           locale,
