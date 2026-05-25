@@ -71,6 +71,8 @@ export default async function V110ConversationsEntry({
       initialNativeListTopInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeListTopInsetPx"))}
       initialNativeConversationBannerPosition={readSearchParamValue(searchParams, "nativeConversationBannerPosition")}
       initialNativeConversationBottomInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeConversationBottomInsetPx"))}
+      initialTrackingExternalUserId={identity.externalUserId}
+      initialTrackingSessionKey={identity.sessionKey}
       appleOAuthEnabled={false}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
     />

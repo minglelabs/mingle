@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
+  buildConversationRequestIdentityHeaders,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
@@ -59,6 +60,25 @@ function buildConversationSummary(
 }
 
 describe("conversation-list logic", () => {
+  it("keeps the server-rendered tracking identity for client conversation refreshes", () => {
+    expect(buildConversationRequestIdentityHeaders({
+      initialExternalUserId: " cookie-user ",
+      initialSessionKey: " cookie-session ",
+      fallbackExternalUserId: "local-user",
+      clientApiNamespace: "ios/v1.1.4",
+    })).toEqual({
+      "x-mingle-user-id": "cookie-user",
+      "x-mingle-session-key": "cookie-session",
+      "x-mingle-api-namespace": "ios/v1.1.4",
+    });
+
+    expect(buildConversationRequestIdentityHeaders({
+      fallbackExternalUserId: "local-user",
+    })).toEqual({
+      "x-mingle-user-id": "local-user",
+    });
+  });
+
   it("locks conversation creation synchronously before React state updates", () => {
     const lockRef = { current: false };
 

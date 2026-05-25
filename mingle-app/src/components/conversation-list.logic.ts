@@ -64,6 +64,29 @@ export function normalizeRecentSearches(values: string[]): string[] {
   return deduped;
 }
 
+export function buildConversationRequestIdentityHeaders(input: {
+  initialExternalUserId?: string;
+  initialSessionKey?: string;
+  fallbackExternalUserId: string;
+  clientApiNamespace?: string;
+}): Record<string, string> {
+  const externalUserId = (input.initialExternalUserId || "").trim() || input.fallbackExternalUserId.trim();
+  const sessionKey = (input.initialSessionKey || "").trim();
+  const headers: Record<string, string> = {};
+
+  if (externalUserId) {
+    headers["x-mingle-user-id"] = externalUserId;
+  }
+  if (sessionKey) {
+    headers["x-mingle-session-key"] = sessionKey;
+  }
+  if (input.clientApiNamespace) {
+    headers["x-mingle-api-namespace"] = input.clientApiNamespace;
+  }
+
+  return headers;
+}
+
 export function mergeSearchOverlayHistoryState(state: unknown, open: boolean): Record<string, unknown> {
   const nextState = state && typeof state === "object" && !Array.isArray(state)
     ? { ...(state as Record<string, unknown>) }
