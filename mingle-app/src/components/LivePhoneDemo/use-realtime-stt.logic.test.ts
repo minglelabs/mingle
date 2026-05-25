@@ -36,6 +36,7 @@ import {
   shouldApplyNativeBridgeConnectionStatus,
   shouldResetConnectionToIdleForNativeMicRecovery,
   shouldPromoteConnectionStatusFromNativeActivity,
+  shouldHandleNativeBridgeServerMessage,
   shouldTrackUsageForConnectionStatus,
   shouldApplyPendingTurnPartialTranslationResponse,
   shouldOpenNativeMicSettingsOnRetry,
@@ -770,6 +771,21 @@ describe('use-realtime-stt pure logic', () => {
         previousConnectionStatus: 'ready',
       }),
       nativeStopRequested: true,
+    })).toBe(true)
+
+    expect(shouldHandleNativeBridgeServerMessage({
+      message: { status: 'ready' },
+      nativeStopRequested: true,
+    })).toBe(false)
+
+    expect(shouldHandleNativeBridgeServerMessage({
+      message: { type: 'stop_recording_ack' },
+      nativeStopRequested: true,
+    })).toBe(true)
+
+    expect(shouldHandleNativeBridgeServerMessage({
+      message: { status: 'ready' },
+      nativeStopRequested: false,
     })).toBe(true)
   })
 

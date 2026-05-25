@@ -438,6 +438,15 @@ export function shouldPromoteConnectionStatusFromNativeActivity(input: {
   return input.previousConnectionStatus !== 'ready'
 }
 
+export function shouldHandleNativeBridgeServerMessage(input: {
+  message: Record<string, unknown>
+  isStopping?: boolean
+  nativeStopRequested?: boolean
+}): boolean {
+  if (!(input.isStopping || input.nativeStopRequested)) return true
+  return input.message.status !== 'ready'
+}
+
 export function shouldTrackUsageForConnectionStatus(connectionStatus: ConnectionStatus): boolean {
   return connectionStatus === 'ready'
 }
@@ -4630,6 +4639,14 @@ export default function useRealtimeSTT({
         }
         try {
           const message = JSON.parse(detail.raw) as Record<string, unknown>
+          if (!shouldHandleNativeBridgeServerMessage({
+            message,
+            isStopping: isStoppingRef.current,
+            nativeStopRequested: nativeStopRequestedRef.current,
+          })) {
+            logSttDebug('native.message.skip_stop_pending_ready')
+            return
+          }
           handleSttServerMessage(message)
         } catch {
           // ignore malformed payload
