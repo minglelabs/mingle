@@ -643,6 +643,13 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
             )
           : {},
         createdAtMs: typeof record.createdAtMs === 'number' ? record.createdAtMs : undefined,
+        ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
+        ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
+          ? { speakerAvatarSeed: record.speakerAvatarSeed.trim() }
+          : {}),
+        ...(typeof record.speakerAvatarIndex === 'number'
+          ? { speakerAvatarIndex: record.speakerAvatarIndex }
+          : {}),
       })
     })
     .filter((utterance) => utterance.id && utterance.originalText.trim())

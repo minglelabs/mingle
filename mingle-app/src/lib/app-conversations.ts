@@ -39,6 +39,9 @@ export type ConversationHydrationUtterance = {
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
   createdAtMs: number;
+  speaker: string | null;
+  speakerAvatarSeed: string | null;
+  speakerAvatarIndex: number | null;
 };
 
 export type ConversationHydrationCursor = {
@@ -702,6 +705,7 @@ export async function getConversationHydrationStateForUser(args: {
         clientMessageId: true,
         sourceLanguage: true,
         createdAt: true,
+        metadata: true,
         contents: {
           where: buildVisibleMessageContentWhere(),
           orderBy: { createdAt: "asc" },
@@ -737,6 +741,8 @@ export async function getConversationHydrationStateForUser(args: {
     }
 
     const targetLanguages = Object.keys(translations);
+    const metadata = readJsonObject(message.metadata);
+    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
@@ -746,6 +752,11 @@ export async function getConversationHydrationStateForUser(args: {
       translations,
       translationFinalized,
       createdAtMs: message.createdAt.getTime(),
+      speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
+      speakerAvatarSeed:
+        readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
+      speakerAvatarIndex:
+        readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
     };
   }).filter((utterance) => utterance.originalText.length > 0);
 
