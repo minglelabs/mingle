@@ -1026,6 +1026,9 @@ interface LocalFinalizeResult {
   text: string
   lang: string
   currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
+  speaker: string
+  speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
 }
 
 interface PendingSpeakerTurn {
@@ -3454,6 +3457,9 @@ export default function useRealtimeSTT({
       text: localPayload.text,
       lang: localPayload.language,
       currentTurnPreviousState,
+      speaker: localPayload.utterance.speaker || 'unknown',
+      speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
+      speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
   }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages])
 
@@ -3505,6 +3511,9 @@ export default function useRealtimeSTT({
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
+    const resolvedSpeaker = options?.speaker ?? localFinalizeResult.speaker
+    const resolvedSpeakerAvatarSeed = options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed
+    const resolvedSpeakerAvatarIndex = options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
     const targetLanguages = [...getCurrentTargetLanguages()]
@@ -3531,11 +3540,11 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           singleLanguageMode: true,
           skipTranslation: true,
-          speaker: options?.speaker || null,
-          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speaker: resolvedSpeaker || null,
+          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
           speakerAvatarIndex:
-            typeof options?.speakerAvatarIndex === 'number'
-              ? options.speakerAvatarIndex
+            typeof resolvedSpeakerAvatarIndex === 'number'
+              ? resolvedSpeakerAvatarIndex
               : null,
         },
         keepalive: true,
@@ -3624,11 +3633,11 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           hasInlineTts: Boolean(result.ttsAudioBase64),
           singleLanguageMode: isSingleLanguageMode,
-          speaker: options?.speaker || null,
-          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speaker: resolvedSpeaker || null,
+          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
           speakerAvatarIndex:
-            typeof options?.speakerAvatarIndex === 'number'
-              ? options.speakerAvatarIndex
+            typeof resolvedSpeakerAvatarIndex === 'number'
+              ? resolvedSpeakerAvatarIndex
               : null,
         },
         keepalive: true,
@@ -4301,10 +4310,14 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
             currentTurnPreviousState,
+            speaker: finalizedPayload.utterance.speaker || speaker,
           },
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+            speaker: finalizedPayload.utterance.speaker,
+            speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed,
+            speakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex,
           },
         )
         removePendingTurn(speaker)
