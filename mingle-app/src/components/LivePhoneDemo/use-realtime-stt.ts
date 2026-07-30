@@ -51,6 +51,14 @@ export const getWsUrl = (): string => {
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
+const LOG_CLIENT_EVENT_MAX_ATTEMPTS = 2
+const LOG_CLIENT_EVENT_RETRY_DELAY_MS = 500
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -3230,7 +3238,7 @@ export default function useRealtimeSTT({
       }
       if (payload.metadata) body.metadata = payload.metadata
 
-      await fetch(buildClientApiPath('/log/client-event'), {
+      const requestInit: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3238,7 +3246,24 @@ export default function useRealtimeSTT({
         },
         body: JSON.stringify(body),
         keepalive: payload.keepalive === true,
-      })
+      }
+
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < LOG_CLIENT_EVENT_MAX_ATTEMPTS; attempt += 1) {
+        try {
+          const res = await fetch(buildClientApiPath('/log/client-event'), requestInit)
+          if (res.ok) return
+          lastError = new Error(`log/client-event responded with ${res.status}`)
+        } catch (error) {
+          lastError = error
+        }
+        if (attempt < LOG_CLIENT_EVENT_MAX_ATTEMPTS - 1) {
+          await sleep(LOG_CLIENT_EVENT_RETRY_DELAY_MS)
+        }
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[log-client-event] giving up after retries', { eventType: payload.eventType, lastError })
+      }
     } catch {
       // Logging must not affect UX.
     }
