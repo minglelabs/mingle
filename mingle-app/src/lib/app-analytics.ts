@@ -313,6 +313,15 @@ export async function createTrackedEventLog(args: {
   const { userId, tracking, clientContext } = args;
   const usageSec = args.usageSec ?? clientContext.usageSec;
 
+  if (args.messageId) {
+    const existing = await prisma.appEventLog.findFirst({
+      where: { messageId: args.messageId, eventType: args.eventType },
+      select: { id: true },
+    });
+    // A retried request for the same finalized turn must not duplicate its event log row.
+    if (existing) return;
+  }
+
   await prisma.appEventLog.create({
     data: {
       user: {
