@@ -136,6 +136,12 @@ import { resolveLivePhoneDemoCopyActionCopy } from './live-phone-demo.copy-actio
 import { resolveLivePhoneDemoConversationDeleteCopy } from './live-phone-demo.delete-copy'
 import { resolveLivePhoneDemoRoomManagementCopy } from './live-phone-demo.room-management-copy'
 import { resolveLivePhoneDemoTtsActionCopy } from './live-phone-demo.tts-actions'
+import ConversationSummarySheet from './ConversationSummarySheet'
+import {
+  hasConversationSummaryContent,
+  resolveConversationSummaryCopy,
+  type ConversationSummary,
+} from './conversation-summary'
 import {
   formatLivePhoneDemoMessageCount,
   formatLivePhoneDemoUsageDuration,
@@ -1375,6 +1381,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const conversationSummaryCopy = useMemo(() => resolveConversationSummaryCopy(uiLocale), [uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -1397,6 +1404,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [renameConversationValue, setRenameConversationValue] = useState(conversationTitle ?? '')
   const [isRenamingConversation, setIsRenamingConversation] = useState(false)
   const [displayConversationTitle, setDisplayConversationTitle] = useState(conversationTitle ?? '')
+  const [finishDialogOpen, setFinishDialogOpen] = useState(false)
+  const [summarySheetOpen, setSummarySheetOpen] = useState(false)
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
+  const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null)
+  const [conversationSummaryError, setConversationSummaryError] = useState<'empty' | 'request' | null>(null)
   const [feedbackTab, setFeedbackTab] = useState<FeedbackPageTab>('compose')
   const [feedbackCategory, setFeedbackCategory] = useState<LivePhoneDemoFeedbackCategory>('feedback')
   const [feedbackMessage, setFeedbackMessage] = useState('')
@@ -3951,6 +3963,107 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     void handleStartRecording()
   }, [handleStartRecording, handleStopRecording, isSttSessionRunning])
 
+  const requestConversationSummary = useCallback(async () => {
+    if (!conversationId) return
+
+    const summaryUtterances = utterancesRef.current
+      .filter((utterance) => utterance.originalText.trim())
+      .map((utterance, index) => ({
+        speaker: utterance.speaker?.trim() || `Speaker ${index + 1}`,
+        language: utterance.originalLang,
+        text: utterance.originalText,
+      }))
+
+    setSummarySheetOpen(true)
+    setIsGeneratingSummary(true)
+    setConversationSummary(null)
+    setConversationSummaryError(null)
+
+    if (summaryUtterances.length < 2) {
+      setIsGeneratingSummary(false)
+      setConversationSummaryError('empty')
+      return
+    }
+
+    try {
+      const response = await fetch(
+        buildClientApiPath(`/conversations/${conversationId}/summary`),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...buildTrackingRequestHeaders({
+              sessionKey: resolveConversationSessionKey(),
+              trackingUserId: getOrCreateTrackingUserId(),
+              nativeAppUpdate,
+            }),
+          },
+          body: JSON.stringify({
+            locale: uiLocale,
+            utterances: summaryUtterances,
+          }),
+        },
+      )
+
+      if (response.status === 422) {
+        setConversationSummaryError('empty')
+        return
+      }
+      if (!response.ok) {
+        throw new Error(`conversation_summary_failed:${response.status}`)
+      }
+
+      const payload = await response.json() as { summary?: ConversationSummary }
+      if (!payload.summary || !hasConversationSummaryContent(payload.summary)) {
+        throw new Error('conversation_summary_empty')
+      }
+      setConversationSummary(payload.summary)
+    } catch {
+      setConversationSummaryError('request')
+    } finally {
+      setIsGeneratingSummary(false)
+    }
+  }, [
+    conversationId,
+    nativeAppUpdate,
+    resolveConversationSessionKey,
+    uiLocale,
+  ])
+
+  const handleFinishConversation = useCallback(async () => {
+    if (isGeneratingSummary) return
+    setFinishDialogOpen(false)
+    setSummarySheetOpen(true)
+    setIsGeneratingSummary(true)
+    setConversationSummary(null)
+    setConversationSummaryError(null)
+
+    try {
+      if (isSttSessionRunning) {
+        await handleStopRecording()
+      }
+      forceStopTtsPlayback('force_reset', { clearSpeakingItem: true })
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 0)
+      })
+      await requestConversationSummary()
+    } catch {
+      setConversationSummaryError('request')
+      setIsGeneratingSummary(false)
+    }
+  }, [
+    forceStopTtsPlayback,
+    handleStopRecording,
+    isGeneratingSummary,
+    isSttSessionRunning,
+    requestConversationSummary,
+  ])
+
+  const handleSummaryDone = useCallback(() => {
+    setSummarySheetOpen(false)
+    onBack?.()
+  }, [onBack])
+
   const handleToggleComposer = useCallback(() => {
     setIsComposerOpen((previous) => {
       const next = !previous
@@ -5114,6 +5227,17 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
+            {headerMode === 'conversation' && conversationId ? (
+              <button
+                type="button"
+                data-qa="conversation-finish-button"
+                onClick={() => setFinishDialogOpen(true)}
+                disabled={isGeneratingSummary}
+                className="inline-flex h-[38px] shrink-0 items-center justify-center rounded-lg px-2 text-[0.82rem] font-semibold text-amber-700 transition-colors hover:bg-amber-50 active:bg-amber-100 disabled:opacity-50"
+              >
+                {conversationSummaryCopy.finishLabel}
+              </button>
+            ) : null}
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -5190,6 +5314,60 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             ) : null}
           </div>
         </div>
+
+        {finishDialogOpen ? (
+          <div
+            className="absolute inset-0 z-[95] flex items-end bg-black/45 px-4"
+            role="presentation"
+            onClick={() => setFinishDialogOpen(false)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label={conversationSummaryCopy.finishDialogTitle}
+              onClick={(event) => event.stopPropagation()}
+              className="mb-4 w-full rounded-2xl bg-white p-5 shadow-2xl"
+              style={{ marginBottom: 'max(16px, env(safe-area-inset-bottom, 0px))' }}
+            >
+              <h2 className="text-[1.05rem] font-semibold text-gray-950">
+                {conversationSummaryCopy.finishDialogTitle}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                {conversationSummaryCopy.finishDialogMessage}
+              </p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFinishDialogOpen(false)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-700"
+                >
+                  {conversationSummaryCopy.continueLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleFinishConversation()
+                  }}
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-gray-950 px-3 text-sm font-semibold text-white"
+                >
+                  {conversationSummaryCopy.finishAndSummarizeLabel}
+                </button>
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        <ConversationSummarySheet
+          open={summarySheetOpen}
+          isLoading={isGeneratingSummary}
+          summary={conversationSummary}
+          error={conversationSummaryError}
+          copy={conversationSummaryCopy}
+          onRetry={() => {
+            void requestConversationSummary()
+          }}
+          onDone={handleSummaryDone}
+        />
 
         <AnimatePresence
           custom={menuMotionState}
