@@ -24,7 +24,8 @@ describe('buildConversationSummaryPrompt', () => {
       utterances: [{ speaker: 'A', language: 'en', text: 'Hello' }],
     })
 
-    expect(prompt).toContain('locale "ko"')
+    expect(prompt).toContain('Korean (ko)')
+    expect(prompt).toContain('Do not use another output language')
     expect(prompt).toContain('untrusted data')
     expect(prompt).toContain('[en] A: Hello')
   })

@@ -5227,17 +5227,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             <MingleWordmark className="relative z-20" />
           )}
           <div className="relative z-20 flex items-center gap-1">
-            {headerMode === 'conversation' && conversationId ? (
-              <button
-                type="button"
-                data-qa="conversation-finish-button"
-                onClick={() => setFinishDialogOpen(true)}
-                disabled={isGeneratingSummary}
-                className="inline-flex h-[38px] shrink-0 items-center justify-center rounded-lg px-2 text-[0.82rem] font-semibold text-amber-700 transition-colors hover:bg-amber-50 active:bg-amber-100 disabled:opacity-50"
-              >
-                {conversationSummaryCopy.finishLabel}
-              </button>
-            ) : null}
             <div className="relative mr-1.5">
               <button
                 ref={langSelectorButtonRef}
@@ -5317,7 +5306,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
         {finishDialogOpen ? (
           <div
-            className="absolute inset-0 z-[95] flex items-end bg-black/45 px-4"
+            className="absolute inset-0 z-[95] flex items-center justify-center bg-black/45 px-5"
             role="presentation"
             onClick={() => setFinishDialogOpen(false)}
           >
@@ -5326,8 +5315,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               aria-modal="true"
               aria-label={conversationSummaryCopy.finishDialogTitle}
               onClick={(event) => event.stopPropagation()}
-              className="mb-4 w-full rounded-2xl bg-white p-5 shadow-2xl"
-              style={{ marginBottom: 'max(16px, env(safe-area-inset-bottom, 0px))' }}
+              className="w-full max-w-[20rem] rounded-2xl bg-white p-5 shadow-2xl"
             >
               <h2 className="text-[1.05rem] font-semibold text-gray-950">
                 {conversationSummaryCopy.finishDialogTitle}
@@ -6391,6 +6379,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {headerMode === 'conversation' && conversationId ? (
+              <button
+                type="button"
+                data-qa="conversation-finish-button"
+                onClick={() => setFinishDialogOpen(true)}
+                disabled={isGeneratingSummary}
+                className="absolute right-4 z-30 inline-flex h-10 items-center justify-center rounded-full border border-rose-200 bg-white/95 px-4 text-sm font-semibold text-rose-600 shadow-[0_4px_14px_rgba(15,23,42,0.16)] backdrop-blur transition active:scale-95 disabled:opacity-50"
+                style={{ bottom: effectiveNativeBottomBannerInsetPx + 12 }}
+              >
+                {conversationSummaryCopy.finishLabel}
+              </button>
+            ) : null}
 
             <AnimatePresence>
               {floatingToastMessage && (
