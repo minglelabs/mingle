@@ -313,36 +313,41 @@ export async function createTrackedEventLog(args: {
   const { userId, tracking, clientContext } = args;
   const usageSec = args.usageSec ?? clientContext.usageSec;
 
+  const data = {
+    user: {
+      connect: { id: userId },
+    },
+    ...(args.messageId ? {
+      message: {
+        connect: { id: args.messageId },
+      },
+    } : {}),
+    sessionKey: args.sessionKey ?? tracking.sessionKey,
+    eventType: args.eventType,
+    ipAddress: tracking.ipAddress ?? undefined,
+    userAgent: tracking.userAgent ?? undefined,
+    platform: clientContext.platform ?? undefined,
+    appVersion: clientContext.appVersion ?? undefined,
+    locale: clientContext.pageLanguage ?? clientContext.language ?? tracking.requestLocale ?? undefined,
+    fullUrl: clientContext.fullUrl ?? tracking.requestFullUrl ?? undefined,
+    pathname: clientContext.pathname ?? tracking.requestPathname ?? undefined,
+    usageSec: usageSec ?? undefined,
+    metadata: args.metadata ?? undefined,
+  };
+
   if (args.messageId) {
     const existing = await prisma.appEventLog.findFirst({
       where: { messageId: args.messageId, eventType: args.eventType },
       select: { id: true },
     });
-    // A retried request for the same finalized turn must not duplicate its event log row.
-    if (existing) return;
+    // A retried or reconciled request (e.g. a local-final turn later replaced by the
+    // server's final text) updates the existing row instead of duplicating it, so the
+    // latest data always wins rather than getting silently stuck on stale local data.
+    if (existing) {
+      await prisma.appEventLog.update({ where: { id: existing.id }, data });
+      return;
+    }
   }
 
-  await prisma.appEventLog.create({
-    data: {
-      user: {
-        connect: { id: userId },
-      },
-      ...(args.messageId ? {
-        message: {
-          connect: { id: args.messageId },
-        },
-      } : {}),
-      sessionKey: args.sessionKey ?? tracking.sessionKey,
-      eventType: args.eventType,
-      ipAddress: tracking.ipAddress ?? undefined,
-      userAgent: tracking.userAgent ?? undefined,
-      platform: clientContext.platform ?? undefined,
-      appVersion: clientContext.appVersion ?? undefined,
-      locale: clientContext.pageLanguage ?? clientContext.language ?? tracking.requestLocale ?? undefined,
-      fullUrl: clientContext.fullUrl ?? tracking.requestFullUrl ?? undefined,
-      pathname: clientContext.pathname ?? tracking.requestPathname ?? undefined,
-      usageSec: usageSec ?? undefined,
-      metadata: args.metadata ?? undefined,
-    },
-  });
+  await prisma.appEventLog.create({ data });
 }
