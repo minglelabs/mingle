@@ -313,6 +313,23 @@ describe("/api/conversations/[conversationId] route", () => {
     });
   });
 
+  it("returns a conflict error instead of leaking a raw 500 when deletion exhausts its retries", async () => {
+    mockDeleteConversationChannel.mockRejectedValue(
+      new Error("conversation_channel_delete_conflict"),
+    );
+
+    const response = await DELETE(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json).toEqual({ error: "conversation_channel_delete_conflict" });
+  });
+
   it("updates selected languages for a guest request", async () => {
     mockSanitizeSttLanguageSelection.mockReturnValue(["en", "fr"]);
     mockUpdateConversationChannelSelectedLanguages.mockResolvedValue({
