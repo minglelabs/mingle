@@ -397,11 +397,23 @@ export async function createConversationChannelForUser(
     try {
       const record = await prisma.$transaction(async (tx) => {
         const lastChannel = await tx.appConversationChannel.findFirst({
-          where: { ownerUserId: userId },
+          where: { ownerUserId: userId, ...buildVisibleConversationWhere() },
           orderBy: { sequenceNumber: "desc" },
           select: { sequenceNumber: true },
         });
         const sequenceNumber = (lastChannel?.sequenceNumber ?? 0) + 1;
+
+        const lowestChannel = await tx.appConversationChannel.findFirst({
+          where: { ownerUserId: userId },
+          orderBy: { sequenceNumber: "asc" },
+          select: { sequenceNumber: true },
+        });
+        const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, sequenceNumber) - 1;
+
+        await tx.appConversationChannel.updateMany({
+          where: { ownerUserId: userId, sequenceNumber, isDeleted: true },
+          data: { sequenceNumber: vacatedSequenceNumber },
+        });
 
         return tx.appConversationChannel.create({
           data: {
@@ -781,15 +793,39 @@ export async function deleteConversationChannel(args: {
     return null;
   }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      isDeleted: true,
-      status: APP_CONVERSATION_STATUS_PAUSED,
-      pausedAt: new Date(),
-    },
-    select: conversationChannelSelect,
-  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await prisma.$transaction(async (tx) => {
+        const lowestChannel = await tx.appConversationChannel.findFirst({
+          where: { ownerUserId: args.userId },
+          orderBy: { sequenceNumber: "asc" },
+          select: { sequenceNumber: true },
+        });
+        const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, 0) - 1;
 
-  return serializeConversationChannel(record);
+        return tx.appConversationChannel.update({
+          where: { id: args.conversationId },
+          data: {
+            isDeleted: true,
+            status: APP_CONVERSATION_STATUS_PAUSED,
+            pausedAt: new Date(),
+            sequenceNumber: vacatedSequenceNumber,
+          },
+          select: conversationChannelSelect,
+        });
+      });
+
+      return serializeConversationChannel(record);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("conversation_channel_delete_conflict");
 }
