@@ -336,17 +336,20 @@ export async function createTrackedEventLog(args: {
   };
 
   if (args.messageId) {
-    const existing = await prisma.appEventLog.findFirst({
-      where: { messageId: args.messageId, eventType: args.eventType },
-      select: { id: true },
-    });
     // A retried or reconciled request (e.g. a local-final turn later replaced by the
     // server's final text) updates the existing row instead of duplicating it, so the
     // latest data always wins rather than getting silently stuck on stale local data.
-    if (existing) {
-      await prisma.appEventLog.update({ where: { id: existing.id }, data });
-      return;
-    }
+    // This is a single atomic upsert (backed by a DB unique constraint on
+    // messageId+eventType) rather than a separate find-then-write, so two overlapping
+    // requests for the same message can't both slip past the check and insert twice.
+    await prisma.appEventLog.upsert({
+      where: {
+        messageId_eventType: { messageId: args.messageId, eventType: args.eventType },
+      },
+      create: data,
+      update: data,
+    });
+    return;
   }
 
   await prisma.appEventLog.create({ data });

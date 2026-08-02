@@ -54,6 +54,27 @@ const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
 const LOG_CLIENT_EVENT_MAX_ATTEMPTS = 2
 const LOG_CLIENT_EVENT_RETRY_DELAY_MS = 500
 
+// Only events carrying a clientMessageId are safely deduped server-side, so only those
+// are worth retrying; retrying the rest risks duplicate analytics rows.
+export function resolveLogClientEventMaxAttempts(clientMessageId: string | undefined | null): number {
+  return clientMessageId ? LOG_CLIENT_EVENT_MAX_ATTEMPTS : 1
+}
+
+// When a locally finalized turn is later reconciled with the server's final text, prefer
+// the avatar already shown to the user over the payload's (freshly assigned) avatar so the
+// turn doesn't visually reopen under a different animal.
+export function resolveReconciledSpeakerAvatar(input: {
+  reusedSpeakerAvatarSeed?: string
+  reusedSpeakerAvatarIndex?: number
+  fallbackSpeakerAvatarSeed?: string
+  fallbackSpeakerAvatarIndex?: number
+}): { speakerAvatarSeed?: string; speakerAvatarIndex?: number } {
+  return {
+    speakerAvatarSeed: input.reusedSpeakerAvatarSeed ?? input.fallbackSpeakerAvatarSeed,
+    speakerAvatarIndex: input.reusedSpeakerAvatarIndex ?? input.fallbackSpeakerAvatarIndex,
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -3248,8 +3269,9 @@ export default function useRealtimeSTT({
         keepalive: payload.keepalive === true,
       }
 
+      const maxAttempts = resolveLogClientEventMaxAttempts(payload.clientMessageId)
       let lastError: unknown = null
-      for (let attempt = 0; attempt < LOG_CLIENT_EVENT_MAX_ATTEMPTS; attempt += 1) {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
           const res = await fetch(buildClientApiPath('/log/client-event'), requestInit)
           if (res.ok) return
@@ -3257,7 +3279,7 @@ export default function useRealtimeSTT({
         } catch (error) {
           lastError = error
         }
-        if (attempt < LOG_CLIENT_EVENT_MAX_ATTEMPTS - 1) {
+        if (attempt < maxAttempts - 1) {
           await sleep(LOG_CLIENT_EVENT_RETRY_DELAY_MS)
         }
       }
@@ -4287,19 +4309,28 @@ export default function useRealtimeSTT({
             ? recentFinalizedMatch.utteranceId
             : null
         )
+        let reusedSpeakerAvatarSeed: string | undefined
+        let reusedSpeakerAvatarIndex: number | undefined
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
             text: finalizedPayload.text,
             language: finalizedPayload.language,
           })
-          setUtteranceStore((prev) => replaceFinalizedUtteranceSourceInStoreState({
-            store: prev,
-            utteranceId: recentLocalReuseUtteranceId,
-            sourceText: finalizedPayload.text,
-            sourceLanguage: finalizedPayload.language,
-            selectedLanguages: targetLanguages,
-          }))
+          setUtteranceStore((prev) => {
+            const existingUtterance = prev.utterances.find(
+              (utterance) => utterance.id === recentLocalReuseUtteranceId,
+            )
+            reusedSpeakerAvatarSeed = existingUtterance?.speakerAvatarSeed
+            reusedSpeakerAvatarIndex = existingUtterance?.speakerAvatarIndex
+            return replaceFinalizedUtteranceSourceInStoreState({
+              store: prev,
+              utteranceId: recentLocalReuseUtteranceId,
+              sourceText: finalizedPayload.text,
+              sourceLanguage: finalizedPayload.language,
+              selectedLanguages: targetLanguages,
+            })
+          })
         } else {
           utteranceIdRef.current = nextUtteranceSerial
         }
@@ -4341,8 +4372,12 @@ export default function useRealtimeSTT({
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
             speaker: finalizedPayload.utterance.speaker,
-            speakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed,
-            speakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex,
+            ...resolveReconciledSpeakerAvatar({
+              reusedSpeakerAvatarSeed,
+              reusedSpeakerAvatarIndex,
+              fallbackSpeakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed,
+              fallbackSpeakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex,
+            }),
           },
         )
         removePendingTurn(speaker)

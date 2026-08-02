@@ -1,21 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  mockAppEventLogFindFirst,
   mockAppEventLogCreate,
-  mockAppEventLogUpdate,
+  mockAppEventLogUpsert,
 } = vi.hoisted(() => ({
-  mockAppEventLogFindFirst: vi.fn(),
   mockAppEventLogCreate: vi.fn(),
-  mockAppEventLogUpdate: vi.fn(),
+  mockAppEventLogUpsert: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     appEventLog: {
-      findFirst: mockAppEventLogFindFirst,
       create: mockAppEventLogCreate,
-      update: mockAppEventLogUpdate,
+      upsert: mockAppEventLogUpsert,
     },
   },
 }));
@@ -54,27 +51,7 @@ describe("createTrackedEventLog", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a new row when no prior event log exists for the message", async () => {
-    mockAppEventLogFindFirst.mockResolvedValue(null);
-
-    await createTrackedEventLog({
-      userId: "user-1",
-      tracking,
-      clientContext,
-      eventType: "stt_turn_finalized",
-      messageId: "msg-1",
-      metadata: { text: "local partial" },
-    });
-
-    expect(mockAppEventLogCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ eventType: "stt_turn_finalized" }),
-    }));
-    expect(mockAppEventLogUpdate).not.toHaveBeenCalled();
-  });
-
-  it("updates the existing row instead of dropping a reconciled finalize for the same message", async () => {
-    mockAppEventLogFindFirst.mockResolvedValue({ id: "log-1" });
-
+  it("atomically upserts by messageId+eventType when a messageId is present", async () => {
     await createTrackedEventLog({
       userId: "user-1",
       tracking,
@@ -84,17 +61,41 @@ describe("createTrackedEventLog", () => {
       metadata: { text: "server final" },
     });
 
-    expect(mockAppEventLogUpdate).toHaveBeenCalledWith({
-      where: { id: "log-1" },
-      data: expect.objectContaining({
-        eventType: "stt_turn_finalized",
-        metadata: { text: "server final" },
-      }),
+    expect(mockAppEventLogUpsert).toHaveBeenCalledWith({
+      where: {
+        messageId_eventType: { messageId: "msg-1", eventType: "stt_turn_finalized" },
+      },
+      create: expect.objectContaining({ eventType: "stt_turn_finalized", metadata: { text: "server final" } }),
+      update: expect.objectContaining({ eventType: "stt_turn_finalized", metadata: { text: "server final" } }),
     });
     expect(mockAppEventLogCreate).not.toHaveBeenCalled();
   });
 
-  it("creates directly without a dedupe lookup when there is no messageId", async () => {
+  it("upserts with the latest data so a reconciled finalize for the same message overwrites stale data", async () => {
+    await createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext,
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: { text: "local partial" },
+    });
+    await createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext,
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: { text: "server final" },
+    });
+
+    expect(mockAppEventLogUpsert).toHaveBeenCalledTimes(2);
+    expect(mockAppEventLogUpsert).toHaveBeenLastCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ metadata: { text: "server final" } }),
+    }));
+  });
+
+  it("creates directly without an upsert when there is no messageId", async () => {
     await createTrackedEventLog({
       userId: "user-1",
       tracking,
@@ -102,7 +103,7 @@ describe("createTrackedEventLog", () => {
       eventType: "stt_session_started",
     });
 
-    expect(mockAppEventLogFindFirst).not.toHaveBeenCalled();
+    expect(mockAppEventLogUpsert).not.toHaveBeenCalled();
     expect(mockAppEventLogCreate).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ eventType: "stt_session_started" }),
     }));

@@ -30,6 +30,8 @@ import {
   pruneUnresolvedTranslationTargets,
   rememberRecentFinalizedUtterance,
   replaceFinalizedUtteranceSourceInStoreState,
+  resolveLogClientEventMaxAttempts,
+  resolveReconciledSpeakerAvatar,
   resolveCachedNativeMicPermissionRecoveryAction,
   resolveNativeMicPermissionRecoveryAction,
   resolveConnectionStatusFromNativeBridgeStatus,
@@ -2195,6 +2197,37 @@ describe('use-realtime-stt pure logic', () => {
       translationFinalized: {
         ko: true,
       },
+    })
+  })
+
+  it('only retries log/client-event calls that carry a clientMessageId', () => {
+    expect(resolveLogClientEventMaxAttempts('client_message_123')).toBe(2)
+    expect(resolveLogClientEventMaxAttempts(undefined)).toBe(1)
+    expect(resolveLogClientEventMaxAttempts(null)).toBe(1)
+    expect(resolveLogClientEventMaxAttempts('')).toBe(1)
+  })
+
+  it('prefers the already-shown avatar when reconciling a locally reused utterance', () => {
+    expect(resolveReconciledSpeakerAvatar({
+      reusedSpeakerAvatarSeed: 'panda',
+      reusedSpeakerAvatarIndex: 3,
+      fallbackSpeakerAvatarSeed: 'otter',
+      fallbackSpeakerAvatarIndex: 7,
+    })).toEqual({
+      speakerAvatarSeed: 'panda',
+      speakerAvatarIndex: 3,
+    })
+  })
+
+  it('falls back to the payload avatar when there is no reused utterance to preserve', () => {
+    expect(resolveReconciledSpeakerAvatar({
+      reusedSpeakerAvatarSeed: undefined,
+      reusedSpeakerAvatarIndex: undefined,
+      fallbackSpeakerAvatarSeed: 'otter',
+      fallbackSpeakerAvatarIndex: 7,
+    })).toEqual({
+      speakerAvatarSeed: 'otter',
+      speakerAvatarIndex: 7,
     })
   })
 })
