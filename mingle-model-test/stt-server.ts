@@ -12,9 +12,15 @@ import {
     type AddTranscript,
 } from '@speechmatics/real-time-client';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const openai = process.env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    : null;
+const anthropic = process.env.CLAUDE_API_KEY
+    ? new Anthropic({ apiKey: process.env.CLAUDE_API_KEY })
+    : null;
+const genAI = process.env.GEMINI_API_KEY
+    ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    : null;
 
 const PORT = Number.parseInt(process.env.STT_PORT || '3001', 10);
 const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
@@ -667,7 +673,7 @@ wss.on('connection', (clientWs) => {
 
     // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
     const startOpenAIRealtimeConnection = async (config: ClientConfig) => {
-        if (!process.env.OPENAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY || !openai) {
             console.error('OPENAI_API_KEY environment variable not set!');
             clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
             return;
@@ -1509,6 +1515,9 @@ wss.on('connection', (clientWs) => {
             let content: string | undefined;
 
             if (translateModel === 'claude-haiku-4-5') {
+                if (!anthropic) {
+                    throw new Error('CLAUDE_API_KEY environment variable not set.');
+                }
                 const resp = await anthropic.messages.create({
                     model: 'claude-haiku-4-5-20251001',
                     max_tokens: 1024,
@@ -1518,6 +1527,9 @@ wss.on('connection', (clientWs) => {
                 const block = resp.content[0];
                 if (block.type === 'text') content = block.text.trim();
             } else if (translateModel === 'gemini-2.5-flash-lite' || translateModel === 'gemini-3-flash-preview') {
+                if (!genAI) {
+                    throw new Error('GEMINI_API_KEY environment variable not set.');
+                }
                 const model = genAI.getGenerativeModel({
                     model: translateModel,
                     systemInstruction: systemPrompt,
@@ -1525,6 +1537,9 @@ wss.on('connection', (clientWs) => {
                 const result = await model.generateContent(userPrompt);
                 content = result.response.text()?.trim();
             } else {
+                if (!openai) {
+                    throw new Error('OPENAI_API_KEY environment variable not set.');
+                }
                 const resp = await openai.chat.completions.create({
                     model: 'gpt-5-nano',
                     messages: [
