@@ -313,27 +313,46 @@ export async function createTrackedEventLog(args: {
   const { userId, tracking, clientContext } = args;
   const usageSec = args.usageSec ?? clientContext.usageSec;
 
-  await prisma.appEventLog.create({
-    data: {
-      user: {
-        connect: { id: userId },
-      },
-      ...(args.messageId ? {
-        message: {
-          connect: { id: args.messageId },
-        },
-      } : {}),
-      sessionKey: args.sessionKey ?? tracking.sessionKey,
-      eventType: args.eventType,
-      ipAddress: tracking.ipAddress ?? undefined,
-      userAgent: tracking.userAgent ?? undefined,
-      platform: clientContext.platform ?? undefined,
-      appVersion: clientContext.appVersion ?? undefined,
-      locale: clientContext.pageLanguage ?? clientContext.language ?? tracking.requestLocale ?? undefined,
-      fullUrl: clientContext.fullUrl ?? tracking.requestFullUrl ?? undefined,
-      pathname: clientContext.pathname ?? tracking.requestPathname ?? undefined,
-      usageSec: usageSec ?? undefined,
-      metadata: args.metadata ?? undefined,
+  const data = {
+    user: {
+      connect: { id: userId },
     },
-  });
+    ...(args.messageId ? {
+      message: {
+        connect: { id: args.messageId },
+      },
+    } : {}),
+    sessionKey: args.sessionKey ?? tracking.sessionKey,
+    eventType: args.eventType,
+    ipAddress: tracking.ipAddress ?? undefined,
+    userAgent: tracking.userAgent ?? undefined,
+    platform: clientContext.platform ?? undefined,
+    appVersion: clientContext.appVersion ?? undefined,
+    locale: clientContext.pageLanguage ?? clientContext.language ?? tracking.requestLocale ?? undefined,
+    fullUrl: clientContext.fullUrl ?? tracking.requestFullUrl ?? undefined,
+    pathname: clientContext.pathname ?? tracking.requestPathname ?? undefined,
+    usageSec: usageSec ?? undefined,
+    metadata: args.metadata ?? undefined,
+  };
+
+  if (args.messageId) {
+    // A retried or reconciled request (e.g. a local-final turn later replaced by the
+    // server's final text) updates the existing row instead of duplicating it, so the
+    // latest data always wins rather than getting silently stuck on stale local data.
+    // Keyed on the DB-level unique constraint so concurrent requests for the same
+    // message can't both slip past a check and create duplicate rows.
+    await prisma.appEventLog.upsert({
+      where: {
+        messageId_eventType: {
+          messageId: args.messageId,
+          eventType: args.eventType,
+        },
+      },
+      create: data,
+      update: data,
+    });
+    return;
+  }
+
+  await prisma.appEventLog.create({ data });
 }

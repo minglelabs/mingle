@@ -228,6 +228,7 @@ describe("app-conversations", () => {
         clientMessageId: "u-new",
         sourceLanguage: "en",
         createdAt: new Date("2026-04-12T10:00:00.000Z"),
+        metadata: { speaker: "1", speakerAvatarSeed: "seed-a", speakerAvatarIndex: 4 },
         contents: [
           { contentType: "SOURCE", language: "en", text: "new source" },
           { contentType: "TRANSLATION_FINAL", language: "ko", text: "새 번역" },
@@ -271,6 +272,7 @@ describe("app-conversations", () => {
       ],
       take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
       select: expect.objectContaining({
+        metadata: true,
         contents: expect.objectContaining({
           where: {
             OR: [
@@ -294,6 +296,10 @@ describe("app-conversations", () => {
     expect(state?.messageCount).toBe(250);
     expect(state?.utterances.map((utterance) => utterance.id)).toEqual(["u-old", "u-new"]);
     expect(state?.utterances[0]?.translations).toEqual({ ko: "이전 번역" });
+    expect(state?.utterances[0]?.speaker).toBeNull();
+    expect(state?.utterances[1]?.speaker).toBe("1");
+    expect(state?.utterances[1]?.speakerAvatarSeed).toBe("seed-a");
+    expect(state?.utterances[1]?.speakerAvatarIndex).toBe(4);
     expect(state?.hasMoreUtterances).toBe(false);
     expect(state?.oldestMessageCursor).toEqual({
       createdAtMs: new Date("2026-04-12T09:00:00.000Z").getTime(),
