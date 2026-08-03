@@ -80,6 +80,54 @@ describe("createTrackedEventLog", () => {
     expect(mockAppEventLogCreate).not.toHaveBeenCalled();
   });
 
+  it("issues one atomic upsert per call, so two overlapping retries for the same message can't race between a check and a write", async () => {
+    let releaseFirstUpsert: () => void = () => {};
+    const firstUpsertStarted = new Promise<void>((resolve) => {
+      mockAppEventLogUpsert.mockImplementationOnce(() => {
+        resolve();
+        return new Promise((resolveUpsert) => {
+          releaseFirstUpsert = () => resolveUpsert(undefined);
+        });
+      });
+    });
+    mockAppEventLogUpsert.mockImplementationOnce(async () => undefined);
+
+    const firstRequest = createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext,
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: { text: "local partial" },
+    });
+
+    // Wait until the first call is in flight before starting the retry, mirroring
+    // a client retry landing while the original request is still being processed.
+    await firstUpsertStarted;
+
+    const secondRequest = createTrackedEventLog({
+      userId: "user-1",
+      tracking,
+      clientContext,
+      eventType: "stt_turn_finalized",
+      messageId: "msg-1",
+      metadata: { text: "server final" },
+    });
+
+    releaseFirstUpsert();
+    await Promise.all([firstRequest, secondRequest]);
+
+    // Both calls target the same DB-enforced unique key via a single upsert each,
+    // instead of a separate check step something could slip between.
+    expect(mockAppEventLogUpsert).toHaveBeenCalledTimes(2);
+    for (const [args] of mockAppEventLogUpsert.mock.calls) {
+      expect(args.where).toEqual({
+        messageId_eventType: { messageId: "msg-1", eventType: "stt_turn_finalized" },
+      });
+    }
+    expect(mockAppEventLogCreate).not.toHaveBeenCalled();
+  });
+
   it("creates directly without an upsert lookup when there is no messageId", async () => {
     await createTrackedEventLog({
       userId: "user-1",
