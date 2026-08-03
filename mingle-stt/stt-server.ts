@@ -1080,7 +1080,7 @@ wss.on('connection', (clientWs) => {
                     .filter(Boolean);
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: 'stt-rt-v4',
+                    model: 'stt-rt-v5',
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
