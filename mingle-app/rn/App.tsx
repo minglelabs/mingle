@@ -537,11 +537,6 @@ type NativeSttStartPayload = {
   behaviorProfile?: string;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
-  sonioxTranslation?: {
-    type: 'two_way';
-    language_a: string;
-    language_b: string;
-  };
 };
 
 type NativeSttStopPayload = {
@@ -2014,18 +2009,6 @@ function AppInner(): React.JSX.Element {
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
-    const sonioxTranslation = payload?.sonioxTranslation?.type === 'two_way'
-      && typeof payload.sonioxTranslation.language_a === 'string'
-      && typeof payload.sonioxTranslation.language_b === 'string'
-      && payload.sonioxTranslation.language_a.trim()
-      && payload.sonioxTranslation.language_b.trim()
-      && payload.sonioxTranslation.language_a.trim() !== payload.sonioxTranslation.language_b.trim()
-      ? {
-        type: 'two_way' as const,
-        language_a: payload.sonioxTranslation.language_a.trim(),
-        language_b: payload.sonioxTranslation.language_b.trim(),
-      }
-      : undefined;
 
     const startPayload = {
       sttModel,
@@ -2036,7 +2019,6 @@ function AppInner(): React.JSX.Element {
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
         : {}),
-      ...(sonioxTranslation ? { sonioxTranslation } : {}),
     };
 
     try {

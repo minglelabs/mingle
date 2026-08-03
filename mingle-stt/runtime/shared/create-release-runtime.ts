@@ -19,12 +19,6 @@ export type MingleSttFinalizeSource =
     | 'server_provider_close_fallback'
     | 'server_carry_expiry';
 
-export type MingleSonioxTranslationConfig = {
-    type: 'two_way';
-    language_a: string;
-    language_b: string;
-};
-
 export type MingleSttClientConfig = {
     sample_rate: number;
     languages: string[];
@@ -35,7 +29,6 @@ export type MingleSttClientConfig = {
     lang_hints_strict?: boolean;
     soniox_language_hints?: string[];
     soniox_manual_finalize_silence_ms?: number;
-    soniox_translation?: MingleSonioxTranslationConfig;
 };
 
 export type MingleSttFinalTurnPayload = {

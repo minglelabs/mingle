@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildLanguageSelectionSignature,
   buildSonioxLanguageHints,
-  buildSonioxNativeTranslationConfig,
   appendFinalizedUtteranceToStoreState,
   buildLiveUtterance,
   buildLiveUtterances,
@@ -23,13 +22,11 @@ import {
   LOCAL_UTTERANCE_CACHE_LIMIT,
   resolveRenderedTtsCandidateFromUtterance,
   parseSttTranscriptMessage,
-  parseSttTranslationMessage,
   parsePartialTranslateMode,
   parsePositiveIntWithFallback,
   parseRecentStoredUtterances,
   persistMessageCountSnapshot,
   persistUtterancesSnapshot,
-  normalizeSonioxNativeTranslations,
   pruneUnresolvedTranslationTargets,
   rememberRecentFinalizedUtterance,
   replaceFinalizedUtteranceSourceInStoreState,
@@ -424,39 +421,6 @@ describe('use-realtime-stt pure logic', () => {
       language: 'en-US',
       isFinal: true,
       speaker: 'speaker-2',
-    })
-  })
-
-  it('uses Soniox native translation only for matching two-language sessions', () => {
-    expect(buildSonioxNativeTranslationConfig(['ko', 'en'], ['en', 'ko'])).toEqual({
-      type: 'two_way',
-      language_a: 'ko',
-      language_b: 'en',
-    })
-    expect(buildSonioxNativeTranslationConfig(['ko', 'en'], ['en', 'ko', 'ja'])).toBeNull()
-    expect(buildSonioxNativeTranslationConfig(['ko', 'en', 'ja'], ['ko', 'en', 'ja'])).toBeNull()
-  })
-
-  it('maps Soniox translation codes back to selected client language codes', () => {
-    expect(normalizeSonioxNativeTranslations({ zh: '你好', en: 'hello' }, ['zh-CN', 'en'])).toEqual({
-      'zh-CN': '你好',
-      en: 'hello',
-    })
-  })
-
-  it('parses Soniox partial translation messages', () => {
-    expect(parseSttTranslationMessage({
-      type: 'translation',
-      data: {
-        speaker: 'speaker-2',
-        target_language: 'ko',
-        translated_utterance: { text: ' 안녕하세요 ' },
-        is_partial: true,
-      },
-    })).toEqual({
-      speaker: 'speaker-2',
-      targetLanguage: 'ko',
-      text: '안녕하세요',
     })
   })
 

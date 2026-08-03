@@ -327,28 +327,6 @@ class NativeSTTModule: RCTEventEmitter {
         return Int(raw.rounded(.down))
     }
 
-    private func parseSonioxTranslation(_ rawValue: Any?) -> [String: String]? {
-        guard let raw = rawValue as? [String: Any],
-              let type = raw["type"] as? String,
-              type == "two_way",
-              let languageA = raw["language_a"] as? String,
-              let languageB = raw["language_b"] as? String
-        else {
-            return nil
-        }
-
-        let normalizedA = languageA.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedB = languageB.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedA.isEmpty, !normalizedB.isEmpty, normalizedA != normalizedB else {
-            return nil
-        }
-        return [
-            "type": "two_way",
-            "language_a": normalizedA,
-            "language_b": normalizedB,
-        ]
-    }
-
     override func constantsToExport() -> [AnyHashable: Any]! {
         return [
             "runtimeConfig": [
@@ -867,7 +845,6 @@ class NativeSTTModule: RCTEventEmitter {
         behaviorProfile: String,
         sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
-        sonioxTranslation: [String: String]?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
@@ -965,9 +942,6 @@ class NativeSTTModule: RCTEventEmitter {
         if !sonioxLanguageHints.isEmpty {
             configPayload["soniox_language_hints"] = sonioxLanguageHints
         }
-        if let sonioxTranslation {
-            configPayload["soniox_translation"] = sonioxTranslation
-        }
         sendJson(configPayload)
 
         emitStatus("running")
@@ -1007,7 +981,6 @@ class NativeSTTModule: RCTEventEmitter {
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
-        let sonioxTranslation = parseSonioxTranslation(options["sonioxTranslation"])
 
         let audioSession = AVAudioSession.sharedInstance()
         switch audioSession.recordPermission {
@@ -1022,7 +995,6 @@ class NativeSTTModule: RCTEventEmitter {
                 behaviorProfile: behaviorProfile,
                 sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
-                sonioxTranslation: sonioxTranslation,
                 resolve: resolve,
                 reject: reject
             )
@@ -1044,7 +1016,6 @@ class NativeSTTModule: RCTEventEmitter {
                             behaviorProfile: behaviorProfile,
                             sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
-                            sonioxTranslation: sonioxTranslation,
                             resolve: resolve,
                             reject: reject
                         )

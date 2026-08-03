@@ -3,7 +3,6 @@ export type SonioxDebugTokenLike = {
     is_final?: unknown;
     language?: unknown;
     speaker?: unknown;
-    translation_status?: unknown;
 };
 
 export type SonioxDebugTokenRun = {
@@ -78,7 +77,7 @@ export function buildSonioxDebugTokenRuns(tokens: SonioxDebugTokenLike[]): Sonio
 
     for (const token of tokens) {
         const text = typeof token.text === 'string' ? token.text : '';
-        if (!text || token.translation_status === 'translation' || ENDPOINT_MARKER_RE.test(text)) {
+        if (!text || ENDPOINT_MARKER_RE.test(text)) {
             continue;
         }
 

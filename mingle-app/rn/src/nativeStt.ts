@@ -6,11 +6,6 @@ type NativeSttStartOptions = {
   aecEnabled?: boolean;
   sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
-  sonioxTranslation?: {
-    type: 'two_way';
-    language_a: string;
-    language_b: string;
-  };
 };
 
 type NativeSttStopOptions = {
