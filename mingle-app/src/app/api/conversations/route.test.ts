@@ -167,6 +167,23 @@ describe("/api/conversations route", () => {
     });
   });
 
+  it("returns a conflict error instead of leaking a raw 500 when creation exhausts its retries", async () => {
+    mockCreateConversationChannelForUser.mockRejectedValue(
+      new Error("conversation_channel_create_conflict"),
+    );
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations", {
+      method: "POST",
+      headers: {
+        "x-mingle-user-id": "anon_local_storage_user",
+      },
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(json).toEqual({ error: "conversation_channel_create_conflict" });
+  });
+
   it("creates a new conversation seeded with the legacy single-room session key", async () => {
     mockCreateConversationChannelForUser.mockResolvedValue({
       id: "conv_legacy",
