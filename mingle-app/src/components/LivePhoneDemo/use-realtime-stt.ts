@@ -840,9 +840,8 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const translationFinalized: Record<string, boolean> = {}
   for (const language of targetLanguages) {
-    if (input.translationFinalized?.[language] === true) {
-      translationFinalized[language] = true
-    }
+    const finalized = input.translationFinalized?.[language]
+    if (typeof finalized === 'boolean') translationFinalized[language] = finalized
   }
 
   return {
@@ -1178,6 +1177,13 @@ export function buildLiveUtterance(input: {
     input.languages,
     sourceLanguage,
   )
+  const translations = filterTranslationsToTargetLanguages(
+    stripSourceLanguageFromTranslations(
+      input.partialTranslations,
+      sourceLanguage,
+    ),
+    targetLanguages,
+  )
 
   return {
     id: input.pendingTurn.utteranceId,
@@ -1187,14 +1193,10 @@ export function buildLiveUtterance(input: {
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages,
-    translations: filterTranslationsToTargetLanguages(
-      stripSourceLanguageFromTranslations(
-        input.partialTranslations,
-        sourceLanguage,
-      ),
-      targetLanguages,
+    translations,
+    translationFinalized: Object.fromEntries(
+      Object.keys(translations).map(language => [language, false]),
     ),
-    translationFinalized: {},
     createdAtMs: input.pendingTurn.createdAtMs,
   }
 }

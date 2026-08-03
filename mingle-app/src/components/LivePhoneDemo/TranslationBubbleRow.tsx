@@ -5,6 +5,7 @@ import CopyableBubbleSurface from './CopyableBubbleSurface'
 
 interface TranslationBubbleRowProps {
   lang: string
+  translationState?: 'interim' | 'final'
   bubbleClassName: string
   metaClassName: string
   accessory?: ReactNode
@@ -24,6 +25,7 @@ interface TranslationBubbleRowProps {
 
 export default function TranslationBubbleRow({
   lang,
+  translationState,
   bubbleClassName,
   metaClassName,
   accessory,
@@ -69,7 +71,11 @@ export default function TranslationBubbleRow({
   )
 
   return (
-    <div data-translation-bubble-row className="flex w-full items-start">
+    <div
+      data-translation-bubble-row
+      data-translation-state={translationState}
+      className="flex w-full items-start"
+    >
       {inlineMeta && copyText ? (
         <CopyableBubbleSurface
           data-translation-bubble-body

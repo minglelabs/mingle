@@ -879,7 +879,7 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
-  it('builds a live utterance with the speaker before finalization', () => {
+  it('marks live translations as interim before finalization', () => {
     expect(buildLiveUtterance({
       pendingTurn: {
         utteranceId: 'u-live',
@@ -907,7 +907,9 @@ describe('use-realtime-stt pure logic', () => {
       translations: {
         ko: '계속 말하는 중',
       },
-      translationFinalized: {},
+      translationFinalized: {
+        ko: false,
+      },
       createdAtMs: 1700000000999,
     })
 
@@ -967,7 +969,9 @@ describe('use-realtime-stt pure logic', () => {
         translations: {
           ko: '첫 번째 초안',
         },
-        translationFinalized: {},
+        translationFinalized: {
+          ko: false,
+        },
         createdAtMs: 1700000000001,
       },
       {
@@ -981,7 +985,9 @@ describe('use-realtime-stt pure logic', () => {
         translations: {
           en: 'Updated second draft',
         },
-        translationFinalized: {},
+        translationFinalized: {
+          en: false,
+        },
         createdAtMs: 1700000000002,
       },
     ])
@@ -1308,9 +1314,28 @@ describe('use-realtime-stt pure logic', () => {
       ko: '그리고 결국 우리는 사이가 틀어졌어요. 그때',
       ja: 'そして最終的に私たちは仲たがいしました。その時',
     })
-    expect(appended.utterances[0].translationFinalized).toEqual({})
+    expect(appended.utterances[0].translationFinalized).toEqual({
+      ko: false,
+      ja: false,
+    })
     expect(appended.translationPriorities.get('u-seeded:ko')).toEqual({ kind: 'partial', seq: 3 })
     expect(appended.translationPriorities.get('u-seeded:ja')).toEqual({ kind: 'partial', seq: 3 })
+
+    const finalized = applyTranslationToUtteranceStoreState({
+      store: appended,
+      utteranceId: 'u-seeded',
+      translations: {
+        ko: '그리고 결국 우리는 사이가 틀어졌어요. 최종 문장',
+        ja: 'そして最終的に私たちは仲たがいしました。最終文',
+      },
+      priority: { kind: 'final', seq: 4 },
+      markFinalized: true,
+    })
+
+    expect(finalized.utterances[0]?.translationFinalized).toEqual({
+      ko: true,
+      ja: true,
+    })
   })
 
   it('does not let an older queued partial override a seeded newer partial', () => {
@@ -2196,6 +2221,30 @@ describe('use-realtime-stt pure logic', () => {
       },
       translationFinalized: {
         ko: true,
+      },
+    })
+  })
+
+  it('preserves interim finalization flags for available partial translations', () => {
+    expect(pruneUnresolvedTranslationTargets({
+      targetLanguages: ['ko', 'ja'],
+      translations: {
+        ko: '부분 번역',
+        ja: '暫定翻訳',
+      },
+      translationFinalized: {
+        ko: false,
+        ja: true,
+      },
+    })).toEqual({
+      targetLanguages: ['ko', 'ja'],
+      translations: {
+        ko: '부분 번역',
+        ja: '暫定翻訳',
+      },
+      translationFinalized: {
+        ko: false,
+        ja: true,
       },
     })
   })
