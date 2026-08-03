@@ -132,7 +132,6 @@ model AppEventLog {
   user    User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
   message AppMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
 
-  @@unique([messageId, eventType], map: "app_event_logs_message_event_uidx")
   @@index([eventType], map: "app_event_logs_event_type_idx")
   @@index([createdAt], map: "app_event_logs_created_at_idx")
   @@index([userId], map: "app_event_logs_user_id_idx")
