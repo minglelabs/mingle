@@ -804,9 +804,8 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const translationFinalized: Record<string, boolean> = {}
   for (const language of targetLanguages) {
-    if (input.translationFinalized?.[language] === true) {
-      translationFinalized[language] = true
-    }
+    const finalized = input.translationFinalized?.[language]
+    if (typeof finalized === 'boolean') translationFinalized[language] = finalized
   }
 
   return {
