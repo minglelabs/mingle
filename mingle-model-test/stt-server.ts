@@ -50,6 +50,17 @@ type SttModel =
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
 
+type SonioxTranslationConfig =
+    | {
+        type: 'one_way';
+        target_language: string;
+    }
+    | {
+        type: 'two_way';
+        language_a: string;
+        language_b: string;
+    };
+
 interface ClientConfig {
     sample_rate: number;
     languages: string[];
@@ -57,6 +68,7 @@ interface ClientConfig {
     translate_model?: TranslateModel;
     translation_enabled?: boolean;
     lang_hints_strict?: boolean;
+    soniox_translation?: SonioxTranslationConfig;
 }
 
 interface SpeechmaticsSessionConfig {
@@ -1326,6 +1338,44 @@ wss.on('connection', (clientWs) => {
             let hadNonFinal = false;
             let lastPartialTranslateTime = 0;
             let partialTranslateInFlight = false;
+            const sonioxNativeTranslation = config.stt_model === 'soniox-v5'
+                ? config.soniox_translation
+                : undefined;
+            const nativeTranslationBuffers = new Map<string, {
+                finalizedText: string;
+                pendingText: string;
+            }>();
+
+            const getNativeTranslationBuffer = (language: string) => {
+                const existing = nativeTranslationBuffers.get(language);
+                if (existing) return existing;
+
+                const created = { finalizedText: '', pendingText: '' };
+                nativeTranslationBuffers.set(language, created);
+                return created;
+            };
+
+            const emitNativeTranslations = (isPartial: boolean) => {
+                for (const [targetLanguage, buffer] of nativeTranslationBuffers) {
+                    const text = `${buffer.finalizedText}${buffer.pendingText}`
+                        .replace(/<\/?end>/gi, '')
+                        .trim();
+                    if (!text) continue;
+
+                    clientWs.send(JSON.stringify({
+                        type: 'translation',
+                        data: {
+                            target_language: targetLanguage,
+                            translated_utterance: { text },
+                            is_partial: isPartial,
+                        },
+                    }));
+                }
+            };
+
+            const resetNativeTranslations = () => {
+                nativeTranslationBuffers.clear();
+            };
 
             sttWs.onopen = () => {
                 const sonioxConfig = {
@@ -1340,6 +1390,7 @@ wss.on('connection', (clientWs) => {
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
                     max_endpoint_delay_ms: 500,
+                    ...(sonioxNativeTranslation ? { translation: sonioxNativeTranslation } : {}),
                 };
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
@@ -1383,8 +1434,26 @@ wss.on('connection', (clientWs) => {
 
                     let newFinalText = '';
                     let nonFinalText = '';
+                    const nonFinalTranslations = new Map<string, string>();
 
                     for (const token of tokens) {
+                        if (sonioxNativeTranslation && token.translation_status === 'translation') {
+                            const targetLanguage = token.language;
+                            if (!targetLanguage) continue;
+
+                            const buffer = getNativeTranslationBuffer(targetLanguage);
+                            if (token.is_final) {
+                                buffer.finalizedText += token.text;
+                                buffer.pendingText = '';
+                            } else {
+                                nonFinalTranslations.set(
+                                    targetLanguage,
+                                    `${nonFinalTranslations.get(targetLanguage) || ''}${token.text}`,
+                                );
+                            }
+                            continue;
+                        }
+
                         if (token.language) {
                             detectedLang = token.language;
                         }
@@ -1393,6 +1462,10 @@ wss.on('connection', (clientWs) => {
                         } else {
                             nonFinalText += token.text;
                         }
+                    }
+
+                    for (const [targetLanguage, pendingText] of nonFinalTranslations) {
+                        getNativeTranslationBuffer(targetLanguage).pendingText = pendingText;
                     }
 
                     finalizedText += newFinalText;
@@ -1413,14 +1486,18 @@ wss.on('connection', (clientWs) => {
                         };
                         clientWs.send(JSON.stringify(partialMsg));
 
-                        // 부분 번역: ~1.5초마다 중간 번역 실행
-                        const now = Date.now();
-                        if (selectedLanguages.length > 0 && !partialTranslateInFlight && now - lastPartialTranslateTime > 1500 && fullText.trim().length > 3) {
-                            partialTranslateInFlight = true;
-                            lastPartialTranslateTime = now;
-                            translateText(fullText.trim(), detectedLang, selectedLanguages, clientWs, true).finally(() => {
-                                partialTranslateInFlight = false;
-                            });
+                        if (sonioxNativeTranslation) {
+                            emitNativeTranslations(true);
+                        } else {
+                            // 부분 번역: ~1.5초마다 중간 번역 실행
+                            const now = Date.now();
+                            if (selectedLanguages.length > 0 && !partialTranslateInFlight && now - lastPartialTranslateTime > 1500 && fullText.trim().length > 3) {
+                                partialTranslateInFlight = true;
+                                lastPartialTranslateTime = now;
+                                translateText(fullText.trim(), detectedLang, selectedLanguages, clientWs, true).finally(() => {
+                                    partialTranslateInFlight = false;
+                                });
+                            }
                         }
                     } else if (newFinalText && hadNonFinal) {
                         // 모델이 엔드포인트를 감지하여 토큰을 확정함 → 발화 완료
@@ -1437,7 +1514,10 @@ wss.on('connection', (clientWs) => {
                         };
                         clientWs.send(JSON.stringify(finalMsg));
 
-                        if (selectedLanguages.length > 0) {
+                        if (sonioxNativeTranslation) {
+                            emitNativeTranslations(false);
+                            resetNativeTranslations();
+                        } else if (selectedLanguages.length > 0) {
                             translateText(finalText, detectedLang, selectedLanguages, clientWs);
                         }
 
@@ -1474,7 +1554,10 @@ wss.on('connection', (clientWs) => {
                     };
                     clientWs.send(JSON.stringify(finalMsg));
 
-                    if (selectedLanguages.length > 0) {
+                    if (sonioxNativeTranslation) {
+                        emitNativeTranslations(false);
+                        resetNativeTranslations();
+                    } else if (selectedLanguages.length > 0) {
                         translateText(remainingText, detectedLang, selectedLanguages, clientWs);
                     }
 
@@ -1588,10 +1671,12 @@ wss.on('connection', (clientWs) => {
             currentSampleRate = data.sample_rate;
             translateModel = data.translate_model || 'claude-haiku-4-5';
             translationEnabled = data.translation_enabled !== false;
-            selectedLanguages = translationEnabled ? data.languages : [];
+            const sonioxNativeTranslation = currentModel === 'soniox-v5'
+                && data.soniox_translation;
+            selectedLanguages = translationEnabled && !sonioxNativeTranslation ? data.languages : [];
 
             console.log(
-                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
+                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sonioxNativeTranslation=${sonioxNativeTranslation?.type || '-'} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
             );
             
             if (currentModel === 'deepgram') {
