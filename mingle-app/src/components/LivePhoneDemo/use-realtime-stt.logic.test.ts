@@ -877,7 +877,7 @@ describe('use-realtime-stt pure logic', () => {
     })
   })
 
-  it('builds a live utterance with the speaker before finalization', () => {
+  it('marks live translations as interim before finalization', () => {
     expect(buildLiveUtterance({
       pendingTurn: {
         utteranceId: 'u-live',
@@ -905,7 +905,9 @@ describe('use-realtime-stt pure logic', () => {
       translations: {
         ko: '계속 말하는 중',
       },
-      translationFinalized: {},
+      translationFinalized: {
+        ko: false,
+      },
       createdAtMs: 1700000000999,
     })
 
@@ -965,7 +967,9 @@ describe('use-realtime-stt pure logic', () => {
         translations: {
           ko: '첫 번째 초안',
         },
-        translationFinalized: {},
+        translationFinalized: {
+          ko: false,
+        },
         createdAtMs: 1700000000001,
       },
       {
@@ -979,7 +983,9 @@ describe('use-realtime-stt pure logic', () => {
         translations: {
           en: 'Updated second draft',
         },
-        translationFinalized: {},
+        translationFinalized: {
+          en: false,
+        },
         createdAtMs: 1700000000002,
       },
     ])

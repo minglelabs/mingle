@@ -61,7 +61,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('class="align-middle"')
   })
 
-  it('renders an explicitly unfinished translation as an interim gray bubble', () => {
+  it('matches interim translation text to the draft input gray without a cursor', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -82,9 +82,11 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('data-translation-state="interim"')
-    expect(html).toContain('bg-gray-100 border border-gray-200')
+    expect(html).toContain('bg-amber-50 border border-amber-100')
     expect(html).toContain('text-gray-500')
-    expect(html).not.toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('class="min-w-0 text-sm text-gray-400"')
+    expect(html).not.toContain('class="min-w-0 text-sm text-gray-500"')
+    expect(html).not.toContain('bg-gray-100 border border-gray-200')
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
@@ -92,7 +94,7 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('aria-label="Copy All"'),
     )
-    expect(html).not.toContain('bg-gray-400 animate-pulse')
+    expect(html).not.toContain('data-interim-translation-cursor')
   })
 
   it('renders a finalized translation with the existing amber treatment', () => {
@@ -117,6 +119,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-translation-state="final"')
     expect(html).toContain('bg-amber-50 border border-amber-100')
     expect(html).not.toContain('bg-gray-100 border border-gray-200')
+    expect(html).not.toContain('data-interim-translation-cursor')
   })
 
   it('treats translations without a finalization flag as finalized for saved conversations', () => {

@@ -264,13 +264,10 @@ function ChatBubble({
             lang={lang}
             translationState={state}
             maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
-            bubbleClassName={state === 'interim'
-              ? 'bg-gray-100 border border-gray-200 transition-colors'
-              : 'bg-amber-50 border border-amber-100 transition-colors'
-            }
+            bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
             metaClassName={state === 'interim' ? 'text-gray-500' : 'text-amber-500'}
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-            contentClassName={`${bubbleTextClassName} ${state === 'interim' ? 'text-gray-500' : 'text-gray-700'}`}
+            contentClassName={`${bubbleTextClassName} ${state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`}
             copyText={text}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             allText={combinedUtteranceCopyText}
