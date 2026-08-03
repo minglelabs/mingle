@@ -173,6 +173,9 @@ function ChatBubble({
     .map(lang => ({
       lang,
       text: utterance.translations[lang],
+      state: utterance.translationFinalized?.[lang] === false
+        ? 'interim' as const
+        : 'final' as const,
     }))
   const pendingLangs = targetLangs
     .filter(lang => !utterance.translations[lang])
@@ -255,15 +258,19 @@ function ChatBubble({
         </div>
 
         {/* Translation bubbles */}
-        {translationEntries.map(({ lang, text }) => (
+        {translationEntries.map(({ lang, text, state }) => (
           <TranslationBubbleRow
             key={lang}
             lang={lang}
+            translationState={state}
             maxWidth={TRANSLATION_BUBBLE_MAX_WIDTH}
-            bubbleClassName="bg-amber-50 border border-amber-100 transition-colors"
-            metaClassName="text-amber-500"
+            bubbleClassName={state === 'interim'
+              ? 'bg-gray-100 border border-gray-200 transition-colors'
+              : 'bg-amber-50 border border-amber-100 transition-colors'
+            }
+            metaClassName={state === 'interim' ? 'text-gray-500' : 'text-amber-500'}
             contentStyle={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-            contentClassName={`${bubbleTextClassName} text-gray-700`}
+            contentClassName={`${bubbleTextClassName} ${state === 'interim' ? 'text-gray-500' : 'text-gray-700'}`}
             copyText={text}
             copyBubbleLabel={copyActionCopy.copyBubbleLabel}
             allText={combinedUtteranceCopyText}

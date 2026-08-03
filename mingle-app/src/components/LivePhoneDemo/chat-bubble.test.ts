@@ -61,7 +61,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('class="align-middle"')
   })
 
-  it('keeps translation bubbles amber even before the final flag is set', () => {
+  it('renders an explicitly unfinished translation as an interim gray bubble', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -72,14 +72,19 @@ describe('ChatBubble', () => {
           translations: {
             ko: '부분 번역',
           },
-          translationFinalized: {},
+          translationFinalized: {
+            ko: false,
+          },
         },
         uiLocale: 'en',
       }),
     )
 
     expect(html).toContain('부분 번역')
-    expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('data-translation-state="interim"')
+    expect(html).toContain('bg-gray-100 border border-gray-200')
+    expect(html).toContain('text-gray-500')
+    expect(html).not.toContain('bg-amber-50 border border-amber-100')
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
@@ -87,8 +92,50 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
       html.indexOf('aria-label="Copy All"'),
     )
-    expect(html).not.toContain('bg-gray-100/80')
     expect(html).not.toContain('bg-gray-400 animate-pulse')
+  })
+
+  it('renders a finalized translation with the existing amber treatment', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-final',
+          originalText: 'Original message',
+          originalLang: 'en',
+          targetLanguages: ['ko'],
+          translations: {
+            ko: 'Final translation',
+          },
+          translationFinalized: {
+            ko: true,
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).toContain('data-translation-state="final"')
+    expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).not.toContain('bg-gray-100 border border-gray-200')
+  })
+
+  it('treats translations without a finalization flag as finalized for saved conversations', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-saved',
+          originalText: 'Saved original',
+          originalLang: 'en',
+          translations: {
+            ko: 'Saved translation',
+          },
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).toContain('data-translation-state="final"')
+    expect(html).toContain('bg-amber-50 border border-amber-100')
   })
 
   it('renders draft original bubbles with the same bubble structure and a live cursor', () => {
