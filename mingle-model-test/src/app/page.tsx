@@ -36,6 +36,7 @@ type SttModel =
   | 'fireworks'
   | 'chirp-3'
   | 'soniox'
+  | 'soniox-v5'
   | 'elevenlabs'
   | 'speechmatics'
 
@@ -86,7 +87,7 @@ export default function Home() {
   const [lang3, setLang3] = useState('ja');
   // selectedLanguages is derived from individual lang selectors
   const selectedLanguages = [lang1, lang2, lang3].filter(Boolean);
-  const [sttModel, setSttModel] = useState<SttModel>('soniox');
+  const [sttModel, setSttModel] = useState<SttModel>('soniox-v5');
   const [translationEnabled, setTranslationEnabled] = useState(true);
   const [translateModel, setTranslateModel] = useState<'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview'>('gemini-2.5-flash-lite');
   const [langHintsStrict, setLangHintsStrict] = useState(true);
@@ -336,6 +337,7 @@ export default function Home() {
   const isActive = connectionStatus !== 'idle'
   const isReady = connectionStatus === 'ready'
   const isConnecting = connectionStatus === 'connecting'
+  const isSonioxModel = sttModel === 'soniox' || sttModel === 'soniox-v5'
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
   const rippleOpacity = showRipple ? 0.3 : 0
@@ -379,6 +381,7 @@ export default function Home() {
             <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
+            <option value="soniox-v5">Soniox V5 (AI 번역, 60+ 언어 자동 감지)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
           {sttModel === 'chirp-3' && (
@@ -406,7 +409,7 @@ export default function Home() {
               언어 선택은 번역 대상 위주입니다. STT는 Scribe v2 Realtime의 자동 언어 감지와 VAD 세그먼트를 사용합니다.
             </p>
           )}
-          {sttModel === 'soniox' && (
+          {isSonioxModel && (
             <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
@@ -539,7 +542,7 @@ export default function Home() {
         </div>
       </div>
 
-      {sttModel === 'soniox' && (sessionUsageSec > 0 || cumulativeUsageSec > 0) && (
+      {isSonioxModel && (sessionUsageSec > 0 || cumulativeUsageSec > 0) && (
         <div className="mt-3 w-full max-w-md text-xs text-gray-400 flex justify-between px-1">
           <span>이번 세션: {sessionUsageSec.toFixed(1)}s</span>
           <span>누적: {(cumulativeUsageSec + sessionUsageSec).toFixed(1)}s</span>
