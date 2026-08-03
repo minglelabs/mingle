@@ -55,6 +55,7 @@ class NativeSTTModule(
     val behaviorProfile: String,
     val sonioxLanguageHints: List<String>,
     val sonioxManualFinalizeSilenceMs: Int?,
+    val sonioxTranslation: JSONObject?,
   )
 
   private data class PendingStartRequest(
@@ -150,6 +151,13 @@ class NativeSTTModule(
       sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
         if (options.hasKey("sonioxManualFinalizeSilenceMs") && !options.isNull("sonioxManualFinalizeSilenceMs")) {
           options.getDouble("sonioxManualFinalizeSilenceMs")
+        } else {
+          null
+        },
+      ),
+      sonioxTranslation = parseSonioxTranslation(
+        if (options.hasKey("sonioxTranslation") && !options.isNull("sonioxTranslation")) {
+          options.getMap("sonioxTranslation")
         } else {
           null
         },
@@ -265,6 +273,17 @@ class NativeSTTModule(
     return seen.toList()
   }
 
+  private fun parseSonioxTranslation(map: ReadableMap?): JSONObject? {
+    if (map == null || map.getString("type")?.trim() != "two_way") return null
+    val languageA = map.getString("language_a")?.trim().orEmpty()
+    val languageB = map.getString("language_b")?.trim().orEmpty()
+    if (languageA.isEmpty() || languageB.isEmpty() || languageA == languageB) return null
+    return JSONObject()
+      .put("type", "two_way")
+      .put("language_a", languageA)
+      .put("language_b", languageB)
+  }
+
   private fun startSession(
     options: StartOptions,
     promise: Promise,
@@ -324,6 +343,9 @@ class NativeSTTModule(
           }
           if (options.sonioxLanguageHints.isNotEmpty()) {
             config.put("soniox_language_hints", options.sonioxLanguageHints)
+          }
+          options.sonioxTranslation?.let {
+            config.put("soniox_translation", it)
           }
           webSocket.send(config.toString())
           Log.i(

@@ -51,6 +51,7 @@ test('raw Soniox debug token grouping preserves contiguous language runs', () =>
     const runs = buildSonioxDebugTokenRuns([
         { text: '안녕하세요 ', is_final: false, speaker: '1', language: 'ko' },
         { text: 'how ', is_final: false, speaker: '1', language: 'en' },
+        { text: 'hello ', is_final: false, speaker: '1', language: 'en', translation_status: 'translation' },
         { text: 'are you?', is_final: false, speaker: '1', language: 'en' },
         { text: '<fin>', is_final: true, speaker: '1', language: 'ko' },
         { text: '안녕하세요 ', is_final: true, speaker: '1', language: 'ko' },

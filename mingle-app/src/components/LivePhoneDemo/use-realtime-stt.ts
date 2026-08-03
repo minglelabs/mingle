@@ -705,6 +705,52 @@ function normalizeIncomingSourceLanguage(rawLanguage: string, rawText = ''): str
   return (rawLanguage || '').trim().replace(/_/g, '-')
 }
 
+export type SonioxNativeTranslationConfig = {
+  type: 'two_way'
+  language_a: string
+  language_b: string
+}
+
+export function buildSonioxNativeTranslationConfig(
+  targetLanguages: string[],
+  speechLanguages: string[],
+): SonioxNativeTranslationConfig | null {
+  if (targetLanguages.length !== 2 || speechLanguages.length !== 2) return null
+
+  const targetPair = targetLanguages.map(canonicalizeSonioxLanguageHintCode)
+  const speechPair = speechLanguages.map(canonicalizeSonioxLanguageHintCode)
+  if (targetPair.some((language) => !language) || speechPair.some((language) => !language)) return null
+  if (new Set(targetPair).size !== 2 || new Set(speechPair).size !== 2) return null
+  if (!targetPair.every((language) => speechPair.includes(language))) return null
+
+  return {
+    type: 'two_way',
+    language_a: targetPair[0],
+    language_b: targetPair[1],
+  }
+}
+
+export function normalizeSonioxNativeTranslations(
+  translationsRaw: Record<string, string>,
+  targetLanguages: string[],
+): Record<string, string> {
+  const targetLanguageBySonioxCode = new Map<string, string>()
+  for (const targetLanguage of targetLanguages) {
+    const sonioxCode = canonicalizeSonioxLanguageHintCode(targetLanguage)
+    if (!sonioxCode || targetLanguageBySonioxCode.has(sonioxCode)) continue
+    targetLanguageBySonioxCode.set(sonioxCode, targetLanguage)
+  }
+
+  const translations: Record<string, string> = {}
+  for (const [rawLanguage, rawText] of Object.entries(translationsRaw)) {
+    const targetLanguage = targetLanguageBySonioxCode.get(canonicalizeSonioxLanguageHintCode(rawLanguage))
+    const text = typeof rawText === 'string' ? rawText.trim() : ''
+    if (!targetLanguage || !text) continue
+    translations[targetLanguage] = text
+  }
+  return translations
+}
+
 function shouldKeepSourceLanguageBubble(options?: {
   sourceLanguagesMixed?: boolean
   sourceTextHasForeignScript?: boolean
@@ -869,6 +915,7 @@ export interface ParsedSttTranscriptMessage {
   isFinal: boolean
   speaker: string
   finalizeSource?: string
+  nativeTranslations?: Record<string, string>
 }
 
 export function parseSttTranscriptMessage(
@@ -894,6 +941,15 @@ export function parseSttTranscriptMessage(
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
+  const nativeTranslations = typeof utterance.translations === 'object' && utterance.translations !== null
+    ? Object.fromEntries(
+      Object.entries(utterance.translations as Record<string, unknown>)
+        .filter((entry): entry is [string, string] => (
+          typeof entry[0] === 'string' && typeof entry[1] === 'string' && entry[1].trim().length > 0
+        ))
+        .map(([translationLanguage, translationText]) => [translationLanguage, translationText.trim()]),
+    )
+    : {}
 
   return {
     rawText,
@@ -902,6 +958,33 @@ export function parseSttTranscriptMessage(
     isFinal,
     speaker,
     ...(finalizeSource ? { finalizeSource } : {}),
+    ...(Object.keys(nativeTranslations).length > 0 ? { nativeTranslations } : {}),
+  }
+}
+
+export interface ParsedSttTranslationMessage {
+  speaker: string
+  targetLanguage: string
+  text: string
+}
+
+export function parseSttTranslationMessage(
+  message: Record<string, unknown>,
+): ParsedSttTranslationMessage | null {
+  if (message.type !== 'translation') return null
+  if (typeof message.data !== 'object' || message.data === null) return null
+  const data = message.data as Record<string, unknown>
+  if (data.is_partial !== true) return null
+  const translatedUtterance = data.translated_utterance
+  if (typeof translatedUtterance !== 'object' || translatedUtterance === null) return null
+  const translated = translatedUtterance as Record<string, unknown>
+  const text = normalizeSttTurnText(typeof translated.text === 'string' ? translated.text : '')
+  const targetLanguage = typeof data.target_language === 'string' ? data.target_language.trim() : ''
+  if (!text || !targetLanguage) return null
+  return {
+    speaker: typeof data.speaker === 'string' && data.speaker.trim() ? data.speaker.trim() : 'unknown',
+    targetLanguage,
+    text,
   }
 }
 
@@ -2332,6 +2415,8 @@ export default function useRealtimeSTT({
   // Monotonically increasing sequence number for translation requests.
   // Final translations use this to keep newer final responses ahead of older ones.
   const translateSeqRef = useRef(0)
+  const sonioxNativeTranslationSeqRef = useRef(0)
+  const sonioxNativeTranslationEnabledRef = useRef(false)
   const conversationClearSequenceRef = useRef(0)
   const recentFinalizedUtterancesRef = useRef<RecentFinalizedUtterance[]>([])
   const sessionKeyRef = useRef('')
@@ -2973,6 +3058,7 @@ export default function useRealtimeSTT({
   }, [])
 
   const cleanup = useCallback(() => {
+    sonioxNativeTranslationEnabledRef.current = false
     stopAudioPipeline({ closeContext: true })
     if (socketRef.current) {
       socketRef.current.close()
@@ -2981,6 +3067,7 @@ export default function useRealtimeSTT({
   }, [stopAudioPipeline])
 
   const resetToIdle = useCallback(() => {
+    sonioxNativeTranslationEnabledRef.current = false
     clearConnectionErrorResetTimer()
     resolvePendingNativeStopAck()
     isStoppingRef.current = false
@@ -4147,9 +4234,61 @@ export default function useRealtimeSTT({
       return
     }
 
+    const nativeTranslation = parseSttTranslationMessage(message)
+    if (nativeTranslation) {
+      if (!sonioxNativeTranslationEnabledRef.current || isStoppingRef.current) return
+      const pendingTurn = pendingTurnsBySpeakerRef.current[nativeTranslation.speaker] || null
+      if (!pendingTurn) {
+        logSttDebug('soniox.translation.skip_without_turn', {
+          speaker: nativeTranslation.speaker,
+          targetLanguage: nativeTranslation.targetLanguage,
+        })
+        return
+      }
+
+      const targetLanguages = getCurrentTargetLanguages()
+      const nextTranslations = normalizeSonioxNativeTranslations(
+        { [nativeTranslation.targetLanguage]: nativeTranslation.text },
+        targetLanguages,
+      )
+      const targetLanguage = Object.keys(nextTranslations)[0] || ''
+      if (!targetLanguage) return
+
+      const priority: TranslationPriority = {
+        kind: 'partial',
+        seq: ++sonioxNativeTranslationSeqRef.current,
+      }
+      const nextPriorities = new Map(pendingTurn.partialTranslationPriorities)
+      const existingPriority = nextPriorities.get(targetLanguage)
+      if (!shouldOverrideTranslationByPriority(existingPriority, priority)) return
+
+      const mergedTranslations = {
+        ...pendingTurn.partialTranslations,
+        [targetLanguage]: nextTranslations[targetLanguage],
+      }
+      nextPriorities.set(targetLanguage, priority)
+      const updatedPendingTurn: PendingSpeakerTurn = {
+        ...pendingTurn,
+        partialTranslations: mergedTranslations,
+        partialTranslationPriorities: nextPriorities,
+        currentTurnPreviousState: buildCurrentTurnPreviousStatePayload(
+          pendingTurn.language,
+          pendingTurn.text,
+          mergedTranslations,
+        ),
+      }
+      pendingTurnsBySpeakerRef.current[nativeTranslation.speaker] = updatedPendingTurn
+      if (activePartialSpeakerRef.current === nativeTranslation.speaker) {
+        partialTranslationsRef.current = mergedTranslations
+        setPartialTranslations(mergedTranslations)
+      }
+      bumpPendingTurnRenderVersion()
+      return
+    }
+
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
+      const { rawText, text, language: lang, isFinal, speaker, finalizeSource, nativeTranslations } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
@@ -4181,11 +4320,14 @@ export default function useRealtimeSTT({
         turnStartedAtRef.current = null
 
         const targetLanguages = getCurrentTargetLanguages()
+        const nativeFinalTranslations = sonioxNativeTranslationEnabledRef.current
+          ? normalizeSonioxNativeTranslations(nativeTranslations || {}, targetLanguages)
+          : {}
         const nextUtteranceSerial = pendingTurn?.utteranceSerial ?? (utteranceIdRef.current + 1)
         const seedTranslationState = buildSeedTranslationState(
           targetLanguages,
           lang,
-          options.partialTranslations,
+          { ...options.partialTranslations, ...nativeFinalTranslations },
           options.partialTranslationPriorities,
         )
         const finalizedPayload = buildFinalizedUtterancePayload({
@@ -4291,18 +4433,60 @@ export default function useRealtimeSTT({
           nowMs: now,
         })
 
-        finalizeTurnWithTranslation(
-          {
-            utteranceId: recentLocalReuseUtteranceId || finalizedPayload.utteranceId,
-            text: finalizedPayload.text,
-            lang: finalizedPayload.language,
-            currentTurnPreviousState,
-          },
-          {
+        const finalizedUtteranceId = recentLocalReuseUtteranceId || finalizedPayload.utteranceId
+        const hasNativeTranslations = sonioxNativeTranslationEnabledRef.current
+          && Object.keys(seedTranslationState.translations).length > 0
+        if (hasNativeTranslations) {
+          const priority: TranslationPriority = {
+            kind: 'final',
+            seq: ++sonioxNativeTranslationSeqRef.current,
+          }
+          applyTranslationToUtterance(
+            finalizedUtteranceId,
+            seedTranslationState.translations,
+            priority,
+            true,
+            {
+              sourceText: finalizedPayload.text,
+              sourceLanguage: finalizedPayload.language,
+            },
+          )
+          const ttsLanguage = Object.keys(seedTranslationState.translations)[0] || ''
+          if (enableTtsRef.current && ttsLanguage) {
+            onTtsRequestedRef.current?.(finalizedUtteranceId, ttsLanguage)
+            pendingFinalizedTtsUtteranceIdsRef.current.add(finalizedUtteranceId)
+          }
+          void logClientEvent({
+            eventType: 'stt_turn_finalized',
+            clientMessageId: finalizedUtteranceId,
+            sourceLanguage: finalizedPayload.language,
+            sourceText: finalizedPayload.text,
+            translations: seedTranslationState.translations,
             sttDurationMs,
-            reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
-          },
-        )
+            totalDurationMs: sttDurationMs ?? 0,
+            provider: 'soniox',
+            model: 'stt-rt-v5',
+            metadata: {
+              reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+              nativeSpeechTranslation: true,
+              speaker,
+            },
+            keepalive: true,
+          })
+        } else {
+          finalizeTurnWithTranslation(
+            {
+              utteranceId: finalizedUtteranceId,
+              text: finalizedPayload.text,
+              lang: finalizedPayload.language,
+              currentTurnPreviousState,
+            },
+            {
+              sttDurationMs,
+              reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+            },
+          )
+        }
         removePendingTurn(speaker)
         syncVisiblePendingTurn()
       } else {
@@ -4355,6 +4539,7 @@ export default function useRealtimeSTT({
       }
     }
   }, [
+    applyTranslationToUtterance,
     buildLocalFinalizeOptionsForSpeaker,
     bumpMessageCountForNewUtterance,
     bumpPendingTurnRenderVersion,
@@ -4373,6 +4558,7 @@ export default function useRealtimeSTT({
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
     const currentSpeechLanguages = [...effectiveSpeechLanguages]
+    const sonioxTranslation = buildSonioxNativeTranslationConfig(targetLanguages, currentSpeechLanguages)
     useNativeSttRef.current = useNativeStt
     if (shouldOpenNativeMicSettingsOnRetry({
       useNativeStt,
@@ -4411,6 +4597,8 @@ export default function useRealtimeSTT({
 
     try {
       setConnectionStatus('connecting')
+      sonioxNativeTranslationEnabledRef.current = Boolean(sonioxTranslation)
+      sonioxNativeTranslationSeqRef.current = 0
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
       recentFinalizedUtterancesRef.current = []
@@ -4442,6 +4630,7 @@ export default function useRealtimeSTT({
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
             sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
+            ...(sonioxTranslation ? { sonioxTranslation } : {}),
           },
         })
         if (!posted) {
@@ -4493,6 +4682,7 @@ export default function useRealtimeSTT({
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
           soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
+          ...(sonioxTranslation ? { soniox_translation: sonioxTranslation } : {}),
         }
         socket.send(JSON.stringify(config))
       }
@@ -4793,6 +4983,7 @@ export default function useRealtimeSTT({
 
   // ===== Partial translation: fire immediately once, then re-trigger per configured mode =====
   useEffect(() => {
+    if (sonioxNativeTranslationEnabledRef.current) return
     const pendingTurns = Object.values(pendingTurnsBySpeakerRef.current)
     const targetLanguages = [...effectiveTargetLanguages]
     const targetLanguageSignature = buildLanguageSelectionSignature(targetLanguages)

@@ -49,6 +49,7 @@ const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
+const SONIOX_RT_MODEL = 'stt-rt-v5';
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MIN = 500;
 const SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX = 3000;
@@ -589,6 +590,13 @@ wss.on('connection', (clientWs) => {
                 is_final?: unknown;
                 language?: unknown;
                 speaker?: unknown;
+                translation_status?: unknown;
+                source_language?: unknown;
+            };
+            type SonioxNativeTranslationState = {
+                finalizedText: string;
+                finalizedEndMs: number;
+                pendingText: string;
             };
             type SonioxSpeakerState = {
                 speaker: string;
@@ -602,6 +610,7 @@ wss.on('connection', (clientWs) => {
                 lastConsumedEndMs: number;
                 detectedLang: string;
                 strategy: SilenceTimerStrategy;
+                nativeTranslations: Map<string, SonioxNativeTranslationState>;
             };
             type SonioxFinalizeRequest = {
                 requestId: number;
@@ -628,6 +637,15 @@ wss.on('connection', (clientWs) => {
             };
 
             const speakerStates = new Map<string, SonioxSpeakerState>();
+            const latestSpeakerByLanguage = new Map<string, string>();
+            const sonioxNativeTranslation = (() => {
+                const translation = config.soniox_translation;
+                if (!translation || typeof translation !== 'object' || translation.type !== 'two_way') return null;
+                const languageA = typeof translation.language_a === 'string' ? translation.language_a.trim() : '';
+                const languageB = typeof translation.language_b === 'string' ? translation.language_b.trim() : '';
+                if (!languageA || !languageB || languageA === languageB) return null;
+                return { type: 'two_way' as const, language_a: languageA, language_b: languageB };
+            })();
             let globalFinalizeTimer: ReturnType<typeof setTimeout> | null = null;
             let globalFinalizeLastSentAtMs = 0;
             let activeFinalizeRequest: SonioxFinalizeRequest | null = null;
@@ -866,6 +884,7 @@ wss.on('connection', (clientWs) => {
                 speaker?: string,
                 options?: {
                     finalizeSource?: MingleSttFinalizeSource;
+                    nativeTranslations?: Record<string, string>;
                 },
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
@@ -884,6 +903,9 @@ wss.on('connection', (clientWs) => {
                                 text: cleanedText,
                                 language: cleanedLang,
                                 speaker: cleanedSpeaker,
+                                ...(options?.nativeTranslations && Object.keys(options.nativeTranslations).length > 0
+                                    ? { translations: options.nativeTranslations }
+                                    : {}),
                             },
                         },
                     }));
@@ -902,6 +924,47 @@ wss.on('connection', (clientWs) => {
                 };
             };
 
+            const getNativeTranslationState = (
+                state: SonioxSpeakerState,
+                targetLanguage: string,
+            ): SonioxNativeTranslationState => {
+                const existing = state.nativeTranslations.get(targetLanguage);
+                if (existing) return existing;
+                const created: SonioxNativeTranslationState = {
+                    finalizedText: '',
+                    finalizedEndMs: -1,
+                    pendingText: '',
+                };
+                state.nativeTranslations.set(targetLanguage, created);
+                return created;
+            };
+
+            const getNativeTranslations = (state: SonioxSpeakerState): Record<string, string> => {
+                const translations: Record<string, string> = {};
+                for (const [targetLanguage, translation] of state.nativeTranslations) {
+                    const text = composeTurnText(translation.finalizedText, translation.pendingText);
+                    if (text) translations[targetLanguage] = text;
+                }
+                return translations;
+            };
+
+            const emitNativePartialTranslations = (state: SonioxSpeakerState) => {
+                if (!sonioxNativeTranslation || clientWs.readyState !== WebSocket.OPEN) return;
+                const translations = getNativeTranslations(state);
+                for (const [targetLanguage, text] of Object.entries(translations)) {
+                    clientWs.send(JSON.stringify({
+                        type: 'translation',
+                        data: {
+                            speaker: state.speaker,
+                            source_language: state.detectedLang,
+                            target_language: targetLanguage,
+                            translated_utterance: { text },
+                            is_partial: true,
+                        },
+                    }));
+                }
+            };
+
             const disposeSpeakerState = (state: SonioxSpeakerState) => {
                 state.strategy.resetState();
                 state.strategy.dispose();
@@ -916,6 +979,7 @@ wss.on('connection', (clientWs) => {
                 state.currentSnapshotEndMs = -1;
                 state.lastProgressAtMs = 0;
                 state.detectedLang = 'unknown';
+                state.nativeTranslations.clear();
                 state.strategy.resetState();
             };
 
@@ -936,7 +1000,7 @@ wss.on('connection', (clientWs) => {
                     state.detectedLang,
                     true,
                     state.speaker,
-                    { finalizeSource },
+                    { finalizeSource, nativeTranslations: getNativeTranslations(state) },
                 );
                 if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
                     state.lastConsumedEndMs = state.currentSnapshotEndMs;
@@ -982,7 +1046,7 @@ wss.on('connection', (clientWs) => {
                             finalizedDetectedLang,
                             true,
                             state.speaker,
-                            { finalizeSource },
+                            { finalizeSource, nativeTranslations: getNativeTranslations(state) },
                         )
                         : null;
                     if (payload) {
@@ -1046,6 +1110,7 @@ wss.on('connection', (clientWs) => {
                     lastConsumedEndMs: -1,
                     detectedLang: 'unknown',
                     strategy,
+                    nativeTranslations: new Map(),
                 };
                 speakerStates.set(speaker, state);
                 return state;
@@ -1080,13 +1145,14 @@ wss.on('connection', (clientWs) => {
                     .filter(Boolean);
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: 'stt-rt-v4',
+                    model: SONIOX_RT_MODEL,
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
                     enable_endpoint_detection: false,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
+                    ...(sonioxNativeTranslation ? { translation: sonioxNativeTranslation } : {}),
                 };
                 if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
                     Object.assign(sonioxConfig, {
@@ -1148,6 +1214,7 @@ wss.on('connection', (clientWs) => {
                     }
                     let hasEndpointToken = false;
                     let endpointMarkerText = '';
+                    const translationTokens: SonioxToken[] = [];
                     const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
                     const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
                         const existing = speakerFrameUpdates.get(speaker);
@@ -1169,6 +1236,10 @@ wss.on('connection', (clientWs) => {
                     for (const token of tokens) {
                         const tokenText = typeof token.text === 'string' ? token.text : '';
                         if (!tokenText) continue;
+                        if (sonioxNativeTranslation && token.translation_status === 'translation') {
+                            translationTokens.push(token);
+                            continue;
+                        }
                         const tokenStartMs = parseTokenTimeMs(token.start_ms);
                         const tokenEndMs = parseTokenTimeMs(token.end_ms);
 
@@ -1183,6 +1254,9 @@ wss.on('connection', (clientWs) => {
 
                         const tokenLanguage = normalizeDetectedLang(token.language);
                         const tokenSpeaker = normalizeSpeaker(token.speaker);
+                        if (tokenLanguage !== 'unknown') {
+                            latestSpeakerByLanguage.set(tokenLanguage, tokenSpeaker);
+                        }
 
                         const speakerState = getSpeakerState(tokenSpeaker);
 
@@ -1238,6 +1312,32 @@ wss.on('connection', (clientWs) => {
                         }
                         if (tokenEndMs !== null && tokenEndMs > frameUpdate.maxSeenTokenEndMs) {
                             frameUpdate.maxSeenTokenEndMs = tokenEndMs;
+                        }
+                    }
+
+                    for (const token of translationTokens) {
+                        const tokenText = typeof token.text === 'string' ? token.text : '';
+                        const targetLanguage = normalizeDetectedLang(token.language);
+                        const sourceLanguage = normalizeDetectedLang(token.source_language);
+                        if (!tokenText || targetLanguage === 'unknown') continue;
+                        const tokenSpeaker = normalizeSpeaker(token.speaker);
+                        const speaker = tokenSpeaker !== 'unknown'
+                            ? tokenSpeaker
+                            : (latestSpeakerByLanguage.get(sourceLanguage) || 'unknown');
+                        const speakerState = speakerStates.get(speaker);
+                        if (!speakerState) continue;
+                        const translation = getNativeTranslationState(speakerState, targetLanguage);
+                        const tokenStartMs = parseTokenTimeMs(token.start_ms);
+                        const tokenEndMs = parseTokenTimeMs(token.end_ms);
+                        if (token.is_final === true) {
+                            if (!isTokenBeyondWatermark(tokenStartMs, tokenEndMs, translation.finalizedEndMs)) continue;
+                            translation.finalizedText += tokenText;
+                            translation.pendingText = '';
+                            if (tokenEndMs !== null && tokenEndMs > translation.finalizedEndMs) {
+                                translation.finalizedEndMs = tokenEndMs;
+                            }
+                        } else {
+                            translation.pendingText += tokenText;
                         }
                     }
 
@@ -1360,7 +1460,10 @@ wss.on('connection', (clientWs) => {
                                     finalizedDetectedLang,
                                     true,
                                     speakerState.speaker,
-                                    { finalizeSource: 'soniox_manual' },
+                                    {
+                                        finalizeSource: 'soniox_manual',
+                                        nativeTranslations: getNativeTranslations(speakerState),
+                                    },
                                 );
                                 if (payload) {
                                     lastFinalizedPayloadForFrame = payload;
@@ -1398,6 +1501,7 @@ wss.on('connection', (clientWs) => {
                                 false,
                                 speakerState.speaker,
                             );
+                            emitNativePartialTranslations(speakerState);
                         }
                     }
 
