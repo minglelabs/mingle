@@ -264,10 +264,16 @@ export async function deleteConversationResponse(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const conversation = await deleteConversationChannel({
-    conversationId,
-    userId: resolvedUser.userId,
-  });
+  let conversation;
+  try {
+    conversation = await deleteConversationChannel({
+      conversationId,
+      userId: resolvedUser.userId,
+    });
+  } catch (error) {
+    console.error("[conversations] delete_failed", error);
+    return NextResponse.json({ error: "conversation_channel_delete_conflict" }, { status: 409 });
+  }
 
   if (!conversation) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

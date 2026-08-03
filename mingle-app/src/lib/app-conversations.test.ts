@@ -4,6 +4,8 @@ const {
   mockFindConversationMany,
   mockFindConversationFirst,
   mockUpdateConversation,
+  mockUpdateManyConversation,
+  mockCreateConversation,
   mockAppMessageFindMany,
   mockAppMessageCount,
   mockAppMessageGroupBy,
@@ -12,18 +14,22 @@ const {
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
   mockUpdateConversation: vi.fn(),
+  mockUpdateManyConversation: vi.fn(),
+  mockCreateConversation: vi.fn(),
   mockAppMessageFindMany: vi.fn(),
   mockAppMessageCount: vi.fn(),
   mockAppMessageGroupBy: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
+vi.mock("@/lib/prisma", () => {
+  const prisma = {
     appConversationChannel: {
       findMany: mockFindConversationMany,
       findFirst: mockFindConversationFirst,
       update: mockUpdateConversation,
+      updateMany: mockUpdateManyConversation,
+      create: mockCreateConversation,
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
@@ -33,9 +39,15 @@ vi.mock("@/lib/prisma", () => ({
     appEventLog: {
       findFirst: mockAppEventLogFindFirst,
     },
-    $transaction: vi.fn(async (operations: Promise<unknown>[]) => Promise.all(operations)),
-  },
-}));
+    $transaction: vi.fn(async (arg: unknown) => {
+      if (typeof arg === "function") {
+        return (arg as (tx: typeof prisma) => Promise<unknown>)(prisma);
+      }
+      return Promise.all(arg as Promise<unknown>[]);
+    }),
+  };
+  return { prisma };
+});
 
 vi.mock("@/lib/stt-languages", () => ({
   sanitizeSttLanguageSelection: (value: unknown) => Array.isArray(value) ? value : [],
@@ -47,6 +59,7 @@ vi.mock("@/i18n/conversations", () => ({
 
 import {
   CONVERSATION_HYDRATION_MESSAGE_LIMIT,
+  createConversationChannelForUser,
   deleteConversationChannel,
   getConversationHydrationStateForUser,
   listConversationChannelsForUser,
@@ -56,6 +69,7 @@ describe("app-conversations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAppMessageGroupBy.mockResolvedValue([]);
+    mockUpdateManyConversation.mockResolvedValue({ count: 0 });
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -214,6 +228,7 @@ describe("app-conversations", () => {
         clientMessageId: "u-new",
         sourceLanguage: "en",
         createdAt: new Date("2026-04-12T10:00:00.000Z"),
+        metadata: { speaker: "1", speakerAvatarSeed: "seed-a", speakerAvatarIndex: 4 },
         contents: [
           { contentType: "SOURCE", language: "en", text: "new source" },
           { contentType: "TRANSLATION_FINAL", language: "ko", text: "새 번역" },
@@ -257,6 +272,7 @@ describe("app-conversations", () => {
       ],
       take: CONVERSATION_HYDRATION_MESSAGE_LIMIT + 1,
       select: expect.objectContaining({
+        metadata: true,
         contents: expect.objectContaining({
           where: {
             OR: [
@@ -280,6 +296,10 @@ describe("app-conversations", () => {
     expect(state?.messageCount).toBe(250);
     expect(state?.utterances.map((utterance) => utterance.id)).toEqual(["u-old", "u-new"]);
     expect(state?.utterances[0]?.translations).toEqual({ ko: "이전 번역" });
+    expect(state?.utterances[0]?.speaker).toBeNull();
+    expect(state?.utterances[1]?.speaker).toBe("1");
+    expect(state?.utterances[1]?.speakerAvatarSeed).toBe("seed-a");
+    expect(state?.utterances[1]?.speakerAvatarIndex).toBe(4);
     expect(state?.hasMoreUtterances).toBe(false);
     expect(state?.oldestMessageCursor).toEqual({
       createdAtMs: new Date("2026-04-12T09:00:00.000Z").getTime(),
@@ -386,7 +406,99 @@ describe("app-conversations", () => {
       data: expect.objectContaining({
         isDeleted: true,
         status: "paused",
+        sequenceNumber: -1,
       }),
+    }));
+  });
+
+  it("vacates the sequence number below the lowest existing one so it never collides with a future room", async () => {
+    mockFindConversationFirst
+      .mockResolvedValueOnce({ id: "conv-delete" })
+      .mockResolvedValueOnce({ sequenceNumber: -4 });
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-delete",
+      sequenceNumber: -5,
+      title: "Conversation (1)",
+      status: "paused",
+      sessionKey: "session-delete",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T12:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T12:00:00.000Z"),
+    });
+
+    await deleteConversationChannel({
+      conversationId: "conv-delete",
+      userId: "user-1",
+    });
+
+    expect(mockUpdateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sequenceNumber: -5 }),
+    }));
+  });
+
+  it("ignores soft-deleted conversations when assigning the next sequence number", async () => {
+    mockFindConversationFirst.mockResolvedValue(null);
+    mockCreateConversation.mockResolvedValue({
+      id: "conv-new",
+      sequenceNumber: 1,
+      title: "ko:1",
+      status: "paused",
+      sessionKey: "session-new",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await createConversationChannelForUser("user-1", { locale: "ko" });
+
+    expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        ownerUserId: "user-1",
+        OR: [
+          { isDeleted: false },
+          { isDeleted: null },
+        ],
+      },
+    }));
+    expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sequenceNumber: 1 }),
+    }));
+  });
+
+  it("vacates a stale soft-deleted row that still occupies the next sequence number", async () => {
+    mockFindConversationFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ sequenceNumber: 1 });
+    mockCreateConversation.mockResolvedValue({
+      id: "conv-new",
+      sequenceNumber: 1,
+      title: "ko:1",
+      status: "paused",
+      sessionKey: "session-new",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await createConversationChannelForUser("user-1", { locale: "ko" });
+
+    expect(mockUpdateManyConversation).toHaveBeenCalledWith({
+      where: { ownerUserId: "user-1", sequenceNumber: 1, isDeleted: true },
+      data: { sequenceNumber: 0 },
+    });
+    expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ sequenceNumber: 1 }),
     }));
   });
 });

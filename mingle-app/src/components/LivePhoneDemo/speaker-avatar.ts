@@ -98,6 +98,13 @@ export function getSpeakerAvatar(
   if (isValidSpeakerAvatarIndex(avatarIndex)) {
     return SPEAKER_AVATARS[avatarIndex]
   }
+  if (process.env.NODE_ENV !== 'production' && !rawSpeaker?.trim()) {
+    console.warn('[speaker-avatar] missing speaker info, falling back to a hashed default avatar', {
+      rawSpeaker,
+      rawSeed,
+      avatarIndex,
+    })
+  }
   const speakerKey = normalizeSpeakerKey(rawSpeaker)
   const avatarSeed = normalizeAvatarSeed(rawSeed)
   const scopedSpeakerKey = avatarSeed ? `${avatarSeed}::${speakerKey}` : speakerKey

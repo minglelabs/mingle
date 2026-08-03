@@ -39,6 +39,9 @@ export type ConversationHydrationUtterance = {
   translations: Record<string, string>;
   translationFinalized: Record<string, boolean>;
   createdAtMs: number;
+  speaker: string | null;
+  speakerAvatarSeed: string | null;
+  speakerAvatarIndex: number | null;
 };
 
 export type ConversationHydrationCursor = {
@@ -397,11 +400,23 @@ export async function createConversationChannelForUser(
     try {
       const record = await prisma.$transaction(async (tx) => {
         const lastChannel = await tx.appConversationChannel.findFirst({
-          where: { ownerUserId: userId },
+          where: { ownerUserId: userId, ...buildVisibleConversationWhere() },
           orderBy: { sequenceNumber: "desc" },
           select: { sequenceNumber: true },
         });
         const sequenceNumber = (lastChannel?.sequenceNumber ?? 0) + 1;
+
+        const lowestChannel = await tx.appConversationChannel.findFirst({
+          where: { ownerUserId: userId },
+          orderBy: { sequenceNumber: "asc" },
+          select: { sequenceNumber: true },
+        });
+        const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, sequenceNumber) - 1;
+
+        await tx.appConversationChannel.updateMany({
+          where: { ownerUserId: userId, sequenceNumber, isDeleted: true },
+          data: { sequenceNumber: vacatedSequenceNumber },
+        });
 
         return tx.appConversationChannel.create({
           data: {
@@ -702,6 +717,7 @@ export async function getConversationHydrationStateForUser(args: {
         clientMessageId: true,
         sourceLanguage: true,
         createdAt: true,
+        metadata: true,
         contents: {
           where: buildVisibleMessageContentWhere(),
           orderBy: { createdAt: "asc" },
@@ -737,6 +753,8 @@ export async function getConversationHydrationStateForUser(args: {
     }
 
     const targetLanguages = Object.keys(translations);
+    const metadata = readJsonObject(message.metadata);
+    const clientMetadata = readJsonObject((metadata?.clientMetadata as Prisma.JsonValue | undefined) ?? null);
 
     return {
       id: (message.clientMessageId || "").trim() || `db-${message.id}`,
@@ -746,6 +764,11 @@ export async function getConversationHydrationStateForUser(args: {
       translations,
       translationFinalized,
       createdAtMs: message.createdAt.getTime(),
+      speaker: readStringValue(clientMetadata?.speaker) ?? readStringValue(metadata?.speaker),
+      speakerAvatarSeed:
+        readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
+      speakerAvatarIndex:
+        readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
     };
   }).filter((utterance) => utterance.originalText.length > 0);
 
@@ -781,15 +804,39 @@ export async function deleteConversationChannel(args: {
     return null;
   }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      isDeleted: true,
-      status: APP_CONVERSATION_STATUS_PAUSED,
-      pausedAt: new Date(),
-    },
-    select: conversationChannelSelect,
-  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const record = await prisma.$transaction(async (tx) => {
+        const lowestChannel = await tx.appConversationChannel.findFirst({
+          where: { ownerUserId: args.userId },
+          orderBy: { sequenceNumber: "asc" },
+          select: { sequenceNumber: true },
+        });
+        const vacatedSequenceNumber = Math.min(lowestChannel?.sequenceNumber ?? 0, 0) - 1;
 
-  return serializeConversationChannel(record);
+        return tx.appConversationChannel.update({
+          where: { id: args.conversationId },
+          data: {
+            isDeleted: true,
+            status: APP_CONVERSATION_STATUS_PAUSED,
+            pausedAt: new Date(),
+            sequenceNumber: vacatedSequenceNumber,
+          },
+          select: conversationChannelSelect,
+        });
+      });
+
+      return serializeConversationChannel(record);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("conversation_channel_delete_conflict");
 }

@@ -51,6 +51,35 @@ export const getWsUrl = (): string => {
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
+const LOG_CLIENT_EVENT_MAX_ATTEMPTS = 2
+const LOG_CLIENT_EVENT_RETRY_DELAY_MS = 500
+
+// Only events carrying a clientMessageId are safely deduped server-side, so only those
+// are worth retrying; retrying the rest risks duplicate analytics rows.
+export function resolveLogClientEventMaxAttempts(clientMessageId: string | undefined | null): number {
+  return clientMessageId ? LOG_CLIENT_EVENT_MAX_ATTEMPTS : 1
+}
+
+// When a locally finalized turn is later reconciled with the server's final text, prefer
+// the avatar already shown to the user over the payload's (freshly assigned) avatar so the
+// turn doesn't visually reopen under a different animal.
+export function resolveReconciledSpeakerAvatar(input: {
+  reusedSpeakerAvatarSeed?: string
+  reusedSpeakerAvatarIndex?: number
+  fallbackSpeakerAvatarSeed?: string
+  fallbackSpeakerAvatarIndex?: number
+}): { speakerAvatarSeed?: string; speakerAvatarIndex?: number } {
+  return {
+    speakerAvatarSeed: input.reusedSpeakerAvatarSeed ?? input.fallbackSpeakerAvatarSeed,
+    speakerAvatarIndex: input.reusedSpeakerAvatarIndex ?? input.fallbackSpeakerAvatarIndex,
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
 
 const LS_KEY_UTTERANCES = 'mingle_demo_utterances'
 const LS_KEY_USAGE = 'mingle_demo_usage_sec'
@@ -643,6 +672,13 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
             )
           : {},
         createdAtMs: typeof record.createdAtMs === 'number' ? record.createdAtMs : undefined,
+        ...(typeof record.speaker === 'string' && record.speaker.trim() ? { speaker: record.speaker.trim() } : {}),
+        ...(typeof record.speakerAvatarSeed === 'string' && record.speakerAvatarSeed.trim()
+          ? { speakerAvatarSeed: record.speakerAvatarSeed.trim() }
+          : {}),
+        ...(typeof record.speakerAvatarIndex === 'number'
+          ? { speakerAvatarIndex: record.speakerAvatarIndex }
+          : {}),
       })
     })
     .filter((utterance) => utterance.id && utterance.originalText.trim())
@@ -804,9 +840,8 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const translationFinalized: Record<string, boolean> = {}
   for (const language of targetLanguages) {
-    if (input.translationFinalized?.[language] === true) {
-      translationFinalized[language] = true
-    }
+    const finalized = input.translationFinalized?.[language]
+    if (typeof finalized === 'boolean') translationFinalized[language] = finalized
   }
 
   return {
@@ -1019,6 +1054,9 @@ interface LocalFinalizeResult {
   text: string
   lang: string
   currentTurnPreviousState: CurrentTurnPreviousStatePayload | null
+  speaker: string
+  speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
 }
 
 interface PendingSpeakerTurn {
@@ -3223,7 +3261,7 @@ export default function useRealtimeSTT({
       }
       if (payload.metadata) body.metadata = payload.metadata
 
-      await fetch(buildClientApiPath('/log/client-event'), {
+      const requestInit: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3231,7 +3269,25 @@ export default function useRealtimeSTT({
         },
         body: JSON.stringify(body),
         keepalive: payload.keepalive === true,
-      })
+      }
+
+      const maxAttempts = resolveLogClientEventMaxAttempts(payload.clientMessageId)
+      let lastError: unknown = null
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        try {
+          const res = await fetch(buildClientApiPath('/log/client-event'), requestInit)
+          if (res.ok) return
+          lastError = new Error(`log/client-event responded with ${res.status}`)
+        } catch (error) {
+          lastError = error
+        }
+        if (attempt < maxAttempts - 1) {
+          await sleep(LOG_CLIENT_EVENT_RETRY_DELAY_MS)
+        }
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[log-client-event] giving up after retries', { eventType: payload.eventType, lastError })
+      }
     } catch {
       // Logging must not affect UX.
     }
@@ -3450,6 +3506,9 @@ export default function useRealtimeSTT({
       text: localPayload.text,
       lang: localPayload.language,
       currentTurnPreviousState,
+      speaker: localPayload.utterance.speaker || 'unknown',
+      speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
+      speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
   }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages])
 
@@ -3501,6 +3560,9 @@ export default function useRealtimeSTT({
     },
   ) => {
     const { utteranceId, text, lang, currentTurnPreviousState } = localFinalizeResult
+    const resolvedSpeaker = options?.speaker ?? localFinalizeResult.speaker
+    const resolvedSpeakerAvatarSeed = options?.speakerAvatarSeed ?? localFinalizeResult.speakerAvatarSeed
+    const resolvedSpeakerAvatarIndex = options?.speakerAvatarIndex ?? localFinalizeResult.speakerAvatarIndex
     const seq = ++translateSeqRef.current
     const requestStartedAt = Date.now()
     const targetLanguages = [...getCurrentTargetLanguages()]
@@ -3527,11 +3589,11 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           singleLanguageMode: true,
           skipTranslation: true,
-          speaker: options?.speaker || null,
-          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speaker: resolvedSpeaker || null,
+          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
           speakerAvatarIndex:
-            typeof options?.speakerAvatarIndex === 'number'
-              ? options.speakerAvatarIndex
+            typeof resolvedSpeakerAvatarIndex === 'number'
+              ? resolvedSpeakerAvatarIndex
               : null,
         },
         keepalive: true,
@@ -3620,11 +3682,11 @@ export default function useRealtimeSTT({
           reason: options?.reason || 'unknown',
           hasInlineTts: Boolean(result.ttsAudioBase64),
           singleLanguageMode: isSingleLanguageMode,
-          speaker: options?.speaker || null,
-          speakerAvatarSeed: options?.speakerAvatarSeed || null,
+          speaker: resolvedSpeaker || null,
+          speakerAvatarSeed: resolvedSpeakerAvatarSeed || null,
           speakerAvatarIndex:
-            typeof options?.speakerAvatarIndex === 'number'
-              ? options.speakerAvatarIndex
+            typeof resolvedSpeakerAvatarIndex === 'number'
+              ? resolvedSpeakerAvatarIndex
               : null,
         },
         keepalive: true,
@@ -4249,19 +4311,28 @@ export default function useRealtimeSTT({
             ? recentFinalizedMatch.utteranceId
             : null
         )
+        let reusedSpeakerAvatarSeed: string | undefined
+        let reusedSpeakerAvatarIndex: number | undefined
         if (recentLocalReuseUtteranceId) {
           logSttDebug('finalize.reuse_recent_utterance', {
             reusedUtteranceId: recentLocalReuseUtteranceId,
             text: finalizedPayload.text,
             language: finalizedPayload.language,
           })
-          setUtteranceStore((prev) => replaceFinalizedUtteranceSourceInStoreState({
-            store: prev,
-            utteranceId: recentLocalReuseUtteranceId,
-            sourceText: finalizedPayload.text,
-            sourceLanguage: finalizedPayload.language,
-            selectedLanguages: targetLanguages,
-          }))
+          setUtteranceStore((prev) => {
+            const existingUtterance = prev.utterances.find(
+              (utterance) => utterance.id === recentLocalReuseUtteranceId,
+            )
+            reusedSpeakerAvatarSeed = existingUtterance?.speakerAvatarSeed
+            reusedSpeakerAvatarIndex = existingUtterance?.speakerAvatarIndex
+            return replaceFinalizedUtteranceSourceInStoreState({
+              store: prev,
+              utteranceId: recentLocalReuseUtteranceId,
+              sourceText: finalizedPayload.text,
+              sourceLanguage: finalizedPayload.language,
+              selectedLanguages: targetLanguages,
+            })
+          })
         } else {
           utteranceIdRef.current = nextUtteranceSerial
         }
@@ -4297,10 +4368,18 @@ export default function useRealtimeSTT({
             text: finalizedPayload.text,
             lang: finalizedPayload.language,
             currentTurnPreviousState,
+            speaker: finalizedPayload.utterance.speaker || speaker,
           },
           {
             sttDurationMs,
             reason: finalizeSource ? `stt_server_final:${finalizeSource}` : 'stt_server_final',
+            speaker: finalizedPayload.utterance.speaker,
+            ...resolveReconciledSpeakerAvatar({
+              reusedSpeakerAvatarSeed,
+              reusedSpeakerAvatarIndex,
+              fallbackSpeakerAvatarSeed: finalizedPayload.utterance.speakerAvatarSeed,
+              fallbackSpeakerAvatarIndex: finalizedPayload.utterance.speakerAvatarIndex,
+            }),
           },
         )
         removePendingTurn(speaker)
