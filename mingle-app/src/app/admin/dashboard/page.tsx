@@ -6,18 +6,20 @@ import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-
 import {
   ADMIN_DASHBOARD_RANGE_OPTIONS,
   DEPLOY_MARKERS,
-  type AdminDashboardRange,
   type DashboardMetric,
   buildChartGeometry,
   formatDeltaPercent,
   formatMetricValue,
   formatSecondsAsDuration,
+  formatShortDay,
   normalizeDashboardDays,
   resolveDeltaTone,
   resolveDeployMarkerX,
+  resolveXAxisTicks,
   computeDeltaPercent,
 } from "@/lib/admin-dashboard-metrics";
 import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
+import { RangeNav } from "./range-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -48,20 +50,24 @@ async function isAdminAuthenticated(): Promise<boolean> {
   return verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value);
 }
 
-function rangeHref(days: AdminDashboardRange): string {
-  return `/admin/dashboard?days=${days}`;
-}
-
-function DeltaBadge({ metric }: { metric: DashboardMetric }) {
-  const deltaPercent = computeDeltaPercent(metric.latest, metric.previous);
-  const tone = resolveDeltaTone(deltaPercent, metric.lowerIsBetter);
+function DeltaBadge({
+  latest,
+  comparison,
+  lowerIsBetter,
+}: {
+  latest: number | null;
+  comparison: { label: string; value: number | null };
+  lowerIsBetter: boolean;
+}) {
+  const deltaPercent = computeDeltaPercent(latest, comparison.value);
+  const tone = resolveDeltaTone(deltaPercent, lowerIsBetter);
   const glyph = deltaPercent === null || Math.abs(deltaPercent) < 0.05 ? "→" : deltaPercent > 0 ? "▲" : "▼";
   const color = tone === "good" ? GOOD_COLOR : tone === "bad" ? BAD_COLOR : "#52514e";
   return (
-    <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color }}>
+    <span className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color }}>
       <span aria-hidden="true">{glyph}</span>
       {formatDeltaPercent(deltaPercent)}
-      <span className="font-normal text-slate-400">{metric.previousLabel}</span>
+      <span className="font-normal text-slate-400">{comparison.label}</span>
     </span>
   );
 }
@@ -75,13 +81,20 @@ function StatTile({ metric }: { metric: DashboardMetric }) {
     : formatMetricValue(metric.summaryValue, metric.kind);
 
   return (
-    <div className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm">
+    <div className="rounded-lg border border-slate-300 bg-white p-2.5 shadow-sm">
       <p className="text-sm font-medium text-slate-600">{metric.label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-950">{displayValue}</p>
-      <div className="mt-1">
-        <DeltaBadge metric={metric} />
+      <p className="mt-1 text-2xl font-semibold text-slate-950">{displayValue}</p>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+        {metric.comparisons.map((comparison) => (
+          <DeltaBadge
+            key={comparison.label}
+            comparison={comparison}
+            latest={metric.latest}
+            lowerIsBetter={metric.lowerIsBetter}
+          />
+        ))}
       </div>
-      <p className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-600">
+      <p className="mt-1.5 border-t border-slate-200 pt-1.5 text-xs text-slate-600">
         {metric.summaryLabel}: <span className="font-semibold text-slate-800">{summaryDisplay}</span>
       </p>
     </div>
@@ -102,14 +115,14 @@ function MetricChart({ metric }: { metric: DashboardMetric }) {
   const lastPoint = geometry.points[geometry.points.length - 1];
   const midValue = geometry.yMax / 2;
   const dayKeys = metric.points.map((point) => point.day);
-  const firstDay = dayKeys[0] ?? "";
   const lastDay = dayKeys[dayKeys.length - 1] ?? "";
+  const xAxisTicks = resolveXAxisTicks(dayKeys, CHART_WIDTH, 6);
   const visibleMarkers = DEPLOY_MARKERS
     .map((marker) => ({ marker, x: resolveDeployMarkerX(dayKeys, marker.date, CHART_WIDTH) }))
     .filter((entry): entry is { marker: typeof DEPLOY_MARKERS[number]; x: number } => entry.x !== null);
 
   return (
-    <div className="rounded-lg border border-slate-300 bg-white p-3 shadow-sm">
+    <div className="rounded-lg border border-slate-300 bg-white p-2.5 shadow-sm">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
         {metric.secondarySeries ? (
@@ -126,10 +139,10 @@ function MetricChart({ metric }: { metric: DashboardMetric }) {
         ) : null}
       </div>
       <svg
-        className="mt-2 w-full"
+        className="mt-1.5 w-full"
         role="img"
         aria-label={`${metric.label} 일별 추이`}
-        viewBox={`-4 -8 ${CHART_WIDTH + 48} ${CHART_HEIGHT + 16}`}
+        viewBox={`-4 -8 ${CHART_WIDTH + 48} ${CHART_HEIGHT + 30}`}
       >
         {/* gridlines: 0 / mid / max, hairline recessive */}
         {[0, midValue, geometry.yMax].map((tickValue) => {
@@ -187,11 +200,21 @@ function MetricChart({ metric }: { metric: DashboardMetric }) {
             {formatMetricValue(lastPoint.value, metric.kind)}
           </text>
         ) : null}
+
+        {/* x-axis date ticks, so a value is readable at a glance without hovering */}
+        {xAxisTicks.map((tick) => (
+          <text
+            key={tick.day}
+            x={tick.x}
+            y={CHART_HEIGHT + 20}
+            fontSize={10}
+            fill="#898781"
+            textAnchor={tick.day === dayKeys[0] ? "start" : tick.day === lastDay ? "end" : "middle"}
+          >
+            {formatShortDay(tick.day)}
+          </text>
+        ))}
       </svg>
-      <div className="mt-1 flex justify-between text-xs text-slate-400">
-        <span>{firstDay}</span>
-        <span>{lastDay}</span>
-      </div>
     </div>
   );
 }
@@ -210,9 +233,24 @@ function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
           </tr>
         </thead>
         <tbody>
-          {dayKeys.map((day, rowIndex) => (
-            <tr className="border-b border-slate-200 last:border-0" key={day}>
-              <td className="px-3 py-1.5 font-medium text-slate-800" style={{ fontVariantNumeric: "tabular-nums" }}>{day}</td>
+          {dayKeys.map((day, rowIndex) => {
+            const marker = DEPLOY_MARKERS.find((entry) => entry.date === day);
+            return (
+            <tr className={marker ? "border-b border-slate-200 bg-amber-50 last:border-0" : "border-b border-slate-200 last:border-0"} key={day}>
+              <td className="px-3 py-1.5 font-medium text-slate-800" style={{ fontVariantNumeric: "tabular-nums" }}>
+                <span className="flex items-center gap-1.5">
+                  {day}
+                  {marker ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"
+                      title={marker.label}
+                    >
+                      <span aria-hidden="true">🚀</span>
+                      {marker.label}
+                    </span>
+                  ) : null}
+                </span>
+              </td>
               {metrics.map((metric) => {
                 const value = metric.points[rowIndex]?.value ?? null;
                 const display = metric.kind === "seconds" && value !== null
@@ -225,7 +263,8 @@ function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
                 );
               })}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -263,37 +302,22 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </div>
       </header>
 
-      <nav className="mx-auto mt-5 flex w-full max-w-6xl gap-2 px-5" aria-label="기간 선택">
-        {ADMIN_DASHBOARD_RANGE_OPTIONS.map((option) => (
-          <Link
-            key={option}
-            className={[
-              "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-semibold transition",
-              option === days
-                ? "border-slate-950 bg-slate-950 text-white"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
-            ].join(" ")}
-            href={rangeHref(option)}
-          >
-            최근 {option}일
-          </Link>
-        ))}
-      </nav>
+      <RangeNav options={ADMIN_DASHBOARD_RANGE_OPTIONS} activeDays={days} />
 
-      <section className="mx-auto mt-5 grid w-full max-w-6xl grid-cols-1 gap-3 px-5 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="mx-auto mt-3 grid w-full max-w-6xl grid-cols-1 gap-2 px-4 sm:grid-cols-2 lg:grid-cols-3">
         {metrics.map((metric) => (
           <StatTile key={metric.key} metric={metric} />
         ))}
       </section>
 
-      <section className="mx-auto mt-5 grid w-full max-w-6xl grid-cols-1 gap-4 px-5 lg:grid-cols-2">
+      <section className="mx-auto mt-3 grid w-full max-w-6xl grid-cols-1 gap-3 px-4 lg:grid-cols-2">
         {metrics.map((metric) => (
           <MetricChart key={metric.key} metric={metric} />
         ))}
       </section>
 
-      <section className="mx-auto my-5 w-full max-w-6xl px-5 pb-10">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700">표로 보기</h2>
+      <section className="mx-auto mt-3 mb-4 w-full max-w-6xl px-4 pb-6">
+        <h2 className="mb-1.5 text-sm font-semibold text-slate-700">표로 보기</h2>
         <MetricsTable metrics={metrics} />
       </section>
     </main>

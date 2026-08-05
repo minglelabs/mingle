@@ -201,8 +201,14 @@ function buildMetric(args: {
   const points = trimToDisplayRange(extendedPoints, displayDays);
 
   const latest = extendedPoints[extendedPoints.length - 1]?.value ?? null;
-  const previousIndex = extendedPoints.length - 1 - COMPARISON_LOOKBACK_DAYS;
-  const previous = previousIndex >= 0 ? extendedPoints[previousIndex].value : null;
+  const valueAt = (daysBack: number): number | null => {
+    const index = extendedPoints.length - 1 - daysBack;
+    return index >= 0 ? extendedPoints[index].value : null;
+  };
+  const comparisons = [
+    { label: "전일 대비", value: valueAt(1) },
+    { label: `${COMPARISON_LOOKBACK_DAYS}일 전 대비`, value: valueAt(COMPARISON_LOOKBACK_DAYS) },
+  ];
 
   const secondarySeries = args.secondary
     ? {
@@ -220,8 +226,7 @@ function buildMetric(args: {
     points,
     secondarySeries,
     latest,
-    previous,
-    previousLabel: `${COMPARISON_LOOKBACK_DAYS}일 전 대비`,
+    comparisons,
     summaryLabel: args.summaryLabel,
     summaryValue: args.kind === "milliseconds" ? averageSeries(points) : sumSeries(points),
   };

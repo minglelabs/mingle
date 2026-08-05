@@ -10,15 +10,43 @@ import {
   formatDeltaPercent,
   formatMetricValue,
   formatSecondsAsDuration,
+  formatShortDay,
   niceCeil,
   normalizeDashboardDays,
   resolveDeltaTone,
   resolveDeployMarkerX,
   resolveTodayKey,
+  resolveXAxisTicks,
   shiftDayKey,
   startOfDayUtc,
   sumSeries,
 } from "./admin-dashboard-metrics";
+
+describe("x-axis ticks", () => {
+  it("formats a day key as short MM/DD", () => {
+    expect(formatShortDay("2026-08-05")).toBe("08/05");
+  });
+
+  it("always includes the first and last day", () => {
+    const dayKeys = Array.from({ length: 30 }, (_, i) => shiftDayKey("2026-08-05", -(29 - i)));
+    const ticks = resolveXAxisTicks(dayKeys, 600, 6);
+    expect(ticks[0].day).toBe(dayKeys[0]);
+    expect(ticks[ticks.length - 1].day).toBe(dayKeys[dayKeys.length - 1]);
+    expect(ticks[0].x).toBe(0);
+    expect(ticks[ticks.length - 1].x).toBe(600);
+  });
+
+  it("never exceeds maxTicks and never duplicates a day for a short range", () => {
+    const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
+    const ticks = resolveXAxisTicks(dayKeys, 300, 6);
+    expect(ticks.length).toBeLessThanOrEqual(3);
+    expect(new Set(ticks.map((t) => t.day)).size).toBe(ticks.length);
+  });
+
+  it("handles a single day without dividing by zero", () => {
+    expect(resolveXAxisTicks(["2026-08-05"], 300)).toEqual([{ day: "2026-08-05", x: 150 }]);
+  });
+});
 
 describe("resolveDeployMarkerX", () => {
   const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05"];

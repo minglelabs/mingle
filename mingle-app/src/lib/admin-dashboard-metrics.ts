@@ -47,9 +47,8 @@ export type DashboardMetric = {
   /** 두 번째 시리즈(p95 등). 있으면 차트에 2번째 라인 + 범례로 같이 뜬다. */
   secondarySeries?: { label: string; points: DailyPoint[] };
   latest: number | null;
-  /** 델타 비교 기준값 — "전일"이 아니라 "7일 전" 같은 자리표시자와 비교한다. */
-  previous: number | null;
-  previousLabel: string;
+  /** 여러 기준 시점 대비 델타 (전일, 7일 전 등). 필요해지면 원소를 더 추가하면 된다. */
+  comparisons: { label: string; value: number | null }[];
   summaryLabel: string;
   summaryValue: number | null;
 };
@@ -176,6 +175,35 @@ export function formatDeltaPercent(deltaPercent: number | null): string {
   const rounded = Math.round(deltaPercent * 10) / 10;
   const sign = rounded > 0 ? "+" : "";
   return `${sign}${rounded.toFixed(1)}%`;
+}
+
+export function formatShortDay(dayKey: string): string {
+  const [, month, day] = dayKey.split("-");
+  return `${month}/${day}`;
+}
+
+export type XAxisTick = { day: string; x: number };
+
+/**
+ * 날짜 눈금을 최대 maxTicks개까지 균등 간격으로 뽑는다. 매일 다 찍으면
+ * 90일 차트에서 라벨이 겹치므로, hover 없이도 몇 개 지점은 바로 읽히게
+ * 하는 타협점이다 (첫날/마지막날은 항상 포함).
+ */
+export function resolveXAxisTicks(dayKeys: readonly string[], width: number, maxTicks = 6): XAxisTick[] {
+  if (dayKeys.length === 0) return [];
+  if (dayKeys.length === 1) return [{ day: dayKeys[0], x: width / 2 }];
+
+  const tickCount = Math.min(maxTicks, dayKeys.length);
+  const denominator = dayKeys.length - 1;
+  const seenIndexes = new Set<number>();
+  const ticks: XAxisTick[] = [];
+  for (let i = 0; i < tickCount; i += 1) {
+    const index = Math.round((i * denominator) / (tickCount - 1));
+    if (seenIndexes.has(index)) continue;
+    seenIndexes.add(index);
+    ticks.push({ day: dayKeys[index], x: (index / denominator) * width });
+  }
+  return ticks;
 }
 
 /** 축 눈금이 1 / 2 / 5 × 10ⁿ 로만 떨어지게 올림한다. */
