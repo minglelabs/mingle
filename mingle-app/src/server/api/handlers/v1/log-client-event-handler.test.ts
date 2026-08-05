@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const {
+  mockAppMessageFindUnique,
   mockAppMessageUpsert,
   mockAppMessageContentUpsert,
   mockAppEventLogFindFirst,
@@ -9,6 +10,7 @@ const {
   mockEnsureTrackingContext,
   mockUpsertTrackedUser,
 } = vi.hoisted(() => ({
+  mockAppMessageFindUnique: vi.fn(),
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
@@ -20,6 +22,7 @@ const {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     appMessage: {
+      findUnique: mockAppMessageFindUnique,
       upsert: mockAppMessageUpsert,
     },
     appMessageContent: {
@@ -49,6 +52,7 @@ describe("handleLogClientEventV1", () => {
     vi.clearAllMocks();
     mockEnsureTrackingContext.mockReturnValue({ sessionKey: "sess_123" });
     mockUpsertTrackedUser.mockResolvedValue("user_123");
+    mockAppMessageFindUnique.mockResolvedValue({ id: "message_123" });
     mockAppMessageUpsert.mockResolvedValue({ id: "message_123" });
     mockAppMessageContentUpsert.mockResolvedValue({});
     mockAppEventLogFindFirst.mockResolvedValue(null);
@@ -165,5 +169,47 @@ describe("handleLogClientEventV1", () => {
         messageId: null,
       }),
     );
+  });
+
+  it("links translation visibility telemetry to the finalized message", async () => {
+    const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "translation_visibility",
+        sessionKey: "sess_123",
+        clientMessageId: "client_message_123",
+        metadata: {
+          translationFirstVisibleMs: 320,
+          translationAllVisibleMs: 640,
+          translationLanguages: ["en", "ja"],
+        },
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).not.toHaveBeenCalled();
+    expect(mockAppMessageFindUnique).toHaveBeenCalledWith({
+      where: {
+        sessionKey_clientMessageId: {
+          sessionKey: "sess_123",
+          clientMessageId: "client_message_123",
+        },
+      },
+      select: { id: true },
+    });
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "translation_visibility",
+      messageId: "message_123",
+      metadata: expect.objectContaining({
+        clientMessageId: "client_message_123",
+        clientMetadata: {
+          translationFirstVisibleMs: 320,
+          translationAllVisibleMs: 640,
+          translationLanguages: ["en", "ja"],
+        },
+      }),
+    }));
   });
 });

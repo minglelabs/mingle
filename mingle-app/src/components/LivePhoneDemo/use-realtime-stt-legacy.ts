@@ -14,6 +14,10 @@ import {
   type MingleBehaviorProfile,
 } from '@/lib/client-behavior-profile'
 import { assignSpeakerAvatarIndex, getSpeakerAvatar } from './speaker-avatar'
+import {
+  useTranslationVisibilityTelemetry,
+  type TranslationVisibilityLogPayload,
+} from './translation-visibility-telemetry'
 import { DEFAULT_SONIOX_SILENCE_MS } from './live-phone-demo.preferences'
 import {
   readRequestedApiNamespaceFromSearch,
@@ -1599,7 +1603,12 @@ interface RecentTurnContextPayload {
 }
 
 interface ClientEventLogPayload {
-  eventType: 'stt_session_started' | 'stt_session_stopped' | 'stt_turn_started' | 'stt_turn_finalized'
+  eventType:
+    | 'stt_session_started'
+    | 'stt_session_stopped'
+    | 'stt_turn_started'
+    | 'stt_turn_finalized'
+    | 'translation_visibility'
   clientMessageId?: string
   sourceLanguage?: string
   sourceText?: string
@@ -2419,6 +2428,24 @@ export default function useRealtimeSTT({
     }
   }, [ensureSessionKey, usageSec])
 
+  const logTranslationVisibility = useCallback((payload: TranslationVisibilityLogPayload) => (
+    logClientEvent({
+      eventType: 'translation_visibility',
+      clientMessageId: payload.clientMessageId,
+      metadata: payload.metadata,
+      keepalive: true,
+    })
+  ), [logClientEvent])
+
+  const {
+    beginTracking: beginTranslationVisibilityTracking,
+    rememberFinalizedMessagePersistence,
+    clear: clearTranslationVisibilityTelemetry,
+  } = useTranslationVisibilityTelemetry({
+    utterances,
+    logVisibility: logTranslationVisibility,
+  })
+
   const synthesizeTtsViaApi = useCallback(async (text: string, language: string): Promise<Blob | null> => {
     const normalizedText = text.trim()
     const normalizedLang = language.trim()
@@ -2715,6 +2742,10 @@ export default function useRealtimeSTT({
       ? targetLanguages                  // [selectedLang] — translateViaApi 내부에서 sourceLanguage(detected) 제거 후 번역
       : targetLanguages
 
+    if (effectiveTargetLanguages.length > 0) {
+      beginTranslationVisibilityTracking(utteranceId)
+    }
+
     // Reserve a TTS queue slot before the API call so playback order matches utterance order
     if (enableTtsRef.current && ttsTargetLang) {
       onTtsRequestedRef.current?.(utteranceId, ttsTargetLang)
@@ -2769,7 +2800,7 @@ export default function useRealtimeSTT({
 
       const translationLatencyMs = Math.max(0, Date.now() - requestStartedAt)
       const totalDurationMs = (options?.sttDurationMs ?? 0) + translationLatencyMs
-      void logClientEvent({
+      const finalizedMessagePersistence = logClientEvent({
         eventType: 'stt_turn_finalized',
         clientMessageId: utteranceId,
         sourceLanguage: result.sourceLanguage || lang,
@@ -2790,11 +2821,20 @@ export default function useRealtimeSTT({
         },
         keepalive: true,
       })
+      rememberFinalizedMessagePersistence(utteranceId, finalizedMessagePersistence)
     }).finally(() => {
       if (finalizedTurnTranslationControllersRef.current[utteranceId] !== controller) return
       delete finalizedTurnTranslationControllersRef.current[utteranceId]
     })
-  }, [applyTranslationToUtterance, clearFinalizedTurnTranslationController, getCurrentTargetLanguages, logClientEvent, translateViaApi])
+  }, [
+    applyTranslationToUtterance,
+    beginTranslationVisibilityTracking,
+    clearFinalizedTurnTranslationController,
+    getCurrentTargetLanguages,
+    logClientEvent,
+    rememberFinalizedMessagePersistence,
+    translateViaApi,
+  ])
 
   const submitExternalUtterance = useCallback((input: SubmitExternalUtteranceInput): string | null => {
     const text = normalizeSttTurnText(input.text)
@@ -2845,6 +2885,7 @@ export default function useRealtimeSTT({
     }
 
     clearPartialBuffers()
+    clearTranslationVisibilityTelemetry()
     resetToIdle()
     storedUtterancesRef.current = []
     storageLoadedCountRef.current = 0
@@ -2871,6 +2912,7 @@ export default function useRealtimeSTT({
     clearConnectionErrorResetTimer,
     clearUtterancePersistTimer,
     clearPartialBuffers,
+    clearTranslationVisibilityTelemetry,
     logClientEvent,
     resetToIdle,
     sendNativeSttCommand,

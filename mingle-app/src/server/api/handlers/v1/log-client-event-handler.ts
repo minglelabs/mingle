@@ -26,6 +26,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'stt_session_stopped',
   'stt_turn_started',
   'stt_turn_finalized',
+  'translation_visibility',
 ])
 
 function stripEndpointMarkers(text: string): string {
@@ -241,6 +242,19 @@ export async function handleLogClientEventV1(request: NextRequest) {
           })
         }
       }
+    }
+
+    if (eventType === 'translation_visibility' && clientMessageId) {
+      const message = await prisma.appMessage.findUnique({
+        where: {
+          sessionKey_clientMessageId: {
+            sessionKey: tracking.sessionKey,
+            clientMessageId,
+          },
+        },
+        select: { id: true },
+      })
+      messageId = message?.id ?? null
     }
 
     const eventMetadata: Prisma.JsonObject = {}
