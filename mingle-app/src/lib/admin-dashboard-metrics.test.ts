@@ -2,19 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   averageSeries,
   buildChartGeometry,
-  computeDeltaPercent,
+  buildCumulativeSeries,
   enumerateDayKeys,
   fillDailySeries,
   formatCompactNumber,
   formatDayKey,
-  formatDeltaPercent,
+  formatMetricDisplayValue,
   formatMetricValue,
   formatSecondsAsDuration,
   formatShortDay,
   niceCeil,
   normalizeDashboardDays,
-  resolveDeltaTone,
-  resolveDeployMarkerX,
   resolveTodayKey,
   resolveXAxisTicks,
   shiftDayKey,
@@ -45,20 +43,6 @@ describe("x-axis ticks", () => {
 
   it("handles a single day without dividing by zero", () => {
     expect(resolveXAxisTicks(["2026-08-05"], 300)).toEqual([{ day: "2026-08-05", x: 150 }]);
-  });
-});
-
-describe("resolveDeployMarkerX", () => {
-  const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04", "2026-08-05"];
-
-  it("maps a marker date inside the range to its day's x position", () => {
-    expect(resolveDeployMarkerX(dayKeys, "2026-08-02", 300)).toBe(0);
-    expect(resolveDeployMarkerX(dayKeys, "2026-08-05", 300)).toBe(300);
-    expect(resolveDeployMarkerX(dayKeys, "2026-08-03", 300)).toBeCloseTo(100);
-  });
-
-  it("returns null for a marker date outside the visible range", () => {
-    expect(resolveDeployMarkerX(dayKeys, "2026-07-20", 300)).toBeNull();
   });
 });
 
@@ -151,32 +135,12 @@ describe("formatting", () => {
     expect(formatSecondsAsDuration(5_400)).toBe("1시간 30분");
     expect(formatSecondsAsDuration(90_000)).toBe("1일 1시간");
   });
-});
 
-describe("delta", () => {
-  it("computes a percentage change", () => {
-    expect(computeDeltaPercent(150, 100)).toBeCloseTo(50);
-    expect(computeDeltaPercent(50, 100)).toBeCloseTo(-50);
-  });
-
-  it("returns null when the baseline is zero or missing", () => {
-    expect(computeDeltaPercent(10, 0)).toBeNull();
-    expect(computeDeltaPercent(10, null)).toBeNull();
-    expect(computeDeltaPercent(null, 10)).toBeNull();
-  });
-
-  it("formats with an explicit sign", () => {
-    expect(formatDeltaPercent(12.34)).toBe("+12.3%");
-    expect(formatDeltaPercent(-8)).toBe("-8.0%");
-    expect(formatDeltaPercent(null)).toBe("—");
-  });
-
-  it("treats rising latency as bad but rising signups as good", () => {
-    expect(resolveDeltaTone(20, false)).toBe("good");
-    expect(resolveDeltaTone(20, true)).toBe("bad");
-    expect(resolveDeltaTone(-20, true)).toBe("good");
-    expect(resolveDeltaTone(null, false)).toBe("neutral");
-    expect(resolveDeltaTone(0, false)).toBe("neutral");
+  it("routes seconds-kind metrics through the duration formatter, everything else through formatMetricValue", () => {
+    expect(formatMetricDisplayValue(5_400, "seconds")).toBe("1시간 30분");
+    expect(formatMetricDisplayValue(1234.6, "milliseconds")).toBe("1,235ms");
+    expect(formatMetricDisplayValue(12_900, "count")).toBe("12.9K");
+    expect(formatMetricDisplayValue(null, "seconds")).toBe("—");
   });
 });
 
@@ -284,5 +248,29 @@ describe("aggregates", () => {
 
   it("returns null when averaging an empty series", () => {
     expect(averageSeries([{ day: "2026-08-04", value: null }])).toBeNull();
+  });
+});
+
+describe("buildCumulativeSeries", () => {
+  it("runs a cumulative total across the series", () => {
+    const cumulative = buildCumulativeSeries([
+      { day: "2026-08-02", value: 10 },
+      { day: "2026-08-03", value: 5 },
+      { day: "2026-08-04", value: 20 },
+    ]);
+    expect(cumulative).toEqual([
+      { day: "2026-08-02", value: 10 },
+      { day: "2026-08-03", value: 15 },
+      { day: "2026-08-04", value: 35 },
+    ]);
+  });
+
+  it("treats gaps as zero so the running total doesn't drop", () => {
+    const cumulative = buildCumulativeSeries([
+      { day: "2026-08-02", value: 10 },
+      { day: "2026-08-03", value: null },
+      { day: "2026-08-04", value: 5 },
+    ]);
+    expect(cumulative.map((point) => point.value)).toEqual([10, 10, 15]);
   });
 });

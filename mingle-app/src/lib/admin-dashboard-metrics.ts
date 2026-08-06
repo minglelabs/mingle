@@ -4,6 +4,12 @@ export const ADMIN_DASHBOARD_DEFAULT_DAYS = 30;
 export const ADMIN_DASHBOARD_TIME_ZONE = "UTC";
 export const ADMIN_DASHBOARD_RANGE_OPTIONS = [7, 30, 90] as const;
 
+/** Logical chart plot area, in svg units. Shared by the server-side geometry builder
+ * (buildChartGeometry) and the client hover component so their coordinate spaces
+ * always agree -- letting them drift apart would silently break hover positioning. */
+export const ADMIN_DASHBOARD_CHART_WIDTH = 560;
+export const ADMIN_DASHBOARD_CHART_HEIGHT = 140;
+
 export type AdminDashboardRange = (typeof ADMIN_DASHBOARD_RANGE_OPTIONS)[number];
 
 export function normalizeDashboardDays(value: unknown): AdminDashboardRange {
@@ -24,6 +30,23 @@ export function startOfDayUtc(dayKey: string, utcOffsetHours = 0): Date {
   return parsed;
 }
 
+export type AdminDashboardDateRange = {
+  dayKeys: string[];
+  rangeStart: Date;
+  rangeEnd: Date;
+};
+
+/** 지표 쿼리(Postgres)와 배포 마커 쿼리(GitHub) 둘 다 같은 날짜 범위를 써야 그래프의
+ * x축과 마커 위치가 어긋나지 않는다 -- 각자 따로 계산하면 드리프트가 생기므로 여기 하나로 통일. */
+export function resolveAdminDashboardRange(now: Date, days: AdminDashboardRange): AdminDashboardDateRange {
+  const todayKey = resolveTodayKey(now, ADMIN_DASHBOARD_TIME_ZONE);
+  const dayKeys = enumerateDayKeys(todayKey, days);
+  const rangeStart = startOfDayUtc(dayKeys[0]);
+  const rangeEnd = startOfDayUtc(todayKey);
+  rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
+  return { dayKeys, rangeStart, rangeEnd };
+}
+
 export type MetricKind = "count" | "seconds" | "milliseconds";
 
 export type DailyPoint = {
@@ -41,43 +64,17 @@ export type DashboardMetric = {
   label: string;
   unit: string;
   kind: MetricKind;
-  /** 지연시간처럼 낮을수록 좋은 지표는 델타 색을 뒤집는다. */
-  lowerIsBetter: boolean;
   points: DailyPoint[];
   /** 두 번째 시리즈(p95 등). 있으면 차트에 2번째 라인 + 범례로 같이 뜬다. */
   secondarySeries?: { label: string; points: DailyPoint[] };
-  latest: number | null;
-  /** 여러 기준 시점 대비 델타 (전일, 7일 전 등). 필요해지면 원소를 더 추가하면 된다. */
-  comparisons: { label: string; value: number | null }[];
-  summaryLabel: string;
-  summaryValue: number | null;
 };
 
-/** 주요 배포/인프라 변경 시점. 스크럼에서 그래프 보다가 바로 원인 짚을 수 있게 세로선으로 표시한다. */
+/** 주요 배포/인프라 변경 시점. 스크럼에서 그래프 보다가 바로 원인 짚을 수 있게 그래프에 표시한다.
+ * admin-dashboard-deploy-markers.ts가 GitHub 커밋 이력에서 자동으로 채운다. */
 export type DeployMarker = {
   date: string;
   label: string;
 };
-
-export const DEPLOY_MARKERS: DeployMarker[] = [
-  { date: "2026-08-02", label: "PR #190 배포 (대화방 시퀀스 수정)" },
-  { date: "2026-08-04", label: "Railway region → Southeast Asia" },
-];
-
-/**
- * dayKeys 범위 안에 있는 배포 마커만 x좌표로 변환한다. 범위 밖이면 null —
- * 화면에 없는 날짜에 선을 그리면 다른 그래프의 좌표계와 어긋나 보인다.
- */
-export function resolveDeployMarkerX(
-  dayKeys: readonly string[],
-  markerDate: string,
-  width: number,
-): number | null {
-  const index = dayKeys.indexOf(markerDate);
-  if (index === -1) return null;
-  const denominator = Math.max(1, dayKeys.length - 1);
-  return dayKeys.length > 1 ? (index / denominator) * width : width / 2;
-}
 
 /** UTC 기준 YYYY-MM-DD. Date의 로컬 타임존에 의존하지 않도록 UTC 필드로만 계산한다. */
 export function formatDayKey(value: Date): string {
@@ -155,26 +152,11 @@ export function formatMetricValue(value: number | null, kind: MetricKind): strin
   return formatCompactNumber(Math.round(value));
 }
 
-export function computeDeltaPercent(current: number | null, previous: number | null): number | null {
-  if (current === null || previous === null) return null;
-  if (previous === 0) return null;
-  return ((current - previous) / Math.abs(previous)) * 100;
-}
-
-export type DeltaTone = "good" | "bad" | "neutral";
-
-export function resolveDeltaTone(deltaPercent: number | null, lowerIsBetter: boolean): DeltaTone {
-  if (deltaPercent === null || Math.abs(deltaPercent) < 0.05) return "neutral";
-  const rising = deltaPercent > 0;
-  const helpful = lowerIsBetter ? !rising : rising;
-  return helpful ? "good" : "bad";
-}
-
-export function formatDeltaPercent(deltaPercent: number | null): string {
-  if (deltaPercent === null) return "—";
-  const rounded = Math.round(deltaPercent * 10) / 10;
-  const sign = rounded > 0 ? "+" : "";
-  return `${sign}${rounded.toFixed(1)}%`;
+/** 표/그래프/카드 어디서 보여주든 같은 규칙: "초" 단위 지표만 사람이 읽는 기간(시/분)으로,
+ * 나머지는 formatMetricValue 그대로. */
+export function formatMetricDisplayValue(value: number | null, kind: MetricKind): string {
+  if (kind === "seconds" && value !== null) return formatSecondsAsDuration(value);
+  return formatMetricValue(value, kind);
 }
 
 export function formatShortDay(dayKey: string): string {
@@ -293,6 +275,15 @@ export function buildChartGeometry(
 
 export function sumSeries(points: readonly DailyPoint[]): number {
   return points.reduce((total, point) => total + (point.value ?? 0), 0);
+}
+
+/** 일별 값을 누적 합으로 변환한다 (null은 0으로 취급 — 카운트 계열만 쓰는 용도라 안전하다). */
+export function buildCumulativeSeries(points: readonly DailyPoint[]): DailyPoint[] {
+  let running = 0;
+  return points.map((point) => {
+    running += point.value ?? 0;
+    return { day: point.day, value: running };
+  });
 }
 
 export function averageSeries(points: readonly DailyPoint[]): number | null {
