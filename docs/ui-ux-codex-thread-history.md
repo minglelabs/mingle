@@ -7,6 +7,13 @@
 - User impact: Users could not switch between the conversation list and a personal page without leaving the main flow, and the primary new-conversation action occupied the entire bottom edge.
 - Resolution: Replaced the footer with a two-tab bottom bar, moved search slightly left, added a chat-plus new-conversation action in the header, and added an Instagram-style personal-page header with a disabled lower placeholder. Profile editing, sharing, settings, and post uploads remain out of scope for this draft.
 
+## 2026-08-07 - Remove My Page Plus Action Placeholder
+
+- Surface: `mingle-app/src/components/my-page.tsx`
+- Issue: The My Page header still displayed an inactive Instagram-style plus button even though Mingle has no post-creation feature in this scope.
+- User impact: The disabled control suggested an unavailable posting action and occupied an unnecessary interactive-looking area.
+- Resolution: Removed the plus button while retaining a non-interactive 40px layout spacer so the profile title stays centered and the menu action remains aligned.
+
 ## 2026-04-30 - Live Demo Chat Scroll Surface Paint Boundary
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`

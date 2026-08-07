@@ -2,7 +2,7 @@
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { AppLocale, AppDictionary } from "@/i18n";
-import { Menu, Plus, UserRound } from "lucide-react";
+import { Menu, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -60,14 +60,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
           paddingTop: "env(safe-area-inset-top, 44px)",
         }}
       >
-        <button
-          type="button"
-          disabled
-          className="flex h-10 w-10 items-center justify-center rounded-full transition"
-          aria-label={dictionary.profile.shareProfile}
-        >
-          <Plus size={24} strokeWidth={2.1} />
-        </button>
+        <div aria-hidden="true" className="h-10 w-10 shrink-0" />
         <h1 className="min-w-0 flex-1 truncate text-center text-[17px] font-bold text-slate-950">
           {displayName}
         </h1>
