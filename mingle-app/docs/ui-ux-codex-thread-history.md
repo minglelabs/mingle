@@ -1,5 +1,16 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-07 iOS room/list repeated back-forward regression
+
+### `2026-08-07-ios-room-list-history-regression` | UI/UX issues found
+
+1. **Repeated iOS back/forward swipes could settle on the list while native history still pointed at a room**
+   Problem: After opening a room, swiping back, and swiping forward, the WebView could remain unresponsive during the native transition and then show the conversation list again. A later back swipe appeared to slide the list over the same list, and a subsequent forward swipe restored the list instead of the room. The same history family had previously affected the room hamburger menu and its feedback/conversation-management subpages.
+   Root cause: The conversation overlay close path marked every closed room with the native-STT restore suppression flag. When a legitimate forward `popstate` returned to that room, the route-sync and popstate-open paths treated it as an unwanted automatic restore and removed the `conversation` query with `replaceState`. That preserved the native stamped history index while changing the visible route to the list. The iOS native snapshot, delayed `popstate`, React overlay state, and URL then described different screens.
+   Fix: Track the latest room/list target produced by an actual `popstate` separately from the native-STT suppression flag. History-forward restoration now consumes the close guard and reopens the room without rewriting the room history entry. App-driven back closes also keep route-sync from rewriting the current room entry before `history.back()` commits.
+   Regression coverage: The iOS forward-swipe QA case now asserts the restored `activeConversationId`, not only the shared `/conversations` pathname.
+   Status: Fixed in-thread on 2026-08-07; physical-device validation remains required for repeated native edge-swipe timing.
+
 ## 2026-05-08 STT 실행 중 뒤로가기 → 대화방 재진입 루프
 
 ### `2026-05-08-stt-back-reentry-loop` | UI/UX issues found

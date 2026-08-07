@@ -126,6 +126,9 @@ type ConversationOverlayTransitionState = {
   enterMode: ConversationOverlayEnterMode;
   exitMode: ConversationOverlayExitMode;
 };
+type ConversationHistoryPopStateTarget = {
+  conversationId: string | null;
+};
 
 type ConversationListWindow = Window & {
   [NATIVE_HISTORY_BACK_ANIMATE_FLAG]?: boolean;
@@ -1471,8 +1474,17 @@ export default function ConversationList({
   const deletingConversationIdsRef = useRef(new Set<string>());
   const nativeSttRestoreAttemptedRef = useRef(false);
   // Track the last conversation ID manually closed by the user (conversationId-scoped).
-  // native STT restore, route-sync open, and popstate-open will not re-open this ID.
+  // Native STT restore must not re-open it automatically, but an explicit browser
+  // history forward to the room must still restore it.
   const suppressNativeSttRestoreConversationIdRef = useRef<string | null>(null);
+  // A popstate event is the browser's explicit back/forward signal. Keep its
+  // latest room/list target separate from the STT suppression flag so a forward
+  // gesture is never mistaken for an automatic native restore.
+  const conversationHistoryPopStateTargetRef = useRef<ConversationHistoryPopStateTarget | null>(null);
+  // The app-driven back button closes the overlay before calling history.back().
+  // Keep route-sync from rewriting that still-current room entry into a list
+  // entry before the browser finishes the history navigation.
+  const pendingConversationHistoryBackRef = useRef(false);
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
@@ -2795,8 +2807,9 @@ export default function ConversationList({
     const shouldReplaceUrl = options?.replaceUrl ?? false;
     const previousConversation = conversation;
 
-    // Mark this conversation as manually closed so native STT restore,
-    // route-sync open, and popstate-open do not re-open it automatically.
+    // Mark this conversation as closed so native STT restore and non-history
+    // route-sync cannot re-open it automatically. An explicit history-forward
+    // popstate consumes this guard and restores the room.
     suppressNativeSttRestoreConversationIdRef.current = conversation.id;
     if (activeConversationRef.current?.id === conversation.id) {
       activeConversationRef.current = null;
@@ -2832,6 +2845,11 @@ export default function ConversationList({
     const enterMode = options?.enterMode ?? "animate";
     const syncHistory = options?.syncHistory ?? "push";
     const clearSuppression = options?.clearManualCloseSuppression ?? (syncHistory === "push");
+
+    if (syncHistory === "push") {
+      conversationHistoryPopStateTargetRef.current = null;
+      pendingConversationHistoryBackRef.current = false;
+    }
 
     if (clearSuppression) {
       suppressNativeSttRestoreConversationIdRef.current = null;
@@ -3092,6 +3110,7 @@ export default function ConversationList({
     ) {
       postNativeBannerZone("hidden");
       pendingHistoryCloseAnimationRef.current = "animate";
+      pendingConversationHistoryBackRef.current = true;
       closeConversationOverlay(activeConversation, { animateExit: true });
       window.history.back();
       return;
@@ -3124,16 +3143,30 @@ export default function ConversationList({
 
     if (!routeConversationId) {
       routeSyncConversationIdRef.current = null;
+      conversationHistoryPopStateTargetRef.current = null;
+      pendingConversationHistoryBackRef.current = false;
       return;
     }
-    if (routeSyncConversationIdRef.current === routeConversationId) return;
+    const isHistoryRestore = conversationHistoryPopStateTargetRef.current?.conversationId
+      === routeConversationId;
+    if (routeSyncConversationIdRef.current === routeConversationId && !isHistoryRestore) return;
     if (isCreatingConversation || isImportingLegacyConversation) return;
 
     const matchedConversation = conversations.find((conversation) => conversation.id === routeConversationId);
     if (!matchedConversation) return;
 
-    // User manually closed this conversation — clean up URL instead of re-opening via route-sync.
-    if (suppressNativeSttRestoreConversationIdRef.current === routeConversationId) {
+    if (isHistoryRestore) {
+      conversationHistoryPopStateTargetRef.current = null;
+    }
+
+    // A room URL that appears without a popstate is still an automatic/native
+    // restore. Keep the manual-close guard for that path, while allowing an
+    // explicit browser forward gesture to restore the room below.
+    if (
+      !isHistoryRestore
+      && suppressNativeSttRestoreConversationIdRef.current === routeConversationId
+    ) {
+      if (pendingConversationHistoryBackRef.current) return;
       routeSyncConversationIdRef.current = routeConversationId;
       replaceConversationOverlayUrl(null);
       return;
@@ -3143,6 +3176,7 @@ export default function ConversationList({
     void openConversationSummary(matchedConversation, {
       enterMode: "instant",
       syncHistory: "none", // URL already reflects the route-sync target; no push needed
+      clearManualCloseSuppression: isHistoryRestore,
     }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
@@ -3197,6 +3231,20 @@ export default function ConversationList({
     const handlePopState = () => {
       const currentActiveConversation = activeConversationRef.current;
       const currentRouteConversationId = readConversationIdFromLocation();
+      pendingConversationHistoryBackRef.current = false;
+
+      if (
+        (currentActiveConversation && currentRouteConversationId !== currentActiveConversation.id)
+        || (!currentActiveConversation && currentRouteConversationId)
+      ) {
+        conversationHistoryPopStateTargetRef.current = {
+          conversationId: currentRouteConversationId,
+        };
+      } else {
+        // Menu/search history entries keep the room query unchanged and are not
+        // room/list restoration events.
+        conversationHistoryPopStateTargetRef.current = null;
+      }
 
       if (!currentActiveConversation) return;
       if (currentRouteConversationId === currentActiveConversation.id) return;
@@ -3228,8 +3276,19 @@ export default function ConversationList({
       );
       if (!matchedConversation) return;
 
-      // User manually closed this conversation — clean up URL instead of re-opening via popstate.
-      if (suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId) {
+      const isHistoryRestore = conversationHistoryPopStateTargetRef.current?.conversationId
+        === currentRouteConversationId;
+      if (isHistoryRestore) {
+        conversationHistoryPopStateTargetRef.current = null;
+      }
+
+      // A forward popstate is an explicit request to restore the room. It must
+      // clear the close guard rather than rewriting the room entry into a list
+      // entry while preserving the native history index.
+      if (
+        !isHistoryRestore
+        && suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId
+      ) {
         routeSyncConversationIdRef.current = currentRouteConversationId;
         replaceConversationOverlayUrl(null);
         return;
@@ -3239,6 +3298,7 @@ export default function ConversationList({
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
         syncHistory: "none", // popstate already updated the URL; no push needed
+        clearManualCloseSuppression: isHistoryRestore,
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === currentRouteConversationId) {
