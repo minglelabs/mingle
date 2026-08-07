@@ -637,10 +637,63 @@ function notifyLocationSearchSync(): void {
   }
 }
 
-function replaceConversationOverlayUrl(conversationId: string | null): void {
+function summarizeConversationHistoryDebugState(state: unknown): Record<string, unknown> {
+  if (state === null) return { kind: "null" };
+  if (typeof state === "undefined") return { kind: "undefined" };
+  if (typeof state !== "object" || Array.isArray(state)) {
+    return { kind: typeof state };
+  }
+
+  const record = state as Record<string, unknown>;
+  const nativeNavigationIndex = record.__MINGLE_NATIVE_NAV_INDEX__;
+  return {
+    kind: "object",
+    conversationId: typeof record.conversationId === "string" ? record.conversationId : null,
+    conversationRoute: readConversationHistoryRouteFromState(state),
+    nativeNavigationIndex:
+      typeof nativeNavigationIndex === "number" && Number.isFinite(nativeNavigationIndex)
+        ? nativeNavigationIndex
+        : null,
+    searchOverlayOpen: record.__mingleConversationSearchOpen === true,
+  };
+}
+
+function postConversationHistoryDebug(
+  event: string,
+  details: Record<string, unknown> = {},
+): void {
+  if (typeof window === "undefined") return;
+  if (!readNativeQaBridgeAuthority(window)) return;
+
+  const payload = {
+    event,
+    timestamp: Date.now(),
+    url: window.location.href,
+    historyLength: window.history.length,
+    historyState: summarizeConversationHistoryDebugState(window.history.state),
+    ...details,
+  };
+
+  try {
+    console.warn("[MingleHistoryDebug]", payload);
+    window.ReactNativeWebView?.postMessage(JSON.stringify({
+      type: "native_history_debug",
+      payload,
+    }));
+  } catch {
+    // Diagnostic logging must never affect navigation.
+  }
+}
+
+function replaceConversationOverlayUrl(
+  conversationId: string | null,
+  reason = "unspecified",
+): void {
   if (typeof window === "undefined") return;
 
   try {
+    const previousUrl = window.location.href;
+    const previousState = window.history.state;
     const nextUrl = new URL(window.location.href);
     if (conversationId) {
       nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
@@ -652,6 +705,12 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
       "",
       nextUrl.toString(),
     );
+    postConversationHistoryDebug("replace-conversation-overlay-url", {
+      reason,
+      requestedConversationId: conversationId,
+      previousUrl,
+      previousState: summarizeConversationHistoryDebugState(previousState),
+    });
     notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
@@ -1768,7 +1827,7 @@ export default function ConversationList({
 
   const handleConversationDeleted = useCallback((conversationId: string) => {
     deletingConversationIdsRef.current.add(conversationId);
-    replaceConversationOverlayUrl(null);
+    replaceConversationOverlayUrl(null, "conversation-deleted");
     postNativeBannerZone("hidden");
     setOverlayExitMode("instant");
     setAutoStartConversationId((current) => (
@@ -2384,7 +2443,7 @@ export default function ConversationList({
     // already on the next entry; the marker lets the handlers use the entry
     // that caused the gesture instead of guessing from the transient URL.
     if (readConversationHistoryRouteFromState(window.history.state) !== undefined) return;
-    replaceConversationOverlayUrl(readConversationIdFromLocation());
+    replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
   }, []);
 
   useEffect(() => {
@@ -2465,7 +2524,7 @@ export default function ConversationList({
     if (activeConversation || isHydratingConversations) return;
     if (conversations.some((conversation) => conversation.id === initialConversationIdToOpen)) return;
     if (readConversationIdFromLocation() !== initialConversationIdToOpen) return;
-    replaceConversationOverlayUrl(null);
+    replaceConversationOverlayUrl(null, "initial-conversation-missing");
   }, [
     activeConversation,
     conversations,
@@ -2828,6 +2887,13 @@ export default function ConversationList({
     // Mark this conversation as closed so native STT restore and non-history
     // route-sync cannot re-open it automatically. An explicit history-forward
     // popstate consumes this guard and restores the room.
+    postConversationHistoryDebug("close-conversation-overlay", {
+      conversationId: conversation.id,
+      animateExit: options?.animateExit === true,
+      replaceUrl: shouldReplaceUrl,
+      activeConversationId: activeConversationRef.current?.id ?? null,
+      suppressionBefore: suppressNativeSttRestoreConversationIdRef.current,
+    });
     suppressNativeSttRestoreConversationIdRef.current = conversation.id;
     if (activeConversationRef.current?.id === conversation.id) {
       activeConversationRef.current = null;
@@ -2836,7 +2902,7 @@ export default function ConversationList({
     postNativeBannerZone("hidden");
 
     if (shouldReplaceUrl) {
-      replaceConversationOverlayUrl(null);
+      replaceConversationOverlayUrl(null, "close-conversation-overlay");
     }
 
     setOverlayExitMode(exitMode);
@@ -2863,6 +2929,7 @@ export default function ConversationList({
     const enterMode = options?.enterMode ?? "animate";
     const syncHistory = options?.syncHistory ?? "push";
     const clearSuppression = options?.clearManualCloseSuppression ?? (syncHistory === "push");
+    const suppressionBefore = suppressNativeSttRestoreConversationIdRef.current;
 
     if (syncHistory === "push") {
       conversationHistoryPopStateTargetRef.current = null;
@@ -2872,6 +2939,15 @@ export default function ConversationList({
     if (clearSuppression) {
       suppressNativeSttRestoreConversationIdRef.current = null;
     }
+
+    postConversationHistoryDebug("open-conversation-summary", {
+      conversationId: conversation.id,
+      syncHistory,
+      enterMode,
+      clearManualCloseSuppression: clearSuppression,
+      suppressionBefore,
+      activeConversationId: activeConversationRef.current?.id ?? null,
+    });
 
     postNativeBannerZone("hidden");
     closeSearchOverlay({ transitionMode: "instant", syncHistory: "replace" });
@@ -3222,8 +3298,15 @@ export default function ConversationList({
       && suppressNativeSttRestoreConversationIdRef.current === routeConversationId
     ) {
       if (pendingConversationHistoryBackRef.current) return;
+      postConversationHistoryDebug("route-sync-suppression-branch", {
+        routeConversationId,
+        pendingHistoryTarget: pendingHistoryTarget?.conversationId ?? null,
+        activeConversationId: activeConversationRef.current?.id ?? null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        routeSyncConversationId: routeSyncConversationIdRef.current,
+      });
       routeSyncConversationIdRef.current = routeConversationId;
-      replaceConversationOverlayUrl(null);
+      replaceConversationOverlayUrl(null, "route-sync-native-stt-suppression");
       return;
     }
 
@@ -3235,7 +3318,7 @@ export default function ConversationList({
     }).catch((error: unknown) => {
       routeSyncConversationIdRef.current = null;
       if (readConversationIdFromLocation() === routeConversationId) {
-        replaceConversationOverlayUrl(null);
+        replaceConversationOverlayUrl(null, "route-sync-open-failed");
       }
       const aborted = isAbortLikeMutationError(error);
       logConversationMutationFailure({
@@ -3291,6 +3374,15 @@ export default function ConversationList({
         window.history.state,
         currentRouteConversationId,
       );
+      postConversationHistoryDebug("popstate-close-handler", {
+        handler: "close",
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId: currentActiveConversation?.id ?? null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        pendingHistoryTarget: conversationHistoryPopStateTargetRef.current?.conversationId ?? null,
+      });
       pendingConversationHistoryBackRef.current = false;
 
       // Use the current history entry's explicit route marker when available.
@@ -3335,6 +3427,15 @@ export default function ConversationList({
         window.history.state,
         currentRouteConversationId,
       );
+      postConversationHistoryDebug("popstate-open-handler", {
+        handler: "open",
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId: null,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        pendingHistoryTarget: conversationHistoryPopStateTargetRef.current?.conversationId ?? null,
+      });
       if (!historyTargetConversationId) return;
       if (isCreatingConversationRef.current || isImportingLegacyConversationRef.current) return;
 
@@ -3349,6 +3450,15 @@ export default function ConversationList({
         conversationHistoryPopStateTargetRef.current = null;
       }
 
+      postConversationHistoryDebug("popstate-open-decision", {
+        handler: "open",
+        currentRouteConversationId,
+        historyTargetConversationId,
+        isHistoryRestore,
+        suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
+        activeConversationId: null,
+      });
+
       // A forward popstate is an explicit request to restore the room. It must
       // clear the close guard rather than rewriting the room entry into a list
       // entry while preserving the native history index.
@@ -3357,7 +3467,7 @@ export default function ConversationList({
         && suppressNativeSttRestoreConversationIdRef.current === historyTargetConversationId
       ) {
         routeSyncConversationIdRef.current = historyTargetConversationId;
-        replaceConversationOverlayUrl(null);
+        replaceConversationOverlayUrl(null, "popstate-native-stt-suppression");
         return;
       }
 
@@ -3369,7 +3479,7 @@ export default function ConversationList({
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === historyTargetConversationId) {
-          replaceConversationOverlayUrl(null);
+          replaceConversationOverlayUrl(null, "popstate-open-failed");
         }
         const aborted = isAbortLikeMutationError(error);
         logConversationMutationFailure({

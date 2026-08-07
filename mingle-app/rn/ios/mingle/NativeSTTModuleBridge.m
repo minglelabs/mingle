@@ -37,4 +37,6 @@ RCT_EXTERN_METHOD(rememberConversationRestoreUrl:(NSString *)url
 RCT_EXTERN_METHOD(clearConversationRestoreUrl:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(recordHistoryDebug:(NSString *)payload)
+
 @end

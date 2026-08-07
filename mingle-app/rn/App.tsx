@@ -112,6 +112,7 @@ type NativeConversationRestoreStorageModule = {
     createdAtMs: number,
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
+  recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -625,6 +626,11 @@ type NativeNavigationStateCommand = {
   };
 };
 
+type NativeHistoryDebugCommand = {
+  type: 'native_history_debug';
+  payload?: Record<string, unknown>;
+};
+
 type NativeOpenUpdateStoreCommand = {
   type: 'native_open_update_store';
   payload?: {
@@ -683,6 +689,7 @@ type WebViewCommand =
   | NativeAuthAckCommand
   | NativeAuthResetCommand
   | NativeNavigationStateCommand
+  | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
   | NativeUiOverlayStateCommand
   | NativeSetAdBannerPositionCommand
@@ -2271,6 +2278,19 @@ function AppInner(): React.JSX.Element {
       }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
+      return;
+    }
+
+    if (parsed.type === 'native_history_debug') {
+      if (!RUNTIME_QA_BRIDGE_ENABLED) return;
+      try {
+        const serializedPayload = JSON.stringify(parsed.payload ?? {}).slice(0, 4000);
+        NATIVE_CONVERSATION_RESTORE_STORAGE.recordHistoryDebug?.(serializedPayload);
+        console.warn('[MingleHistoryDebug]', serializedPayload);
+      } catch {
+        NATIVE_CONVERSATION_RESTORE_STORAGE.recordHistoryDebug?.('{"error":"unable_to_serialize"}');
+        console.warn('[MingleHistoryDebug] unable to serialize diagnostic payload');
+      }
       return;
     }
 

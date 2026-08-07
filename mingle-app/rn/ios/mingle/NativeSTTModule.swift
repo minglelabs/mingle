@@ -1214,4 +1214,13 @@ class NativeRuntimeConfigModule: NSObject {
         defaults.removeObject(forKey: Self.conversationRestoreCreatedAtMsKey)
         resolve(true)
     }
+
+    @objc(recordHistoryDebug:)
+    func recordHistoryDebug(_ payload: String) {
+        guard NativeSTTModule.readRuntimeConfigValue("MingleQaBridgeEnabled") == "1" else {
+            return
+        }
+        let boundedPayload = String(payload.prefix(4_000))
+        NSLog("[MingleHistoryDebug] %@", boundedPayload)
+    }
 }
