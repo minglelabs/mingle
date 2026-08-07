@@ -48,6 +48,7 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import {
   buildConversationRequestIdentityHeaders,
+  buildConversationHistoryState,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
   CONVERSATION_AVATAR_IMAGE_STYLE,
@@ -64,6 +65,8 @@ import {
   replaceConversationLists,
   releaseConversationCreateLock,
   resolveConversationDisplayMessageCount,
+  resolveConversationHistoryRoute,
+  readConversationHistoryRouteFromState,
   type TooltipPos,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -644,7 +647,11 @@ function replaceConversationOverlayUrl(conversationId: string | null): void {
     } else {
       nextUrl.searchParams.delete(CONVERSATION_QUERY_KEY);
     }
-    window.history.replaceState(window.history.state, "", nextUrl.toString());
+    window.history.replaceState(
+      buildConversationHistoryState(conversationId, window.history.state),
+      "",
+      nextUrl.toString(),
+    );
     notifyLocationSearchSync();
   } catch {
     // Ignore history synchronization failures in restricted environments.
@@ -2371,6 +2378,17 @@ export default function ConversationList({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // Give every conversation-list history entry an explicit screen marker.
+    // iOS can deliver a delayed popstate while the visible WebView snapshot is
+    // already on the next entry; the marker lets the handlers use the entry
+    // that caused the gesture instead of guessing from the transient URL.
+    if (readConversationHistoryRouteFromState(window.history.state) !== undefined) return;
+    replaceConversationOverlayUrl(readConversationIdFromLocation());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     if (!isNativeRuntime && !isNativeAppRuntime()) return;
 
     setNativeSttStatus(readCachedNativeSttStatus());
@@ -2873,11 +2891,29 @@ export default function ConversationList({
       const nextUrl = buildConversationOverlayUrl(conversation.id);
       if (nextUrl && currentConversationId !== conversation.id) {
         if (syncHistory === "push") {
-          window.history.pushState({ conversationId: conversation.id }, "", nextUrl);
+          window.history.pushState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
         } else {
-          window.history.replaceState(window.history.state, "", nextUrl);
+          window.history.replaceState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
         }
         notifyLocationSearchSync();
+      } else if (nextUrl && currentConversationId === conversation.id) {
+        const currentHistoryRoute = readConversationHistoryRouteFromState(window.history.state);
+        if (currentHistoryRoute !== conversation.id) {
+          window.history.replaceState(
+            buildConversationHistoryState(conversation.id, window.history.state),
+            "",
+            nextUrl,
+          );
+          notifyLocationSearchSync();
+        }
       }
     }
 
@@ -3137,17 +3173,36 @@ export default function ConversationList({
 
   useEffect(() => {
     if (activeConversation) {
+      const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
+      if (
+        pendingHistoryTarget?.conversationId === activeConversation.id
+        && routeConversationId === activeConversation.id
+      ) {
+        conversationHistoryPopStateTargetRef.current = null;
+      }
       routeSyncConversationIdRef.current = null;
       return;
     }
 
+    const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
     if (!routeConversationId) {
+      // A native gesture can deliver the popstate target before the URL store
+      // catches up. Keep the explicit target alive so a stale room URL cannot
+      // trigger the native-STT suppression cleanup path and rewrite that room
+      // history entry into another list entry.
+      if (pendingHistoryTarget?.conversationId) return;
       routeSyncConversationIdRef.current = null;
       conversationHistoryPopStateTargetRef.current = null;
       pendingConversationHistoryBackRef.current = false;
       return;
     }
-    const isHistoryRestore = conversationHistoryPopStateTargetRef.current?.conversationId
+    // If the URL still describes the previous screen, wait for the browser's
+    // history commit instead of treating the room query as an automatic/native
+    // restore. The popstate handler has already recorded the intended target.
+    if (pendingHistoryTarget && pendingHistoryTarget.conversationId !== routeConversationId) {
+      return;
+    }
+    const isHistoryRestore = pendingHistoryTarget?.conversationId
       === routeConversationId;
     if (routeSyncConversationIdRef.current === routeConversationId && !isHistoryRestore) return;
     if (isCreatingConversation || isImportingLegacyConversation) return;
@@ -3228,26 +3283,33 @@ export default function ConversationList({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       const currentActiveConversation = activeConversationRef.current;
       const currentRouteConversationId = readConversationIdFromLocation();
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
       pendingConversationHistoryBackRef.current = false;
 
-      if (
-        (currentActiveConversation && currentRouteConversationId !== currentActiveConversation.id)
-        || (!currentActiveConversation && currentRouteConversationId)
-      ) {
-        conversationHistoryPopStateTargetRef.current = {
-          conversationId: currentRouteConversationId,
-        };
-      } else {
-        // Menu/search history entries keep the room query unchanged and are not
-        // room/list restoration events.
-        conversationHistoryPopStateTargetRef.current = null;
-      }
+      // Use the current history entry's explicit route marker when available.
+      // During an iOS edge-swipe, the WebView URL and a delayed popstate event
+      // can briefly describe an older entry; recording the settled entry keeps
+      // that stale list event from closing a room that was just restored.
+      const isRoomHistoryTransition = (
+        currentActiveConversation
+          && historyTargetConversationId !== currentActiveConversation.id
+      ) || (
+        !currentActiveConversation
+          && historyTargetConversationId !== null
+      );
+      conversationHistoryPopStateTargetRef.current = isRoomHistoryTransition
+        ? { conversationId: historyTargetConversationId }
+        : null;
 
       if (!currentActiveConversation) return;
-      if (currentRouteConversationId === currentActiveConversation.id) return;
+      if (historyTargetConversationId === currentActiveConversation.id) return;
 
       const animateExit = pendingHistoryCloseAnimationRef.current === "animate"
         || consumeNativeHistoryCloseAnimationFlag();
@@ -3264,21 +3326,26 @@ export default function ConversationList({
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handlePopState = () => {
+    const handlePopState = (event: PopStateEvent) => {
       if (activeConversationRef.current) return;
 
       const currentRouteConversationId = readConversationIdFromLocation();
-      if (!currentRouteConversationId) return;
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
+      if (!historyTargetConversationId) return;
       if (isCreatingConversationRef.current || isImportingLegacyConversationRef.current) return;
 
       const matchedConversation = conversationsRef.current.find(
-        (conversation) => conversation.id === currentRouteConversationId,
+        (conversation) => conversation.id === historyTargetConversationId,
       );
       if (!matchedConversation) return;
 
       const isHistoryRestore = conversationHistoryPopStateTargetRef.current?.conversationId
-        === currentRouteConversationId;
-      if (isHistoryRestore) {
+        === historyTargetConversationId;
+      if (isHistoryRestore && currentRouteConversationId === historyTargetConversationId) {
         conversationHistoryPopStateTargetRef.current = null;
       }
 
@@ -3287,27 +3354,27 @@ export default function ConversationList({
       // entry while preserving the native history index.
       if (
         !isHistoryRestore
-        && suppressNativeSttRestoreConversationIdRef.current === currentRouteConversationId
+        && suppressNativeSttRestoreConversationIdRef.current === historyTargetConversationId
       ) {
-        routeSyncConversationIdRef.current = currentRouteConversationId;
+        routeSyncConversationIdRef.current = historyTargetConversationId;
         replaceConversationOverlayUrl(null);
         return;
       }
 
-      routeSyncConversationIdRef.current = currentRouteConversationId;
+      routeSyncConversationIdRef.current = historyTargetConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
         syncHistory: "none", // popstate already updated the URL; no push needed
         clearManualCloseSuppression: isHistoryRestore,
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
-        if (readConversationIdFromLocation() === currentRouteConversationId) {
+        if (readConversationIdFromLocation() === historyTargetConversationId) {
           replaceConversationOverlayUrl(null);
         }
         const aborted = isAbortLikeMutationError(error);
         logConversationMutationFailure({
           label: "popstate-open",
-          conversationId: currentRouteConversationId,
+          conversationId: historyTargetConversationId,
           error,
           aborted,
         });

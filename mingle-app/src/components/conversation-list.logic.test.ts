@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import {
+  buildConversationHistoryState,
   buildConversationRequestIdentityHeaders,
   calculateConversationRowTooltipPosForRect,
   compareConversationRecency,
+  CONVERSATION_HISTORY_ROUTE_STATE_KEY,
   CONVERSATION_AVATAR_IMAGE_STYLE,
   CONVERSATION_ROW_TOUCH_SAFE_STYLE,
   createMutationVersionTracker,
@@ -16,6 +18,8 @@ import {
   normalizeSearchTerm,
   replaceConversationLists,
   releaseConversationCreateLock,
+  resolveConversationHistoryRoute,
+  readConversationHistoryRouteFromState,
   resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
   tryAcquireConversationCreateLock,
@@ -125,6 +129,30 @@ describe("conversation-list logic", () => {
     const closed = mergeSearchOverlayHistoryState(opened, false);
     expect(closed).toEqual({ foo: "bar" });
     expect(isSearchOverlayHistoryOpen(closed)).toBe(false);
+  });
+
+  it("prefers the committed history entry over a stale popstate route", () => {
+    const roomState = buildConversationHistoryState("conv-1", {
+      nativeIndex: 2,
+    });
+    const listState = buildConversationHistoryState(null, {
+      nativeIndex: 1,
+    });
+
+    expect(resolveConversationHistoryRoute(listState, roomState, null)).toBe("conv-1");
+    expect(resolveConversationHistoryRoute(null, listState, "conv-1")).toBeNull();
+    expect(readConversationHistoryRouteFromState(roomState)).toBe("conv-1");
+    expect(readConversationHistoryRouteFromState(listState)).toBeNull();
+  });
+
+  it("preserves unrelated history state while removing legacy room metadata from list entries", () => {
+    expect(buildConversationHistoryState(null, {
+      keep: true,
+      conversationId: "legacy-room",
+    })).toEqual({
+      keep: true,
+      [CONVERSATION_HISTORY_ROUTE_STATE_KEY]: null,
+    });
   });
 
   it("orders conversations by latest finalized message time before fallback timestamps", () => {

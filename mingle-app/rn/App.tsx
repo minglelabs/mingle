@@ -437,6 +437,7 @@ const NATIVE_CONVERSATION_BOTTOM_BAR_VISUAL_TOP_OFFSET_PX = 64;
 const IOS_NATIVE_CONVERSATION_BOTTOM_BANNER_NUDGE_PX = 4;
 const NATIVE_APP_UPDATE_EVENT = 'mingle:native-app-update';
 const NATIVE_HISTORY_BACK_ANIMATE_FLAG = '__MINGLE_NATIVE_HISTORY_CLOSE_ANIMATE__';
+const CONVERSATION_HISTORY_ROUTE_STATE_KEY = '__MINGLE_CONVERSATION_HISTORY_ROUTE__';
 // Marks that a restored iOS room has received a synthetic list history entry.
 const IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG = '__MINGLE_IOS_ROOM_HISTORY_SEEDED__';
 const IOS_SAFE_BROWSER_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -2615,8 +2616,33 @@ function AppInner(): React.JSX.Element {
             } catch (urlError) {
               listUrl = currentHref.replace(/[?&]conversation=[^&]*/g, '').replace(/[?&]$/, '');
             }
-            window.history.replaceState(null, '', listUrl);
-            window.history.pushState(null, '', currentHref);
+            var conversationId = '';
+            try {
+              conversationId = new URL(currentHref).searchParams.get('conversation') || '';
+            } catch (urlError) {
+              conversationId = '';
+            }
+            var buildConversationRouteState = function (routeConversationId, sourceState) {
+              var nextState = sourceState && typeof sourceState === 'object' && !Array.isArray(sourceState)
+                ? Object.assign({}, sourceState)
+                : {};
+              delete nextState.conversationId;
+              nextState[${JSON.stringify(CONVERSATION_HISTORY_ROUTE_STATE_KEY)}] = routeConversationId || null;
+              if (routeConversationId) {
+                nextState.conversationId = routeConversationId;
+              }
+              return nextState;
+            };
+            window.history.replaceState(
+              buildConversationRouteState(null, window.history.state),
+              '',
+              listUrl,
+            );
+            window.history.pushState(
+              buildConversationRouteState(conversationId, window.history.state),
+              '',
+              currentHref,
+            );
             window[${JSON.stringify(IOS_CONVERSATION_ROOM_HISTORY_SEEDED_FLAG)}] = true;
           } catch (e) {
             // Ignore errors in history seed injection.

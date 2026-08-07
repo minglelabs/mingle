@@ -1,5 +1,16 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-07 iOS room/list repeated back-forward regression follow-up
+
+### `2026-08-07-ios-room-list-history-stale-popstate` | UI/UX issues found
+
+1. **The first history fix could still leave a list screen in the forward stack after repeated edge swipes**
+   Problem: After opening a room, swiping back, and swiping forward, the room could appear briefly and then snap back to the conversation list after roughly three seconds. From that list, another back swipe moved to the same list again, and a forward swipe restored the list instead of the room. The same failure family can appear when repeatedly navigating through room subpages such as the hamburger drawer, conversation management, or feedback.
+   Root cause: The earlier mitigation separated the native-STT close guard from the popstate restore path, but still treated the delayed `popstate` event's route (or the transient URL) as authoritative. iOS can replay a stale list event from the previous back gesture after the WebView has already committed the forward room entry. The delayed event then closed the restored room, and the cleanup path could rewrite the current room history entry into another list entry. The native iOS restore-history seed also discarded the route metadata, leaving seeded entries without enough information to reject the stale event.
+   Fix: Every conversation-list history entry now carries an explicit list-or-room route marker while preserving the native navigation index and other WebView state. Popstate handling resolves the current committed history entry before falling back to the event state or URL, so a delayed older list event cannot close the current room. List URL cleanup removes the legacy plain `conversationId` field, preventing a list entry from being mistaken for a room. The native iOS restore-history seed preserves the same markers, and the QA reset path now creates a clean marked list entry.
+   Regression coverage: Unit, UI-contract, script, web production-build, and RN test suites pass. The physical iPhone edge-swipe scenario still needs manual confirmation because the connected iOS 26 WebDriverAgent cannot currently expose a usable WebView automation context.
+   Status: Fix implemented in-thread on 2026-08-07; pending physical-device confirmation.
+
 ## 2026-08-07 iOS room/list repeated back-forward regression
 
 ### `2026-08-07-ios-room-list-history-regression` | UI/UX issues found
@@ -9,7 +20,7 @@
    Root cause: The conversation overlay close path marked every closed room with the native-STT restore suppression flag. When a legitimate forward `popstate` returned to that room, the route-sync and popstate-open paths treated it as an unwanted automatic restore and removed the `conversation` query with `replaceState`. That preserved the native stamped history index while changing the visible route to the list. The iOS native snapshot, delayed `popstate`, React overlay state, and URL then described different screens.
    Fix: Track the latest room/list target produced by an actual `popstate` separately from the native-STT suppression flag. History-forward restoration now consumes the close guard and reopens the room without rewriting the room history entry. App-driven back closes also keep route-sync from rewriting the current room entry before `history.back()` commits.
    Regression coverage: The iOS forward-swipe QA case now asserts the restored `activeConversationId`, not only the shared `/conversations` pathname.
-   Status: Fixed in-thread on 2026-08-07; physical-device validation remains required for repeated native edge-swipe timing.
+   Status: Initial mitigation implemented in-thread on 2026-08-07; superseded by the stale-popstate follow-up above.
 
 ## 2026-05-08 STT 실행 중 뒤로가기 → 대화방 재진입 루프
 

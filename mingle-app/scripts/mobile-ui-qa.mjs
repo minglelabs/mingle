@@ -1071,7 +1071,12 @@ async function resetConversationListRouteForQa(driver) {
   await driver.execute(() => {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete('conversation');
-    window.history.replaceState(window.history.state, '', nextUrl.toString());
+    const nextState = window.history.state && typeof window.history.state === 'object'
+      ? { ...window.history.state }
+      : {};
+    delete nextState.conversationId;
+    nextState.__MINGLE_CONVERSATION_HISTORY_ROUTE__ = null;
+    window.history.replaceState(nextState, '', nextUrl.toString());
     window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
     return true;
   });
@@ -1956,6 +1961,38 @@ async function runIosCases(driver, reportDir, options) {
           afterForward,
         });
 
+        const stalePopstateReplay = await driver.execute(() => {
+          const currentState = window.history.state && typeof window.history.state === 'object'
+            ? { ...window.history.state }
+            : {};
+          delete currentState.conversationId;
+          currentState.__MINGLE_CONVERSATION_HISTORY_ROUTE__ = null;
+          window.dispatchEvent(new PopStateEvent('popstate', { state: currentState }));
+          return {
+            href: window.location.href,
+            historyState: window.history.state,
+          };
+        });
+        const afterStalePopstateReplay = await waitFor(async () => {
+          const snapshot = await getConversationListQaSnapshot(driver);
+          return snapshot?.activeConversationId === conversationId ? snapshot : null;
+        }, 'the restored room to ignore a stale list popstate replay', 5000, 250);
+        assert(afterStalePopstateReplay?.activeConversationId === conversationId, 'A stale list popstate replay closed the restored room.', {
+          resetList,
+          before,
+          beforeListSnapshot,
+          historyStateBeforeBack,
+          afterBack,
+          afterBackHistoryState,
+          afterEdgeHistoryState,
+          fallbackForwardAction,
+          restoredBy,
+          afterForwardListSnapshot,
+          afterForward,
+          stalePopstateReplay,
+          afterStalePopstateReplay,
+        });
+
         const repeatedSwipeCycles = [];
         for (let cycle = 1; cycle <= 2; cycle += 1) {
           await delay(500);
@@ -1986,6 +2023,8 @@ async function runIosCases(driver, reportDir, options) {
           restoredBy,
           afterForwardListSnapshot,
           afterForward,
+          stalePopstateReplay,
+          afterStalePopstateReplay,
           repeatedSwipeCycles,
         };
       }),
