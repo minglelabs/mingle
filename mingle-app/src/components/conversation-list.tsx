@@ -625,6 +625,26 @@ function buildConversationOverlayUrl(conversationId: string): string | null {
   }
 }
 
+function clearNativeTabRootFromCurrentHistoryEntry(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) !== "1") return;
+
+    // The tab-root marker is only a boundary for the tab switch itself. Once
+    // the user explicitly opens a room, convert the current list entry back
+    // into an ordinary in-tab entry so room -> list -> room forward navigation
+    // remains available.
+    currentUrl.searchParams.delete(NATIVE_TAB_ROOT_QUERY_KEY);
+    currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
+    window.history.replaceState(window.history.state, "", currentUrl.toString());
+    notifyLocationSearchSync();
+  } catch {
+    // Ignore history synchronization failures in restricted environments.
+  }
+}
+
 function buildConversationApiPath(suffix = ""): string {
   return buildClientApiPath(`/conversations${suffix}` as `/${string}`);
 }
@@ -3004,6 +3024,7 @@ export default function ConversationList({
       const nextUrl = buildConversationOverlayUrl(conversation.id);
       if (nextUrl && currentConversationId !== conversation.id) {
         if (syncHistory === "push") {
+          clearNativeTabRootFromCurrentHistoryEntry();
           window.history.pushState(
             buildConversationHistoryState(conversation.id, window.history.state),
             "",
