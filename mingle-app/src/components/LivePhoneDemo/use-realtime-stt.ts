@@ -26,6 +26,13 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
+import {
+  isNativeSttMessageForConversation,
+  readNativeSttMessageQueue,
+  removeNativeSttQueuedMessage,
+  splitNativeSttMessagesForConversation,
+  type NativeSttQueuedMessage,
+} from '@/lib/native-stt-event-queue'
 
 export {
   buildStorageKey,
@@ -111,6 +118,7 @@ type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
   __MINGLE_LAST_NATIVE_MIC_PERMISSION?: unknown
+  __MINGLE_NATIVE_STT_MESSAGE_QUEUE?: unknown
 }
 
 function resolveRuntimeApiNamespace(): string {
@@ -304,6 +312,7 @@ export function buildSonioxLanguageHints(languages: string[]): string[] {
 type NativeSttStartCommand = {
   type: 'native_stt_start'
   payload: {
+    conversationId: string
     wsUrl: string
     sttModel: string
     aecEnabled: boolean
@@ -345,11 +354,13 @@ export type NativeMicPermissionRecoveryAction = 'none' | 'open_ios_settings'
 
 type NativeSttBridgeEvent =
   | { type: 'status', status: string }
-  | { type: 'message', raw: string }
+  | { type: 'message', raw: string, conversationId?: string, queueId?: string }
   | { type: 'error', message: string, code?: string, platform?: string }
   | { type: 'permission', permission: string, platform?: string }
   | { type: 'capabilities', openAppSettings: boolean }
   | { type: 'close', reason: string }
+
+type NativeSttBridgeMessageEvent = Extract<NativeSttBridgeEvent, { type: 'message' }>
 
 export function resolveNativeMicPermissionRecoveryAction(input: {
   message?: string
@@ -4513,6 +4524,7 @@ export default function useRealtimeSTT({
         const posted = sendNativeSttCommand({
           type: 'native_stt_start',
           payload: {
+            conversationId: conversationId || '',
             wsUrl: getWsUrl(),
             sttModel: 'soniox',
             aecEnabled: enableAec,
@@ -4615,7 +4627,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -4661,8 +4673,18 @@ export default function useRealtimeSTT({
       }
 
       if (detail.type === 'message') {
+        if (!isNativeSttMessageForConversation(detail, conversationId)) {
+          return
+        }
         if (!claimCurrentNativeSttOwnerIfUnclaimed()) {
           return
+        }
+        if (detail.queueId && typeof window !== 'undefined') {
+          const cachedWindow = window as NativeAppUpdateWindow
+          cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE = removeNativeSttQueuedMessage(
+            readNativeSttMessageQueue(cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE),
+            detail.queueId,
+          )
         }
         if (shouldPromoteConnectionStatusFromNativeActivity({
           previousConnectionStatus: connectionStatusRef.current,
@@ -4759,7 +4781,31 @@ export default function useRealtimeSTT({
     return () => {
       window.removeEventListener(NATIVE_STT_EVENT, handleNativeEvent as EventListener)
     }
-  }, [claimCurrentNativeSttOwnerIfUnclaimed, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, finalizePendingTurnsLocallyForStop, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, isCurrentNativeSttOwner, releaseCurrentNativeSttOwner, resetToIdle, resolvePendingNativeStopAck])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!isStorageHydrated) return
+    if (!shouldUseNativeSttBridge()) return
+
+    const cachedWindow = window as NativeAppUpdateWindow
+    const queuedMessages = readNativeSttMessageQueue(cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE)
+    const { matching, remaining } = splitNativeSttMessagesForConversation(queuedMessages, conversationId)
+    if (matching.length === 0) return
+    if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
+
+    cachedWindow.__MINGLE_NATIVE_STT_MESSAGE_QUEUE = remaining
+    for (const queuedMessage of matching as NativeSttQueuedMessage[]) {
+      window.dispatchEvent(new CustomEvent(NATIVE_STT_EVENT, {
+        detail: {
+          type: 'message',
+          raw: queuedMessage.raw,
+          ...(queuedMessage.conversationId ? { conversationId: queuedMessage.conversationId } : {}),
+          ...(queuedMessage.queueId ? { queueId: queuedMessage.queueId } : {}),
+        } satisfies NativeSttBridgeMessageEvent,
+      }))
+    }
+  }, [claimCurrentNativeSttOwnerIfUnclaimed, conversationId, isStorageHydrated])
 
   useEffect(() => {
     if (!shouldTrackUsageForConnectionStatus(connectionStatus)) {

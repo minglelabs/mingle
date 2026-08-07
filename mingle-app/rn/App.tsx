@@ -425,6 +425,8 @@ const REQUIRED_CONFIG_ERROR = missingRuntimeConfig.length > 0
   : null;
 
 const NATIVE_STT_EVENT = 'mingle:native-stt';
+const NATIVE_STT_MESSAGE_QUEUE_KEY = '__MINGLE_NATIVE_STT_MESSAGE_QUEUE';
+const NATIVE_STT_MESSAGE_QUEUE_LIMIT = 200;
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
@@ -542,6 +544,7 @@ function resolveBannerZoneForUrl(rawUrl: string): BannerZone | null {
 const IOS_VERSION_POLICY_TIMEOUT_MS = 8000;
 
 type NativeSttStartPayload = {
+  conversationId?: string;
   wsUrl?: string;
   sttModel?: string;
   aecEnabled?: boolean;
@@ -700,7 +703,7 @@ type WebViewCommand =
 
 type NativeSttEvent =
   | { type: 'status'; status: string }
-  | { type: 'message'; raw: string }
+  | { type: 'message'; raw: string; conversationId?: string; queueId?: string }
   | { type: 'error'; message: string; code?: string; platform?: string }
   | { type: 'permission'; permission: string; platform?: string }
   | { type: 'capabilities'; openAppSettings: boolean }
@@ -1122,6 +1125,9 @@ function AppInner(): React.JSX.Element {
   const recommendPromptShownRef = useRef(false);
   const pendingRecommendPromptRef = useRef<RecommendUpdatePrompt | null>(null);
   const nativeStatusRef = useRef('idle');
+  const nativeSttConversationIdRef = useRef<string | null>(null);
+  const nativeSttMessageSequenceRef = useRef(0);
+  const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1783,23 +1789,68 @@ function AppInner(): React.JSX.Element {
   }, [versionGate]);
 
   const emitToWeb = useCallback((payload: NativeSttEvent) => {
-    if (!isPageReadyRef.current) return;
-    const serialized = JSON.stringify(payload);
+    const queueId = payload.type === 'message' && !payload.queueId
+      ? `native-stt-${Date.now()}-${++nativeSttMessageSequenceRef.current}`
+      : undefined;
+    const nextPayload: NativeSttEvent = payload.type === 'message'
+      ? {
+          ...payload,
+          ...(payload.queueId || queueId ? { queueId: payload.queueId || queueId } : {}),
+          ...(payload.conversationId || nativeSttConversationIdRef.current
+            ? { conversationId: payload.conversationId || nativeSttConversationIdRef.current || undefined }
+            : {}),
+        }
+      : payload;
+
+    if (!isPageReadyRef.current) {
+      if (nextPayload.type === 'message') {
+        pendingNativeSttMessagesRef.current.push(nextPayload);
+        if (pendingNativeSttMessagesRef.current.length > NATIVE_STT_MESSAGE_QUEUE_LIMIT) {
+          pendingNativeSttMessagesRef.current.splice(
+            0,
+            pendingNativeSttMessagesRef.current.length - NATIVE_STT_MESSAGE_QUEUE_LIMIT,
+          );
+        }
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(nextPayload);
     if (__DEV__) {
-      const preview = payload.type === 'message'
-        ? `message(${(payload as { raw?: string }).raw?.slice(0, 80) ?? ''})`
-        : `${payload.type}(${JSON.stringify(payload).slice(0, 80)})`;
+      const preview = nextPayload.type === 'message'
+        ? `message(${nextPayload.raw.slice(0, 80)})`
+        : `${nextPayload.type}(${JSON.stringify(nextPayload).slice(0, 80)})`;
       console.log(`[NativeSTT→Web] ${preview}`);
     }
-    const cacheStatusScript = payload.type === 'status'
-      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(payload.status)}; `
+    const cacheStatusScript = nextPayload.type === 'status'
+      ? `window.__MINGLE_LAST_NATIVE_STT_STATUS = ${JSON.stringify(nextPayload.status)}; `
       : '';
-    const cachePermissionScript = payload.type === 'permission'
-      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(payload.permission)}; `
+    const cachePermissionScript = nextPayload.type === 'permission'
+      ? `window.__MINGLE_LAST_NATIVE_MIC_PERMISSION = ${JSON.stringify(nextPayload.permission)}; `
       : '';
-    const script = `${cacheStatusScript}${cachePermissionScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
+    const cacheMessageScript = nextPayload.type === 'message'
+      ? `(function () {
+          var queue = Array.isArray(window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}])
+            ? window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}]
+            : [];
+          queue.push(${serialized});
+          if (queue.length > ${NATIVE_STT_MESSAGE_QUEUE_LIMIT}) {
+            queue.splice(0, queue.length - ${NATIVE_STT_MESSAGE_QUEUE_LIMIT});
+          }
+          window[${JSON.stringify(NATIVE_STT_MESSAGE_QUEUE_KEY)}] = queue;
+        })(); `
+      : '';
+    const script = `${cacheStatusScript}${cachePermissionScript}${cacheMessageScript}window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_STT_EVENT)}, { detail: ${serialized} })); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
+
+  const flushPendingNativeSttMessagesToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingMessages = pendingNativeSttMessagesRef.current.splice(0);
+    for (const message of pendingMessages) {
+      emitToWeb(message);
+    }
+  }, [emitToWeb]);
 
   const emitCurrentMicPermissionToWeb = useCallback(async () => {
     if (Platform.OS !== 'ios' || !nativeAvailable) return;
@@ -2049,6 +2100,10 @@ function AppInner(): React.JSX.Element {
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
+    const conversationId = typeof payload?.conversationId === 'string'
+      ? payload.conversationId.trim()
+      : '';
+    nativeSttConversationIdRef.current = conversationId || null;
 
     const startPayload = {
       sttModel,
@@ -2094,6 +2149,7 @@ function AppInner(): React.JSX.Element {
             ? (fallbackError as { code: string }).code.trim()
             : resolveNativeSttErrorCode(fallbackMessage);
           nativeStatusRef.current = fallbackCode === 'mic_permission' ? 'idle' : 'failed';
+          nativeSttConversationIdRef.current = null;
           emitToWeb({
             type: 'error',
             message: fallbackMessage,
@@ -2104,6 +2160,7 @@ function AppInner(): React.JSX.Element {
         }
       }
       nativeStatusRef.current = code === 'mic_permission' ? 'idle' : 'failed';
+      nativeSttConversationIdRef.current = null;
       if (code === 'mic_permission') {
         emitToWeb({
           type: 'permission',
@@ -2127,6 +2184,7 @@ function AppInner(): React.JSX.Element {
         pendingLanguage: typeof payload?.pendingLanguage === 'string' ? payload.pendingLanguage : 'unknown',
       });
       nativeStatusRef.current = 'stopped';
+      nativeSttConversationIdRef.current = null;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       emitToWeb({ type: 'error', message });
@@ -2614,6 +2672,7 @@ function AppInner(): React.JSX.Element {
     setCurrentWebPathname(parseWebPathname(nextUrl));
     updateSafeAreaPalette(nextUrl);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
+    flushPendingNativeSttMessagesToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
@@ -2676,7 +2735,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativeSttMessagesToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (activateWebFallback()) return;

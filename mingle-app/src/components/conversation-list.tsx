@@ -2580,6 +2580,13 @@ export default function ConversationList({
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
 
+    const hiddenNativeSttConversation = isNativeSttStatusLive(cachedNativeSttStatus)
+      ? findNativeSttRestoreConversation(
+          conversations,
+          deletingConversationIdsRef.current,
+        )
+      : null;
+
     const shouldStayOnConversationList = (() => {
       const currentUrl = new URL(window.location.href);
       const isExplicitTabRoot = currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
@@ -2617,6 +2624,17 @@ export default function ConversationList({
       // the list tab, so reopening the live room would violate that action.
       takeNativeRemountRestoreConversation();
       nativeSttRestoreAttemptedRef.current = true;
+      if (
+        hiddenNativeSttConversation
+        && suppressNativeSttRestoreConversationIdRef.current !== hiddenNativeSttConversation.id
+      ) {
+        // The hidden room mounts with an idle React state before its cached
+        // native status is applied. Keep a false sentinel so that its initial
+        // callback cannot PATCH the live conversation to paused; the first
+        // native running callback will promote it back to active.
+        conversationRunningStateRef.current.set(hiddenNativeSttConversation.id, false);
+        setLiveConversationId(hiddenNativeSttConversation.id);
+      }
       return;
     }
 
