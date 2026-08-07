@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-07 - Messenger Bottom Tabs and My Page Draft Surface
+
+- Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/components/my-page.tsx`
+- Issue: The conversation list used a full-width start-conversation footer and did not provide persistent navigation to a personal page.
+- User impact: Users could not switch between the conversation list and a personal page without leaving the main flow, and the primary new-conversation action occupied the entire bottom edge.
+- Resolution: Replaced the footer with a two-tab bottom bar, moved search slightly left, added a chat-plus new-conversation action in the header, and added an Instagram-style personal-page header with a disabled lower placeholder. Profile editing, sharing, settings, and post uploads remain out of scope for this draft.
+
 ## 2026-04-30 - Live Demo Chat Scroll Surface Paint Boundary
 
 - Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`

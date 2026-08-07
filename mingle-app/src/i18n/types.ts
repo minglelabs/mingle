@@ -89,6 +89,7 @@ export type BaseAppDictionarySource = {
     followersLabel: string;
     followingLabel: string;
     bio: string;
+    comingSoonLabel?: string;
     editProfile: string;
     shareProfile: string;
     authTitle: string;

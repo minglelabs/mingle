@@ -21,7 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
+import { Loader2, MessageCirclePlus, PencilLine, Search, Trash2 } from "lucide-react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
   formatLivePhoneDemoMessageCount,
@@ -83,6 +83,7 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
@@ -1503,7 +1504,7 @@ export default function ConversationList({
         ? runtimeNativeConversationBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
-  const conversationListFooterPaddingBottom = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+  const conversationListScrollPaddingBottomPx = BOTTOM_TAB_BAR_HEIGHT_PX + 20;
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -3195,14 +3196,29 @@ export default function ConversationList({
       >
         <MingleWordmark />
 
-        <button
-          type="button"
-          onClick={handleOpenSearch}
-          className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
-          aria-label={copy.searchButtonLabel}
-        >
-          <Search size={22} strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleOpenSearch}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+            aria-label={copy.searchButtonLabel}
+          >
+            <Search size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={handleCreateConversation}
+            disabled={actionDisabled}
+            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={copy.newConversationButtonLabel}
+          >
+            {isCreatingConversation ? (
+              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
+            ) : (
+              <MessageCirclePlus size={22} strokeWidth={2} />
+            )}
+          </button>
+        </div>
       </header>
 
       <div
@@ -3210,7 +3226,7 @@ export default function ConversationList({
         className="min-h-0 flex-1 overflow-y-auto"
         style={{
           paddingTop: effectiveNativeTopInsetPx > 0 ? `${effectiveNativeTopInsetPx}px` : "0px",
-          paddingBottom: "20px",
+          paddingBottom: `${conversationListScrollPaddingBottomPx}px`,
         }}
         onTouchStart={(event) => {
           if (showSearch || activeConversation || isRefreshingConversations) return;
@@ -3335,36 +3351,11 @@ export default function ConversationList({
         </div>
       </div>
 
-      <footer className="shrink-0">
-        <button
-          type="button"
-          onClick={handleCreateConversation}
-          disabled={actionDisabled}
-          className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
-          aria-label={copy.newConversationButtonLabel}
-          style={{
-            minHeight: "72px",
-            paddingBottom: conversationListFooterPaddingBottom,
-            backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
-          }}
-        >
-          <span
-            className={`flex min-h-[24px] items-center justify-center gap-2 transition-opacity ${
-              isCreatingConversation ? "opacity-0" : "opacity-100"
-            }`}
-          >
-            <>
-              <span>{copy.newConversationButtonLabel}</span>
-              <ArrowRight size={18} strokeWidth={2.4} />
-            </>
-          </span>
-          {isCreatingConversation ? (
-            <span className="absolute inset-0 flex items-center justify-center">
-              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
-            </span>
-          ) : null}
-        </button>
-      </footer>
+      <BottomTabBar
+        activeRoute="conversations"
+        dictionary={dictionary}
+        locale={locale}
+      />
 
       {isClientReady && typeof document !== "undefined"
         ? createPortal(

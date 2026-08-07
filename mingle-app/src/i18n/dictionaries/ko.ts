@@ -73,6 +73,7 @@ export const koDictionary: BaseAppDictionarySource = {
     followersLabel: "팔로워",
     followingLabel: "팔로잉",
     bio: "커피와 대화를 좋아하는 사람",
+    comingSoonLabel: "기능 준비중입니다.",
     editProfile: "프로필 변경",
     shareProfile: "프로필 공유",
     authTitle: "인증",

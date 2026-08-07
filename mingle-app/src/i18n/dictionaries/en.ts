@@ -73,6 +73,7 @@ export const enDictionary: BaseAppDictionarySource = {
     followersLabel: "followers",
     followingLabel: "following",
     bio: "A person who loves coffee and meaningful conversations",
+    comingSoonLabel: "Feature coming soon.",
     editProfile: "Edit profile",
     shareProfile: "Share profile",
     authTitle: "Authentication",
