@@ -145,6 +145,21 @@ export function resolveConversationHistoryRoute(
   return fallbackRoute;
 }
 
+export type ConversationHistoryNavigationDirection = "back" | "forward" | "unknown";
+
+export function resolveConversationHistoryNavigationDirection(
+  activeConversationId: string | null,
+  targetConversationId: string | null,
+): ConversationHistoryNavigationDirection {
+  if (activeConversationId && targetConversationId !== activeConversationId) {
+    return "back";
+  }
+  if (!activeConversationId && targetConversationId) {
+    return "forward";
+  }
+  return "unknown";
+}
+
 export function buildConversationHistoryState(
   conversationId: string | null,
   currentState: unknown,

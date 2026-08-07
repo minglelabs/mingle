@@ -65,8 +65,10 @@ import {
   replaceConversationLists,
   releaseConversationCreateLock,
   resolveConversationDisplayMessageCount,
+  resolveConversationHistoryNavigationDirection,
   resolveConversationHistoryRoute,
   readConversationHistoryRouteFromState,
+  type ConversationHistoryNavigationDirection,
   type TooltipPos,
   tryAcquireConversationCreateLock,
   upsertConversation,
@@ -131,6 +133,9 @@ type ConversationOverlayTransitionState = {
 };
 type ConversationHistoryPopStateTarget = {
   conversationId: string | null;
+};
+type ConversationHistoryPopStateTransition = ConversationHistoryPopStateTarget & {
+  direction: ConversationHistoryNavigationDirection;
 };
 
 type ConversationListWindow = Window & {
@@ -1547,6 +1552,10 @@ export default function ConversationList({
   // latest room/list target separate from the STT suppression flag so a forward
   // gesture is never mistaken for an automatic native restore.
   const conversationHistoryPopStateTargetRef = useRef<ConversationHistoryPopStateTarget | null>(null);
+  // Capture the transition before the location store's bubble-phase listener
+  // can synchronously re-render and run route-sync. This is the authoritative
+  // ownership record for an iOS back/forward gesture.
+  const conversationHistoryPopStateTransitionRef = useRef<ConversationHistoryPopStateTransition | null>(null);
   // The app-driven back button closes the overlay before calling history.back().
   // Keep route-sync from rewriting that still-current room entry into a list
   // entry before the browser finishes the history navigation.
@@ -2933,6 +2942,7 @@ export default function ConversationList({
 
     if (syncHistory === "push") {
       conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
       pendingConversationHistoryBackRef.current = false;
     }
 
@@ -3248,6 +3258,50 @@ export default function ConversationList({
   ]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // This listener must run in the capture phase. The location store also
+    // listens to popstate and can synchronously flush a React render before
+    // the normal bubble-phase handlers run. Recording the destination here
+    // prevents route-sync from mistaking an explicit forward gesture for a
+    // native-STT restore and replacing the room entry with a list entry.
+    const handlePopStateCapture = (event: PopStateEvent) => {
+      const activeConversationId = activeConversationRef.current?.id ?? null;
+      const currentRouteConversationId = readConversationIdFromLocation();
+      const historyTargetConversationId = resolveConversationHistoryRoute(
+        event.state,
+        window.history.state,
+        currentRouteConversationId,
+      );
+      const direction = resolveConversationHistoryNavigationDirection(
+        activeConversationId,
+        historyTargetConversationId,
+      );
+
+      conversationHistoryPopStateTransitionRef.current = {
+        conversationId: historyTargetConversationId,
+        direction,
+      };
+      conversationHistoryPopStateTargetRef.current = {
+        conversationId: historyTargetConversationId,
+      };
+      postConversationHistoryDebug("popstate-capture", {
+        eventState: summarizeConversationHistoryDebugState(event.state),
+        currentRouteConversationId,
+        resolvedTargetConversationId: historyTargetConversationId,
+        activeConversationId,
+        direction,
+      });
+    };
+
+    window.addEventListener("popstate", handlePopStateCapture, true);
+    return () => {
+      window.removeEventListener("popstate", handlePopStateCapture, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const capturedHistoryTransition = conversationHistoryPopStateTransitionRef.current;
     if (activeConversation) {
       const pendingHistoryTarget = conversationHistoryPopStateTargetRef.current;
       if (
@@ -3255,6 +3309,7 @@ export default function ConversationList({
         && routeConversationId === activeConversation.id
       ) {
         conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
       }
       routeSyncConversationIdRef.current = null;
       return;
@@ -3266,9 +3321,16 @@ export default function ConversationList({
       // catches up. Keep the explicit target alive so a stale room URL cannot
       // trigger the native-STT suppression cleanup path and rewrite that room
       // history entry into another list entry.
-      if (pendingHistoryTarget?.conversationId) return;
+      if (
+        pendingHistoryTarget?.conversationId
+        || (
+          capturedHistoryTransition?.direction === "forward"
+          && capturedHistoryTransition.conversationId
+        )
+      ) return;
       routeSyncConversationIdRef.current = null;
       conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
       pendingConversationHistoryBackRef.current = false;
       return;
     }
@@ -3278,8 +3340,22 @@ export default function ConversationList({
     if (pendingHistoryTarget && pendingHistoryTarget.conversationId !== routeConversationId) {
       return;
     }
+    // During a native edge swipe the URL can temporarily still describe the
+    // source entry. Wait for the destination rather than running automatic
+    // restore/suppression logic against that stale room URL.
+    if (
+      capturedHistoryTransition
+      && capturedHistoryTransition.direction !== "unknown"
+      && capturedHistoryTransition.conversationId !== routeConversationId
+    ) {
+      return;
+    }
     const isHistoryRestore = pendingHistoryTarget?.conversationId
-      === routeConversationId;
+      === routeConversationId
+      || (
+        capturedHistoryTransition?.direction === "forward"
+        && capturedHistoryTransition.conversationId === routeConversationId
+      );
     if (routeSyncConversationIdRef.current === routeConversationId && !isHistoryRestore) return;
     if (isCreatingConversation || isImportingLegacyConversation) return;
 
@@ -3288,6 +3364,7 @@ export default function ConversationList({
 
     if (isHistoryRestore) {
       conversationHistoryPopStateTargetRef.current = null;
+      conversationHistoryPopStateTransitionRef.current = null;
     }
 
     // A room URL that appears without a popstate is still an automatic/native
@@ -3301,6 +3378,7 @@ export default function ConversationList({
       postConversationHistoryDebug("route-sync-suppression-branch", {
         routeConversationId,
         pendingHistoryTarget: pendingHistoryTarget?.conversationId ?? null,
+        capturedHistoryTransition,
         activeConversationId: activeConversationRef.current?.id ?? null,
         suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
         routeSyncConversationId: routeSyncConversationIdRef.current,
@@ -3448,34 +3526,38 @@ export default function ConversationList({
         === historyTargetConversationId;
       if (isHistoryRestore && currentRouteConversationId === historyTargetConversationId) {
         conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
       }
+
+      const isExplicitSuppressedRestore = (
+        !isHistoryRestore
+        && suppressNativeSttRestoreConversationIdRef.current === historyTargetConversationId
+      );
 
       postConversationHistoryDebug("popstate-open-decision", {
         handler: "open",
         currentRouteConversationId,
         historyTargetConversationId,
         isHistoryRestore,
+        isExplicitSuppressedRestore,
         suppressionConversationId: suppressNativeSttRestoreConversationIdRef.current,
         activeConversationId: null,
       });
 
-      // A forward popstate is an explicit request to restore the room. It must
-      // clear the close guard rather than rewriting the room entry into a list
-      // entry while preserving the native history index.
-      if (
-        !isHistoryRestore
-        && suppressNativeSttRestoreConversationIdRef.current === historyTargetConversationId
-      ) {
-        routeSyncConversationIdRef.current = historyTargetConversationId;
-        replaceConversationOverlayUrl(null, "popstate-native-stt-suppression");
-        return;
+      // A forward popstate is an explicit request to restore the room. If the
+      // capture-phase target was unavailable for any reason, clear the close
+      // guard and continue opening the room. Never replace the current room
+      // entry with a list URL here; that mutates the native history stack.
+      if (isExplicitSuppressedRestore) {
+        conversationHistoryPopStateTargetRef.current = null;
+        conversationHistoryPopStateTransitionRef.current = null;
       }
 
       routeSyncConversationIdRef.current = historyTargetConversationId;
       void openConversationSummary(matchedConversation, {
         enterMode: "instant",
         syncHistory: "none", // popstate already updated the URL; no push needed
-        clearManualCloseSuppression: isHistoryRestore,
+        clearManualCloseSuppression: isHistoryRestore || isExplicitSuppressedRestore,
       }).catch((error: unknown) => {
         routeSyncConversationIdRef.current = null;
         if (readConversationIdFromLocation() === historyTargetConversationId) {

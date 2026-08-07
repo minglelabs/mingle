@@ -19,6 +19,7 @@ import {
   replaceConversationLists,
   releaseConversationCreateLock,
   resolveConversationHistoryRoute,
+  resolveConversationHistoryNavigationDirection,
   readConversationHistoryRouteFromState,
   resolveConversationDisplayMessageCount,
   SEARCH_OVERLAY_HISTORY_STATE_KEY,
@@ -143,6 +144,13 @@ describe("conversation-list logic", () => {
     expect(resolveConversationHistoryRoute(null, listState, "conv-1")).toBeNull();
     expect(readConversationHistoryRouteFromState(roomState)).toBe("conv-1");
     expect(readConversationHistoryRouteFromState(listState)).toBeNull();
+  });
+
+  it("classifies room history transitions before React state catches up", () => {
+    expect(resolveConversationHistoryNavigationDirection("conv-1", null)).toBe("back");
+    expect(resolveConversationHistoryNavigationDirection(null, "conv-1")).toBe("forward");
+    expect(resolveConversationHistoryNavigationDirection(null, null)).toBe("unknown");
+    expect(resolveConversationHistoryNavigationDirection("conv-1", "conv-1")).toBe("unknown");
   });
 
   it("preserves unrelated history state while removing legacy room metadata from list entries", () => {
