@@ -85,6 +85,7 @@ import {
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
 import type { MingleHomeRef } from "@/components/mingle-home";
+import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
 
@@ -213,6 +214,7 @@ interface ConversationItem {
   speechLanguages: string[];
   translationLanguagesLinked: boolean;
   languageFlags: string;
+  isInterimPreview: boolean;
 }
 
 type ConversationRowActionMenuState = {
@@ -727,8 +729,20 @@ function mapConversationSummaryToItem(
     pausedStatusLabel: string;
   },
   localStats: ConversationLocalStats = EMPTY_CONVERSATION_LOCAL_STATS,
+  interimPreview?: LatestUtterancePayload,
 ): ConversationItem {
   const title = conversation.title;
+  const normalizedInterimPreview = interimPreview?.preview.trim() || "";
+  const latestMessagePreview = normalizedInterimPreview || conversation.latestMessagePreview || "";
+  const latestMessageAt = interimPreview?.createdAt.trim() || conversation.latestMessageAt || conversation.createdAt;
+  const latestSpeaker = interimPreview?.speaker?.trim() || conversation.latestSpeaker || null;
+  const latestSpeakerAvatarSeed = interimPreview?.speakerAvatarSeed?.trim()
+    || conversation.latestSpeakerAvatarSeed
+    || null;
+  const latestSpeakerAvatarIndex = typeof interimPreview?.speakerAvatarIndex === "number"
+    && Number.isInteger(interimPreview.speakerAvatarIndex)
+    ? interimPreview.speakerAvatarIndex
+    : conversation.latestSpeakerAvatarIndex ?? null;
   const statusLabel = conversation.status === "active"
     ? labels.activeStatusLabel
     : "";
@@ -748,18 +762,18 @@ function mapConversationSummaryToItem(
   const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
   const languageFlags = effectiveSelectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
   const avatar = getSpeakerAvatar(
-    conversation.latestSpeaker || conversation.sessionKey,
-    conversation.latestSpeakerAvatarSeed || conversation.id,
-    conversation.latestSpeakerAvatarIndex ?? undefined,
+    latestSpeaker || conversation.sessionKey,
+    latestSpeakerAvatarSeed || conversation.id,
+    latestSpeakerAvatarIndex ?? undefined,
   );
 
   return {
     id: conversation.id,
     title,
-    preview: truncateConversationPreview(conversation.latestMessagePreview || ""),
-    previewFullText: conversation.latestMessagePreview || "",
+    preview: truncateConversationPreview(latestMessagePreview),
+    previewFullText: latestMessagePreview,
     timeLabel: timeLabelsReady
-      ? formatConversationTime(conversation.latestMessageAt || conversation.createdAt, locale)
+      ? formatConversationTime(latestMessageAt, locale)
       : "",
     statsLabel: `${usageDurationLabel} · ${messageCountLabel}`,
     statsFullLabel: `STT ${usageDurationLabel}, ${messageCountLabel}`,
@@ -776,6 +790,7 @@ function mapConversationSummaryToItem(
     speechLanguages,
     translationLanguagesLinked,
     languageFlags,
+    isInterimPreview: Boolean(normalizedInterimPreview),
   };
 }
 
@@ -1073,7 +1088,9 @@ function ConversationRow({
             ) : null}
           </div>
           <div className="flex shrink-0 flex-col items-end leading-none">
-            <span className="text-[12px] text-gray-400">{item.timeLabel}</span>
+            <span className={`text-[12px] ${item.isInterimPreview ? "text-gray-300" : "text-gray-400"}`}>
+              {item.timeLabel}
+            </span>
             <span
               className="mt-1 max-w-[118px] truncate text-[10px] tabular-nums text-gray-400"
               title={item.statsFullLabel}
@@ -1084,10 +1101,11 @@ function ConversationRow({
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
           <p
-            className="truncate text-[13px] text-gray-500"
+            className={`truncate text-[13px] ${item.isInterimPreview ? "italic text-gray-400" : "text-gray-500"}`}
             title={item.previewFullText || undefined}
           >
             {item.preview || "\u00A0"}
+            {item.isInterimPreview && item.preview ? "…" : null}
           </p>
           {item.status === "active" ? (
             <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] text-emerald-700">
@@ -1415,6 +1433,9 @@ export default function ConversationList({
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialConversations].sort(compareConversationRecency),
   );
+  const [conversationInterimPreviews, setConversationInterimPreviews] = useState<
+    Record<string, LatestUtterancePayload>
+  >({});
   const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>({});
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
@@ -1515,9 +1536,10 @@ export default function ConversationList({
         timeLabelsReady,
         copy,
         conversationLocalStats[conversation.id],
+        conversationInterimPreviews[conversation.id],
       )
     )),
-    [conversationLocalStats, conversations, copy, locale, timeLabelsReady],
+    [conversationInterimPreviews, conversationLocalStats, conversations, copy, locale, timeLabelsReady],
   );
   const mountedConversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -2238,20 +2260,74 @@ export default function ConversationList({
       });
   }, [defaultSelectedLanguages]);
 
+  const clearConversationInterimPreview = useCallback((conversationId: string) => {
+    setConversationInterimPreviews((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, conversationId)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
+
+  const handleConversationLatestUtterancePreviewChange = useCallback((
+    conversationId: string,
+    payload: LatestUtterancePayload | null,
+  ) => {
+    if (!payload) {
+      clearConversationInterimPreview(conversationId);
+      return;
+    }
+
+    const normalizedPreview = payload.preview.trim();
+    if (!normalizedPreview) return;
+    const normalizedCreatedAt = payload.createdAt.trim();
+    if (!normalizedCreatedAt) return;
+    const normalizedSpeaker = payload.speaker?.trim() || undefined;
+    const normalizedSpeakerAvatarSeed = payload.speakerAvatarSeed?.trim() || undefined;
+    const normalizedSpeakerAvatarIndex = typeof payload.speakerAvatarIndex === "number"
+      && Number.isInteger(payload.speakerAvatarIndex)
+      ? payload.speakerAvatarIndex
+      : undefined;
+    const nextPreview: LatestUtterancePayload = {
+      preview: normalizedPreview,
+      createdAt: normalizedCreatedAt,
+      ...(normalizedSpeaker ? { speaker: normalizedSpeaker } : {}),
+      ...(normalizedSpeakerAvatarSeed ? { speakerAvatarSeed: normalizedSpeakerAvatarSeed } : {}),
+      ...(typeof normalizedSpeakerAvatarIndex === "number"
+        ? { speakerAvatarIndex: normalizedSpeakerAvatarIndex }
+        : {}),
+    };
+
+    setConversationInterimPreviews((current) => {
+      const previous = current[conversationId];
+      if (
+        previous?.preview === nextPreview.preview
+        && previous.createdAt === nextPreview.createdAt
+        && previous.speaker === nextPreview.speaker
+        && previous.speakerAvatarSeed === nextPreview.speakerAvatarSeed
+        && previous.speakerAvatarIndex === nextPreview.speakerAvatarIndex
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [conversationId]: nextPreview,
+      };
+    });
+  }, [clearConversationInterimPreview]);
+
   const handleConversationLatestUtteranceChange = useCallback((
     conversationId: string,
-    payload: {
-      preview: string;
-      createdAt: string;
-      speaker?: string;
-      speakerAvatarSeed?: string;
-      speakerAvatarIndex?: number;
-    },
+    payload: LatestUtterancePayload,
   ) => {
     const normalizedPreview = payload.preview.trim();
     if (!normalizedPreview) return;
     const normalizedCreatedAt = payload.createdAt.trim();
     if (!normalizedCreatedAt) return;
+
+    clearConversationInterimPreview(conversationId);
 
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== conversationId) {
@@ -2270,7 +2346,7 @@ export default function ConversationList({
             : conversation.latestSpeakerAvatarIndex ?? null,
       };
     }).sort(compareConversationRecency));
-  }, []);
+  }, [clearConversationInterimPreview]);
 
   const handleOpenSearch = useCallback(() => {
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
@@ -3489,6 +3565,9 @@ export default function ConversationList({
                         }}
                         onLatestUtteranceChange={(payload) => {
                           handleConversationLatestUtteranceChange(conversation.id, payload);
+                        }}
+                        onLatestUtterancePreviewChange={(payload) => {
+                          handleConversationLatestUtterancePreviewChange(conversation.id, payload);
                         }}
                         onConversationStatsChange={(payload) => {
                           handleConversationStatsChange(conversation.id, payload);

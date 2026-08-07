@@ -14,7 +14,10 @@ import {
 import { signIn, signOut, useSession } from "next-auth/react";
 import { resolveLegalDocumentPathSegment, type AppLocale } from "@/i18n";
 import type { AppDictionary } from "@/i18n/types";
-import LivePhoneDemo, { type LivePhoneDemoRef } from "@/components/LivePhoneDemo/LivePhoneDemo";
+import LivePhoneDemo, {
+  type LatestUtterancePayload,
+  type LivePhoneDemoRef,
+} from "@/components/LivePhoneDemo/LivePhoneDemo";
 import {
   AUTH_GATE_BACKGROUND_STYLE,
   AUTH_GATE_PANEL_CLASSNAME,
@@ -52,13 +55,8 @@ type MingleHomeProps = {
     switchedFromLiveConversation: boolean;
   } | void;
   onSttSessionRunningChange?: (isRunning: boolean) => void;
-  onLatestUtteranceChange?: (payload: {
-    preview: string;
-    createdAt: string;
-    speaker?: string;
-    speakerAvatarSeed?: string;
-    speakerAvatarIndex?: number;
-  }) => void;
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void;
+  onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void;
   onConversationStatsChange?: (payload: {
     usageSec: number;
     messageCount: number;
@@ -1796,6 +1794,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onStartRecordingRequested={props.onStartRecordingRequested}
           onSttSessionRunningChange={props.onSttSessionRunningChange}
           onLatestUtteranceChange={props.onLatestUtteranceChange}
+          onLatestUtterancePreviewChange={props.onLatestUtterancePreviewChange}
           onConversationStatsChange={props.onConversationStatsChange}
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
           onSpeechLanguagesChange={props.onSpeechLanguagesChange}

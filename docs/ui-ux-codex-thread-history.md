@@ -335,3 +335,15 @@
 - Issue: Opening the profile-share route replaced the My Page view immediately, unlike the existing conversation and hamburger-menu panels that enter from the right. The existing swipe-back handler only detected the completed gesture, so the panel did not visually follow the user's finger while closing.
 - User impact: Profile sharing felt like a sudden page change rather than a consistent in-app panel transition, and swipe-back dismissal could feel abrupt.
 - Resolution: Added the shared right-to-left entrance/exit timing, made the profile-share view a right-side motion panel, and enabled horizontal drag dismissal. A sufficiently long or fast right swipe now follows the gesture, completes the slide-out, and then returns to My Page; shorter swipes spring back into place.
+
+## 2026-08-07 - Live STT preview in conversation list
+
+- Surface: `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/conversation-list.tsx`
+- Issue: While STT was running, the conversation list continued to show the previous finalized utterance until the current speech segment was committed. Users who left the room could not tell that speech recognition was actively progressing.
+- User impact: The list felt stale during an active conversation, especially when users navigated away from the room while continuing to speak.
+- Resolution:
+  - Added a separate live-preview callback sourced from the room's `liveUtterances` state.
+  - Debounced interim updates to 250ms so rapid STT revisions do not cause excessive list renders.
+  - Rendered the interim text only in the list/search row, with muted italic styling and a trailing ellipsis.
+  - Kept interim text out of `ConversationChannelSummary`, persistence, message counts, and recency sorting. The existing finalized-utterance callback remains the only path that updates the stored summary and reorders the list.
+  - Cleared the preview when the utterance is finalized, discarded, or the live STT buffer is emptied.

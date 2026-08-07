@@ -1026,6 +1026,14 @@ export interface LivePhoneDemoRef {
   isSttSessionRunning: () => boolean
 }
 
+export type LatestUtterancePayload = {
+  preview: string
+  createdAt: string
+  speaker?: string
+  speakerAvatarSeed?: string
+  speakerAvatarIndex?: number
+}
+
 type LivePhoneDemoStartRecordingPreparation = {
   switchedFromLiveConversation: boolean
 }
@@ -1080,13 +1088,8 @@ interface LivePhoneDemoProps {
   enableNativeBannerBridge?: boolean
   onStartRecordingRequested?: () => Promise<LivePhoneDemoStartRecordingPreparation | void> | LivePhoneDemoStartRecordingPreparation | void
   onSttSessionRunningChange?: (isRunning: boolean) => void
-  onLatestUtteranceChange?: (payload: {
-    preview: string
-    createdAt: string
-    speaker?: string
-    speakerAvatarSeed?: string
-    speakerAvatarIndex?: number
-  }) => void
+  onLatestUtteranceChange?: (payload: LatestUtterancePayload) => void
+  onLatestUtterancePreviewChange?: (payload: LatestUtterancePayload | null) => void
   onConversationStatsChange?: (payload: {
     usageSec: number
     messageCount: number
@@ -1097,6 +1100,25 @@ interface LivePhoneDemoProps {
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
+const LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS = 250
+
+function buildLatestUtterancePayload(utterance: Utterance): LatestUtterancePayload | null {
+  const preview = utterance.originalText.trim()
+  if (!preview) return null
+
+  const createdAtMs = typeof utterance.createdAtMs === 'number'
+    && Number.isFinite(utterance.createdAtMs)
+    ? utterance.createdAtMs
+    : Date.now()
+
+  return {
+    preview,
+    createdAt: new Date(createdAtMs).toISOString(),
+    speaker: utterance.speaker,
+    speakerAvatarSeed: utterance.speakerAvatarSeed,
+    speakerAvatarIndex: utterance.speakerAvatarIndex,
+  }
+}
 
 type TtsQueueItem = {
   playbackKey: string
@@ -1341,6 +1363,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onStartRecordingRequested,
   onSttSessionRunningChange,
   onLatestUtteranceChange,
+  onLatestUtterancePreviewChange,
   onConversationStatsChange,
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
@@ -3387,27 +3410,102 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     })
   }, [onConversationStatsChange, persistedUtteranceCount, usageSec])
 
+  const committedUtteranceIdsRef = useRef<Set<string>>(new Set())
+  committedUtteranceIdsRef.current = new Set(utterances.map((utterance) => utterance.id))
   const lastReportedUtteranceIdRef = useRef('')
-  useEffect(() => {
-    if (!onLatestUtteranceChange) return
-    const latestUtterance = utterances[utterances.length - 1]
-    if (!latestUtterance) return
-    if (!latestUtterance.originalText.trim()) return
-    if (lastReportedUtteranceIdRef.current === latestUtterance.id) return
-    lastReportedUtteranceIdRef.current = latestUtterance.id
-    const latestUtteranceCreatedAtMs = typeof latestUtterance.createdAtMs === 'number'
-      && Number.isFinite(latestUtterance.createdAtMs)
-      ? latestUtterance.createdAtMs
-      : Date.now()
+  const liveUtterancePreviewTimerRef = useRef<number | null>(null)
+  const lastReportedLiveUtterancePreviewRef = useRef<{
+    utteranceId: string
+    preview: string
+  } | null>(null)
+  const onLatestUtterancePreviewChangeRef = useRef(onLatestUtterancePreviewChange)
 
-    onLatestUtteranceChange({
-      preview: latestUtterance.originalText,
-      createdAt: new Date(latestUtteranceCreatedAtMs).toISOString(),
-      speaker: latestUtterance.speaker,
-      speakerAvatarSeed: latestUtterance.speakerAvatarSeed,
-      speakerAvatarIndex: latestUtterance.speakerAvatarIndex,
-    })
+  useEffect(() => {
+    onLatestUtterancePreviewChangeRef.current = onLatestUtterancePreviewChange
+  }, [onLatestUtterancePreviewChange])
+
+  useEffect(() => {
+    if (!onLatestUtteranceChange && !onLatestUtterancePreviewChangeRef.current) return
+    const latestUtterance = utterances[utterances.length - 1]
+    const latestPayload = latestUtterance
+      ? buildLatestUtterancePayload(latestUtterance)
+      : null
+    if (!latestPayload || !latestUtterance) return
+
+    const isNewFinalUtterance = lastReportedUtteranceIdRef.current !== latestUtterance.id
+    if (isNewFinalUtterance) {
+      if (liveUtterancePreviewTimerRef.current !== null) {
+        window.clearTimeout(liveUtterancePreviewTimerRef.current)
+        liveUtterancePreviewTimerRef.current = null
+      }
+      lastReportedLiveUtterancePreviewRef.current = null
+      onLatestUtterancePreviewChangeRef.current?.(null)
+    }
+
+    if (!isNewFinalUtterance) return
+    lastReportedUtteranceIdRef.current = latestUtterance.id
+    onLatestUtteranceChange?.(latestPayload)
   }, [onLatestUtteranceChange, utterances])
+
+  useEffect(() => {
+    const onPreviewChange = onLatestUtterancePreviewChangeRef.current
+    if (!onPreviewChange) return
+
+    if (liveUtterancePreviewTimerRef.current !== null) {
+      window.clearTimeout(liveUtterancePreviewTimerRef.current)
+      liveUtterancePreviewTimerRef.current = null
+    }
+
+    const latestLiveUtterance = [...liveUtterances]
+      .reverse()
+      .find((utterance) => (
+        !committedUtteranceIdsRef.current.has(utterance.id)
+        && Boolean(utterance.originalText.trim())
+      ))
+    const latestPayload = latestLiveUtterance
+      ? buildLatestUtterancePayload(latestLiveUtterance)
+      : null
+
+    if (!latestLiveUtterance || !latestPayload) {
+      if (lastReportedLiveUtterancePreviewRef.current) {
+        lastReportedLiveUtterancePreviewRef.current = null
+        onPreviewChange(null)
+      }
+      return
+    }
+
+    const previousPreview = lastReportedLiveUtterancePreviewRef.current
+    if (
+      previousPreview?.utteranceId === latestLiveUtterance.id
+      && previousPreview.preview === latestPayload.preview
+    ) {
+      return
+    }
+
+    const previewUtteranceId = latestLiveUtterance.id
+    const previewPayload = latestPayload
+    liveUtterancePreviewTimerRef.current = window.setTimeout(() => {
+      liveUtterancePreviewTimerRef.current = null
+      if (committedUtteranceIdsRef.current.has(previewUtteranceId)) {
+        lastReportedLiveUtterancePreviewRef.current = null
+        onPreviewChange(null)
+        return
+      }
+
+      lastReportedLiveUtterancePreviewRef.current = {
+        utteranceId: previewUtteranceId,
+        preview: previewPayload.preview,
+      }
+      onPreviewChange(previewPayload)
+    }, LIVE_UTTERANCE_PREVIEW_DEBOUNCE_MS)
+
+    return () => {
+      if (liveUtterancePreviewTimerRef.current !== null) {
+        window.clearTimeout(liveUtterancePreviewTimerRef.current)
+        liveUtterancePreviewTimerRef.current = null
+      }
+    }
+  }, [liveUtterances, utterances])
 
   const chatBubbleTextClassName = TEXT_SIZE_CLASS_BY_LEVEL[textSizeLevel] || TEXT_SIZE_CLASS_BY_LEVEL[DEFAULT_TEXT_SIZE_LEVEL]
   const textSizePreviewLanguage = effectiveTranslationLanguages[0] || fallbackLanguages[0] || DEFAULT_STT_LANGUAGES[0] || 'en'
