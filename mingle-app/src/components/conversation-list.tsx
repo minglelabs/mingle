@@ -97,6 +97,7 @@ const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
+const NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY = "nativeSkipConversationRestore";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
@@ -2378,6 +2379,25 @@ export default function ConversationList({
     }
     if (isHydratingConversations) return;
     if (conversations.length === 0) return;
+
+    const shouldStayOnConversationList = (() => {
+      const currentUrl = new URL(window.location.href);
+      if (currentUrl.searchParams.get(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY) !== "1") {
+        return false;
+      }
+
+      currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
+      window.history.replaceState(window.history.state, "", currentUrl.toString());
+      notifyLocationSearchSync();
+      return true;
+    })();
+    if (shouldStayOnConversationList) {
+      // Consume any stale remount hint as well. The user explicitly selected
+      // the list tab, so reopening the live room would violate that action.
+      takeNativeRemountRestoreConversation();
+      nativeSttRestoreAttemptedRef.current = true;
+      return;
+    }
 
     const restoreConversationId = takeNativeRemountRestoreConversation();
     const explicitRestoreConversation = restoreConversationId

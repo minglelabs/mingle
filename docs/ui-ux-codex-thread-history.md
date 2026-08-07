@@ -306,3 +306,11 @@
 - User impact: Pressing Stop could briefly show the mic as stopped, then running/connecting again, then stopped. Recording ultimately stopped, but the control visually flickered and made the action feel unreliable.
 - Resolution: Added a stop-pending guard for native bridge status/activity handling. While `isStopping` or `nativeStopRequested` is true, the web layer now ignores native statuses and ready server messages that would re-enter a live UI state and suppresses transcript-activity promotion, while still allowing terminal idle/close/error and `stop_recording_ack` handling to complete.
 - Tests: `scripts/devbox test --target app -- src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` covers the stop-pending status and activity-promotion guard.
+
+## 2026-08-07 - Live STT navigation from My Page to conversation list
+
+- Surface: Native app bottom-tab navigation between My Page and the conversation list.
+- Issue: When STT was running, selecting the conversation-list tab after visiting My Page reopened the active chat room instead of showing the list.
+- User impact: Users could not continue using the app outside the running STT room.
+- Resolution: Mark the My Page-to-list tab transition as an intentional list request, consume the marker on the list screen, and suppress only the automatic live-room/remount restoration for that transition.
+- Scope: App-start recovery and other native remount restoration paths remain unchanged.

@@ -44,9 +44,14 @@ const PRESERVED_NATIVE_QUERY_KEYS = [
   "ttsDebug",
 ] as const;
 
+const NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY = "nativeSkipConversationRestore";
+
 function buildNativeAwareTabPath(
   pathname: string,
   searchParams: Pick<URLSearchParams, "getAll">,
+  options?: {
+    skipConversationRestore?: boolean;
+  },
 ): string {
   const nextSearchParams = new URLSearchParams();
 
@@ -54,6 +59,10 @@ function buildNativeAwareTabPath(
     for (const value of searchParams.getAll(key)) {
       nextSearchParams.append(key, value);
     }
+  }
+
+  if (options?.skipConversationRestore) {
+    nextSearchParams.set(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, "1");
   }
 
   const nextSearch = nextSearchParams.toString();
@@ -109,7 +118,11 @@ export default function BottomTabBar({
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
-  const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams);
+  const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
+    // Returning from My Page is an intentional request for the list. A live
+    // STT room must not be restored as a side effect of mounting the list.
+    skipConversationRestore: activeRoute === "mypage",
+  });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams);
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
