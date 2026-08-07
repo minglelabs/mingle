@@ -314,3 +314,10 @@
 - User impact: Users could not continue using the app outside the running STT room.
 - Resolution: Mark the My Page-to-list tab transition as an intentional list request, consume the marker on the list screen, and suppress only the automatic live-room/remount restoration for that transition.
 - Scope: App-start recovery and other native remount restoration paths remain unchanged.
+
+## 2026-08-07 - Conversation header action spacing
+
+- Surface: Search and new-conversation actions in the conversation-list header.
+- Issue: The search and new-conversation icons were visually too close together, while their tap targets were limited to the existing fixed button size.
+- User impact: The adjacent actions were harder to distinguish and tap comfortably.
+- Resolution: Replaced the fixed 40px button boxes with padding-based 44px minimum tap targets. Icon sizes remain unchanged, and no margin was added.

@@ -3220,7 +3220,7 @@ export default function ConversationList({
           <button
             type="button"
             onClick={handleOpenSearch}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
             aria-label={copy.searchButtonLabel}
           >
             <Search size={22} strokeWidth={2} />
@@ -3229,7 +3229,7 @@ export default function ConversationList({
             type="button"
             onClick={handleCreateConversation}
             disabled={actionDisabled}
-            className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label={copy.newConversationButtonLabel}
           >
             {isCreatingConversation ? (
