@@ -9,7 +9,18 @@
    Product decision: Conversations and My Page are top-level navigation roots. Switching tabs starts a fresh navigation boundary for the selected tab. The conversations tab always opens on the list after a tab switch; a room is entered only after the user explicitly taps a conversation. Native STT remains owned by the native shell and must continue without being stopped or restarted by the tab change.
    Fix: Tab links now use `replace` and add a `nativeTabRoot=1` marker while preserving only the native runtime parameters. The native bridge reports no back/forward gesture target while that marker is active, and the iOS WebView gesture gate rejects the stale cross-tab stack. The conversation list consumes the explicit tab-root/skip-restore marker without restoring the live room. When the user explicitly taps a room, the current tab-root list entry is converted back into an ordinary in-tab entry before the room is pushed, so room → list → room forward navigation remains available. The native shell also starts directly at `/conversations` instead of first loading the locale redirect, and clears its persisted room-restore hint whenever the WebView reaches a non-room route.
    Regression coverage: Added tab-root URL and native WebView gesture-gating tests, plus RN navigation-layout coverage. Physical-device verification is pending after rebuilding and reinstalling the devbox iOS app.
-   Status: Implementation in progress on 2026-08-08.
+   Status: Implemented in-thread on 2026-08-08; the latest Release build was installed on the connected iPhone, with the final physical interaction check pending.
+
+## 2026-08-08 Tab-root reset forward-navigation regression
+
+### `2026-08-08-tab-root-reset-forward-navigation` | UI/UX issue found
+
+1. **A normal room back gesture could return to the list but no longer allow a forward gesture**
+   Problem: After the tab-root reset was introduced, opening a room from the conversations tab and swiping back to the list left forward navigation disabled. The user expected the ordinary in-tab sequence `room → list → room` to remain reversible; only an explicit top-level tab switch should discard the older cross-tab stack.
+   Root cause: The initial implementation removed `nativeTabRoot=1` from the newly pushed room URL, but the preceding list history entry still carried the marker. When the room was popped, the native navigation bridge and iOS WebView gesture gate saw the marker on the list and treated the normal in-tab destination as a fresh tab root, hiding the forward target.
+   Fix: On an explicit room open (`syncHistory: "push"`), the current tab-root list entry is first converted to an ordinary list entry with `replaceState`; the room is then pushed on top of it. A later room back therefore returns to an unmarked list entry, preserving forward navigation. Tab buttons still use `router.replace` and create the marked root, so only an actual tab switch resets navigation.
+   Regression coverage: Focused web/RN tests pass, and the fix was committed as `caa7365c`. The connected iPhone was clean-installed with the Vault-backed devbox Release build; final manual confirmation of room → list → room and tab-switch behavior is pending.
+   Status: Fix implemented in-thread on 2026-08-08.
 
 ## 2026-08-07 iOS room/list repeated back-forward regression follow-up
 
