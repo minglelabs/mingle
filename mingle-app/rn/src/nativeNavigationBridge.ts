@@ -91,6 +91,7 @@ export function buildNativeNavigationBridgeScript(): string {
     var NATIVE_NAV_INDEX_KEY = '${NATIVE_NAV_INDEX_KEY}';
     var NATIVE_NAV_RAW_STATE_KEY = '${NATIVE_NAV_RAW_STATE_KEY}';
     var CONVERSATION_HISTORY_ROUTE_STATE_KEY = '__MINGLE_CONVERSATION_HISTORY_ROUTE__';
+    var NATIVE_TAB_ROOT_QUERY_KEY = 'nativeTabRoot';
     var currentHistoryIndex = 0;
 
     var isMergeableState = function (state) {
@@ -194,6 +195,12 @@ export function buildNativeNavigationBridgeScript(): string {
       if (!bridge || typeof bridge.postMessage !== 'function') {
         return;
       }
+      var isTabRoot = false;
+      try {
+        isTabRoot = new URL(window.location.href).searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === '1';
+      } catch (error) {
+        isTabRoot = false;
+      }
       var historyLength = typeof window.history.length === 'number'
         ? Math.max(0, Math.floor(window.history.length))
         : 0;
@@ -202,8 +209,8 @@ export function buildNativeNavigationBridgeScript(): string {
           type: 'native_navigation_state',
           payload: {
             url: window.location.href,
-            canGoBack: currentHistoryIndex > 0,
-            canGoForward: historyLength > currentHistoryIndex + 1,
+            canGoBack: !isTabRoot && currentHistoryIndex > 0,
+            canGoForward: !isTabRoot && historyLength > currentHistoryIndex + 1,
           }
         }));
       } catch (error) {

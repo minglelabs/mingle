@@ -1,4 +1,8 @@
-import { appendNativeRuntimeWebViewParams, shouldEnableIosWebViewBackForwardNavigation } from '../src/webViewLayout';
+import {
+  appendNativeRuntimeWebViewParams,
+  isNativeTabRootUrl,
+  shouldEnableIosWebViewBackForwardNavigation,
+} from '../src/webViewLayout';
 
 describe('appendNativeRuntimeWebViewParams', () => {
   it('adds zone-specific banner fallbacks and client build query params', () => {
@@ -53,6 +57,16 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
       canGoBack: false,
       canGoForward: false,
       currentUrl: `${BASE}/ko/conversations`,
+    })).toBe(false);
+  });
+
+  it('returns false for an explicit tab root even when older history exists', () => {
+    expect(isNativeTabRootUrl(`${BASE}/ko/mypage?nativeTabRoot=1`)).toBe(true);
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: true,
+      currentUrl: `${BASE}/ko/mypage?nativeTabRoot=1`,
     })).toBe(false);
   });
 

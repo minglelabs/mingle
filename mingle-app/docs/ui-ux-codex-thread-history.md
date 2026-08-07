@@ -1,5 +1,16 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-08 Top-level tab navigation boundary while native STT is live
+
+### `2026-08-08-native-stt-tab-root-boundary` | UI/UX issue found
+
+1. **Switching from the conversation list to My Page and swiping back could reopen the live STT room instead of returning to the list**
+   Problem: While native STT was running, the user could leave the conversation list for My Page and then use the iOS back gesture. The stale WebView history pointed back to the active conversation room, so returning to the conversations tab could reopen that room and appear to stop/restart the running STT session. This made a top-level tab change behave like an in-tab room navigation.
+   Product decision: Conversations and My Page are top-level navigation roots. Switching tabs starts a fresh navigation boundary for the selected tab. The conversations tab always opens on the list after a tab switch; a room is entered only after the user explicitly taps a conversation. Native STT remains owned by the native shell and must continue without being stopped or restarted by the tab change.
+   Fix: Tab links now use `replace` and add a `nativeTabRoot=1` marker while preserving only the native runtime parameters. The native bridge reports no back/forward gesture target while that marker is active, and the iOS WebView gesture gate rejects the stale cross-tab stack. The conversation list consumes the explicit tab-root/skip-restore marker without restoring the live room, while an explicit room tap removes the marker so room-level back/forward gestures continue to work. The native shell also starts directly at `/conversations` instead of first loading the locale redirect, and clears its persisted room-restore hint whenever the WebView reaches a non-room route.
+   Regression coverage: Added tab-root URL and native WebView gesture-gating tests, plus RN navigation-layout coverage. Physical-device verification is pending after rebuilding and reinstalling the devbox iOS app.
+   Status: Implementation in progress on 2026-08-08.
+
 ## 2026-08-07 iOS room/list repeated back-forward regression follow-up
 
 ### `2026-08-07-ios-room-list-history-stale-popstate` | UI/UX issues found

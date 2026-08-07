@@ -5,6 +5,10 @@ import { MessageCircle, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import {
+  buildNativeAwareTabPath as buildNativeAwareTabPathInternal,
+  NATIVE_TAB_ROOT_QUERY_KEY,
+} from "@/lib/tab-navigation";
 
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
 
@@ -20,53 +24,15 @@ type NativeBridgeWindow = Window & {
   };
 };
 
-const PRESERVED_NATIVE_QUERY_KEYS = [
-  "apiNamespace",
-  "apiNs",
-  "debug",
-  "inset",
-  "nativeAuth",
-  "nativeBannerPosition",
-  "nativeBottomInsetPx",
-  "nativeClientBuild",
-  "nativeClientVersion",
-  "nativeConversationBannerPosition",
-  "nativeConversationBottomInsetPx",
-  "nativeConversationTopInsetPx",
-  "nativeListTopInsetPx",
-  "nativePlatform",
-  "nativeQa",
-  "nativeStt",
-  "nativeTopInsetPx",
-  "nativeUi",
-  "qa",
-  "sttDebug",
-  "ttsDebug",
-] as const;
-
-const NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY = "nativeSkipConversationRestore";
-
 export function buildNativeAwareTabPath(
   pathname: string,
   searchParams: Pick<URLSearchParams, "getAll">,
   options?: {
     skipConversationRestore?: boolean;
+    tabRoot?: boolean;
   },
 ): string {
-  const nextSearchParams = new URLSearchParams();
-
-  for (const key of PRESERVED_NATIVE_QUERY_KEYS) {
-    for (const value of searchParams.getAll(key)) {
-      nextSearchParams.append(key, value);
-    }
-  }
-
-  if (options?.skipConversationRestore) {
-    nextSearchParams.set(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, "1");
-  }
-
-  const nextSearch = nextSearchParams.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+  return buildNativeAwareTabPathInternal(pathname, searchParams, options);
 }
 
 function ProfileTabIcon({
@@ -115,6 +81,7 @@ export default function BottomTabBar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsKey = searchParams.toString();
+  const isNativeTabRoot = searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
 
   const conversationsPath = `/${locale}/conversations`;
   const mypagePath = `/${locale}/mypage`;
@@ -122,8 +89,9 @@ export default function BottomTabBar({
     // Returning from My Page is an intentional request for the list. A live
     // STT room must not be restored as a side effect of mounting the list.
     skipConversationRestore: activeRoute === "mypage",
+    tabRoot: true,
   });
-  const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams);
+  const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
@@ -141,14 +109,14 @@ export default function BottomTabBar({
       bridgeWindow.ReactNativeWebView.postMessage(JSON.stringify({
         type: "native_navigation_state",
         payload: {
-          canGoBack: window.history.length > 1,
+          canGoBack: !isNativeTabRoot && window.history.length > 1,
           url: window.location.href,
         },
       }));
     } catch {
       // Leave native navigation unchanged when bridge serialization fails.
     }
-  }, [pathname, searchParamsKey]);
+  }, [isNativeTabRoot, pathname, searchParamsKey]);
 
   return (
     <nav
@@ -161,7 +129,10 @@ export default function BottomTabBar({
     >
       <button
         type="button"
-        onClick={() => router.push(conversationsHref)}
+        onClick={() => {
+          if (isConversationsActive) return;
+          router.replace(conversationsHref);
+        }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
         aria-label={dictionary.titles.chats}
         aria-current={isConversationsActive ? "page" : undefined}
@@ -176,7 +147,10 @@ export default function BottomTabBar({
       </button>
       <button
         type="button"
-        onClick={() => router.push(mypageHref)}
+        onClick={() => {
+          if (isMypageActive) return;
+          router.replace(mypageHref);
+        }}
         className="flex flex-1 items-center justify-center transition active:opacity-60"
         aria-label={dictionary.titles.my}
         aria-current={isMypageActive ? "page" : undefined}

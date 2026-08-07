@@ -1,6 +1,8 @@
 import { WEB_SUPPORTED_LOCALE_SEGMENTS } from './i18n';
 import { classifyConversationWebUrl } from './webViewRestore';
 
+const NATIVE_TAB_ROOT_QUERY_KEY = 'nativeTabRoot';
+
 function splitPathname(pathname: string): string[] {
   return pathname
     .split('/')
@@ -36,6 +38,17 @@ export function isLiveDemoPathname(pathname: string): boolean {
   );
 }
 
+export function isNativeTabRootUrl(rawUrl: string): boolean {
+  const candidate = rawUrl.trim();
+  if (!candidate) return false;
+
+  try {
+    return new URL(candidate).searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export function shouldDisableIosWebViewScrolling(params: {
   isIosPlatform: boolean;
   pathname: string;
@@ -57,6 +70,11 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
   currentUrl?: string;
 }): boolean {
   if (!params.isIosPlatform) return false;
+  // A tab switch marks the destination as a fresh navigation root. Do not
+  // expose the WebView's older cross-tab history entries as edge-swipe targets.
+  if (params.currentUrl && isNativeTabRootUrl(params.currentUrl)) {
+    return false;
+  }
   // Restored conversation URLs may have no prior WebView history entry after
   // app relaunch, but iOS should still expose the edge-swipe affordance.
   if (params.currentUrl && classifyConversationWebUrl(params.currentUrl) === 'room') {

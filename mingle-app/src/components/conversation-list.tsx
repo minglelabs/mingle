@@ -93,6 +93,7 @@ import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
 import { getSpeakerAvatar } from "@/components/LivePhoneDemo/speaker-avatar";
+import { NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY, NATIVE_TAB_ROOT_QUERY_KEY } from "@/lib/tab-navigation";
 
 const MingleHome = lazy(() => import("@/components/mingle-home"));
 
@@ -103,7 +104,6 @@ const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
-const NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY = "nativeSkipConversationRestore";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
 const LEGACY_SINGLE_ROOM_USAGE_KEY = "mingle_demo_usage_sec";
 const LEGACY_SINGLE_ROOM_MESSAGE_COUNT_KEY = "mingle_demo_message_count";
@@ -614,6 +614,11 @@ function buildConversationOverlayUrl(conversationId: string): string | null {
   try {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.set(CONVERSATION_QUERY_KEY, conversationId);
+    // A tab-root marker disables native cross-tab gestures. Remove it as soon
+    // as the user explicitly enters a conversation so room back/forward
+    // gestures remain available within the conversations tab.
+    nextUrl.searchParams.delete(NATIVE_TAB_ROOT_QUERY_KEY);
+    nextUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
     return nextUrl.toString();
   } catch {
     return null;
@@ -1544,6 +1549,7 @@ export default function ConversationList({
   const conversationRunningStateRef = useRef(new Map<string, boolean>());
   const deletingConversationIdsRef = useRef(new Set<string>());
   const nativeSttRestoreAttemptedRef = useRef(false);
+  const nativeTabRootRestoreHandledRef = useRef<string | null>(null);
   // Track the last conversation ID manually closed by the user (conversationId-scoped).
   // Native STT restore must not re-open it automatically, but an explicit browser
   // history forward to the room must still restore it.
@@ -2556,13 +2562,34 @@ export default function ConversationList({
 
     const shouldStayOnConversationList = (() => {
       const currentUrl = new URL(window.location.href);
-      if (currentUrl.searchParams.get(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY) !== "1") {
+      const isExplicitTabRoot = currentUrl.searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
+      const shouldSkipConversationRestore = currentUrl.searchParams.get(
+        NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY,
+      ) === "1";
+      if (!shouldSkipConversationRestore && !isExplicitTabRoot) {
         return false;
       }
 
-      currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
-      window.history.replaceState(window.history.state, "", currentUrl.toString());
-      notifyLocationSearchSync();
+      const currentHref = currentUrl.toString();
+      if (
+        isExplicitTabRoot
+        && !shouldSkipConversationRestore
+        && nativeTabRootRestoreHandledRef.current === currentHref
+      ) {
+        return true;
+      }
+
+      if (shouldSkipConversationRestore) {
+        currentUrl.searchParams.delete(NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY);
+      }
+      const nextHref = currentUrl.toString();
+      if (nextHref !== window.location.href) {
+        window.history.replaceState(window.history.state, "", nextHref);
+        notifyLocationSearchSync();
+      }
+      if (isExplicitTabRoot) {
+        nativeTabRootRestoreHandledRef.current = nextHref;
+      }
       return true;
     })();
     if (shouldStayOnConversationList) {
