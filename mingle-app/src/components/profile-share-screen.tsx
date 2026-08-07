@@ -74,6 +74,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const [viewportWidth, setViewportWidth] = useState(0);
   const statusTimeoutRef = useRef<number | null>(null);
   const isLeavingRef = useRef(false);
+  const isMountedRef = useRef(false);
 
   const displayName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileHandle = displayName.startsWith("@")
@@ -119,14 +120,15 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   }, [locale, router]);
 
   const handleBack = useCallback(async () => {
-    if (isLeavingRef.current) return;
+    if (isLeavingRef.current || !isMountedRef.current) return;
     isLeavingRef.current = true;
     await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
+    if (!isMountedRef.current) return;
     navigateBack();
   }, [motionControls, navigateBack]);
 
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (isLeavingRef.current) return;
+    if (isLeavingRef.current || !isMountedRef.current) return;
 
     const closeThreshold = Math.max(
       PROFILE_SHARE_SWIPE_THRESHOLD_PX,
@@ -171,6 +173,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    isMountedRef.current = true;
     const syncViewportWidth = () => {
       setViewportWidth(Math.max(1, window.innerWidth));
     };
@@ -180,6 +183,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
 
     return () => {
+      isMountedRef.current = false;
       window.removeEventListener("resize", syncViewportWidth);
     };
   }, [motionControls]);

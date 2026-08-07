@@ -347,3 +347,10 @@
   - Rendered the interim text only in the list/search row, with muted italic styling and a trailing ellipsis.
   - Kept interim text out of `ConversationChannelSummary`, persistence, message counts, and recency sorting. The existing finalized-utterance callback remains the only path that updates the stored summary and reorders the list.
   - Cleared the preview when the utterance is finalized, discarded, or the live STT buffer is emptied.
+
+## 2026-08-07 - Profile share swipe animation lifecycle guard
+
+- Surface: `mingle-app/src/components/profile-share-screen.tsx`
+- Issue: A horizontal swipe ending while the profile-share panel was being removed could call Framer Motion's `controls.start()` after the component had unmounted.
+- User impact: The browser console showed a lifecycle warning during swipe navigation, and the return animation could race with route teardown.
+- Resolution: Track the panel mount lifecycle and guard both drag-snapback and back-navigation animation calls. Navigation now runs only if the panel remains mounted after the exit animation completes.
