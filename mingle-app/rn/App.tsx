@@ -476,6 +476,16 @@ const CONVERSATIONS_SAFE_AREA_PALETTE: SafeAreaPalette = {
   bottomEdgeMode: 'transparent',
 };
 
+const PROFILE_SHARE_SAFE_AREA_PALETTE: SafeAreaPalette = {
+  topColor: '#1295e8',
+  topOverlayColor: 'transparent',
+  bottomColor: '#7338f2',
+  webViewColor: '#3569ed',
+  statusBarStyle: 'light-content',
+  topEdgeMode: 'transparent',
+  bottomEdgeMode: 'transparent',
+};
+
 type VersionPolicyLocale =
   | 'ko'
   | 'en'
@@ -875,6 +885,23 @@ function isConversationsLikePathname(pathname: string): boolean {
   return segments[1] === 'conversations' || segments[1] === 'mypage';
 }
 
+function isProfileSharePathname(pathname: string): boolean {
+  const normalized = pathname.trim();
+  if (!normalized.startsWith('/')) return false;
+
+  const segments = normalized
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(Boolean);
+
+  if (segments.length !== 3) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  if (!WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale)) return false;
+
+  return segments[1] === 'mypage' && segments[2] === 'share';
+}
+
 function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
   const candidate = rawUrl.trim();
   if (!candidate) return DEFAULT_SAFE_AREA_PALETTE;
@@ -883,6 +910,9 @@ function resolveSafeAreaPaletteForUrl(rawUrl: string): SafeAreaPalette {
     const parsed = new URL(candidate);
     if (isAuthLikePathname(parsed.pathname)) {
       return AUTH_LOGIN_SAFE_AREA_PALETTE;
+    }
+    if (isProfileSharePathname(parsed.pathname)) {
+      return PROFILE_SHARE_SAFE_AREA_PALETTE;
     }
     if (isConversationsLikePathname(parsed.pathname)) {
       return CONVERSATIONS_SAFE_AREA_PALETTE;

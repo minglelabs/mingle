@@ -30,8 +30,9 @@ export function isLiveDemoPathname(pathname: string): boolean {
   if (segments.length === 1) return true;
 
   return (
-    segments.length === 2
-    && (segments[1] === 'translator' || segments[1] === 'conversations' || segments[1] === 'mypage')
+    (segments.length === 2
+      && (segments[1] === 'translator' || segments[1] === 'conversations' || segments[1] === 'mypage'))
+    || (segments.length === 3 && segments[1] === 'mypage' && segments[2] === 'share')
   );
 }
 

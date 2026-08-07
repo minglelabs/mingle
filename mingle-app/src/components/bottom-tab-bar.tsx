@@ -46,7 +46,7 @@ const PRESERVED_NATIVE_QUERY_KEYS = [
 
 const NATIVE_SKIP_CONVERSATION_RESTORE_QUERY_KEY = "nativeSkipConversationRestore";
 
-function buildNativeAwareTabPath(
+export function buildNativeAwareTabPath(
   pathname: string,
   searchParams: Pick<URLSearchParams, "getAll">,
   options?: {

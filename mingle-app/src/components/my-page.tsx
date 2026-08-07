@@ -1,9 +1,10 @@
 "use client";
 
-import BottomTabBar from "@/components/bottom-tab-bar";
+import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { AppLocale, AppDictionary } from "@/i18n";
 import { Menu, Plus, UserRound } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -42,8 +43,11 @@ function ProfileAvatar({
 
 export default function MyPage({ dictionary, locale }: MyPageProps) {
   const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const displayName = session?.user?.name?.trim() || dictionary.titles.my;
   const profileImageUrl = session?.user?.image ?? null;
+  const profileShareHref = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
   const comingSoonLabel = dictionary.profile.comingSoonLabel
     ?? (locale === "ko" ? "기능 준비중입니다." : "Coming soon.");
 
@@ -111,6 +115,13 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
           >
             {dictionary.profile.editProfile}
           </div>
+          <button
+            type="button"
+            onClick={() => router.push(profileShareHref)}
+            className="mt-2 flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+          >
+            {dictionary.profile.shareProfile}
+          </button>
         </section>
 
         <section className="flex min-h-[220px] items-center justify-center border-t border-gray-200 px-6 text-center">

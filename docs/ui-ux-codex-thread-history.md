@@ -321,3 +321,10 @@
 - Issue: The search and new-conversation icons were visually too close together, while their tap targets were limited to the existing fixed button size.
 - User impact: The adjacent actions were harder to distinguish and tap comfortably.
 - Resolution: Replaced the fixed 40px button boxes with padding-based 44px minimum tap targets. Icon sizes remain unchanged, and no margin was added.
+
+## 2026-08-07 - Profile share screen
+
+- Surface: My Page profile actions and the new profile-share route.
+- Issue: The profile-share action was only a visual placeholder, so users could not share their profile or copy its link.
+- User impact: The Instagram-style profile surface had no usable profile-sharing flow.
+- Resolution: Added a dedicated profile-share screen with a gradient layout, back navigation, left-edge swipe-back support, native navigation state reporting, Web Share API fallback, and clipboard link copying. QR scanning, QR rendering, and download remain explicit coming-soon actions for this iteration.
