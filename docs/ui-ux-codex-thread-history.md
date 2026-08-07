@@ -328,3 +328,10 @@
 - Issue: The profile-share action was only a visual placeholder, so users could not share their profile or copy its link.
 - User impact: The Instagram-style profile surface had no usable profile-sharing flow.
 - Resolution: Added a dedicated profile-share screen with a gradient layout, back navigation, left-edge swipe-back support, native navigation state reporting, Web Share API fallback, and clipboard link copying. QR scanning, QR rendering, and download remain explicit coming-soon actions for this iteration.
+
+## 2026-08-07 - Profile share panel transition
+
+- Surface: `mingle-app/src/components/profile-share-screen.tsx`
+- Issue: Opening the profile-share route replaced the My Page view immediately, unlike the existing conversation and hamburger-menu panels that enter from the right. The existing swipe-back handler only detected the completed gesture, so the panel did not visually follow the user's finger while closing.
+- User impact: Profile sharing felt like a sudden page change rather than a consistent in-app panel transition, and swipe-back dismissal could feel abrupt.
+- Resolution: Added the shared right-to-left entrance/exit timing, made the profile-share view a right-side motion panel, and enabled horizontal drag dismissal. A sufficiently long or fast right swipe now follows the gesture, completes the slide-out, and then returns to My Page; shorter swipes spring back into place.

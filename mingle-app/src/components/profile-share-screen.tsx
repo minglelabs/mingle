@@ -11,6 +11,7 @@ import {
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion, useAnimationControls, type PanInfo } from "framer-motion";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
@@ -22,6 +23,13 @@ type NativeBridgeWindow = Window & {
     postMessage?: (message: string) => void;
   };
 };
+
+const PROFILE_SHARE_TRANSITION = {
+  duration: 0.32,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
+const PROFILE_SHARE_SWIPE_THRESHOLD_PX = 72;
+const PROFILE_SHARE_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
 function buildProfileShareUrl(locale: AppLocale): string {
   const profilePath = `/${locale}/mypage`;
@@ -61,8 +69,9 @@ async function copyTextToClipboard(value: string): Promise<void> {
 export default function ProfileShareScreen({ dictionary, locale }: ProfileShareScreenProps) {
   const router = useRouter();
   const { data: session } = useSession();
+  const motionControls = useAnimationControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const statusTimeoutRef = useRef<number | null>(null);
   const isLeavingRef = useRef(false);
 
@@ -101,9 +110,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     }, 2400);
   }, []);
 
-  const handleBack = useCallback(() => {
-    if (isLeavingRef.current) return;
-    isLeavingRef.current = true;
+  const navigateBack = useCallback(() => {
     if (window.history.length > 1) {
       router.back();
       return;
@@ -111,28 +118,27 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     router.push(`/${locale}/mypage`);
   }, [locale, router]);
 
-  const handleTouchStart = useCallback((event: React.TouchEvent<HTMLElement>) => {
-    const touch = event.touches[0];
-    if (!touch || touch.clientX > 40) {
-      touchStartRef.current = null;
+  const handleBack = useCallback(async () => {
+    if (isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
+    navigateBack();
+  }, [motionControls, navigateBack]);
+
+  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (isLeavingRef.current) return;
+
+    const closeThreshold = Math.max(
+      PROFILE_SHARE_SWIPE_THRESHOLD_PX,
+      viewportWidth * 0.2,
+    );
+    if (info.offset.x >= closeThreshold || info.velocity.x >= PROFILE_SHARE_SWIPE_VELOCITY_PX_PER_SECOND) {
+      void handleBack();
       return;
     }
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-  }, []);
 
-  const handleTouchEnd = useCallback((event: React.TouchEvent<HTMLElement>) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start) return;
-
-    const touch = event.changedTouches[0];
-    if (!touch) return;
-    const deltaX = touch.clientX - start.x;
-    const deltaY = Math.abs(touch.clientY - start.y);
-    if (deltaX >= 64 && deltaX > deltaY * 1.2) {
-      handleBack();
-    }
-  }, [handleBack]);
+    void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
+  }, [handleBack, motionControls, viewportWidth]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -165,6 +171,22 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const syncViewportWidth = () => {
+      setViewportWidth(Math.max(1, window.innerWidth));
+    };
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+
+    void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
+
+    return () => {
+      window.removeEventListener("resize", syncViewportWidth);
+    };
+  }, [motionControls]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const bridgeWindow = window as NativeBridgeWindow;
     if (typeof bridgeWindow.ReactNativeWebView?.postMessage !== "function") return;
 
@@ -188,13 +210,19 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   }, []);
 
   return (
-    <main
-      className="relative flex h-full min-h-0 w-full flex-col overflow-hidden text-slate-950"
+    <motion.main
+      initial={{ x: "100%" }}
+      animate={motionControls}
+      drag="x"
+      dragConstraints={{ left: 0, right: viewportWidth }}
+      dragElastic={0.08}
+      dragMomentum={false}
+      onDragEnd={handleDragEnd}
+      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
       style={{
         background: "linear-gradient(135deg, #1295e8 0%, #3569ed 52%, #7338f2 100%)",
+        touchAction: "pan-y",
       }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
     >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4 text-white"
@@ -271,6 +299,6 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
           {statusMessage}
         </div>
       ) : null}
-    </main>
+    </motion.main>
   );
 }
