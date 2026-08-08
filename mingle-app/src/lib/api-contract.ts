@@ -20,6 +20,10 @@ const DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET = {
     android: 'android/v1.1.4',
     ios: 'ios/v1.1.4',
   },
+  v2_0_0: {
+    android: 'android/v2.0.0',
+    ios: 'ios/v2.0.0',
+  },
 } as const
 type ReleaseTargetWithDefaultApiNamespace = keyof typeof DEFAULT_API_NAMESPACE_BY_RELEASE_TARGET
 const VERSIONED_API_NAMESPACE_RULES = [
@@ -39,6 +43,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'android/v1.1.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.1.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'android/v1.1.4', enablesFinalizeSourceRedetection: true },
+  { namespace: 'android/v2.0.0', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.0.0', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.2', enablesFinalizeSourceRedetection: false },
   { namespace: 'ios/v1.0.3', enablesFinalizeSourceRedetection: false },
@@ -55,6 +60,7 @@ const VERSIONED_API_NAMESPACE_RULES = [
   { namespace: 'ios/v1.1.2', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.1.3', enablesFinalizeSourceRedetection: true },
   { namespace: 'ios/v1.1.4', enablesFinalizeSourceRedetection: true },
+  { namespace: 'ios/v2.0.0', enablesFinalizeSourceRedetection: true },
 ] as const
 const ALLOWED_API_NAMESPACES = new Set<string>([
   DEFAULT_API_NAMESPACE,

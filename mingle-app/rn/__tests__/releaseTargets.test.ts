@@ -31,10 +31,15 @@ describe('releaseTargets', () => {
     expect(resolveMingleReleaseTarget('android/v1.1.3')).toBe('v1_1_3');
   });
 
-  it('maps 1.1.4 and later namespaces to the 1.1.4 release target', () => {
+  it('maps 1.1.4 namespaces to the 1.1.4 release target', () => {
     expect(resolveMingleReleaseTarget('ios/v1.1.4')).toBe('v1_1_4');
     expect(resolveMingleReleaseTarget('android/v1.1.4')).toBe('v1_1_4');
     expect(resolveMingleReleaseTarget('android/v1.2.0')).toBe('v1_1_4');
+  });
+
+  it('maps the 2.0.0 namespaces to the 2.0.0 release target', () => {
+    expect(resolveMingleReleaseTarget('ios/v2.0.0')).toBe('v2_0_0');
+    expect(resolveMingleReleaseTarget('android/v2.0.0')).toBe('v2_0_0');
   });
 
   it('rejects the legacy production web host for a 1.1.0 release target', () => {
