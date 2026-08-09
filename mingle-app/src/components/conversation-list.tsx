@@ -29,13 +29,25 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import {
+  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   normalizeLivePhoneDemoAdBannerPosition,
+  readPersistedBooleanPreference,
+  readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import LanguageOnboardingModal from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/language-onboarding-copy";
+import {
+  resolveOnboardingDefaultSourceLanguage,
+  resolveOnboardingDefaultTargetLanguages,
+  resolveUiLocaleForSourceLanguage,
+  shouldAutoOpenLanguageOnboarding,
+} from "@/components/LivePhoneDemo/language-onboarding.logic";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import {
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
@@ -1420,6 +1432,11 @@ export default function ConversationList({
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
+  const [languageOnboardingModalOpen, setLanguageOnboardingModalOpen] = useState(false);
+  const languageOnboardingCopy = useMemo(
+    () => resolveLanguageOnboardingCopy(locale),
+    [locale],
+  );
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -2277,6 +2294,24 @@ export default function ConversationList({
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let hasConfirmedLanguageOnboarding = false;
+    try {
+      hasConfirmedLanguageOnboarding = readPersistedBooleanPreference(
+        window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
+        false,
+      );
+    } catch {
+      hasConfirmedLanguageOnboarding = false;
+    }
+
+    if (shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)) {
+      setLanguageOnboardingModalOpen(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -3170,6 +3205,40 @@ export default function ConversationList({
     resetPullRefresh();
   }, [activeConversation, resetPullRefresh]);
 
+  const handleLanguageOnboardingConfirm = useCallback((sourceLanguageCode: string, targetLanguageCodes: string[]) => {
+    const normalizedTargets = sanitizeSttLanguageSelection(targetLanguageCodes, [sourceLanguageCode]);
+
+    try {
+      window.localStorage.setItem(LS_KEY_SPEECH_LANGUAGES, JSON.stringify([sourceLanguageCode]));
+      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
+      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    setLanguageOnboardingModalOpen(false);
+
+    const nextUiLocale = resolveUiLocaleForSourceLanguage(sourceLanguageCode);
+    if (nextUiLocale !== locale) {
+      window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
+    }
+  }, [locale]);
+
+  const languageOnboardingDefaults = useMemo(() => {
+    const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
+    const persisted = readPersistedLivePhoneDemoPreferences(fallbackLanguages);
+    const initialSourceLanguage = resolveOnboardingDefaultSourceLanguage(persisted.speechLanguages, locale);
+    const initialTargetLanguages = resolveOnboardingDefaultTargetLanguages(
+      persisted.selectedLanguages,
+      initialSourceLanguage,
+    );
+    return { initialSourceLanguage, initialTargetLanguages };
+    // Recompute from localStorage each time the modal opens, so a reopen after an
+    // earlier confirm (without a full page reload) reflects the latest saved choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, languageOnboardingModalOpen]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
@@ -3633,6 +3702,17 @@ export default function ConversationList({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {languageOnboardingModalOpen ? (
+        <LanguageOnboardingModal
+          onClose={() => setLanguageOnboardingModalOpen(false)}
+          initialSourceLanguage={languageOnboardingDefaults.initialSourceLanguage}
+          initialTargetLanguages={languageOnboardingDefaults.initialTargetLanguages}
+          uiLocale={locale}
+          copy={languageOnboardingCopy}
+          onConfirm={handleLanguageOnboardingConfirm}
+        />
+      ) : null}
     </main>
   );
 }

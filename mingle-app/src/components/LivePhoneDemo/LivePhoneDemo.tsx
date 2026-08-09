@@ -20,7 +20,6 @@ import {
   resolveOnboardingDefaultSourceLanguage,
   resolveOnboardingDefaultTargetLanguages,
   resolveUiLocaleForSourceLanguage,
-  shouldAutoOpenLanguageOnboarding,
 } from './language-onboarding.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
@@ -51,7 +50,6 @@ import {
   MIN_SONIOX_SILENCE_MS,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoInputMode,
-  readPersistedBooleanPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
@@ -779,19 +777,6 @@ function resolveDefaultSelectedLanguages(uiLocale?: string): string[] {
   ).trim()
 
   return deriveDefaultSttLanguagesForLocale(browserLocale)
-}
-
-function hasConfirmedLanguageOnboarding(): boolean {
-  if (typeof window === 'undefined') return false
-
-  try {
-    return readPersistedBooleanPreference(
-      window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
-      false,
-    )
-  } catch {
-    return false
-  }
 }
 
 function areLanguageSelectionsEqual(left: readonly string[], right: readonly string[]): boolean {
@@ -1682,10 +1667,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setComposerHasDraft(persistedComposerDraft.trim().length > 0)
       setHasHydratedLocalUiPreferences(true)
       setHasHydratedComposerDraft(true)
-      if (shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding())) {
-        setLanguageOnboardingModalOpen(true)
-      }
-
     })
 
     return () => {
