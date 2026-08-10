@@ -417,3 +417,20 @@ export function createSegmentationStrategy(
             return new SilenceTimerStrategy(opts);
     }
 }
+
+export function resolveSonioxEndpointDetectionConfig(
+    id: SegmentationStrategyId,
+    endpointDelayMs: number,
+): Record<string, unknown> {
+    if (id !== 'end') {
+        return { enable_endpoint_detection: false };
+    }
+    return new SonioxEndpointStrategy(endpointDelayMs).sonioxConfigOverrides();
+}
+
+export function resolveSonioxEndpointDelayMs(
+    id: SegmentationStrategyId,
+    configuredSilenceMs: number,
+): number {
+    return id === 'end' ? 2000 : configuredSilenceMs;
+}

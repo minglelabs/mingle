@@ -6,6 +6,9 @@ import fetch from 'node-fetch';
 import { config as loadDotenv } from 'dotenv';
 import {
     evaluateEndpointMarkerDecision,
+    readSegmentationStrategyId,
+    resolveSonioxEndpointDetectionConfig,
+    resolveSonioxEndpointDelayMs,
     stripEndpointMarkers,
     SilenceTimerStrategy,
 } from './segmentation-strategy';
@@ -582,6 +585,12 @@ wss.on('connection', (clientWs) => {
                     Math.min(SONIOX_MANUAL_FINALIZE_SILENCE_MS_MAX, Math.floor(raw)),
                 );
             })();
+            const segmentationStrategyId = readSegmentationStrategyId();
+            const usesSonioxEndpointDetection = segmentationStrategyId === 'end';
+            const endpointDelayMs = resolveSonioxEndpointDelayMs(
+                segmentationStrategyId,
+                sonioxManualFinalizeSilenceMs,
+            );
             type SonioxToken = {
                 text?: unknown;
                 start_ms?: unknown;
@@ -843,6 +852,10 @@ wss.on('connection', (clientWs) => {
                 });
             };
             const refreshGlobalFinalizeScheduling = () => {
+                if (usesSonioxEndpointDetection) {
+                    clearGlobalFinalizeTimer();
+                    return;
+                }
                 const now = Date.now();
                 const wait = nextGlobalFinalizeDelayMs(now);
                 if (wait === null) {
@@ -1084,9 +1097,12 @@ wss.on('connection', (clientWs) => {
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
-                    enable_endpoint_detection: false,
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
+                    ...resolveSonioxEndpointDetectionConfig(
+                        segmentationStrategyId,
+                        endpointDelayMs,
+                    ),
                 };
                 if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
                     Object.assign(sonioxConfig, {
@@ -1095,6 +1111,9 @@ wss.on('connection', (clientWs) => {
                     });
                 }
                 sttWs!.send(JSON.stringify(sonioxConfig));
+                console.log(
+                    `[conn:${connId}] soniox_segmentation strategy=${segmentationStrategyId} endpointing=${usesSonioxEndpointDetection} maxDelayMs=${endpointDelayMs}`,
+                );
 
                 if (isClientConnected) {
                     sendReadyStatus();
@@ -1242,8 +1261,17 @@ wss.on('connection', (clientWs) => {
                     }
 
                     const finalizeRequestForFrame = hasEndpointToken ? activeFinalizeRequest : null;
-                    if (hasEndpointToken && finalizeRequestForFrame) {
-                        for (const [speaker, requestSpeaker] of finalizeRequestForFrame.speakers.entries()) {
+                    if (hasEndpointToken && (finalizeRequestForFrame || usesSonioxEndpointDetection)) {
+                        const endpointSpeakers = finalizeRequestForFrame
+                            ? Array.from(finalizeRequestForFrame.speakers.entries())
+                            : Array.from(speakerStates.entries()).map(([speaker, state]) => [speaker, {
+                                speaker,
+                                snapshotText: state.currentSnapshotText,
+                                snapshotTextLen: 0,
+                                snapshotEndMs: state.currentSnapshotEndMs,
+                                detectedLang: state.detectedLang,
+                            }] as const);
+                        for (const [speaker, requestSpeaker] of endpointSpeakers) {
                             const state = speakerStates.get(speaker);
                             if (!state) continue;
                             if (speakerFrameUpdates.has(speaker)) continue;
@@ -1336,7 +1364,7 @@ wss.on('connection', (clientWs) => {
                         }
 
                         const requestSpeaker = finalizeRequestForFrame?.speakers.get(frameUpdate.speaker) || null;
-                        const decision = requestSpeaker
+                        const decision = hasEndpointToken && (usesSonioxEndpointDetection || requestSpeaker)
                             ? evaluateEndpointMarkerDecision({
                                 finalizedText: speakerState.providerFinalizedText,
                                 latestNonFinalText: speakerState.latestNonFinalText,
@@ -1344,7 +1372,7 @@ wss.on('connection', (clientWs) => {
                                 hasEndpointToken,
                                 endpointMarkerText,
                                 hasProgressTokenBeyondWatermark: frameUpdate.hasProgressTokenBeyondWatermark,
-                                finalizeSnapshotTextLen: requestSpeaker.snapshotTextLen,
+                                finalizeSnapshotTextLen: requestSpeaker?.snapshotTextLen ?? null,
                                 hadPendingTextBeforeFrame: previousMergedSnapshot.length > 0,
                             })
                             : { action: 'none' as const };
@@ -1360,7 +1388,7 @@ wss.on('connection', (clientWs) => {
                                     finalizedDetectedLang,
                                     true,
                                     speakerState.speaker,
-                                    { finalizeSource: 'soniox_manual' },
+                                    { finalizeSource: usesSonioxEndpointDetection ? 'soniox_endpoint' : 'soniox_manual' },
                                 );
                                 if (payload) {
                                     lastFinalizedPayloadForFrame = payload;
