@@ -13,6 +13,7 @@ export type MingleSttModel =
 
 export type MingleSttFinalizeSource =
     | 'soniox_manual'
+    | 'soniox_endpoint'
     | 'server_idle_snapshot'
     | 'server_stop_fallback'
     | 'server_timeout_fallback'
