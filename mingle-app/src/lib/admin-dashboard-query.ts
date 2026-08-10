@@ -43,11 +43,24 @@ function dayKeyFromRaw(value: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * upsertTrackedUser (src/lib/app-analytics.ts) creates an app_users row keyed only by
+ * externalUserId for anyone who fires a tracked client event, before they ever sign up
+ * -- counting every row here would report anonymous demo visitors as 가입자/signups.
+ * A real account always has either a password (email/password signup) or a linked
+ * auth_accounts row (Google/Apple OAuth, including the native bridge flow, which both
+ * go through the same NextAuth PrismaAdapter user-creation path); anonymous tracking
+ * rows have neither.
+ */
 async function querySignups(range: AdminDashboardDateRange): Promise<DailyRow[]> {
   const rows = await prisma.$queryRawUnsafe<RawDayCount[]>(
     `select ${DAY_BUCKET_EXPR("created_at")} as day, count(*) as value
-     from "app"."app_users"
-     where "created_at" >= $1 and "created_at" < $2
+     from "app"."app_users" as u
+     where u."created_at" >= $1 and u."created_at" < $2
+       and (
+         u."password_hash" is not null
+         or exists (select 1 from "app"."auth_accounts" as a where a."user_id" = u."id")
+       )
      group by day
      order by day`,
     range.rangeStart,
