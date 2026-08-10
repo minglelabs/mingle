@@ -3225,6 +3225,19 @@ export default function ConversationList({
     }
   }, [locale]);
 
+  // Closing without picking (X / Escape) should still count as "seen" -- this is a
+  // one-time first-entry prompt, not a gate the user must complete. Without this, only
+  // handleLanguageOnboardingConfirm sets the flag, so a dismissed modal reopens on every
+  // future visit until the user finally taps 시작하기.
+  const handleLanguageOnboardingDismiss = useCallback(() => {
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+    setLanguageOnboardingModalOpen(false);
+  }, []);
+
   const languageOnboardingDefaults = useMemo(() => {
     const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
     const persisted = readPersistedLivePhoneDemoPreferences(fallbackLanguages);
@@ -3705,7 +3718,7 @@ export default function ConversationList({
 
       {languageOnboardingModalOpen ? (
         <LanguageOnboardingModal
-          onClose={() => setLanguageOnboardingModalOpen(false)}
+          onClose={handleLanguageOnboardingDismiss}
           initialSourceLanguage={languageOnboardingDefaults.initialSourceLanguage}
           initialTargetLanguages={languageOnboardingDefaults.initialTargetLanguages}
           uiLocale={locale}
