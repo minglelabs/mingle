@@ -18,6 +18,7 @@ import {
   sanitizeText,
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
+import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
 
 export const runtime = 'nodejs'
 
@@ -229,6 +230,14 @@ export async function handleLogClientEventV1(request: NextRequest) {
               model: model ?? undefined,
             },
           })
+        }
+
+        try {
+          await maybeGenerateConversationTitleForSession({
+            sessionKey: tracking.sessionKey,
+          })
+        } catch (error) {
+          console.error('Conversation auto title generation failed:', error)
         }
       }
     }
