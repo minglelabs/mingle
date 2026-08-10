@@ -69,13 +69,6 @@ export type DashboardMetric = {
   secondarySeries?: { label: string; points: DailyPoint[] };
 };
 
-/** 주요 배포/인프라 변경 시점. 스크럼에서 그래프 보다가 바로 원인 짚을 수 있게 그래프에 표시한다.
- * admin-dashboard-deploy-markers.ts가 GitHub 커밋 이력에서 자동으로 채운다. */
-export type DeployMarker = {
-  date: string;
-  label: string;
-};
-
 /** UTC 기준 YYYY-MM-DD. Date의 로컬 타임존에 의존하지 않도록 UTC 필드로만 계산한다. */
 export function formatDayKey(value: Date): string {
   const year = value.getUTCFullYear();

@@ -5,7 +5,6 @@ import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
   type ChartPoint,
-  type DeployMarker,
   type MetricKind,
   formatMetricDisplayValue,
   formatShortDay,
@@ -18,13 +17,6 @@ const VIEW_MIN_X = -4;
 const VIEW_MIN_Y = -8;
 const VIEW_WIDTH = CHART_WIDTH + 48;
 const VIEW_HEIGHT = CHART_HEIGHT + 30;
-/** App's own brand accent (globals.css --primary/--accent), reused here so deploy
- * markers read as "this app's" annotation rather than an arbitrary extra hue. */
-const DEPLOY_MARKER_COLOR = "#f59e0b";
-const DEPLOY_MARKER_TOOLTIP_COLOR = "#fbbf24";
-/** How close (in svg viewBox units) the cursor must be to a deploy line to count as
- * "on" it -- the line itself renders at 1px, far too thin to reliably point at. */
-const DEPLOY_MARKER_HOVER_TOLERANCE = 5;
 
 type HoverPosition = { day: string; value: number | null; x: number; y: number };
 
@@ -79,62 +71,33 @@ export function LineChartCard(props: {
   color: string;
   secondary?: SeriesProps;
   footer?: string;
-  /** 주요 배포일. 그래프 위에 세로선으로 항상 표시하고, 그 선에 커서를 올리면 별도 툴팁으로 내용을 띄운다. */
-  deployMarkers?: DeployMarker[];
 }) {
   const {
-    label, kind, ariaLabel, points, linePath, areaPath, yMax, color, secondary, footer, deployMarkers,
+    label, kind, ariaLabel, points, linePath, areaPath, yMax, color, secondary, footer,
   } = props;
   const [hoverT, setHoverT] = useState<number | null>(null);
-  const [hoveredDeployMarker, setHoveredDeployMarker] = useState<(DeployMarker & { x: number }) | null>(null);
 
   const dayKeys = points.map((point) => point.day);
   const midValue = yMax / 2;
   const xAxisTicks = resolveXAxisTicks(dayKeys, CHART_WIDTH, 6);
   const bandWidth = points.length > 1 ? CHART_WIDTH / (points.length - 1) : CHART_WIDTH;
 
-  const visibleDeployMarkers = useMemo(() => {
-    if (!deployMarkers) return [];
-    return deployMarkers
-      .map((marker) => {
-        const point = points.find((candidate) => candidate.day === marker.date);
-        return point ? { ...marker, x: point.x } : null;
-      })
-      .filter((marker): marker is DeployMarker & { x: number } => marker !== null);
-  }, [deployMarkers, points]);
-
   // Native SVG <title> tooltips require a pixel-precise, held hover on a 5px dot and
   // show only after the browser's own delay -- from the outside that reads as "hover
   // does nothing". This tracks the raw pointer position as a fractional index instead
   // (not rounded), so the marker and value glide continuously with the cursor.
-  //
-  // The deploy line and the data line are deliberately separate hover targets: sitting
-  // on a deploy line shows only what deployed that day, sitting anywhere else on the
-  // chart shows only the date/value -- mixing the two into one tooltip made it unclear
-  // which one you were actually pointing at.
   const handlePointerMove = useCallback((event: PointerEvent<SVGRectElement>) => {
     const svg = event.currentTarget.ownerSVGElement;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0) return;
     const svgX = ((event.clientX - rect.left) / rect.width) * VIEW_WIDTH + VIEW_MIN_X;
-
-    const nearMarker = visibleDeployMarkers.find(
-      (marker) => Math.abs(marker.x - svgX) <= DEPLOY_MARKER_HOVER_TOLERANCE,
-    );
-    if (nearMarker) {
-      setHoveredDeployMarker(nearMarker);
-      setHoverT(null);
-      return;
-    }
-    setHoveredDeployMarker(null);
     const t = svgX / (bandWidth || 1);
     setHoverT(Math.min(points.length - 1, Math.max(0, t)));
-  }, [bandWidth, points.length, visibleDeployMarkers]);
+  }, [bandWidth, points.length]);
 
   const handlePointerLeave = useCallback(() => {
     setHoverT(null);
-    setHoveredDeployMarker(null);
   }, []);
 
   const hovered = useMemo(() => (hoverT === null ? null : interpolateAt(points, hoverT)), [hoverT, points]);
@@ -181,21 +144,6 @@ export function LineChartCard(props: {
               </g>
             );
           })}
-
-          {visibleDeployMarkers.map((marker) => (
-            <line
-              key={marker.date}
-              x1={marker.x}
-              x2={marker.x}
-              y1={0}
-              y2={CHART_HEIGHT}
-              stroke={DEPLOY_MARKER_COLOR}
-              strokeWidth={1}
-              strokeDasharray="3,3"
-              opacity={0.6}
-              pointerEvents="none"
-            />
-          ))}
 
           {secondary?.areaPath ? <path d={secondary.areaPath} fill={secondary.color} opacity={0.08} /> : null}
           {secondary?.linePath ? (
@@ -261,20 +209,6 @@ export function LineChartCard(props: {
             {secondary && hoveredSecondary ? (
               <div className="text-[#c3c2b7]">{secondary.label}: {formatMetricDisplayValue(hoveredSecondary.value, kind)}</div>
             ) : null}
-          </div>
-        ) : null}
-
-        {hoveredDeployMarker ? (
-          <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium shadow-lg"
-            style={{
-              left: `${((hoveredDeployMarker.x - VIEW_MIN_X) / VIEW_WIDTH) * 100}%`,
-              top: `${((-VIEW_MIN_Y - 6) / VIEW_HEIGHT) * 100}%`,
-              color: DEPLOY_MARKER_TOOLTIP_COLOR,
-            }}
-          >
-            <div>{hoveredDeployMarker.date}</div>
-            <div className="font-semibold">{hoveredDeployMarker.label}</div>
           </div>
         ) : null}
       </div>

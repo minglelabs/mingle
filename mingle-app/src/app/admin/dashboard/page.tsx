@@ -3,13 +3,11 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
-import { loadDeployMarkers } from "@/lib/admin-dashboard-deploy-markers";
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
   ADMIN_DASHBOARD_RANGE_OPTIONS,
   type DashboardMetric,
-  type DeployMarker,
   buildChartGeometry,
   buildCumulativeSeries,
   formatMetricDisplayValue,
@@ -45,7 +43,7 @@ async function isAdminAuthenticated(): Promise<boolean> {
   return verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value);
 }
 
-function DailyChart({ metric, deployMarkers }: { metric: DashboardMetric; deployMarkers: DeployMarker[] }) {
+function DailyChart({ metric }: { metric: DashboardMetric }) {
   // Both series share one y-scale (same unit, e.g. ms) -- computed together so
   // p95 (always >= avg) doesn't get clipped against a scale sized only for avg.
   const combinedForScale = metric.secondarySeries
@@ -67,7 +65,6 @@ function DailyChart({ metric, deployMarkers }: { metric: DashboardMetric; deploy
       areaPath={geometry.areaPath}
       yMax={geometry.yMax}
       color={CHART_COLOR}
-      deployMarkers={deployMarkers}
       secondary={metric.secondarySeries && secondaryGeometry ? {
         label: metric.secondarySeries.label,
         points: secondaryGeometry.points,
@@ -79,7 +76,7 @@ function DailyChart({ metric, deployMarkers }: { metric: DashboardMetric; deploy
   );
 }
 
-function CumulativeChart({ metric, deployMarkers }: { metric: DashboardMetric; deployMarkers: DeployMarker[] }) {
+function CumulativeChart({ metric }: { metric: DashboardMetric }) {
   const cumulativePoints = buildCumulativeSeries(metric.points);
   const geometry = buildChartGeometry(cumulativePoints, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
   const total = cumulativePoints[cumulativePoints.length - 1]?.value ?? null;
@@ -95,13 +92,12 @@ function CumulativeChart({ metric, deployMarkers }: { metric: DashboardMetric; d
       areaPath={geometry.areaPath}
       yMax={geometry.yMax}
       color={CUMULATIVE_COLOR}
-      deployMarkers={deployMarkers}
       footer={`누적 합계 ${totalDisplay}`}
     />
   );
 }
 
-function MetricsTable({ metrics, deployMarkers }: { metrics: DashboardMetric[]; deployMarkers: DeployMarker[] }) {
+function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
   const dayKeys = metrics[0]?.points.map((point) => point.day) ?? [];
   return (
     <div className="overflow-x-auto rounded-xl border border-[#e5e3dc] bg-white shadow-sm">
@@ -115,40 +111,21 @@ function MetricsTable({ metrics, deployMarkers }: { metrics: DashboardMetric[]; 
           </tr>
         </thead>
         <tbody>
-          {dayKeys.map((day, rowIndex) => {
-            const marker = deployMarkers.find((entry) => entry.date === day);
-            return (
-              <tr className="border-b border-[#ece9e0] last:border-0" key={day}>
-                <td className="px-3 py-1.5 font-medium text-[#0b0b0b]" style={{ fontVariantNumeric: "tabular-nums" }}>
-                  <span className="flex items-center gap-1.5">
-                    {day}
-                    {marker ? (
-                      <span className="group relative inline-flex">
-                        <span className="cursor-default rounded border border-[#f0c975] bg-[#fbe7c0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7a4b00]">
-                          배포
-                        </span>
-                        {/* left-0 (not centered) -- this badge sits in the table's leftmost column, right at the
-                            edge of the horizontally-scrolling wrapper, so a centered tooltip clips on its left
-                            half. Anchoring the tooltip's own left edge to the badge lets it only grow rightward,
-                            into the table's much wider space. */}
-                        <span className="pointer-events-none absolute left-0 top-full z-10 mt-1 hidden w-max max-w-64 whitespace-normal rounded-md border border-[rgba(255,255,255,0.10)] bg-[#1a1a19] px-2 py-1 text-xs font-medium text-white shadow-lg group-hover:block">
-                          {marker.label}
-                        </span>
-                      </span>
-                    ) : null}
-                  </span>
-                </td>
-                {metrics.map((metric) => {
-                  const value = metric.points[rowIndex]?.value ?? null;
-                  return (
-                    <td className="px-3 py-1.5 text-[#52514e]" key={metric.key} style={{ fontVariantNumeric: "tabular-nums" }}>
-                      {formatMetricDisplayValue(value, metric.kind)}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
+          {dayKeys.map((day, rowIndex) => (
+            <tr className="border-b border-[#ece9e0] last:border-0" key={day}>
+              <td className="px-3 py-1.5 font-medium text-[#0b0b0b]" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {day}
+              </td>
+              {metrics.map((metric) => {
+                const value = metric.points[rowIndex]?.value ?? null;
+                return (
+                  <td className="px-3 py-1.5 text-[#52514e]" key={metric.key} style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {formatMetricDisplayValue(value, metric.kind)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
@@ -163,10 +140,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
   const params = await searchParams;
   const days = normalizeDashboardDays(takeFirst(params.days));
   const range = resolveAdminDashboardRange(new Date(), days);
-  const [metrics, deployMarkers] = await Promise.all([
-    loadAdminDashboardMetrics(range),
-    loadDeployMarkers(range),
-  ]);
+  const metrics = await loadAdminDashboardMetrics(range);
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
   return (
@@ -189,7 +163,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         <h2 className="mb-2 text-sm font-semibold text-[#52514e]">일자별 추이</h2>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {metrics.map((metric) => (
-            <DailyChart key={metric.key} metric={metric} deployMarkers={deployMarkers} />
+            <DailyChart key={metric.key} metric={metric} />
           ))}
         </div>
       </section>
@@ -198,14 +172,14 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         <h2 className="mb-2 text-sm font-semibold text-[#52514e]">누적 추이</h2>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {cumulativeMetrics.map((metric) => (
-            <CumulativeChart key={metric.key} metric={metric} deployMarkers={deployMarkers} />
+            <CumulativeChart key={metric.key} metric={metric} />
           ))}
         </div>
       </section>
 
       <section className="mx-auto mt-8 mb-6 w-full max-w-6xl px-4 pb-6">
         <h2 className="mb-2 text-sm font-semibold text-[#52514e]">표로 보기</h2>
-        <MetricsTable metrics={metrics} deployMarkers={deployMarkers} />
+        <MetricsTable metrics={metrics} />
       </section>
     </main>
   );
