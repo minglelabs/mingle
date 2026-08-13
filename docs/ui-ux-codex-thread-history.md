@@ -455,6 +455,12 @@
 - Issue: The selector was copied visually from the conversation-room picker, but it was nested inside a native `fieldset`. The fieldset's browser default minimum-content width prevented the search/sort flex row from shrinking to the profile panel's content width, so the edit screen could scroll horizontally on narrow devices.
 - Resolution: Reset the fieldset and selector wrappers to `min-width: 0`/`max-width: 100%`, constrain the search/sort row and language list, truncate sort labels when needed, and explicitly disable horizontal overflow on the profile panel's vertical scroller. The conversation-room selector remains unchanged.
 
+## 2026-08-14 - Profile edit language list nested scrolling
+
+- Surface: Profile edit screen's primary speech-language selector.
+- Issue: The profile screen's main vertical scroller contained a second vertical scroller inside the language selector. This made browsing the full language list awkward and required the user to switch between two scroll areas. The selector also carried the conversation-room picker's cream-colored surface styling into the otherwise white profile edit screen.
+- Resolution: Removed the selector's fixed height and inner vertical overflow so the profile edit screen's single main scroller covers the entire form. Kept the conversation-room selector's visual language—rounded cards, search field, sort controls, language rows, and selection indicator—while using a white and neutral-gray palette for the profile edit context.
+
 ## 2026-08-14 - My Page settings subpage dismissal and profile share loading
 
 - Surface: My Page hamburger settings, blocked-user/report/app-language subpages, profile sharing, and the empty post area.

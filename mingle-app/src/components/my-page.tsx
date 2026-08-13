@@ -857,10 +857,10 @@ function ProfileEditPanel({
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
-                <div className="min-w-0 w-full max-w-full overflow-hidden rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <div className="min-w-0 w-full max-w-full overflow-hidden rounded-[18px] border border-gray-200 bg-white p-1 shadow-sm">
                   <div className="flex min-w-0 w-full max-w-full items-stretch gap-3 p-2">
                     <label
-                      className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+                      className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-gray-200 bg-white px-3.5 shadow-sm"
                       style={{ flex: showLanguageSortToggle ? "1 1 0" : "1 1 100%" }}
                     >
                       <Search size={18} className="shrink-0 text-slate-400" aria-hidden="true" />
@@ -879,7 +879,7 @@ function ProfileEditPanel({
                     </label>
 
                     {showLanguageSortToggle ? (
-                      <div className="min-w-0 rounded-[16px] border border-[#e6dfd2] bg-[#f3eee4] p-1" style={{ flex: "1 1 0" }}>
+                      <div className="min-w-0 rounded-[16px] border border-gray-200 bg-gray-50 p-1" style={{ flex: "1 1 0" }}>
                         <div className="flex h-full items-stretch gap-1.5">
                           <button
                             type="button"
@@ -902,7 +902,7 @@ function ProfileEditPanel({
                     ) : null}
                   </div>
 
-                  <div className="min-w-0 max-w-full max-h-[360px] overflow-x-hidden overflow-y-auto px-2 pb-2">
+                  <div className="min-w-0 w-full max-w-full px-2 pb-2">
                     {visibleLanguageItems.length === 0 ? (
                       <div className="flex min-h-[160px] items-center justify-center px-6 text-center text-[13px] text-slate-500">
                         {languageCopy.languageSelectorNoResultsLabel}
@@ -916,17 +916,17 @@ function ProfileEditPanel({
                               key={option.code}
                               type="button"
                               onClick={() => setNationality(option.code)}
-                              className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${selected ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]" : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"}`}
+                              className={`flex w-full items-center gap-4 rounded-[1.6rem] border bg-white px-4 py-3 text-left transition ${selected ? "border-slate-900 shadow-[0_8px_20px_rgba(15,23,42,0.08)]" : "border-gray-200 shadow-sm"}`}
                               aria-pressed={selected}
                             >
-                              <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${selected ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]" : "border-[#e5dfd5] bg-[#faf7f1]"}`}>
+                              <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm ${selected ? "border-gray-400" : "border-gray-200"}`}>
                                 <span className="text-[2rem] leading-none" aria-hidden="true">{option.flag}</span>
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">{option.localizedName}</span>
                                 <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
                               </span>
-                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 text-transparent"}`}>
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-slate-900 bg-slate-900 text-white" : "border-gray-300 text-transparent"}`}>
                                 <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 ${selected ? "text-white" : "text-transparent"}`} fill="none">
                                   <path d="M5.5 12.5L10 17L18.5 8.5" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
