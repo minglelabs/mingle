@@ -99,6 +99,8 @@ const MingleHome = lazy(() => import("@/components/mingle-home"));
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
+const CONVERSATION_LIST_CACHE_KEY_PREFIX = "mingle:conversation-list-cache:v1";
+const CONVERSATION_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
@@ -120,6 +122,76 @@ const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
+
+type ConversationListCacheRecord = {
+  savedAt: number;
+  conversations: ConversationChannelSummary[];
+};
+
+function buildConversationListCacheKey(externalUserId = ""): string {
+  const identity = externalUserId.trim() || getOrCreateTrackingUserId();
+  const namespace = clientApiNamespace.trim() || "default";
+  return `${CONVERSATION_LIST_CACHE_KEY_PREFIX}:${encodeURIComponent(namespace)}:${encodeURIComponent(identity)}`;
+}
+
+function isCachedConversationSummary(value: unknown): value is ConversationChannelSummary {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+
+  const candidate = value as Partial<ConversationChannelSummary>;
+  return typeof candidate.id === "string"
+    && typeof candidate.title === "string"
+    && typeof candidate.sessionKey === "string"
+    && (candidate.status === "active" || candidate.status === "paused")
+    && typeof candidate.createdAt === "string"
+    && typeof candidate.updatedAt === "string";
+}
+
+function readConversationListCache(externalUserId = ""): ConversationListCacheRecord | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const storageKey = buildConversationListCacheKey(externalUserId);
+    const rawValue = window.sessionStorage.getItem(storageKey);
+    if (!rawValue) return null;
+
+    const parsed = JSON.parse(rawValue) as Partial<ConversationListCacheRecord>;
+    if (
+      typeof parsed.savedAt !== "number"
+      || !Number.isFinite(parsed.savedAt)
+      || Date.now() - parsed.savedAt > CONVERSATION_LIST_CACHE_MAX_AGE_MS
+      || !Array.isArray(parsed.conversations)
+    ) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+
+    const conversations = parsed.conversations.filter(isCachedConversationSummary);
+    if (conversations.length !== parsed.conversations.length) {
+      window.sessionStorage.removeItem(storageKey);
+      return null;
+    }
+
+    return { savedAt: parsed.savedAt, conversations };
+  } catch {
+    return null;
+  }
+}
+
+function writeConversationListCache(
+  conversations: ConversationChannelSummary[],
+  externalUserId = "",
+): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(
+      buildConversationListCacheKey(externalUserId),
+      JSON.stringify({ savedAt: Date.now(), conversations }),
+    );
+  } catch {
+    // Treat storage as an optional fast path. The server remains authoritative.
+  }
+}
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -1769,18 +1841,27 @@ export default function ConversationList({
   }, [setSearchOverlayVisible]);
 
   const refreshConversationList = useCallback(async (options?: { replaceCurrent?: boolean }) => {
-    const response = await fetch(buildConversationApiPath(), {
-      cache: "no-store",
-      headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-    });
+    const response = await fetch(
+      initialNativeUi
+        ? buildConversationApiPath("?view=native-list")
+        : buildConversationApiPath(),
+      {
+        cache: "no-store",
+        headers: buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+    );
     const nextConversations = await readConversationListResponse(response);
+    writeConversationListCache(
+      nextConversations,
+      initialTrackingIdentityRef.current.externalUserId,
+    );
     setConversations((current) => (
       options?.replaceCurrent
         ? replaceConversationLists(current, nextConversations)
         : mergeConversationLists(current, nextConversations)
     ));
     return nextConversations;
-  }, []);
+  }, [initialNativeUi]);
 
   const triggerPullToRefresh = useCallback(async () => {
     if (isRefreshingConversations || isHydratingConversations || activeConversation || showSearch) {
@@ -2796,6 +2877,22 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
+    if (!initialNativeUi || initialConversations.length > 0) return;
+
+    const cached = readConversationListCache(initialTrackingExternalUserId);
+    if (!cached) return;
+
+    setConversations(cached.conversations);
+    refreshConversationLocalStats(cached.conversations);
+    setIsHydratingConversations(false);
+  }, [
+    initialConversations.length,
+    initialNativeUi,
+    initialTrackingExternalUserId,
+    refreshConversationLocalStats,
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
     let timeoutId: number | null = null;
 
@@ -2841,6 +2938,20 @@ export default function ConversationList({
     initialConversationsRequireRefresh,
     refreshConversationList,
     refreshConversationLocalStats,
+  ]);
+
+  useEffect(() => {
+    if (!initialNativeUi || isHydratingConversations) return;
+
+    writeConversationListCache(
+      conversations,
+      initialTrackingExternalUserId,
+    );
+  }, [
+    conversations,
+    initialNativeUi,
+    initialTrackingExternalUserId,
+    isHydratingConversations,
   ]);
 
   useEffect(() => {

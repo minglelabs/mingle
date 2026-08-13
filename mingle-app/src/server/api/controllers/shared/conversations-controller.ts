@@ -3,11 +3,15 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
   createConversationChannelForUser,
+  listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 import {
+  normalizeSessionUserIdentity,
+  resolveTrackingExternalUserId,
+  resolveTrackingSessionKey,
   resolveOrCreateUserIdForRequest,
   sanitizeRequestIdentityValue,
 } from "@/lib/request-user-identity";
@@ -35,6 +39,31 @@ function applyTrackingCookies(
 
 export async function getConversationsResponse(request: NextRequest) {
   const session = await getServerSession(getAuthOptions());
+
+  // Native tab switches already carry a trusted session identity or the
+  // stable external tracking identity. Resolve the conversation list directly
+  // for this read-only path so Railway does not spend one round-trip resolving
+  // the user and another round-trip loading the same user's channels.
+  if (request.nextUrl.searchParams.get("view") === "native-list") {
+    const sessionIdentity = normalizeSessionUserIdentity(session);
+    const externalUserId = resolveTrackingExternalUserId(request);
+    const sessionKey = resolveTrackingSessionKey(request);
+    const conversations = sessionIdentity.id
+      ? await listConversationChannelsForUser(sessionIdentity.id)
+      : externalUserId
+        ? await listConversationChannelsForExternalUserId(externalUserId)
+        : null;
+
+    if (conversations) {
+      const response = NextResponse.json({ conversations });
+      applyTrackingCookies(request, response, {
+        externalUserId: externalUserId || undefined,
+        sessionKey: sessionKey || undefined,
+      });
+      return response;
+    }
+  }
+
   const resolvedUser = await resolveOrCreateUserIdForRequest({
     request,
     session,

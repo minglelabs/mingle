@@ -325,13 +325,13 @@ async function serializeConversationChannelWithPreview(
   );
 }
 
-export async function listConversationChannelsForUser(
-  userId: string,
+async function listConversationChannelsForOwner(
+  ownerWhere: Prisma.AppConversationChannelWhereInput,
   options: ListConversationChannelsForUserOptions = {},
 ): Promise<ConversationChannelSummary[]> {
   const records = await prisma.appConversationChannel.findMany({
     where: {
-      ownerUserId: userId,
+      ...ownerWhere,
       ...buildVisibleConversationWhere(),
     },
     orderBy: [
@@ -373,6 +373,27 @@ export async function listConversationChannelsForUser(
       const rightTimestamp = Date.parse(right.latestMessageAt || right.createdAt) || 0;
       return rightTimestamp - leftTimestamp;
     });
+}
+
+export async function listConversationChannelsForUser(
+  userId: string,
+  options: ListConversationChannelsForUserOptions = {},
+): Promise<ConversationChannelSummary[]> {
+  return listConversationChannelsForOwner({ ownerUserId: userId }, options);
+}
+
+export async function listConversationChannelsForExternalUserId(
+  externalUserId: string,
+  options: ListConversationChannelsForUserOptions = {},
+): Promise<ConversationChannelSummary[]> {
+  const normalizedExternalUserId = externalUserId.trim();
+  if (!normalizedExternalUserId) return [];
+
+  return listConversationChannelsForOwner({
+    owner: {
+      is: { externalUserId: normalizedExternalUserId },
+    },
+  }, options);
 }
 
 export async function createConversationChannelForUser(

@@ -62,6 +62,7 @@ import {
   createConversationChannelForUser,
   deleteConversationChannel,
   getConversationHydrationStateForUser,
+  listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
 
@@ -81,6 +82,25 @@ describe("app-conversations", () => {
     expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
         ownerUserId: "user-1",
+        OR: [
+          { isDeleted: false },
+          { isDeleted: null },
+        ],
+      },
+    }));
+  });
+
+  it("can list conversations directly by the stable external user identity", async () => {
+    mockFindConversationMany.mockResolvedValue([]);
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await listConversationChannelsForExternalUserId(" anon_local_storage_user ");
+
+    expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        owner: {
+          is: { externalUserId: "anon_local_storage_user" },
+        },
         OR: [
           { isDeleted: false },
           { isDeleted: null },

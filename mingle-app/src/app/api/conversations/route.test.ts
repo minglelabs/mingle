@@ -3,18 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 
 const {
   mockGetServerSession,
+  mockListConversationChannelsForExternalUserId,
   mockListConversationChannelsForUser,
   mockCreateConversationChannelForUser,
   mockEnsureTrackingContext,
+  mockNormalizeSessionUserIdentity,
   mockResolveOrCreateUserIdForRequest,
+  mockResolveTrackingExternalUserId,
+  mockResolveTrackingSessionKey,
   mockSanitizeRequestIdentityValue,
   mockSanitizeSttLanguageSelection,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
+  mockListConversationChannelsForExternalUserId: vi.fn(),
   mockListConversationChannelsForUser: vi.fn(),
   mockCreateConversationChannelForUser: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
+  mockNormalizeSessionUserIdentity: vi.fn(),
   mockResolveOrCreateUserIdForRequest: vi.fn(),
+  mockResolveTrackingExternalUserId: vi.fn(),
+  mockResolveTrackingSessionKey: vi.fn(),
   mockSanitizeRequestIdentityValue: vi.fn((value: string) => value.trim()),
   mockSanitizeSttLanguageSelection: vi.fn((value: unknown) => Array.isArray(value) ? value : []),
 }));
@@ -28,6 +36,7 @@ vi.mock("@/lib/auth-options", () => ({
 }));
 
 vi.mock("@/lib/app-conversations", () => ({
+  listConversationChannelsForExternalUserId: mockListConversationChannelsForExternalUserId,
   listConversationChannelsForUser: mockListConversationChannelsForUser,
   createConversationChannelForUser: mockCreateConversationChannelForUser,
 }));
@@ -41,7 +50,10 @@ vi.mock("@/lib/stt-languages", () => ({
 }));
 
 vi.mock("@/lib/request-user-identity", () => ({
+  normalizeSessionUserIdentity: mockNormalizeSessionUserIdentity,
   resolveOrCreateUserIdForRequest: mockResolveOrCreateUserIdForRequest,
+  resolveTrackingExternalUserId: mockResolveTrackingExternalUserId,
+  resolveTrackingSessionKey: mockResolveTrackingSessionKey,
   sanitizeRequestIdentityValue: mockSanitizeRequestIdentityValue,
 }));
 
@@ -51,6 +63,14 @@ describe("/api/conversations route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue(null);
+    mockNormalizeSessionUserIdentity.mockReturnValue({
+      id: "",
+      email: "",
+      externalUserId: "",
+      sessionKey: "",
+    });
+    mockResolveTrackingExternalUserId.mockReturnValue("anon_local_storage_user");
+    mockResolveTrackingSessionKey.mockReturnValue("sess_local_storage_user");
     mockResolveOrCreateUserIdForRequest.mockResolvedValue({
       userId: "tracked_user_123",
       identity: {
@@ -68,6 +88,56 @@ describe("/api/conversations route", () => {
       externalUserId: "anon_local_storage_user",
       sessionKey: "sess_local_storage_user",
     });
+  });
+
+  it("uses the native list fast path without resolving the guest user twice", async () => {
+    mockListConversationChannelsForExternalUserId.mockResolvedValue([
+      {
+        id: "conv_native_1",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "active",
+        sessionKey: "conv_native_session_1",
+        selectedLanguages: ["en", "ko"],
+        createdAt: "2026-04-02T00:00:00.000Z",
+        updatedAt: "2026-04-02T00:01:00.000Z",
+        pausedAt: null,
+      },
+    ]);
+
+    const response = await GET(new NextRequest(
+      "https://example.com/api/conversations?view=native-list",
+      {
+        headers: {
+          "x-mingle-user-id": "anon_local_storage_user",
+          "x-mingle-session-key": "sess_local_storage_user",
+        },
+      },
+    ));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({
+      conversations: [
+        expect.objectContaining({
+          id: "conv_native_1",
+          sessionKey: "conv_native_session_1",
+        }),
+      ],
+    });
+    expect(mockListConversationChannelsForExternalUserId).toHaveBeenCalledWith(
+      "anon_local_storage_user",
+    );
+    expect(mockResolveOrCreateUserIdForRequest).not.toHaveBeenCalled();
+    expect(mockListConversationChannelsForUser).not.toHaveBeenCalled();
+    expect(mockEnsureTrackingContext).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      expect.any(NextResponse),
+      {
+        externalUserIdHint: "anon_local_storage_user",
+        sessionKeyHint: "sess_local_storage_user",
+      },
+    );
   });
 
   it("lists conversations for a guest request identified by the header seed", async () => {
