@@ -722,7 +722,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
             <button
               type="button"
               onClick={() => setShowProfileEdit(true)}
-              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-200"
+              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
             >
               {dictionary.profile.editProfile}
             </button>
