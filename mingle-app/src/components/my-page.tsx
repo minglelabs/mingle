@@ -3,11 +3,11 @@
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { AnimatePresence, motion, type PanInfo } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
 import { ChevronLeft, FileText, Loader2, Menu, ShieldOff, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -27,6 +27,13 @@ type ProfileDraft = {
   bio: string;
   nationality: AppLocale;
 };
+
+const PROFILE_EDIT_TRANSITION = {
+  duration: 0.32,
+  ease: [0.22, 1, 0.36, 1] as const,
+};
+const PROFILE_EDIT_SWIPE_THRESHOLD_PX = 92;
+const PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
 type BlockedUserRecord = {
   id: string;
@@ -459,6 +466,9 @@ function ProfileEditPanel({
   onSave: (draft: ProfileDraft) => Promise<boolean>;
   open: boolean;
 }) {
+  const motionControls = useAnimationControls();
+  const isMountedRef = useRef(false);
+  const isLeavingRef = useRef(false);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [bio, setBio] = useState(initialBio);
   const [nationality, setNationality] = useState<AppLocale>(initialNationality);
@@ -484,6 +494,19 @@ function ProfileEditPanel({
     setSaveError(null);
   }, [initialBio, initialDisplayName, initialNationality, open]);
 
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isMountedRef.current) return;
+    isLeavingRef.current = false;
+    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [motionControls, open]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
 
@@ -507,12 +530,24 @@ function ProfileEditPanel({
     }
   }, [bio, copy.saveError, displayName, isSaving, nationality, onClose, onSave]);
 
+  const handleBack = useCallback(async () => {
+    if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
+    isLeavingRef.current = true;
+    await motionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
+    if (isMountedRef.current) onClose();
+  }, [isSaving, motionControls, onClose]);
+
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (isSaving) return;
-    if (info.offset.x >= 92 || info.velocity.x >= 650) {
-      onClose();
+    if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
+    if (
+      info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX
+      || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND
+    ) {
+      void handleBack();
+      return;
     }
-  }, [isSaving, onClose]);
+    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [handleBack, isSaving, motionControls]);
 
   return (
     <AnimatePresence>
@@ -520,7 +555,7 @@ function ProfileEditPanel({
         <motion.section
           key="profile-edit-panel"
           initial={{ x: "100%" }}
-          animate={{ x: 0 }}
+          animate={motionControls}
           exit={{ x: "100%" }}
           transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           drag="x"

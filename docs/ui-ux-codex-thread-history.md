@@ -7,6 +7,13 @@
 - User impact: Users could not distinguish an empty history from a request failure, and one failed collection prevented the other collection from being displayed.
 - Resolution: Load block and report history independently. The panel now always renders both management sections, shows an explicit sign-in state when the account session is unavailable, keeps an empty state for authenticated users with no records, and limits the generic error state to the collection that actually failed.
 
+## 2026-08-13 - Profile Edit Swipe Snap Behavior
+
+- Surface: `mingle-app/src/components/my-page.tsx` profile edit panel.
+- Issue: A short rightward swipe could leave the profile edit panel resting at an intermediate horizontal offset instead of returning to its fully open position or closing completely.
+- User impact: The panel looked partially dismissed and required an extra gesture, making the back interaction feel unreliable.
+- Resolution: Added explicit drag-settle behavior. Swipes below the distance and velocity thresholds animate back to `x: 0`, while qualifying swipes run the full exit animation before closing. The animation controls are guarded by the panel lifecycle to avoid starting animations after unmount.
+
 ## 2026-08-07 - Messenger Bottom Tabs and My Page Draft Surface
 
 - Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/components/my-page.tsx`
