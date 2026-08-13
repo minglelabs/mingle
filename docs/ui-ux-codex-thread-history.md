@@ -419,3 +419,9 @@
 - Surface: My Page hamburger menu, blocked-user management, and report history.
 - Issue: The hamburger panel rendered both potentially long management lists inline, making the menu act like a history page instead of a compact navigation surface.
 - Resolution: Replaced the inline lists with two menu rows that open dedicated right-to-left subpages. The blocked-user row uses the `UserRoundX` icon, the report-history row uses the `Siren` icon, and each subpage supports the existing back button and horizontal swipe-to-dismiss behavior. Unblocking and report-reply viewing remain available inside their respective subpages.
+
+## 2026-08-14 - My Page hamburger swipe dismissal
+
+- Surface: My Page hamburger menu and its management subpages.
+- Issue: A short rightward swipe could leave the panel partially displaced instead of settling to a stable open or closed state.
+- Resolution: Added the same snap-back/snap-dismiss behavior used by the profile edit panel. Swipes below the dismissal threshold animate back to the left edge, while qualifying swipes animate fully off-screen before closing the panel.

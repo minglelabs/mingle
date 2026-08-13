@@ -189,6 +189,11 @@ function ProfileSettingsPanel({
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [managementPage, setManagementPage] = useState<"blocked" | "reports" | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
+  const motionControls = useAnimationControls();
+  const managementMotionControls = useAnimationControls();
+  const isMountedRef = useRef(false);
+  const isLeavingRef = useRef(false);
+  const isManagementLeavingRef = useRef(false);
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
@@ -215,6 +220,25 @@ function ProfileSettingsPanel({
       other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
     } as Record<string, string>,
   };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isMountedRef.current) return;
+    isLeavingRef.current = false;
+    void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [motionControls, open]);
+
+  useEffect(() => {
+    if (!open || !managementPage || !isMountedRef.current) return;
+    isManagementLeavingRef.current = false;
+    void managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [managementMotionControls, managementPage, open]);
 
   useEffect(() => {
     if (!open) {
@@ -319,22 +343,36 @@ function ProfileSettingsPanel({
     }
   }, [copy.unblockError, unblockingId]);
 
-  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.x >= Math.max(72, viewportWidth * 0.2) || info.velocity.x >= 650) onClose();
-  }, [onClose, viewportWidth]);
+  const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!isMountedRef.current || isLeavingRef.current) return;
+    if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
+      isLeavingRef.current = true;
+      await motionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
+      if (isMountedRef.current) onClose();
+      return;
+    }
+    await motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [motionControls, onClose]);
 
-  const handleManagementDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (info.offset.x >= Math.max(72, viewportWidth * 0.2) || info.velocity.x >= 650) setManagementPage(null);
-  }, [viewportWidth]);
+  const handleManagementDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!isMountedRef.current || isManagementLeavingRef.current) return;
+    if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
+      isManagementLeavingRef.current = true;
+      await managementMotionControls.start({ x: "100%", transition: PROFILE_EDIT_TRANSITION });
+      if (isMountedRef.current) setManagementPage(null);
+      return;
+    }
+    await managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
+  }, [managementMotionControls]);
 
   return (
     <AnimatePresence>
       {open && !managementPage ? (
         <motion.section
           initial={{ x: "100%" }}
-          animate={{ x: 0 }}
+          animate={motionControls}
           exit={{ x: "100%" }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          transition={PROFILE_EDIT_TRANSITION}
           drag="x"
           dragConstraints={{ left: 0, right: viewportWidth }}
           dragElastic={0.08}
@@ -405,9 +443,9 @@ function ProfileSettingsPanel({
         <motion.section
           key={`profile-management-${managementPage}`}
           initial={{ x: "100%" }}
-          animate={{ x: 0 }}
+          animate={managementMotionControls}
           exit={{ x: "100%" }}
-          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          transition={PROFILE_EDIT_TRANSITION}
           drag="x"
           dragConstraints={{ left: 0, right: viewportWidth }}
           dragElastic={0.08}
