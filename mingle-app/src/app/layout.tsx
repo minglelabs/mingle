@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Toaster } from "sonner";
+import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import { TtsSettingsProvider } from "@/context/tts-settings";
@@ -73,6 +74,7 @@ export default function RootLayout({
   return (
     <html lang={DEFAULT_LOCALE}>
       <body className="antialiased">
+        <AppLocalePreferenceSync />
         <TtsSettingsProvider>
           <AuthSessionProvider>
             <MobileCanvasShell>{children}</MobileCanvasShell>

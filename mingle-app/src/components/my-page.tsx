@@ -1,12 +1,13 @@
 "use client";
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
-import type { AppDictionary, AppLocale } from "@/i18n";
+import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
+import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatUsername, USERNAME_MAX_LENGTH } from "@/lib/usernames";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
-import { ChevronLeft, ChevronRight, Loader2, LogOut, Menu, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -168,6 +169,7 @@ function ProfileSettingsPanel({
   dictionary,
   locale,
   onClose,
+  onChangeAppLanguage,
   onSignOut,
   open,
   sessionStatus,
@@ -175,6 +177,7 @@ function ProfileSettingsPanel({
   dictionary: AppDictionary;
   locale: AppLocale;
   onClose: () => void;
+  onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
   onSignOut: () => void;
   open: boolean;
   sessionStatus: SessionStatus;
@@ -187,7 +190,7 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
   const motionControls = useAnimationControls();
   const managementMotionControls = useAnimationControls();
@@ -198,20 +201,24 @@ function ProfileSettingsPanel({
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
     reports: dictionary.profile.reportsLabel ?? (locale === "ko" ? "신고 내역" : "Reports"),
+    appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 언어" : "App language"),
+    appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 언어" : "App language"),
+    appLanguageDescription: dictionary.profile.appLanguageDescription
+      ?? (locale === "ko" ? "Mingle 앱 화면에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
     unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
     unblockError: dictionary.profile.unblockError ?? (locale === "ko" ? "차단을 해제하지 못했습니다." : "Could not unblock this user."),
     pending: dictionary.profile.reportPendingLabel ?? (locale === "ko" ? "운영진 확인 중" : "Under review"),
-    close: locale === "ko" ? "닫기" : "Close",
-    loading: locale === "ko" ? "불러오는 중..." : "Loading...",
-    loadError: locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity.",
-    authRequired: locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history.",
+    close: dictionary.profile.settingsCloseLabel ?? (locale === "ko" ? "닫기" : "Close"),
+    loading: dictionary.profile.settingsLoadingLabel ?? (locale === "ko" ? "불러오는 중..." : "Loading..."),
+    loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
+    authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
-    reportedUser: locale === "ko" ? "신고한 사용자" : "Reported user",
+    reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
     userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
-    myMessage: locale === "ko" ? "신고 내용" : "Your report",
-    teamReply: locale === "ko" ? "운영진 답변" : "Team reply",
+    myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
+    teamReply: dictionary.profile.settingsTeamReplyLabel ?? (locale === "ko" ? "운영진 답변" : "Team reply"),
     reasonLabels: {
       spam: dictionary.profile.reportReasonSpam ?? (locale === "ko" ? "스팸·도배" : "Spam"),
       harassment: dictionary.profile.reportReasonHarassment ?? (locale === "ko" ? "괴롭힘·불쾌한 행동" : "Harassment"),
@@ -343,6 +350,12 @@ function ProfileSettingsPanel({
     }
   }, [copy.unblockError, unblockingId]);
 
+  const handleSelectAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
+    if (nextLocale === locale) return;
+    storeAppLocale(nextLocale);
+    onChangeAppLanguage(nextLocale);
+  }, [locale, onChangeAppLanguage]);
+
   const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (!isMountedRef.current || isLeavingRef.current) return;
     if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
@@ -417,10 +430,19 @@ function ProfileSettingsPanel({
               <button
                 type="button"
                 onClick={() => setManagementPage("reports")}
-                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
                 <Siren size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
                 <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.reports}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setManagementPage("language")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.appLanguage}</span>
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
             </div>
@@ -455,7 +477,7 @@ function ProfileSettingsPanel({
           style={{ touchAction: "pan-y" }}
           role="dialog"
           aria-modal="true"
-          aria-label={managementPage === "blocked" ? copy.blocked : copy.reports}
+          aria-label={managementPage === "blocked" ? copy.blocked : managementPage === "reports" ? copy.reports : copy.appLanguageTitle}
         >
           <header
             className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
@@ -473,13 +495,35 @@ function ProfileSettingsPanel({
               <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
             </button>
             <h2 className="truncate text-center text-[17px] font-bold">
-              {managementPage === "blocked" ? copy.blocked : copy.reports}
+              {managementPage === "blocked" ? copy.blocked : managementPage === "reports" ? copy.reports : copy.appLanguageTitle}
             </h2>
             <div aria-hidden="true" />
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
-            {isLoading ? (
+            {managementPage === "language" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.appLanguageDescription}</p>
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+                  {PRIMARY_UI_LANGUAGE_OPTIONS.map((option, index) => {
+                    const selected = option.code === locale;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => handleSelectAppLanguage(option.code)}
+                        className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-gray-50 ${index < PRIMARY_UI_LANGUAGE_OPTIONS.length - 1 ? "border-b border-gray-100" : ""}`}
+                        aria-pressed={selected}
+                      >
+                        <span className="w-7 text-lg" aria-hidden="true">{option.flag}</span>
+                        <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-900">{option.name}</span>
+                        {selected ? <span className="text-[13px] font-semibold text-amber-600">✓</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : isLoading ? (
               <div className="flex justify-center pt-8 text-gray-400">
                 <Loader2 size={24} className="animate-spin" aria-label={copy.loading} />
               </div>
@@ -927,6 +971,11 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     void signOut({ callbackUrl: signOutCallbackUrl });
   }, [signOutCallbackUrl]);
 
+  const handleChangeAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {
+    setShowProfileSettings(false);
+    router.replace(buildNativeAwareTabPath(`/${nextLocale}/mypage`, searchParams, { tabRoot: true }));
+  }, [router, searchParams]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <ProfileEditPanel
@@ -945,6 +994,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         dictionary={dictionary}
         locale={locale}
         onClose={() => setShowProfileSettings(false)}
+        onChangeAppLanguage={handleChangeAppLanguage}
         onSignOut={handleSignOut}
         open={showProfileSettings}
         sessionStatus={sessionStatus}

@@ -85,24 +85,14 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     ? displayName
     : `@${displayName.replace(/\s+/g, "")}`);
   const profileUrl = useMemo(() => buildProfileShareUrl(locale), [locale]);
-  const comingSoonLabel = locale === "ko"
-    ? "아직 기능 준비중입니다."
-    : dictionary.profile.comingSoonLabel ?? "Coming soon.";
-  const copy = locale === "ko"
-    ? {
-        copyLink: "링크 복사",
-        copied: "프로필 링크를 복사했습니다.",
-        copyFailed: "링크 복사에 실패했습니다.",
-        download: "다운로드",
-        qrScan: "QR 스캔",
-      }
-    : {
-        copyLink: "Copy link",
-        copied: "Profile link copied.",
-        copyFailed: "Could not copy the profile link.",
-        download: "Download",
-      qrScan: "Scan QR code",
-    };
+  const comingSoonLabel = dictionary.profile.comingSoonLabel ?? "Coming soon.";
+  const copy = {
+    copyLink: dictionary.profile.profileShareCopyLinkLabel ?? "Copy link",
+    copied: dictionary.profile.profileShareCopiedMessage ?? "Profile link copied.",
+    copyFailed: dictionary.profile.profileShareCopyFailedMessage ?? "Could not copy the profile link.",
+    download: dictionary.profile.profileShareDownloadLabel ?? "Download",
+    qrScan: dictionary.profile.profileShareQrScanLabel ?? "Scan QR code",
+  };
 
   useEffect(() => {
     if (!sessionUserId) return;
@@ -263,7 +253,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
           type="button"
           onClick={handleBack}
           className="flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/15"
-          aria-label={locale === "ko" ? "뒤로가기" : "Back"}
+          aria-label={dictionary.profile.profileShareBackLabel ?? "Back"}
         >
           <ChevronLeft size={30} strokeWidth={2.2} aria-hidden="true" />
         </button>

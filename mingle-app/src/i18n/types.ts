@@ -70,6 +70,7 @@ export type BaseAppDictionarySource = {
     followAction?: string;
     followingAction?: string;
     followError?: string;
+    clearSearchLabel?: string;
   };
   moments: {
     minutesAgoSuffix: string;
@@ -145,6 +146,23 @@ export type BaseAppDictionarySource = {
     reportReasonInappropriate?: string;
     reportReasonImpersonation?: string;
     reportReasonOther?: string;
+    appLanguageLabel?: string;
+    appLanguageTitle?: string;
+    appLanguageDescription?: string;
+    settingsCloseLabel?: string;
+    settingsLoadingLabel?: string;
+    settingsLoadError?: string;
+    settingsAuthRequired?: string;
+    settingsReportedUserLabel?: string;
+    settingsMyMessageLabel?: string;
+    settingsTeamReplyLabel?: string;
+    profileShareBackLabel?: string;
+    profileShareCopyLinkLabel?: string;
+    profileShareCopiedMessage?: string;
+    profileShareCopyFailedMessage?: string;
+    profileShareDownloadLabel?: string;
+    profileShareQrScanLabel?: string;
+    profileLoadingLabel?: string;
     authTitle: string;
     loginRequiredTitle: string;
     loginRequiredDescription: string;

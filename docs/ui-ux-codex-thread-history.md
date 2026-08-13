@@ -425,3 +425,16 @@
 - Surface: My Page hamburger menu and its management subpages.
 - Issue: A short rightward swipe could leave the panel partially displaced instead of settling to a stable open or closed state.
 - Resolution: Added the same snap-back/snap-dismiss behavior used by the profile edit panel. Swipes below the dismissal threshold animate back to the left edge, while qualifying swipes animate fully off-screen before closing the panel.
+
+## 2026-08-14 - App language setting and social-surface localization
+
+- Surface: My Page hamburger menu, app-language subpage, profile editing, profile sharing, Explore search, public user profiles, and block/report management.
+- Product distinction: The app language is separate from the profile's primary speech language. The profile setting continues to control the user's STT language identity; the new app-language setting controls the Mingle interface only.
+- Issue: The app had a primary UI locale catalog, but there was no user-facing way to change it from My Page. Several recently added profile and social screens also used Korean/English inline fallbacks, so switching the route locale could leave parts of the new UI untranslated.
+- User impact: Users could not choose their preferred Mingle interface language, and the profile/social surfaces could show mixed-language labels, errors, and accessibility text.
+- Resolution:
+  - Added an `App language` row to the hamburger menu. It opens a right-to-left subpage with exactly the 15 `PRIMARY_UI_LOCALES` options, preserving the existing panel back button and swipe-dismiss interaction.
+  - Selecting a language stores the preference locally and replaces the current `/{locale}/...` route with the selected locale so the server dictionary and UI re-render immediately. The root sync also restores the stored app locale on the next app launch and updates the document language tag.
+  - Added supplemental locale copy for the app-language screen and the recently added profile edit, profile share, Explore search, public profile, blocked-user, and report-history surfaces across all 15 primary UI locales.
+  - Kept the profile editor's `Primary language`/STT language selector backed by `STT_LANGUAGE_OPTIONS`; it is intentionally not reused for the app-language list.
+- Tests: Added coverage that the 15 app-language options and the new social/profile copy resolve for every primary UI locale. Existing i18n and lint checks pass; the repository's full `tsc --noEmit` still reports the two previously known unrelated test typing issues in `language-selector.logic.test.ts` and `get-dictionary.test.ts`.

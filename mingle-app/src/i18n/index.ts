@@ -17,6 +17,11 @@ export { getDictionary } from "@/i18n/get-dictionary";
 export { getVersionPolicyCopy } from "@/i18n/get-version-policy-copy";
 export { resolveLivePhoneDemoComposerCopy } from "@/i18n/live-phone-demo-composer-copy";
 export { resolveVersionPolicyFallbackCopy } from "@/i18n/version-policy-fallback-copy";
+export {
+  PRIMARY_UI_LANGUAGE_OPTIONS,
+  PRIMARY_UI_LOCALES,
+  type PrimaryUiLocale,
+} from "@/i18n/mingle-locales";
 export type {
   AppDictionary,
   BaseAppDictionarySource,

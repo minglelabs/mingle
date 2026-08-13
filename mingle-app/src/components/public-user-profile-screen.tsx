@@ -48,8 +48,8 @@ const SWIPE_VELOCITY_PX_PER_SECOND = 650;
 function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   const isKorean = locale === "ko";
   return {
-    back: isKorean ? "뒤로가기" : "Back",
-    userFallback: isKorean ? "Mingle 사용자" : "Mingle user",
+    back: dictionary.profile.profileShareBackLabel ?? (isKorean ? "뒤로가기" : "Back"),
+    userFallback: dictionary.connect.userFallbackLabel ?? (isKorean ? "Mingle 사용자" : "Mingle user"),
     profileLoadError: dictionary.profile.profileLoadError
       ?? (isKorean ? "프로필을 불러오지 못했습니다." : "Could not load this profile."),
     follow: dictionary.connect.followAction ?? (isKorean ? "팔로우" : "Follow"),
@@ -75,6 +75,7 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
     reportError: dictionary.profile.reportError
       ?? (isKorean ? "신고를 보내지 못했습니다." : "Could not submit the report."),
     status: dictionary.profile.reportPendingLabel ?? (isKorean ? "운영진 확인 중" : "Under review"),
+    loading: dictionary.profile.profileLoadingLabel ?? (isKorean ? "불러오는 중" : "Loading"),
     reasons: {
       spam: dictionary.profile.reportReasonSpam ?? (isKorean ? "스팸·도배" : "Spam"),
       harassment: dictionary.profile.reportReasonHarassment ?? (isKorean ? "괴롭힘·불쾌한 행동" : "Harassment"),
@@ -309,7 +310,7 @@ export default function PublicUserProfileScreen({
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-7">
         {isLoading ? (
           <div className="flex justify-center pt-12 text-gray-400" aria-live="polite">
-            <Loader2 size={26} className="animate-spin" aria-label={locale === "ko" ? "불러오는 중" : "Loading"} />
+            <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />
           </div>
         ) : loadError || !profile ? (
           <p className="pt-12 text-center text-[14px] text-gray-500" role="alert">{copy.profileLoadError}</p>

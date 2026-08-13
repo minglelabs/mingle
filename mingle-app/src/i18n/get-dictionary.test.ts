@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUPPORTED_LOCALES, getDictionary } from "@/i18n";
+import { PRIMARY_UI_LANGUAGE_OPTIONS, SUPPORTED_LOCALES, getDictionary } from "@/i18n";
 
 describe("getDictionary", () => {
   it("returns dedicated dictionaries for the expanded locale catalog", () => {
@@ -36,5 +36,20 @@ describe("getDictionary", () => {
     expect(polishDictionary.versionPolicy.checkingTitle).toBe("Checking version");
     expect(polishDictionary.versionPolicy.updateButtonLabel).toBe("Aktualizacja");
     expect(polishDictionary.livePhoneDemo.composer.sendMessageLabel).toBe("Send message");
+  });
+
+  it("provides localized copy for the app language and social profile surfaces", () => {
+    expect(PRIMARY_UI_LANGUAGE_OPTIONS).toHaveLength(15);
+
+    for (const option of PRIMARY_UI_LANGUAGE_OPTIONS) {
+      const dictionary = getDictionary(option.code);
+
+      expect(dictionary.profile.appLanguageTitle).toBeTruthy();
+      expect(dictionary.profile.appLanguageDescription).toBeTruthy();
+      expect(dictionary.profile.profileShareCopyLinkLabel).toBeTruthy();
+      expect(dictionary.profile.settingsLoadError).toBeTruthy();
+      expect(dictionary.connect.searchPlaceholder).toBeTruthy();
+      expect(dictionary.connect.clearSearchLabel).toBeTruthy();
+    }
   });
 });

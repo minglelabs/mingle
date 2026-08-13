@@ -41,6 +41,8 @@ function resolveSearchCopy(dictionary: AppDictionary) {
       ?? (isKorean ? "팔로잉" : "Following"),
     followError: dictionary.connect.followError
       ?? (isKorean ? "팔로우 상태를 변경하지 못했습니다." : "Could not update follow status."),
+    clearSearch: dictionary.connect.clearSearchLabel
+      ?? (isKorean ? "검색어 지우기" : "Clear search"),
   };
 }
 
@@ -174,7 +176,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                 inputRef.current?.focus();
               }}
               className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition active:bg-gray-200"
-              aria-label={locale === "ko" ? "검색어 지우기" : "Clear search"}
+              aria-label={copy.clearSearch}
             >
               <X size={16} strokeWidth={2.2} aria-hidden="true" />
             </button>
