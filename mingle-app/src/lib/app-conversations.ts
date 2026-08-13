@@ -639,6 +639,7 @@ export async function updateConversationChannelTitle(args: {
     where: { id: args.conversationId },
     data: {
       title: normalizedTitle,
+      userEditedTitleAt: new Date(),
     },
     select: conversationChannelSelect,
   });

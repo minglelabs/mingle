@@ -17,6 +17,10 @@
     "healthcheckPath": "/railway/health",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE",
-    "region": "asia-southeast1-eqsg3a"
+    "multiRegionConfig": {
+      "us-west2": {
+        "numReplicas": 1
+      }
+    }
   }
 }

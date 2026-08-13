@@ -582,6 +582,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             </div>
             <h1 className="text-2xl font-semibold text-slate-950">Mingle Admin</h1>
           </div>
+          <Link
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            href="/admin/dashboard"
+          >
+            대시보드
+          </Link>
           <form action={logoutAdminAction}>
             <button
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
