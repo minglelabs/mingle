@@ -7,6 +7,13 @@
 - User impact: Users could not distinguish an empty history from a request failure, and one failed collection prevented the other collection from being displayed.
 - Resolution: Load block and report history independently. The panel now always renders both management sections, shows an explicit sign-in state when the account session is unavailable, keeps an empty state for authenticated users with no records, and limits the generic error state to the collection that actually failed.
 
+## 2026-08-14 - Profile Primary Speech Language
+
+- Surface: My Page profile edit panel.
+- Issue: The profile form asked for a country even though Mingle uses the value to represent the user's speech-input language for STT.
+- User impact: The field's meaning did not match the product behavior, and users could select only the small primary-UI locale subset rather than the full speech-language catalog.
+- Resolution: Renamed the visible field to primary language, reused the shared STT language catalog and flags, localized the language names for the active UI locale, and updated profile validation to accept every selectable STT language. Chinese Simplified and Chinese Traditional remain separate selectable speech variants, matching the existing STT selector.
+
 ## 2026-08-13 - Profile Edit Swipe Snap Behavior
 
 - Surface: `mingle-app/src/components/my-page.tsx` profile edit panel.

@@ -5,12 +5,10 @@ const {
   mockGetServerSession,
   mockUserFindUnique,
   mockUserUpdate,
-  mockResolveSupportedLocaleTag,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
   mockUserUpdate: vi.fn(),
-  mockResolveSupportedLocaleTag: vi.fn(),
 }));
 
 vi.mock("next-auth", () => ({
@@ -19,10 +17,6 @@ vi.mock("next-auth", () => ({
 
 vi.mock("@/lib/auth-options", () => ({
   getAuthOptions: () => ({}),
-}));
-
-vi.mock("@/i18n/config", () => ({
-  resolveSupportedLocaleTag: mockResolveSupportedLocaleTag,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -40,7 +34,6 @@ describe("/api/profile route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
-    mockResolveSupportedLocaleTag.mockImplementation((value: string) => value.trim());
   });
 
   it("returns unauthorized for unauthenticated profile reads", async () => {
@@ -98,7 +91,6 @@ describe("/api/profile route", () => {
   });
 
   it("normalizes and saves editable profile fields", async () => {
-    mockResolveSupportedLocaleTag.mockReturnValue("ja");
     mockUserUpdate.mockResolvedValue({
       id: "user_123",
       name: "Original Name",
@@ -150,8 +142,6 @@ describe("/api/profile route", () => {
   });
 
   it("rejects unsupported profile fields", async () => {
-    mockResolveSupportedLocaleTag.mockReturnValue(null);
-
     const response = await PATCH(new NextRequest("https://example.com/api/profile", {
       method: "PATCH",
       body: JSON.stringify({ nationality: "not-a-locale" }),
@@ -160,5 +150,28 @@ describe("/api/profile route", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "invalid_nationality" });
     expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
+  it("accepts an STT language outside the primary UI locale list", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: "Original Name",
+      image: null,
+      displayName: null,
+      bio: null,
+      nationality: "cy",
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nationality: " cy " }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: { nationality: "cy" },
+    }));
   });
 });

@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
-import { resolveSupportedLocaleTag } from "@/i18n/config";
 import { prisma } from "@/lib/prisma";
+import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 
 export const runtime = "nodejs";
 
@@ -75,9 +75,11 @@ function normalizeNationality(value: unknown): { value: string | null; valid: bo
   const normalized = value.trim();
   if (!normalized) return { value: null, valid: true };
 
+  const languageCode = canonicalizeSttLanguageCode(normalized);
+
   return {
-    value: resolveSupportedLocaleTag(normalized),
-    valid: Boolean(resolveSupportedLocaleTag(normalized)),
+    value: languageCode || null,
+    valid: Boolean(languageCode),
   };
 }
 

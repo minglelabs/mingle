@@ -77,7 +77,7 @@ export const itDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "Inserisci il tuo nome",
     bioLabel: "Bio",
     bioPlaceholder: "Parlaci di te",
-    nationalityLabel: "Paese",
+    nationalityLabel: "Lingua principale",
     saveAction: "Salva",
     cancelAction: "Annulla",
     profileSaveError: "Impossibile salvare il profilo.",

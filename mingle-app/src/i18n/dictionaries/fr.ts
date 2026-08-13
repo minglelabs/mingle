@@ -77,7 +77,7 @@ export const frDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "Saisissez votre nom",
     bioLabel: "Présentation",
     bioPlaceholder: "Parlez-nous de vous",
-    nationalityLabel: "Pays",
+    nationalityLabel: "Langue principale",
     saveAction: "Enregistrer",
     cancelAction: "Annuler",
     profileSaveError: "Impossible d'enregistrer votre profil.",

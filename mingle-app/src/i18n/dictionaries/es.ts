@@ -77,7 +77,7 @@ export const esDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "Escribe tu nombre",
     bioLabel: "Biografía",
     bioPlaceholder: "Cuéntanos algo sobre ti",
-    nationalityLabel: "País",
+    nationalityLabel: "Idioma principal",
     saveAction: "Guardar",
     cancelAction: "Cancelar",
     profileSaveError: "No se pudo guardar el perfil.",

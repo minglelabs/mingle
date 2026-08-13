@@ -77,7 +77,7 @@ export const jaDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "名前を入力してください",
     bioLabel: "自己紹介",
     bioPlaceholder: "自己紹介を入力してください",
-    nationalityLabel: "国",
+    nationalityLabel: "主な言語",
     saveAction: "保存",
     cancelAction: "キャンセル",
     profileSaveError: "プロフィールを保存できませんでした。",

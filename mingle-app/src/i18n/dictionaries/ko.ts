@@ -89,7 +89,7 @@ export const koDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "이름을 입력하세요",
     bioLabel: "소개",
     bioPlaceholder: "나를 소개해 주세요",
-    nationalityLabel: "국가",
+    nationalityLabel: "주 사용 언어",
     saveAction: "저장",
     cancelAction: "취소",
     profileSaveError: "프로필 저장에 실패했습니다.",

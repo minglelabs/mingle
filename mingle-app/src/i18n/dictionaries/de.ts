@@ -77,7 +77,7 @@ export const deDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "Namen eingeben",
     bioLabel: "Über mich",
     bioPlaceholder: "Erzählen Sie etwas über sich",
-    nationalityLabel: "Land",
+    nationalityLabel: "Hauptsprache",
     saveAction: "Speichern",
     cancelAction: "Abbrechen",
     profileSaveError: "Profil konnte nicht gespeichert werden.",

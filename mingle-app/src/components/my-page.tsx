@@ -3,11 +3,12 @@
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
 import { ChevronLeft, FileText, Loader2, Menu, ShieldOff, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -25,7 +26,7 @@ type ProfileRecord = {
 type ProfileDraft = {
   displayName: string;
   bio: string;
-  nationality: AppLocale;
+  nationality: SttLanguageCode;
 };
 
 const PROFILE_EDIT_TRANSITION = {
@@ -70,31 +71,33 @@ type ReportRecord = {
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
 
-const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: string }> = [
-  { locale: "ko", label: "한국어", flag: "🇰🇷" },
-  { locale: "ja", label: "日本語", flag: "🇯🇵" },
-  { locale: "en", label: "English", flag: "🇺🇸" },
-  { locale: "zh-CN", label: "简体中文", flag: "🇨🇳" },
-  { locale: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
-  { locale: "fr", label: "Français", flag: "🇫🇷" },
-  { locale: "de", label: "Deutsch", flag: "🇩🇪" },
-  { locale: "es", label: "Español", flag: "🇪🇸" },
-  { locale: "pt", label: "Português", flag: "🇧🇷" },
-  { locale: "it", label: "Italiano", flag: "🇮🇹" },
-  { locale: "ru", label: "Русский", flag: "🇷🇺" },
-  { locale: "ar", label: "العربية", flag: "🇸🇦" },
-  { locale: "hi", label: "हिन्दी", flag: "🇮🇳" },
-  { locale: "th", label: "ภาษาไทย", flag: "🇹🇭" },
-  { locale: "vi", label: "Tiếng Việt", flag: "🇻🇳" },
-];
+const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
+  STT_LANGUAGE_OPTIONS.map(({ code, englishName, flag }) => ({
+    locale: code,
+    label: englishName,
+    flag,
+  }));
 
 function getNationalityOption(value: string | null | undefined) {
-  const normalized = value === "zh" ? "zh-CN" : value;
+  const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
   return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
 }
 
-function getFallbackNationality(locale: AppLocale): AppLocale {
+function getFallbackNationality(locale: AppLocale): SttLanguageCode {
   return getNationalityOption(locale)?.locale ?? "ko";
+}
+
+function getLocalizedLanguageLabel(
+  locale: AppLocale,
+  languageCode: SttLanguageCode,
+  fallbackLabel: string,
+): string {
+  try {
+    const displayNames = new Intl.DisplayNames([locale], { type: "language" });
+    return displayNames.of(languageCode)?.trim() || fallbackLabel;
+  } catch {
+    return fallbackLabel;
+  }
 }
 
 function ProfileAvatar({
@@ -449,6 +452,7 @@ function ProfileSettingsPanel({
 
 function ProfileEditPanel({
   dictionary,
+  locale,
   imageUrl,
   initialBio,
   initialDisplayName,
@@ -458,10 +462,11 @@ function ProfileEditPanel({
   open,
 }: {
   dictionary: AppDictionary;
+  locale: AppLocale;
   imageUrl?: string | null;
   initialBio: string;
   initialDisplayName: string;
-  initialNationality: AppLocale;
+  initialNationality: SttLanguageCode;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<boolean>;
   open: boolean;
@@ -471,7 +476,7 @@ function ProfileEditPanel({
   const isLeavingRef = useRef(false);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [bio, setBio] = useState(initialBio);
-  const [nationality, setNationality] = useState<AppLocale>(initialNationality);
+  const [nationality, setNationality] = useState<SttLanguageCode>(initialNationality);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const copy = {
@@ -480,11 +485,18 @@ function ProfileEditPanel({
     namePlaceholder: dictionary.profile.profileNamePlaceholder ?? "Enter your name",
     bioLabel: dictionary.profile.bioLabel ?? "Bio",
     bioPlaceholder: dictionary.profile.bioPlaceholder ?? "Tell us about yourself",
-    nationalityLabel: dictionary.profile.nationalityLabel ?? "Country",
+    nationalityLabel: dictionary.profile.nationalityLabel ?? "Primary language",
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
     saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
   };
+  const localizedLanguageOptions = useMemo(
+    () => LANGUAGE_OPTIONS.map((option) => ({
+      ...option,
+      label: getLocalizedLanguageLabel(locale, option.locale, option.label),
+    })),
+    [locale],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -635,7 +647,7 @@ function ProfileEditPanel({
               <fieldset>
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
                 <div className="grid grid-cols-3 gap-2">
-                  {LANGUAGE_OPTIONS.map((option) => {
+                  {localizedLanguageOptions.map((option) => {
                     const selected = nationality === option.locale;
                     return (
                       <button
@@ -745,6 +757,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <ProfileEditPanel
         dictionary={dictionary}
+        locale={locale}
         imageUrl={session?.user?.image}
         initialBio={profile.bio ?? ""}
         initialDisplayName={displayName}

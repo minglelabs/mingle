@@ -89,7 +89,7 @@ export const enDictionary: BaseAppDictionarySource = {
     profileNamePlaceholder: "Enter your name",
     bioLabel: "Bio",
     bioPlaceholder: "Tell us about yourself",
-    nationalityLabel: "Country",
+    nationalityLabel: "Primary language",
     saveAction: "Save",
     cancelAction: "Cancel",
     profileSaveError: "Could not save your profile.",
