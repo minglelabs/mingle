@@ -56,6 +56,7 @@ model User {
   conversationChannels AppConversationChannel[]
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
+  @@index([createdAt], map: "app_users_created_at_idx")
   @@map("app_users")
 }
 

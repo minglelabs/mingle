@@ -1,0 +1,186 @@
+import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-auth";
+import {
+  ADMIN_DASHBOARD_CHART_HEIGHT,
+  ADMIN_DASHBOARD_CHART_WIDTH,
+  ADMIN_DASHBOARD_RANGE_OPTIONS,
+  type DashboardMetric,
+  buildChartGeometry,
+  buildCumulativeSeries,
+  formatMetricDisplayValue,
+  normalizeDashboardDays,
+  resolveAdminDashboardRange,
+} from "@/lib/admin-dashboard-metrics";
+import { loadAdminDashboardMetrics } from "@/lib/admin-dashboard-query";
+import { LineChartCard } from "./line-chart-card";
+import { RangeNav } from "./range-nav";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Mingle Admin Dashboard",
+};
+
+const CHART_COLOR = "#2a78d6";
+const SECONDARY_COLOR = "#eb6834";
+const CUMULATIVE_COLOR = "#1baf7a";
+
+type DashboardPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function takeFirst(value: string | string[] | undefined): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value[0] ?? "";
+  return "";
+}
+
+async function isAdminAuthenticated(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return verifyAdminSessionToken(cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value);
+}
+
+function DailyChart({ metric }: { metric: DashboardMetric }) {
+  // Both series share one y-scale (same unit, e.g. ms) -- computed together so
+  // p95 (always >= avg) doesn't get clipped against a scale sized only for avg.
+  const combinedForScale = metric.secondarySeries
+    ? [...metric.points, ...metric.secondarySeries.points]
+    : metric.points;
+  const scaleGeometry = buildChartGeometry(combinedForScale, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
+  const geometry = buildChartGeometry(metric.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax);
+  const secondaryGeometry = metric.secondarySeries
+    ? buildChartGeometry(metric.secondarySeries.points, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT, scaleGeometry.yMax)
+    : null;
+
+  return (
+    <LineChartCard
+      label={metric.label}
+      kind={metric.kind}
+      ariaLabel={`${metric.label} 일별 추이`}
+      points={geometry.points}
+      linePath={geometry.linePath}
+      areaPath={geometry.areaPath}
+      yMax={geometry.yMax}
+      color={CHART_COLOR}
+      secondary={metric.secondarySeries && secondaryGeometry ? {
+        label: metric.secondarySeries.label,
+        points: secondaryGeometry.points,
+        linePath: secondaryGeometry.linePath,
+        areaPath: secondaryGeometry.areaPath,
+        color: SECONDARY_COLOR,
+      } : undefined}
+    />
+  );
+}
+
+function CumulativeChart({ metric }: { metric: DashboardMetric }) {
+  const cumulativePoints = buildCumulativeSeries(metric.points);
+  const geometry = buildChartGeometry(cumulativePoints, ADMIN_DASHBOARD_CHART_WIDTH, ADMIN_DASHBOARD_CHART_HEIGHT);
+  const total = cumulativePoints[cumulativePoints.length - 1]?.value ?? null;
+  const totalDisplay = formatMetricDisplayValue(total, metric.kind);
+
+  return (
+    <LineChartCard
+      label={metric.label}
+      kind={metric.kind}
+      ariaLabel={`${metric.label} 누적 추이`}
+      points={geometry.points}
+      linePath={geometry.linePath}
+      areaPath={geometry.areaPath}
+      yMax={geometry.yMax}
+      color={CUMULATIVE_COLOR}
+      footer={`누적 합계 ${totalDisplay}`}
+    />
+  );
+}
+
+function MetricsTable({ metrics }: { metrics: DashboardMetric[] }) {
+  const dayKeys = metrics[0]?.points.map((point) => point.day) ?? [];
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[#e5e3dc] bg-white shadow-sm">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead>
+          <tr className="border-b border-[#e5e3dc] bg-[#f4f3ee] text-xs font-semibold uppercase tracking-wide text-[#898781]">
+            <th className="px-3 py-2">날짜</th>
+            {metrics.map((metric) => (
+              <th className="px-3 py-2" key={metric.key}>{metric.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dayKeys.map((day, rowIndex) => (
+            <tr className="border-b border-[#ece9e0] last:border-0" key={day}>
+              <td className="px-3 py-1.5 font-medium text-[#0b0b0b]" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {day}
+              </td>
+              {metrics.map((metric) => {
+                const value = metric.points[rowIndex]?.value ?? null;
+                return (
+                  <td className="px-3 py-1.5 text-[#52514e]" key={metric.key} style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {formatMetricDisplayValue(value, metric.kind)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default async function AdminDashboardPage({ searchParams }: DashboardPageProps) {
+  if (!(await isAdminAuthenticated())) {
+    redirect("/admin");
+  }
+
+  const params = await searchParams;
+  const days = normalizeDashboardDays(takeFirst(params.days));
+  const range = resolveAdminDashboardRange(new Date(), days);
+  const metrics = await loadAdminDashboardMetrics(range);
+  const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
+
+  return (
+    <main className="h-svh w-full overflow-y-auto bg-[#f9f9f7] text-[#0b0b0b]">
+      <header className="border-b border-[#e5e3dc] bg-white">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-5">
+          <h1 className="text-2xl font-semibold text-[#0b0b0b]">서비스 대시보드</h1>
+          <Link
+            className="inline-flex h-10 items-center justify-center rounded-md border border-[#e5e3dc] bg-white px-4 text-sm font-semibold text-[#52514e] transition hover:bg-[#f4f3ee]"
+            href="/admin"
+          >
+            피드백함으로
+          </Link>
+        </div>
+      </header>
+
+      <RangeNav options={ADMIN_DASHBOARD_RANGE_OPTIONS} activeDays={days} />
+
+      <section className="mx-auto mt-6 w-full max-w-6xl px-4">
+        <h2 className="mb-2 text-sm font-semibold text-[#52514e]">일자별 추이</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {metrics.map((metric) => (
+            <DailyChart key={metric.key} metric={metric} />
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto mt-8 w-full max-w-6xl px-4">
+        <h2 className="mb-2 text-sm font-semibold text-[#52514e]">누적 추이</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {cumulativeMetrics.map((metric) => (
+            <CumulativeChart key={metric.key} metric={metric} />
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto mt-8 mb-6 w-full max-w-6xl px-4 pb-6">
+        <h2 className="mb-2 text-sm font-semibold text-[#52514e]">표로 보기</h2>
+        <MetricsTable metrics={metrics} />
+      </section>
+    </main>
+  );
+}
