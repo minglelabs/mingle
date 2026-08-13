@@ -7,7 +7,11 @@ import {
 } from "@/lib/app-conversations";
 import { getDictionary } from "@/i18n";
 import type { AppLocale } from "@/i18n/config";
-import { getAuthOptions, isGoogleOAuthConfigured } from "@/lib/auth-options";
+import {
+  getAuthOptions,
+  isAppleOAuthConfigured,
+  isGoogleOAuthConfigured,
+} from "@/lib/auth-options";
 import {
   findUserIdForIdentity,
   normalizeSessionUserIdentity,
@@ -87,7 +91,7 @@ export default async function V110ConversationsEntry({
       initialNativeConversationBottomInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeConversationBottomInsetPx"))}
       initialTrackingExternalUserId={identity.externalUserId}
       initialTrackingSessionKey={identity.sessionKey}
-      appleOAuthEnabled={false}
+      appleOAuthEnabled={isAppleOAuthConfigured()}
       googleOAuthEnabled={isGoogleOAuthConfigured()}
     />
   );

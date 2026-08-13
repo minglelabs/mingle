@@ -73,8 +73,9 @@ export type MingleHomeRef = {
   isSttSessionRunning: () => boolean;
 };
 
-// Keep auth implementation intact for future re-enable, but disable auth gate for App Review.
-const REQUIRE_AUTH_FOR_TRANSLATOR = false;
+// Conversation rooms require an authenticated account so the existing Apple,
+// Google, and email sign-in surface is available before translation starts.
+const REQUIRE_AUTH_FOR_TRANSLATOR = true;
 
 const NATIVE_AUTH_EVENT = "mingle:native-auth";
 const NATIVE_AUTH_FLOW_TIMEOUT_MS = 86_400_000; // 24 hours — OAuth flows should allow ample time for completion
