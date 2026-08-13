@@ -6,7 +6,7 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatUsername, USERNAME_MAX_LENGTH } from "@/lib/usernames";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
-import { ChevronLeft, FileText, Loader2, LogOut, Menu, ShieldOff, UserRound, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, LogOut, Menu, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -187,6 +187,7 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
   const copy = {
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
@@ -216,7 +217,11 @@ function ProfileSettingsPanel({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setManagementPage(null);
+      return;
+    }
+
     let cancelled = false;
     setBlocks([]);
     setReports([]);
@@ -318,9 +323,13 @@ function ProfileSettingsPanel({
     if (info.offset.x >= Math.max(72, viewportWidth * 0.2) || info.velocity.x >= 650) onClose();
   }, [onClose, viewportWidth]);
 
+  const handleManagementDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.x >= Math.max(72, viewportWidth * 0.2) || info.velocity.x >= 650) setManagementPage(null);
+  }, [viewportWidth]);
+
   return (
     <AnimatePresence>
-      {open ? (
+      {open && !managementPage ? (
         <motion.section
           initial={{ x: "100%" }}
           animate={{ x: 0 }}
@@ -357,104 +366,26 @@ function ProfileSettingsPanel({
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
-            {isLoading ? (
-              <div className="flex justify-center pt-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-label={copy.loading} /></div>
-            ) : (
-              <div className="space-y-8">
-                <section>
-                  <div className="mb-3 flex items-center gap-2">
-                    <ShieldOff size={18} className="text-gray-500" aria-hidden="true" />
-                    <h3 className="text-[15px] font-bold">{copy.blocked}</h3>
-                  </div>
-                  {requiresAuthentication || blocksLoadState === "unauthorized" ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
-                  ) : blocksLoadState === "error" ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
-                  ) : blocks.length === 0 ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noBlocked}</p>
-                  ) : (
-                    <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
-                      {blocks.map((block) => {
-                        const name = block.user.displayName?.trim() || block.user.name?.trim() || copy.userFallback;
-                        const username = formatUsername(block.user.username);
-                        return (
-                          <li key={block.id} className="flex items-center gap-3 px-3 py-3">
-                            <UserMiniAvatar image={block.user.image} label={name} />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-[14px] font-semibold">{name}</p>
-                              {username ? <p className="truncate text-[12px] text-gray-500">{username}</p> : null}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => void handleUnblock(block.user.id)}
-                              disabled={unblockingId === block.user.id}
-                              className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-[12px] font-semibold text-gray-700 transition active:bg-gray-50 disabled:opacity-50"
-                            >
-                              {unblockingId === block.user.id ? "…" : copy.unblock}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-
-                <section>
-                  <div className="mb-3 flex items-center gap-2">
-                    <FileText size={18} className="text-gray-500" aria-hidden="true" />
-                    <h3 className="text-[15px] font-bold">{copy.reports}</h3>
-                  </div>
-                  {requiresAuthentication || reportsLoadState === "unauthorized" ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
-                  ) : reportsLoadState === "error" ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
-                  ) : reports.length === 0 ? (
-                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noReports}</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {reports.map((report) => {
-                        const name = report.reportedUser.displayName?.trim() || report.reportedUser.name?.trim() || copy.userFallback;
-                        const username = formatUsername(report.reportedUser.username);
-                        const statusLabel = report.status === "resolved"
-                          ? (dictionary.profile.reportStatusResolved ?? "Resolved")
-                          : report.status === "rejected"
-                            ? (dictionary.profile.reportStatusRejected ?? "Rejected")
-                            : report.status === "in_review"
-                              ? (dictionary.profile.reportStatusInReview ?? "In review")
-                              : copy.pending;
-                        const expanded = expandedReportId === report.id;
-                        return (
-                          <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate text-[14px] font-semibold">{name}</p>
-                                  {username ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{username}</p> : null}
-                                  <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
-                                </div>
-                                <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
-                              </div>
-                            </button>
-                            {expanded ? (
-                              <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
-                                {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
-                                {report.replies.map((reply) => (
-                                  <div key={reply.id} className="rounded-lg bg-white px-3 py-2">
-                                    <p className="mb-1 text-[11px] font-semibold text-emerald-600">{copy.teamReply}</p>
-                                    <p className="whitespace-pre-wrap text-gray-700">{reply.message}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-
-              </div>
-            )}
+            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <button
+                type="button"
+                onClick={() => setManagementPage("blocked")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <UserRoundX size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.blocked}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setManagementPage("reports")}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Siren size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.reports}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+            </div>
             <button
               type="button"
               onClick={onSignOut}
@@ -466,6 +397,140 @@ function ProfileSettingsPanel({
             </button>
           </div>
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
+            <X size={18} aria-hidden="true" />
+          </button>
+        </motion.section>
+      ) : null}
+      {open && managementPage ? (
+        <motion.section
+          key={`profile-management-${managementPage}`}
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          drag="x"
+          dragConstraints={{ left: 0, right: viewportWidth }}
+          dragElastic={0.08}
+          dragMomentum={false}
+          onDragEnd={handleManagementDragEnd}
+          className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+          style={{ touchAction: "pan-y" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={managementPage === "blocked" ? copy.blocked : copy.reports}
+        >
+          <header
+            className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+            style={{
+              height: "calc(54px + env(safe-area-inset-top, 44px))",
+              paddingTop: "env(safe-area-inset-top, 44px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setManagementPage(null)}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={copy.close}
+            >
+              <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <h2 className="truncate text-center text-[17px] font-bold">
+              {managementPage === "blocked" ? copy.blocked : copy.reports}
+            </h2>
+            <div aria-hidden="true" />
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
+            {isLoading ? (
+              <div className="flex justify-center pt-8 text-gray-400">
+                <Loader2 size={24} className="animate-spin" aria-label={copy.loading} />
+              </div>
+            ) : managementPage === "blocked" ? (
+              requiresAuthentication || blocksLoadState === "unauthorized" ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+              ) : blocksLoadState === "error" ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+              ) : blocks.length === 0 ? (
+                <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noBlocked}</p>
+              ) : (
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+                  {blocks.map((block) => {
+                    const name = block.user.displayName?.trim() || block.user.name?.trim() || copy.userFallback;
+                    const username = formatUsername(block.user.username);
+                    return (
+                      <li key={block.id} className="flex items-center gap-3 px-3 py-3">
+                        <UserMiniAvatar image={block.user.image} label={name} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-semibold">{name}</p>
+                          {username ? <p className="truncate text-[12px] text-gray-500">{username}</p> : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleUnblock(block.user.id)}
+                          disabled={unblockingId === block.user.id}
+                          className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-[12px] font-semibold text-gray-700 transition active:bg-gray-50 disabled:opacity-50"
+                        >
+                          {unblockingId === block.user.id ? "…" : copy.unblock}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : requiresAuthentication || reportsLoadState === "unauthorized" ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+            ) : reportsLoadState === "error" ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+            ) : reports.length === 0 ? (
+              <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noReports}</p>
+            ) : (
+              <div className="space-y-3">
+                {reports.map((report) => {
+                  const name = report.reportedUser.displayName?.trim() || report.reportedUser.name?.trim() || copy.userFallback;
+                  const username = formatUsername(report.reportedUser.username);
+                  const statusLabel = report.status === "resolved"
+                    ? (dictionary.profile.reportStatusResolved ?? "Resolved")
+                    : report.status === "rejected"
+                      ? (dictionary.profile.reportStatusRejected ?? "Rejected")
+                      : report.status === "in_review"
+                        ? (dictionary.profile.reportStatusInReview ?? "In review")
+                        : copy.pending;
+                  const expanded = expandedReportId === report.id;
+                  return (
+                    <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                      <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[14px] font-semibold">{name}</p>
+                            {username ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{username}</p> : null}
+                            <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
+                        </div>
+                      </button>
+                      {expanded ? (
+                        <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
+                          {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
+                          {report.replies.map((reply) => (
+                            <div key={reply.id} className="rounded-lg bg-white px-3 py-2">
+                              <p className="mb-1 text-[11px] font-semibold text-emerald-600">{copy.teamReply}</p>
+                              <p className="whitespace-pre-wrap text-gray-700">{reply.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setManagementPage(null)}
+            className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100"
+            aria-label={copy.close}
+          >
             <X size={18} aria-hidden="true" />
           </button>
         </motion.section>

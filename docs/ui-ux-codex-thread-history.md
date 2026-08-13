@@ -413,3 +413,9 @@
 - Surface: Explore tab search field.
 - Issue: The search field started immediately below the safe-area inset, so it felt attached to the status bar and visually tighter than the Instagram-like reference.
 - Resolution: Added a 12px top inset after the safe-area padding while keeping the existing field size, horizontal padding, focus state, and bottom spacing unchanged.
+
+## 2026-08-14 - My Page safety management subpages
+
+- Surface: My Page hamburger menu, blocked-user management, and report history.
+- Issue: The hamburger panel rendered both potentially long management lists inline, making the menu act like a history page instead of a compact navigation surface.
+- Resolution: Replaced the inline lists with two menu rows that open dedicated right-to-left subpages. The blocked-user row uses the `UserRoundX` icon, the report-history row uses the `Siren` icon, and each subpage supports the existing back button and horizontal swipe-to-dismiss behavior. Unblocking and report-reply viewing remain available inside their respective subpages.
