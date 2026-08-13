@@ -22,6 +22,7 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { Loader2, MessageCirclePlus, PencilLine, Search, Trash2 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
   formatLivePhoneDemoMessageCount,
@@ -1577,6 +1578,7 @@ export default function ConversationList({
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
+  const { status: sessionStatus } = useSession();
   const initialConversationToOpen = initialConversationIdToOpen
     ? initialConversations.find((conversation) => conversation.id === initialConversationIdToOpen) ?? null
     : null;
@@ -2613,6 +2615,16 @@ export default function ConversationList({
   }, [conversations]);
 
   useEffect(() => {
+    if (sessionStatus !== "unauthenticated") return;
+
+    // Do not leave the previous account's rows available underneath the
+    // authentication gate or merge them into the next authenticated refresh.
+    setConversations([]);
+    setConversationInterimPreviews({});
+    setConversationLocalStats({});
+  }, [sessionStatus]);
+
+  useEffect(() => {
     refreshConversationLocalStats(conversations);
   }, [conversations, refreshConversationLocalStats]);
 
@@ -2897,7 +2909,8 @@ export default function ConversationList({
     let timeoutId: number | null = null;
 
     const shouldRefreshInitialConversations = initialConversationsRequireRefresh
-      || initialConversations.length === 0;
+      || initialConversations.length === 0
+      || sessionStatus === "authenticated";
     if (!shouldRefreshInitialConversations) {
       refreshConversationLocalStats(conversationsRef.current);
       setIsHydratingConversations(false);
@@ -2921,6 +2934,10 @@ export default function ConversationList({
         });
     };
 
+    if (sessionStatus === "authenticated" && conversationsRef.current.length === 0) {
+      setIsHydratingConversations(true);
+    }
+
     if (initialConversationsRequireRefresh && initialConversations.length > 0) {
       timeoutId = window.setTimeout(runRefresh, 250);
     } else {
@@ -2938,6 +2955,7 @@ export default function ConversationList({
     initialConversationsRequireRefresh,
     refreshConversationList,
     refreshConversationLocalStats,
+    sessionStatus,
   ]);
 
   useEffect(() => {
@@ -3765,6 +3783,31 @@ export default function ConversationList({
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+
+      {sessionStatus !== "authenticated" ? (
+        <div
+          className="absolute inset-0 z-[200] flex min-h-0 w-full overflow-hidden bg-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label={dictionary.profile.authTitle}
+        >
+          <Suspense
+            fallback={(
+              <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">
+                <Loader2 size={24} className="animate-spin" aria-hidden />
+              </div>
+            )}
+          >
+            <MingleHome
+              authOnly
+              dictionary={dictionary}
+              appleOAuthEnabled={appleOAuthEnabled}
+              googleOAuthEnabled={googleOAuthEnabled}
+              locale={locale}
+            />
+          </Suspense>
+        </div>
+      ) : null}
 
       {isClientReady ? (
         <SearchOverlay

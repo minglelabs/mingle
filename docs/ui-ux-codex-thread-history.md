@@ -389,3 +389,13 @@
 - Issue: A horizontal swipe ending while the profile-share panel was being removed could call Framer Motion's `controls.start()` after the component had unmounted.
 - User impact: The browser console showed a lifecycle warning during swipe navigation, and the return animation could race with route teardown.
 - Resolution: Track the panel mount lifecycle and guard both drag-snapback and back-navigation animation calls. Navigation now runs only if the panel remains mounted after the exit animation completes.
+
+## 2026-08-14 - App-start authentication gate and My Page sign-out
+
+- Surface: App startup conversation list and the My Page menu/settings panel.
+- Issue: The existing authentication UI was mounted only inside a conversation room, so an unauthenticated user could see the conversation list and did not encounter sign-in until creating or opening a room. The My Page menu also had no sign-out action.
+- User impact: Authentication felt delayed and inconsistent with the account-required translator flow, and users had no clear way to end the current session from My Page.
+- Resolution:
+  - Reused the existing authentication surface as an app-start gate over the conversation list while the session is loading or unauthenticated. Authenticated users pass through automatically without an extra login step.
+  - After authentication becomes available, the conversation list performs a fresh session-backed refresh so a guest/empty initial list does not remain visible after sign-in.
+  - Added a sign-out action to the My Page menu/settings panel. Sign-out returns to the native-aware conversation-list tab root and suppresses stale room restoration.

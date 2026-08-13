@@ -5,8 +5,8 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
-import { ChevronLeft, FileText, Loader2, Menu, ShieldOff, UserRound, X } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { ChevronLeft, FileText, Loader2, LogOut, Menu, ShieldOff, UserRound, X } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -161,12 +161,14 @@ function ProfileSettingsPanel({
   dictionary,
   locale,
   onClose,
+  onSignOut,
   open,
   sessionStatus,
 }: {
   dictionary: AppDictionary;
   locale: AppLocale;
   onClose: () => void;
+  onSignOut: () => void;
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
@@ -192,6 +194,7 @@ function ProfileSettingsPanel({
     loading: locale === "ko" ? "불러오는 중..." : "Loading...",
     loadError: locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity.",
     authRequired: locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history.",
+    logout: dictionary.profile.logout,
     reportedUser: locale === "ko" ? "신고한 사용자" : "Reported user",
     myMessage: locale === "ko" ? "신고 내용" : "Your report",
     teamReply: locale === "ko" ? "운영진 답변" : "Team reply",
@@ -438,8 +441,18 @@ function ProfileSettingsPanel({
                     </div>
                   )}
                 </section>
+
               </div>
             )}
+            <button
+              type="button"
+              onClick={onSignOut}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-slate-700 transition active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
+              {copy.logout}
+            </button>
           </div>
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
             <X size={18} aria-hidden="true" />
@@ -702,6 +715,10 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     ?? getFallbackNationality(locale);
   const nationalityFlag = getNationalityOption(nationality)?.flag;
   const profileShareHref = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
+  const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, {
+    skipConversationRestore: true,
+    tabRoot: true,
+  });
   const comingSoonLabel = dictionary.profile.comingSoonLabel
     ?? (locale === "ko" ? "기능 준비중입니다." : "Coming soon.");
 
@@ -753,6 +770,10 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     }
   }, []);
 
+  const handleSignOut = useCallback(() => {
+    void signOut({ callbackUrl: signOutCallbackUrl });
+  }, [signOutCallbackUrl]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
       <ProfileEditPanel
@@ -770,6 +791,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         dictionary={dictionary}
         locale={locale}
         onClose={() => setShowProfileSettings(false)}
+        onSignOut={handleSignOut}
         open={showProfileSettings}
         sessionStatus={sessionStatus}
       />

@@ -48,6 +48,8 @@ type MingleHomeProps = {
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
+  /** Render only the existing authentication surface without mounting a room. */
+  authOnly?: boolean;
   enableNativeBannerBridge?: boolean;
   onStartRecordingRequested?: () => Promise<{
     switchedFromLiveConversation: boolean;
@@ -1739,6 +1741,10 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
         ) : null}
       </main>
     );
+  }
+
+  if (props.authOnly) {
+    return null;
   }
 
   return (
