@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client/index";
 import type { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { buildDefaultUsername } from "@/lib/usernames";
 
 const USER_COOKIE_KEY = "mingle_uid";
 const SESSION_COOKIE_KEY = "mingle_sid";
@@ -235,6 +236,7 @@ export async function upsertTrackedUser(args: {
     where: { externalUserId: tracking.externalUserId },
     create: {
       externalUserId: tracking.externalUserId,
+      username: buildDefaultUsername({ id: tracking.externalUserId }),
       latestIpAddress: tracking.ipAddress ?? undefined,
       latestUserAgent: latestUserAgent ?? undefined,
       language: language ?? undefined,

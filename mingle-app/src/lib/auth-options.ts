@@ -1,5 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
-import type { Adapter } from "next-auth/adapters";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
 import AppleProvider from "next-auth/providers/apple";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
@@ -8,6 +8,7 @@ import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultUsername } from "@/lib/usernames";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -64,70 +65,73 @@ async function upsertUserForCredentialsSignIn(args: {
   const normalizedName = normalizeDisplayName(args.name);
   const normalizedExternalUserId = normalizeUserId(args.externalUserIdHint);
   const now = new Date();
+  const select = {
+    id: true,
+    name: true,
+    email: true,
+    externalUserId: true,
+  } as const;
 
   if (idHint) {
-    return prisma.user.upsert({
-      where: { id: idHint },
-      create: {
-        id: idHint,
-        email: normalizedEmail ?? undefined,
-        name: normalizedName ?? "Mingle User",
-        externalUserId: normalizedExternalUserId ?? idHint,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      },
-      update: {
-        email: normalizedEmail ?? undefined,
-        name: normalizedName ?? undefined,
-        externalUserId: normalizedExternalUserId ?? idHint,
-        lastSeenAt: now,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        externalUserId: true,
-      },
-    });
+    return createWithDefaultUsername(
+      { id: idHint, name: normalizedName, email: normalizedEmail },
+      (username) => prisma.user.upsert({
+        where: { id: idHint },
+        create: {
+          id: idHint,
+          email: normalizedEmail ?? undefined,
+          name: normalizedName ?? "Mingle User",
+          username,
+          externalUserId: normalizedExternalUserId ?? idHint,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          email: normalizedEmail ?? undefined,
+          name: normalizedName ?? undefined,
+          externalUserId: normalizedExternalUserId ?? idHint,
+          lastSeenAt: now,
+        },
+        select,
+      }),
+    );
   }
 
   if (normalizedEmail) {
-    return prisma.user.upsert({
-      where: { email: normalizedEmail },
-      create: {
-        email: normalizedEmail,
+    return createWithDefaultUsername(
+      { name: normalizedName, email: normalizedEmail },
+      (username) => prisma.user.upsert({
+        where: { email: normalizedEmail },
+        create: {
+          email: normalizedEmail,
+          name: normalizedName ?? "Mingle User",
+          username,
+          externalUserId: normalizedExternalUserId ?? undefined,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          name: normalizedName ?? undefined,
+          lastSeenAt: now,
+        },
+        select,
+      }),
+    );
+  }
+
+  return createWithDefaultUsername(
+    { id: normalizedExternalUserId, name: normalizedName },
+    (username) => prisma.user.create({
+      data: {
         name: normalizedName ?? "Mingle User",
+        username,
         externalUserId: normalizedExternalUserId ?? undefined,
         firstSeenAt: now,
         lastSeenAt: now,
       },
-      update: {
-        name: normalizedName ?? undefined,
-        lastSeenAt: now,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        externalUserId: true,
-      },
-    });
-  }
-
-  return prisma.user.create({
-    data: {
-      name: normalizedName ?? "Mingle User",
-      externalUserId: normalizedExternalUserId ?? undefined,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      externalUserId: true,
-    },
-  });
+      select,
+    }),
+  );
 }
 
 const APPLE_OAUTH_SECRET_REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -348,8 +352,27 @@ const oauthTransientCookieOptions = {
   maxAge: 60 * 15,
 };
 
+function createNextAuthAdapter(): Adapter {
+  const adapter = PrismaAdapter(prisma) as Adapter;
+  return {
+    ...adapter,
+    createUser: async (data: Omit<AdapterUser, "id">) => {
+      const user = await createWithDefaultUsername(
+        { name: data.name, email: data.email },
+        (username) => prisma.user.create({
+          data: {
+            ...data,
+            username,
+          },
+        }),
+      );
+      return user as unknown as AdapterUser;
+    },
+  };
+}
+
 const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
-  adapter: PrismaAdapter(prisma) as Adapter,
+  adapter: createNextAuthAdapter(),
   debug: authDebugEnabled,
   logger: {
     error(code, metadata) {
@@ -394,23 +417,27 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
       const now = new Date();
       const email = normalizeEmail(user?.email);
       const name = normalizeDisplayName(user?.name);
-      await prisma.user.upsert({
-        where: { id: userId },
-        create: {
-          id: userId,
-          email: email ?? undefined,
-          name: name ?? "Mingle User",
-          externalUserId: userId,
-          firstSeenAt: now,
-          lastSeenAt: now,
-        },
-        update: {
-          email: email ?? undefined,
-          name: name ?? undefined,
-          externalUserId: userId,
-          lastSeenAt: now,
-        },
-      });
+      await createWithDefaultUsername(
+        { id: userId, name, email },
+        (username) => prisma.user.upsert({
+          where: { id: userId },
+          create: {
+            id: userId,
+            email: email ?? undefined,
+            name: name ?? "Mingle User",
+            username,
+            externalUserId: userId,
+            firstSeenAt: now,
+            lastSeenAt: now,
+          },
+          update: {
+            email: email ?? undefined,
+            name: name ?? undefined,
+            externalUserId: userId,
+            lastSeenAt: now,
+          },
+        }),
+      );
     },
   },
   callbacks: {

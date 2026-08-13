@@ -405,7 +405,7 @@
 - Surface: Profile editing, My Page, Explore search, public user profiles, and profile sharing.
 - Decision: Store the public identifier as `username` and call it `아이디` in the Korean UI. Render it as `@username`. Keep `User.id` as the private, immutable database identifier and do not use `id` as the public field name.
 - Naming: The editable visible name remains `displayName` and is labeled `이름` in the UI. The existing `name` field is retained as the authentication-provider/legacy source name and fallback; it is not the public handle.
-- Rules: Usernames are normalized to lowercase and may contain only ASCII letters, numbers, `_`, and `.`; the stored value is optional for existing accounts and limited to 30 characters.
+- Rules: Usernames are normalized to lowercase and may contain only ASCII letters, numbers, `_`, and `.`; the stored value is limited to 30 characters and is now required after the follow-up backfill migration below.
 - Resolution: Added unique username persistence, profile editing, username/name search, `@username` display on user surfaces, and profile routes that accept either the existing internal ID or the new username for backward compatibility.
 
 ## 2026-08-14 - Explore search top spacing
@@ -438,3 +438,13 @@
   - Added supplemental locale copy for the app-language screen and the recently added profile edit, profile share, Explore search, public profile, blocked-user, and report-history surfaces across all 15 primary UI locales.
   - Kept the profile editor's `Primary language`/STT language selector backed by `STT_LANGUAGE_OPTIONS`; it is intentionally not reused for the app-language list.
 - Tests: Added coverage that the 15 app-language options and the new social/profile copy resolve for every primary UI locale. Existing i18n and lint checks pass; the repository's full `tsc --noEmit` still reports the two previously known unrelated test typing issues in `language-selector.logic.test.ts` and `get-dictionary.test.ts`.
+
+## 2026-08-14 - Profile primary-language picker and default public handle
+
+- Surface: Profile editing's `Primary language` field, My Page profile summary, and account creation/sign-in persistence.
+- Issue: The profile editor used a compact three-column language grid that did not match the conversation-room language picker and was difficult to scan across the full STT language catalog. Empty bios also showed a sample sentence, making an unset profile look populated. Public `@username` values were optional, so newly created or legacy users could be missing the identifier used by Explore and public profiles.
+- Resolution:
+  - Reused the conversation-room language selector's localized language names, flags, card layout, search normalization, locale-aware sorting, and English A-Z sorting for the profile's single primary STT language choice.
+  - Removed the bio textarea placeholder and stopped rendering the sample bio on My Page when the user has not written one.
+  - Added deterministic default public usernames for email signup, OAuth/native sign-in, and anonymous tracking-user creation. Existing null usernames are backfilled from the account name/email with collision suffixes, then the database field is made `NOT NULL`; users can still change the value later within the existing character rules.
+- Data contract: `User.id` remains the private database identifier; `User.username` is the required public handle, and `User.displayName` remains the editable visible name.

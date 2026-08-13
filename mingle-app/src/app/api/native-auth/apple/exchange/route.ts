@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createNativeAuthBridgeToken, resolveNativeAuthRequestId, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultUsername } from "@/lib/usernames";
 
 export const runtime = "nodejs";
 
@@ -307,20 +308,24 @@ async function upsertNativeAppleUser(args: {
     }
   }
 
-  return prisma.user.create({
-    data: {
-      name: displayName,
-      email: args.email || undefined,
-      externalUserId,
-      firstSeenAt: now,
-      lastSeenAt: now,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-    },
-  });
+  return createWithDefaultUsername(
+    { name: displayName, email: args.email, id: externalUserId },
+    (username) => prisma.user.create({
+      data: {
+        name: displayName,
+        username,
+        email: args.email || undefined,
+        externalUserId,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    }),
+  );
 }
 
 export async function POST(request: NextRequest) {

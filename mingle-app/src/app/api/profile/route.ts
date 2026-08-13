@@ -30,7 +30,7 @@ type ProfileRecord = {
   id: string;
   name: string | null;
   image: string | null;
-  username: string | null;
+  username: string;
   displayName: string | null;
   bio: string | null;
   nationality: string | null;
@@ -122,7 +122,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const data: {
-    username?: string | null;
+    username?: string;
     displayName?: string | null;
     bio?: string | null;
     nationality?: string | null;
@@ -130,7 +130,7 @@ export async function PATCH(request: NextRequest) {
 
   if (Object.prototype.hasOwnProperty.call(body, "username")) {
     const username = normalizeUsername(body.username);
-    if (!username.valid) {
+    if (!username.valid || !username.value) {
       return NextResponse.json({ error: "invalid_username" }, { status: 400 });
     }
     data.username = username.value;

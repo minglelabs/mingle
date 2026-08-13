@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hashPassword, isValidEmail, normalizeEmail, validatePassword } from "@/lib/email-password-auth";
 import { prisma } from "@/lib/prisma";
+import { createWithDefaultUsername } from "@/lib/usernames";
 
 type SignupPayload = {
   email?: unknown;
@@ -57,15 +58,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    await prisma.user.create({
+    await createWithDefaultUsername({ name, email }, (username) => prisma.user.create({
       data: {
         email,
         name,
+        username,
         passwordHash,
         firstSeenAt: now,
         lastSeenAt: now,
       },
-    });
+    }));
   } catch (error: unknown) {
     if (isPrismaUniqueConstraintError(error)) {
       return NextResponse.json({ error: "email_already_registered" }, { status: 409 });

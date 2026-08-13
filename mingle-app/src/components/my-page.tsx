@@ -1,13 +1,23 @@
 "use client";
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import {
+  buildLanguageSelectorItems,
+  filterLanguageSelectorItems,
+  resolveDefaultLanguageSelectorSortMode,
+  resolveLanguageSelectorLocale,
+  resolveLanguageSelectorShowsSortToggle,
+  sortLanguageSelectorItems,
+  type LanguageSelectorSortMode,
+} from "@/components/LivePhoneDemo/language-selector.logic";
+import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatUsername, USERNAME_MAX_LENGTH } from "@/lib/usernames";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
-import { ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -93,19 +103,6 @@ function getNationalityOption(value: string | null | undefined) {
 
 function getFallbackNationality(locale: AppLocale): SttLanguageCode {
   return getNationalityOption(locale)?.locale ?? "ko";
-}
-
-function getLocalizedLanguageLabel(
-  locale: AppLocale,
-  languageCode: SttLanguageCode,
-  fallbackLabel: string,
-): string {
-  try {
-    const displayNames = new Intl.DisplayNames([locale], { type: "language" });
-    return displayNames.of(languageCode)?.trim() || fallbackLabel;
-  } catch {
-    return fallbackLabel;
-  }
 }
 
 function ProfileAvatar({
@@ -651,6 +648,8 @@ function ProfileEditPanel({
   const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(initialBio);
   const [nationality, setNationality] = useState<SttLanguageCode>(initialNationality);
+  const [languageQuery, setLanguageQuery] = useState("");
+  const [languageSortMode, setLanguageSortMode] = useState<LanguageSelectorSortMode>("locale");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const copy = {
@@ -661,7 +660,6 @@ function ProfileEditPanel({
     nameLabel: dictionary.profile.profileNameLabel ?? "Name",
     namePlaceholder: dictionary.profile.profileNamePlaceholder ?? "Enter your name",
     bioLabel: dictionary.profile.bioLabel ?? "Bio",
-    bioPlaceholder: dictionary.profile.bioPlaceholder ?? "Tell us about yourself",
     nationalityLabel: dictionary.profile.nationalityLabel ?? "Primary language",
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
@@ -669,13 +667,24 @@ function ProfileEditPanel({
     usernameTaken: dictionary.profile.usernameTakenMessage ?? (locale === "ko" ? "이미 사용 중인 아이디입니다." : "That username is already taken."),
     usernameInvalid: dictionary.profile.usernameInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
-  const localizedLanguageOptions = useMemo(
-    () => LANGUAGE_OPTIONS.map((option) => ({
-      ...option,
-      label: getLocalizedLanguageLabel(locale, option.locale, option.label),
-    })),
-    [locale],
+  const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
+  const languageLocaleInfo = useMemo(() => resolveLanguageSelectorLocale(locale), [locale]);
+  const defaultLanguageSortMode = useMemo(
+    () => resolveDefaultLanguageSelectorSortMode(languageLocaleInfo.source),
+    [languageLocaleInfo.source],
   );
+  const showLanguageSortToggle = useMemo(
+    () => resolveLanguageSelectorShowsSortToggle(languageLocaleInfo.locale),
+    [languageLocaleInfo.locale],
+  );
+  const languageItems = useMemo(
+    () => buildLanguageSelectorItems(languageLocaleInfo.locale),
+    [languageLocaleInfo.locale],
+  );
+  const visibleLanguageItems = useMemo(() => {
+    const filteredItems = filterLanguageSelectorItems(languageItems, languageQuery);
+    return sortLanguageSelectorItems(filteredItems, languageSortMode, languageLocaleInfo.locale);
+  }, [languageItems, languageLocaleInfo.locale, languageQuery, languageSortMode]);
 
   useEffect(() => {
     if (!open) return;
@@ -683,8 +692,10 @@ function ProfileEditPanel({
     setUsername(initialUsername);
     setBio(initialBio);
     setNationality(initialNationality);
+    setLanguageQuery("");
+    setLanguageSortMode(defaultLanguageSortMode);
     setSaveError(null);
-  }, [initialBio, initialDisplayName, initialNationality, initialUsername, open]);
+  }, [defaultLanguageSortMode, initialBio, initialDisplayName, initialNationality, initialUsername, open]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -838,7 +849,6 @@ function ProfileEditPanel({
                   maxLength={160}
                   rows={3}
                   onChange={(event) => setBio(event.target.value)}
-                  placeholder={copy.bioPlaceholder}
                   className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-[15px] leading-relaxed outline-none transition focus:border-gray-400 focus:bg-white"
                 />
                 <span className="mt-1 block text-right text-[12px] text-gray-400">{bio.length}/160</span>
@@ -846,26 +856,86 @@ function ProfileEditPanel({
 
               <fieldset>
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
-                <div className="grid grid-cols-3 gap-2">
-                  {localizedLanguageOptions.map((option) => {
-                    const selected = nationality === option.locale;
-                    return (
-                      <button
-                        key={option.locale}
-                        type="button"
-                        onClick={() => setNationality(option.locale)}
-                        className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-[13px] transition active:bg-gray-100"
-                        style={{
-                          borderColor: selected ? "#f59e0b" : "#e5e7eb",
-                          backgroundColor: selected ? "#fffbeb" : "#f9fafb",
-                        }}
-                        aria-pressed={selected}
-                      >
-                        <span className="text-lg" aria-hidden="true">{option.flag}</span>
-                        <span className="min-w-0 truncate text-gray-700">{option.label}</span>
-                      </button>
-                    );
-                  })}
+                <div className="rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-stretch gap-3 p-2">
+                    <label
+                      className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+                      style={{ flex: showLanguageSortToggle ? "1 1 0" : "1 1 100%" }}
+                    >
+                      <Search size={18} className="shrink-0 text-slate-400" aria-hidden="true" />
+                      <input
+                        type="search"
+                        value={languageQuery}
+                        onChange={(event) => setLanguageQuery(event.target.value)}
+                        placeholder={languageCopy.languageSelectorSearchPlaceholder}
+                        aria-label={languageCopy.languageSelectorSearchPlaceholder}
+                        className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400"
+                        enterKeyHint="search"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                      />
+                    </label>
+
+                    {showLanguageSortToggle ? (
+                      <div className="min-w-0 rounded-[16px] border border-[#e6dfd2] bg-[#f3eee4] p-1" style={{ flex: "1 1 0" }}>
+                        <div className="flex h-full items-stretch gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setLanguageSortMode("locale")}
+                            className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "locale" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
+                            aria-pressed={languageSortMode === "locale"}
+                          >
+                            {languageCopy.languageSelectorSortLocaleLabel}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLanguageSortMode("alphabetical")}
+                            className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "alphabetical" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
+                            aria-pressed={languageSortMode === "alphabetical"}
+                          >
+                            {languageCopy.languageSelectorSortAlphabeticalLabel}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="max-h-[360px] overflow-y-auto px-2 pb-2">
+                    {visibleLanguageItems.length === 0 ? (
+                      <div className="flex min-h-[160px] items-center justify-center px-6 text-center text-[13px] text-slate-500">
+                        {languageCopy.languageSelectorNoResultsLabel}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {visibleLanguageItems.map((option) => {
+                          const selected = nationality === option.code;
+                          return (
+                            <button
+                              key={option.code}
+                              type="button"
+                              onClick={() => setNationality(option.code)}
+                              className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${selected ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]" : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"}`}
+                              aria-pressed={selected}
+                            >
+                              <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${selected ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]" : "border-[#e5dfd5] bg-[#faf7f1]"}`}>
+                                <span className="text-[2rem] leading-none" aria-hidden="true">{option.flag}</span>
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">{option.localizedName}</span>
+                                <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
+                              </span>
+                              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-amber-500 bg-amber-500 text-white" : "border-slate-300 text-transparent"}`}>
+                                <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 ${selected ? "text-white" : "text-transparent"}`} fill="none">
+                                  <path d="M5.5 12.5L10 17L18.5 8.5" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </fieldset>
 
@@ -898,7 +968,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
   const displayName = profile.displayName?.trim() || fallbackName;
-  const bio = profile.bio?.trim() || dictionary.profile.bio;
+  const bio = profile.bio?.trim() || "";
   const nationality = getNationalityOption(profile.nationality)?.locale
     ?? getFallbackNationality(locale);
   const nationalityFlag = getNationalityOption(nationality)?.flag;
@@ -1044,7 +1114,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
           <div className="mt-4 pl-2">
             <p className="text-[15px] font-semibold text-slate-950">{displayName}</p>
             {profile.username ? <p className="mt-0.5 text-[13px] text-gray-500">{formatUsername(profile.username)}</p> : null}
-            <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p>
+            {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
           </div>
 
           <div className="mt-4 flex gap-2">
