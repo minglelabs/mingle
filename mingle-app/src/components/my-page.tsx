@@ -418,20 +418,22 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
             <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowProfileEdit(true)}
-            className="mt-4 flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-gray-100 text-[13px] font-semibold text-slate-900 transition active:bg-gray-200"
-          >
-            {dictionary.profile.editProfile}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push(profileShareHref)}
-            className="mt-2 flex h-10 w-full items-center justify-center rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
-          >
-            {dictionary.profile.shareProfile}
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowProfileEdit(true)}
+              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-200"
+            >
+              {dictionary.profile.editProfile}
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(profileShareHref)}
+              className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+            >
+              {dictionary.profile.shareProfile}
+            </button>
+          </div>
         </section>
 
         <section className="flex min-h-[220px] items-center justify-center border-t border-gray-200 px-6 text-center">
