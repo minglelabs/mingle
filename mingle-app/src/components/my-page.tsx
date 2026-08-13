@@ -797,17 +797,13 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 pl-2">
             <ProfileAvatar
               alt={dictionary.profile.shareProfile}
               flag={nationalityFlag}
               imageUrl={session?.user?.image}
             />
-            <div className="grid flex-1 grid-cols-3 gap-1 text-center">
-              <div>
-                <p className="text-[18px] font-semibold leading-tight">0</p>
-                <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.postsLabel}</p>
-              </div>
+            <div className="-translate-x-2 grid flex-1 grid-cols-2 gap-1 text-center">
               <div>
                 <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
                 <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.followersLabel}</p>
@@ -819,7 +815,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 pl-2">
             <p className="text-[15px] font-semibold text-slate-950">{displayName}</p>
             <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p>
           </div>

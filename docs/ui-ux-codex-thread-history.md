@@ -14,6 +14,13 @@
 - User impact: The field's meaning did not match the product behavior, and users could select only the small primary-UI locale subset rather than the full speech-language catalog.
 - Resolution: Renamed the visible field to primary language, reused the shared STT language catalog and flags, localized the language names for the active UI locale, and updated profile validation to accept every selectable STT language. Chinese Simplified and Chinese Traditional remain separate selectable speech variants, matching the existing STT selector.
 
+## 2026-08-14 - My Page Profile Header Counts and Alignment
+
+- Surface: My Page profile summary header.
+- Issue: The header displayed a placeholder posts count even though post creation is not available, while the follower/following counts and profile identity block felt horizontally unbalanced.
+- User impact: The placeholder suggested an unavailable feature, and the profile photo, name, and bio appeared too far left relative to the intended composition.
+- Resolution: Removed the posts count, changed the stats row to follower/following only with a slight left adjustment, and added a small right inset to the profile photo, name, and bio.
+
 ## 2026-08-13 - Profile Edit Swipe Snap Behavior
 
 - Surface: `mingle-app/src/components/my-page.tsx` profile edit panel.
