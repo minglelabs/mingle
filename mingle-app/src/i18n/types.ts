@@ -92,6 +92,15 @@ export type BaseAppDictionarySource = {
     comingSoonLabel?: string;
     editProfile: string;
     shareProfile: string;
+    editProfileTitle?: string;
+    profileNameLabel?: string;
+    profileNamePlaceholder?: string;
+    bioLabel?: string;
+    bioPlaceholder?: string;
+    nationalityLabel?: string;
+    saveAction?: string;
+    cancelAction?: string;
+    profileSaveError?: string;
     authTitle: string;
     loginRequiredTitle: string;
     loginRequiredDescription: string;

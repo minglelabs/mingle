@@ -72,11 +72,13 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const motionControls = useAnimationControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const [profileDisplayName, setProfileDisplayName] = useState("");
   const statusTimeoutRef = useRef<number | null>(null);
   const isLeavingRef = useRef(false);
   const isMountedRef = useRef(false);
 
-  const displayName = session?.user?.name?.trim() || dictionary.titles.my;
+  const sessionUserId = session?.user?.id ?? "";
+  const displayName = profileDisplayName || session?.user?.name?.trim() || dictionary.titles.my;
   const profileHandle = displayName.startsWith("@")
     ? displayName
     : `@${displayName.replace(/\s+/g, "")}`;
@@ -97,8 +99,27 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
         copied: "Profile link copied.",
         copyFailed: "Could not copy the profile link.",
         download: "Download",
-        qrScan: "Scan QR code",
-      };
+      qrScan: "Scan QR code",
+    };
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    let cancelled = false;
+    void fetch("/api/profile", { cache: "no-store" })
+      .then(async (response) => (response.ok ? response.json() as Promise<{ displayName?: unknown }> : null))
+      .then((data) => {
+        if (cancelled || typeof data?.displayName !== "string") return;
+        setProfileDisplayName(data.displayName.trim());
+      })
+      .catch(() => {
+        // The session name remains available when profile hydration fails.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUserId]);
 
   const showStatus = useCallback((message: string) => {
     setStatusMessage(message);
