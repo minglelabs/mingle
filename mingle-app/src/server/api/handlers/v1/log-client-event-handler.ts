@@ -133,6 +133,16 @@ export async function handleLogClientEventV1(request: NextRequest) {
         messageMetadata.clientMetadata = clientMetadata
       }
 
+      if (
+        process.env.NODE_ENV !== 'production'
+        && !(typeof clientMetadata?.speaker === 'string' && clientMetadata.speaker.trim())
+      ) {
+        console.warn('[log-client-event] persisting stt_turn_finalized without speaker info', {
+          clientMessageId,
+          sessionKey: tracking.sessionKey,
+        })
+      }
+
       if (!shouldIgnoreDueToConversationClear) {
         const message = await prisma.appMessage.upsert({
           where: {

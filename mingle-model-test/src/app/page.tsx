@@ -36,6 +36,7 @@ type SttModel =
   | 'fireworks'
   | 'chirp-3'
   | 'soniox'
+  | 'soniox-v5'
   | 'elevenlabs'
   | 'speechmatics'
 
@@ -81,15 +82,17 @@ export default function Home() {
   const [volume, setVolume] = useState(0)
   const [utterances, setUtterances] = useState<Utterance[]>([])
   const [partialTranscript, setPartialTranscript] = useState('')
+  const [partialTranslations, setPartialTranslations] = useState<Record<string, string>>({})
   const [lang1, setLang1] = useState('en');
   const [lang2, setLang2] = useState('ko');
   const [lang3, setLang3] = useState('ja');
-  // selectedLanguages is derived from individual lang selectors
-  const selectedLanguages = [lang1, lang2, lang3].filter(Boolean);
-  const [sttModel, setSttModel] = useState<SttModel>('soniox');
+  const [sttModel, setSttModel] = useState<SttModel>('soniox-v5');
   const [translationEnabled, setTranslationEnabled] = useState(true);
   const [translateModel, setTranslateModel] = useState<'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview'>('gemini-2.5-flash-lite');
   const [langHintsStrict, setLangHintsStrict] = useState(true);
+  const [useSonioxNativeTranslation, setUseSonioxNativeTranslation] = useState(true);
+  const [sonioxTranslationMode, setSonioxTranslationMode] = useState<'one_way' | 'two_way'>('two_way');
+  const [sonioxTranslationTarget, setSonioxTranslationTarget] = useState('ko');
   const [sessionUsageSec, setSessionUsageSec] = useState(0)
   const [cumulativeUsageSec, setCumulativeUsageSec] = useState(0)
   const sessionUsageRef = useRef(0)
@@ -192,6 +195,11 @@ export default function Home() {
   }
 
   const startRecording = async () => {
+    if (isSonioxNativeTranslation && sonioxTranslationMode === 'two_way' && lang1 === lang2) {
+      alert('Soniox 양방향 번역은 서로 다른 언어 2개를 선택해야 합니다.')
+      return
+    }
+
     try {
       // 연결 시작 - connecting 상태로 변경
       setConnectionStatus('connecting')
@@ -213,7 +221,12 @@ export default function Home() {
           stt_model: sttModel,
           translation_enabled: translationEnabled,
           translate_model: translateModel,
-          lang_hints_strict: langHintsStrict
+          lang_hints_strict: langHintsStrict,
+          soniox_translation: isSonioxNativeTranslation
+            ? sonioxTranslationMode === 'two_way'
+              ? { type: 'two_way', language_a: lang1, language_b: lang2 }
+              : { type: 'one_way', target_language: sonioxTranslationTarget }
+            : undefined,
         }
         socket.send(JSON.stringify(config))
         // 아직 connecting 상태 유지 - Gladia ready 까지 대기
@@ -250,23 +263,31 @@ export default function Home() {
           setSessionUsageSec(totalSec)
           sessionUsageRef.current = totalSec
         } else if (message.type === 'translation' && message.data) {
-          // 부분 번역은 model-test에서 무시
-          if (message.data.is_partial) return;
-          // 번역 결과 - 마지막 발화에 추가
           const targetLang = message.data.target_language;
           const rawTranslated = message.data.translated_utterance?.text;
           const translatedText = rawTranslated ? rawTranslated.replace(/<\/?end>/gi, '').trim() : '';
 
-          if (targetLang && translatedText) {
+          if (!targetLang) return;
+
+          if (message.data.is_partial) {
+            setPartialTranslations(prev => translatedText
+              ? { ...prev, [targetLang]: translatedText }
+              : prev,
+            );
+          } else if (translatedText) {
             setUtterances(prev => {
               if (prev.length === 0) return prev;
-              // 마지막 발화에 번역 추가
               const lastIndex = prev.length - 1;
               const lastUtterance = prev[lastIndex];
               return [
                 ...prev.slice(0, lastIndex),
                 { ...lastUtterance, translations: { ...lastUtterance.translations, [targetLang]: translatedText } }
               ];
+            });
+            setPartialTranslations(prev => {
+              const next = { ...prev };
+              delete next[targetLang];
+              return next;
             });
           }
         }
@@ -315,6 +336,7 @@ export default function Home() {
     if (connectionStatus === 'connecting') {
       setUtterances([])
       setPartialTranscript('')
+      setPartialTranslations({})
       setSessionUsageSec(0)
     }
   }, [connectionStatus])
@@ -330,12 +352,15 @@ export default function Home() {
     if (transcriptContainerRef.current) {
       transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
     }
-  }, [utterances, partialTranscript])
+  }, [utterances, partialTranscript, partialTranslations])
 
   // 파생 상태
   const isActive = connectionStatus !== 'idle'
   const isReady = connectionStatus === 'ready'
   const isConnecting = connectionStatus === 'connecting'
+  const isSonioxModel = sttModel === 'soniox' || sttModel === 'soniox-v5'
+  const isSonioxV5 = sttModel === 'soniox-v5'
+  const isSonioxNativeTranslation = isSonioxV5 && translationEnabled && useSonioxNativeTranslation
   const showRipple = isReady && volume > VOLUME_THRESHOLD
   const rippleScale = showRipple ? 1 + (volume - VOLUME_THRESHOLD) * 5 : 1
   const rippleOpacity = showRipple ? 0.3 : 0
@@ -379,6 +404,7 @@ export default function Home() {
             <option value="chirp-3">Google Chirp 3 (Google Cloud STT V2)</option>
             <option value="elevenlabs">ElevenLabs Scribe v2 Realtime (AI 번역, 자동 언어 감지)</option>
             <option value="speechmatics">Speechmatics (AI 번역, 제한적 bilingual pack)</option>
+            <option value="soniox-v5">Soniox V5 (내장 S2T 번역, 60+ 언어 자동 감지)</option>
             <option value="soniox">Soniox V4 (AI 번역, 60+ 언어 자동 감지)</option>
           </select>
           {sttModel === 'chirp-3' && (
@@ -406,7 +432,7 @@ export default function Home() {
               언어 선택은 번역 대상 위주입니다. STT는 Scribe v2 Realtime의 자동 언어 감지와 VAD 세그먼트를 사용합니다.
             </p>
           )}
-          {sttModel === 'soniox' && (
+          {isSonioxModel && (
             <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input
                 type="checkbox"
@@ -436,8 +462,52 @@ export default function Home() {
             </p>
           )}
         </div>
+        {isSonioxV5 && translationEnabled && (
+          <div className="mb-4 rounded-md border border-indigo-200 bg-indigo-50/70 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useSonioxNativeTranslation}
+                onChange={(e) => setUseSonioxNativeTranslation(e.target.checked)}
+                disabled={isActive}
+                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Soniox 내장 S2T 번역 사용
+            </label>
+            {useSonioxNativeTranslation && (
+              <div className="mt-3 space-y-2">
+                <select
+                  value={sonioxTranslationMode}
+                  onChange={(e) => setSonioxTranslationMode(e.target.value as 'one_way' | 'two_way')}
+                  disabled={isActive}
+                  className="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+                >
+                  <option value="two_way">양방향 번역 (언어 1 ↔ 언어 2)</option>
+                  <option value="one_way">단방향 번역 (모든 발화 → 대상 언어)</option>
+                </select>
+                {sonioxTranslationMode === 'one_way' ? (
+                  <div>
+                    <label htmlFor="sonioxTranslationTarget" className="block text-xs font-medium text-gray-700">번역 대상 언어</label>
+                    <select
+                      id="sonioxTranslationTarget"
+                      value={sonioxTranslationTarget}
+                      onChange={(e) => setSonioxTranslationTarget(e.target.value)}
+                      disabled={isActive}
+                      className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-indigo-500"
+                    >
+                      {SUPPORTED_LANGUAGES.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <p className="text-xs text-indigo-700">언어 1과 언어 2 사이를 양방향 번역합니다. 언어 3은 인식 힌트로만 사용됩니다.</p>
+                )}
+                <p className="text-xs text-indigo-700">Soniox가 원문 STT와 번역을 같은 WebSocket으로 반환합니다. 외부 번역 모델은 호출하지 않습니다.</p>
+              </div>
+            )}
+          </div>
+        )}
         {/* 번역 모델 선택 (Gladia 자체 번역 제외) */}
-        {translationEnabled && sttModel !== 'gladia' && (
+        {translationEnabled && sttModel !== 'gladia' && !isSonioxNativeTranslation && (
           <div className="mb-4">
             <label htmlFor="translateModel" className="block text-sm font-medium text-gray-700">번역 모델</label>
             <select
@@ -519,7 +589,7 @@ export default function Home() {
               </p>
               {/* 번역들 (선택한 언어만, 원본 언어 제외) */}
               {Object.entries(utterance.translations)
-                .filter(([lang]) => selectedLanguages.includes(lang) && lang !== utterance.originalLang)
+                .filter(([lang]) => lang !== utterance.originalLang)
                 .map(([lang, text]) => (
                   <p key={lang} className="text-gray-600 text-sm">
                     <span className="text-xs text-gray-400 mr-2">[{lang.toUpperCase()}]</span>
@@ -528,18 +598,24 @@ export default function Home() {
                 ))}
             </div>
           ))}
-          {partialTranscript && (
-            <p className="border-l-2 border-gray-300 pl-3 py-1 text-gray-500">
-              {partialTranscript}
-            </p>
+          {(partialTranscript || Object.keys(partialTranslations).length > 0) && (
+            <div className="border-l-2 border-gray-300 pl-3 py-1 text-gray-500 space-y-1">
+              {partialTranscript && <p>{partialTranscript}</p>}
+              {Object.entries(partialTranslations).map(([lang, text]) => (
+                <p key={lang} className="text-sm">
+                  <span className="text-xs text-gray-400 mr-2">[{lang.toUpperCase()}]</span>
+                  {text}
+                </p>
+              ))}
+            </div>
           )}
-          {utterances.length === 0 && !partialTranscript && (
+          {utterances.length === 0 && !partialTranscript && Object.keys(partialTranslations).length === 0 && (
             <p className="text-gray-400">음성 인식 결과가 여기에 표시됩니다.</p>
           )}
         </div>
       </div>
 
-      {sttModel === 'soniox' && (sessionUsageSec > 0 || cumulativeUsageSec > 0) && (
+      {isSonioxModel && (sessionUsageSec > 0 || cumulativeUsageSec > 0) && (
         <div className="mt-3 w-full max-w-md text-xs text-gray-400 flex justify-between px-1">
           <span>이번 세션: {sessionUsageSec.toFixed(1)}s</span>
           <span>누적: {(cumulativeUsageSec + sessionUsageSec).toFixed(1)}s</span>

@@ -98,13 +98,19 @@ export async function postConversationResponse(request: NextRequest) {
         sessionKey: resolvedUser.tracking.sessionKey,
       }
     : resolvedUser.identity;
-  const conversation = await createConversationChannelForUser(resolvedUser.userId, {
-    locale,
-    preferredSessionKey: legacySessionKey || undefined,
-    selectedLanguages,
-    speechLanguages,
-    translationLanguagesLinked,
-  });
+  let conversation;
+  try {
+    conversation = await createConversationChannelForUser(resolvedUser.userId, {
+      locale,
+      preferredSessionKey: legacySessionKey || undefined,
+      selectedLanguages,
+      speechLanguages,
+      translationLanguagesLinked,
+    });
+  } catch (error) {
+    console.error("[conversations] create_failed", error);
+    return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
+  }
   const response = NextResponse.json({ conversation }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);
   return response;

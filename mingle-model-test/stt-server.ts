@@ -12,15 +12,23 @@ import {
     type AddTranscript,
 } from '@speechmatics/real-time-client';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const openai = process.env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    : null;
+const anthropic = process.env.CLAUDE_API_KEY
+    ? new Anthropic({ apiKey: process.env.CLAUDE_API_KEY })
+    : null;
+const genAI = process.env.GEMINI_API_KEY
+    ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    : null;
 
 const PORT = Number.parseInt(process.env.STT_PORT || '3001', 10);
 const GLADIA_API_URL = 'https://api.gladia.io/v2/live';
 const DEEPGRAM_WS_URL = 'wss://api.deepgram.com/v1/listen';
 const FIREWORKS_WS_URL = 'wss://audio-streaming.api.fireworks.ai/v1/audio/transcriptions/streaming';
 const SONIOX_WS_URL = 'wss://stt-rt.soniox.com/transcribe-websocket';
+const SONIOX_RT_V4_MODEL = 'stt-rt-v4';
+const SONIOX_RT_V5_MODEL = 'stt-rt-v5';
 const ELEVENLABS_WS_URL = 'wss://api.elevenlabs.io/v1/speech-to-text/realtime';
 const OPENAI_REALTIME_WS_URL = 'wss://api.openai.com/v1/realtime';
 const SPEECHMATICS_JWT_TTL_SEC = 60;
@@ -36,10 +44,22 @@ type SttModel =
     | 'fireworks'
     | 'chirp-3'
     | 'soniox'
+    | 'soniox-v5'
     | 'elevenlabs'
     | 'speechmatics';
 
 type TranslateModel = 'gpt-5-nano' | 'claude-haiku-4-5' | 'gemini-2.5-flash-lite' | 'gemini-3-flash-preview';
+
+type SonioxTranslationConfig =
+    | {
+        type: 'one_way';
+        target_language: string;
+    }
+    | {
+        type: 'two_way';
+        language_a: string;
+        language_b: string;
+    };
 
 interface ClientConfig {
     sample_rate: number;
@@ -48,6 +68,7 @@ interface ClientConfig {
     translate_model?: TranslateModel;
     translation_enabled?: boolean;
     lang_hints_strict?: boolean;
+    soniox_translation?: SonioxTranslationConfig;
 }
 
 interface SpeechmaticsSessionConfig {
@@ -664,7 +685,7 @@ wss.on('connection', (clientWs) => {
 
     // ===== OPENAI REALTIME TRANSCRIPTION 연결 =====
     const startOpenAIRealtimeConnection = async (config: ClientConfig) => {
-        if (!process.env.OPENAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY || !openai) {
             console.error('OPENAI_API_KEY environment variable not set!');
             clientWs.close(1011, 'Server configuration error: OpenAI API key not found.');
             return;
@@ -1317,11 +1338,49 @@ wss.on('connection', (clientWs) => {
             let hadNonFinal = false;
             let lastPartialTranslateTime = 0;
             let partialTranslateInFlight = false;
+            const sonioxNativeTranslation = config.stt_model === 'soniox-v5'
+                ? config.soniox_translation
+                : undefined;
+            const nativeTranslationBuffers = new Map<string, {
+                finalizedText: string;
+                pendingText: string;
+            }>();
+
+            const getNativeTranslationBuffer = (language: string) => {
+                const existing = nativeTranslationBuffers.get(language);
+                if (existing) return existing;
+
+                const created = { finalizedText: '', pendingText: '' };
+                nativeTranslationBuffers.set(language, created);
+                return created;
+            };
+
+            const emitNativeTranslations = (isPartial: boolean) => {
+                for (const [targetLanguage, buffer] of nativeTranslationBuffers) {
+                    const text = `${buffer.finalizedText}${buffer.pendingText}`
+                        .replace(/<\/?end>/gi, '')
+                        .trim();
+                    if (!text) continue;
+
+                    clientWs.send(JSON.stringify({
+                        type: 'translation',
+                        data: {
+                            target_language: targetLanguage,
+                            translated_utterance: { text },
+                            is_partial: isPartial,
+                        },
+                    }));
+                }
+            };
+
+            const resetNativeTranslations = () => {
+                nativeTranslationBuffers.clear();
+            };
 
             sttWs.onopen = () => {
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
-                    model: 'stt-rt-v4',
+                    model: config.stt_model === 'soniox-v5' ? SONIOX_RT_V5_MODEL : SONIOX_RT_V4_MODEL,
                     audio_format: 'pcm_s16le',
                     sample_rate: config.sample_rate,
                     num_channels: 1,
@@ -1331,6 +1390,7 @@ wss.on('connection', (clientWs) => {
                     enable_language_identification: true,
                     enable_speaker_diarization: true,
                     max_endpoint_delay_ms: 500,
+                    ...(sonioxNativeTranslation ? { translation: sonioxNativeTranslation } : {}),
                 };
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
@@ -1374,8 +1434,26 @@ wss.on('connection', (clientWs) => {
 
                     let newFinalText = '';
                     let nonFinalText = '';
+                    const nonFinalTranslations = new Map<string, string>();
 
                     for (const token of tokens) {
+                        if (sonioxNativeTranslation && token.translation_status === 'translation') {
+                            const targetLanguage = token.language;
+                            if (!targetLanguage) continue;
+
+                            const buffer = getNativeTranslationBuffer(targetLanguage);
+                            if (token.is_final) {
+                                buffer.finalizedText += token.text;
+                                buffer.pendingText = '';
+                            } else {
+                                nonFinalTranslations.set(
+                                    targetLanguage,
+                                    `${nonFinalTranslations.get(targetLanguage) || ''}${token.text}`,
+                                );
+                            }
+                            continue;
+                        }
+
                         if (token.language) {
                             detectedLang = token.language;
                         }
@@ -1384,6 +1462,10 @@ wss.on('connection', (clientWs) => {
                         } else {
                             nonFinalText += token.text;
                         }
+                    }
+
+                    for (const [targetLanguage, pendingText] of nonFinalTranslations) {
+                        getNativeTranslationBuffer(targetLanguage).pendingText = pendingText;
                     }
 
                     finalizedText += newFinalText;
@@ -1404,14 +1486,18 @@ wss.on('connection', (clientWs) => {
                         };
                         clientWs.send(JSON.stringify(partialMsg));
 
-                        // 부분 번역: ~1.5초마다 중간 번역 실행
-                        const now = Date.now();
-                        if (selectedLanguages.length > 0 && !partialTranslateInFlight && now - lastPartialTranslateTime > 1500 && fullText.trim().length > 3) {
-                            partialTranslateInFlight = true;
-                            lastPartialTranslateTime = now;
-                            translateText(fullText.trim(), detectedLang, selectedLanguages, clientWs, true).finally(() => {
-                                partialTranslateInFlight = false;
-                            });
+                        if (sonioxNativeTranslation) {
+                            emitNativeTranslations(true);
+                        } else {
+                            // 부분 번역: ~1.5초마다 중간 번역 실행
+                            const now = Date.now();
+                            if (selectedLanguages.length > 0 && !partialTranslateInFlight && now - lastPartialTranslateTime > 1500 && fullText.trim().length > 3) {
+                                partialTranslateInFlight = true;
+                                lastPartialTranslateTime = now;
+                                translateText(fullText.trim(), detectedLang, selectedLanguages, clientWs, true).finally(() => {
+                                    partialTranslateInFlight = false;
+                                });
+                            }
                         }
                     } else if (newFinalText && hadNonFinal) {
                         // 모델이 엔드포인트를 감지하여 토큰을 확정함 → 발화 완료
@@ -1428,7 +1514,10 @@ wss.on('connection', (clientWs) => {
                         };
                         clientWs.send(JSON.stringify(finalMsg));
 
-                        if (selectedLanguages.length > 0) {
+                        if (sonioxNativeTranslation) {
+                            emitNativeTranslations(false);
+                            resetNativeTranslations();
+                        } else if (selectedLanguages.length > 0) {
                             translateText(finalText, detectedLang, selectedLanguages, clientWs);
                         }
 
@@ -1465,7 +1554,10 @@ wss.on('connection', (clientWs) => {
                     };
                     clientWs.send(JSON.stringify(finalMsg));
 
-                    if (selectedLanguages.length > 0) {
+                    if (sonioxNativeTranslation) {
+                        emitNativeTranslations(false);
+                        resetNativeTranslations();
+                    } else if (selectedLanguages.length > 0) {
                         translateText(remainingText, detectedLang, selectedLanguages, clientWs);
                     }
 
@@ -1506,6 +1598,9 @@ wss.on('connection', (clientWs) => {
             let content: string | undefined;
 
             if (translateModel === 'claude-haiku-4-5') {
+                if (!anthropic) {
+                    throw new Error('CLAUDE_API_KEY environment variable not set.');
+                }
                 const resp = await anthropic.messages.create({
                     model: 'claude-haiku-4-5-20251001',
                     max_tokens: 1024,
@@ -1515,6 +1610,9 @@ wss.on('connection', (clientWs) => {
                 const block = resp.content[0];
                 if (block.type === 'text') content = block.text.trim();
             } else if (translateModel === 'gemini-2.5-flash-lite' || translateModel === 'gemini-3-flash-preview') {
+                if (!genAI) {
+                    throw new Error('GEMINI_API_KEY environment variable not set.');
+                }
                 const model = genAI.getGenerativeModel({
                     model: translateModel,
                     systemInstruction: systemPrompt,
@@ -1522,6 +1620,9 @@ wss.on('connection', (clientWs) => {
                 const result = await model.generateContent(userPrompt);
                 content = result.response.text()?.trim();
             } else {
+                if (!openai) {
+                    throw new Error('OPENAI_API_KEY environment variable not set.');
+                }
                 const resp = await openai.chat.completions.create({
                     model: 'gpt-5-nano',
                     messages: [
@@ -1570,10 +1671,12 @@ wss.on('connection', (clientWs) => {
             currentSampleRate = data.sample_rate;
             translateModel = data.translate_model || 'claude-haiku-4-5';
             translationEnabled = data.translation_enabled !== false;
-            selectedLanguages = translationEnabled ? data.languages : [];
+            const sonioxNativeTranslation = currentModel === 'soniox-v5'
+                && data.soniox_translation;
+            selectedLanguages = translationEnabled && !sonioxNativeTranslation ? data.languages : [];
 
             console.log(
-                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
+                `[model-test] config model=${currentModel} sampleRate=${currentSampleRate} translationEnabled=${translationEnabled} sonioxNativeTranslation=${sonioxNativeTranslation?.type || '-'} sttLanguages=${data.languages.join(',')} translationTargets=${selectedLanguages.join(',') || '-'}`,
             );
             
             if (currentModel === 'deepgram') {
@@ -1590,7 +1693,7 @@ wss.on('connection', (clientWs) => {
                 startElevenLabsConnection(data as ClientConfig);
             } else if (currentModel === 'speechmatics') {
                 startSpeechmaticsConnection(data as ClientConfig);
-            } else if (currentModel === 'soniox') {
+            } else if (currentModel === 'soniox' || currentModel === 'soniox-v5') {
                 startSonioxConnection(data as ClientConfig);
             } else if (currentModel === 'gladia-stt') {
                 startGladiaConnection(data as ClientConfig, false);
@@ -1623,6 +1726,7 @@ wss.on('connection', (clientWs) => {
                 || currentModel === 'deepgram-multi'
                 || currentModel === 'fireworks'
                 || currentModel === 'soniox'
+                || currentModel === 'soniox-v5'
             ) {
                 // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
