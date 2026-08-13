@@ -50,6 +50,19 @@ async function resolveFollowTarget(
     return { response: NextResponse.json({ error: "user_not_found" }, { status: 404 }) };
   }
 
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: followerId, blockedId: followingId },
+        { blockerId: followingId, blockedId: followerId },
+      ],
+    },
+    select: { id: true },
+  });
+  if (block) {
+    return { response: NextResponse.json({ error: "user_blocked" }, { status: 409 }) };
+  }
+
   return { followerId, followingId };
 }
 

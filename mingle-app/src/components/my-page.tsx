@@ -2,8 +2,9 @@
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import type { AppDictionary, AppLocale } from "@/i18n";
+import { buildClientApiPath } from "@/lib/api-contract";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
-import { ChevronLeft, Menu, UserRound } from "lucide-react";
+import { ChevronLeft, FileText, Loader2, Menu, ShieldOff, UserRound, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -25,6 +26,38 @@ type ProfileDraft = {
   displayName: string;
   bio: string;
   nationality: AppLocale;
+};
+
+type BlockedUserRecord = {
+  id: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    displayName: string | null;
+  };
+};
+
+type ReportRecord = {
+  id: string;
+  reason: string;
+  message: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  reportedUser: {
+    id: string;
+    displayName: string | null;
+    name: string | null;
+    image: string | null;
+  };
+  replies: Array<{
+    id: string;
+    authorType: string;
+    message: string;
+    createdAt: string;
+  }>;
 };
 
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: string }> = [
@@ -95,6 +128,258 @@ function ProfileAvatar({
         </span>
       ) : null}
     </div>
+  );
+}
+
+function UserMiniAvatar({ image, label }: { image: string | null; label: string }) {
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt={label} className="h-full w-full object-cover" />
+      ) : (
+        <UserRound size={22} className="text-gray-400" aria-hidden="true" />
+      )}
+    </div>
+  );
+}
+
+function ProfileSettingsPanel({
+  dictionary,
+  locale,
+  onClose,
+  open,
+}: {
+  dictionary: AppDictionary;
+  locale: AppLocale;
+  onClose: () => void;
+  open: boolean;
+}) {
+  const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(1);
+  const copy = {
+    title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
+    blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
+    reports: dictionary.profile.reportsLabel ?? (locale === "ko" ? "신고 내역" : "Reports"),
+    noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
+    noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
+    unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
+    unblockError: dictionary.profile.unblockError ?? (locale === "ko" ? "차단을 해제하지 못했습니다." : "Could not unblock this user."),
+    pending: dictionary.profile.reportPendingLabel ?? (locale === "ko" ? "운영진 확인 중" : "Under review"),
+    close: locale === "ko" ? "닫기" : "Close",
+    loading: locale === "ko" ? "불러오는 중..." : "Loading...",
+    loadError: locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity.",
+    reportedUser: locale === "ko" ? "신고한 사용자" : "Reported user",
+    myMessage: locale === "ko" ? "신고 내용" : "Your report",
+    teamReply: locale === "ko" ? "운영진 답변" : "Team reply",
+    reasonLabels: {
+      spam: dictionary.profile.reportReasonSpam ?? (locale === "ko" ? "스팸·도배" : "Spam"),
+      harassment: dictionary.profile.reportReasonHarassment ?? (locale === "ko" ? "괴롭힘·불쾌한 행동" : "Harassment"),
+      inappropriate: dictionary.profile.reportReasonInappropriate ?? (locale === "ko" ? "부적절한 콘텐츠" : "Inappropriate content"),
+      impersonation: dictionary.profile.reportReasonImpersonation ?? (locale === "ko" ? "사칭" : "Impersonation"),
+      other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
+    } as Record<string, string>,
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError(false);
+    void Promise.all([
+      fetch(buildClientApiPath("/account/blocks"), { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) throw new Error("blocks_load_failed");
+        return response.json() as Promise<{ blocks?: BlockedUserRecord[] }>;
+      }),
+      fetch(buildClientApiPath("/account/reports"), { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) throw new Error("reports_load_failed");
+        return response.json() as Promise<{ reports?: ReportRecord[] }>;
+      }),
+    ])
+      .then(([blocksPayload, reportsPayload]) => {
+        if (cancelled) return;
+        setBlocks(Array.isArray(blocksPayload.blocks) ? blocksPayload.blocks : []);
+        setReports(Array.isArray(reportsPayload.reports) ? reportsPayload.reports : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+    return () => window.removeEventListener("resize", syncViewportWidth);
+  }, [open]);
+
+  const handleUnblock = useCallback(async (userId: string) => {
+    if (unblockingId) return;
+    setUnblockingId(userId);
+    try {
+      const response = await fetch(buildClientApiPath(`/account/blocks/${encodeURIComponent(userId)}`), {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("unblock_failed");
+      setBlocks((current) => current.filter((block) => block.user.id !== userId));
+    } catch {
+      window.alert(copy.unblockError);
+    } finally {
+      setUnblockingId(null);
+    }
+  }, [copy.unblockError, unblockingId]);
+
+  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (info.offset.x >= Math.max(72, viewportWidth * 0.2) || info.velocity.x >= 650) onClose();
+  }, [onClose, viewportWidth]);
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.section
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          drag="x"
+          dragConstraints={{ left: 0, right: viewportWidth }}
+          dragElastic={0.08}
+          dragMomentum={false}
+          onDragEnd={handleDragEnd}
+          className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+          style={{ touchAction: "pan-y" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={copy.title}
+        >
+          <header
+            className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+            style={{
+              height: "calc(54px + env(safe-area-inset-top, 44px))",
+              paddingTop: "env(safe-area-inset-top, 44px)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full transition active:bg-gray-100"
+              aria-label={copy.close}
+            >
+              <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
+            </button>
+            <h2 className="truncate text-center text-[17px] font-bold">{copy.title}</h2>
+            <div aria-hidden="true" />
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
+            {isLoading ? (
+              <div className="flex justify-center pt-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-label={copy.loading} /></div>
+            ) : loadError ? (
+              <p className="pt-8 text-center text-[14px] text-gray-500" role="alert">{copy.loadError}</p>
+            ) : (
+              <div className="space-y-8">
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <ShieldOff size={18} className="text-gray-500" aria-hidden="true" />
+                    <h3 className="text-[15px] font-bold">{copy.blocked}</h3>
+                  </div>
+                  {blocks.length === 0 ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noBlocked}</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
+                      {blocks.map((block) => {
+                        const name = block.user.displayName?.trim() || block.user.name?.trim() || block.user.id;
+                        return (
+                          <li key={block.id} className="flex items-center gap-3 px-3 py-3">
+                            <UserMiniAvatar image={block.user.image} label={name} />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[14px] font-semibold">{name}</p>
+                              <p className="truncate text-[12px] text-gray-500">{block.user.id}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleUnblock(block.user.id)}
+                              disabled={unblockingId === block.user.id}
+                              className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-2 text-[12px] font-semibold text-gray-700 transition active:bg-gray-50 disabled:opacity-50"
+                            >
+                              {unblockingId === block.user.id ? "…" : copy.unblock}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <FileText size={18} className="text-gray-500" aria-hidden="true" />
+                    <h3 className="text-[15px] font-bold">{copy.reports}</h3>
+                  </div>
+                  {reports.length === 0 ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noReports}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {reports.map((report) => {
+                        const name = report.reportedUser.displayName?.trim() || report.reportedUser.name?.trim() || report.reportedUser.id;
+                        const statusLabel = report.status === "resolved"
+                          ? (dictionary.profile.reportStatusResolved ?? "Resolved")
+                          : report.status === "rejected"
+                            ? (dictionary.profile.reportStatusRejected ?? "Rejected")
+                            : report.status === "in_review"
+                              ? (dictionary.profile.reportStatusInReview ?? "In review")
+                              : copy.pending;
+                        const expanded = expandedReportId === report.id;
+                        return (
+                          <article key={report.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <button type="button" onClick={() => setExpandedReportId(expanded ? null : report.id)} className="w-full text-left">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-[14px] font-semibold">{name}</p>
+                                  <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
+                              </div>
+                            </button>
+                            {expanded ? (
+                              <div className="mt-3 space-y-3 border-t border-gray-200 pt-3 text-[13px] leading-relaxed">
+                                {report.message ? <p><span className="font-semibold text-gray-600">{copy.myMessage}: </span>{report.message}</p> : null}
+                                {report.replies.map((reply) => (
+                                  <div key={reply.id} className="rounded-lg bg-white px-3 py-2">
+                                    <p className="mb-1 text-[11px] font-semibold text-emerald-600">{copy.teamReply}</p>
+                                    <p className="whitespace-pre-wrap text-gray-700">{reply.message}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
+            <X size={18} aria-hidden="true" />
+          </button>
+        </motion.section>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -303,6 +588,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     followingCount: 0,
   });
   const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
@@ -375,6 +661,12 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         onSave={handleSaveProfile}
         open={showProfileEdit}
       />
+      <ProfileSettingsPanel
+        dictionary={dictionary}
+        locale={locale}
+        onClose={() => setShowProfileSettings(false)}
+        open={showProfileSettings}
+      />
 
       <header
         className="flex shrink-0 items-center px-4"
@@ -389,7 +681,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         </h1>
         <button
           type="button"
-          disabled
+          onClick={() => setShowProfileSettings(true)}
           className="flex h-10 w-10 items-center justify-center rounded-full transition"
           aria-label={dictionary.profile.menuLabel}
         >

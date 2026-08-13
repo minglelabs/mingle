@@ -4,11 +4,13 @@ import { NextRequest } from "next/server";
 const {
   mockGetServerSession,
   mockUserFindUnique,
+  mockUserBlockFindFirst,
   mockUserFollowUpsert,
   mockUserFollowDeleteMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockUserBlockFindFirst: vi.fn(),
   mockUserFollowUpsert: vi.fn(),
   mockUserFollowDeleteMany: vi.fn(),
 }));
@@ -26,6 +28,9 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findUnique: mockUserFindUnique,
     },
+    userBlock: {
+      findFirst: mockUserBlockFindFirst,
+    },
     userFollow: {
       upsert: mockUserFollowUpsert,
       deleteMany: mockUserFollowDeleteMany,
@@ -40,6 +45,7 @@ describe("/api/users/[userId]/follow route", () => {
     vi.clearAllMocks();
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
     mockUserFindUnique.mockResolvedValue({ id: "user_456" });
+    mockUserBlockFindFirst.mockResolvedValue(null);
   });
 
   it("creates an idempotent follow relation", async () => {
@@ -97,6 +103,19 @@ describe("/api/users/[userId]/follow route", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "user_not_found" });
+    expect(mockUserFollowUpsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects following a user when either side has blocked the other", async () => {
+    mockUserBlockFindFirst.mockResolvedValue({ id: "block_123" });
+
+    const response = await POST(
+      new NextRequest("https://example.com/api/users/user_456/follow", { method: "POST" }),
+      { params: Promise.resolve({ userId: "user_456" }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "user_blocked" });
     expect(mockUserFollowUpsert).not.toHaveBeenCalled();
   });
 });

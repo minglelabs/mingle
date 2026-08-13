@@ -76,11 +76,17 @@ describe("/api/users/search route", () => {
     });
     expect(mockUserFindMany).toHaveBeenCalledWith({
       where: {
-        id: { not: "user_123" },
-        OR: [
-          { id: { contains: "Mina", mode: "insensitive" } },
-          { displayName: { contains: "Mina", mode: "insensitive" } },
-          { name: { contains: "Mina", mode: "insensitive" } },
+        AND: [
+          { id: { not: "user_123" } },
+          { blockingRelations: { none: { blockedId: "user_123" } } },
+          { blockedByRelations: { none: { blockerId: "user_123" } } },
+          {
+            OR: [
+              { id: { contains: "Mina", mode: "insensitive" } },
+              { displayName: { contains: "Mina", mode: "insensitive" } },
+              { name: { contains: "Mina", mode: "insensitive" } },
+            ],
+          },
         ],
       },
       orderBy: { updatedAt: "desc" },

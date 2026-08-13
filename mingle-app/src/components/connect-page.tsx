@@ -5,6 +5,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type ConnectPageProps = {
   dictionary: AppDictionary;
@@ -42,6 +43,7 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 }
 
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const [query, setQuery] = useState("");
@@ -212,7 +214,13 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/${locale}/users/${encodeURIComponent(user.id)}`)}
+                        className="block max-w-full truncate text-left text-[15px] font-semibold text-slate-900"
+                      >
+                        {name}
+                      </button>
                       <p className="truncate text-[13px] text-gray-500">{user.id}</p>
                     </div>
                     <button

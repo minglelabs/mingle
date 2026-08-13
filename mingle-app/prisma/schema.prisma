@@ -59,6 +59,10 @@ model User {
   conversationChannels   AppConversationChannel[]
   followingRelations     UserFollow[]             @relation("UserFollowing")
   followerRelations      UserFollow[]             @relation("UserFollowers")
+  blockingRelations      UserBlock[]              @relation("UserBlocking")
+  blockedByRelations     UserBlock[]              @relation("UserBlockedBy")
+  sentUserReports        UserReport[]             @relation("UserReportsSent")
+  receivedUserReports    UserReport[]             @relation("UserReportsReceived")
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
@@ -78,6 +82,55 @@ model UserFollow {
   @@index([followerId, createdAt], map: "app_user_follows_follower_created_at_idx")
   @@index([followingId, createdAt], map: "app_user_follows_following_created_at_idx")
   @@map("app_user_follows")
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String   @map("blocker_id")
+  blockedId String   @map("blocked_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("UserBlocking", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("UserBlockedBy", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId], map: "app_user_blocks_blocker_blocked_uidx")
+  @@index([blockerId, createdAt], map: "app_user_blocks_blocker_created_at_idx")
+  @@index([blockedId, createdAt], map: "app_user_blocks_blocked_created_at_idx")
+  @@map("app_user_blocks")
+}
+
+model UserReport {
+  id             String   @id @default(cuid())
+  reporterId     String   @map("reporter_id")
+  reportedUserId String   @map("reported_user_id")
+  reason         String
+  message        String?  @db.Text
+  status         String   @default("open")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  reporter     User               @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User               @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  replies      UserReportReply[]
+
+  @@index([reporterId, createdAt], map: "app_user_reports_reporter_created_at_idx")
+  @@index([reportedUserId, createdAt], map: "app_user_reports_reported_created_at_idx")
+  @@index([status, createdAt], map: "app_user_reports_status_created_at_idx")
+  @@map("app_user_reports")
+}
+
+model UserReportReply {
+  id        String   @id @default(cuid())
+  reportId  String   @map("report_id")
+  authorType String  @map("author_type")
+  message   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  report UserReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt], map: "app_user_report_replies_report_created_at_idx")
+  @@map("app_user_report_replies")
 }
 
 model AppMessage {

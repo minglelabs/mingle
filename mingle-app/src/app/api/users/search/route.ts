@@ -38,11 +38,25 @@ export async function GET(request: NextRequest) {
 
   const users = await prisma.user.findMany({
     where: {
-      id: { not: userId },
-      OR: [
-        { id: { contains: query, mode: "insensitive" } },
-        { displayName: { contains: query, mode: "insensitive" } },
-        { name: { contains: query, mode: "insensitive" } },
+      AND: [
+        { id: { not: userId } },
+        {
+          blockingRelations: {
+            none: { blockedId: userId },
+          },
+        },
+        {
+          blockedByRelations: {
+            none: { blockerId: userId },
+          },
+        },
+        {
+          OR: [
+            { id: { contains: query, mode: "insensitive" } },
+            { displayName: { contains: query, mode: "insensitive" } },
+            { name: { contains: query, mode: "insensitive" } },
+          ],
+        },
       ],
     },
     orderBy: { updatedAt: "desc" },
