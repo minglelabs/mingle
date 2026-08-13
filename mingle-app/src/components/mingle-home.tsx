@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Mail, X } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Mail, X } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -249,6 +249,21 @@ function GoogleMark() {
         d="M12.25 21.6c2.7 0 4.97-.9 6.63-2.44l-3.23-2.65c-.9.63-2.06 1.06-3.4 1.06-2.9 0-4.72-1.96-5.51-4.58L3.4 15.33C5.05 18.98 8.4 21.6 12.25 21.6Z"
       />
     </svg>
+  );
+}
+
+function AgreementCheckMark({ checked, disabled }: { checked: boolean; disabled: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border transition-colors ${
+        checked
+          ? "border-[#F3C35A] bg-[#F3C35A] text-[#2D2A1E]"
+          : "border-white/35 bg-transparent text-transparent"
+      } ${disabled ? "opacity-60" : ""}`}
+    >
+      {checked ? <Check size={14} strokeWidth={3} /> : null}
+    </span>
   );
 }
 
@@ -1293,19 +1308,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                     </h2>
                     <button
                       type="button"
+                      role="checkbox"
+                      aria-checked={hasAgreedAllRequiredTerms}
                       onClick={handleAgreeAllRequiredTerms}
                       disabled={disabled}
                       className="mt-4 flex h-10 w-full items-center gap-2.5 rounded-xl bg-white/8 px-3.5 text-left text-[0.9rem] font-semibold leading-none text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <span
-                        className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[0.62rem] ${
-                          hasAgreedAllRequiredTerms
-                            ? "border-rose-400 bg-rose-500 text-white"
-                            : "border-white/25 text-transparent"
-                        }`}
-                      >
-                        ✓
-                      </span>
+                      <AgreementCheckMark checked={hasAgreedAllRequiredTerms} disabled={disabled} />
                       <span className="inline-flex h-full items-center leading-none">
                         {props.dictionary.profile.agreeToAll}
                       </span>
@@ -1313,13 +1322,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
                     <div className="mt-1.5 space-y-0.5">
                       <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
-                        <input
-                          type="checkbox"
-                          checked={agreedPrivacy}
-                          onChange={(event) => setAgreedPrivacy(event.target.checked)}
-                          disabled={disabled}
-                          className="h-4 w-4 accent-rose-500"
-                        />
+                        <label className={`inline-flex shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={agreedPrivacy}
+                            onChange={(event) => setAgreedPrivacy(event.target.checked)}
+                            disabled={disabled}
+                            aria-label={props.dictionary.profile.privacyPolicyRequired}
+                            className="sr-only"
+                          />
+                          <AgreementCheckMark checked={agreedPrivacy} disabled={disabled} />
+                        </label>
                         <button
                           type="button"
                           onClick={() => handleOpenLegalSheet("privacy")}
@@ -1329,13 +1342,17 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         </button>
                       </div>
                       <div className="flex items-center gap-2.5 px-1 py-1.5 text-[0.94rem] text-white/90">
-                        <input
-                          type="checkbox"
-                          checked={agreedTerms}
-                          onChange={(event) => setAgreedTerms(event.target.checked)}
-                          disabled={disabled}
-                          className="h-4 w-4 accent-rose-500"
-                        />
+                        <label className={`inline-flex shrink-0 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
+                          <input
+                            type="checkbox"
+                            checked={agreedTerms}
+                            onChange={(event) => setAgreedTerms(event.target.checked)}
+                            disabled={disabled}
+                            aria-label={props.dictionary.profile.termsOfUseRequired}
+                            className="sr-only"
+                          />
+                          <AgreementCheckMark checked={agreedTerms} disabled={disabled} />
+                        </label>
                         <button
                           type="button"
                           onClick={() => handleOpenLegalSheet("terms")}
