@@ -85,7 +85,8 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     ? displayName
     : `@${displayName.replace(/\s+/g, "")}`);
   const profileUrl = useMemo(() => buildProfileShareUrl(locale), [locale]);
-  const comingSoonLabel = dictionary.profile.comingSoonLabel ?? "Coming soon.";
+  const qrComingSoonLabel = dictionary.profile.profileShareQrComingSoonLabel
+    ?? (locale === "ko" ? "아직 QR 기능은 준비중입니다." : "QR features are not available yet.");
   const copy = {
     copyLink: dictionary.profile.profileShareCopyLinkLabel ?? "Copy link",
     copied: dictionary.profile.profileShareCopiedMessage ?? "Profile link copied.",
@@ -260,7 +261,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
         <h1 className="truncate text-center text-[18px] font-semibold">{dictionary.profile.shareProfile}</h1>
         <button
           type="button"
-          onClick={() => showStatus(comingSoonLabel)}
+          onClick={() => showStatus(qrComingSoonLabel)}
           className="flex h-11 w-11 items-center justify-center rounded-full bg-white/35 transition active:bg-white/50"
           aria-label={copy.qrScan}
         >
@@ -271,12 +272,12 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-8">
         <button
           type="button"
-          onClick={() => showStatus(comingSoonLabel)}
+          onClick={() => showStatus(qrComingSoonLabel)}
           className="mx-auto flex min-h-[300px] w-full max-w-[360px] flex-col items-center justify-center rounded-[28px] bg-white px-6 py-8 shadow-[0_16px_40px_rgba(22,50,140,0.18)] transition active:bg-white/90"
-          aria-label={comingSoonLabel}
+          aria-label={qrComingSoonLabel}
         >
           <QrCode size={92} strokeWidth={1.35} className="text-indigo-500" aria-hidden="true" />
-          <span className="mt-6 text-[15px] font-semibold text-gray-500">{comingSoonLabel}</span>
+          <span className="mt-6 text-[15px] font-semibold text-gray-500">{qrComingSoonLabel}</span>
           <span className="mt-2 text-[14px] text-gray-400">{profileHandle}</span>
         </button>
 
@@ -299,7 +300,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
           </button>
           <button
             type="button"
-            onClick={() => showStatus(comingSoonLabel)}
+            onClick={() => showStatus(qrComingSoonLabel)}
             className="flex min-h-[112px] flex-col items-center justify-center rounded-[22px] bg-white px-2 py-4 text-[14px] font-semibold text-slate-900 shadow-[0_12px_30px_rgba(22,50,140,0.16)] transition active:bg-white/90"
           >
             <Download size={30} strokeWidth={1.8} aria-hidden="true" />

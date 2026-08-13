@@ -162,6 +162,7 @@ export type BaseAppDictionarySource = {
     profileShareCopyFailedMessage?: string;
     profileShareDownloadLabel?: string;
     profileShareQrScanLabel?: string;
+    profileShareQrComingSoonLabel?: string;
     profileLoadingLabel?: string;
     authTitle: string;
     loginRequiredTitle: string;

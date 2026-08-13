@@ -448,3 +448,12 @@
   - Removed the bio textarea placeholder and stopped rendering the sample bio on My Page when the user has not written one.
   - Added deterministic default public usernames for email signup, OAuth/native sign-in, and anonymous tracking-user creation. Existing null usernames are backfilled from the account name/email with collision suffixes, then the database field is made `NOT NULL`; users can still change the value later within the existing character rules.
 - Data contract: `User.id` remains the private database identifier; `User.username` is the required public handle, and `User.displayName` remains the editable visible name.
+
+## 2026-08-14 - My Page settings subpage dismissal and profile share loading
+
+- Surface: My Page hamburger settings, blocked-user/report/app-language subpages, profile sharing, and the empty post area.
+- Issue: Opening a settings subpage removed the hamburger panel from the DOM. A right-swipe dismissal then made the subpage exit and the parent panel re-enter at the same time, which could leave a stale fixed layer over the My Page header; the hamburger button stopped responding until a tab transition reset the stack. Profile sharing also waited for a cold client navigation to the share route before showing its panel.
+- Resolution:
+  - Keep the hamburger settings panel mounted beneath the active subpage and animate only the subpage out on a right swipe, so the swipe returns to a usable menu instead of closing both layers.
+  - Prefetch the profile-share route while My Page is mounted so tapping `Share profile` can enter the already-prepared panel without the full route delay.
+  - Changed QR-only coming-soon feedback to `QR features are not available yet` (localized), and removed the unused coming-soon message from the empty post area.

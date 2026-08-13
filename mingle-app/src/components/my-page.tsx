@@ -377,8 +377,9 @@ function ProfileSettingsPanel({
 
   return (
     <AnimatePresence>
-      {open && !managementPage ? (
+      {open ? (
         <motion.section
+          key="profile-settings-panel"
           initial={{ x: "100%" }}
           animate={motionControls}
           exit={{ x: "100%" }}
@@ -977,8 +978,10 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     skipConversationRestore: true,
     tabRoot: true,
   });
-  const comingSoonLabel = dictionary.profile.comingSoonLabel
-    ?? (locale === "ko" ? "기능 준비중입니다." : "Coming soon.");
+
+  useEffect(() => {
+    void router.prefetch(profileShareHref);
+  }, [profileShareHref, router]);
 
   useEffect(() => {
     if (!sessionUserId) return;
@@ -1135,9 +1138,6 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
           </div>
         </section>
 
-        <section className="flex min-h-[220px] items-center justify-center border-t border-gray-200 px-6 text-center">
-          <p className="text-[15px] font-semibold text-gray-500">{comingSoonLabel}</p>
-        </section>
       </div>
 
       <BottomTabBar
