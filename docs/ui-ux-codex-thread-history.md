@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-13 - My Page Safety History Empty and Auth States
+
+- Surface: My Page hamburger menu safety management panel.
+- Issue: The panel requested block and report history with `Promise.all`, so an unauthenticated 401 response from either endpoint replaced both sections with the generic `관리 내역을 불러오지 못했습니다.` message. This was especially confusing because My Page remains visible while the translator auth gate is disabled.
+- User impact: Users could not distinguish an empty history from a request failure, and one failed collection prevented the other collection from being displayed.
+- Resolution: Load block and report history independently. The panel now always renders both management sections, shows an explicit sign-in state when the account session is unavailable, keeps an empty state for authenticated users with no records, and limits the generic error state to the collection that actually failed.
+
 ## 2026-08-07 - Messenger Bottom Tabs and My Page Draft Surface
 
 - Surface: `mingle-app/src/components/conversation-list.tsx`, `mingle-app/src/components/bottom-tab-bar.tsx`, `mingle-app/src/components/my-page.tsx`

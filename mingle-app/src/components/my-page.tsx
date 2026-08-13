@@ -60,6 +60,9 @@ type ReportRecord = {
   }>;
 };
 
+type SessionStatus = "loading" | "authenticated" | "unauthenticated";
+type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
+
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: AppLocale; label: string; flag: string }> = [
   { locale: "ko", label: "한국어", flag: "🇰🇷" },
   { locale: "ja", label: "日本語", flag: "🇯🇵" },
@@ -149,16 +152,20 @@ function ProfileSettingsPanel({
   locale,
   onClose,
   open,
+  sessionStatus,
 }: {
   dictionary: AppDictionary;
   locale: AppLocale;
   onClose: () => void;
   open: boolean;
+  sessionStatus: SessionStatus;
 }) {
   const [blocks, setBlocks] = useState<BlockedUserRecord[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState(false);
+  const [requiresAuthentication, setRequiresAuthentication] = useState(false);
+  const [blocksLoadState, setBlocksLoadState] = useState<ManagementLoadState>("idle");
+  const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
@@ -174,6 +181,7 @@ function ProfileSettingsPanel({
     close: locale === "ko" ? "닫기" : "Close",
     loading: locale === "ko" ? "불러오는 중..." : "Loading...",
     loadError: locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity.",
+    authRequired: locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history.",
     reportedUser: locale === "ko" ? "신고한 사용자" : "Reported user",
     myMessage: locale === "ko" ? "신고 내용" : "Your report",
     teamReply: locale === "ko" ? "운영진 답변" : "Team reply",
@@ -189,34 +197,77 @@ function ProfileSettingsPanel({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    setBlocks([]);
+    setReports([]);
+    setRequiresAuthentication(false);
+
+    if (sessionStatus === "loading") {
+      setIsLoading(true);
+      setBlocksLoadState("loading");
+      setReportsLoadState("loading");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (sessionStatus !== "authenticated") {
+      setIsLoading(false);
+      setRequiresAuthentication(true);
+      setBlocksLoadState("unauthorized");
+      setReportsLoadState("unauthorized");
+      return () => {
+        cancelled = true;
+      };
+    }
+
     setIsLoading(true);
-    setLoadError(false);
-    void Promise.all([
-      fetch(buildClientApiPath("/account/blocks"), { cache: "no-store" }).then(async (response) => {
-        if (!response.ok) throw new Error("blocks_load_failed");
-        return response.json() as Promise<{ blocks?: BlockedUserRecord[] }>;
-      }),
-      fetch(buildClientApiPath("/account/reports"), { cache: "no-store" }).then(async (response) => {
-        if (!response.ok) throw new Error("reports_load_failed");
-        return response.json() as Promise<{ reports?: ReportRecord[] }>;
-      }),
-    ])
-      .then(([blocksPayload, reportsPayload]) => {
+    setBlocksLoadState("loading");
+    setReportsLoadState("loading");
+
+    const loadBlocks = async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/account/blocks"), { cache: "no-store" });
         if (cancelled) return;
-        setBlocks(Array.isArray(blocksPayload.blocks) ? blocksPayload.blocks : []);
-        setReports(Array.isArray(reportsPayload.reports) ? reportsPayload.reports : []);
-      })
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+        if (response.status === 401) {
+          setBlocksLoadState("unauthorized");
+          return;
+        }
+        if (!response.ok) throw new Error("blocks_load_failed");
+        const payload = await response.json() as { blocks?: BlockedUserRecord[] };
+        if (cancelled) return;
+        setBlocks(Array.isArray(payload.blocks) ? payload.blocks : []);
+        setBlocksLoadState("ready");
+      } catch {
+        if (!cancelled) setBlocksLoadState("error");
+      }
+    };
+
+    const loadReports = async () => {
+      try {
+        const response = await fetch(buildClientApiPath("/account/reports"), { cache: "no-store" });
+        if (cancelled) return;
+        if (response.status === 401) {
+          setReportsLoadState("unauthorized");
+          return;
+        }
+        if (!response.ok) throw new Error("reports_load_failed");
+        const payload = await response.json() as { reports?: ReportRecord[] };
+        if (cancelled) return;
+        setReports(Array.isArray(payload.reports) ? payload.reports : []);
+        setReportsLoadState("ready");
+      } catch {
+        if (!cancelled) setReportsLoadState("error");
+      }
+    };
+
+    void Promise.all([loadBlocks(), loadReports()]).finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, sessionStatus]);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return;
@@ -287,8 +338,6 @@ function ProfileSettingsPanel({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
             {isLoading ? (
               <div className="flex justify-center pt-8 text-gray-400"><Loader2 size={24} className="animate-spin" aria-label={copy.loading} /></div>
-            ) : loadError ? (
-              <p className="pt-8 text-center text-[14px] text-gray-500" role="alert">{copy.loadError}</p>
             ) : (
               <div className="space-y-8">
                 <section>
@@ -296,7 +345,11 @@ function ProfileSettingsPanel({
                     <ShieldOff size={18} className="text-gray-500" aria-hidden="true" />
                     <h3 className="text-[15px] font-bold">{copy.blocked}</h3>
                   </div>
-                  {blocks.length === 0 ? (
+                  {requiresAuthentication || blocksLoadState === "unauthorized" ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+                  ) : blocksLoadState === "error" ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+                  ) : blocks.length === 0 ? (
                     <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noBlocked}</p>
                   ) : (
                     <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
@@ -329,7 +382,11 @@ function ProfileSettingsPanel({
                     <FileText size={18} className="text-gray-500" aria-hidden="true" />
                     <h3 className="text-[15px] font-bold">{copy.reports}</h3>
                   </div>
-                  {reports.length === 0 ? (
+                  {requiresAuthentication || reportsLoadState === "unauthorized" ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.authRequired}</p>
+                  ) : reportsLoadState === "error" ? (
+                    <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">{copy.loadError}</p>
+                  ) : reports.length === 0 ? (
                     <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">{copy.noReports}</p>
                   ) : (
                     <div className="space-y-3">
@@ -577,7 +634,7 @@ function ProfileEditPanel({
 }
 
 export default function MyPage({ dictionary, locale }: MyPageProps) {
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<ProfileRecord>({
@@ -666,6 +723,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         locale={locale}
         onClose={() => setShowProfileSettings(false)}
         open={showProfileSettings}
+        sessionStatus={sessionStatus}
       />
 
       <header
