@@ -18,13 +18,13 @@ export const enDictionary: BaseAppDictionarySource = {
   },
   tabs: {
     chats: "Chats",
-    connect: "Connect",
+    connect: "Explore",
     moments: "Moments",
     my: "My",
   },
   titles: {
     chats: "Chats",
-    connect: "Discover",
+    connect: "Explore",
     moments: "Moments",
     my: "My",
   },
@@ -46,6 +46,11 @@ export const enDictionary: BaseAppDictionarySource = {
   connect: {
     aboutTitle: "About",
     interestsTitle: "Interests",
+    searchPlaceholder: "Search by ID or name",
+    searchingLabel: "Searching...",
+    searchNoResults: "No results found.",
+    searchError: "Could not search. Please try again.",
+    userFallbackLabel: "Mingle user",
   },
   moments: {
     minutesAgoSuffix: "m ago",

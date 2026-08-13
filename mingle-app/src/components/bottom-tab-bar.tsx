@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppDictionary } from "@/i18n/types";
-import { MessageCircle, UserCircle } from "lucide-react";
+import { MessageCircle, Search, UserCircle } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
@@ -13,7 +13,7 @@ import {
 export const BOTTOM_TAB_BAR_HEIGHT_PX = 52;
 
 type BottomTabBarProps = {
-  activeRoute: "conversations" | "mypage";
+  activeRoute: "conversations" | "connect" | "mypage";
   dictionary: AppDictionary;
   locale: string;
 };
@@ -84,17 +84,23 @@ export default function BottomTabBar({
   const isNativeTabRoot = searchParams.get(NATIVE_TAB_ROOT_QUERY_KEY) === "1";
 
   const conversationsPath = `/${locale}/conversations`;
+  const connectPath = `/${locale}/connect`;
   const mypagePath = `/${locale}/mypage`;
   const conversationsHref = buildNativeAwareTabPath(conversationsPath, searchParams, {
-    // Returning from My Page is an intentional request for the list. A live
-    // STT room must not be restored as a side effect of mounting the list.
-    skipConversationRestore: activeRoute === "mypage",
+    // Returning from another top-level tab is an intentional request for the
+    // list. A live STT room must not be restored as a side effect of mounting
+    // the list.
+    skipConversationRestore: activeRoute !== "conversations",
     tabRoot: true,
   });
+  const connectHref = buildNativeAwareTabPath(connectPath, searchParams, { tabRoot: true });
   const mypageHref = buildNativeAwareTabPath(mypagePath, searchParams, { tabRoot: true });
   const isConversationsActive = activeRoute === "conversations"
     || pathname === conversationsPath
     || pathname.startsWith(`${conversationsPath}/`);
+  const isConnectActive = activeRoute === "connect"
+    || pathname === connectPath
+    || pathname.startsWith(`${connectPath}/`);
   const isMypageActive = activeRoute === "mypage"
     || pathname === mypagePath
     || pathname.startsWith(`${mypagePath}/`);
@@ -142,6 +148,23 @@ export default function BottomTabBar({
           fill={isConversationsActive ? "#f59e0b" : "none"}
           stroke={isConversationsActive ? "#f59e0b" : "#9ca3af"}
           strokeWidth={1.9}
+          aria-hidden="true"
+        />
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          if (isConnectActive) return;
+          router.replace(connectHref);
+        }}
+        className="flex flex-1 items-center justify-center transition active:opacity-60"
+        aria-label={dictionary.titles.connect}
+        aria-current={isConnectActive ? "page" : undefined}
+      >
+        <Search
+          size={26}
+          stroke={isConnectActive ? "#f59e0b" : "#9ca3af"}
+          strokeWidth={isConnectActive ? 2.3 : 1.9}
           aria-hidden="true"
         />
       </button>

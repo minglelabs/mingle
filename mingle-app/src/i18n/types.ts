@@ -62,6 +62,11 @@ export type BaseAppDictionarySource = {
   connect: {
     aboutTitle: string;
     interestsTitle: string;
+    searchPlaceholder?: string;
+    searchingLabel?: string;
+    searchNoResults?: string;
+    searchError?: string;
+    userFallbackLabel?: string;
   };
   moments: {
     minutesAgoSuffix: string;

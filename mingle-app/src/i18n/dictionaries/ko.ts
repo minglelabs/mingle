@@ -18,13 +18,13 @@ export const koDictionary: BaseAppDictionarySource = {
   },
   tabs: {
     chats: "채팅",
-    connect: "친구 찾기",
+    connect: "탐색",
     moments: "모먼츠",
     my: "마이",
   },
   titles: {
     chats: "대화목록",
-    connect: "친구 찾기",
+    connect: "탐색",
     moments: "모먼츠",
     my: "마이",
   },
@@ -46,6 +46,11 @@ export const koDictionary: BaseAppDictionarySource = {
   connect: {
     aboutTitle: "소개",
     interestsTitle: "관심사",
+    searchPlaceholder: "ID 또는 이름 검색",
+    searchingLabel: "검색 중...",
+    searchNoResults: "검색 결과가 없습니다.",
+    searchError: "검색하지 못했습니다. 다시 시도해 주세요.",
+    userFallbackLabel: "Mingle 사용자",
   },
   moments: {
     minutesAgoSuffix: "분 전",

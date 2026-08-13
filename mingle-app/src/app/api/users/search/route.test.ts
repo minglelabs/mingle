@@ -1,0 +1,84 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+const {
+  mockGetServerSession,
+  mockUserFindMany,
+} = vi.hoisted(() => ({
+  mockGetServerSession: vi.fn(),
+  mockUserFindMany: vi.fn(),
+}));
+
+vi.mock("next-auth", () => ({
+  getServerSession: mockGetServerSession,
+}));
+
+vi.mock("@/lib/auth-options", () => ({
+  getAuthOptions: () => ({}),
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    user: {
+      findMany: mockUserFindMany,
+    },
+  },
+}));
+
+import { GET } from "@/app/api/users/search/route";
+
+describe("/api/users/search route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
+  });
+
+  it("returns unauthorized for unauthenticated searches", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+
+    const response = await GET(new NextRequest("https://example.com/api/users/search?q=mina"));
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "unauthorized" });
+    expect(mockUserFindMany).not.toHaveBeenCalled();
+  });
+
+  it("does not query the database for an empty search", async () => {
+    const response = await GET(new NextRequest("https://example.com/api/users/search?q=%20%20"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ users: [] });
+    expect(mockUserFindMany).not.toHaveBeenCalled();
+  });
+
+  it("searches display names, names, and IDs while excluding the current user", async () => {
+    mockUserFindMany.mockResolvedValue([
+      { id: "user_456", displayName: "Mina", name: "Original Mina", image: null },
+    ]);
+
+    const response = await GET(new NextRequest("https://example.com/api/users/search?q=%20Mina%20"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      users: [{ id: "user_456", displayName: "Mina", name: "Original Mina", image: null }],
+    });
+    expect(mockUserFindMany).toHaveBeenCalledWith({
+      where: {
+        id: { not: "user_123" },
+        OR: [
+          { id: { contains: "Mina", mode: "insensitive" } },
+          { displayName: { contains: "Mina", mode: "insensitive" } },
+          { name: { contains: "Mina", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        displayName: true,
+        name: true,
+        image: true,
+      },
+    });
+  });
+});
