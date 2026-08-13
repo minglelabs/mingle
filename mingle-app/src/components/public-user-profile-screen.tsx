@@ -2,6 +2,7 @@
 
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { formatUsername } from "@/lib/usernames";
 import {
   AlertTriangle,
   Check,
@@ -23,6 +24,7 @@ type PublicUserProfileScreenProps = {
 
 type PublicUserProfile = {
   id: string;
+  username: string | null;
   name: string | null;
   image: string | null;
   displayName: string | null;
@@ -316,7 +318,7 @@ export default function PublicUserProfileScreen({
             <section className="flex flex-col items-center text-center">
               <ProfileAvatar image={profile.image} label={displayName} />
               <h2 className="mt-4 text-[20px] font-bold">{displayName}</h2>
-              <p className="mt-1 text-[14px] text-gray-500">{profile.id}</p>
+              {profile.username ? <p className="mt-1 text-[14px] text-gray-500">{formatUsername(profile.username)}</p> : null}
               {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}
               <div className="mt-5 flex items-center gap-8 text-center">
                 <div>

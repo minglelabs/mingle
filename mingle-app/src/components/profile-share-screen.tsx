@@ -9,6 +9,7 @@ import {
   Share2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { formatUsername } from "@/lib/usernames";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls, type PanInfo } from "framer-motion";
@@ -73,15 +74,16 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [profileDisplayName, setProfileDisplayName] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
   const statusTimeoutRef = useRef<number | null>(null);
   const isLeavingRef = useRef(false);
   const isMountedRef = useRef(false);
 
   const sessionUserId = session?.user?.id ?? "";
   const displayName = profileDisplayName || session?.user?.name?.trim() || dictionary.titles.my;
-  const profileHandle = displayName.startsWith("@")
+  const profileHandle = formatUsername(profileUsername) || (displayName.startsWith("@")
     ? displayName
-    : `@${displayName.replace(/\s+/g, "")}`;
+    : `@${displayName.replace(/\s+/g, "")}`);
   const profileUrl = useMemo(() => buildProfileShareUrl(locale), [locale]);
   const comingSoonLabel = locale === "ko"
     ? "아직 기능 준비중입니다."
@@ -107,10 +109,11 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
 
     let cancelled = false;
     void fetch("/api/profile", { cache: "no-store" })
-      .then(async (response) => (response.ok ? response.json() as Promise<{ displayName?: unknown }> : null))
+      .then(async (response) => (response.ok ? response.json() as Promise<{ displayName?: unknown; username?: unknown }> : null))
       .then((data) => {
-        if (cancelled || typeof data?.displayName !== "string") return;
-        setProfileDisplayName(data.displayName.trim());
+        if (cancelled || !data) return;
+        if (typeof data.displayName === "string") setProfileDisplayName(data.displayName.trim());
+        if (typeof data.username === "string") setProfileUsername(data.username.trim());
       })
       .catch(() => {
         // The session name remains available when profile hydration fails.

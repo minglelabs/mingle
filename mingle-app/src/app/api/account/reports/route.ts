@@ -28,6 +28,7 @@ export async function GET() {
       reportedUser: {
         select: {
           id: true,
+          username: true,
           displayName: true,
           name: true,
           image: true,

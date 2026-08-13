@@ -10,6 +10,7 @@ const MAX_RESULTS = 20;
 
 const userSearchSelect = {
   id: true,
+  username: true,
   displayName: true,
   name: true,
   image: true,
@@ -36,6 +37,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const usernameQuery = query.startsWith("@") ? query.slice(1) : query;
+  if (!usernameQuery) {
+    return NextResponse.json({ users: [] }, {
+      headers: { "Cache-Control": "private, no-store" },
+    });
+  }
+
   const users = await prisma.user.findMany({
     where: {
       AND: [
@@ -52,7 +60,7 @@ export async function GET(request: NextRequest) {
         },
         {
           OR: [
-            { id: { contains: query, mode: "insensitive" } },
+            { username: { contains: usernameQuery, mode: "insensitive" } },
             { displayName: { contains: query, mode: "insensitive" } },
             { name: { contains: query, mode: "insensitive" } },
           ],

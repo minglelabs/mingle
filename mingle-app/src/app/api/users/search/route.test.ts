@@ -51,10 +51,19 @@ describe("/api/users/search route", () => {
     expect(mockUserFindMany).not.toHaveBeenCalled();
   });
 
-  it("searches display names, names, and IDs while excluding the current user", async () => {
+  it("does not query the database when an at-sign has no username", async () => {
+    const response = await GET(new NextRequest("https://example.com/api/users/search?q=%40"));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ users: [] });
+    expect(mockUserFindMany).not.toHaveBeenCalled();
+  });
+
+  it("searches usernames and names while excluding the current user", async () => {
     mockUserFindMany.mockResolvedValue([
       {
         id: "user_456",
+        username: "mina.song",
         displayName: "Mina",
         name: "Original Mina",
         image: null,
@@ -68,6 +77,7 @@ describe("/api/users/search route", () => {
     expect(await response.json()).toEqual({
       users: [{
         id: "user_456",
+        username: "mina.song",
         displayName: "Mina",
         name: "Original Mina",
         image: null,
@@ -82,7 +92,7 @@ describe("/api/users/search route", () => {
           { blockedByRelations: { none: { blockerId: "user_123" } } },
           {
             OR: [
-              { id: { contains: "Mina", mode: "insensitive" } },
+              { username: { contains: "Mina", mode: "insensitive" } },
               { displayName: { contains: "Mina", mode: "insensitive" } },
               { name: { contains: "Mina", mode: "insensitive" } },
             ],
@@ -93,6 +103,7 @@ describe("/api/users/search route", () => {
       take: 20,
       select: {
         id: true,
+        username: true,
         displayName: true,
         name: true,
         image: true,

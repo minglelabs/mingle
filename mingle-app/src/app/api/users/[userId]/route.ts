@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { normalizeUsername } from "@/lib/usernames";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,26 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
   });
 }
 
+const userProfileSelect = {
+  id: true,
+  username: true,
+  name: true,
+  image: true,
+  displayName: true,
+  bio: true,
+  nationality: true,
+  _count: {
+    select: {
+      followerRelations: true,
+      followingRelations: true,
+    },
+  },
+  followerRelations: {
+    select: { followerId: true },
+    take: 1,
+  },
+} as const;
+
 export async function GET(_request: NextRequest, { params }: UserProfileRouteProps) {
   const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
   if (!viewerId) {
@@ -32,57 +53,60 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
   }
 
   const { userId: rawUserId } = await params;
-  const userId = rawUserId.trim();
-  if (!userId) {
+  const userReference = rawUserId.trim();
+  if (!userReference) {
     return responseJson({ error: "invalid_user_id" }, { status: 400 });
   }
-  if (userId === viewerId) {
-    return responseJson({ error: "use_profile_endpoint" }, { status: 400 });
-  }
-
-  const [user, block] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        image: true,
-        displayName: true,
-        bio: true,
-        nationality: true,
-        _count: {
-          select: {
-            followerRelations: true,
-            followingRelations: true,
+  const normalizedUsername = normalizeUsername(userReference.startsWith("@")
+    ? userReference.slice(1)
+    : userReference).value;
+  const userById = await prisma.user.findUnique({
+    where: { id: userReference },
+    select: {
+      ...userProfileSelect,
+      followerRelations: {
+        where: { followerId: viewerId },
+        ...userProfileSelect.followerRelations,
+      },
+    },
+  });
+  const user = userById ?? (normalizedUsername
+    ? await prisma.user.findUnique({
+        where: { username: normalizedUsername },
+        select: {
+          ...userProfileSelect,
+          followerRelations: {
+            where: { followerId: viewerId },
+            ...userProfileSelect.followerRelations,
           },
         },
-        followerRelations: {
-          where: { followerId: viewerId },
-          select: { followerId: true },
-          take: 1,
-        },
-      },
-    }),
-    prisma.userBlock.findFirst({
-      where: {
-        OR: [
-          { blockerId: viewerId, blockedId: userId },
-          { blockerId: userId, blockedId: viewerId },
-        ],
-      },
-      select: { blockerId: true, blockedId: true },
-    }),
-  ]);
+      })
+    : null);
 
   if (!user) {
     return responseJson({ error: "user_not_found" }, { status: 404 });
   }
-  if (block?.blockerId === userId) {
+  if (user.id === viewerId) {
+    return responseJson({ error: "use_profile_endpoint" }, { status: 400 });
+  }
+
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: viewerId, blockedId: user.id },
+        { blockerId: user.id, blockedId: viewerId },
+      ],
+    },
+    select: { blockerId: true, blockedId: true },
+  });
+
+  if (block?.blockerId === user.id) {
     return responseJson({ error: "user_unavailable" }, { status: 403 });
   }
 
   return responseJson({
     id: user.id,
+    username: user.username,
     name: user.name,
     image: user.image,
     displayName: user.displayName,

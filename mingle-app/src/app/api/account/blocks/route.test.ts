@@ -27,7 +27,7 @@ describe("/api/account/blocks route", () => {
       {
         id: "block_123",
         createdAt: new Date("2026-08-13T00:00:00.000Z"),
-        blocked: { id: "user_456", name: "Mina", image: null, displayName: "미나" },
+        blocked: { id: "user_456", username: "mina.song", name: "Mina", image: null, displayName: "미나" },
       },
     ]);
   });
@@ -40,7 +40,7 @@ describe("/api/account/blocks route", () => {
       blocks: [{
         id: "block_123",
         createdAt: "2026-08-13T00:00:00.000Z",
-        user: { id: "user_456", name: "Mina", image: null, displayName: "미나" },
+        user: { id: "user_456", username: "mina.song", name: "Mina", image: null, displayName: "미나" },
       }],
     });
     expect(mockUserBlockFindMany).toHaveBeenCalledWith({
@@ -49,7 +49,7 @@ describe("/api/account/blocks route", () => {
       select: {
         id: true,
         createdAt: true,
-        blocked: { select: { id: true, name: true, image: true, displayName: true } },
+        blocked: { select: { id: true, username: true, name: true, image: true, displayName: true } },
       },
     });
   });

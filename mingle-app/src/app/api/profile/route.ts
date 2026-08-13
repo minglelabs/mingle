@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
+import { normalizeUsername } from "@/lib/usernames";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,7 @@ const profileSelect = {
   id: true,
   name: true,
   image: true,
+  username: true,
   displayName: true,
   bio: true,
   nationality: true,
@@ -28,6 +30,7 @@ type ProfileRecord = {
   id: string;
   name: string | null;
   image: string | null;
+  username: string | null;
   displayName: string | null;
   bio: string | null;
   nationality: string | null;
@@ -119,10 +122,19 @@ export async function PATCH(request: NextRequest) {
   }
 
   const data: {
+    username?: string | null;
     displayName?: string | null;
     bio?: string | null;
     nationality?: string | null;
   } = {};
+
+  if (Object.prototype.hasOwnProperty.call(body, "username")) {
+    const username = normalizeUsername(body.username);
+    if (!username.valid) {
+      return NextResponse.json({ error: "invalid_username" }, { status: 400 });
+    }
+    data.username = username.value;
+  }
 
   if (Object.prototype.hasOwnProperty.call(body, "displayName")) {
     const displayName = normalizeOptionalText(body.displayName, MAX_DISPLAY_NAME_LENGTH);
@@ -159,7 +171,15 @@ export async function PATCH(request: NextRequest) {
       select: profileSelect,
     });
     return profileResponse(updated);
-  } catch {
+  } catch (error) {
+    if (
+      typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "P2002"
+    ) {
+      return NextResponse.json({ error: "username_taken" }, { status: 409 });
+    }
     return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
   }
 }

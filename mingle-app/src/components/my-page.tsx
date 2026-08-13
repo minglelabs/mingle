@@ -4,6 +4,7 @@ import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-b
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
+import { formatUsername, USERNAME_MAX_LENGTH } from "@/lib/usernames";
 import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
 import { ChevronLeft, FileText, Loader2, LogOut, Menu, ShieldOff, UserRound, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
@@ -16,6 +17,7 @@ type MyPageProps = {
 };
 
 type ProfileRecord = {
+  username: string | null;
   displayName: string | null;
   bio: string | null;
   nationality: string | null;
@@ -24,10 +26,13 @@ type ProfileRecord = {
 };
 
 type ProfileDraft = {
+  username: string;
   displayName: string;
   bio: string;
   nationality: SttLanguageCode;
 };
+
+type ProfileSaveResult = "saved" | "username_taken" | "username_invalid" | "failed";
 
 const PROFILE_EDIT_TRANSITION = {
   duration: 0.32,
@@ -41,6 +46,7 @@ type BlockedUserRecord = {
   createdAt: string;
   user: {
     id: string;
+    username: string | null;
     name: string | null;
     image: string | null;
     displayName: string | null;
@@ -56,6 +62,7 @@ type ReportRecord = {
   updatedAt: string;
   reportedUser: {
     id: string;
+    username: string | null;
     displayName: string | null;
     name: string | null;
     image: string | null;
@@ -196,6 +203,7 @@ function ProfileSettingsPanel({
     authRequired: locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history.",
     logout: dictionary.profile.logout,
     reportedUser: locale === "ko" ? "신고한 사용자" : "Reported user",
+    userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
     myMessage: locale === "ko" ? "신고 내용" : "Your report",
     teamReply: locale === "ko" ? "운영진 답변" : "Team reply",
     reasonLabels: {
@@ -367,13 +375,14 @@ function ProfileSettingsPanel({
                   ) : (
                     <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100">
                       {blocks.map((block) => {
-                        const name = block.user.displayName?.trim() || block.user.name?.trim() || block.user.id;
+                        const name = block.user.displayName?.trim() || block.user.name?.trim() || copy.userFallback;
+                        const username = formatUsername(block.user.username);
                         return (
                           <li key={block.id} className="flex items-center gap-3 px-3 py-3">
                             <UserMiniAvatar image={block.user.image} label={name} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-[14px] font-semibold">{name}</p>
-                              <p className="truncate text-[12px] text-gray-500">{block.user.id}</p>
+                              {username ? <p className="truncate text-[12px] text-gray-500">{username}</p> : null}
                             </div>
                             <button
                               type="button"
@@ -404,7 +413,8 @@ function ProfileSettingsPanel({
                   ) : (
                     <div className="space-y-3">
                       {reports.map((report) => {
-                        const name = report.reportedUser.displayName?.trim() || report.reportedUser.name?.trim() || report.reportedUser.id;
+                        const name = report.reportedUser.displayName?.trim() || report.reportedUser.name?.trim() || copy.userFallback;
+                        const username = formatUsername(report.reportedUser.username);
                         const statusLabel = report.status === "resolved"
                           ? (dictionary.profile.reportStatusResolved ?? "Resolved")
                           : report.status === "rejected"
@@ -419,6 +429,7 @@ function ProfileSettingsPanel({
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="truncate text-[14px] font-semibold">{name}</p>
+                                  {username ? <p className="mt-0.5 truncate text-[12px] text-gray-500">{username}</p> : null}
                                   <p className="mt-1 text-[12px] text-gray-500">{copy.reasonLabels[report.reason] ?? report.reason}</p>
                                 </div>
                                 <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-gray-600">{statusLabel}</span>
@@ -469,6 +480,7 @@ function ProfileEditPanel({
   imageUrl,
   initialBio,
   initialDisplayName,
+  initialUsername,
   initialNationality,
   onClose,
   onSave,
@@ -479,21 +491,26 @@ function ProfileEditPanel({
   imageUrl?: string | null;
   initialBio: string;
   initialDisplayName: string;
+  initialUsername: string;
   initialNationality: SttLanguageCode;
   onClose: () => void;
-  onSave: (draft: ProfileDraft) => Promise<boolean>;
+  onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
 }) {
   const motionControls = useAnimationControls();
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [username, setUsername] = useState(initialUsername);
   const [bio, setBio] = useState(initialBio);
   const [nationality, setNationality] = useState<SttLanguageCode>(initialNationality);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const copy = {
     title: dictionary.profile.editProfileTitle ?? dictionary.profile.editProfile,
+    usernameLabel: dictionary.profile.usernameLabel ?? (locale === "ko" ? "아이디" : "Username"),
+    usernamePlaceholder: dictionary.profile.usernamePlaceholder ?? (locale === "ko" ? "아이디를 입력하세요" : "Enter a username"),
+    usernameHint: dictionary.profile.usernameHint ?? (locale === "ko" ? "영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
     nameLabel: dictionary.profile.profileNameLabel ?? "Name",
     namePlaceholder: dictionary.profile.profileNamePlaceholder ?? "Enter your name",
     bioLabel: dictionary.profile.bioLabel ?? "Bio",
@@ -502,6 +519,8 @@ function ProfileEditPanel({
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
     saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
+    usernameTaken: dictionary.profile.usernameTakenMessage ?? (locale === "ko" ? "이미 사용 중인 아이디입니다." : "That username is already taken."),
+    usernameInvalid: dictionary.profile.usernameInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
   const localizedLanguageOptions = useMemo(
     () => LANGUAGE_OPTIONS.map((option) => ({
@@ -514,10 +533,11 @@ function ProfileEditPanel({
   useEffect(() => {
     if (!open) return;
     setDisplayName(initialDisplayName);
+    setUsername(initialUsername);
     setBio(initialBio);
     setNationality(initialNationality);
     setSaveError(null);
-  }, [initialBio, initialDisplayName, initialNationality, open]);
+  }, [initialBio, initialDisplayName, initialNationality, initialUsername, open]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -539,21 +559,22 @@ function ProfileEditPanel({
     setSaveError(null);
     try {
       const saved = await onSave({
+        username: username.trim(),
         displayName: displayName.trim(),
         bio: bio.trim(),
         nationality,
       });
-      if (saved) {
+      if (saved === "saved") {
         onClose();
       } else {
-        setSaveError(copy.saveError);
+        setSaveError(saved === "username_taken" ? copy.usernameTaken : saved === "username_invalid" ? copy.usernameInvalid : copy.saveError);
       }
     } catch {
       setSaveError(copy.saveError);
     } finally {
       setIsSaving(false);
     }
-  }, [bio, copy.saveError, displayName, isSaving, nationality, onClose, onSave]);
+  }, [bio, copy.saveError, copy.usernameInvalid, copy.usernameTaken, displayName, isSaving, nationality, onClose, onSave, username]);
 
   const handleBack = useCallback(async () => {
     if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
@@ -633,6 +654,25 @@ function ProfileEditPanel({
 
             <div className="space-y-5">
               <label className="block">
+                <span className="mb-1.5 block text-[13px] font-semibold text-gray-600">{copy.usernameLabel}</span>
+                <div className="flex items-center rounded-xl border border-gray-200 bg-gray-50 px-4 transition focus-within:border-gray-400 focus-within:bg-white">
+                  <span className="text-[15px] text-gray-500">@</span>
+                  <input
+                    type="text"
+                    value={username}
+                    maxLength={USERNAME_MAX_LENGTH}
+                    onChange={(event) => setUsername(event.target.value.replace(/[^A-Za-z0-9_.]/g, "").toLowerCase())}
+                    placeholder={copy.usernamePlaceholder}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="h-12 min-w-0 flex-1 bg-transparent pl-1 text-[15px] outline-none"
+                  />
+                </div>
+                <span className="mt-1 block text-[12px] text-gray-400">{copy.usernameHint}</span>
+              </label>
+
+              <label className="block">
                 <span className="mb-1.5 block text-[13px] font-semibold text-gray-600">{copy.nameLabel}</span>
                 <input
                   type="text"
@@ -698,6 +738,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<ProfileRecord>({
+    username: null,
     displayName: null,
     bio: null,
     nationality: null,
@@ -731,6 +772,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
       .then((data) => {
         if (cancelled || !data) return;
         setProfile({
+          username: typeof data.username === "string" ? data.username : null,
           displayName: typeof data.displayName === "string" ? data.displayName : null,
           bio: typeof data.bio === "string" ? data.bio : null,
           nationality: typeof data.nationality === "string" ? data.nationality : null,
@@ -747,26 +789,34 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     };
   }, [sessionUserId]);
 
-  const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<boolean> => {
+  const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
     try {
       const response = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      if (!response.ok) return false;
+      if (!response.ok) {
+        if (response.status === 409) return "username_taken";
+        if (response.status === 400) {
+          const errorBody = await response.json().catch(() => null) as { error?: unknown } | null;
+          if (errorBody?.error === "invalid_username") return "username_invalid";
+        }
+        return "failed";
+      }
 
       const saved = await response.json() as Partial<ProfileRecord>;
       setProfile({
+        username: typeof saved.username === "string" ? saved.username : null,
         displayName: typeof saved.displayName === "string" ? saved.displayName : null,
         bio: typeof saved.bio === "string" ? saved.bio : null,
         nationality: typeof saved.nationality === "string" ? saved.nationality : null,
         followersCount: typeof saved.followersCount === "number" ? saved.followersCount : 0,
         followingCount: typeof saved.followingCount === "number" ? saved.followingCount : 0,
       });
-      return true;
+      return "saved";
     } catch {
-      return false;
+      return "failed";
     }
   }, []);
 
@@ -782,6 +832,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         imageUrl={session?.user?.image}
         initialBio={profile.bio ?? ""}
         initialDisplayName={displayName}
+        initialUsername={profile.username ?? ""}
         initialNationality={nationality}
         onClose={() => setShowProfileEdit(false)}
         onSave={handleSaveProfile}
@@ -839,6 +890,7 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
 
           <div className="mt-4 pl-2">
             <p className="text-[15px] font-semibold text-slate-950">{displayName}</p>
+            {profile.username ? <p className="mt-0.5 text-[13px] text-gray-500">{formatUsername(profile.username)}</p> : null}
             <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p>
           </div>
 

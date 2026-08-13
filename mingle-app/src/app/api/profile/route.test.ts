@@ -51,6 +51,7 @@ describe("/api/profile route", () => {
       id: "user_123",
       name: "Original Name",
       image: null,
+      username: "original.name",
       displayName: "Mingle Name",
       bio: "Hello",
       nationality: "ko",
@@ -64,6 +65,7 @@ describe("/api/profile route", () => {
       id: "user_123",
       name: "Original Name",
       image: null,
+      username: "original.name",
       displayName: "Mingle Name",
       bio: "Hello",
       nationality: "ko",
@@ -77,6 +79,7 @@ describe("/api/profile route", () => {
         id: true,
         name: true,
         image: true,
+        username: true,
         displayName: true,
         bio: true,
         nationality: true,
@@ -95,6 +98,7 @@ describe("/api/profile route", () => {
       id: "user_123",
       name: "Original Name",
       image: null,
+      username: "new.name",
       displayName: "New Name",
       bio: "New bio",
       nationality: "ja",
@@ -105,6 +109,7 @@ describe("/api/profile route", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        username: "  New.Name ",
         displayName: "  New Name ",
         bio: "  New bio ",
         nationality: " ja ",
@@ -114,12 +119,14 @@ describe("/api/profile route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({
       displayName: "New Name",
+      username: "new.name",
       bio: "New bio",
       nationality: "ja",
     }));
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
+        username: "new.name",
         displayName: "New Name",
         bio: "New bio",
         nationality: "ja",
@@ -128,6 +135,7 @@ describe("/api/profile route", () => {
         id: true,
         name: true,
         image: true,
+        username: true,
         displayName: true,
         bio: true,
         nationality: true,
@@ -152,11 +160,35 @@ describe("/api/profile route", () => {
     expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 
+  it("rejects usernames with unsupported characters", async () => {
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ username: "name-with-dash" }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_username" });
+    expect(mockUserUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns a conflict when a username is already in use", async () => {
+    mockUserUpdate.mockRejectedValue({ code: "P2002" });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ username: "taken.name" }),
+    }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "username_taken" });
+  });
+
   it("accepts an STT language outside the primary UI locale list", async () => {
     mockUserUpdate.mockResolvedValue({
       id: "user_123",
       name: "Original Name",
       image: null,
+      username: null,
       displayName: null,
       bio: null,
       nationality: "cy",

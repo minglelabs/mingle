@@ -31,7 +31,7 @@ describe("/api/account/reports route", () => {
         status: "in_review",
         createdAt: new Date("2026-08-13T00:00:00.000Z"),
         updatedAt: new Date("2026-08-13T01:00:00.000Z"),
-        reportedUser: { id: "user_456", displayName: "미나", name: "Mina", image: null },
+        reportedUser: { id: "user_456", username: "mina.song", displayName: "미나", name: "Mina", image: null },
         replies: [{
           id: "reply_123",
           authorType: "team",
@@ -54,7 +54,7 @@ describe("/api/account/reports route", () => {
         status: "in_review",
         createdAt: "2026-08-13T00:00:00.000Z",
         updatedAt: "2026-08-13T01:00:00.000Z",
-        reportedUser: { id: "user_456", displayName: "미나", name: "Mina", image: null },
+        reportedUser: { id: "user_456", username: "mina.song", displayName: "미나", name: "Mina", image: null },
         replies: [{
           id: "reply_123",
           authorType: "team",

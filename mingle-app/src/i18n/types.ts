@@ -103,6 +103,11 @@ export type BaseAppDictionarySource = {
     editProfileTitle?: string;
     profileNameLabel?: string;
     profileNamePlaceholder?: string;
+    usernameLabel?: string;
+    usernamePlaceholder?: string;
+    usernameHint?: string;
+    usernameTakenMessage?: string;
+    usernameInvalidMessage?: string;
     bioLabel?: string;
     bioPlaceholder?: string;
     nationalityLabel?: string;
