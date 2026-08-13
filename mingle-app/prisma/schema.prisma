@@ -149,6 +149,9 @@ model AppConversationChannel {
   ownerUserId    String    @map("owner_user_id")
   sequenceNumber Int       @map("sequence_number")
   title          String
+  userEditedTitleAt DateTime? @map("user_edited_title_at")
+  autoTitleGeneratedAt DateTime? @map("auto_title_generated_at")
+  autoTitleLastTurnCount Int? @map("auto_title_last_turn_count")
   isDeleted      Boolean?  @map("is_deleted")
   status         String    @default("active")
   sessionKey     String    @unique @map("session_key")

@@ -8,6 +8,7 @@ const {
   mockCreateTrackedEventLog,
   mockEnsureTrackingContext,
   mockUpsertTrackedUser,
+  mockMaybeGenerateConversationTitleForSession,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
@@ -15,6 +16,7 @@ const {
   mockCreateTrackedEventLog: vi.fn(),
   mockEnsureTrackingContext: vi.fn(),
   mockUpsertTrackedUser: vi.fn(),
+  mockMaybeGenerateConversationTitleForSession: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -42,6 +44,10 @@ vi.mock("@/lib/app-analytics", () => ({
   upsertTrackedUser: mockUpsertTrackedUser,
 }));
 
+vi.mock("@/server/conversation-auto-title", () => ({
+  maybeGenerateConversationTitleForSession: mockMaybeGenerateConversationTitleForSession,
+}));
+
 import { handleLogClientEventV1 } from "@/server/api/handlers/v1/log-client-event-handler";
 
 describe("handleLogClientEventV1", () => {
@@ -53,6 +59,7 @@ describe("handleLogClientEventV1", () => {
     mockAppMessageContentUpsert.mockResolvedValue({});
     mockAppEventLogFindFirst.mockResolvedValue(null);
     mockCreateTrackedEventLog.mockResolvedValue(undefined);
+    mockMaybeGenerateConversationTitleForSession.mockResolvedValue(undefined);
   });
 
   it("persists translation model and infrastructure provider for finalized turns", async () => {
@@ -129,6 +136,9 @@ describe("handleLogClientEventV1", () => {
         }),
       }),
     );
+    expect(mockMaybeGenerateConversationTitleForSession).toHaveBeenCalledWith({
+      sessionKey: "sess_123",
+    });
   });
 
   it("ignores stale finalized turns after the conversation was cleared", async () => {
