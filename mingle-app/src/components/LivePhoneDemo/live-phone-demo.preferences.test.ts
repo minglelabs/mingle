@@ -21,7 +21,11 @@ import {
 
 describe('speech split control', () => {
   it('is not exposed as a user setting', () => {
-    expect(shouldShowSpeechSplitControl()).toBe(false)
+    expect(shouldShowSpeechSplitControl(false)).toBe(false)
+  })
+
+  it('is available for local development testing', () => {
+    expect(shouldShowSpeechSplitControl(true)).toBe(true)
   })
 })
 

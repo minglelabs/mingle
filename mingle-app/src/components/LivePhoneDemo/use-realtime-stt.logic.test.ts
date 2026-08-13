@@ -443,6 +443,24 @@ describe('use-realtime-stt pure logic', () => {
     expect(parsed?.finalizeSource).toBe('server_idle_snapshot')
   })
 
+  it('preserves the provider audio endpoint for latency measurement', () => {
+    const parsed = parseSttTranscriptMessage({
+      type: 'transcript',
+      data: {
+        is_final: true,
+        finalize_source: 'soniox_endpoint',
+        provider_audio_end_ms: 1_240,
+        utterance: {
+          text: 'Hello there',
+          language: 'en-US',
+          speaker: 'speaker-2',
+        },
+      },
+    })
+
+    expect(parsed?.providerAudioEndMs).toBe(1_240)
+  })
+
   it('promotes generic Chinese transcript language to zh-CN by default', () => {
     const parsed = parseSttTranscriptMessage({
       type: 'transcript',

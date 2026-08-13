@@ -17,6 +17,11 @@ import {
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import {
+  buildEndpointingLatencyCsv,
+  summarizeEndpointingLatencyMetrics,
+  type EndpointingLatencyMetric,
+} from './endpointing-latency-benchmark'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
@@ -1379,6 +1384,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
+  const isEndpointingLatencyBenchmarkEnabled = shouldShowSpeechSplitControl()
   const [langSelectorOpen, setLangSelectorOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuScreen, setMenuScreen] = useState<LivePhoneDemoMenuScreen>('root')
@@ -1387,6 +1393,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const [translationModelMenuOpen, setTranslationModelMenuOpen] = useState(false)
   const [textSizeLevel, setTextSizeLevel] = useState<number>(DEFAULT_TEXT_SIZE_LEVEL)
   const [sonioxManualFinalizeSilenceMs, setSonioxManualFinalizeSilenceMs] = useState<number>(DEFAULT_SONIOX_SILENCE_MS)
+  const [endpointingLatencyMetrics, setEndpointingLatencyMetrics] = useState<EndpointingLatencyMetric[]>([])
   const [translationModel, setTranslationModel] = useState<UserSelectableTranslationModel>(DEFAULT_SELECTABLE_TRANSLATION_MODEL)
   const [adBannerPosition, setAdBannerPosition] = useState<LivePhoneDemoAdBannerPosition | null>(null)
   const [sessionAdBannerPositionOverride, setSessionAdBannerPositionOverride] = useState<LivePhoneDemoAdBannerPosition | null>(null)
@@ -1428,6 +1435,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => buildLanguageSelectorButtonCodes(speechLanguages, effectiveTranslationLanguages),
     [effectiveTranslationLanguages, speechLanguages],
   )
+
+  const recordEndpointingLatencyMetric = useCallback((metric: EndpointingLatencyMetric) => {
+    setEndpointingLatencyMetrics((current) => [...current.slice(-199), metric])
+  }, [])
+  const endpointingLatencySummary = useMemo(
+    () => summarizeEndpointingLatencyMetrics(endpointingLatencyMetrics),
+    [endpointingLatencyMetrics],
+  )
+  const copyEndpointingLatencyCsv = useCallback(async () => {
+    const csv = buildEndpointingLatencyCsv(endpointingLatencyMetrics)
+    try {
+      await navigator.clipboard.writeText(csv)
+      toast.success('Endpointing benchmark CSV copied')
+    } catch {
+      toast.error('Could not copy endpointing benchmark CSV')
+    }
+  }, [endpointingLatencyMetrics])
 
   const {
     ttsEnabled: isSoundEnabled,
@@ -3366,6 +3390,9 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    onEndpointingLatencyMetric: isEndpointingLatencyBenchmarkEnabled
+      ? recordEndpointingLatencyMetric
+      : undefined,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
@@ -5456,6 +5483,37 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 )}
                               </div>
                             </label>
+                            )}
+
+                            {isEndpointingLatencyBenchmarkEnabled && (
+                              <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-700">
+                                <div className="flex items-center justify-between gap-2 font-semibold">
+                                  <span>Endpointing benchmark (local only)</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEndpointingLatencyMetrics([])}
+                                    className="text-slate-500 underline"
+                                  >
+                                    Clear
+                                  </button>
+                                </div>
+                                <p className="mt-1 text-slate-500">
+                                  Final receipt latency, estimated from Soniox audio end. No transcript text is collected.
+                                </p>
+                                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                                  <div><div className="font-semibold">{endpointingLatencySummary.count}</div><div className="text-slate-500">samples</div></div>
+                                  <div><div className="font-semibold">{endpointingLatencySummary.medianMs ?? '-'}ms</div><div className="text-slate-500">median</div></div>
+                                  <div><div className="font-semibold">{endpointingLatencySummary.p90Ms ?? '-'}ms</div><div className="text-slate-500">p90</div></div>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={endpointingLatencyMetrics.length === 0}
+                                  onClick={() => void copyEndpointingLatencyCsv()}
+                                  className="mt-3 w-full rounded-lg border border-slate-300 bg-white py-2 font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                  Copy CSV
+                                </button>
+                              </section>
                             )}
 
                             <div className="block">

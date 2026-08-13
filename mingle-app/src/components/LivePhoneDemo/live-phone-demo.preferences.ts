@@ -11,8 +11,10 @@ export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
 
-export function shouldShowSpeechSplitControl(): boolean {
-  return false
+export function shouldShowSpeechSplitControl(
+  isDevelopment = process.env.NODE_ENV === 'development',
+): boolean {
+  return isDevelopment
 }
 export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
 export type LivePhoneDemoInputMode = 'voice' | 'text'

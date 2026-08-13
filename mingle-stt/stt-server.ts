@@ -879,6 +879,7 @@ wss.on('connection', (clientWs) => {
                 speaker?: string,
                 options?: {
                     finalizeSource?: MingleSttFinalizeSource;
+                    providerAudioEndMs?: number;
                 },
             ): MingleSttFinalTurnPayload => {
                 const cleanedText = text.trim();
@@ -893,6 +894,9 @@ wss.on('connection', (clientWs) => {
                         data: {
                             is_final: isFinal,
                             ...(finalizeSource ? { finalize_source: finalizeSource } : {}),
+                            ...(Number.isFinite(options?.providerAudioEndMs)
+                                ? { provider_audio_end_ms: Math.floor(options!.providerAudioEndMs!) }
+                                : {}),
                             utterance: {
                                 text: cleanedText,
                                 language: cleanedLang,
@@ -949,7 +953,10 @@ wss.on('connection', (clientWs) => {
                     state.detectedLang,
                     true,
                     state.speaker,
-                    { finalizeSource },
+                    {
+                        finalizeSource,
+                        providerAudioEndMs: state.currentSnapshotEndMs,
+                    },
                 );
                 if (state.currentSnapshotEndMs > state.lastConsumedEndMs) {
                     state.lastConsumedEndMs = state.currentSnapshotEndMs;
@@ -995,7 +1002,10 @@ wss.on('connection', (clientWs) => {
                             finalizedDetectedLang,
                             true,
                             state.speaker,
-                            { finalizeSource },
+                            {
+                                finalizeSource,
+                                providerAudioEndMs: requestSpeaker.snapshotEndMs,
+                            },
                         )
                         : null;
                     if (payload) {
@@ -1388,7 +1398,10 @@ wss.on('connection', (clientWs) => {
                                     finalizedDetectedLang,
                                     true,
                                     speakerState.speaker,
-                                    { finalizeSource: usesSonioxEndpointDetection ? 'soniox_endpoint' : 'soniox_manual' },
+                                    {
+                                        finalizeSource: usesSonioxEndpointDetection ? 'soniox_endpoint' : 'soniox_manual',
+                                        providerAudioEndMs: finalizedEndMs,
+                                    },
                                 );
                                 if (payload) {
                                     lastFinalizedPayloadForFrame = payload;

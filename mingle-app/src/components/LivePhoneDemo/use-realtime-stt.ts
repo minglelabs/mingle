@@ -26,6 +26,10 @@ import {
   getOrCreateTrackingUserId,
 } from './realtime-storage'
 import type { UserSelectableTranslationModel } from '@/lib/translation-models'
+import {
+  buildEndpointingLatencyMetric,
+  type EndpointingLatencyMetric,
+} from './endpointing-latency-benchmark'
 
 export {
   buildStorageKey,
@@ -904,6 +908,7 @@ export interface ParsedSttTranscriptMessage {
   isFinal: boolean
   speaker: string
   finalizeSource?: string
+  providerAudioEndMs?: number
 }
 
 export function parseSttTranscriptMessage(
@@ -926,6 +931,10 @@ export function parseSttTranscriptMessage(
   const finalizeSource = typeof data.finalize_source === 'string' && data.finalize_source.trim()
     ? data.finalize_source.trim()
     : ''
+  const providerAudioEndMs = typeof data.provider_audio_end_ms === 'number'
+    && Number.isFinite(data.provider_audio_end_ms)
+    ? Math.max(0, Math.floor(data.provider_audio_end_ms))
+    : undefined
   const speaker = typeof utterance.speaker === 'string' && utterance.speaker.trim()
     ? utterance.speaker.trim()
     : 'unknown'
@@ -937,6 +946,7 @@ export function parseSttTranscriptMessage(
     isFinal,
     speaker,
     ...(finalizeSource ? { finalizeSource } : {}),
+    ...(providerAudioEndMs !== undefined ? { providerAudioEndMs } : {}),
   }
 }
 
@@ -1037,6 +1047,7 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  onEndpointingLatencyMetric?: (metric: EndpointingLatencyMetric) => void
 }
 
 type StopRecordingOptions = {
@@ -2195,6 +2206,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  onEndpointingLatencyMetric,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -2339,10 +2351,13 @@ export default function useRealtimeSTT({
   const utteranceIdRef = useRef(0)
   const usageIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastAudioChunkAtRef = useRef(0)
+  const sessionAudioStartedAtMsRef = useRef<number | null>(null)
   const isBackgroundRecoveringRef = useRef(false)
   const wasBackgroundedRef = useRef(false)
   const onLimitReachedRef = useRef(onLimitReached)
   onLimitReachedRef.current = onLimitReached
+  const onEndpointingLatencyMetricRef = useRef(onEndpointingLatencyMetric)
+  onEndpointingLatencyMetricRef.current = onEndpointingLatencyMetric
 
   // Ref mirror of partialTranslations for synchronous read
   // (avoids nesting setUtterances inside setPartialTranslations updater,
@@ -4187,6 +4202,7 @@ export default function useRealtimeSTT({
       })
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
+      sessionAudioStartedAtMsRef.current = Date.now()
       if (!hasActiveSessionRef.current) {
         hasActiveSessionRef.current = true
         void logClientEvent({
@@ -4211,7 +4227,15 @@ export default function useRealtimeSTT({
 
     const transcript = parseSttTranscriptMessage(message)
     if (transcript) {
-      const { rawText, text, language: lang, isFinal, speaker, finalizeSource } = transcript
+      const {
+        rawText,
+        text,
+        language: lang,
+        isFinal,
+        speaker,
+        finalizeSource,
+        providerAudioEndMs,
+      } = transcript
       logSttDebug('transcript.received', {
         speaker,
         isFinal,
@@ -4226,6 +4250,15 @@ export default function useRealtimeSTT({
       }
 
       if (isFinal) {
+        const latencyMetric = buildEndpointingLatencyMetric({
+          finalizeSource,
+          providerAudioEndMs,
+          sessionAudioStartedAtMs: sessionAudioStartedAtMsRef.current,
+          clientFinalReceivedAtMs: Date.now(),
+        })
+        if (latencyMetric) {
+          onEndpointingLatencyMetricRef.current?.(latencyMetric)
+        }
         // Ignore non-meaningful turns (only "." / spaces) entirely.
         // No bubble, translation, or TTS should be produced.
         const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -4492,6 +4525,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('connecting')
       stopFinalizeDedupRef.current = { utteranceId: '', expiresAt: 0 }
       turnStartedAtRef.current = null
+      sessionAudioStartedAtMsRef.current = null
       recentFinalizedUtterancesRef.current = []
       hasActiveSessionRef.current = false
       pendingTurnsBySpeakerRef.current = {}
