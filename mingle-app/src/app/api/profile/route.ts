@@ -16,6 +16,12 @@ const profileSelect = {
   displayName: true,
   bio: true,
   nationality: true,
+  _count: {
+    select: {
+      followerRelations: true,
+      followingRelations: true,
+    },
+  },
 } as const;
 
 type ProfileRecord = {
@@ -25,10 +31,19 @@ type ProfileRecord = {
   displayName: string | null;
   bio: string | null;
   nationality: string | null;
+  _count: {
+    followerRelations: number;
+    followingRelations: number;
+  };
 };
 
 function profileResponse(profile: ProfileRecord): NextResponse {
-  return NextResponse.json(profile, {
+  const { _count, ...profileFields } = profile;
+  return NextResponse.json({
+    ...profileFields,
+    followersCount: _count.followerRelations,
+    followingCount: _count.followingRelations,
+  }, {
     headers: { "Cache-Control": "private, no-store" },
   });
 }

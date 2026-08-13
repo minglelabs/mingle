@@ -67,6 +67,9 @@ export type BaseAppDictionarySource = {
     searchNoResults?: string;
     searchError?: string;
     userFallbackLabel?: string;
+    followAction?: string;
+    followingAction?: string;
+    followError?: string;
   };
   moments: {
     minutesAgoSuffix: string;

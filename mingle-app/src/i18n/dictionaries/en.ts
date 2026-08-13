@@ -51,6 +51,9 @@ export const enDictionary: BaseAppDictionarySource = {
     searchNoResults: "No results found.",
     searchError: "Could not search. Please try again.",
     userFallbackLabel: "Mingle user",
+    followAction: "Follow",
+    followingAction: "Following",
+    followError: "Could not update follow status.",
   },
   moments: {
     minutesAgoSuffix: "m ago",

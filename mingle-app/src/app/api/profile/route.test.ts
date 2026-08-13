@@ -61,6 +61,7 @@ describe("/api/profile route", () => {
       displayName: "Mingle Name",
       bio: "Hello",
       nationality: "ko",
+      _count: { followerRelations: 2, followingRelations: 3 },
     });
 
     const response = await GET();
@@ -73,6 +74,8 @@ describe("/api/profile route", () => {
       displayName: "Mingle Name",
       bio: "Hello",
       nationality: "ko",
+      followersCount: 2,
+      followingCount: 3,
     });
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(mockUserFindUnique).toHaveBeenCalledWith({
@@ -84,6 +87,12 @@ describe("/api/profile route", () => {
         displayName: true,
         bio: true,
         nationality: true,
+        _count: {
+          select: {
+            followerRelations: true,
+            followingRelations: true,
+          },
+        },
       },
     });
   });
@@ -97,6 +106,7 @@ describe("/api/profile route", () => {
       displayName: "New Name",
       bio: "New bio",
       nationality: "ja",
+      _count: { followerRelations: 1, followingRelations: 4 },
     });
 
     const response = await PATCH(new NextRequest("https://example.com/api/profile", {
@@ -129,6 +139,12 @@ describe("/api/profile route", () => {
         displayName: true,
         bio: true,
         nationality: true,
+        _count: {
+          select: {
+            followerRelations: true,
+            followingRelations: true,
+          },
+        },
       },
     });
   });

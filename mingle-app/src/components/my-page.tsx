@@ -17,6 +17,8 @@ type ProfileRecord = {
   displayName: string | null;
   bio: string | null;
   nationality: string | null;
+  followersCount: number;
+  followingCount: number;
 };
 
 type ProfileDraft = {
@@ -297,6 +299,8 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
     displayName: null,
     bio: null,
     nationality: null,
+    followersCount: 0,
+    followingCount: 0,
   });
   const [showProfileEdit, setShowProfileEdit] = useState(false);
 
@@ -323,6 +327,8 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
           displayName: typeof data.displayName === "string" ? data.displayName : null,
           bio: typeof data.bio === "string" ? data.bio : null,
           nationality: typeof data.nationality === "string" ? data.nationality : null,
+          followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
+          followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
         });
       })
       .catch(() => {
@@ -348,6 +354,8 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
         displayName: typeof saved.displayName === "string" ? saved.displayName : null,
         bio: typeof saved.bio === "string" ? saved.bio : null,
         nationality: typeof saved.nationality === "string" ? saved.nationality : null,
+        followersCount: typeof saved.followersCount === "number" ? saved.followersCount : 0,
+        followingCount: typeof saved.followingCount === "number" ? saved.followingCount : 0,
       });
       return true;
     } catch {
@@ -403,11 +411,11 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
                 <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.postsLabel}</p>
               </div>
               <div>
-                <p className="text-[18px] font-semibold leading-tight">0</p>
+                <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
                 <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.followersLabel}</p>
               </div>
               <div>
-                <p className="text-[18px] font-semibold leading-tight">0</p>
+                <p className="text-[18px] font-semibold leading-tight">{profile.followingCount}</p>
                 <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.followingLabel}</p>
               </div>
             </div>

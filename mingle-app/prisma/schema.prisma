@@ -9,58 +9,75 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(cuid())
-  externalUserId  String?  @unique @map("external_user_id")
-  email           String?  @unique(map: "app_users_email_key")
-  emailVerified   DateTime? @map("email_verified")
-  passwordHash    String?  @map("password_hash")
-  name            String?
-  image           String?
-  latestIpAddress String?  @map("latest_ip_address")
-  latestUserAgent String?  @map("latest_user_agent")
-  language        String?
-  pageLanguage    String?  @map("page_language")
-  referrer        String?
-  fullUrl         String?  @map("full_url")
-  queryParams     String?  @map("query_params")
-  screenWidth     Int?     @map("screen_width")
-  screenHeight    Int?     @map("screen_height")
-  timezone        String?
-  platform        String?
-  latestClientPlatform String? @map("latest_client_platform")
-  latestAppVersion String? @map("latest_app_version")
-  latestApiNamespace String? @map("latest_api_namespace")
-  appVersionHistory String[] @default([]) @map("app_version_history")
-  apiNamespaceHistory String[] @default([]) @map("api_namespace_history")
-  pathname        String?
-  demoTextSizeLevel Int?   @map("demo_text_size_level")
-  demoSilenceFinalizeMs Int? @default(500) @map("demo_silence_finalize_ms")
-  translationModel  String?  @map("translation_model")
-  adBannerPosition  String?  @map("ad_banner_position")
-  demoInputMode     String?  @map("demo_input_mode")
-  demoSpeakerEnabled Boolean? @default(false) @map("demo_speaker_enabled")
-  demoEchoAllowed Boolean? @default(true) @map("demo_echo_allowed")
-  totalUsageSec   Int      @default(0) @map("total_usage_sec")
-  displayName     String?  @map("display_name")
-  bio             String?  @db.Text
-  nationality     String?
-  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
-  lastSeenAt      DateTime @default(now()) @map("last_seen_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                    String    @id @default(cuid())
+  externalUserId        String?   @unique @map("external_user_id")
+  email                 String?   @unique(map: "app_users_email_key")
+  emailVerified         DateTime? @map("email_verified")
+  passwordHash          String?   @map("password_hash")
+  name                  String?
+  image                 String?
+  latestIpAddress       String?   @map("latest_ip_address")
+  latestUserAgent       String?   @map("latest_user_agent")
+  language              String?
+  pageLanguage          String?   @map("page_language")
+  referrer              String?
+  fullUrl               String?   @map("full_url")
+  queryParams           String?   @map("query_params")
+  screenWidth           Int?      @map("screen_width")
+  screenHeight          Int?      @map("screen_height")
+  timezone              String?
+  platform              String?
+  latestClientPlatform  String?   @map("latest_client_platform")
+  latestAppVersion      String?   @map("latest_app_version")
+  latestApiNamespace    String?   @map("latest_api_namespace")
+  appVersionHistory     String[]  @default([]) @map("app_version_history")
+  apiNamespaceHistory   String[]  @default([]) @map("api_namespace_history")
+  pathname              String?
+  demoTextSizeLevel     Int?      @map("demo_text_size_level")
+  demoSilenceFinalizeMs Int?      @default(500) @map("demo_silence_finalize_ms")
+  translationModel      String?   @map("translation_model")
+  adBannerPosition      String?   @map("ad_banner_position")
+  demoInputMode         String?   @map("demo_input_mode")
+  demoSpeakerEnabled    Boolean?  @default(false) @map("demo_speaker_enabled")
+  demoEchoAllowed       Boolean?  @default(true) @map("demo_echo_allowed")
+  totalUsageSec         Int       @default(0) @map("total_usage_sec")
+  displayName           String?   @map("display_name")
+  bio                   String?   @db.Text
+  nationality           String?
+  firstSeenAt           DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt            DateTime  @default(now()) @map("last_seen_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  messages  AppMessage[]
-  eventLogs AppEventLog[]
-  feedbackEntries AppFeedback[]
+  messages               AppMessage[]
+  eventLogs              AppEventLog[]
+  feedbackEntries        AppFeedback[]
   versionPoliciesCreated AppClientVersionPolicy[]
-  accounts  Account[]
-  sessions  Session[]
-  passwordResetTokens PasswordResetToken[]
-  conversationChannels AppConversationChannel[]
+  accounts               Account[]
+  sessions               Session[]
+  passwordResetTokens    PasswordResetToken[]
+  conversationChannels   AppConversationChannel[]
+  followingRelations     UserFollow[]             @relation("UserFollowing")
+  followerRelations      UserFollow[]             @relation("UserFollowers")
 
   @@index([lastSeenAt], map: "app_users_last_seen_at_idx")
   @@index([createdAt], map: "app_users_created_at_idx")
   @@map("app_users")
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId], map: "app_user_follows_follower_following_uidx")
+  @@index([followerId, createdAt], map: "app_user_follows_follower_created_at_idx")
+  @@index([followingId, createdAt], map: "app_user_follows_following_created_at_idx")
+  @@map("app_user_follows")
 }
 
 model AppMessage {
@@ -148,22 +165,22 @@ model AppEventLog {
 }
 
 model AppConversationChannel {
-  id             String    @id @default(cuid())
-  ownerUserId    String    @map("owner_user_id")
-  sequenceNumber Int       @map("sequence_number")
-  title          String
-  userEditedTitleAt DateTime? @map("user_edited_title_at")
-  autoTitleGeneratedAt DateTime? @map("auto_title_generated_at")
-  autoTitleLastTurnCount Int? @map("auto_title_last_turn_count")
-  isDeleted      Boolean?  @map("is_deleted")
-  status         String    @default("active")
-  sessionKey     String    @unique @map("session_key")
-  selectedLanguages String[] @default([]) @map("selected_languages")
-  speechLanguages   String[] @default([]) @map("speech_languages")
-  translationLanguagesLinked Boolean @default(true) @map("translation_languages_linked")
-  pausedAt       DateTime? @map("paused_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  id                         String    @id @default(cuid())
+  ownerUserId                String    @map("owner_user_id")
+  sequenceNumber             Int       @map("sequence_number")
+  title                      String
+  userEditedTitleAt          DateTime? @map("user_edited_title_at")
+  autoTitleGeneratedAt       DateTime? @map("auto_title_generated_at")
+  autoTitleLastTurnCount     Int?      @map("auto_title_last_turn_count")
+  isDeleted                  Boolean?  @map("is_deleted")
+  status                     String    @default("active")
+  sessionKey                 String    @unique @map("session_key")
+  selectedLanguages          String[]  @default([]) @map("selected_languages")
+  speechLanguages            String[]  @default([]) @map("speech_languages")
+  translationLanguagesLinked Boolean   @default(true) @map("translation_languages_linked")
+  pausedAt                   DateTime? @map("paused_at")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
 
   owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
 
@@ -258,13 +275,13 @@ model VerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  tokenHash String   @unique(map: "app_password_reset_tokens_token_hash_key") @map("token_hash")
-  expiresAt DateTime @map("expires_at")
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique(map: "app_password_reset_tokens_token_hash_key") @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -274,15 +291,15 @@ model PasswordResetToken {
 }
 
 model NativeAuthPendingResult {
-  requestId  String   @id @map("request_id")
-  status     String
-  provider   String?
-  callbackUrl String  @map("callback_url")
-  bridgeToken String? @map("bridge_token")
-  message    String?
-  expiresAt  DateTime @map("expires_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  requestId   String   @id @map("request_id")
+  status      String
+  provider    String?
+  callbackUrl String   @map("callback_url")
+  bridgeToken String?  @map("bridge_token")
+  message     String?
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([expiresAt], map: "native_auth_pending_results_expires_at_idx")
   @@map("native_auth_pending_results")

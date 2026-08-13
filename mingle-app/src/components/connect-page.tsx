@@ -4,7 +4,7 @@ import BottomTabBar from "@/components/bottom-tab-bar";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { Loader2, Search, UserRound, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ConnectPageProps = {
   dictionary: AppDictionary;
@@ -16,6 +16,7 @@ type UserSearchResult = {
   displayName: string | null;
   name: string | null;
   image: string | null;
+  isFollowing: boolean;
 };
 
 function resolveSearchCopy(dictionary: AppDictionary) {
@@ -31,6 +32,12 @@ function resolveSearchCopy(dictionary: AppDictionary) {
       ?? (isKorean ? "검색하지 못했습니다. 다시 시도해 주세요." : "Could not search. Please try again."),
     userFallback: dictionary.connect.userFallbackLabel
       ?? (isKorean ? "Mingle 사용자" : "Mingle user"),
+    follow: dictionary.connect.followAction
+      ?? (isKorean ? "팔로우" : "Follow"),
+    following: dictionary.connect.followingAction
+      ?? (isKorean ? "팔로잉" : "Following"),
+    followError: dictionary.connect.followError
+      ?? (isKorean ? "팔로우 상태를 변경하지 못했습니다." : "Could not update follow status."),
   };
 }
 
@@ -43,11 +50,47 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const [resultsQuery, setResultsQuery] = useState("");
   const [searchError, setSearchError] = useState(false);
   const [searchErrorQuery, setSearchErrorQuery] = useState("");
+  const [followInFlightIds, setFollowInFlightIds] = useState<Set<string>>(new Set());
+  const [followError, setFollowError] = useState(false);
   const copy = resolveSearchCopy(dictionary);
   const normalizedQuery = query.trim();
   const isSearching = Boolean(normalizedQuery) && searchingQuery === normalizedQuery;
   const visibleResults = resultsQuery === normalizedQuery ? results : [];
   const isSearchErrorVisible = searchError && searchErrorQuery === normalizedQuery;
+
+  const handleToggleFollow = useCallback(async (user: UserSearchResult) => {
+    if (followInFlightIds.has(user.id)) return;
+
+    const nextIsFollowing = !user.isFollowing;
+    setFollowError(false);
+    setFollowInFlightIds((current) => new Set(current).add(user.id));
+    setResults((current) => current.map((candidate) => (
+      candidate.id === user.id
+        ? { ...candidate, isFollowing: nextIsFollowing }
+        : candidate
+    )));
+
+    try {
+      const response = await fetch(
+        buildClientApiPath(`/users/${encodeURIComponent(user.id)}/follow`),
+        { method: nextIsFollowing ? "POST" : "DELETE" },
+      );
+      if (!response.ok) throw new Error("follow_update_failed");
+    } catch {
+      setFollowError(true);
+      setResults((current) => current.map((candidate) => (
+        candidate.id === user.id
+          ? { ...candidate, isFollowing: user.isFollowing }
+          : candidate
+      )));
+    } finally {
+      setFollowInFlightIds((current) => {
+        const next = new Set(current);
+        next.delete(user.id);
+        return next;
+      });
+    }
+  }, [followInFlightIds]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -136,6 +179,11 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {followError ? (
+          <p className="px-6 pt-4 text-center text-[13px] text-red-500" role="alert">
+            {copy.followError}
+          </p>
+        ) : null}
         {isSearching ? (
           <div className="flex justify-center pt-6 text-gray-400" aria-live="polite">
             <Loader2 size={22} className="animate-spin" aria-label={copy.searching} />
@@ -167,6 +215,19 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                       <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
                       <p className="truncate text-[13px] text-gray-500">{user.id}</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleFollow(user)}
+                      disabled={followInFlightIds.has(user.id)}
+                      className={`ml-auto shrink-0 rounded-lg border px-3 py-2 text-[13px] font-semibold transition active:opacity-70 disabled:opacity-50 ${
+                        user.isFollowing
+                          ? "border-amber-200 bg-amber-50 text-amber-700"
+                          : "border-gray-200 bg-white text-slate-800"
+                      }`}
+                      aria-pressed={user.isFollowing}
+                    >
+                      {followInFlightIds.has(user.id) ? "…" : user.isFollowing ? copy.following : copy.follow}
+                    </button>
                   </div>
                 </li>
               );

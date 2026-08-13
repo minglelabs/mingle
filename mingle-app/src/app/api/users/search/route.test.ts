@@ -53,14 +53,26 @@ describe("/api/users/search route", () => {
 
   it("searches display names, names, and IDs while excluding the current user", async () => {
     mockUserFindMany.mockResolvedValue([
-      { id: "user_456", displayName: "Mina", name: "Original Mina", image: null },
+      {
+        id: "user_456",
+        displayName: "Mina",
+        name: "Original Mina",
+        image: null,
+        followerRelations: [{ followerId: "user_123" }],
+      },
     ]);
 
     const response = await GET(new NextRequest("https://example.com/api/users/search?q=%20Mina%20"));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      users: [{ id: "user_456", displayName: "Mina", name: "Original Mina", image: null }],
+      users: [{
+        id: "user_456",
+        displayName: "Mina",
+        name: "Original Mina",
+        image: null,
+        isFollowing: true,
+      }],
     });
     expect(mockUserFindMany).toHaveBeenCalledWith({
       where: {
@@ -78,6 +90,11 @@ describe("/api/users/search route", () => {
         displayName: true,
         name: true,
         image: true,
+        followerRelations: {
+          where: { followerId: "user_123" },
+          select: { followerId: true },
+          take: 1,
+        },
       },
     });
   });

@@ -47,10 +47,22 @@ export async function GET(request: NextRequest) {
     },
     orderBy: { updatedAt: "desc" },
     take: MAX_RESULTS,
-    select: userSearchSelect,
+    select: {
+      ...userSearchSelect,
+      followerRelations: {
+        where: { followerId: userId },
+        select: { followerId: true },
+        take: 1,
+      },
+    },
   });
 
-  return NextResponse.json({ users }, {
+  return NextResponse.json({
+    users: users.map(({ followerRelations, ...user }) => ({
+      ...user,
+      isFollowing: followerRelations.length > 0,
+    })),
+  }, {
     headers: { "Cache-Control": "private, no-store" },
   });
 }
