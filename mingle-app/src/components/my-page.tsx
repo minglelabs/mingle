@@ -414,7 +414,7 @@ function ProfileSettingsPanel({
             <div aria-hidden="true" />
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
             <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
               <button
                 type="button"
@@ -498,7 +498,7 @@ function ProfileSettingsPanel({
             <div aria-hidden="true" />
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
             {managementPage === "language" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.appLanguageDescription}</p>
@@ -801,7 +801,7 @@ function ProfileEditPanel({
             </button>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-10 pt-6">
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
             <div className="flex justify-center pb-7">
               <ProfileAvatar
                 alt={copy.title}
@@ -855,10 +855,10 @@ function ProfileEditPanel({
                 <span className="mt-1 block text-right text-[12px] text-gray-400">{bio.length}/160</span>
               </label>
 
-              <fieldset>
+              <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
-                <div className="rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-                  <div className="flex items-stretch gap-3 p-2">
+                <div className="min-w-0 w-full max-w-full overflow-hidden rounded-[18px] border border-[#e6dfd2] bg-[#f3eee4] p-1 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                  <div className="flex min-w-0 w-full max-w-full items-stretch gap-3 p-2">
                     <label
                       className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
                       style={{ flex: showLanguageSortToggle ? "1 1 0" : "1 1 100%" }}
@@ -884,7 +884,7 @@ function ProfileEditPanel({
                           <button
                             type="button"
                             onClick={() => setLanguageSortMode("locale")}
-                            className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "locale" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
+                            className={`min-w-0 flex-1 truncate rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "locale" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
                             aria-pressed={languageSortMode === "locale"}
                           >
                             {languageCopy.languageSelectorSortLocaleLabel}
@@ -892,7 +892,7 @@ function ProfileEditPanel({
                           <button
                             type="button"
                             onClick={() => setLanguageSortMode("alphabetical")}
-                            className={`flex-1 rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "alphabetical" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
+                            className={`min-w-0 flex-1 truncate rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "alphabetical" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
                             aria-pressed={languageSortMode === "alphabetical"}
                           >
                             {languageCopy.languageSelectorSortAlphabeticalLabel}
@@ -902,7 +902,7 @@ function ProfileEditPanel({
                     ) : null}
                   </div>
 
-                  <div className="max-h-[360px] overflow-y-auto px-2 pb-2">
+                  <div className="min-w-0 max-w-full max-h-[360px] overflow-x-hidden overflow-y-auto px-2 pb-2">
                     {visibleLanguageItems.length === 0 ? (
                       <div className="flex min-h-[160px] items-center justify-center px-6 text-center text-[13px] text-slate-500">
                         {languageCopy.languageSelectorNoResultsLabel}
