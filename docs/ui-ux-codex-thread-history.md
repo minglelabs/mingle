@@ -614,4 +614,4 @@
   - Updated the iOS WebView shell to allow programmatic keyboard presentation, which is required for the focused input to open the keyboard without a second tap.
   - Kept the focus helper shared with the clear-search action so clearing the query returns directly to typing.
 - Data contract: None. Search requests, history snapshots, and follow actions are unchanged.
-- Testing notes: Verify on iPhone TestFlight build 66 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.
+- Testing notes: Verify on iPhone TestFlight build 67 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.
