@@ -554,6 +554,13 @@
 - User impact: Users could miss which interface language was active, especially on a small phone screen.
 - Resolution: The selected row now uses a dark high-contrast background, bold white label, and a larger circular check indicator with a standard icon. Unselected rows keep a light outlined indicator, while keyboard focus receives an inset focus ring.
 
+## 2026-08-14 - Match app-language selection to the key color
+
+- Surface: The app-language selector inside the My Page hamburger menu.
+- Issue: The selected language's dark filled row and white controls were visually heavier than the profile-edit language selector and did not use the Mingle key color.
+- User impact: The active language looked like a separate dark action state instead of a consistent, easy-to-scan selection focus.
+- Resolution: Replaced the dark treatment with a soft amber background, restrained amber inset outline, neutral selected text, amber flag-card accent, and the same amber check treatment used by the profile-edit selector. The keyboard focus ring now uses the same key color as well.
+
 ## 2026-08-14 - Restrict profile-surface swipe dismissal to the edge
 
 - Surface: Profile editing, the My Page hamburger menu and its blocked-user/report/app-language subpages, and profile sharing.
