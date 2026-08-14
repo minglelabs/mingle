@@ -4,14 +4,22 @@ import { notFound } from "next/navigation";
 
 type ProfileSharePageProps = {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function ProfileSharePage({ params }: ProfileSharePageProps) {
+export default async function ProfileSharePage({ params, searchParams }: ProfileSharePageProps) {
   const { locale } = await params;
+  const resolvedSearchParams = await searchParams;
 
   if (!isSupportedLocale(locale)) {
     notFound();
   }
 
-  return <ProfileShareScreen dictionary={getDictionary(locale)} locale={locale} />;
+  return (
+    <ProfileShareScreen
+      dictionary={getDictionary(locale)}
+      locale={locale}
+      initialHandle={typeof resolvedSearchParams.profileHandle === "string" ? resolvedSearchParams.profileHandle : ""}
+    />
+  );
 }

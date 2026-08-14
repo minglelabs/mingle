@@ -533,6 +533,20 @@
 - User impact: Users had to repeat the same search after inspecting every profile, which made comparing multiple profiles unnecessarily slow.
 - Resolution: Store the active search query and result snapshot on the current browser history entry. Restore it immediately when the Explore route mounts, keep the list visible while the latest search request refreshes follow status, and remove the snapshot when the search is cleared or changed.
 
+## 2026-08-14 - Add follower and following list navigation
+
+- Surface: My Page follower/following statistics, the follower/following list, and nested public user profiles.
+- Issue: The follower and following counts were static labels with no way to inspect the corresponding users. There was also no list-level search or navigation path for opening a user's public profile from a relationship list.
+- User impact: Users could not verify who followed them or whom they followed, and could not move from a relationship list into a profile and back without losing the intended navigation depth.
+- Resolution: Made both statistics interactive and added a dedicated right-entering `/mypage/follows` screen. The screen has follower/following tabs, name/handle search, full-row user links, edge-only back dismissal, and a route history sequence of My Page → relationship list → public profile. Returning from a public profile therefore lands on the relationship list first; a second back returns to My Page.
+
+## 2026-08-14 - Remove the profile-share handle hydration flash
+
+- Surface: Profile share screen opened from My Page.
+- Issue: The share route started with an empty handle and fetched the same profile a second time after mounting. The QR/share card therefore showed a fallback handle briefly before switching to the saved public handle.
+- User impact: The profile identifier visibly changed after the screen appeared, making the share card look unstable and suggesting that the profile data had not been saved.
+- Resolution: My Page now carries the already-hydrated public handle into the prefetched share route. The share screen uses it on its first render and still performs the existing server refresh for direct-entry or stale cases.
+
 ## 2026-08-14 - Strengthen the selected app-language state
 
 - Surface: The app-language selector inside the My Page menu and settings panel.

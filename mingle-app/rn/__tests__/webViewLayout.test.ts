@@ -1,5 +1,6 @@
 import {
   appendNativeRuntimeWebViewParams,
+  isLiveDemoPathname,
   isNativeTabRootUrl,
   shouldEnableIosWebViewBackForwardNavigation,
 } from '../src/webViewLayout';
@@ -100,5 +101,11 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
       canGoBack: false,
       canGoForward: false,
     })).toBe(false);
+  });
+});
+
+describe('isLiveDemoPathname', () => {
+  it('treats the follower/following list as an in-app My Page surface', () => {
+    expect(isLiveDemoPathname('/ko/mypage/follows')).toBe(true);
   });
 });

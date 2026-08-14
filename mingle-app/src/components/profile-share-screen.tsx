@@ -18,6 +18,7 @@ import { motion, useAnimationControls } from "framer-motion";
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
+  initialHandle?: string;
 };
 
 type NativeBridgeWindow = Window & {
@@ -68,14 +69,14 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
-export default function ProfileShareScreen({ dictionary, locale }: ProfileShareScreenProps) {
+export default function ProfileShareScreen({ dictionary, locale, initialHandle = "" }: ProfileShareScreenProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const motionControls = useAnimationControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [profileName, setProfileName] = useState("");
-  const [rawHandle, setRawHandle] = useState("");
+  const [rawHandle, setRawHandle] = useState(initialHandle.trim());
   const statusTimeoutRef = useRef<number | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const isLeavingRef = useRef(false);
@@ -83,9 +84,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
 
   const sessionUserId = session?.user?.id ?? "";
   const name = profileName || session?.user?.name?.trim() || dictionary.titles.my;
-  const profileHandle = formatHandle(rawHandle) || (name.startsWith("@")
-    ? name
-    : `@${name.replace(/\s+/g, "")}`);
+  const profileHandle = formatHandle(rawHandle);
   const profileUrl = useMemo(() => buildProfileShareUrl(locale), [locale]);
   const qrComingSoonLabel = dictionary.profile.profileShareQrComingSoonLabel
     ?? (locale === "ko" ? "아직 QR 기능은 준비중입니다." : "QR features are not available yet.");

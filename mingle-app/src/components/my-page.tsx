@@ -105,6 +105,11 @@ function getFallbackNationality(locale: AppLocale): SttLanguageCode {
   return getNationalityOption(locale)?.locale ?? "ko";
 }
 
+function appendPathSearchParam(path: string, key: string, value: string): string {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+}
+
 function LanguageOptionButton({
   option,
   selected,
@@ -1099,7 +1104,13 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
   const nationality = getNationalityOption(profile.nationality)?.locale
     ?? getFallbackNationality(locale);
   const nationalityFlag = getNationalityOption(nationality)?.flag;
-  const profileShareHref = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
+  const profileSharePath = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
+  const profileShareHref = profile.handle
+    ? appendPathSearchParam(profileSharePath, "profileHandle", profile.handle)
+    : profileSharePath;
+  const followListPath = buildNativeAwareTabPath(`/${locale}/mypage/follows`, searchParams);
+  const followersHref = appendPathSearchParam(followListPath, "tab", "followers");
+  const followingHref = appendPathSearchParam(followListPath, "tab", "following");
   const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, {
     skipConversationRestore: true,
     tabRoot: true,
@@ -1229,14 +1240,24 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
               imageUrl={session?.user?.image}
             />
             <div className="-translate-x-2 grid flex-1 grid-cols-2 gap-1 text-center">
-              <div>
+              <button
+                type="button"
+                onClick={() => router.push(followersHref)}
+                className="rounded-xl px-2 py-1 transition active:bg-gray-50"
+                aria-label={`${profile.followersCount} ${dictionary.profile.followersLabel}`}
+              >
                 <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
                 <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followersLabel}</p>
-              </div>
-              <div>
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(followingHref)}
+                className="rounded-xl px-2 py-1 transition active:bg-gray-50"
+                aria-label={`${profile.followingCount} ${dictionary.profile.followingLabel}`}
+              >
                 <p className="text-[18px] font-semibold leading-tight">{profile.followingCount}</p>
                 <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followingLabel}</p>
-              </div>
+              </button>
             </div>
           </div>
 
