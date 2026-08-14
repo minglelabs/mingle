@@ -5,8 +5,8 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { Loader2, Search, UserRound, X } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type ConnectPageProps = {
   dictionary: AppDictionary;
@@ -46,7 +46,6 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 }
 
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const [query, setQuery] = useState("");
@@ -205,27 +204,28 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           <ul className="border-t border-gray-100">
             {visibleResults.map((user) => {
               const name = user.name?.trim() || copy.userFallback;
+              const profileHref = `/${locale}/users/${encodeURIComponent(user.handle || user.id)}`;
               return (
                 <li key={user.id} className="border-b border-gray-100 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-                      {user.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={user.image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <UserRound size={24} className="text-gray-400" aria-hidden="true" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/${locale}/users/${encodeURIComponent(user.handle || user.id)}`)}
-                        className="block max-w-full truncate text-left text-[15px] font-semibold text-slate-900"
-                      >
-                        {name}
-                      </button>
-                      {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
-                    </div>
+                    <Link
+                      href={profileHref}
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                      aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
+                    >
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+                        {user.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={user.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <UserRound size={24} className="text-gray-400" aria-hidden="true" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
+                        {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
+                      </div>
+                    </Link>
                     <button
                       type="button"
                       onClick={() => void handleToggleFollow(user)}

@@ -519,6 +519,13 @@
 - Issue: The stat labels were smaller than the nearby profile-action labels, so they looked visually weak beneath the similarly sized counts.
 - Resolution: Increased both labels from 12px to 13px to match the profile-action text scale while preserving the existing count size, color, spacing, and layout.
 
+## 2026-08-14 - Expand Explore profile result tap targets
+
+- Surface: Explore search results and public user profile navigation.
+- Issue: Only the small display-name text was a navigation button. Tapping the result avatar, handle, or surrounding identity area did nothing, which made the first tap feel unreliable on a phone.
+- User impact: Users had to aim at a narrow text target or tap repeatedly before opening a searched user’s profile.
+- Resolution: Made the complete identity area—avatar, display name, and handle—a prefetched Next link with a full-row tap target and visible keyboard focus state. The follow action remains a separate button.
+
 ## 2026-08-14 - Strengthen the selected app-language state
 
 - Surface: The app-language selector inside the My Page menu and settings panel.
