@@ -21,7 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Loader2, MessageCirclePlus, PencilLine, Search, Trash2 } from "lucide-react";
+import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
@@ -126,6 +126,7 @@ const ROW_ACTION_CANCEL_DISTANCE_PX = 10;
 const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
+const CONVERSATION_CREATE_BUTTON_HEIGHT_PX = 72;
 
 type ConversationListCacheRecord = {
   savedAt: number;
@@ -1716,7 +1717,7 @@ export default function ConversationList({
         ? runtimeNativeConversationBottomInsetPx
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
-  const conversationListScrollPaddingBottomPx = BOTTOM_TAB_BAR_HEIGHT_PX + 20;
+  const conversationListScrollPaddingBottomPx = CONVERSATION_CREATE_BUTTON_HEIGHT_PX + 20;
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -3833,29 +3834,14 @@ export default function ConversationList({
       >
         <MingleWordmark />
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={handleOpenSearch}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
-            aria-label={copy.searchButtonLabel}
-          >
-            <Search size={22} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            onClick={handleCreateConversation}
-            disabled={actionDisabled}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={copy.newConversationButtonLabel}
-          >
-            {isCreatingConversation ? (
-              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
-            ) : (
-              <MessageCirclePlus size={22} strokeWidth={2} />
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleOpenSearch}
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+          aria-label={copy.searchButtonLabel}
+        >
+          <Search size={22} strokeWidth={2} />
+        </button>
       </header>
 
       <div
@@ -3986,6 +3972,40 @@ export default function ConversationList({
             </div>
           ) : null}
         </div>
+      </div>
+
+      <div
+        className="absolute inset-x-0 z-20"
+        style={{
+          bottom: `calc(${BOTTOM_TAB_BAR_HEIGHT_PX}px + env(safe-area-inset-bottom, 0px))`,
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleCreateConversation}
+          disabled={actionDisabled}
+          className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
+          aria-label={copy.newConversationButtonLabel}
+          style={{
+            minHeight: `${CONVERSATION_CREATE_BUTTON_HEIGHT_PX}px`,
+            paddingBottom: "16px",
+            backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)",
+          }}
+        >
+          <span
+            className={`flex min-h-[24px] items-center justify-center gap-2 transition-opacity ${
+              isCreatingConversation ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            <span>{copy.newConversationButtonLabel}</span>
+            <ArrowRight size={18} strokeWidth={2.4} />
+          </span>
+          {isCreatingConversation ? (
+            <span className="absolute inset-0 flex items-center justify-center">
+              <Loader2 size={20} className="animate-spin" strokeWidth={2.25} />
+            </span>
+          ) : null}
+        </button>
       </div>
 
       <BottomTabBar

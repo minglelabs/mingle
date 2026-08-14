@@ -589,3 +589,16 @@
 - Issue: The client session provider started without the server-known session, so a route transition could briefly expose the `loading` state. The conversation list treated that transient state as unauthenticated and displayed the login surface with the Korean copy “로그인 상태 확인 중...”.
 - User impact: A logged-in user saw an unnecessary login-checking screen while moving between tabs. Repeating the same tap often hid the flash, which made the navigation feel unreliable.
 - Resolution: Hydrate the shared session provider with the server session on the first render, stop refetching on window focus, show the auth gate only after a definitive `unauthenticated` result, and extend the JWT lifetime so the session remains valid until explicit sign-out.
+
+## 2026-08-14 - Restore the bottom new-conversation action
+
+- Surface: The 2.0.0 conversation-list screen above the native-aware bottom tab bar.
+- Issue: The new-conversation action was moved into the upper-right header beside search. On a phone, this made the primary action harder to discover and less comfortable to reach than the full-width action used before the messenger tabs were introduced in 1.1.4.
+- User impact: Starting a conversation required aiming at a small header icon instead of using the familiar, easy-to-reach action at the bottom of the conversation list.
+- Resolution:
+  - Removed the new-conversation icon from the conversation-list header, leaving search as the only header action.
+  - Restored the 1.1.4 full-width amber-to-orange `Start Conversation` button with its existing label, arrow, loading state, and create-flow handler.
+  - Rendered the button outside the scroll container as an absolute upper layer positioned directly above the bottom tab bar, so long lists can continue scrolling behind the button and the button remains visually fixed.
+  - Added scroll-bottom padding equal to the button height plus the existing breathing space, so the final conversation row can still be scrolled above the overlay when the list reaches its end.
+- Data contract: None. The existing conversation creation endpoint, create lock, accessibility label, and auto-start behavior are unchanged.
+- Testing notes: Verify on a real iPhone that the button remains fixed above the bottom tabs, long lists pass underneath it while scrolling, the last row is not permanently hidden at the scroll limit, and the loading state still prevents duplicate creation.
