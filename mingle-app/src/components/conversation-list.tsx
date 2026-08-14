@@ -3786,7 +3786,7 @@ export default function ConversationList({
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
-      {sessionStatus !== "authenticated" ? (
+      {sessionStatus === "unauthenticated" ? (
         <div
           className="absolute inset-0 z-[200] flex min-h-0 w-full overflow-hidden bg-white"
           role="dialog"

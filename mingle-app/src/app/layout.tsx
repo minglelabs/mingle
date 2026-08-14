@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { getServerSession } from "next-auth";
 import { Analytics } from "@vercel/analytics/next";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -7,6 +8,7 @@ import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
 import { TtsSettingsProvider } from "@/context/tts-settings";
+import { getAuthOptions } from "@/lib/auth-options";
 import { DEFAULT_LOCALE } from "@/i18n";
 import "./globals.css";
 
@@ -66,17 +68,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const session = await getServerSession(getAuthOptions());
+
   return (
     <html lang={DEFAULT_LOCALE}>
       <body className="antialiased">
         <AppLocalePreferenceSync />
         <TtsSettingsProvider>
-          <AuthSessionProvider>
+          <AuthSessionProvider session={session}>
             <MobileCanvasShell>{children}</MobileCanvasShell>
             <Toaster
               position="bottom-center"

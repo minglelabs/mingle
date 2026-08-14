@@ -74,7 +74,7 @@ export function resolveAuthGateVisualState(args: {
 }): AuthGateVisualState {
   const shouldShowAuthGate =
     args.requireAuthGate &&
-    (args.status === "loading" || args.status !== "authenticated");
+    args.status === "unauthenticated";
   const isLoading = args.status === "loading";
   const disabled = args.isSigningIn || isLoading;
   const emailSheetDisabled = args.isEmailSubmitting || isLoading;

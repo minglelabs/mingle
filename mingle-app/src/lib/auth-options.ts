@@ -339,6 +339,9 @@ const authBaseUrl = (
   || process.env.NEXT_PUBLIC_SITE_URL
   || ""
 ).trim();
+// Keep authenticated users signed in until they explicitly sign out.
+// The long-lived JWT is still removed immediately by NextAuth signOut.
+const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 100;
 const useSecureOauthCookies = authBaseUrl.startsWith("https://");
 const oauthCookieSameSite = (useSecureOauthCookies ? "none" : "lax") as "none" | "lax";
 const oauthCookiePrefix = useSecureOauthCookies ? "__Secure-" : "";
@@ -387,6 +390,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
   session: {
     // Keep JWT session strategy because native credential bridge sign-in relies on it.
     strategy: "jwt",
+    maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
   },
   cookies: {
     // Apple returns OAuth callback via cross-site POST(form_post), so Lax cookies can be dropped.
