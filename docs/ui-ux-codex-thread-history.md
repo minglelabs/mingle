@@ -492,6 +492,13 @@
 - User impact: Login looked visually cluttered and the banner occupied space on a screen that should focus on account entry and agreement actions.
 - Resolution: Treat localized and non-localized authentication paths as an explicit native-banner hidden state. The native banner is now hidden immediately from the current WebView pathname, and the WebView receives zero banner inset while authentication is active. Conversation-list and conversation-room ad behavior remains unchanged.
 
+## 2026-08-14 - Hide the banner behind the conversation-list authentication gate
+
+- Surface: The native conversation-list authentication gate shown before Apple/Google sign-in.
+- Issue: The login UI is an `authOnly` overlay rendered over `/ko/conversations`, not a separate `/ko/auth` pathname. The native banner pathname guard therefore continued to classify the screen as the conversation list and left the AdMob banner visible behind the login surface.
+- User impact: The login screen still showed the banner after the earlier route-based hide fix, making the authentication layout look unfinished and reducing its usable space.
+- Resolution: The conversation list now posts the native banner zone as `hidden` whenever the session is loading or unauthenticated, and returns it to `list` only after authentication succeeds. Search and conversation overlays retain the existing hidden behavior.
+
 ## 2026-08-14 - Restrict profile-surface swipe dismissal to the edge
 
 - Surface: Profile editing, the My Page hamburger menu and its blocked-user/report/app-language subpages, and profile sharing.

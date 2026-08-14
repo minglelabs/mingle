@@ -1,5 +1,17 @@
 export type NativeBannerZone = 'list' | 'conversation' | 'hidden'
 
+export function resolveConversationListNativeBannerZone(params: {
+  isAuthenticated: boolean
+  hasActiveConversation: boolean
+  isSearchOpen: boolean
+}): NativeBannerZone {
+  if (!params.isAuthenticated || params.hasActiveConversation || params.isSearchOpen) {
+    return 'hidden'
+  }
+
+  return 'list'
+}
+
 type NativeBannerZoneBridgeWindow = Window & {
   ReactNativeWebView?: {
     postMessage?: (message: string) => void

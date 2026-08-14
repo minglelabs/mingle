@@ -83,7 +83,10 @@ import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
-import { postNativeBannerZone } from "@/lib/native-banner-zone";
+import {
+  postNativeBannerZone,
+  resolveConversationListNativeBannerZone,
+} from "@/lib/native-banner-zone";
 import {
   readNativeQaBridgeAuthority,
   shouldExposeNativeQaBridge,
@@ -2864,13 +2867,12 @@ export default function ConversationList({
 
   useEffect(() => {
     if (!isNativeAppRuntime()) return;
-    if (showSearch) {
-      postNativeBannerZone("hidden");
-      return;
-    }
-    if (activeConversation) return;
-    postNativeBannerZone("list");
-  }, [activeConversation, showSearch]);
+    postNativeBannerZone(resolveConversationListNativeBannerZone({
+      isAuthenticated: sessionStatus === "authenticated",
+      hasActiveConversation: Boolean(activeConversation),
+      isSearchOpen: showSearch,
+    }));
+  }, [activeConversation, sessionStatus, showSearch]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
