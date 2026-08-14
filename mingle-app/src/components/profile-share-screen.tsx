@@ -10,9 +10,10 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { formatHandle } from "@/lib/handles";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useAnimationControls, type PanInfo } from "framer-motion";
+import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
@@ -71,6 +72,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const router = useRouter();
   const { data: session } = useSession();
   const motionControls = useAnimationControls();
+  const dragControls = useDragControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [profileName, setProfileName] = useState("");
@@ -134,13 +136,17 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     router.push(`/${locale}/mypage`);
   }, [locale, router]);
 
-  const handleBack = useCallback(async () => {
+  const handleBack = useCallback(() => {
     if (isLeavingRef.current || !isMountedRef.current) return;
     isLeavingRef.current = true;
-    await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
-    if (!isMountedRef.current) return;
     navigateBack();
-  }, [motionControls, navigateBack]);
+  }, [navigateBack]);
+
+  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    dragControls.start(event);
+  }, [dragControls]);
 
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (isLeavingRef.current || !isMountedRef.current) return;
@@ -195,13 +201,14 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     syncViewportWidth();
     window.addEventListener("resize", syncViewportWidth);
 
+    void router.prefetch(`/${locale}/mypage`);
     void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
 
     return () => {
       isMountedRef.current = false;
       window.removeEventListener("resize", syncViewportWidth);
     };
-  }, [motionControls]);
+  }, [locale, motionControls, router]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -233,9 +240,13 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
       initial={{ x: "100%" }}
       animate={motionControls}
       drag="x"
+      dragControls={dragControls}
+      dragDirectionLock
+      dragListener={false}
       dragConstraints={{ left: 0, right: viewportWidth }}
       dragElastic={0.08}
       dragMomentum={false}
+      onPointerDown={handlePanelPointerDown}
       onDragEnd={handleDragEnd}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
       style={{

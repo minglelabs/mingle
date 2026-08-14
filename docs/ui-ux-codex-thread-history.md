@@ -491,3 +491,12 @@
 - Issue: The native AdMob banner could remain visible while the WebView was transitioning from the conversation list into the login screen. The ad made the authentication surface feel like an accidental continuation of the signed-in conversation layout.
 - User impact: Login looked visually cluttered and the banner occupied space on a screen that should focus on account entry and agreement actions.
 - Resolution: Treat localized and non-localized authentication paths as an explicit native-banner hidden state. The native banner is now hidden immediately from the current WebView pathname, and the WebView receives zero banner inset while authentication is active. Conversation-list and conversation-room ad behavior remains unchanged.
+
+## 2026-08-14 - Restrict profile-surface swipe dismissal to the edge
+
+- Surface: Profile editing, the My Page hamburger menu and its blocked-user/report/app-language subpages, and profile sharing.
+- Issue: The full surface listened for horizontal drag gestures, so a vertical scroll with a small horizontal deviation could begin dismissing the page. Profile sharing also animated itself off-screen before routing back, briefly exposing a blank white page background.
+- Resolution:
+  - Start the horizontal drag only when the pointer begins within the first 32px of the panel's local left edge, matching the expected iOS back-swipe origin.
+  - Lock the gesture direction and keep `touchAction: pan-y` so vertical content scrolling remains the native interaction everywhere else.
+  - Navigate back immediately from profile sharing and prefetch My Page on mount, avoiding the route-level exit gap that exposed the blank background.

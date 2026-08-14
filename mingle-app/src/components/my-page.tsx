@@ -14,13 +14,14 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
-import { AnimatePresence, motion, useAnimationControls, type PanInfo } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 type MyPageProps = {
   dictionary: AppDictionary;
@@ -188,7 +189,9 @@ function ProfileSettingsPanel({
   const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
   const motionControls = useAnimationControls();
+  const dragControls = useDragControls();
   const managementMotionControls = useAnimationControls();
+  const managementDragControls = useDragControls();
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
   const isManagementLeavingRef = useRef(false);
@@ -351,6 +354,18 @@ function ProfileSettingsPanel({
     onChangeAppLanguage(nextLocale);
   }, [locale, onChangeAppLanguage]);
 
+  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    dragControls.start(event);
+  }, [dragControls]);
+
+  const handleManagementPanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    managementDragControls.start(event);
+  }, [managementDragControls]);
+
   const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (!isMountedRef.current || isLeavingRef.current) return;
     if (info.offset.x >= PROFILE_EDIT_SWIPE_THRESHOLD_PX || info.velocity.x >= PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND) {
@@ -383,9 +398,13 @@ function ProfileSettingsPanel({
           exit={{ x: "100%" }}
           transition={PROFILE_EDIT_TRANSITION}
           drag="x"
+          dragControls={dragControls}
+          dragDirectionLock
+          dragListener={false}
           dragConstraints={{ left: 0, right: viewportWidth }}
           dragElastic={0.08}
           dragMomentum={false}
+          onPointerDown={handlePanelPointerDown}
           onDragEnd={handleDragEnd}
           className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
           style={{ touchAction: "pan-y" }}
@@ -465,9 +484,13 @@ function ProfileSettingsPanel({
           exit={{ x: "100%" }}
           transition={PROFILE_EDIT_TRANSITION}
           drag="x"
+          dragControls={managementDragControls}
+          dragDirectionLock
+          dragListener={false}
           dragConstraints={{ left: 0, right: viewportWidth }}
           dragElastic={0.08}
           dragMomentum={false}
+          onPointerDown={handleManagementPanelPointerDown}
           onDragEnd={handleManagementDragEnd}
           className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
           style={{ touchAction: "pan-y" }}
@@ -641,6 +664,7 @@ function ProfileEditPanel({
   open: boolean;
 }) {
   const motionControls = useAnimationControls();
+  const dragControls = useDragControls();
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
   const [name, setName] = useState(initialName);
@@ -709,6 +733,12 @@ function ProfileEditPanel({
     void motionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
   }, [motionControls, open]);
 
+  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    dragControls.start(event);
+  }, [dragControls]);
+
   const handleSave = useCallback(async () => {
     if (isSaving) return;
 
@@ -762,9 +792,13 @@ function ProfileEditPanel({
           exit={{ x: "100%" }}
           transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
           drag="x"
+          dragControls={dragControls}
+          dragDirectionLock
+          dragListener={false}
           dragConstraints={{ left: 0, right: 480 }}
           dragElastic={0.08}
           dragMomentum={false}
+          onPointerDown={handlePanelPointerDown}
           onDragEnd={handleDragEnd}
           className="fixed inset-0 z-[90] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
           style={{ touchAction: "pan-y" }}
