@@ -38,6 +38,14 @@ export function isLiveDemoPathname(pathname: string): boolean {
   );
 }
 
+function isMyPagePathname(pathname: string): boolean {
+  const segments = splitPathname(pathname);
+  if (segments.length < 2) return false;
+
+  const locale = segments[0]?.toLowerCase() || '';
+  return WEB_SUPPORTED_LOCALE_SEGMENTS.has(locale) && segments[1] === 'mypage';
+}
+
 export function isNativeTabRootUrl(rawUrl: string): boolean {
   const candidate = rawUrl.trim();
   if (!candidate) return false;
@@ -70,6 +78,12 @@ export function shouldEnableIosWebViewBackForwardNavigation(params: {
   currentUrl?: string;
 }): boolean {
   if (!params.isIosPlatform) return false;
+  // My Page owns its panel-level edge swipes. Letting WKWebView handle the
+  // same gesture on profile/share routes can race the web router and briefly
+  // expose the native WebView background during the route transition.
+  if (params.currentUrl && isMyPagePathname(parseWebPathname(params.currentUrl))) {
+    return false;
+  }
   // A tab switch marks the destination as a fresh navigation root. Do not
   // expose the WebView's older cross-tab history entries as edge-swipe targets.
   if (params.currentUrl && isNativeTabRootUrl(params.currentUrl)) {

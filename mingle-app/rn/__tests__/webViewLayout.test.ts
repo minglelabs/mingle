@@ -79,6 +79,21 @@ describe('shouldEnableIosWebViewBackForwardNavigation', () => {
     })).toBe(true);
   });
 
+  it('returns false for My Page surfaces so web panel swipes own the gesture', () => {
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: false,
+      currentUrl: `${BASE}/ko/mypage/share?nativeUi=1`,
+    })).toBe(false);
+    expect(shouldEnableIosWebViewBackForwardNavigation({
+      isIosPlatform: true,
+      canGoBack: true,
+      canGoForward: true,
+      currentUrl: `${BASE}/ko/mypage?nativeUi=1`,
+    })).toBe(false);
+  });
+
   it('returns false on iOS without currentUrl or back history', () => {
     expect(shouldEnableIosWebViewBackForwardNavigation({
       isIosPlatform: true,

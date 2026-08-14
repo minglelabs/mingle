@@ -11,9 +11,9 @@ import {
 import { useSession } from "next-auth/react";
 import { formatHandle } from "@/lib/handles";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
+import { motion, useAnimationControls } from "framer-motion";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
@@ -31,7 +31,6 @@ const PROFILE_SHARE_TRANSITION = {
   ease: [0.22, 1, 0.36, 1] as const,
 };
 const PROFILE_SHARE_SWIPE_THRESHOLD_PX = 72;
-const PROFILE_SHARE_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
 function buildProfileShareUrl(locale: AppLocale): string {
   const profilePath = `/${locale}/mypage`;
@@ -72,12 +71,12 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const router = useRouter();
   const { data: session } = useSession();
   const motionControls = useAnimationControls();
-  const dragControls = useDragControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [profileName, setProfileName] = useState("");
   const [rawHandle, setRawHandle] = useState("");
   const statusTimeoutRef = useRef<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const isLeavingRef = useRef(false);
   const isMountedRef = useRef(false);
 
@@ -142,26 +141,40 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     navigateBack();
   }, [navigateBack]);
 
-  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
-    if (!isLeftEdgeSwipeStart(localClientX)) return;
-    dragControls.start(event);
-  }, [dragControls]);
+  const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    if (!touch) {
+      touchStartRef.current = null;
+      return;
+    }
 
-  const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-    if (isLeavingRef.current || !isMountedRef.current) return;
+    const localClientX = touch.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) {
+      touchStartRef.current = null;
+      return;
+    }
 
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || isLeavingRef.current || !isMountedRef.current) return;
+
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = Math.abs(touch.clientY - start.y);
     const closeThreshold = Math.max(
       PROFILE_SHARE_SWIPE_THRESHOLD_PX,
       viewportWidth * 0.2,
     );
-    if (info.offset.x >= closeThreshold || info.velocity.x >= PROFILE_SHARE_SWIPE_VELOCITY_PX_PER_SECOND) {
+    if (deltaX >= closeThreshold && deltaX > deltaY * 1.2) {
       void handleBack();
-      return;
     }
-
-    void motionControls.start({ x: 0, transition: PROFILE_SHARE_TRANSITION });
-  }, [handleBack, motionControls, viewportWidth]);
+  }, [handleBack, viewportWidth]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -239,15 +252,11 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     <motion.main
       initial={{ x: "100%" }}
       animate={motionControls}
-      drag="x"
-      dragControls={dragControls}
-      dragDirectionLock
-      dragListener={false}
-      dragConstraints={{ left: 0, right: viewportWidth }}
-      dragElastic={0.08}
-      dragMomentum={false}
-      onPointerDown={handlePanelPointerDown}
-      onDragEnd={handleDragEnd}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={() => {
+        touchStartRef.current = null;
+      }}
       className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
       style={{
         background: "linear-gradient(135deg, #1295e8 0%, #3569ed 52%, #7338f2 100%)",

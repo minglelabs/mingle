@@ -500,3 +500,9 @@
   - Start the horizontal drag only when the pointer begins within the first 32px of the panel's local left edge, matching the expected iOS back-swipe origin.
   - Lock the gesture direction and keep `touchAction: pan-y` so vertical content scrolling remains the native interaction everywhere else.
   - Navigate back immediately from profile sharing and prefetch My Page on mount, avoiding the route-level exit gap that exposed the blank background.
+
+## 2026-08-14 - Keep native history gestures out of profile panels
+
+- Surface: iOS WebView navigation on My Page and profile sharing.
+- Issue: The native WKWebView back/forward gesture remained enabled on profile routes while the web UI also owned an edge-swipe dismissal. Both navigation layers could react to one gesture, and the native history transition briefly exposed the WebView's white background.
+- Resolution: Disable native WebView back/forward gestures for the `/mypage` route family. Profile editing, hamburger subpages, and profile sharing now use the web panel's edge-only gesture exclusively, while native history gestures remain available for conversation navigation.
