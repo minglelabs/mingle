@@ -863,6 +863,10 @@ function isAuthLikePathname(pathname: string): boolean {
   return false;
 }
 
+export function shouldHideNativeBannersForPathname(pathname: string): boolean {
+  return isAuthLikePathname(pathname);
+}
+
 function isAllowedNativeAuthStartPath(pathname: string): boolean {
   const normalized = pathname.trim();
   if (!normalized.startsWith('/')) return false;
@@ -1461,6 +1465,10 @@ function AppInner(): React.JSX.Element {
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const canRenderNativeBanner = versionGate.status === 'ready';
+  const shouldHideNativeBanners = useMemo(
+    () => shouldHideNativeBannersForPathname(currentWebPathname),
+    [currentWebPathname],
+  );
   const shouldDisableIosScroll = useMemo(() => shouldDisableIosWebViewScrolling({
     isIosPlatform: Platform.OS === 'ios',
     pathname: currentWebPathname,
@@ -1910,8 +1918,12 @@ function AppInner(): React.JSX.Element {
 
   const emitBannerLayoutToWeb = useCallback(() => {
     if (!nativeBannerUnitId) return;
-    const shouldReserveListTopInset = activeBannerZone === 'list' && canRenderNativeBanner && nativeAdsReady;
-    const shouldReserveConversationInset = activeBannerZone === 'conversation'
+    const shouldReserveListTopInset = !shouldHideNativeBanners
+      && activeBannerZone === 'list'
+      && canRenderNativeBanner
+      && nativeAdsReady;
+    const shouldReserveConversationInset = !shouldHideNativeBanners
+      && activeBannerZone === 'conversation'
       && canRenderNativeBanner
       && nativeAdsReady
       && !isNativeMenuOverlayOpen;
@@ -1947,6 +1959,7 @@ function AppInner(): React.JSX.Element {
     nativeBannerUnitId,
     nativeTranscriptInsetPx,
     safeAreaInsets.bottom,
+    shouldHideNativeBanners,
   ]);
 
   const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {
@@ -2918,7 +2931,7 @@ function AppInner(): React.JSX.Element {
             bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
-            hidden={activeBannerZone !== 'list'}
+            hidden={shouldHideNativeBanners || activeBannerZone !== 'list'}
           />
           <NativeAdBanner
             adModule={nativeAdModule}
@@ -2930,7 +2943,7 @@ function AppInner(): React.JSX.Element {
             bottomOffsetPx={nativeConversationBannerBottomOffsetPx}
             ready={nativeAdsReady}
             reloadToken={nativeBannerReloadToken}
-            hidden={activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
+            hidden={shouldHideNativeBanners || activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
           />
         </>
       ) : null}

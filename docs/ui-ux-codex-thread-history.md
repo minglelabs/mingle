@@ -484,3 +484,10 @@
 - Product decision: `User.id` remains the internal database key. The public, unique user ID is stored as `handle` and displayed as `아이디`/`@handle` in the Korean UI. The existing `name` column is the single visible name: OAuth's initial name is saved there, profile editing updates that same value, and later logins do not overwrite the user's edit. The duplicate `display_name` concept is removed from the 2.0.0 UI and schema.
 - Resolution: Renamed the 2.0.0 Prisma/API/client contract from `username` to `handle`, removed `displayName` usage, routed profile/search/social surfaces through `name` plus `handle`, and kept admin-login `username` terminology isolated because it is unrelated to user profiles.
 - Compatibility: The migration installs an `app.app_users` insert trigger that derives a unique handle when the shared 1.1.4 server inserts a user without knowing the new column. Existing `name` data is preserved, and any earlier `display_name` data is used only when `name` is empty before the duplicate column is removed.
+
+## 2026-08-14 - Hide native banner ads on login
+
+- Surface: Native iOS/Android login and authentication routes.
+- Issue: The native AdMob banner could remain visible while the WebView was transitioning from the conversation list into the login screen. The ad made the authentication surface feel like an accidental continuation of the signed-in conversation layout.
+- User impact: Login looked visually cluttered and the banner occupied space on a screen that should focus on account entry and agreement actions.
+- Resolution: Treat localized and non-localized authentication paths as an explicit native-banner hidden state. The native banner is now hidden immediately from the current WebView pathname, and the WebView receives zero banner inset while authentication is active. Conversation-list and conversation-room ad behavior remains unchanged.
