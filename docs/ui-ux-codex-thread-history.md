@@ -506,6 +506,13 @@
 - User impact: Users had to search or scroll to confirm the active language, and the most useful language choices were not easy to reach.
 - Resolution: Search and sort controls remain at the top. The list now shows the current language first, a fixed seven-language group in the order English, Spanish, Korean, Japanese, Chinese, French, Portuguese, and then the complete locale/alphabetically sorted catalog. The current language remains checked in its original position in the complete catalog as well as in the first section. Search filters the featured and complete sections without hiding the current-language summary.
 
+## 2026-08-14 - Strengthen the selected app-language state
+
+- Surface: The app-language selector inside the My Page menu and settings panel.
+- Issue: The selected state was represented by a small amber text check mark, which was difficult to see and did not sufficiently distinguish the selected row from the other languages.
+- User impact: Users could miss which interface language was active, especially on a small phone screen.
+- Resolution: The selected row now uses a dark high-contrast background, bold white label, and a larger circular check indicator with a standard icon. Unselected rows keep a light outlined indicator, while keyboard focus receives an inset focus ring.
+
 ## 2026-08-14 - Restrict profile-surface swipe dismissal to the edge
 
 - Surface: Profile editing, the My Page hamburger menu and its blocked-user/report/app-language subpages, and profile sharing.

@@ -19,7 +19,7 @@ import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
-import { ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -581,12 +581,17 @@ function ProfileSettingsPanel({
                         key={option.code}
                         type="button"
                         onClick={() => handleSelectAppLanguage(option.code)}
-                        className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition active:bg-gray-50 ${index < PRIMARY_UI_LANGUAGE_OPTIONS.length - 1 ? "border-b border-gray-100" : ""}`}
+                        className={`group relative flex w-full items-center gap-3 px-4 py-3.5 text-left transition focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-900 ${selected ? "bg-slate-950 text-white shadow-[0_8px_20px_rgba(15,23,42,0.16)]" : "bg-white text-slate-900 active:bg-gray-50"} ${index < PRIMARY_UI_LANGUAGE_OPTIONS.length - 1 ? selected ? "border-b border-slate-800" : "border-b border-gray-100" : ""}`}
                         aria-pressed={selected}
                       >
-                        <span className="w-7 text-lg" aria-hidden="true">{option.flag}</span>
-                        <span className="min-w-0 flex-1 text-[15px] font-medium text-slate-900">{option.name}</span>
-                        {selected ? <span className="text-[13px] font-semibold text-amber-600">✓</span> : null}
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg ${selected ? "bg-white/10" : "bg-gray-50"}`} aria-hidden="true">{option.flag}</span>
+                        <span className={`min-w-0 flex-1 text-[15px] ${selected ? "font-bold text-white" : "font-medium text-slate-900"}`}>{option.name}</span>
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition ${selected ? "border-white bg-white text-slate-950 shadow-sm" : "border-slate-300 bg-white text-transparent group-hover:border-slate-400"}`}
+                          aria-hidden="true"
+                        >
+                          <Check size={21} strokeWidth={3.2} />
+                        </span>
                       </button>
                     );
                   })}
