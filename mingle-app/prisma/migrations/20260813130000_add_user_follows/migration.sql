@@ -30,13 +30,13 @@ $$;
 ALTER TABLE app.app_user_follows
     ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS app.app_user_follows_follower_created_at_idx
+CREATE INDEX IF NOT EXISTS app_user_follows_follower_created_at_idx
     ON app.app_user_follows (follower_id, created_at);
 
-CREATE INDEX IF NOT EXISTS app.app_user_follows_following_created_at_idx
+CREATE INDEX IF NOT EXISTS app_user_follows_following_created_at_idx
     ON app.app_user_follows (following_id, created_at);
 
-CREATE UNIQUE INDEX IF NOT EXISTS app.app_user_follows_follower_following_uidx
+CREATE UNIQUE INDEX IF NOT EXISTS app_user_follows_follower_following_uidx
     ON app.app_user_follows (follower_id, following_id);
 
 DO $$
