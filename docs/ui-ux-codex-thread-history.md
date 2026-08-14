@@ -602,3 +602,16 @@
   - Added scroll-bottom padding equal to the button height plus the existing breathing space, so the final conversation row can still be scrolled above the overlay when the list reaches its end.
 - Data contract: None. The existing conversation creation endpoint, create lock, accessibility label, and auto-start behavior are unchanged.
 - Testing notes: Verify on a real iPhone that the button remains fixed above the bottom tabs, long lists pass underneath it while scrolling, the last row is not permanently hidden at the scroll limit, and the loading state still prevents duplicate creation.
+
+## 2026-08-14 - Autofocus the explore search field
+
+- Surface: The 2.0.0 Explore tab user search field.
+- Issue: Entering the Explore tab focused the search input only during the first mount attempt. Route-transition and WebView timing could leave the field visually available but require a second tap before typing.
+- User impact: Users had to tap the search field again after opening Explore, adding friction to the primary action of the tab and delaying the keyboard.
+- Resolution:
+  - Added the native `autoFocus` hint to the search input.
+  - Added focus attempts on mount, the next animation frame, and two short post-navigation delays so the input remains focused after the route and WebView finish settling.
+  - Updated the iOS WebView shell to allow programmatic keyboard presentation, which is required for the focused input to open the keyboard without a second tap.
+  - Kept the focus helper shared with the clear-search action so clearing the query returns directly to typing.
+- Data contract: None. Search requests, history snapshots, and follow actions are unchanged.
+- Testing notes: Verify on iPhone TestFlight build 66 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.

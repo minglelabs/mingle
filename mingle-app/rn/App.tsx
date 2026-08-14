@@ -2824,6 +2824,7 @@ function AppInner(): React.JSX.Element {
             cacheMode={Platform.OS === 'android' && shouldUseAggressiveWebViewCacheBypass ? 'LOAD_NO_CACHE' : 'LOAD_DEFAULT'}
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}
+            keyboardDisplayRequiresUserAction={false}
             setSupportMultipleWindows={false}
             scrollEnabled={Platform.OS !== 'ios' || !shouldDisableIosScroll}
             bounces={Platform.OS !== 'ios' || !shouldDisableIosScroll}
