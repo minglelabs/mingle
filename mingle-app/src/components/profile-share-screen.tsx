@@ -9,7 +9,7 @@ import {
   Share2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { formatUsername } from "@/lib/usernames";
+import { formatHandle } from "@/lib/handles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls, type PanInfo } from "framer-motion";
@@ -73,17 +73,17 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   const motionControls = useAnimationControls();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
-  const [profileDisplayName, setProfileDisplayName] = useState("");
-  const [profileUsername, setProfileUsername] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [rawHandle, setRawHandle] = useState("");
   const statusTimeoutRef = useRef<number | null>(null);
   const isLeavingRef = useRef(false);
   const isMountedRef = useRef(false);
 
   const sessionUserId = session?.user?.id ?? "";
-  const displayName = profileDisplayName || session?.user?.name?.trim() || dictionary.titles.my;
-  const profileHandle = formatUsername(profileUsername) || (displayName.startsWith("@")
-    ? displayName
-    : `@${displayName.replace(/\s+/g, "")}`);
+  const name = profileName || session?.user?.name?.trim() || dictionary.titles.my;
+  const profileHandle = formatHandle(rawHandle) || (name.startsWith("@")
+    ? name
+    : `@${name.replace(/\s+/g, "")}`);
   const profileUrl = useMemo(() => buildProfileShareUrl(locale), [locale]);
   const qrComingSoonLabel = dictionary.profile.profileShareQrComingSoonLabel
     ?? (locale === "ko" ? "아직 QR 기능은 준비중입니다." : "QR features are not available yet.");
@@ -100,11 +100,11 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
 
     let cancelled = false;
     void fetch("/api/profile", { cache: "no-store" })
-      .then(async (response) => (response.ok ? response.json() as Promise<{ displayName?: unknown; username?: unknown }> : null))
+      .then(async (response) => (response.ok ? response.json() as Promise<{ name?: unknown; handle?: unknown }> : null))
       .then((data) => {
         if (cancelled || !data) return;
-        if (typeof data.displayName === "string") setProfileDisplayName(data.displayName.trim());
-        if (typeof data.username === "string") setProfileUsername(data.username.trim());
+        if (typeof data.name === "string") setProfileName(data.name.trim());
+        if (typeof data.handle === "string") setRawHandle(data.handle.trim());
       })
       .catch(() => {
         // The session name remains available when profile hydration fails.
@@ -170,7 +170,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         await navigator.share({
-          title: displayName,
+          title: name,
           text: dictionary.profile.shareProfile,
           url: profileUrl,
         });
@@ -183,7 +183,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     }
 
     await handleCopyLink();
-  }, [dictionary.profile.shareProfile, displayName, handleCopyLink, profileUrl]);
+  }, [dictionary.profile.shareProfile, name, handleCopyLink, profileUrl]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

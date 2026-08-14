@@ -2,7 +2,7 @@
 
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { formatUsername } from "@/lib/usernames";
+import { formatHandle } from "@/lib/handles";
 import {
   AlertTriangle,
   Check,
@@ -24,10 +24,9 @@ type PublicUserProfileScreenProps = {
 
 type PublicUserProfile = {
   id: string;
-  username: string | null;
+  handle: string | null;
   name: string | null;
   image: string | null;
-  displayName: string | null;
   bio: string | null;
   nationality: string | null;
   followersCount: number;
@@ -273,7 +272,7 @@ export default function PublicUserProfileScreen({
     }
   }, [profile, reportMessage, reportPending, reportReason]);
 
-  const displayName = profile?.displayName?.trim() || profile?.name?.trim() || copy.userFallback;
+  const name = profile?.name?.trim() || copy.userFallback;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
 
   return (
@@ -303,7 +302,7 @@ export default function PublicUserProfileScreen({
         >
           <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
         </button>
-        <h1 className="truncate text-center text-[17px] font-bold">{displayName}</h1>
+        <h1 className="truncate text-center text-[17px] font-bold">{name}</h1>
         <div aria-hidden="true" />
       </header>
 
@@ -317,9 +316,9 @@ export default function PublicUserProfileScreen({
         ) : (
           <>
             <section className="flex flex-col items-center text-center">
-              <ProfileAvatar image={profile.image} label={displayName} />
-              <h2 className="mt-4 text-[20px] font-bold">{displayName}</h2>
-              {profile.username ? <p className="mt-1 text-[14px] text-gray-500">{formatUsername(profile.username)}</p> : null}
+              <ProfileAvatar image={profile.image} label={name} />
+              <h2 className="mt-4 text-[20px] font-bold">{name}</h2>
+              {profile.handle ? <p className="mt-1 text-[14px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
               {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}
               <div className="mt-5 flex items-center gap-8 text-center">
                 <div>

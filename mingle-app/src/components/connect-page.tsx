@@ -3,7 +3,7 @@
 import BottomTabBar from "@/components/bottom-tab-bar";
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
-import { formatUsername } from "@/lib/usernames";
+import { formatHandle } from "@/lib/handles";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,8 +15,7 @@ type ConnectPageProps = {
 
 type UserSearchResult = {
   id: string;
-  username: string | null;
-  displayName: string | null;
+  handle: string | null;
   name: string | null;
   image: string | null;
   isFollowing: boolean;
@@ -26,7 +25,7 @@ function resolveSearchCopy(dictionary: AppDictionary) {
   const isKorean = dictionary.titles.connect === "탐색" || dictionary.titles.connect === "친구 찾기";
   return {
     placeholder: dictionary.connect.searchPlaceholder
-      ?? (isKorean ? "아이디 또는 이름 검색" : "Search by username or name"),
+      ?? (isKorean ? "아이디 또는 이름 검색" : "Search by handle or name"),
     searching: dictionary.connect.searchingLabel
       ?? (isKorean ? "검색 중..." : "Searching..."),
     noResults: dictionary.connect.searchNoResults
@@ -205,7 +204,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
         ) : visibleResults.length > 0 ? (
           <ul className="border-t border-gray-100">
             {visibleResults.map((user) => {
-              const name = user.displayName?.trim() || user.name?.trim() || copy.userFallback;
+              const name = user.name?.trim() || copy.userFallback;
               return (
                 <li key={user.id} className="border-b border-gray-100 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -220,12 +219,12 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                     <div className="min-w-0">
                       <button
                         type="button"
-                        onClick={() => router.push(`/${locale}/users/${encodeURIComponent(user.username || user.id)}`)}
+                        onClick={() => router.push(`/${locale}/users/${encodeURIComponent(user.handle || user.id)}`)}
                         className="block max-w-full truncate text-left text-[15px] font-semibold text-slate-900"
                       >
                         {name}
                       </button>
-                      {user.username ? <p className="truncate text-[13px] text-gray-500">{formatUsername(user.username)}</p> : null}
+                      {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
                     </div>
                     <button
                       type="button"

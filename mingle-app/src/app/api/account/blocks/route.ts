@@ -24,10 +24,9 @@ export async function GET() {
       blocked: {
         select: {
           id: true,
-          username: true,
+          handle: true,
           name: true,
           image: true,
-          displayName: true,
         },
       },
     },

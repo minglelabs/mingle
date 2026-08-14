@@ -51,7 +51,7 @@ describe("/api/users/search route", () => {
     expect(mockUserFindMany).not.toHaveBeenCalled();
   });
 
-  it("does not query the database when an at-sign has no username", async () => {
+  it("does not query the database when an at-sign has no handle", async () => {
     const response = await GET(new NextRequest("https://example.com/api/users/search?q=%40"));
 
     expect(response.status).toBe(200);
@@ -59,13 +59,12 @@ describe("/api/users/search route", () => {
     expect(mockUserFindMany).not.toHaveBeenCalled();
   });
 
-  it("searches usernames and names while excluding the current user", async () => {
+  it("searches handles and names while excluding the current user", async () => {
     mockUserFindMany.mockResolvedValue([
       {
         id: "user_456",
-        username: "mina.song",
-        displayName: "Mina",
-        name: "Original Mina",
+        handle: "mina.song",
+        name: "Mina",
         image: null,
         followerRelations: [{ followerId: "user_123" }],
       },
@@ -77,9 +76,8 @@ describe("/api/users/search route", () => {
     expect(await response.json()).toEqual({
       users: [{
         id: "user_456",
-        username: "mina.song",
-        displayName: "Mina",
-        name: "Original Mina",
+        handle: "mina.song",
+        name: "Mina",
         image: null,
         isFollowing: true,
       }],
@@ -92,8 +90,7 @@ describe("/api/users/search route", () => {
           { blockedByRelations: { none: { blockerId: "user_123" } } },
           {
             OR: [
-              { username: { contains: "Mina", mode: "insensitive" } },
-              { displayName: { contains: "Mina", mode: "insensitive" } },
+              { handle: { contains: "Mina", mode: "insensitive" } },
               { name: { contains: "Mina", mode: "insensitive" } },
             ],
           },
@@ -103,8 +100,7 @@ describe("/api/users/search route", () => {
       take: 20,
       select: {
         id: true,
-        username: true,
-        displayName: true,
+        handle: true,
         name: true,
         image: true,
         followerRelations: {

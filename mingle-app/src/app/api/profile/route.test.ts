@@ -49,10 +49,9 @@ describe("/api/profile route", () => {
   it("returns the authenticated user's profile", async () => {
     mockUserFindUnique.mockResolvedValue({
       id: "user_123",
-      name: "Original Name",
+      name: "Mingle Name",
       image: null,
-      username: "original.name",
-      displayName: "Mingle Name",
+      handle: "original.name",
       bio: "Hello",
       nationality: "ko",
       _count: { followerRelations: 2, followingRelations: 3 },
@@ -63,10 +62,9 @@ describe("/api/profile route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       id: "user_123",
-      name: "Original Name",
+      name: "Mingle Name",
       image: null,
-      username: "original.name",
-      displayName: "Mingle Name",
+      handle: "original.name",
       bio: "Hello",
       nationality: "ko",
       followersCount: 2,
@@ -77,10 +75,9 @@ describe("/api/profile route", () => {
       where: { id: "user_123" },
       select: {
         id: true,
-        name: true,
         image: true,
-        username: true,
-        displayName: true,
+        handle: true,
+        name: true,
         bio: true,
         nationality: true,
         _count: {
@@ -96,10 +93,9 @@ describe("/api/profile route", () => {
   it("normalizes and saves editable profile fields", async () => {
     mockUserUpdate.mockResolvedValue({
       id: "user_123",
-      name: "Original Name",
+      name: "New Name",
       image: null,
-      username: "new.name",
-      displayName: "New Name",
+      handle: "new.name",
       bio: "New bio",
       nationality: "ja",
       _count: { followerRelations: 1, followingRelations: 4 },
@@ -109,8 +105,8 @@ describe("/api/profile route", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        username: "  New.Name ",
-        displayName: "  New Name ",
+        handle: "  New.Name ",
+        name: "  New Name ",
         bio: "  New bio ",
         nationality: " ja ",
       }),
@@ -118,25 +114,24 @@ describe("/api/profile route", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({
-      displayName: "New Name",
-      username: "new.name",
+      name: "New Name",
+      handle: "new.name",
       bio: "New bio",
       nationality: "ja",
     }));
     expect(mockUserUpdate).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        username: "new.name",
-        displayName: "New Name",
+        handle: "new.name",
+        name: "New Name",
         bio: "New bio",
         nationality: "ja",
       },
       select: {
         id: true,
-        name: true,
         image: true,
-        username: true,
-        displayName: true,
+        handle: true,
+        name: true,
         bio: true,
         nationality: true,
         _count: {
@@ -160,36 +155,35 @@ describe("/api/profile route", () => {
     expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 
-  it("rejects usernames with unsupported characters", async () => {
+  it("rejects handles with unsupported characters", async () => {
     const response = await PATCH(new NextRequest("https://example.com/api/profile", {
       method: "PATCH",
-      body: JSON.stringify({ username: "name-with-dash" }),
+      body: JSON.stringify({ handle: "name-with-dash" }),
     }));
 
     expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "invalid_username" });
+    expect(await response.json()).toEqual({ error: "invalid_handle" });
     expect(mockUserUpdate).not.toHaveBeenCalled();
   });
 
-  it("returns a conflict when a username is already in use", async () => {
+  it("returns a conflict when a handle is already in use", async () => {
     mockUserUpdate.mockRejectedValue({ code: "P2002" });
 
     const response = await PATCH(new NextRequest("https://example.com/api/profile", {
       method: "PATCH",
-      body: JSON.stringify({ username: "taken.name" }),
+      body: JSON.stringify({ handle: "taken.name" }),
     }));
 
     expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: "username_taken" });
+    expect(await response.json()).toEqual({ error: "handle_taken" });
   });
 
   it("accepts an STT language outside the primary UI locale list", async () => {
     mockUserUpdate.mockResolvedValue({
       id: "user_123",
-      name: "Original Name",
+      name: null,
       image: null,
-      username: null,
-      displayName: null,
+      handle: null,
       bio: null,
       nationality: "cy",
       _count: { followerRelations: 0, followingRelations: 0 },

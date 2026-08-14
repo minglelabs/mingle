@@ -3,19 +3,18 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
-import { normalizeUsername } from "@/lib/usernames";
+import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 
-const MAX_DISPLAY_NAME_LENGTH = 40;
+const MAX_NAME_LENGTH = 40;
 const MAX_BIO_LENGTH = 160;
 
 const profileSelect = {
   id: true,
   name: true,
   image: true,
-  username: true,
-  displayName: true,
+  handle: true,
   bio: true,
   nationality: true,
   _count: {
@@ -30,8 +29,7 @@ type ProfileRecord = {
   id: string;
   name: string | null;
   image: string | null;
-  username: string;
-  displayName: string | null;
+  handle: string;
   bio: string | null;
   nationality: string | null;
   _count: {
@@ -122,26 +120,26 @@ export async function PATCH(request: NextRequest) {
   }
 
   const data: {
-    username?: string;
-    displayName?: string | null;
+    handle?: string;
+    name?: string | null;
     bio?: string | null;
     nationality?: string | null;
   } = {};
 
-  if (Object.prototype.hasOwnProperty.call(body, "username")) {
-    const username = normalizeUsername(body.username);
-    if (!username.valid || !username.value) {
-      return NextResponse.json({ error: "invalid_username" }, { status: 400 });
+  if (Object.prototype.hasOwnProperty.call(body, "handle")) {
+    const handle = normalizeHandle(body.handle);
+    if (!handle.valid || !handle.value) {
+      return NextResponse.json({ error: "invalid_handle" }, { status: 400 });
     }
-    data.username = username.value;
+    data.handle = handle.value;
   }
 
-  if (Object.prototype.hasOwnProperty.call(body, "displayName")) {
-    const displayName = normalizeOptionalText(body.displayName, MAX_DISPLAY_NAME_LENGTH);
-    if (!displayName.valid) {
-      return NextResponse.json({ error: "invalid_display_name" }, { status: 400 });
+  if (Object.prototype.hasOwnProperty.call(body, "name")) {
+    const name = normalizeOptionalText(body.name, MAX_NAME_LENGTH);
+    if (!name.valid) {
+      return NextResponse.json({ error: "invalid_name" }, { status: 400 });
     }
-    data.displayName = displayName.value;
+    data.name = name.value;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "bio")) {
@@ -178,7 +176,7 @@ export async function PATCH(request: NextRequest) {
       && "code" in error
       && error.code === "P2002"
     ) {
-      return NextResponse.json({ error: "username_taken" }, { status: 409 });
+      return NextResponse.json({ error: "handle_taken" }, { status: 409 });
     }
     return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
   }

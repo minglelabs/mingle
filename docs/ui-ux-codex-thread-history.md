@@ -476,3 +476,11 @@
 - Issue: The all-required-agreements control used a rose circular background and a literal check character, while the privacy and terms controls used browser-native checkbox rendering. The three controls therefore had different shapes, check marks, and colors on iPhone.
 - User impact: The all-agreements state looked visually unrelated to the two required agreement rows, and the inconsistent check treatment made the selected state harder to scan.
 - Resolution: Replaced the mixed checkbox visuals with one shared rounded-square checkbox treatment. The all-agreements control now uses the same check icon as the two required rows, with a Mingle amber selected state and a neutral transparent unselected state. Native checkbox inputs remain keyboard- and screen-reader-accessible but are visually hidden.
+
+## 2026-08-14 - Profile identity naming simplification
+
+- Surface: OAuth/native account creation, profile editing, My Page, Explore search, public profiles, profile sharing, and legacy-compatible user persistence.
+- Issue: The product exposed three overlapping concepts—internal `User.id`, public `username`, and both `name`/`displayName` for the visible profile name. This made it unclear which value users should share, search, or edit, and made the OAuth-provided name appear separate from the editable name.
+- Product decision: `User.id` remains the internal database key. The public, unique user ID is stored as `handle` and displayed as `아이디`/`@handle` in the Korean UI. The existing `name` column is the single visible name: OAuth's initial name is saved there, profile editing updates that same value, and later logins do not overwrite the user's edit. The duplicate `display_name` concept is removed from the 2.0.0 UI and schema.
+- Resolution: Renamed the 2.0.0 Prisma/API/client contract from `username` to `handle`, removed `displayName` usage, routed profile/search/social surfaces through `name` plus `handle`, and kept admin-login `username` terminology isolated because it is unrelated to user profiles.
+- Compatibility: The migration installs an `app.app_users` insert trigger that derives a unique handle when the shared 1.1.4 server inserts a user without knowing the new column. Existing `name` data is preserved, and any earlier `display_name` data is used only when `name` is empty before the duplicate column is removed.

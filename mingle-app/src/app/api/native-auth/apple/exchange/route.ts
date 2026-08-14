@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createNativeAuthBridgeToken, resolveNativeAuthRequestId, resolveSafeCallbackPath } from "@/lib/native-auth-bridge";
 import { savePendingNativeAuthResult } from "@/lib/native-auth-pending-store";
 import { prisma } from "@/lib/prisma";
-import { createWithDefaultUsername } from "@/lib/usernames";
+import { createWithDefaultHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 
@@ -264,7 +264,7 @@ async function upsertNativeAppleUser(args: {
 }) {
   const now = new Date();
   const externalUserId = `apple:${args.appleSubject}`.slice(0, 128);
-  const displayName = args.name || "Mingle User";
+  const name = args.name || "Mingle User";
 
   const existingByExternal = await prisma.user.findUnique({
     where: { externalUserId },
@@ -272,10 +272,10 @@ async function upsertNativeAppleUser(args: {
   });
   if (existingByExternal) {
     return prisma.user.update({
-      where: { id: existingByExternal.id },
-      data: {
-        name: displayName,
-        email: args.email || undefined,
+        where: { id: existingByExternal.id },
+        data: {
+          name: existingByExternal.name ? undefined : name,
+          email: args.email || undefined,
         lastSeenAt: now,
       },
       select: {
@@ -289,13 +289,13 @@ async function upsertNativeAppleUser(args: {
   if (args.email) {
     const existingByEmail = await prisma.user.findUnique({
       where: { email: args.email },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (existingByEmail) {
       return prisma.user.update({
         where: { id: existingByEmail.id },
         data: {
-          name: displayName,
+          name: existingByEmail.name ? undefined : name,
           externalUserId,
           lastSeenAt: now,
         },
@@ -308,12 +308,12 @@ async function upsertNativeAppleUser(args: {
     }
   }
 
-  return createWithDefaultUsername(
-    { name: displayName, email: args.email, id: externalUserId },
-    (username) => prisma.user.create({
+  return createWithDefaultHandle(
+    { name: name, email: args.email, id: externalUserId },
+    (handle) => prisma.user.create({
       data: {
-        name: displayName,
-        username,
+        name: name,
+        handle,
         email: args.email || undefined,
         externalUserId,
         firstSeenAt: now,

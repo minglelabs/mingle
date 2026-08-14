@@ -35,10 +35,9 @@ describe("/api/users/[userId] route", () => {
     mockUserBlockFindFirst.mockResolvedValue(null);
     mockUserFindUnique.mockResolvedValue({
       id: "user_456",
-      username: "mina.song",
-      name: "Mina",
+      handle: "mina.song",
       image: null,
-      displayName: "미나",
+      name: "미나",
       bio: "Hello",
       nationality: "ko",
       _count: { followerRelations: 4, followingRelations: 2 },
@@ -46,16 +45,15 @@ describe("/api/users/[userId] route", () => {
     });
   });
 
-  it("resolves a public profile by username while keeping the internal id private", async () => {
+  it("resolves a public profile by handle while keeping the internal id private", async () => {
     mockUserFindUnique.mockReset();
     mockUserFindUnique
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: "user_456",
-        username: "mina.song",
-        name: "Mina",
+        handle: "mina.song",
         image: null,
-        displayName: "미나",
+        name: "미나",
         bio: "Hello",
         nationality: "ko",
         _count: { followerRelations: 4, followingRelations: 2 },
@@ -69,10 +67,9 @@ describe("/api/users/[userId] route", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       id: "user_456",
-      username: "mina.song",
-      name: "Mina",
+      handle: "mina.song",
       image: null,
-      displayName: "미나",
+      name: "미나",
       bio: "Hello",
       nationality: "ko",
       followersCount: 4,
@@ -81,7 +78,7 @@ describe("/api/users/[userId] route", () => {
       isBlocked: false,
     });
     expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "@Mina.Song" } }));
-    expect(mockUserFindUnique).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { username: "mina.song" } }));
+    expect(mockUserFindUnique).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { handle: "mina.song" } }));
     expect(mockUserBlockFindFirst).toHaveBeenCalledWith({
       where: {
         OR: [

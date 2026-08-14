@@ -8,7 +8,7 @@ import { resolveAppleOAuthCredentials, type AppleOAuthCredentials } from "@/lib/
 import { verifyPassword } from "@/lib/email-password-auth";
 import { verifyNativeAuthBridgeToken } from "@/lib/native-auth-bridge";
 import { prisma } from "@/lib/prisma";
-import { createWithDefaultUsername } from "@/lib/usernames";
+import { createWithDefaultHandle } from "@/lib/handles";
 
 function normalizeEmail(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
@@ -16,7 +16,7 @@ function normalizeEmail(rawValue: unknown): string | null {
   return normalized || null;
 }
 
-function normalizeDisplayName(rawValue: unknown): string | null {
+function normalizeName(rawValue: unknown): string | null {
   if (typeof rawValue !== "string") return null;
   const normalized = rawValue.trim();
   return normalized ? normalized.slice(0, 128) : null;
@@ -62,7 +62,7 @@ async function upsertUserForCredentialsSignIn(args: {
 }) {
   const idHint = normalizeUserId(args.idHint);
   const normalizedEmail = normalizeEmail(args.email);
-  const normalizedName = normalizeDisplayName(args.name);
+  const normalizedName = normalizeName(args.name);
   const normalizedExternalUserId = normalizeUserId(args.externalUserIdHint);
   const now = new Date();
   const select = {
@@ -73,22 +73,21 @@ async function upsertUserForCredentialsSignIn(args: {
   } as const;
 
   if (idHint) {
-    return createWithDefaultUsername(
+    return createWithDefaultHandle(
       { id: idHint, name: normalizedName, email: normalizedEmail },
-      (username) => prisma.user.upsert({
+      (handle) => prisma.user.upsert({
         where: { id: idHint },
         create: {
           id: idHint,
           email: normalizedEmail ?? undefined,
           name: normalizedName ?? "Mingle User",
-          username,
+          handle,
           externalUserId: normalizedExternalUserId ?? idHint,
           firstSeenAt: now,
           lastSeenAt: now,
         },
         update: {
           email: normalizedEmail ?? undefined,
-          name: normalizedName ?? undefined,
           externalUserId: normalizedExternalUserId ?? idHint,
           lastSeenAt: now,
         },
@@ -98,20 +97,19 @@ async function upsertUserForCredentialsSignIn(args: {
   }
 
   if (normalizedEmail) {
-    return createWithDefaultUsername(
+    return createWithDefaultHandle(
       { name: normalizedName, email: normalizedEmail },
-      (username) => prisma.user.upsert({
+      (handle) => prisma.user.upsert({
         where: { email: normalizedEmail },
         create: {
           email: normalizedEmail,
           name: normalizedName ?? "Mingle User",
-          username,
+          handle,
           externalUserId: normalizedExternalUserId ?? undefined,
           firstSeenAt: now,
           lastSeenAt: now,
         },
         update: {
-          name: normalizedName ?? undefined,
           lastSeenAt: now,
         },
         select,
@@ -119,12 +117,12 @@ async function upsertUserForCredentialsSignIn(args: {
     );
   }
 
-  return createWithDefaultUsername(
+  return createWithDefaultHandle(
     { id: normalizedExternalUserId, name: normalizedName },
-    (username) => prisma.user.create({
+    (handle) => prisma.user.create({
       data: {
         name: normalizedName ?? "Mingle User",
-        username,
+        handle,
         externalUserId: normalizedExternalUserId ?? undefined,
         firstSeenAt: now,
         lastSeenAt: now,
@@ -357,12 +355,12 @@ function createNextAuthAdapter(): Adapter {
   return {
     ...adapter,
     createUser: async (data: Omit<AdapterUser, "id">) => {
-      const user = await createWithDefaultUsername(
+      const user = await createWithDefaultHandle(
         { name: data.name, email: data.email },
-        (username) => prisma.user.create({
+        (handle) => prisma.user.create({
           data: {
             ...data,
-            username,
+            handle,
           },
         }),
       );
@@ -416,23 +414,22 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
 
       const now = new Date();
       const email = normalizeEmail(user?.email);
-      const name = normalizeDisplayName(user?.name);
-      await createWithDefaultUsername(
+      const name = normalizeName(user?.name);
+      await createWithDefaultHandle(
         { id: userId, name, email },
-        (username) => prisma.user.upsert({
+        (handle) => prisma.user.upsert({
           where: { id: userId },
           create: {
             id: userId,
             email: email ?? undefined,
             name: name ?? "Mingle User",
-            username,
+            handle,
             externalUserId: userId,
             firstSeenAt: now,
             lastSeenAt: now,
           },
           update: {
             email: email ?? undefined,
-            name: name ?? undefined,
             externalUserId: userId,
             lastSeenAt: now,
           },
@@ -449,7 +446,7 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
         token.email = normalizeEmail(user.email) ?? user.email;
       }
       if (typeof user?.name === "string") {
-        token.name = normalizeDisplayName(user.name) ?? user.name;
+        token.name = normalizeName(user.name) ?? user.name;
       }
       const externalUserId = (user as { externalUserId?: unknown } | null)?.externalUserId;
       if (typeof externalUserId === "string" && externalUserId.trim()) {

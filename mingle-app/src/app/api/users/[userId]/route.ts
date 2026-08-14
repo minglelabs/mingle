@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { normalizeUsername } from "@/lib/usernames";
+import { normalizeHandle } from "@/lib/handles";
 
 export const runtime = "nodejs";
 
@@ -28,10 +28,9 @@ function responseJson(payload: object, init?: ResponseInit): NextResponse {
 
 const userProfileSelect = {
   id: true,
-  username: true,
+  handle: true,
   name: true,
   image: true,
-  displayName: true,
   bio: true,
   nationality: true,
   _count: {
@@ -57,7 +56,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
   if (!userReference) {
     return responseJson({ error: "invalid_user_id" }, { status: 400 });
   }
-  const normalizedUsername = normalizeUsername(userReference.startsWith("@")
+  const normalizedHandle = normalizeHandle(userReference.startsWith("@")
     ? userReference.slice(1)
     : userReference).value;
   const userById = await prisma.user.findUnique({
@@ -70,9 +69,9 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
       },
     },
   });
-  const user = userById ?? (normalizedUsername
+  const user = userById ?? (normalizedHandle
     ? await prisma.user.findUnique({
-        where: { username: normalizedUsername },
+        where: { handle: normalizedHandle },
         select: {
           ...userProfileSelect,
           followerRelations: {
@@ -106,10 +105,9 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
 
   return responseJson({
     id: user.id,
-    username: user.username,
+    handle: user.handle,
     name: user.name,
     image: user.image,
-    displayName: user.displayName,
     bio: user.bio,
     nationality: user.nationality,
     followersCount: user._count.followerRelations,

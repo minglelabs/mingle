@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hashPassword, isValidEmail, normalizeEmail, validatePassword } from "@/lib/email-password-auth";
 import { prisma } from "@/lib/prisma";
-import { createWithDefaultUsername } from "@/lib/usernames";
+import { createWithDefaultHandle } from "@/lib/handles";
 
 type SignupPayload = {
   email?: unknown;
@@ -58,11 +58,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    await createWithDefaultUsername({ name, email }, (username) => prisma.user.create({
+    await createWithDefaultHandle({ name, email }, (handle) => prisma.user.create({
       data: {
         email,
         name,
-        username,
+        handle,
         passwordHash,
         firstSeenAt: now,
         lastSeenAt: now,

@@ -10,8 +10,7 @@ const MAX_RESULTS = 20;
 
 const userSearchSelect = {
   id: true,
-  username: true,
-  displayName: true,
+  handle: true,
   name: true,
   image: true,
 } as const;
@@ -37,8 +36,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const usernameQuery = query.startsWith("@") ? query.slice(1) : query;
-  if (!usernameQuery) {
+  const handleQuery = query.startsWith("@") ? query.slice(1) : query;
+  if (!handleQuery) {
     return NextResponse.json({ users: [] }, {
       headers: { "Cache-Control": "private, no-store" },
     });
@@ -60,8 +59,7 @@ export async function GET(request: NextRequest) {
         },
         {
           OR: [
-            { username: { contains: usernameQuery, mode: "insensitive" } },
-            { displayName: { contains: query, mode: "insensitive" } },
+            { handle: { contains: handleQuery, mode: "insensitive" } },
             { name: { contains: query, mode: "insensitive" } },
           ],
         },

@@ -141,8 +141,8 @@ async function loadReports(status: ReportStatus | "all", requestedPage: number) 
       status: true,
       createdAt: true,
       updatedAt: true,
-      reporter: { select: { id: true, name: true, email: true, displayName: true } },
-      reportedUser: { select: { id: true, name: true, email: true, displayName: true } },
+      reporter: { select: { id: true, name: true, email: true } },
+      reportedUser: { select: { id: true, name: true, email: true } },
       replies: {
         orderBy: { createdAt: "asc" },
         select: { id: true, authorType: true, message: true, createdAt: true },
@@ -227,8 +227,8 @@ export default async function AdminReportsPage({ searchParams }: AdminReportsPag
 
       <section className="mx-auto mt-5 w-full max-w-6xl space-y-4 px-5 pb-10">
         {data.reports.length === 0 ? <div className="rounded-lg border border-slate-200 bg-white p-10 text-center"><ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-400" aria-hidden="true" /><p className="text-base font-semibold text-slate-800">No reports</p></div> : data.reports.map((report) => {
-          const reporter = report.reporter.displayName || report.reporter.name || report.reporter.email || report.reporter.id;
-          const reported = report.reportedUser.displayName || report.reportedUser.name || report.reportedUser.email || report.reportedUser.id;
+          const reporter = report.reporter.name || report.reporter.name || report.reporter.email || report.reporter.id;
+          const reported = report.reportedUser.name || report.reportedUser.name || report.reportedUser.email || report.reportedUser.id;
           const replyInputId = `report-reply-${report.id}`;
           return (
             <article key={report.id} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
