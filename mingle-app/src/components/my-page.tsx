@@ -54,8 +54,6 @@ const PROFILE_EDIT_TRANSITION = {
 const PROFILE_EDIT_SWIPE_THRESHOLD_PX = 92;
 const PROFILE_EDIT_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
-type LanguageOptionButtonVariant = "selected" | "list";
-
 type BlockedUserRecord = {
   id: string;
   createdAt: string;
@@ -110,42 +108,41 @@ function getFallbackNationality(locale: AppLocale): SttLanguageCode {
 function LanguageOptionButton({
   option,
   selected,
-  variant,
   onSelect,
 }: {
   option: ReturnType<typeof buildLanguageSelectorItems>[number];
   selected: boolean;
-  variant: LanguageOptionButtonVariant;
   onSelect: (code: SttLanguageCode) => void;
 }) {
-  const isSelectedCard = variant === "selected";
   return (
     <button
       type="button"
       onClick={() => onSelect(option.code)}
-      className={isSelectedCard
-        ? "flex w-full items-center gap-3 rounded-[18px] border-2 border-slate-900 bg-slate-50 px-3.5 py-3 text-left shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition"
-        : `flex w-full items-center gap-3 rounded-[16px] border bg-white px-3 py-2.5 text-left transition ${selected ? "border-slate-900 shadow-[0_8px_20px_rgba(15,23,42,0.08)]" : "border-gray-200 shadow-sm"}`}
+      className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+        selected
+          ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+          : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+      }`}
       aria-pressed={selected}
     >
-      <span className={isSelectedCard
-        ? "flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white shadow-sm"
-        : "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm"}
+      <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${selected
+        ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
+        : "border-[#e5dfd5] bg-[#faf7f1]"}`}
       >
-        <span className={isSelectedCard ? "text-[1.8rem] leading-none" : "text-[1.55rem] leading-none"} aria-hidden="true">
+        <span className="text-[2rem] leading-none" aria-hidden="true">
           {option.flag}
         </span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className={isSelectedCard
-          ? "block truncate text-[1rem] font-bold tracking-[-0.01em] text-slate-950"
-          : "block truncate text-[0.95rem] font-semibold tracking-[-0.01em] text-slate-950"}
-        >
+        <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
           {option.localizedName}
         </span>
-        <span className="mt-0.5 block truncate text-[0.8rem] text-slate-500">{option.secondaryLabel}</span>
+        <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
       </span>
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected ? "border-slate-900 bg-slate-900 text-white" : "border-gray-300 text-transparent"}`}>
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected
+        ? "border-amber-500 bg-amber-500 text-white"
+        : "border-slate-300 text-transparent"}`}
+      >
         <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 ${selected ? "text-white" : "text-transparent"}`} fill="none">
           <path d="M5.5 12.5L10 17L18.5 8.5" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -1021,7 +1018,6 @@ function ProfileEditPanel({
                         <LanguageOptionButton
                           option={selectedLanguageItem}
                           selected
-                          variant="selected"
                           onSelect={setNationality}
                         />
                       </section>
@@ -1038,7 +1034,6 @@ function ProfileEditPanel({
                               key={`featured-${option.code}`}
                               option={option}
                               selected={nationality === option.code}
-                              variant="list"
                               onSelect={setNationality}
                             />
                           ))}
@@ -1061,7 +1056,6 @@ function ProfileEditPanel({
                               key={`all-${option.code}`}
                               option={option}
                               selected={nationality === option.code}
-                              variant="list"
                               onSelect={setNationality}
                             />
                           ))}

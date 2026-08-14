@@ -506,6 +506,13 @@
 - User impact: Users had to search or scroll to confirm the active language, and the most useful language choices were not easy to reach.
 - Resolution: Search and sort controls remain at the top. The list now shows the current language first, a fixed seven-language group in the order English, Spanish, Korean, Japanese, Chinese, French, Portuguese, and then the complete locale/alphabetically sorted catalog. The current language remains checked in its original position in the complete catalog as well as in the first section. Search filters the featured and complete sections without hiding the current-language summary.
 
+## 2026-08-14 - Match profile language selection emphasis to the conversation picker
+
+- Surface: The primary-language selector inside the My Page profile-edit panel.
+- Issue: The current-language summary and selected rows used a dark, thick border and dark check control that visually overpowered the rest of the selector and differed from the conversation-room language picker.
+- User impact: The selected language felt over-emphasized, and the profile editor did not carry the Mingle amber selection language used elsewhere in the app.
+- Resolution: Reused the conversation picker’s amber border, soft amber background, restrained shadow, amber check circle, and neutral unselected card treatment for both the current-language summary and its duplicate rows in the featured and complete lists.
+
 ## 2026-08-14 - Strengthen the selected app-language state
 
 - Surface: The app-language selector inside the My Page menu and settings panel.
