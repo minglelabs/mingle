@@ -526,6 +526,13 @@
 - User impact: Users had to aim at a narrow text target or tap repeatedly before opening a searched user’s profile.
 - Resolution: Made the complete identity area—avatar, display name, and handle—a prefetched Next link with a full-row tap target and visible keyboard focus state. The follow action remains a separate button.
 
+## 2026-08-14 - Preserve Explore search results after profile back navigation
+
+- Surface: Explore search results when returning from a public user profile with the iOS back swipe.
+- Issue: The search query and result list lived only in the Explore component's local state. Opening a public profile unmounted that component, so returning to Explore showed an empty search screen even though the user had just searched.
+- User impact: Users had to repeat the same search after inspecting every profile, which made comparing multiple profiles unnecessarily slow.
+- Resolution: Store the active search query and result snapshot on the current browser history entry. Restore it immediately when the Explore route mounts, keep the list visible while the latest search request refreshes follow status, and remove the snapshot when the search is cleared or changed.
+
 ## 2026-08-14 - Strengthen the selected app-language state
 
 - Surface: The app-language selector inside the My Page menu and settings panel.

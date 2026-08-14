@@ -21,6 +21,62 @@ type UserSearchResult = {
   isFollowing: boolean;
 };
 
+const CONNECT_SEARCH_HISTORY_STATE_KEY = "__MINGLE_CONNECT_SEARCH_STATE__";
+
+type ConnectSearchHistorySnapshot = {
+  query: string;
+  results: UserSearchResult[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isUserSearchResult(value: unknown): value is UserSearchResult {
+  if (!isRecord(value)) return false;
+
+  return typeof value.id === "string"
+    && (typeof value.handle === "string" || value.handle === null)
+    && (typeof value.name === "string" || value.name === null)
+    && (typeof value.image === "string" || value.image === null)
+    && typeof value.isFollowing === "boolean";
+}
+
+function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null {
+  if (typeof window === "undefined" || !isRecord(window.history.state)) return null;
+
+  const rawSnapshot = window.history.state[CONNECT_SEARCH_HISTORY_STATE_KEY];
+  if (!isRecord(rawSnapshot) || typeof rawSnapshot.query !== "string" || !Array.isArray(rawSnapshot.results)) {
+    return null;
+  }
+
+  if (!rawSnapshot.query.trim() || !rawSnapshot.results.every(isUserSearchResult)) return null;
+
+  return {
+    query: rawSnapshot.query,
+    results: rawSnapshot.results,
+  };
+}
+
+function replaceConnectSearchHistorySnapshot(snapshot: ConnectSearchHistorySnapshot | null): void {
+  if (typeof window === "undefined") return;
+
+  const currentState = isRecord(window.history.state) ? window.history.state : {};
+  const nextState = { ...currentState };
+
+  if (snapshot?.query.trim()) {
+    nextState[CONNECT_SEARCH_HISTORY_STATE_KEY] = snapshot;
+  } else {
+    delete nextState[CONNECT_SEARCH_HISTORY_STATE_KEY];
+  }
+
+  try {
+    window.history.replaceState(nextState, "");
+  } catch {
+    // History state is an optional enhancement; the search itself remains available.
+  }
+}
+
 function resolveSearchCopy(dictionary: AppDictionary) {
   const isKorean = dictionary.titles.connect === "탐색" || dictionary.titles.connect === "친구 찾기";
   return {
@@ -48,6 +104,7 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
+  const isMountedRef = useRef(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [searchingQuery, setSearchingQuery] = useState("");
@@ -58,9 +115,19 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const [followError, setFollowError] = useState(false);
   const copy = resolveSearchCopy(dictionary);
   const normalizedQuery = query.trim();
-  const isSearching = Boolean(normalizedQuery) && searchingQuery === normalizedQuery;
   const visibleResults = resultsQuery === normalizedQuery ? results : [];
+  const isSearching = Boolean(normalizedQuery)
+    && searchingQuery === normalizedQuery
+    && visibleResults.length === 0;
   const isSearchErrorVisible = searchError && searchErrorQuery === normalizedQuery;
+
+  const handleSearchQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery);
+    const normalizedNextQuery = nextQuery.trim();
+    replaceConnectSearchHistorySnapshot(normalizedNextQuery
+      ? { query: normalizedNextQuery, results: [] }
+      : null);
+  }, []);
 
   const handleToggleFollow = useCallback(async (user: UserSearchResult) => {
     if (followInFlightIds.has(user.id)) return;
@@ -97,8 +164,24 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   }, [followInFlightIds]);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    const snapshot = readConnectSearchHistorySnapshot();
+    if (snapshot) {
+      setQuery(snapshot.query);
+      setResults(snapshot.results);
+      setResultsQuery(snapshot.query);
+    }
     inputRef.current?.focus();
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!isMountedRef.current || !resultsQuery) return;
+    replaceConnectSearchHistorySnapshot({ query: resultsQuery, results });
+  }, [results, resultsQuery]);
 
   useEffect(() => {
     const requestSequence = ++requestSequenceRef.current;
@@ -118,19 +201,19 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
           return response.json() as Promise<{ users?: UserSearchResult[] }>;
         })
         .then((payload) => {
-          if (requestSequenceRef.current !== requestSequence) return;
+          if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
           setResults(Array.isArray(payload.users) ? payload.users : []);
           setResultsQuery(normalizedQuery);
         })
         .catch(() => {
-          if (requestSequenceRef.current !== requestSequence) return;
+          if (requestSequenceRef.current !== requestSequence || !isMountedRef.current) return;
           setResults([]);
           setResultsQuery("");
           setSearchError(true);
           setSearchErrorQuery(normalizedQuery);
         })
         .finally(() => {
-          if (requestSequenceRef.current === requestSequence) {
+          if (requestSequenceRef.current === requestSequence && isMountedRef.current) {
             setSearchingQuery("");
           }
         });
@@ -158,7 +241,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             ref={inputRef}
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => handleSearchQueryChange(event.target.value)}
             placeholder={copy.placeholder}
             autoComplete="off"
             autoCorrect="off"
@@ -170,7 +253,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
             <button
               type="button"
               onClick={() => {
-                setQuery("");
+                handleSearchQueryChange("");
                 inputRef.current?.focus();
               }}
               className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition active:bg-gray-200"
