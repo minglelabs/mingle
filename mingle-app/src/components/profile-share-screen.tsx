@@ -31,6 +31,7 @@ const PROFILE_SHARE_TRANSITION = {
   ease: [0.22, 1, 0.36, 1] as const,
 };
 const PROFILE_SHARE_SWIPE_THRESHOLD_PX = 72;
+const PROFILE_SHARE_BACKGROUND = "linear-gradient(135deg, #1295e8 0%, #3569ed 52%, #7338f2 100%)";
 
 function buildProfileShareUrl(locale: AppLocale): string {
   const profilePath = `/${locale}/mypage`;
@@ -135,11 +136,12 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
     router.push(`/${locale}/mypage`);
   }, [locale, router]);
 
-  const handleBack = useCallback(() => {
+  const handleBack = useCallback(async () => {
     if (isLeavingRef.current || !isMountedRef.current) return;
     isLeavingRef.current = true;
-    navigateBack();
-  }, [navigateBack]);
+    await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
+    if (isMountedRef.current) navigateBack();
+  }, [motionControls, navigateBack]);
 
   const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
@@ -249,20 +251,21 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
   }, []);
 
   return (
-    <motion.main
-      initial={{ x: "100%" }}
-      animate={motionControls}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={() => {
-        touchStartRef.current = null;
-      }}
-      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
-      style={{
-        background: "linear-gradient(135deg, #1295e8 0%, #3569ed 52%, #7338f2 100%)",
-        touchAction: "pan-y",
-      }}
+    <div
+      className="fixed inset-0 z-[100] overflow-hidden"
+      style={{ background: PROFILE_SHARE_BACKGROUND }}
     >
+      <motion.main
+        initial={{ x: "100%" }}
+        animate={motionControls}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
+        className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden text-slate-950"
+        style={{ touchAction: "pan-y" }}
+      >
       <header
         className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4 text-white"
         style={{
@@ -272,7 +275,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
       >
         <button
           type="button"
-          onClick={handleBack}
+          onClick={() => void handleBack()}
           className="flex h-11 w-11 items-center justify-center rounded-full transition active:bg-white/15"
           aria-label={dictionary.profile.profileShareBackLabel ?? "Back"}
         >
@@ -338,6 +341,7 @@ export default function ProfileShareScreen({ dictionary, locale }: ProfileShareS
           {statusMessage}
         </div>
       ) : null}
-    </motion.main>
+      </motion.main>
+    </div>
   );
 }

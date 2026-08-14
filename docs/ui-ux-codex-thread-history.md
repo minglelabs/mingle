@@ -520,7 +520,14 @@
 - Resolution:
   - Start the horizontal drag only when the pointer begins within the first 32px of the panel's local left edge, matching the expected iOS back-swipe origin.
   - Lock the gesture direction and keep `touchAction: pan-y` so vertical content scrolling remains the native interaction everywhere else.
-  - Navigate back immediately from profile sharing and prefetch My Page on mount, avoiding the route-level exit gap that exposed the blank background.
+  - Prefetch My Page on mount so the return route is ready when profile sharing closes.
+
+## 2026-08-14 - Animate profile-share route exit before returning to My Page
+
+- Surface: The profile-share route opened from My Page.
+- Issue: Profile sharing called `router.back()` immediately, so the route disappeared before its visual surface could leave the screen. The route's gradient was also the moving element itself, allowing the white or gray canvas background to appear at the left edge.
+- User impact: Swiping back closed this page abruptly and exposed a brief white strip, unlike the profile-edit and settings panels.
+- Resolution: Profile sharing now finishes the same rightward exit transition used by the public profile screen before navigating back. A stationary outer gradient backdrop remains behind the moving surface, so the route canvas cannot flash white during the transition.
 
 ## 2026-08-14 - Keep native history gestures out of profile panels
 
