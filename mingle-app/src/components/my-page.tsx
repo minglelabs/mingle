@@ -1231,11 +1231,11 @@ export default function MyPage({ dictionary, locale }: MyPageProps) {
             <div className="-translate-x-2 grid flex-1 grid-cols-2 gap-1 text-center">
               <div>
                 <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
-                <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.followersLabel}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followersLabel}</p>
               </div>
               <div>
                 <p className="text-[18px] font-semibold leading-tight">{profile.followingCount}</p>
-                <p className="mt-0.5 text-[12px] text-gray-500">{dictionary.profile.followingLabel}</p>
+                <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followingLabel}</p>
               </div>
             </div>
           </div>

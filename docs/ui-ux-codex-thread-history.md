@@ -513,6 +513,12 @@
 - User impact: The selected language felt over-emphasized, and the profile editor did not carry the Mingle amber selection language used elsewhere in the app.
 - Resolution: Reused the conversation picker’s amber border, soft amber background, restrained shadow, amber check circle, and neutral unselected card treatment for both the current-language summary and its duplicate rows in the featured and complete lists.
 
+## 2026-08-14 - Increase My Page follower labels
+
+- Surface: The follower and following stats in the My Page profile header.
+- Issue: The stat labels were smaller than the nearby profile-action labels, so they looked visually weak beneath the similarly sized counts.
+- Resolution: Increased both labels from 12px to 13px to match the profile-action text scale while preserving the existing count size, color, spacing, and layout.
+
 ## 2026-08-14 - Strengthen the selected app-language state
 
 - Surface: The app-language selector inside the My Page menu and settings panel.
