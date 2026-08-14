@@ -499,6 +499,13 @@
 - User impact: The login screen still showed the banner after the earlier route-based hide fix, making the authentication layout look unfinished and reducing its usable space.
 - Resolution: The conversation list now posts the native banner zone as `hidden` whenever the session is loading or unauthenticated, and returns it to `list` only after authentication succeeds. Search and conversation overlays retain the existing hidden behavior.
 
+## 2026-08-14 - Group the profile primary-language selector into three sections
+
+- Surface: The primary-language selector inside the My Page profile-edit panel.
+- Issue: The selector previously presented one long searchable list, so the current language was not persistently visible and commonly used languages were mixed into the full catalog.
+- User impact: Users had to search or scroll to confirm the active language, and the most useful language choices were not easy to reach.
+- Resolution: Search and sort controls remain at the top. The list now shows the current language first, a fixed seven-language group in the order English, Spanish, Korean, Japanese, Chinese, French, Portuguese, and then the complete locale/alphabetically sorted catalog. The current language remains checked in its original position in the complete catalog as well as in the first section. Search filters the featured and complete sections without hiding the current-language summary.
+
 ## 2026-08-14 - Restrict profile-surface swipe dismissal to the edge
 
 - Surface: Profile editing, the My Page hamburger menu and its blocked-user/report/app-language subpages, and profile sharing.

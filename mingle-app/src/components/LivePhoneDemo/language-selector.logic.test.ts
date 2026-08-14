@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
+  buildLanguageSelectorFeaturedItems,
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
   clearLanguageSelectorHistoryState,
@@ -116,6 +117,20 @@ describe("language-selector.logic", () => {
     expect(
       sortLanguageSelectorItems(items, "locale", "ko-KR").map((item) => item.code),
     ).toEqual(["ko", "ja", "de"]);
+  });
+
+  it("keeps featured profile languages in the requested fixed order", () => {
+    const items = buildLanguageSelectorItems("ko-KR");
+
+    expect(buildLanguageSelectorFeaturedItems(items).map((item) => item.code)).toEqual([
+      "en",
+      "es",
+      "ko",
+      "ja",
+      "zh-CN",
+      "fr",
+      "pt",
+    ]);
   });
 
   it("defaults to alphabetical sorting only when locale data is missing", () => {

@@ -20,6 +20,16 @@ export type LanguageSelectorItem = SttLanguageOption & {
   searchText: string;
 };
 
+export const LANGUAGE_SELECTOR_FEATURED_CODES = [
+  "en",
+  "es",
+  "ko",
+  "ja",
+  "zh-CN",
+  "fr",
+  "pt",
+] as const satisfies readonly SttLanguageCode[];
+
 type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 
 const FALLBACK_LOCALE = "en";
@@ -206,6 +216,15 @@ export function sortLanguageSelectorItems(
   });
 
   return sorted;
+}
+
+export function buildLanguageSelectorFeaturedItems(
+  items: readonly LanguageSelectorItem[],
+): LanguageSelectorItem[] {
+  const itemsByCode = new Map(items.map((item) => [item.code, item]));
+  return LANGUAGE_SELECTOR_FEATURED_CODES
+    .map((code) => itemsByCode.get(code))
+    .filter((item): item is LanguageSelectorItem => Boolean(item));
 }
 
 export function isLanguageSelectorHistoryOpen(state: unknown): boolean {
