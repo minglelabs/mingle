@@ -25,6 +25,11 @@ BEGIN
 END
 $$;
 
+-- The follow graph is accessed through the trusted Railway API, not directly
+-- from browser clients. Keep direct anon/authenticated table access closed.
+ALTER TABLE app.app_user_follows
+    ENABLE ROW LEVEL SECURITY;
+
 CREATE INDEX IF NOT EXISTS app.app_user_follows_follower_created_at_idx
     ON app.app_user_follows (follower_id, created_at);
 
