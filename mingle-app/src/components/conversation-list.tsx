@@ -86,6 +86,7 @@ import {
 import {
   postNativeBannerZone,
   resolveConversationListNativeBannerZone,
+  shouldReassertNativeAuthBannerZone,
 } from "@/lib/native-banner-zone";
 import {
   readNativeQaBridgeAuthority,
@@ -2874,6 +2875,24 @@ export default function ConversationList({
       isSearchOpen: showSearch,
     }));
   }, [activeConversation, sessionStatus, showSearch]);
+
+  useEffect(() => {
+    if (!isNativeAppRuntime() || sessionStatus === "authenticated") return;
+    const nativeClientBuild = new URLSearchParams(window.location.search).get("nativeClientBuild");
+    if (!shouldReassertNativeAuthBannerZone(nativeClientBuild)) return;
+
+    // Builds before 68 can restore the list banner after the authentication
+    // gate has already hidden it. Reassert the server-known auth state until
+    // login succeeds so deployed web code also protects existing TestFlight builds.
+    postNativeBannerZone("hidden");
+    const intervalId = window.setInterval(() => {
+      postNativeBannerZone("hidden");
+    }, 250);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [sessionStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

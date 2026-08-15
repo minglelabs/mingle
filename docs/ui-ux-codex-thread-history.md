@@ -499,6 +499,19 @@
 - User impact: The login screen still showed the banner after the earlier route-based hide fix, making the authentication layout look unfinished and reducing its usable space.
 - Resolution: The conversation list now posts the native banner zone as `hidden` whenever the session is loading or unauthenticated, and returns it to `list` only after authentication succeeds. Search and conversation overlays retain the existing hidden behavior.
 
+## 2026-08-15 - Keep authentication banner hiding authoritative
+
+- Surface: The 2.0.0 native login gate rendered over the conversation-list route.
+- Issue: TestFlight build 67 still showed a production AdMob banner above the login controls. The web authentication gate correctly posted the `hidden` banner zone, but the native URL observer still saw `/ko/conversations` and restored its last stable `list` zone. The native banner also initialized as `list`, allowing an advertisement to appear before the web session state had hydrated.
+- User impact: Signed-out users saw a third-party advertisement on the account-entry screen even though login was intended to be an ad-free surface. This made the login layout look broken and could distract users from required agreement and authentication actions.
+- Resolution:
+  - Initialize the native banner zone as `hidden`; authenticated web state must explicitly enable the list or conversation banner.
+  - Restore a stable banner after URL navigation only when native navigation itself created a pending transition. A web-requested hidden state for authentication or search is no longer overwritten by a same-route navigation callback.
+  - Update native banner refs synchronously with bridge commands so closely spaced WebView navigation events cannot observe stale visibility state.
+  - For TestFlight builds before 68, reassert the unauthenticated `hidden` zone from the deployed web client while the login gate remains active. This provides a Railway-delivered compatibility fix without waiting for users to install the new native build.
+- Data contract: No API or database changes. The existing `native_set_banner_zone` bridge message remains backward-compatible.
+- Testing notes: On build 67 after the Railway deployment, restart the app while signed out and confirm the login screen remains ad-free. On build 68, verify no banner flash occurs during startup, the conversation-list banner appears only after authentication, and search/conversation overlay behavior remains unchanged.
+
 ## 2026-08-14 - Group the profile primary-language selector into three sections
 
 - Surface: The primary-language selector inside the My Page profile-edit panel.
@@ -614,4 +627,4 @@
   - Updated the iOS WebView shell to allow programmatic keyboard presentation, which is required for the focused input to open the keyboard without a second tap.
   - Kept the focus helper shared with the clear-search action so clearing the query returns directly to typing.
 - Data contract: None. Search requests, history snapshots, and follow actions are unchanged.
-- Testing notes: Verify on iPhone TestFlight build 67 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.
+- Testing notes: Verify on iPhone TestFlight build 68 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.

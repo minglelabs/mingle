@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveConversationListNativeBannerZone } from "@/lib/native-banner-zone";
+import {
+  resolveConversationListNativeBannerZone,
+  shouldReassertNativeAuthBannerZone,
+} from "@/lib/native-banner-zone";
 
 describe("resolveConversationListNativeBannerZone", () => {
   it("hides the native banner while the authentication gate is visible", () => {
@@ -29,5 +32,12 @@ describe("resolveConversationListNativeBannerZone", () => {
       hasActiveConversation: false,
       isSearchOpen: true,
     })).toBe("hidden");
+  });
+
+  it("reasserts authentication hiding only for native clients before build 68", () => {
+    expect(shouldReassertNativeAuthBannerZone("67")).toBe(true);
+    expect(shouldReassertNativeAuthBannerZone(null)).toBe(true);
+    expect(shouldReassertNativeAuthBannerZone("68")).toBe(false);
+    expect(shouldReassertNativeAuthBannerZone("69")).toBe(false);
   });
 });

@@ -1,5 +1,13 @@
 export type NativeBannerZone = 'list' | 'conversation' | 'hidden'
 
+export const NATIVE_AUTH_BANNER_STATE_FIXED_BUILD = 68
+
+export function shouldReassertNativeAuthBannerZone(clientBuild: string | null): boolean {
+  const normalized = clientBuild?.trim() || ''
+  if (!/^\d+$/.test(normalized)) return true
+  return Number(normalized) < NATIVE_AUTH_BANNER_STATE_FIXED_BUILD
+}
+
 export function resolveConversationListNativeBannerZone(params: {
   isAuthenticated: boolean
   hasActiveConversation: boolean

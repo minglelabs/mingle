@@ -82,6 +82,11 @@ import {
   resolveConversationRestorePayloadFromUrl,
   type NativeConversationRestorePayload,
 } from './src/webViewRestore';
+import {
+  resolveNativeBannerNavigationState,
+  type NativeBannerZone as BannerZone,
+  type StableNativeBannerZone,
+} from './src/nativeBannerZone';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -136,7 +141,6 @@ type NativeAdModule = {
   };
 };
 type NativeBannerPosition = 'top' | 'bottom';
-type BannerZone = 'list' | 'conversation' | 'hidden';
 type VersionPolicyAction = 'force_update' | 'recommend_update' | 'none';
 type VersionPolicyAdMobConfig = {
   bannerUnitId?: string;
@@ -525,22 +529,6 @@ const VERSION_POLICY_SUPPORTED_LOCALES = new Set<VersionPolicyLocale>([
   'vi',
 ]);
 
-function resolveBannerZoneForUrl(rawUrl: string): BannerZone | null {
-  if (!rawUrl) return null;
-
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch {
-    return null;
-  }
-
-  const pathSegments = parsedUrl.pathname.split('/').filter(Boolean);
-  if (pathSegments.length < 2) return 'hidden';
-  if (pathSegments[1] !== 'conversations') return 'hidden';
-
-  return parsedUrl.searchParams.get('conversation') ? 'conversation' : 'list';
-}
 const IOS_VERSION_POLICY_TIMEOUT_MS = 8000;
 
 type NativeSttStartPayload = {
@@ -1447,9 +1435,9 @@ function AppInner(): React.JSX.Element {
     [nativeBottomBannerClearancePx, safeAreaInsets.bottom],
   );
   const nativeTranscriptInsetPx = nativeInitialBannerInsetPx;
-  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('list');
-  const activeBannerZoneRef = useRef<BannerZone>('list');
-  const stableBannerZoneRef = useRef<Exclude<BannerZone, 'hidden'>>('list');
+  const [activeBannerZone, setActiveBannerZone] = useState<BannerZone>('hidden');
+  const activeBannerZoneRef = useRef<BannerZone>('hidden');
+  const stableBannerZoneRef = useRef<StableNativeBannerZone>('list');
   const pendingNavigationBannerZoneRef = useRef<BannerZone | null>(null);
   const nativeConversationBannerBottomOffsetPx = nativeBannerBottomOffsetPx;
   const nativeBannerBottomInsetPx = useMemo(() => resolveNativeBottomBannerContentInsetPx({
@@ -1963,25 +1951,21 @@ function AppInner(): React.JSX.Element {
   ]);
 
   const prepareBannerZoneTransition = useCallback((nextUrl?: string) => {
-    const inferredZone = resolveBannerZoneForUrl(typeof nextUrl === 'string' ? nextUrl : '');
-    if (!inferredZone) return;
+    const currentState = {
+      activeZone: activeBannerZoneRef.current,
+      stableZone: stableBannerZoneRef.current,
+      pendingNavigationZone: pendingNavigationBannerZoneRef.current,
+    };
+    const nextState = resolveNativeBannerNavigationState(
+      currentState,
+      typeof nextUrl === 'string' ? nextUrl : '',
+    );
+    if (nextState === currentState) return;
 
-    const stableZone = stableBannerZoneRef.current;
-    if (inferredZone !== stableZone) {
-      pendingNavigationBannerZoneRef.current = inferredZone;
-      if (activeBannerZoneRef.current !== 'hidden') {
-        setActiveBannerZone('hidden');
-      }
-      return;
-    }
-
-    if (
-      activeBannerZoneRef.current === 'hidden'
-      && inferredZone === stableZone
-    ) {
-      pendingNavigationBannerZoneRef.current = null;
-      setActiveBannerZone(stableZone);
-    }
+    activeBannerZoneRef.current = nextState.activeZone;
+    stableBannerZoneRef.current = nextState.stableZone;
+    pendingNavigationBannerZoneRef.current = nextState.pendingNavigationZone;
+    setActiveBannerZone(nextState.activeZone);
   }, []);
 
   const dispatchAuthToWeb = useCallback((payload: NativeAuthEvent) => {
@@ -2427,6 +2411,7 @@ function AppInner(): React.JSX.Element {
           stableBannerZoneRef.current = zone;
           pendingNavigationBannerZoneRef.current = null;
         }
+        activeBannerZoneRef.current = zone;
         setActiveBannerZone(zone);
       }
       return;
