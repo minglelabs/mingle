@@ -3,11 +3,12 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 type NotificationPanelProps = {
   open: boolean;
@@ -51,6 +52,8 @@ const PANEL_TRANSITION = {
   duration: 0.28,
   ease: [0.22, 1, 0.36, 1] as const,
 };
+const NOTIFICATION_SWIPE_THRESHOLD_PX = 72;
+const NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND = 650;
 
 function getNotificationCopy(dictionary: AppDictionary, locale: AppLocale): NotificationCopy {
   const copy = getConversationDictionary(locale, dictionary);
@@ -158,6 +161,10 @@ export default function NotificationPanel({
   onUnreadCountChange,
 }: NotificationPanelProps) {
   const router = useRouter();
+  const motionControls = useAnimationControls();
+  const dragControls = useDragControls();
+  const isMountedRef = useRef(false);
+  const isLeavingRef = useRef(false);
   const copy = useMemo(() => getNotificationCopy(dictionary, locale), [dictionary, locale]);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -166,7 +173,25 @@ export default function NotificationPanel({
   const [loadError, setLoadError] = useState(false);
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
   const [followErrorId, setFollowErrorId] = useState<string | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(1);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    isLeavingRef.current = false;
+    const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
+    syncViewportWidth();
+    window.addEventListener("resize", syncViewportWidth);
+    void motionControls.start({ x: 0, transition: PANEL_TRANSITION });
+    return () => window.removeEventListener("resize", syncViewportWidth);
+  }, [motionControls, open]);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
     const normalizedCount = Math.max(0, Math.floor(nextCount));
@@ -238,6 +263,26 @@ export default function NotificationPanel({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
+
+  const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
+    if (!isLeftEdgeSwipeStart(localClientX)) return;
+    dragControls.start(event);
+  }, [dragControls]);
+
+  const handleDragEnd = useCallback(async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!isMountedRef.current || isLeavingRef.current) return;
+    if (
+      info.offset.x >= NOTIFICATION_SWIPE_THRESHOLD_PX
+      || info.velocity.x >= NOTIFICATION_SWIPE_VELOCITY_PX_PER_SECOND
+    ) {
+      isLeavingRef.current = true;
+      await motionControls.start({ x: "100%", transition: PANEL_TRANSITION });
+      if (isMountedRef.current) onClose();
+      return;
+    }
+    await motionControls.start({ x: 0, transition: PANEL_TRANSITION });
+  }, [motionControls, onClose]);
 
   const markAsRead = useCallback((notification: NotificationRecord) => {
     if (notification.isRead) return;
@@ -369,10 +414,20 @@ export default function NotificationPanel({
           />
           <motion.aside
             initial={{ x: "100%" }}
-            animate={{ x: 0 }}
+            animate={motionControls}
             exit={{ x: "100%" }}
             transition={PANEL_TRANSITION}
+            drag="x"
+            dragControls={dragControls}
+            dragDirectionLock
+            dragListener={false}
+            dragConstraints={{ left: 0, right: viewportWidth }}
+            dragElastic={0.08}
+            dragMomentum={false}
+            onPointerDown={handlePanelPointerDown}
+            onDragEnd={handleDragEnd}
             className="absolute inset-y-0 right-0 flex w-full max-w-[430px] flex-col bg-white shadow-2xl"
+            style={{ touchAction: "pan-y" }}
             role="dialog"
             aria-modal="true"
             aria-label={copy.title}

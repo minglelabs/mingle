@@ -666,3 +666,12 @@
   - Keep the crop surface outside the text form flow so changing an image does not interfere with handle, name, bio, or language editing.
 - Data contract: Added profile image object-key and crop metadata fields, a multipart profile-image upload endpoint, and iOS/Android v2.0.0 route wrappers. The object key remains server-only; the public image URL and crop values are returned to clients.
 - Testing notes: Verify JPG/PNG/WEBP selection, drag and pinch behavior on a real phone, replacing an existing image, and reopening the editor to confirm the original source and crop coordinates are restored.
+
+## 2026-08-16 - Add edge-swipe dismissal to notifications
+
+- Surface: The notifications panel opened from the conversation-list header.
+- Issue: Notifications could be closed with the header arrow or backdrop, but did not follow the edge-swipe dismissal pattern used by the other full-screen app surfaces.
+- User impact: Returning from notifications required a deliberate tap and felt inconsistent with profile, follow-list, and settings navigation.
+- Resolution: Added a left-edge-only horizontal drag that dismisses the notification panel to the right after the same distance or velocity threshold used by the surrounding screens. Vertical scrolling remains available because the panel keeps `touchAction: pan-y`, and taps outside the panel or on the header arrow retain their existing behavior.
+- Data contract: None.
+- Testing notes: Verify that a rightward gesture beginning within the first 32px closes the panel, a vertical list scroll does not close it, and gestures beginning away from the left edge do not take over the interaction.
