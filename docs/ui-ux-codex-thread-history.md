@@ -524,6 +524,19 @@
 - Data contract: No API or database changes. The page and `/api/profile` now share the same profile selection and serialization helper.
 - Testing notes: Enter My Page from both Conversations and Explore and confirm the name, handle, follower count, and following count all appear together without zero/empty placeholders. Follow or unfollow an account, return to My Page, and confirm the background refresh reconciles the count.
 
+## 2026-08-15 - Keep the complete conversation list warm between tab visits
+
+- Surface: The 2.0.0 Conversations tab list reached from Explore or My Page.
+- Issue: A short-lived session cache already existed, but the component initialized with an empty list and read that cache only after mounting. This still exposed the blocking loading spinner on every tab re-entry. Local STT usage and message counts, plus client-formatted recent-message times, were also initialized separately and appeared after the rows.
+- User impact: Returning to Conversations felt like opening the list for the first time, while avatars, titles, languages, message previews/times, STT usage, and message counts visibly assembled instead of appearing as one stable list snapshot.
+- Resolution:
+  - Keep an account- and API-namespace-scoped in-memory snapshot so a remounted Conversations tab can use the previous complete list as its initial React state rather than waiting for an effect.
+  - Persist the same snapshot in session storage for remount recovery. It includes conversation summary metadata used for the avatar, title, language flags, latest message and time, server message count, and per-room local STT usage/message counts.
+  - Treat the snapshot as stale-while-revalidate for up to seven days within the browser session: show it immediately, then run the existing no-cache server request in the background and replace the snapshot with fresh values.
+  - Preserve account and iOS/Android API namespace isolation so one user's or release namespace's rows cannot warm another list.
+- Data contract: No API or database changes. The existing conversation-list response and local per-room STT statistics are cached together on the client.
+- Testing notes: Load Conversations once, visit Explore or My Page, and return. Confirm the complete rows are visible on the first frame with no blocking spinner, then verify a newly finalized message or changed room language is reconciled by the background refresh. Also confirm switching accounts never exposes the previous account's cached rows.
+
 ## 2026-08-14 - Group the profile primary-language selector into three sections
 
 - Surface: The primary-language selector inside the My Page profile-edit panel.

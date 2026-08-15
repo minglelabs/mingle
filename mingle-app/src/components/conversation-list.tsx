@@ -80,6 +80,14 @@ import {
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
 import {
+  readConversationListCache,
+  readConversationListMemoryCache,
+  resolveConversationListInitialState,
+  writeConversationListCache,
+  type CachedConversationLocalStats,
+  type ConversationListCacheIdentity,
+} from "@/components/conversation-list-cache";
+import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
@@ -104,8 +112,6 @@ const MingleHome = lazy(() => import("@/components/mingle-home"));
 
 const RECENT_SEARCHES_STORAGE_KEY = "mingle:conversation-searches";
 const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
-const CONVERSATION_LIST_CACHE_KEY_PREFIX = "mingle:conversation-list-cache:v1";
-const CONVERSATION_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
@@ -128,76 +134,6 @@ const LIST_PULL_REFRESH_TRIGGER_PX = 72;
 const LIST_PULL_REFRESH_MAX_PX = 108;
 const LIST_PULL_REFRESH_RESISTANCE = 0.45;
 const CONVERSATION_CREATE_BUTTON_HEIGHT_PX = 72;
-
-type ConversationListCacheRecord = {
-  savedAt: number;
-  conversations: ConversationChannelSummary[];
-};
-
-function buildConversationListCacheKey(externalUserId = ""): string {
-  const identity = externalUserId.trim() || getOrCreateTrackingUserId();
-  const namespace = clientApiNamespace.trim() || "default";
-  return `${CONVERSATION_LIST_CACHE_KEY_PREFIX}:${encodeURIComponent(namespace)}:${encodeURIComponent(identity)}`;
-}
-
-function isCachedConversationSummary(value: unknown): value is ConversationChannelSummary {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-  const candidate = value as Partial<ConversationChannelSummary>;
-  return typeof candidate.id === "string"
-    && typeof candidate.title === "string"
-    && typeof candidate.sessionKey === "string"
-    && (candidate.status === "active" || candidate.status === "paused")
-    && typeof candidate.createdAt === "string"
-    && typeof candidate.updatedAt === "string";
-}
-
-function readConversationListCache(externalUserId = ""): ConversationListCacheRecord | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const storageKey = buildConversationListCacheKey(externalUserId);
-    const rawValue = window.sessionStorage.getItem(storageKey);
-    if (!rawValue) return null;
-
-    const parsed = JSON.parse(rawValue) as Partial<ConversationListCacheRecord>;
-    if (
-      typeof parsed.savedAt !== "number"
-      || !Number.isFinite(parsed.savedAt)
-      || Date.now() - parsed.savedAt > CONVERSATION_LIST_CACHE_MAX_AGE_MS
-      || !Array.isArray(parsed.conversations)
-    ) {
-      window.sessionStorage.removeItem(storageKey);
-      return null;
-    }
-
-    const conversations = parsed.conversations.filter(isCachedConversationSummary);
-    if (conversations.length !== parsed.conversations.length) {
-      window.sessionStorage.removeItem(storageKey);
-      return null;
-    }
-
-    return { savedAt: parsed.savedAt, conversations };
-  } catch {
-    return null;
-  }
-}
-
-function writeConversationListCache(
-  conversations: ConversationChannelSummary[],
-  externalUserId = "",
-): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.setItem(
-      buildConversationListCacheKey(externalUserId),
-      JSON.stringify({ savedAt: Date.now(), conversations }),
-    );
-  } catch {
-    // Treat storage as an optional fast path. The server remains authoritative.
-  }
-}
 
 let recentSearchesSnapshot = EMPTY_RECENT_SEARCHES;
 let recentSearchesSnapshotRaw = "__initial__";
@@ -243,10 +179,7 @@ type ConversationListQaEnsureRoomResult = {
   action: "active" | "opened-existing" | "created";
 };
 
-type ConversationLocalStats = {
-  usageSec: number;
-  messageCount: number;
-};
+type ConversationLocalStats = CachedConversationLocalStats;
 
 declare global {
   interface Window {
@@ -1583,9 +1516,34 @@ export default function ConversationList({
   appleOAuthEnabled,
   googleOAuthEnabled,
 }: ConversationListProps) {
-  const { status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
+  const authenticatedUserId = typeof session?.user?.id === "string"
+    ? session.user.id.trim()
+    : "";
+  const conversationCacheIdentity = useMemo<ConversationListCacheIdentity>(() => ({
+    apiNamespace: clientApiNamespace,
+    authenticatedUserId,
+    externalUserId: initialTrackingExternalUserId,
+  }), [authenticatedUserId, initialTrackingExternalUserId]);
+  const [initialWarmSnapshot] = useState(() => {
+    if (
+      !initialNativeUi
+      || initialConversations.length > 0
+      || sessionStatus !== "authenticated"
+    ) {
+      return null;
+    }
+    return readConversationListMemoryCache(conversationCacheIdentity);
+  });
+  const initialListState = resolveConversationListInitialState({
+    initialConversations,
+    initialConversationsRequireRefresh,
+    warmSnapshot: initialWarmSnapshot,
+  });
   const initialConversationToOpen = initialConversationIdToOpen
-    ? initialConversations.find((conversation) => conversation.id === initialConversationIdToOpen) ?? null
+    ? initialListState.conversations.find(
+        (conversation) => conversation.id === initialConversationIdToOpen,
+      ) ?? null
     : null;
   const copy = useMemo(
     () => getConversationDictionary(locale, dictionary),
@@ -1604,17 +1562,19 @@ export default function ConversationList({
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
-    initialConversations.length === 0,
+    !initialListState.hasSnapshot,
   );
   const [isImportingLegacyConversation, setIsImportingLegacyConversation] = useState(false);
   const [isRefreshingConversations, setIsRefreshingConversations] = useState(false);
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
-    [...initialConversations].sort(compareConversationRecency),
+    [...initialListState.conversations].sort(compareConversationRecency),
   );
   const [conversationInterimPreviews, setConversationInterimPreviews] = useState<
     Record<string, LatestUtterancePayload>
   >({});
-  const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>({});
+  const [conversationLocalStats, setConversationLocalStats] = useState<Record<string, ConversationLocalStats>>(
+    initialListState.localStats,
+  );
   const [nativeBannerLayout, setNativeBannerLayout] = useState<NativeUiBannerLayoutEventDetail | null>(null);
   const [activeConversation, setActiveConversation] = useState<ConversationChannelSummary | null>(initialConversationToOpen);
   const [liveConversationId, setLiveConversationId] = useState<string | null>(null);
@@ -1624,7 +1584,7 @@ export default function ConversationList({
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
-  const [timeLabelsReady, setTimeLabelsReady] = useState(false);
+  const [timeLabelsReady, setTimeLabelsReady] = useState(initialListState.timeLabelsReady);
   const [rowActionMenu, setRowActionMenu] = useState<ConversationRowActionMenuState | null>(null);
   const [renameDialogConversationId, setRenameDialogConversationId] = useState<string | null>(null);
   const [renameConversationValue, setRenameConversationValue] = useState("");
@@ -1668,6 +1628,7 @@ export default function ConversationList({
   const suppressRowActionMenuUntilRef = useRef(0);
   const activeConversationRef = useRef<ConversationChannelSummary | null>(null);
   const conversationsRef = useRef<ConversationChannelSummary[]>(conversations);
+  const hasConversationListSnapshotRef = useRef(initialListState.hasSnapshot);
   const initialTrackingIdentityRef = useRef({
     externalUserId: initialTrackingExternalUserId.trim(),
     sessionKey: initialTrackingSessionKey.trim(),
@@ -1858,17 +1819,25 @@ export default function ConversationList({
       },
     );
     const nextConversations = await readConversationListResponse(response);
+    const nextLocalStats = buildConversationLocalStatsSnapshot(nextConversations);
+    hasConversationListSnapshotRef.current = true;
     writeConversationListCache(
+      conversationCacheIdentity,
       nextConversations,
-      initialTrackingIdentityRef.current.externalUserId,
+      nextLocalStats,
     );
+    setConversationLocalStats((current) => (
+      areConversationLocalStatsSnapshotsEqual(current, nextLocalStats)
+        ? current
+        : nextLocalStats
+    ));
     setConversations((current) => (
       options?.replaceCurrent
         ? replaceConversationLists(current, nextConversations)
         : mergeConversationLists(current, nextConversations)
     ));
     return nextConversations;
-  }, [initialNativeUi]);
+  }, [conversationCacheIdentity, initialNativeUi]);
 
   const triggerPullToRefresh = useCallback(async () => {
     if (isRefreshingConversations || isHydratingConversations || activeConversation || showSearch) {
@@ -2911,19 +2880,32 @@ export default function ConversationList({
   }, []);
 
   useEffect(() => {
-    if (!initialNativeUi || initialConversations.length > 0) return;
+    if (
+      !initialNativeUi
+      || initialConversations.length > 0
+      || initialWarmSnapshot !== null
+      || sessionStatus !== "authenticated"
+    ) {
+      return;
+    }
 
-    const cached = readConversationListCache(initialTrackingExternalUserId);
+    const cached = readConversationListCache(conversationCacheIdentity);
     if (!cached) return;
 
+    conversationsRef.current = cached.conversations;
+    hasConversationListSnapshotRef.current = true;
     setConversations(cached.conversations);
+    setConversationLocalStats(cached.localStats);
     refreshConversationLocalStats(cached.conversations);
+    setTimeLabelsReady(true);
     setIsHydratingConversations(false);
   }, [
+    conversationCacheIdentity,
     initialConversations.length,
     initialNativeUi,
-    initialTrackingExternalUserId,
+    initialWarmSnapshot,
     refreshConversationLocalStats,
+    sessionStatus,
   ]);
 
   useEffect(() => {
@@ -2934,6 +2916,7 @@ export default function ConversationList({
       || initialConversations.length === 0
       || sessionStatus === "authenticated";
     if (!shouldRefreshInitialConversations) {
+      hasConversationListSnapshotRef.current = true;
       refreshConversationLocalStats(conversationsRef.current);
       setIsHydratingConversations(false);
       return () => {
@@ -2956,7 +2939,7 @@ export default function ConversationList({
         });
     };
 
-    if (sessionStatus === "authenticated" && conversationsRef.current.length === 0) {
+    if (sessionStatus === "authenticated" && !hasConversationListSnapshotRef.current) {
       setIsHydratingConversations(true);
     }
 
@@ -2981,17 +2964,26 @@ export default function ConversationList({
   ]);
 
   useEffect(() => {
-    if (!initialNativeUi || isHydratingConversations) return;
+    if (
+      !initialNativeUi
+      || isHydratingConversations
+      || sessionStatus !== "authenticated"
+    ) {
+      return;
+    }
 
     writeConversationListCache(
+      conversationCacheIdentity,
       conversations,
-      initialTrackingExternalUserId,
+      conversationLocalStats,
     );
   }, [
+    conversationCacheIdentity,
+    conversationLocalStats,
     conversations,
     initialNativeUi,
-    initialTrackingExternalUserId,
     isHydratingConversations,
+    sessionStatus,
   ]);
 
   useEffect(() => {
