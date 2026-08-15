@@ -1,25 +1,28 @@
 "use client";
 
 import BottomTabBar from "@/components/bottom-tab-bar";
+import {
+  clearConnectSearchCache,
+  isConnectSearchResult,
+  readConnectSearchCache,
+  type ConnectSearchCacheIdentity,
+  type ConnectSearchResult,
+  writeConnectSearchCache,
+} from "@/components/connect-search-cache";
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { buildClientApiPath } from "@/lib/api-contract";
+import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ConnectPageProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
 };
 
-type UserSearchResult = {
-  id: string;
-  handle: string | null;
-  name: string | null;
-  image: string | null;
-  isFollowing: boolean;
-};
+type UserSearchResult = ConnectSearchResult;
 
 const CONNECT_SEARCH_HISTORY_STATE_KEY = "__MINGLE_CONNECT_SEARCH_STATE__";
 
@@ -32,16 +35,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function isUserSearchResult(value: unknown): value is UserSearchResult {
-  if (!isRecord(value)) return false;
-
-  return typeof value.id === "string"
-    && (typeof value.handle === "string" || value.handle === null)
-    && (typeof value.name === "string" || value.name === null)
-    && (typeof value.image === "string" || value.image === null)
-    && typeof value.isFollowing === "boolean";
-}
-
 function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null {
   if (typeof window === "undefined" || !isRecord(window.history.state)) return null;
 
@@ -50,7 +43,7 @@ function readConnectSearchHistorySnapshot(): ConnectSearchHistorySnapshot | null
     return null;
   }
 
-  if (!rawSnapshot.query.trim() || !rawSnapshot.results.every(isUserSearchResult)) return null;
+  if (!rawSnapshot.query.trim() || !rawSnapshot.results.every(isConnectSearchResult)) return null;
 
   return {
     query: rawSnapshot.query,
@@ -102,9 +95,19 @@ function resolveSearchCopy(dictionary: AppDictionary) {
 }
 
 export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
+  const { data: session, status: sessionStatus } = useSession();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const requestSequenceRef = useRef(0);
   const isMountedRef = useRef(false);
+  const initialHistorySnapshotRef = useRef<ConnectSearchHistorySnapshot | null>(null);
+  const hydratedCacheIdentityRef = useRef("");
+  const authenticatedUserId = typeof session?.user?.id === "string"
+    ? session.user.id.trim()
+    : "";
+  const searchCacheIdentity = useMemo<ConnectSearchCacheIdentity>(() => ({
+    apiNamespace: clientApiNamespace,
+    authenticatedUserId,
+  }), [authenticatedUserId]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [searchingQuery, setSearchingQuery] = useState("");
@@ -128,10 +131,19 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   const handleSearchQueryChange = useCallback((nextQuery: string) => {
     setQuery(nextQuery);
     const normalizedNextQuery = nextQuery.trim();
+    if (normalizedNextQuery) {
+      writeConnectSearchCache(searchCacheIdentity, {
+        query: normalizedNextQuery,
+        results: [],
+        resultsReady: false,
+      });
+    } else {
+      clearConnectSearchCache(searchCacheIdentity);
+    }
     replaceConnectSearchHistorySnapshot(normalizedNextQuery
       ? { query: normalizedNextQuery, results: [] }
       : null);
-  }, []);
+  }, [searchCacheIdentity]);
 
   const handleToggleFollow = useCallback(async (user: UserSearchResult) => {
     if (followInFlightIds.has(user.id)) return;
@@ -170,6 +182,7 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   useEffect(() => {
     isMountedRef.current = true;
     const snapshot = readConnectSearchHistorySnapshot();
+    initialHistorySnapshotRef.current = snapshot;
     if (snapshot) {
       setQuery(snapshot.query);
       setResults(snapshot.results);
@@ -192,9 +205,68 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
   }, [focusSearchInput]);
 
   useEffect(() => {
+    if (
+      !isMountedRef.current
+      || sessionStatus !== "authenticated"
+      || !authenticatedUserId
+    ) {
+      return;
+    }
+
+    const cacheIdentityKey = `${clientApiNamespace}:${authenticatedUserId}`;
+    if (hydratedCacheIdentityRef.current === cacheIdentityKey) return;
+
+    const isFirstAuthenticatedIdentity = !hydratedCacheIdentityRef.current;
+    hydratedCacheIdentityRef.current = cacheIdentityKey;
+
+    // The history snapshot is the freshest source when returning from a profile.
+    if (isFirstAuthenticatedIdentity && initialHistorySnapshotRef.current) return;
+
+    const snapshot = readConnectSearchCache(searchCacheIdentity);
+    if (!snapshot) {
+      if (isFirstAuthenticatedIdentity && !initialHistorySnapshotRef.current) return;
+      setQuery("");
+      setResults([]);
+      setResultsQuery("");
+      return;
+    }
+
+    setQuery(snapshot.query);
+    setResults(snapshot.resultsReady ? snapshot.results : []);
+    setResultsQuery(snapshot.resultsReady ? snapshot.query : "");
+    setSearchError(false);
+    setSearchErrorQuery("");
+  }, [authenticatedUserId, searchCacheIdentity, sessionStatus]);
+
+  useEffect(() => {
     if (!isMountedRef.current || !resultsQuery) return;
     replaceConnectSearchHistorySnapshot({ query: resultsQuery, results });
   }, [results, resultsQuery]);
+
+  useEffect(() => {
+    if (
+      !isMountedRef.current
+      || sessionStatus !== "authenticated"
+      || !authenticatedUserId
+      || !normalizedQuery
+      || resultsQuery !== normalizedQuery
+    ) {
+      return;
+    }
+
+    writeConnectSearchCache(searchCacheIdentity, {
+      query: normalizedQuery,
+      results,
+      resultsReady: true,
+    });
+  }, [
+    authenticatedUserId,
+    normalizedQuery,
+    results,
+    resultsQuery,
+    searchCacheIdentity,
+    sessionStatus,
+  ]);
 
   useEffect(() => {
     const requestSequence = ++requestSequenceRef.current;
