@@ -117,6 +117,7 @@ const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
+const NOTIFICATION_PROFILE_HISTORY_KEY = "__MINGLE_NOTIFICATION_PROFILE__";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
@@ -1597,6 +1598,7 @@ export default function ConversationList({
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
+  const notificationProfileIdRef = useRef<string | null>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
@@ -2532,11 +2534,46 @@ export default function ConversationList({
   }, []);
 
   const openNotificationProfile = useCallback((userId: string) => {
+    notificationProfileIdRef.current = userId;
+    if (typeof window !== "undefined") {
+      const currentState = window.history.state;
+      const nextState = currentState && typeof currentState === "object"
+        ? { ...currentState, [NOTIFICATION_PROFILE_HISTORY_KEY]: userId }
+        : { [NOTIFICATION_PROFILE_HISTORY_KEY]: userId };
+      window.history.pushState(nextState, "", window.location.href);
+    }
+    setShowNotifications(true);
     setNotificationProfileId(userId);
   }, []);
 
   const closeNotificationProfile = useCallback(() => {
+    if (
+      typeof window !== "undefined"
+      && window.history.state
+      && typeof window.history.state === "object"
+      && NOTIFICATION_PROFILE_HISTORY_KEY in window.history.state
+    ) {
+      window.history.back();
+      return;
+    }
+    notificationProfileIdRef.current = null;
     setNotificationProfileId(null);
+  }, []);
+
+  useEffect(() => {
+    notificationProfileIdRef.current = notificationProfileId;
+  }, [notificationProfileId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleNotificationProfilePopState = () => {
+      if (!notificationProfileIdRef.current) return;
+      setNotificationProfileId(null);
+    };
+
+    window.addEventListener("popstate", handleNotificationProfilePopState);
+    return () => window.removeEventListener("popstate", handleNotificationProfilePopState);
   }, []);
 
   useEffect(() => {
