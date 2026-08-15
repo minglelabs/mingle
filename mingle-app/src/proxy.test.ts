@@ -27,4 +27,10 @@ describe("proxy locale redirect bypass", () => {
     expect(shouldBypassLocaleRedirect("/admin/feedback")).toBe(true);
     expect(shouldBypassLocaleRedirect("/ko/admin")).toBe(false);
   });
+
+  it("keeps shared profile and app-association routes unlocalized", () => {
+    expect(shouldBypassLocaleRedirect("/p/cmg123abc")).toBe(true);
+    expect(shouldBypassLocaleRedirect("/.well-known/apple-app-site-association")).toBe(true);
+    expect(shouldBypassLocaleRedirect("/ko/p/cmg123abc")).toBe(false);
+  });
 });
