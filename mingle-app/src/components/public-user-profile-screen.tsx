@@ -23,6 +23,7 @@ type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
   userId: string;
+  onClose?: () => void;
 };
 
 type PublicUserProfile = {
@@ -145,6 +146,7 @@ export default function PublicUserProfileScreen({
   dictionary,
   locale,
   userId,
+  onClose,
 }: PublicUserProfileScreenProps) {
   const router = useRouter();
   const motionControls = useAnimationControls();
@@ -216,12 +218,16 @@ export default function PublicUserProfileScreen({
   }, []);
 
   const navigateBack = useCallback(() => {
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push(`/${locale}/connect`);
-  }, [locale, router]);
+  }, [locale, onClose, router]);
 
   const handleBack = useCallback(async () => {
     if (!isMountedRef.current || isLeavingRef.current) return;
@@ -329,7 +335,7 @@ export default function PublicUserProfileScreen({
       dragElastic={0.08}
       dragMomentum={false}
       onDragEnd={handleDragEnd}
-      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
+      className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
       <header

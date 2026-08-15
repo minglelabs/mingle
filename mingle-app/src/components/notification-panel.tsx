@@ -7,7 +7,6 @@ import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 type NotificationPanelProps = {
@@ -17,6 +16,7 @@ type NotificationPanelProps = {
   dictionary: AppDictionary;
   nativeTopInsetPx?: number;
   onClose: () => void;
+  onOpenProfile: (userId: string) => void;
   onUnreadCountChange: (count: number) => void;
 };
 
@@ -160,9 +160,9 @@ export default function NotificationPanel({
   dictionary,
   nativeTopInsetPx = 0,
   onClose,
+  onOpenProfile,
   onUnreadCountChange,
 }: NotificationPanelProps) {
-  const router = useRouter();
   const motionControls = useAnimationControls();
   const dragControls = useDragControls();
   const isMountedRef = useRef(false);
@@ -323,9 +323,8 @@ export default function NotificationPanel({
 
   const handleOpenNotification = useCallback((notification: NotificationRecord) => {
     markAsRead(notification);
-    onClose();
-    router.push(`/${locale}/users/${encodeURIComponent(notification.actor.handle || notification.actor.id)}`);
-  }, [locale, markAsRead, onClose, router]);
+    onOpenProfile(notification.actor.handle || notification.actor.id);
+  }, [markAsRead, onOpenProfile]);
 
   const handleFollowBack = useCallback(async (notification: NotificationRecord) => {
     if (notification.isFollowing || pendingFollowIds.has(notification.id)) return;

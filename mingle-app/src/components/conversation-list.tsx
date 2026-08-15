@@ -80,6 +80,7 @@ import {
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
 import NotificationPanel from "@/components/notification-panel";
+import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -1561,6 +1562,7 @@ export default function ConversationList({
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationProfileId, setNotificationProfileId] = useState<string | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
@@ -2529,6 +2531,14 @@ export default function ConversationList({
     setShowNotifications(false);
   }, []);
 
+  const openNotificationProfile = useCallback((userId: string) => {
+    setNotificationProfileId(userId);
+  }, []);
+
+  const closeNotificationProfile = useCallback(() => {
+    setNotificationProfileId(null);
+  }, []);
+
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
@@ -3460,6 +3470,10 @@ export default function ConversationList({
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
+    if (notificationProfileId) {
+      closeNotificationProfile();
+      return true;
+    }
     if (showNotifications) {
       closeNotifications();
       return true;
@@ -3475,8 +3489,10 @@ export default function ConversationList({
     activeConversation,
     closeConversationOverlay,
     closeNotifications,
+    closeNotificationProfile,
     closeSearchOverlay,
     isCreatingConversation,
+    notificationProfileId,
     showNotifications,
     showSearch,
   ]);
@@ -3858,8 +3874,18 @@ export default function ConversationList({
         dictionary={dictionary}
         nativeTopInsetPx={effectiveNativeTopInsetPx}
         onClose={closeNotifications}
+        onOpenProfile={openNotificationProfile}
         onUnreadCountChange={setUnreadNotificationCount}
       />
+
+      {notificationProfileId ? (
+        <PublicUserProfileScreen
+          dictionary={dictionary}
+          locale={locale}
+          userId={notificationProfileId}
+          onClose={closeNotificationProfile}
+        />
+      ) : null}
 
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
