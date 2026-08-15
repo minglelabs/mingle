@@ -21,7 +21,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { ArrowRight, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
+import { ArrowRight, Bell, Loader2, PencilLine, Search, Trash2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { buildStorageKey, getOrCreateTrackingUserId } from "@/components/LivePhoneDemo/realtime-storage";
 import {
@@ -79,6 +79,7 @@ import {
   isAbortLikeMutationError,
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
+import NotificationPanel from "@/components/notification-panel";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -1559,6 +1560,8 @@ export default function ConversationList({
   );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
@@ -2522,6 +2525,10 @@ export default function ConversationList({
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
 
+  const closeNotifications = useCallback(() => {
+    setShowNotifications(false);
+  }, []);
+
   useEffect(() => {
     setIsClientReady(true);
     setIsNativeRuntime(isNativeAppRuntime());
@@ -2596,6 +2603,8 @@ export default function ConversationList({
     setConversations([]);
     setConversationInterimPreviews({});
     setConversationLocalStats({});
+    setShowNotifications(false);
+    setUnreadNotificationCount(0);
   }, [sessionStatus]);
 
   useEffect(() => {
@@ -3451,6 +3460,10 @@ export default function ConversationList({
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
+    if (showNotifications) {
+      closeNotifications();
+      return true;
+    }
     if (showSearch && !activeConversation) {
       closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
       return true;
@@ -3461,8 +3474,10 @@ export default function ConversationList({
   }, 5), [
     activeConversation,
     closeConversationOverlay,
+    closeNotifications,
     closeSearchOverlay,
     isCreatingConversation,
+    showNotifications,
     showSearch,
   ]);
 
@@ -3836,6 +3851,15 @@ export default function ConversationList({
         />
       ) : null}
 
+      <NotificationPanel
+        open={showNotifications}
+        enabled={sessionStatus === "authenticated"}
+        locale={locale}
+        dictionary={dictionary}
+        onClose={closeNotifications}
+        onUnreadCountChange={setUnreadNotificationCount}
+      />
+
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -3845,14 +3869,32 @@ export default function ConversationList({
       >
         <MingleWordmark />
 
-        <button
-          type="button"
-          onClick={handleOpenSearch}
-          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
-          aria-label={copy.searchButtonLabel}
-        >
-          <Search size={22} strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleOpenSearch}
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+            aria-label={copy.searchButtonLabel}
+          >
+            <Search size={22} strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNotifications(true)}
+            className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
+            aria-label={copy.notificationsButtonLabel ?? (locale === "ko" ? "알림" : "Notifications")}
+          >
+            <Bell size={22} strokeWidth={2} />
+            {unreadNotificationCount > 0 ? (
+              <span
+                className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white"
+                aria-label={`${unreadNotificationCount} ${locale === "ko" ? "개 읽지 않은 알림" : "unread notifications"}`}
+              >
+                {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </header>
 
       <div

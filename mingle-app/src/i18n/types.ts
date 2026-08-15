@@ -16,6 +16,18 @@ export type BaseAppDictionarySource = {
     createErrorMessage: string;
     openErrorMessage: string;
     pauseErrorMessage: string;
+    notificationsButtonLabel?: string;
+    notificationsTitle?: string;
+    notificationsCloseAction?: string;
+    notificationsLoadingLabel?: string;
+    notificationsEmptyLabel?: string;
+    notificationsUnreadSectionLabel?: string;
+    notificationsReadSectionLabel?: string;
+    notificationsFollowMessage?: string;
+    notificationsFollowBackAction?: string;
+    notificationsFollowingAction?: string;
+    notificationsLoadError?: string;
+    notificationsFollowError?: string;
   };
   demo: {
     tapPlayToStart: string;

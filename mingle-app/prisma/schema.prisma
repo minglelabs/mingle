@@ -59,6 +59,8 @@ model User {
   conversationChannels   AppConversationChannel[]
   followingRelations     UserFollow[]             @relation("UserFollowing")
   followerRelations      UserFollow[]             @relation("UserFollowers")
+  receivedNotifications  UserNotification[]       @relation("UserNotificationsReceived")
+  sentNotifications      UserNotification[]       @relation("UserNotificationsSent")
   blockingRelations      UserBlock[]              @relation("UserBlocking")
   blockedByRelations     UserBlock[]              @relation("UserBlockedBy")
   sentUserReports        UserReport[]             @relation("UserReportsSent")
@@ -82,6 +84,22 @@ model UserFollow {
   @@index([followerId, createdAt], map: "app_user_follows_follower_created_at_idx")
   @@index([followingId, createdAt], map: "app_user_follows_following_created_at_idx")
   @@map("app_user_follows")
+}
+
+model UserNotification {
+  id          String    @id @default(cuid())
+  recipientId String    @map("recipient_id")
+  actorId     String    @map("actor_id")
+  type        String    @default("follow")
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  recipient User @relation("UserNotificationsReceived", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User @relation("UserNotificationsSent", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
+  @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")
+  @@map("app_user_notifications")
 }
 
 model UserBlock {
@@ -109,8 +127,8 @@ model UserReport {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  reporter     User               @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
-  reportedUser User               @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reporter     User              @relation("UserReportsSent", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser User              @relation("UserReportsReceived", fields: [reportedUserId], references: [id], onDelete: Cascade)
   replies      UserReportReply[]
 
   @@index([reporterId, createdAt], map: "app_user_reports_reporter_created_at_idx")
@@ -120,12 +138,12 @@ model UserReport {
 }
 
 model UserReportReply {
-  id        String   @id @default(cuid())
-  reportId  String   @map("report_id")
-  authorType String  @map("author_type")
-  message   String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id         String   @id @default(cuid())
+  reportId   String   @map("report_id")
+  authorType String   @map("author_type")
+  message    String   @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   report UserReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 

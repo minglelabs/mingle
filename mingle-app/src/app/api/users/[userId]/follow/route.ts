@@ -21,6 +21,13 @@ function jsonResult(isFollowing: boolean): NextResponse {
   });
 }
 
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && (error as { code?: unknown }).code === "P2002";
+}
+
 async function resolveFollowTarget(
   session: { user?: { id?: unknown } } | null,
   params: Promise<{ userId: string }>,
@@ -70,19 +77,28 @@ export async function POST(_request: NextRequest, { params }: FollowRouteProps) 
   const result = await resolveFollowTarget(await getServerSession(getAuthOptions()), params);
   if ("response" in result) return result.response;
 
-  await prisma.userFollow.upsert({
-    where: {
-      followerId_followingId: {
+  let created = false;
+  try {
+    await prisma.userFollow.create({
+      data: {
         followerId: result.followerId,
         followingId: result.followingId,
       },
-    },
-    create: {
-      followerId: result.followerId,
-      followingId: result.followingId,
-    },
-    update: {},
-  });
+    });
+    created = true;
+  } catch (error) {
+    if (!isUniqueConstraintViolation(error)) throw error;
+  }
+
+  if (created) {
+    await prisma.userNotification.create({
+      data: {
+        recipientId: result.followingId,
+        actorId: result.followerId,
+        type: "follow",
+      },
+    });
+  }
 
   return jsonResult(true);
 }

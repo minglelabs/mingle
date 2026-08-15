@@ -38,6 +38,18 @@ const ENGLISH_CONVERSATION_DICTIONARY: ConversationDictionary = {
   createErrorMessage: "Failed to create a conversation.",
   openErrorMessage: "Failed to open the conversation.",
   pauseErrorMessage: "Failed to pause the conversation.",
+  notificationsButtonLabel: "Notifications",
+  notificationsTitle: "Notifications",
+  notificationsCloseAction: "Close notifications",
+  notificationsLoadingLabel: "Loading notifications",
+  notificationsEmptyLabel: "No notifications yet",
+  notificationsUnreadSectionLabel: "Unread",
+  notificationsReadSectionLabel: "Read",
+  notificationsFollowMessage: "followed you.",
+  notificationsFollowBackAction: "Follow back",
+  notificationsFollowingAction: "Following",
+  notificationsLoadError: "Could not load notifications.",
+  notificationsFollowError: "Could not follow this user.",
 };
 
 const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary>> = {
@@ -58,6 +70,18 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
     createErrorMessage: "대화방을 만들지 못했습니다.",
     openErrorMessage: "대화방을 열지 못했습니다.",
     pauseErrorMessage: "대화방을 정지하지 못했습니다.",
+    notificationsButtonLabel: "알림",
+    notificationsTitle: "알림",
+    notificationsCloseAction: "알림 닫기",
+    notificationsLoadingLabel: "알림을 불러오는 중",
+    notificationsEmptyLabel: "아직 알림이 없어요",
+    notificationsUnreadSectionLabel: "읽지 않음",
+    notificationsReadSectionLabel: "읽음",
+    notificationsFollowMessage: "님이 회원님을 팔로우했습니다.",
+    notificationsFollowBackAction: "맞팔로우",
+    notificationsFollowingAction: "팔로잉",
+    notificationsLoadError: "알림을 불러오지 못했습니다.",
+    notificationsFollowError: "팔로우하지 못했습니다.",
   },
   en: ENGLISH_CONVERSATION_DICTIONARY,
   ja: {
@@ -297,15 +321,20 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
 };
 
 export function getConversationCopy(locale: AppLocale): ConversationDictionary {
-  return conversationDictionaries[locale] ?? ENGLISH_CONVERSATION_DICTIONARY;
+  return {
+    ...ENGLISH_CONVERSATION_DICTIONARY,
+    ...(conversationDictionaries[locale] ?? {}),
+  };
 }
 
 export function getConversationDictionary(
   locale: AppLocale,
   dictionary: AppDictionary,
 ): ConversationDictionary {
-  return dictionary.conversations
-    ?? getConversationCopy(locale);
+  return {
+    ...getConversationCopy(locale),
+    ...(dictionary.conversations ?? {}),
+  };
 }
 
 export function getConversationTitlePrefix(locale: string): string {
