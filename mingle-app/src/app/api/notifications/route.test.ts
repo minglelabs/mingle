@@ -5,11 +5,13 @@ const {
   mockGetServerSession,
   mockNotificationFindMany,
   mockNotificationCount,
+  mockNotificationUpdateMany,
   mockUserFollowFindMany,
 } = vi.hoisted(() => ({
   mockGetServerSession: vi.fn(),
   mockNotificationFindMany: vi.fn(),
   mockNotificationCount: vi.fn(),
+  mockNotificationUpdateMany: vi.fn(),
   mockUserFollowFindMany: vi.fn(),
 }));
 
@@ -26,6 +28,7 @@ vi.mock("@/lib/prisma", () => ({
     userNotification: {
       findMany: mockNotificationFindMany,
       count: mockNotificationCount,
+      updateMany: mockNotificationUpdateMany,
     },
     userFollow: {
       findMany: mockUserFollowFindMany,
@@ -33,7 +36,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { GET } from "@/app/api/notifications/route";
+import { GET, PATCH } from "@/app/api/notifications/route";
 
 describe("/api/notifications route", () => {
   beforeEach(() => {
@@ -66,6 +69,7 @@ describe("/api/notifications route", () => {
       },
     ]);
     mockNotificationCount.mockResolvedValue(1);
+    mockNotificationUpdateMany.mockResolvedValue({ count: 1 });
     mockUserFollowFindMany.mockResolvedValue([{ followingId: "actor_2" }]);
   });
 
@@ -126,5 +130,30 @@ describe("/api/notifications route", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "unauthorized" });
     expect(mockNotificationFindMany).not.toHaveBeenCalled();
+  });
+
+  it("marks all unread follow notifications for the viewer as read", async () => {
+    const response = await PATCH(new NextRequest("https://example.com/api/notifications", { method: "PATCH" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ isRead: true, updatedCount: 1 });
+    expect(mockNotificationUpdateMany).toHaveBeenCalledWith({
+      where: {
+        recipientId: "user_123",
+        type: "follow",
+        readAt: null,
+      },
+      data: { readAt: expect.any(Date) },
+    });
+  });
+
+  it("requires an authenticated viewer when marking all notifications as read", async () => {
+    mockGetServerSession.mockResolvedValue(null);
+
+    const response = await PATCH(new NextRequest("https://example.com/api/notifications", { method: "PATCH" }));
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "unauthorized" });
+    expect(mockNotificationUpdateMany).not.toHaveBeenCalled();
   });
 });

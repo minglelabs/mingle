@@ -15,6 +15,7 @@ type NotificationPanelProps = {
   enabled: boolean;
   locale: AppLocale;
   dictionary: AppDictionary;
+  nativeTopInsetPx?: number;
   onClose: () => void;
   onUnreadCountChange: (count: number) => void;
 };
@@ -157,6 +158,7 @@ export default function NotificationPanel({
   enabled,
   locale,
   dictionary,
+  nativeTopInsetPx = 0,
   onClose,
   onUnreadCountChange,
 }: NotificationPanelProps) {
@@ -199,8 +201,20 @@ export default function NotificationPanel({
     onUnreadCountChange(normalizedCount);
   }, [onUnreadCountChange]);
 
-  const loadNotifications = useCallback(async () => {
-    if (!enabled) return;
+  const markAllNotificationsAsRead = useCallback(() => {
+    setNotifications((current) => current.map((notification) => (
+      notification.isRead ? notification : { ...notification, isRead: true }
+    )));
+    updateUnreadCount(0);
+    void fetch(buildClientApiPath("/notifications"), {
+      method: "PATCH",
+    }).catch(() => {
+      // The panel remains optimistically read; the next refresh reconciles it.
+    });
+  }, [updateUnreadCount]);
+
+  const loadNotifications = useCallback(async (): Promise<{ unreadCount: number } | null> => {
+    if (!enabled) return null;
 
     abortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -227,9 +241,11 @@ export default function NotificationPanel({
       setNotifications(nextNotifications);
       updateUnreadCount(nextUnreadCount);
       setHasLoaded(true);
+      return { unreadCount: nextUnreadCount };
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") return null;
       setLoadError(true);
+      return null;
     } finally {
       if (!controller.signal.aborted) setIsLoading(false);
     }
@@ -251,8 +267,15 @@ export default function NotificationPanel({
 
   useEffect(() => {
     if (!open || !enabled) return;
-    void loadNotifications();
-  }, [enabled, loadNotifications, open]);
+    let isCurrent = true;
+    void loadNotifications().then((result) => {
+      if (!isCurrent || !result || result.unreadCount <= 0) return;
+      markAllNotificationsAsRead();
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [enabled, loadNotifications, markAllNotificationsAsRead, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -451,7 +474,12 @@ export default function NotificationPanel({
               {isLoading ? <Loader2 size={17} className="ml-auto animate-spin text-gray-400" aria-label={copy.loadingLabel} /> : null}
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"
+              style={{
+                paddingTop: nativeTopInsetPx > 0 ? `${Math.round(nativeTopInsetPx)}px` : undefined,
+              }}
+            >
               {loadError && !hasLoaded ? (
                 <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
                   <p className="text-[14px] text-gray-500" role="alert">{copy.loadError}</p>

@@ -3856,6 +3856,7 @@ export default function ConversationList({
         enabled={sessionStatus === "authenticated"}
         locale={locale}
         dictionary={dictionary}
+        nativeTopInsetPx={effectiveNativeTopInsetPx}
         onClose={closeNotifications}
         onUnreadCountChange={setUnreadNotificationCount}
       />

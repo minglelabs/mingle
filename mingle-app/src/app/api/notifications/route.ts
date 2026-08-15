@@ -92,3 +92,19 @@ export async function GET(request: NextRequest) {
     unreadCount,
   });
 }
+
+export async function PATCH() {
+  const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
+  if (!viewerId) return responseJson({ error: "unauthorized" }, { status: 401 });
+
+  const result = await prisma.userNotification.updateMany({
+    where: {
+      recipientId: viewerId,
+      type: "follow",
+      readAt: null,
+    },
+    data: { readAt: new Date() },
+  });
+
+  return responseJson({ isRead: true, updatedCount: result.count });
+}
