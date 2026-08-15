@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 
 type MyPageProps = {
   dictionary: AppDictionary;
+  initialProfile: ProfileRecord | null;
   locale: AppLocale;
 };
 
@@ -1082,18 +1083,18 @@ function ProfileEditPanel({
   );
 }
 
-export default function MyPage({ dictionary, locale }: MyPageProps) {
+export default function MyPage({ dictionary, initialProfile, locale }: MyPageProps) {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [profile, setProfile] = useState<ProfileRecord>({
+  const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
     handle: null,
     name: null,
     bio: null,
     nationality: null,
     followersCount: 0,
     followingCount: 0,
-  });
+  }));
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
 

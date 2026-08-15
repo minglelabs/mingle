@@ -4,47 +4,20 @@ import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import { normalizeHandle } from "@/lib/handles";
+import {
+  getUserProfile,
+  serializeUserProfile,
+  userProfileSelect,
+  type UserProfile,
+} from "@/server/user-profile";
 
 export const runtime = "nodejs";
 
 const MAX_NAME_LENGTH = 40;
 const MAX_BIO_LENGTH = 160;
 
-const profileSelect = {
-  id: true,
-  name: true,
-  image: true,
-  handle: true,
-  bio: true,
-  nationality: true,
-  _count: {
-    select: {
-      followerRelations: true,
-      followingRelations: true,
-    },
-  },
-} as const;
-
-type ProfileRecord = {
-  id: string;
-  name: string | null;
-  image: string | null;
-  handle: string;
-  bio: string | null;
-  nationality: string | null;
-  _count: {
-    followerRelations: number;
-    followingRelations: number;
-  };
-};
-
-function profileResponse(profile: ProfileRecord): NextResponse {
-  const { _count, ...profileFields } = profile;
-  return NextResponse.json({
-    ...profileFields,
-    followersCount: _count.followerRelations,
-    followingCount: _count.followingRelations,
-  }, {
+function profileResponse(profile: UserProfile): NextResponse {
+  return NextResponse.json(profile, {
     headers: { "Cache-Control": "private, no-store" },
   });
 }
@@ -91,10 +64,7 @@ export async function GET() {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const profile = await prisma.user.findUnique({
-    where: { id: userId },
-    select: profileSelect,
-  });
+  const profile = await getUserProfile(userId);
   if (!profile) {
     return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
   }
@@ -166,9 +136,9 @@ export async function PATCH(request: NextRequest) {
     const updated = await prisma.user.update({
       where: { id: userId },
       data,
-      select: profileSelect,
+      select: userProfileSelect,
     });
-    return profileResponse(updated);
+    return profileResponse(serializeUserProfile(updated));
   } catch (error) {
     if (
       typeof error === "object"

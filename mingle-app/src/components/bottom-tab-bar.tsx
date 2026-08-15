@@ -124,6 +124,11 @@ export default function BottomTabBar({
     }
   }, [isNativeTabRoot, pathname, searchParamsKey]);
 
+  useEffect(() => {
+    if (isMypageActive) return;
+    void router.prefetch(mypageHref);
+  }, [isMypageActive, mypageHref, router]);
+
   return (
     <nav
       aria-label={dictionary.titles.my}

@@ -512,6 +512,18 @@
 - Data contract: No API or database changes. The existing `native_set_banner_zone` bridge message remains backward-compatible.
 - Testing notes: On build 67 after the Railway deployment, restart the app while signed out and confirm the login screen remains ad-free. On build 68, verify no banner flash occurs during startup, the conversation-list banner appears only after authentication, and search/conversation overlay behavior remains unchanged.
 
+## 2026-08-15 - Render My Page identity and follow counts immediately
+
+- Surface: The 2.0.0 My Page profile header reached from the bottom tab bar.
+- Issue: The visible name could render from the server-hydrated session, but the public handle and follower/following counts initialized as missing/zero and appeared only after a client-side `/api/profile` request completed.
+- User impact: Entering My Page showed an incomplete identity block and counts that visibly changed after the screen was already present, making the profile feel slow and unstable.
+- Resolution:
+  - Load the authenticated user's profile and relationship counts on the My Page server route and pass them into the client component as its initial state.
+  - Prefetch the My Page route from the bottom tab bar so the server-rendered profile payload is normally ready before the user taps the tab.
+  - Keep the existing client profile request as a background refresh, preserving current values on the first frame while still reconciling recently changed profile or relationship data.
+- Data contract: No API or database changes. The page and `/api/profile` now share the same profile selection and serialization helper.
+- Testing notes: Enter My Page from both Conversations and Explore and confirm the name, handle, follower count, and following count all appear together without zero/empty placeholders. Follow or unfollow an account, return to My Page, and confirm the background refresh reconciles the count.
+
 ## 2026-08-14 - Group the profile primary-language selector into three sections
 
 - Surface: The primary-language selector inside the My Page profile-edit panel.
