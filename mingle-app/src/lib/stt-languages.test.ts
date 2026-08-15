@@ -9,6 +9,7 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
+  getSttLanguageDisplayName,
 } from '@/lib/stt-languages'
 
 describe('STT language catalog', () => {
@@ -56,5 +57,11 @@ describe('STT language catalog', () => {
     expect(getSttLanguageFlag('zh-TW')).toBe('🇹🇼')
     expect(getSttLanguageFlag('fil-PH')).toBe('🇵🇭')
     expect(getSttLanguageFlag('unknown')).toBe('🌐')
+  })
+
+  it('returns a localized full language name instead of a technical code', () => {
+    expect(getSttLanguageDisplayName('ko', 'ko')).toBe('한국어')
+    expect(getSttLanguageDisplayName('ko', 'en')).toBe('Korean')
+    expect(getSttLanguageDisplayName('unknown', 'ko')).toBeNull()
   })
 })

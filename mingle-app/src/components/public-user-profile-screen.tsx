@@ -5,7 +5,11 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
-import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode } from "@/lib/stt-languages";
+import {
+  STT_LANGUAGE_OPTIONS,
+  canonicalizeSttLanguageCode,
+  getSttLanguageDisplayName,
+} from "@/lib/stt-languages";
 import {
   AlertTriangle,
   Check,
@@ -325,6 +329,9 @@ export default function PublicUserProfileScreen({
   const name = profile?.name?.trim() || copy.userFallback;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
   const languageOption = getLanguageOption(profile?.nationality);
+  const languageName = languageOption
+    ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
+    : null;
 
   return (
     <motion.main
@@ -376,7 +383,7 @@ export default function PublicUserProfileScreen({
                 y: profile.imageCropY,
               }}
               flag={languageOption?.flag}
-              languageCode={languageOption?.code}
+              languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}
             />
@@ -392,17 +399,6 @@ export default function PublicUserProfileScreen({
                 }}
                 onClick={() => setShowProfileImagePreview(true)}
               />
-              {languageOption ? (
-                <button
-                  type="button"
-                  onClick={() => setShowProfileImagePreview(true)}
-                  className="mt-3 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] font-semibold text-slate-600 transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                  aria-label={`${languageOption.flag} ${languageOption.code}`}
-                >
-                  <span className="text-[1.15rem] leading-none" aria-hidden="true">{languageOption.flag}</span>
-                  <span className="tracking-[0.06em]">{languageOption.code}</span>
-                </button>
-              ) : null}
               <h2 className="mt-4 text-[20px] font-bold">{name}</h2>
               {profile.handle ? <p className="mt-1 text-[14px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
               {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}

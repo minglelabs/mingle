@@ -27,7 +27,12 @@ import {
   type ProfileImageCrop,
   type ProfileImageCropInput,
 } from "@/lib/profile-image-crop";
-import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
+import {
+  STT_LANGUAGE_OPTIONS,
+  canonicalizeSttLanguageCode,
+  getSttLanguageDisplayName,
+  type SttLanguageCode,
+} from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
@@ -1164,6 +1169,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const nationality = getNationalityOption(profile.nationality)?.locale
     ?? getFallbackNationality(locale);
   const nationalityFlag = getNationalityOption(nationality)?.flag;
+  const nationalityName = getSttLanguageDisplayName(nationality, locale)
+    ?? getNationalityOption(nationality)?.label
+    ?? nationality;
   const profileSharePath = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
   const profileShareHref = profile.handle
     ? appendPathSearchParam(profileSharePath, "profileHandle", profile.handle)
@@ -1323,7 +1331,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           y: profile.imageCropY,
         }}
         flag={nationalityFlag}
-        languageCode={nationality}
+        languageName={nationalityName}
         closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
         onClose={() => setShowProfileImagePreview(false)}
       />
@@ -1364,15 +1372,6 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
                 }}
                 onClick={() => setShowProfileImagePreview(true)}
               />
-              <button
-                type="button"
-                onClick={() => setShowProfileImagePreview(true)}
-                className="mt-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] font-semibold text-slate-600 transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                aria-label={`${nationalityFlag ?? ""} ${nationality}`.trim()}
-              >
-                {nationalityFlag ? <span className="text-[1.15rem] leading-none" aria-hidden="true">{nationalityFlag}</span> : null}
-                <span className="tracking-[0.06em]">{nationality}</span>
-              </button>
             </div>
             <div className="min-w-0 flex-1 grid grid-cols-2 gap-1 text-center">
               <button

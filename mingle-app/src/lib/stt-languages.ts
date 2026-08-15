@@ -103,6 +103,30 @@ export function canonicalizeSttLanguageCode(rawValue: string): SttLanguageCode |
   return isSupportedSttLanguageCode(selectableCode) ? selectableCode : ''
 }
 
+export function getSttLanguageDisplayName(
+  rawValue: string,
+  locale = 'en',
+): string | null {
+  const canonical = canonicalizeSttLanguageCode(rawValue)
+  if (!canonical) return null
+
+  const fallback = STT_LANGUAGE_OPTIONS.find((option) => option.code === canonical)?.englishName ?? null
+  const locales = [locale.trim(), 'en'].filter((candidate, index, candidates) => (
+    candidate.length > 0 && candidates.indexOf(candidate) === index
+  ))
+
+  for (const displayLocale of locales) {
+    try {
+      const displayName = new Intl.DisplayNames([displayLocale], { type: 'language' }).of(canonical)?.trim()
+      if (displayName) return displayName
+    } catch {
+      // Try the English fallback locale before using the catalog name.
+    }
+  }
+
+  return fallback
+}
+
 export function canonicalizeSonioxLanguageHintCode(rawValue: string): string {
   const canonical = canonicalizeTranslationLanguageCode(rawValue)
   if (!canonical) return ''

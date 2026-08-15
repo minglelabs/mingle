@@ -10,7 +10,7 @@ type ProfileImagePreviewProps = {
   alt: string;
   crop?: ProfileImageCropInput;
   flag?: string | null;
-  languageCode?: string | null;
+  languageName?: string | null;
   closeLabel: string;
   onClose: () => void;
 };
@@ -23,7 +23,7 @@ export default function ProfileImagePreview({
   alt,
   crop,
   flag,
-  languageCode,
+  languageName,
   closeLabel,
   onClose,
 }: ProfileImagePreviewProps) {
@@ -95,10 +95,10 @@ export default function ProfileImagePreview({
           )}
         </div>
 
-        {flag || languageCode ? (
+        {flag || languageName ? (
           <div className="mt-5 flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white backdrop-blur-sm">
             {flag ? <span className="text-[1.45rem] leading-none" aria-hidden="true">{flag}</span> : null}
-            {languageCode ? <span className="text-[15px] font-semibold tracking-[0.08em]">{languageCode}</span> : null}
+            {languageName ? <span className="text-[15px] font-semibold">{languageName}</span> : null}
           </div>
         ) : null}
       </div>
