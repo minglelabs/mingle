@@ -4,6 +4,8 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import ProfileImagePreview from "@/components/profile-image-preview";
+import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import {
   AlertTriangle,
   Check,
@@ -93,26 +95,50 @@ function ProfileAvatar({
   image,
   label,
   crop,
+  flag,
+  onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
+  flag?: string | null;
+  onClick?: () => void;
 }) {
   return (
-    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-      {image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={image}
-          alt={label}
-          className="h-full w-full object-cover"
-          style={{ transform: buildProfileImageTransform(96, crop) }}
-        />
-      ) : (
-        <UserRound size={52} className="text-gray-400" aria-hidden="true" />
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+      aria-label={label}
+    >
+      <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image}
+            alt={label}
+            className="h-full w-full object-cover"
+            style={{ transform: buildProfileImageTransform(96, crop) }}
+          />
+        ) : (
+          <UserRound size={52} className="text-gray-400" aria-hidden="true" />
+        )}
+      </span>
+      {flag ? (
+        <span
+          className="absolute bottom-[-2px] left-[-2px] flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-[1.05rem] leading-none shadow-sm"
+          aria-hidden="true"
+        >
+          {flag}
+        </span>
+      ) : null}
+    </button>
   );
+}
+
+function getLanguageOption(value: string | null | undefined) {
+  const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
+  return STT_LANGUAGE_OPTIONS.find((option) => option.code === normalized) ?? null;
 }
 
 export default function PublicUserProfileScreen({
@@ -135,6 +161,7 @@ export default function PublicUserProfileScreen({
   const [reportMessage, setReportMessage] = useState("");
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
 
   useEffect(() => {
@@ -291,6 +318,7 @@ export default function PublicUserProfileScreen({
 
   const name = profile?.name?.trim() || copy.userFallback;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
+  const languageOption = getLanguageOption(profile?.nationality);
 
   return (
     <motion.main
@@ -332,16 +360,43 @@ export default function PublicUserProfileScreen({
           <p className="pt-12 text-center text-[14px] text-gray-500" role="alert">{copy.profileLoadError}</p>
         ) : (
           <>
+            <ProfileImagePreview
+              open={showProfileImagePreview}
+              image={profile.image}
+              alt={name}
+              crop={{
+                scale: profile.imageCropScale,
+                x: profile.imageCropX,
+                y: profile.imageCropY,
+              }}
+              flag={languageOption?.flag}
+              languageCode={languageOption?.code}
+              closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
+              onClose={() => setShowProfileImagePreview(false)}
+            />
             <section className="flex flex-col items-center text-center">
-          <ProfileAvatar
-            image={profile.image}
-            label={name}
-            crop={{
-              scale: profile.imageCropScale,
-              x: profile.imageCropX,
-              y: profile.imageCropY,
-            }}
-          />
+              <ProfileAvatar
+                image={profile.image}
+                label={name}
+                flag={languageOption?.flag}
+                crop={{
+                  scale: profile.imageCropScale,
+                  x: profile.imageCropX,
+                  y: profile.imageCropY,
+                }}
+                onClick={() => setShowProfileImagePreview(true)}
+              />
+              {languageOption ? (
+                <button
+                  type="button"
+                  onClick={() => setShowProfileImagePreview(true)}
+                  className="mt-3 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] font-semibold text-slate-600 transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                  aria-label={`${languageOption.flag} ${languageOption.code}`}
+                >
+                  <span className="text-[1.15rem] leading-none" aria-hidden="true">{languageOption.flag}</span>
+                  <span className="tracking-[0.06em]">{languageOption.code}</span>
+                </button>
+              ) : null}
               <h2 className="mt-4 text-[20px] font-bold">{name}</h2>
               {profile.handle ? <p className="mt-1 text-[14px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
               {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}

@@ -4,6 +4,7 @@ import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-b
 import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
+import ProfileImagePreview from "@/components/profile-image-preview";
 import {
   buildLanguageSelectorFeaturedItems,
   buildLanguageSelectorItems,
@@ -179,17 +180,25 @@ function ProfileAvatar({
   imageUrl,
   imageCrop,
   size = 88,
+  onClick,
 }: {
   alt: string;
   flag?: string;
   imageUrl?: string | null;
   imageCrop?: ProfileImageCropInput;
   size?: number;
+  onClick?: () => void;
 }) {
   const badgeSize = Math.max(24, Math.round(size * 0.32));
 
   return (
-    <div className="relative shrink-0" style={{ height: size, width: size }}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+      style={{ height: size, width: size }}
+      aria-label={alt}
+    >
       <div
         className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100"
       >
@@ -216,7 +225,7 @@ function ProfileAvatar({
           {flag}
         </span>
       ) : null}
-    </div>
+    </button>
   );
 }
 
@@ -1145,6 +1154,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }));
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
@@ -1303,6 +1313,20 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         open={showProfileSettings}
         sessionStatus={sessionStatus}
       />
+      <ProfileImagePreview
+        open={showProfileImagePreview}
+        image={profileImageUrl}
+        alt={name}
+        crop={{
+          scale: profile.imageCropScale,
+          x: profile.imageCropX,
+          y: profile.imageCropY,
+        }}
+        flag={nationalityFlag}
+        languageCode={nationality}
+        closeLabel={dictionary.profile.settingsCloseLabel ?? dictionary.profile.profileShareBackLabel ?? "Close"}
+        onClose={() => setShowProfileImagePreview(false)}
+      />
 
       <header
         className="flex shrink-0 items-center px-4"
@@ -1328,17 +1352,29 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       <div className="min-h-0 flex-1 overflow-y-auto">
         <section className="px-4 pb-4 pt-5">
           <div className="flex items-center gap-6 pl-2">
-            <ProfileAvatar
-              alt={dictionary.profile.shareProfile}
-              flag={nationalityFlag}
-              imageUrl={profileImageUrl}
-              imageCrop={{
-                scale: profile.imageCropScale,
-                x: profile.imageCropX,
-                y: profile.imageCropY,
-              }}
-            />
-            <div className="-translate-x-2 grid flex-1 grid-cols-2 gap-1 text-center">
+            <div className="flex shrink-0 flex-col items-center">
+              <ProfileAvatar
+                alt={name}
+                flag={nationalityFlag}
+                imageUrl={profileImageUrl}
+                imageCrop={{
+                  scale: profile.imageCropScale,
+                  x: profile.imageCropX,
+                  y: profile.imageCropY,
+                }}
+                onClick={() => setShowProfileImagePreview(true)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowProfileImagePreview(true)}
+                className="mt-2 flex items-center gap-1.5 rounded-full px-2 py-1 text-[13px] font-semibold text-slate-600 transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                aria-label={`${nationalityFlag ?? ""} ${nationality}`.trim()}
+              >
+                {nationalityFlag ? <span className="text-[1.15rem] leading-none" aria-hidden="true">{nationalityFlag}</span> : null}
+                <span className="tracking-[0.06em]">{nationality}</span>
+              </button>
+            </div>
+            <div className="min-w-0 flex-1 grid grid-cols-2 gap-1 text-center">
               <button
                 type="button"
                 onClick={() => router.push(followersHref)}
