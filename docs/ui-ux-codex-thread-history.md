@@ -653,3 +653,16 @@
   - Kept the focus helper shared with the clear-search action so clearing the query returns directly to typing.
 - Data contract: None. Search requests, history snapshots, and follow actions are unchanged.
 - Testing notes: Verify on iPhone TestFlight build 68 after the Railway deployment that entering Explore focuses the field and opens the keyboard without a second tap.
+
+## 2026-08-15 - Add an editable profile-image crop surface
+
+- Surface: My Page profile editing and profile avatars shown in search and public profiles.
+- Issue: Profile images had no upload flow, and a saved image could not preserve the user's circular crop when the profile was edited again.
+- User impact: Users could not set a profile photo or control which part of a source image appeared in the avatar. Reopening profile editing would also lose the intended framing.
+- Resolution:
+  - Added a circular crop viewport that keeps the source image intact, supports photo dragging, and uses two-pointer pinch gestures for zooming.
+  - Store a normalized zoom scale and x/y crop coordinates alongside the original R2 object key. Reopening the editor uses the original source URL and restores the same crop state.
+  - Apply the stored crop to search-result and public-profile avatars so the framing is consistent throughout the app.
+  - Keep the crop surface outside the text form flow so changing an image does not interfere with handle, name, bio, or language editing.
+- Data contract: Added profile image object-key and crop metadata fields, a multipart profile-image upload endpoint, and iOS/Android v2.0.0 route wrappers. The object key remains server-only; the public image URL and crop values are returned to clients.
+- Testing notes: Verify JPG/PNG/WEBP selection, drag and pinch behavior on a real phone, replacing an existing image, and reopening the editor to confirm the original source and crop coordinates are restored.

@@ -13,6 +13,9 @@ const userSearchSelect = {
   handle: true,
   name: true,
   image: true,
+  imageCropScale: true,
+  imageCropX: true,
+  imageCropY: true,
 } as const;
 
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {

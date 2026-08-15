@@ -103,6 +103,9 @@ describe("/api/users/search route", () => {
         handle: true,
         name: true,
         image: true,
+        imageCropScale: true,
+        imageCropX: true,
+        imageCropY: true,
         followerRelations: {
           where: { followerId: "user_123" },
           select: { followerId: true },

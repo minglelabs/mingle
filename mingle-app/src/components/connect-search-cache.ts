@@ -8,6 +8,9 @@ export type ConnectSearchResult = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  imageCropScale?: number | null;
+  imageCropX?: number | null;
+  imageCropY?: number | null;
   isFollowing: boolean;
 };
 
@@ -33,6 +36,15 @@ export function isConnectSearchResult(value: unknown): value is ConnectSearchRes
     && (typeof candidate.handle === "string" || candidate.handle === null)
     && (typeof candidate.name === "string" || candidate.name === null)
     && (typeof candidate.image === "string" || candidate.image === null)
+    && (typeof candidate.imageCropScale === "undefined"
+      || typeof candidate.imageCropScale === "number"
+      || candidate.imageCropScale === null)
+    && (typeof candidate.imageCropX === "undefined"
+      || typeof candidate.imageCropX === "number"
+      || candidate.imageCropX === null)
+    && (typeof candidate.imageCropY === "undefined"
+      || typeof candidate.imageCropY === "number"
+      || candidate.imageCropY === null)
     && typeof candidate.isFollowing === "boolean";
 }
 

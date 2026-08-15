@@ -3,6 +3,7 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
+import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import {
   AlertTriangle,
   Check,
@@ -27,6 +28,9 @@ type PublicUserProfile = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
   bio: string | null;
   nationality: string | null;
   followersCount: number;
@@ -85,12 +89,25 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
   };
 }
 
-function ProfileAvatar({ image, label }: { image: string | null; label: string }) {
+function ProfileAvatar({
+  image,
+  label,
+  crop,
+}: {
+  image: string | null;
+  label: string;
+  crop?: ProfileImageCropInput;
+}) {
   return (
     <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
       {image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt={label} className="h-full w-full object-cover" />
+        <img
+          src={image}
+          alt={label}
+          className="h-full w-full object-cover"
+          style={{ transform: buildProfileImageTransform(96, crop) }}
+        />
       ) : (
         <UserRound size={52} className="text-gray-400" aria-hidden="true" />
       )}
@@ -316,7 +333,15 @@ export default function PublicUserProfileScreen({
         ) : (
           <>
             <section className="flex flex-col items-center text-center">
-              <ProfileAvatar image={profile.image} label={name} />
+          <ProfileAvatar
+            image={profile.image}
+            label={name}
+            crop={{
+              scale: profile.imageCropScale,
+              x: profile.imageCropX,
+              y: profile.imageCropY,
+            }}
+          />
               <h2 className="mt-4 text-[20px] font-bold">{name}</h2>
               {profile.handle ? <p className="mt-1 text-[14px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
               {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}

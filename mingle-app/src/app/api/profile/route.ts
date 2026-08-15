@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
 import { normalizeHandle } from "@/lib/handles";
 import {
+  PROFILE_IMAGE_MAX_SCALE,
+  PROFILE_IMAGE_MIN_SCALE,
+} from "@/lib/profile-image-crop";
+import {
   getUserProfile,
   serializeUserProfile,
   userProfileSelect,
@@ -57,6 +61,21 @@ function normalizeNationality(value: unknown): { value: string | null; valid: bo
   };
 }
 
+function normalizeCropValue(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+): { value: number | null; valid: boolean } {
+  if (value === null) return { value: null, valid: true };
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return { value: null, valid: false };
+  }
+  if (value < minimum || value > maximum) {
+    return { value: null, valid: false };
+  }
+  return { value, valid: true };
+}
+
 export async function GET() {
   const session = await getServerSession(getAuthOptions());
   const userId = getSessionUserId(session);
@@ -94,6 +113,9 @@ export async function PATCH(request: NextRequest) {
     name?: string | null;
     bio?: string | null;
     nationality?: string | null;
+    imageCropScale?: number | null;
+    imageCropX?: number | null;
+    imageCropY?: number | null;
   } = {};
 
   if (Object.prototype.hasOwnProperty.call(body, "handle")) {
@@ -126,6 +148,34 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "invalid_nationality" }, { status: 400 });
     }
     data.nationality = nationality.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {
+    const imageCropScale = normalizeCropValue(
+      body.imageCropScale,
+      PROFILE_IMAGE_MIN_SCALE,
+      PROFILE_IMAGE_MAX_SCALE,
+    );
+    if (!imageCropScale.valid) {
+      return NextResponse.json({ error: "invalid_image_crop" }, { status: 400 });
+    }
+    data.imageCropScale = imageCropScale.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "imageCropX")) {
+    const imageCropX = normalizeCropValue(body.imageCropX, -1, 1);
+    if (!imageCropX.valid) {
+      return NextResponse.json({ error: "invalid_image_crop" }, { status: 400 });
+    }
+    data.imageCropX = imageCropX.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "imageCropY")) {
+    const imageCropY = normalizeCropValue(body.imageCropY, -1, 1);
+    if (!imageCropY.valid) {
+      return NextResponse.json({ error: "invalid_image_crop" }, { status: 400 });
+    }
+    data.imageCropY = imageCropY.value;
   }
 
   if (Object.keys(data).length === 0) {

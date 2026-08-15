@@ -76,6 +76,10 @@ describe("/api/profile route", () => {
       select: {
         id: true,
         image: true,
+        imageObjectKey: true,
+        imageCropScale: true,
+        imageCropX: true,
+        imageCropY: true,
         handle: true,
         name: true,
         bio: true,
@@ -130,6 +134,10 @@ describe("/api/profile route", () => {
       select: {
         id: true,
         image: true,
+        imageObjectKey: true,
+        imageCropScale: true,
+        imageCropX: true,
+        imageCropY: true,
         handle: true,
         name: true,
         bio: true,

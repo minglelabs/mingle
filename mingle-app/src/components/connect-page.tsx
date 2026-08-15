@@ -12,6 +12,7 @@ import {
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
+import { buildProfileImageTransform } from "@/lib/profile-image-crop";
 import { Loader2, Search, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -385,7 +386,18 @@ export default function ConnectPage({ dictionary, locale }: ConnectPageProps) {
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
                         {user.image ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={user.image} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={user.image}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            style={{
+                              transform: buildProfileImageTransform(44, {
+                                scale: user.imageCropScale,
+                                x: user.imageCropX,
+                                y: user.imageCropY,
+                              }),
+                            }}
+                          />
                         ) : (
                           <UserRound size={24} className="text-gray-400" aria-hidden="true" />
                         )}

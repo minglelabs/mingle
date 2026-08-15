@@ -16,6 +16,10 @@ model User {
   passwordHash          String?   @map("password_hash")
   name                  String?
   image                 String?
+  imageObjectKey        String?   @map("image_object_key")
+  imageCropScale        Float?    @map("image_crop_scale")
+  imageCropX            Float?    @map("image_crop_x")
+  imageCropY            Float?    @map("image_crop_y")
   latestIpAddress       String?   @map("latest_ip_address")
   latestUserAgent       String?   @map("latest_user_agent")
   language              String?

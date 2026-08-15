@@ -1,6 +1,9 @@
 "use client";
 
 import BottomTabBar, { buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
+import ProfileImageCropper, {
+  type ProfileImageCropperChange,
+} from "@/components/profile-image-cropper";
 import {
   buildLanguageSelectorFeaturedItems,
   buildLanguageSelectorItems,
@@ -16,6 +19,13 @@ import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type P
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
+import {
+  buildProfileImageTransform,
+  DEFAULT_PROFILE_IMAGE_CROP,
+  normalizeProfileImageCrop,
+  type ProfileImageCrop,
+  type ProfileImageCropInput,
+} from "@/lib/profile-image-crop";
 import { STT_LANGUAGE_OPTIONS, canonicalizeSttLanguageCode, type SttLanguageCode } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
@@ -31,6 +41,10 @@ type MyPageProps = {
 };
 
 type ProfileRecord = {
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
   handle: string | null;
   name: string | null;
   bio: string | null;
@@ -40,6 +54,8 @@ type ProfileRecord = {
 };
 
 type ProfileDraft = {
+  imageFile: File | null;
+  imageCrop: ProfileImageCrop;
   handle: string;
   name: string;
   bio: string;
@@ -161,11 +177,13 @@ function ProfileAvatar({
   alt,
   flag,
   imageUrl,
+  imageCrop,
   size = 88,
 }: {
   alt: string;
   flag?: string;
   imageUrl?: string | null;
+  imageCrop?: ProfileImageCropInput;
   size?: number;
 }) {
   const badgeSize = Math.max(24, Math.round(size * 0.32));
@@ -183,6 +201,7 @@ function ProfileAvatar({
             width={size}
             height={size}
             className="h-full w-full object-cover"
+            style={{ transform: buildProfileImageTransform(size, imageCrop) }}
           />
         ) : (
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
@@ -702,6 +721,7 @@ function ProfileEditPanel({
   dictionary,
   locale,
   imageUrl,
+  initialImageCrop,
   initialBio,
   initialName,
   initialHandle,
@@ -713,6 +733,7 @@ function ProfileEditPanel({
   dictionary: AppDictionary;
   locale: AppLocale;
   imageUrl?: string | null;
+  initialImageCrop?: ProfileImageCropInput;
   initialBio: string;
   initialName: string;
   initialHandle: string;
@@ -729,6 +750,10 @@ function ProfileEditPanel({
   const [handle, setHandle] = useState(initialHandle);
   const [bio, setBio] = useState(initialBio);
   const [nationality, setNationality] = useState<SttLanguageCode>(initialNationality);
+  const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
+    file: null,
+    crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
+  });
   const [languageQuery, setLanguageQuery] = useState("");
   const [languageSortMode, setLanguageSortMode] = useState<LanguageSelectorSortMode>("locale");
   const [isSaving, setIsSaving] = useState(false);
@@ -788,7 +813,18 @@ function ProfileEditPanel({
         selected: "Selected language",
         featured: "Popular languages",
         all: "All languages",
-      };
+    };
+  const initialImageCropScale = initialImageCrop?.scale;
+  const initialImageCropX = initialImageCrop?.x;
+  const initialImageCropY = initialImageCrop?.y;
+  const normalizedInitialImageCrop = useMemo(
+    () => normalizeProfileImageCrop({
+      scale: initialImageCropScale,
+      x: initialImageCropX,
+      y: initialImageCropY,
+    }),
+    [initialImageCropScale, initialImageCropX, initialImageCropY],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -796,10 +832,14 @@ function ProfileEditPanel({
     setHandle(initialHandle);
     setBio(initialBio);
     setNationality(initialNationality);
+    setImageDraft({
+      file: null,
+      crop: normalizedInitialImageCrop,
+    });
     setLanguageQuery("");
     setLanguageSortMode(defaultLanguageSortMode);
     setSaveError(null);
-  }, [defaultLanguageSortMode, initialBio, initialName, initialNationality, initialHandle, open]);
+  }, [defaultLanguageSortMode, initialBio, initialName, initialNationality, initialHandle, normalizedInitialImageCrop, open]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -827,6 +867,8 @@ function ProfileEditPanel({
     setSaveError(null);
     try {
       const saved = await onSave({
+        imageFile: imageDraft.file,
+        imageCrop: imageDraft.crop,
         handle: handle.trim(),
         name: name.trim(),
         bio: bio.trim(),
@@ -842,7 +884,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, name, isSaving, nationality, onClose, onSave, handle]);
+  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, nationality, onClose, onSave]);
 
   const handleBack = useCallback(async () => {
     if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
@@ -916,11 +958,13 @@ function ProfileEditPanel({
 
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
             <div className="flex justify-center pb-7">
-              <ProfileAvatar
-                alt={copy.title}
-                imageUrl={imageUrl}
-                flag={getNationalityOption(nationality)?.flag}
-                size={84}
+              <ProfileImageCropper
+                key={`${open ? "open" : "closed"}:${imageUrl ?? ""}:${initialImageCrop?.scale ?? ""}:${initialImageCrop?.x ?? ""}:${initialImageCrop?.y ?? ""}`}
+                imageUrl={imageUrl ?? null}
+                initialCrop={initialImageCrop}
+                locale={locale}
+                onChange={setImageDraft}
+                open={open}
               />
             </div>
 
@@ -1088,6 +1132,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<ProfileRecord>(() => initialProfile ?? ({
+    image: null,
+    imageCropScale: null,
+    imageCropX: null,
+    imageCropY: null,
     handle: null,
     name: null,
     bio: null,
@@ -1100,6 +1148,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
+  const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
   const bio = profile.bio?.trim() || "";
   const nationality = getNationalityOption(profile.nationality)?.locale
@@ -1125,11 +1174,15 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     if (!sessionUserId) return;
 
     let cancelled = false;
-    void fetch("/api/profile", { cache: "no-store" })
+    void fetch(buildClientApiPath("/profile"), { cache: "no-store" })
       .then(async (response) => (response.ok ? response.json() as Promise<Partial<ProfileRecord>> : null))
       .then((data) => {
         if (cancelled || !data) return;
         setProfile({
+          image: typeof data.image === "string" ? data.image : null,
+          imageCropScale: typeof data.imageCropScale === "number" ? data.imageCropScale : null,
+          imageCropX: typeof data.imageCropX === "number" ? data.imageCropX : null,
+          imageCropY: typeof data.imageCropY === "number" ? data.imageCropY : null,
           handle: typeof data.handle === "string" ? data.handle : null,
           name: typeof data.name === "string" ? data.name : null,
           bio: typeof data.bio === "string" ? data.bio : null,
@@ -1149,10 +1202,41 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
   const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
     try {
-      const response = await fetch("/api/profile", {
+      if (draft.imageFile) {
+        const imageFormData = new FormData();
+        imageFormData.append("file", draft.imageFile);
+        imageFormData.append("imageCropScale", String(draft.imageCrop.scale));
+        imageFormData.append("imageCropX", String(draft.imageCrop.x));
+        imageFormData.append("imageCropY", String(draft.imageCrop.y));
+
+        const imageResponse = await fetch(buildClientApiPath("/profile/image"), {
+          method: "POST",
+          body: imageFormData,
+        });
+        if (!imageResponse.ok) return "failed";
+
+        const imageSaved = await imageResponse.json() as Partial<ProfileRecord>;
+        setProfile((current) => ({
+          ...current,
+          image: typeof imageSaved.image === "string" ? imageSaved.image : current.image,
+          imageCropScale: typeof imageSaved.imageCropScale === "number" ? imageSaved.imageCropScale : current.imageCropScale,
+          imageCropX: typeof imageSaved.imageCropX === "number" ? imageSaved.imageCropX : current.imageCropX,
+          imageCropY: typeof imageSaved.imageCropY === "number" ? imageSaved.imageCropY : current.imageCropY,
+        }));
+      }
+
+      const response = await fetch(buildClientApiPath("/profile"), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({
+          handle: draft.handle,
+          name: draft.name,
+          bio: draft.bio,
+          nationality: draft.nationality,
+          imageCropScale: draft.imageCrop.scale,
+          imageCropX: draft.imageCrop.x,
+          imageCropY: draft.imageCrop.y,
+        }),
       });
       if (!response.ok) {
         if (response.status === 409) return "handle_taken";
@@ -1165,6 +1249,10 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
       const saved = await response.json() as Partial<ProfileRecord>;
       setProfile({
+        image: typeof saved.image === "string" ? saved.image : profileImageUrl,
+        imageCropScale: typeof saved.imageCropScale === "number" ? saved.imageCropScale : draft.imageCrop.scale,
+        imageCropX: typeof saved.imageCropX === "number" ? saved.imageCropX : draft.imageCrop.x,
+        imageCropY: typeof saved.imageCropY === "number" ? saved.imageCropY : draft.imageCrop.y,
         handle: typeof saved.handle === "string" ? saved.handle : null,
         name: typeof saved.name === "string" ? saved.name : null,
         bio: typeof saved.bio === "string" ? saved.bio : null,
@@ -1176,7 +1264,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     } catch {
       return "failed";
     }
-  }, []);
+  }, [profileImageUrl]);
 
   const handleSignOut = useCallback(() => {
     void signOut({ callbackUrl: signOutCallbackUrl });
@@ -1192,7 +1280,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       <ProfileEditPanel
         dictionary={dictionary}
         locale={locale}
-        imageUrl={session?.user?.image}
+        imageUrl={profileImageUrl}
+        initialImageCrop={{
+          scale: profile.imageCropScale,
+          x: profile.imageCropX,
+          y: profile.imageCropY,
+        }}
         initialBio={profile.bio ?? ""}
         initialName={name}
         initialHandle={profile.handle ?? ""}
@@ -1238,7 +1331,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <ProfileAvatar
               alt={dictionary.profile.shareProfile}
               flag={nationalityFlag}
-              imageUrl={session?.user?.image}
+              imageUrl={profileImageUrl}
+              imageCrop={{
+                scale: profile.imageCropScale,
+                x: profile.imageCropX,
+                y: profile.imageCropY,
+              }}
             />
             <div className="-translate-x-2 grid flex-1 grid-cols-2 gap-1 text-center">
               <button
