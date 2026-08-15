@@ -109,6 +109,26 @@ jest.mock('react-native-webview', () => {
   return { WebView };
 });
 
+jest.mock('react-native-camera-kit', () => {
+  const React = require('react');
+  const Camera = ({ children, ...props }) => React.createElement('Camera', props, children);
+  return { Camera };
+});
+
+jest.mock('react-native-permissions', () => ({
+  PERMISSIONS: {
+    IOS: { CAMERA: 'ios.permission.CAMERA' },
+    ANDROID: { CAMERA: 'android.permission.CAMERA' },
+  },
+  RESULTS: {
+    GRANTED: 'granted',
+    DENIED: 'denied',
+    BLOCKED: 'blocked',
+    UNAVAILABLE: 'unavailable',
+  },
+  request: jest.fn(async () => 'granted'),
+}));
+
 jest.mock('react-native-google-mobile-ads', () => {
   const React = require('react');
   const BannerAd = ({ children, ...props }) => React.createElement('BannerAd', props, children);

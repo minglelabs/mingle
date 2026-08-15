@@ -1,5 +1,23 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-16 Profile QR Sharing and App Links
+
+### `2026-08-16-profile-qr-app-link-flow` | UI/UX issues found
+
+1. **Profile sharing still opened a placeholder route instead of a stable public profile link**
+   Problem: The profile share surface generated a locale-specific My Page URL and its QR action was only a placeholder. A shared code could not reliably identify the intended profile after a handle change, and the browser route could render the profile instead of guiding an uninstalled user to the app.
+   Fix: QR codes are generated on demand from the immutable profile user ID and an HTTPS `/p/{userId}` link. The QR image can be downloaded, the stable link can be copied or shared, and the browser route validates the ID without fetching or rendering profile content before offering the Mingle app links.
+
+2. **There was no native scanner path for QR profile links inside the WebView app**
+   Problem: A WebView-only camera scanner would make camera permissions and scan behavior inconsistent across iOS and Android. Invalid codes also had no product-level error boundary.
+   Fix: The React Native shell now requests camera permission, presents a framed Camera Kit scanner, accepts only Mingle HTTPS or `mingle://profile/` links, and sends valid results back to the WebView for public-profile navigation. Invalid, cancelled, and unavailable-camera states have explicit feedback and settings fallback.
+
+3. **Opening a shared HTTPS profile link did not have an app-link handoff**
+   Problem: The native shell only handled the existing authentication callback scheme, so a shared profile URL could not reach the correct profile when the app was already running or cold-started.
+   Fix: iOS Universal Links and Android App Links metadata were added, including the AASA and `assetlinks.json` endpoints. React Native handles both initial and subsequent URLs, queues the target until the WebView is ready, and then navigates to the localized public profile route. The first release intentionally uses link re-open or QR re-scan after installation instead of deferred deep-link persistence.
+
+   Status: Implemented in-thread on 2026-08-16. iOS simulator and Android debug builds passed; production Android App Links remain inactive until the Google Play app-signing SHA-256 fingerprint is configured.
+
 ## 2026-08-08 Native STT continuity across the My Page tab
 
 ### `2026-08-08-native-stt-mypage-event-loss` | UI/UX issue found

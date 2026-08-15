@@ -4,9 +4,15 @@ require Pod::Executable.execute_command('node', ['-p',
     "react-native/scripts/react_native_pods.rb",
     {paths: [process.argv[1]]},
   )', __dir__]).strip
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native-permissions/scripts/setup.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
 
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
+setup_permissions(['Camera'])
 
 # Do not embed prebuilt RN framework dSYMs inside the app bundle.
 # The archive still contains symbols, but App Store validation rejects bundled dSYMs.

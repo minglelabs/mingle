@@ -398,6 +398,14 @@ Server client version policy is managed through env values.
   - If Android env is empty, the API falls back to the iOS env once.
   - If `LATEST_VERSION` is empty or invalid, the API falls back to `RECOMMENDED_BELOW_VERSION`, then to `MIN_SUPPORTED_VERSION`.
 
+Profile QR links use the immutable user ID in an HTTPS `/p/{userId}` path. The web route shows an install prompt and does not render a profile in the browser. Configure app-link metadata with:
+
+- `ANDROID_APP_LINK_PACKAGE_NAME`
+- `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` (comma-separated Google Play app-signing certificate fingerprints)
+- `IOS_ASSOCIATED_DOMAINS_APP_ID` (Apple Team ID plus the native bundle ID)
+
+The iOS association file is served at `/.well-known/apple-app-site-association`, and the Android association file is served at `/.well-known/assetlinks.json`. The first release uses a link re-open or QR re-scan after installation instead of storing deferred deep-link state.
+
 Example (`.env.local`):
 
 ```bash

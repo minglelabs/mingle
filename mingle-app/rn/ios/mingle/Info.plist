@@ -32,9 +32,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>mingleauth</string>
-			</array>
+				<array>
+					<string>mingle</string>
+					<string>mingleauth</string>
+				</array>
 		</dict>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
@@ -48,6 +49,8 @@
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mingle uses your microphone for real-time speech translation.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Mingle uses your camera to scan profile QR codes.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>

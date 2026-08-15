@@ -87,6 +87,10 @@ import {
   type NativeBannerZone as BannerZone,
   type StableNativeBannerZone,
 } from './src/nativeBannerZone';
+import NativeQrScanner, {
+  type NativeQrScannerRequest,
+} from './src/nativeQrScanner';
+import { parseNativeProfileLink } from './src/profileLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -434,6 +438,8 @@ const NATIVE_STT_MESSAGE_QUEUE_LIMIT = 200;
 const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
+const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
+const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
@@ -617,6 +623,11 @@ type NativeNavigationStateCommand = {
   };
 };
 
+type NativeQrScannerOpenCommand = {
+  type: 'native_qr_scanner_open';
+  payload?: NativeQrScannerRequest;
+};
+
 type NativeHistoryDebugCommand = {
   type: 'native_history_debug';
   payload?: Record<string, unknown>;
@@ -679,6 +690,7 @@ type WebViewCommand =
   | NativeAuthStartCommand
   | NativeAuthAckCommand
   | NativeAuthResetCommand
+  | NativeQrScannerOpenCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
@@ -724,6 +736,11 @@ type NativeAuthEvent =
       provider: NativeAuthProvider;
       message: string;
     };
+
+type NativeQrScannerEvent =
+  | { type: 'result'; value: string }
+  | { type: 'cancel' }
+  | { type: 'error'; message: string };
 type RecommendUpdatePrompt = {
   title: string;
   message: string;
@@ -1120,6 +1137,8 @@ function AppInner(): React.JSX.Element {
   const nativeSttConversationIdRef = useRef<string | null>(null);
   const nativeSttMessageSequenceRef = useRef(0);
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
+  const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
+  const pendingProfileLinkUserIdRef = useRef<string | null>(null);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1282,6 +1301,38 @@ function AppInner(): React.JSX.Element {
     lastWebViewUrlRef.current = normalizedUrl;
     syncConversationRestoreFromUrl(normalizedUrl);
   }, [syncConversationRestoreFromUrl]);
+  const navigateWebViewToProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingProfileLinkUserIdRef.current = normalizedUserId;
+      return;
+    }
+
+    const destination = `${activeWebAppBaseUrl}/${webLocale}/users/${encodeURIComponent(normalizedUserId)}`;
+    pendingProfileLinkUserIdRef.current = null;
+    webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(destination)}); true;`);
+  }, [activeWebAppBaseUrl, webLocale]);
+  const handleIncomingProfileLink = useCallback((rawUrl: string) => {
+    const candidateOrigins = [
+      activeWebAppBaseUrl,
+      WEB_APP_BASE_URL,
+      FALLBACK_WEB_APP_BASE_URL,
+    ].filter(Boolean);
+    const parsed = candidateOrigins
+      .map((origin) => parseNativeProfileLink(rawUrl, origin))
+      .find((value) => value !== null);
+    if (!parsed) return false;
+
+    navigateWebViewToProfile(parsed.userId);
+    return true;
+  }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
+  const flushPendingProfileLinkToWeb = useCallback(() => {
+    const pendingUserId = pendingProfileLinkUserIdRef.current;
+    if (!pendingUserId || !isPageReadyRef.current) return;
+    navigateWebViewToProfile(pendingUserId);
+  }, [navigateWebViewToProfile]);
   useEffect(() => {
     setDebugRemountWebUrl('');
   }, [baseWebUrl]);
@@ -1297,6 +1348,25 @@ function AppInner(): React.JSX.Element {
       }
     }
   }, []);
+  useEffect(() => {
+    let mounted = true;
+    const handleUrl = (rawUrl: string | null | undefined) => {
+      if (!mounted || typeof rawUrl !== 'string') return;
+      handleIncomingProfileLink(rawUrl);
+    };
+
+    void Linking.getInitialURL().then(handleUrl).catch(() => {
+      // Ignore malformed or unavailable initial URLs.
+    });
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleUrl(url);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, [handleIncomingProfileLink]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],
@@ -1452,6 +1522,7 @@ function AppInner(): React.JSX.Element {
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
+  const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
   const shouldHideNativeBanners = useMemo(
     () => shouldHideNativeBannersForPathname(currentWebPathname),
@@ -1554,6 +1625,10 @@ function AppInner(): React.JSX.Element {
     if (Platform.OS !== 'android') return;
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (qrScannerRequest) {
+        setQrScannerRequest(null);
+        return true;
+      }
       if (versionGate.status === 'force_update') {
         return false;
       }
@@ -1584,7 +1659,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, isNativeMenuOverlayOpen, versionGate.status]);
+  }, [canWebViewGoBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -1783,6 +1858,39 @@ function AppInner(): React.JSX.Element {
     if (!updateUrl) return;
     void Linking.openURL(updateUrl);
   }, [versionGate]);
+
+  const emitQrScannerToWeb = useCallback((payload: NativeQrScannerEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativeQrScannerEventsRef.current.push(payload);
+      if (pendingNativeQrScannerEventsRef.current.length > NATIVE_QR_SCANNER_QUEUE_LIMIT) {
+        pendingNativeQrScannerEventsRef.current.splice(
+          0,
+          pendingNativeQrScannerEventsRef.current.length - NATIVE_QR_SCANNER_QUEUE_LIMIT,
+        );
+      }
+      return;
+    }
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_QR_SCANNER_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingQrScannerEventsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingEvents = pendingNativeQrScannerEventsRef.current.splice(0);
+    pendingEvents.forEach((event) => emitQrScannerToWeb(event));
+  }, [emitQrScannerToWeb]);
+
+  const handleNativeQrRead = useCallback((value: string) => {
+    setQrScannerRequest(null);
+    emitQrScannerToWeb({ type: 'result', value });
+  }, [emitQrScannerToWeb]);
+
+  const handleNativeQrClose = useCallback(() => {
+    setQrScannerRequest(null);
+    emitQrScannerToWeb({ type: 'cancel' });
+  }, [emitQrScannerToWeb]);
 
   const emitToWeb = useCallback((payload: NativeSttEvent) => {
     const queueId = payload.type === 'message' && !payload.queueId
@@ -2325,6 +2433,11 @@ function AppInner(): React.JSX.Element {
     }
     if (!parsed || typeof parsed !== 'object') return;
 
+    if (parsed.type === 'native_qr_scanner_open') {
+      setQrScannerRequest(parsed.payload ?? {});
+      return;
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -2671,6 +2784,8 @@ function AppInner(): React.JSX.Element {
     updateSafeAreaPalette(nextUrl);
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingNativeSttMessagesToWeb();
+    flushPendingQrScannerEventsToWeb();
+    flushPendingProfileLinkToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
     emitBannerLayoutToWeb();
@@ -2733,7 +2848,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativeSttMessagesToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (activateWebFallback()) return;
@@ -2932,6 +3047,13 @@ function AppInner(): React.JSX.Element {
             hidden={shouldHideNativeBanners || activeBannerZone !== 'conversation' || isNativeMenuOverlayOpen}
           />
         </>
+      ) : null}
+      {qrScannerRequest ? (
+        <NativeQrScanner
+          requestConfig={qrScannerRequest}
+          onClose={handleNativeQrClose}
+          onRead={handleNativeQrRead}
+        />
       ) : null}
     </View>
   );
