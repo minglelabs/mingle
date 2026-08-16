@@ -114,6 +114,36 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-interim-translation-cursor')
   })
 
+  it('keeps room language order while moving the original-language quote badge', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-room-order',
+          originalText: '원문',
+          originalLang: 'en',
+          targetLanguages: ['ja', 'ko'],
+          translations: {
+            ja: '原文',
+            ko: '원문',
+          },
+        },
+        uiLocale: 'ko',
+        languageOrder: ['ja', 'en', 'ko'],
+      }),
+    )
+
+    const japaneseIndex = html.indexOf('data-chat-language="ja"')
+    const englishIndex = html.indexOf('data-chat-language="en"')
+    const koreanIndex = html.indexOf('data-chat-language="ko"')
+    const quoteIndex = html.indexOf('data-original-language-quote-badge')
+
+    expect(japaneseIndex).toBeGreaterThan(-1)
+    expect(englishIndex).toBeGreaterThan(japaneseIndex)
+    expect(koreanIndex).toBeGreaterThan(englishIndex)
+    expect(quoteIndex).toBeGreaterThan(englishIndex)
+    expect(quoteIndex).toBeLessThan(koreanIndex)
+  })
+
   it('renders one finalized translation when its language badge is selected', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {

@@ -1206,6 +1206,7 @@ type LivePhoneDemoChatMessageRowProps = {
   utterance: Utterance
   uiLocale: string
   preferredDisplayLanguage?: string | null
+  languageOrder: readonly string[]
   isDraft: boolean
   onPlayOriginal: (utterance: Utterance) => void
   onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
@@ -1233,6 +1234,7 @@ function LivePhoneDemoChatMessageRow({
   utterance,
   uiLocale,
   preferredDisplayLanguage,
+  languageOrder,
   isDraft,
   onPlayOriginal,
   onPlayTranslation,
@@ -1250,6 +1252,7 @@ function LivePhoneDemoChatMessageRow({
         utterance={utterance}
         uiLocale={uiLocale}
         preferredDisplayLanguage={preferredDisplayLanguage}
+        languageOrder={languageOrder}
         isDraft={isDraft}
         onPlayOriginal={onPlayOriginal}
         onPlayTranslation={onPlayTranslation}
@@ -1267,6 +1270,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.utterance !== next.utterance) return false
     if (prev.uiLocale !== next.uiLocale) return false
     if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
+    if (prev.languageOrder !== next.languageOrder) return false
     if (prev.isDraft !== next.isDraft) return false
     if (prev.onPlayOriginal !== next.onPlayOriginal) return false
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
@@ -6198,6 +6202,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   utterance={u}
                   uiLocale={uiLocale}
                   preferredDisplayLanguage={preferredDisplayLanguage}
+                  languageOrder={effectiveTranslationLanguages}
                   isDraft={draftUtteranceIds.has(u.id)}
                   onPlayOriginal={handlePlayOriginalBubbleTts}
                   onPlayTranslation={handlePlayTranslationBubbleTts}

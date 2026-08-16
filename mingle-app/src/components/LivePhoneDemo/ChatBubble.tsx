@@ -71,6 +71,7 @@ interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
   preferredDisplayLanguage?: string | null
+  languageOrder?: readonly string[]
   isDraft?: boolean
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
@@ -131,7 +132,15 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
 function buildLanguageOptionsForUtterance(
   originalLanguage: string,
   targetLanguages: readonly string[],
+  languageOrder?: readonly string[],
 ): string[] {
+  const availableLanguages = [originalLanguage, ...targetLanguages]
+  const availableByKey = new Map<string, string>()
+  for (const language of availableLanguages) {
+    const key = normalizeTranslationLanguageKey(language)
+    if (key && !availableByKey.has(key)) availableByKey.set(key, language)
+  }
+
   const options: string[] = []
   const seen = new Set<string>()
   const pushLanguage = (rawLanguage: string) => {
@@ -143,10 +152,16 @@ function buildLanguageOptionsForUtterance(
     options.push(language)
   }
 
-  // The detected source language is always the first button. The remaining
-  // buttons follow the targetLanguages snapshot captured in user selection order.
-  pushLanguage(originalLanguage)
-  for (const language of targetLanguages) pushLanguage(language)
+  const hasExplicitLanguageOrder = Boolean(languageOrder?.length)
+  const orderedCandidates = hasExplicitLanguageOrder
+    ? [...languageOrder!, ...targetLanguages, originalLanguage]
+    : [originalLanguage, ...targetLanguages]
+
+  for (const language of orderedCandidates) {
+    const normalizedKey = normalizeTranslationLanguageKey(language)
+    pushLanguage(normalizedKey ? (availableByKey.get(normalizedKey) || language) : language)
+  }
+
   return options
 }
 
@@ -259,6 +274,7 @@ function ChatBubble({
   utterance,
   uiLocale,
   preferredDisplayLanguage,
+  languageOrder,
   isDraft = false,
   onPlayOriginal,
   onPlayTranslation,
@@ -293,7 +309,11 @@ function ChatBubble({
       }
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
-  const languageOptions = buildLanguageOptionsForUtterance(utterance.originalLang, targetLangs)
+  const languageOptions = buildLanguageOptionsForUtterance(
+    utterance.originalLang,
+    targetLangs,
+    languageOrder,
+  )
   const [displayLanguage, setDisplayLanguage] = useState(() => (
     resolveInitialDisplayLanguage(
       preferredDisplayLanguage,
@@ -493,6 +513,7 @@ function ChatBubble({
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
+  if (prev.languageOrder !== next.languageOrder) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false

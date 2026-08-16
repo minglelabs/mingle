@@ -4289,6 +4289,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     <ChatBubble
                       utterance={u}
                       uiLocale={uiLocale}
+                      languageOrder={selectedLanguages}
                       isDraft={draftUtteranceIds.has(u.id)}
                       onPlayOriginal={handlePlayOriginalBubbleTts}
                       onPlayTranslation={handlePlayTranslationBubbleTts}

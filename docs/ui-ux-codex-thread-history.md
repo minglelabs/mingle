@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Room Language Order With Per-Message Original Badge
+
+- Surface: Language buttons inside each conversation message bubble.
+- Issue: The detected utterance language was always inserted before the conversation's configured language order.
+- User impact: Every message could present a different button order, and the quote badge appeared fixed to the first position instead of identifying the original-language button.
+- Resolution: Pass the conversation language order into each bubble, render available language buttons in that order, and keep the quote badge attached to the button whose language matches that message's detected original language.
+
 ## 2026-08-17 - Ordered Primary Language Flags on Profile Avatars
 
 - Surface: My Page and public profile avatar badges.
