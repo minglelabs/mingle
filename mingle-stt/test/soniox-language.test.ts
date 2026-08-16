@@ -70,6 +70,19 @@ test('raw Soniox debug token grouping preserves contiguous language runs', () =>
     );
 });
 
+test('raw Soniox debug token grouping splits finality and ignores endpoint metadata', () => {
+    const runs = buildSonioxDebugTokenRuns([
+        { text: '...차이가', is_final: true, speaker: '1', language: 'ko' },
+        { text: ' 많이', is_final: false, speaker: '1', language: 'ko' },
+        { text: '<end>', is_final: true },
+    ]);
+
+    assert.deepEqual(runs, [
+        { isFinal: true, speaker: '1', language: 'ko', text: '...차이가' },
+        { isFinal: false, speaker: '1', language: 'ko', text: ' 많이' },
+    ]);
+});
+
 test('endpoint flush includes any speaker that still has pending text', () => {
     assert.equal(hasPendingSonioxTurnText('personal computer would'), true);
     assert.equal(hasPendingSonioxTurnText('personal computer would <fin>'), true);

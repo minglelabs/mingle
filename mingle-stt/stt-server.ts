@@ -19,7 +19,9 @@ import {
     type SonioxFinalizeRequestCause,
 } from './segmentation-strategy';
 import {
+    buildSonioxDebugTokenRuns,
     buildSonioxFinalizeRequestCohort,
+    formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
     mergeDetectedLang,
@@ -605,20 +607,9 @@ wss.on('connection', (clientWs) => {
                 speaker?: unknown;
             };
             const logSonioxTokenBatch = (tokens: SonioxToken[]): void => {
-                if (tokens.length === 0) return;
-                const summarize = (values: string[]): string => {
-                    const uniqueValues = Array.from(new Set(values));
-                    return uniqueValues.length === 1 ? uniqueValues[0]! : 'mixed';
-                };
-                const isFinal = summarize(tokens.map((token) => (
-                    typeof token.is_final === 'boolean' ? String(token.is_final) : 'unknown'
-                )));
-                const speaker = summarize(tokens.map((token) => normalizeSpeaker(token.speaker)));
-                const language = summarize(tokens.map((token) => normalizeDetectedLang(token.language)));
-                const text = tokens.map((token) => (
-                    typeof token.text === 'string' ? token.text : String(token.text ?? '')
-                )).join('');
-                console.log(`is_final=${isFinal}, speaker=${speaker}, language=${language}, text=${text}`);
+                for (const run of buildSonioxDebugTokenRuns(tokens)) {
+                    console.log(formatSonioxDebugTokenRun(run));
+                }
             };
             type SonioxCommonSpeakerState = {
                 speaker: string;
@@ -1182,11 +1173,7 @@ wss.on('connection', (clientWs) => {
 
                 const partition = partitionSonioxTokensAtFirstBoundary(batchTokens);
                 const tokensBeforeBoundary = partition.before;
-                const boundaryMarker = partition.marker;
                 const boundaryKind: SonioxBoundaryMarker | null = partition.markerKind;
-                const markerSpeaker = boundaryMarker
-                    ? normalizeSpeaker(boundaryMarker.speaker)
-                    : '-';
                 const tokenBeforeSpeakers = Array.from(new Set(
                     tokensBeforeBoundary.map((token) => normalizeSpeaker(token.speaker)),
                 )).sort();
@@ -1308,9 +1295,9 @@ wss.on('connection', (clientWs) => {
                         handling: boundaryHandling,
                         currentSpeakerIds: speakerStates.keys(),
                         requestSpeakerIds: finalizeRequestForBoundary?.speakers.keys() || [],
-                        providerBoundarySpeakerId: markerSpeaker !== 'unknown'
-                            ? markerSpeaker
-                            : lastTokenBeforeSpeaker,
+                        // <end>/<fin> is a control token; ownership comes from
+                        // the preceding speech tokens, never from marker metadata.
+                        providerBoundarySpeakerId: lastTokenBeforeSpeaker,
                         beforeSpeakerIds: tokenBeforeSpeakers,
                         pendingSpeakerIds,
                     });
