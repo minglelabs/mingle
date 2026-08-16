@@ -13,6 +13,11 @@ import {
 
 export type LanguageSelectorSortMode = "locale" | "alphabetical";
 
+export type LanguageSelectorSectionCopy = {
+  featured: string;
+  all: string;
+};
+
 export type LanguageSelectorItem = SttLanguageOption & {
   localizedName: string;
   nativeName: string;
@@ -29,6 +34,14 @@ export const LANGUAGE_SELECTOR_FEATURED_CODES = [
   "fr",
   "pt",
 ] as const satisfies readonly SttLanguageCode[];
+
+export function resolveLanguageSelectorSectionCopy(rawLocale?: string): LanguageSelectorSectionCopy {
+  const normalizedLocale = rawLocale?.trim().toLowerCase() ?? "";
+  const isKorean = normalizedLocale === "ko" || normalizedLocale.startsWith("ko-");
+  return isKorean
+    ? { featured: "주요 언어", all: "전체 언어" }
+    : { featured: "Popular languages", all: "All languages" };
+}
 
 type LanguageSelectorLocaleSource = "ui" | "browser" | "fallback";
 

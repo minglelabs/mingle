@@ -12,6 +12,7 @@ import {
   filterLanguageSelectorItems,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
+  resolveLanguageSelectorSectionCopy,
   resolveLanguageSelectorShowsSortToggle,
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
@@ -997,17 +998,13 @@ function ProfileEditPanel({
     const filteredItems = filterLanguageSelectorItems(languageItems, languageQuery);
     return sortLanguageSelectorItems(filteredItems, languageSortMode, languageLocaleInfo.locale);
   }, [languageItems, languageLocaleInfo.locale, languageQuery, languageSortMode]);
-  const languageSectionCopy = locale === "ko"
-    ? {
-        selected: "현재 선택된 언어",
-        featured: "주요 언어",
-        all: "전체 언어",
-      }
-    : {
-        selected: "Selected language",
-        featured: "Popular languages",
-        all: "All languages",
-    };
+  const languageSectionCopy = useMemo(
+    () => ({
+      selected: locale === "ko" ? "현재 선택된 언어" : "Selected language",
+      ...resolveLanguageSelectorSectionCopy(locale),
+    }),
+    [locale],
+  );
   const initialImageCropScale = initialImageCrop?.scale;
   const initialImageCropX = initialImageCrop?.x;
   const initialImageCropY = initialImageCrop?.y;

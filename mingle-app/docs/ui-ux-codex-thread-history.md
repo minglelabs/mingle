@@ -1,5 +1,14 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-16 Conversation language selector ordering
+
+### `2026-08-16-conversation-language-featured-order` | UI/UX issue found
+
+1. **The in-room language selector showed the full catalog without the same featured-language grouping as My Page profile editing**
+   Problem: The My Page primary-language picker already surfaced seven featured languages first—English, Spanish, Korean, Japanese, Simplified Chinese, French, and Portuguese—while the conversation room selector showed one sorted list. This made the same language choice feel inconsistent and made common languages slower to reach.
+   Fix: The room selector now uses the shared featured-language order, renders a `Popular languages`/`주요 언어` section first, and renders the complete locale-sorted or alphabetical catalog below it. Search filters both sections while preserving the fixed featured order. The section labels are resolved by the same helper used by My Page so the two surfaces remain aligned.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
 ## 2026-08-16 Profile QR Sharing and App Links
 
 ### `2026-08-16-profile-qr-app-link-flow` | UI/UX issues found

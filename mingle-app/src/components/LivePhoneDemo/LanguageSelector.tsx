@@ -14,11 +14,13 @@ import {
 import {
   buildRecentLanguageChipCodes,
   buildLanguageSelectorItems,
+  buildLanguageSelectorFeaturedItems,
   filterLanguageSelectorItems,
   registerDeselectedLanguageCode,
   sanitizeRecentLanguageCodes,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorLocale,
+  resolveLanguageSelectorSectionCopy,
   resolveLanguageSelectorShowsSortToggle,
   syncDeselectedLanguageCodes,
   sortLanguageSelectorItems,
@@ -118,10 +120,21 @@ export default function LanguageSelector({
     () => buildLanguageSelectorItems(localeInfo.locale),
     [localeInfo.locale],
   );
-  const filteredItems = useMemo(() => {
+  const featuredLanguageItems = useMemo(
+    () => buildLanguageSelectorFeaturedItems(languageItems),
+    [languageItems],
+  );
+  const filteredFeaturedItems = useMemo(() => (
+    filterLanguageSelectorItems(featuredLanguageItems, query)
+  ), [featuredLanguageItems, query]);
+  const filteredLanguageItems = useMemo(() => {
     const visibleItems = filterLanguageSelectorItems(languageItems, query);
     return sortLanguageSelectorItems(visibleItems, sortMode, localeInfo.locale);
   }, [languageItems, localeInfo.locale, query, sortMode]);
+  const languageSectionCopy = useMemo(
+    () => resolveLanguageSelectorSectionCopy(localeInfo.locale),
+    [localeInfo.locale],
+  );
   const isTranslationSelectionLinked = activeTab === "translation" && translationLanguagesLinked;
   const activeSelectedLanguages = activeTab === "speech" || translationLanguagesLinked
     ? speechLanguages
@@ -339,6 +352,77 @@ export default function LanguageSelector({
     if (target instanceof Node && searchFieldRef.current?.contains(target)) return;
     searchInputRef.current.blur();
   }, []);
+
+  const renderLanguageOption = (lang: (typeof languageItems)[number]) => {
+    const isSelected = activeSelectedLanguages.includes(lang.code);
+    const isDisabled =
+      disabled
+      || isTranslationSelectionLinked
+      || (!isSelected && atMax)
+      || (isSelected && atMin);
+
+    return (
+      <button
+        key={lang.code}
+        type="button"
+        onClick={() => handleToggleRequest(lang.code)}
+        disabled={isDisabled}
+        className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
+          isSelected
+            ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
+            : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+        } ${
+          isDisabled && !isSelected
+            ? "cursor-not-allowed opacity-45"
+          : isDisabled && isSelected
+            ? "cursor-not-allowed opacity-80"
+              : isSelected
+                ? "hover:-translate-y-[1px] hover:shadow-[0_18px_38px_rgba(245,158,11,0.14)]"
+                : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
+        }`}
+      >
+        <span
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
+            isSelected
+              ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
+              : "border-[#e5dfd5] bg-[#faf7f1]"
+          }`}
+        >
+          <span className="text-[2rem] leading-none">{lang.flag}</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
+            {lang.localizedName}
+          </span>
+          <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
+            {lang.secondaryLabel}
+          </span>
+        </span>
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+            isSelected
+              ? "border-amber-500 bg-amber-500 text-white"
+              : "border-slate-300 text-transparent"
+          }`}
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className={`h-4 w-4 ${isSelected ? "text-white" : "text-transparent"}`}
+            fill="none"
+          >
+            <path
+              d="M5.5 12.5L10 17L18.5 8.5"
+              stroke="currentColor"
+              strokeWidth="3.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+    );
+  };
 
   if (!isOpen || typeof document === "undefined") return null;
 
@@ -606,84 +690,31 @@ export default function LanguageSelector({
             paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           }}
         >
-          {filteredItems.length === 0 ? (
+          {filteredFeaturedItems.length === 0 && filteredLanguageItems.length === 0 ? (
             <div className="flex h-full min-h-[240px] items-center justify-center px-6 text-center text-sm text-slate-500">
               {copy.languageSelectorNoResultsLabel}
             </div>
           ) : (
-            <div className="space-y-3 py-4">
-              {filteredItems.map((lang) => {
-                const isSelected = activeSelectedLanguages.includes(lang.code);
-                const isDisabled =
-                  disabled
-                  || isTranslationSelectionLinked
-                  || (!isSelected && atMax)
-                  || (isSelected && atMin);
+            <div className="space-y-5 py-4">
+              {filteredFeaturedItems.length > 0 ? (
+                <section aria-labelledby="conversation-featured-language-heading" className="space-y-2">
+                  <h3 id="conversation-featured-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                    {languageSectionCopy.featured}
+                  </h3>
+                  <div className="space-y-2">
+                    {filteredFeaturedItems.map(renderLanguageOption)}
+                  </div>
+                </section>
+              ) : null}
 
-                return (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    onClick={() => handleToggleRequest(lang.code)}
-                    disabled={isDisabled}
-                    className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
-                      isSelected
-                        ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
-                        : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
-                    } ${
-                      isDisabled && !isSelected
-                        ? "cursor-not-allowed opacity-45"
-                      : isDisabled && isSelected
-                        ? "cursor-not-allowed opacity-80"
-                          : isSelected
-                            ? "hover:-translate-y-[1px] hover:shadow-[0_18px_38px_rgba(245,158,11,0.14)]"
-                            : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
-                    }`}
-                  >
-                    <span
-                      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
-                        isSelected
-                          ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
-                          : "border-[#e5dfd5] bg-[#faf7f1]"
-                      }`}
-                    >
-                      <span className="text-[2rem] leading-none">{lang.flag}</span>
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
-                        {lang.localizedName}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
-                        {lang.secondaryLabel}
-                      </span>
-                    </span>
-                    <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
-                        isSelected
-                          ? "border-amber-500 bg-amber-500 text-white"
-                          : "border-slate-300 text-transparent"
-                      }`}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className={`h-4 w-4 ${
-                          isSelected ? "text-white" : "text-transparent"
-                        }`}
-                        fill="none"
-                      >
-                        <path
-                          d="M5.5 12.5L10 17L18.5 8.5"
-                          stroke="currentColor"
-                          strokeWidth="3.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                  </button>
-                );
-              })}
+              <section aria-labelledby="conversation-all-language-heading" className="space-y-2">
+                <h3 id="conversation-all-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                  {languageSectionCopy.all}
+                </h3>
+                <div className="space-y-2">
+                  {filteredLanguageItems.map(renderLanguageOption)}
+                </div>
+              </section>
             </div>
           )}
         </div>
