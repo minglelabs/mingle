@@ -701,3 +701,15 @@
   - Kept the conversation-room menu unchanged.
 - Data contract: None. Feedback continues to use the existing `/feedback` endpoint, and app updates continue to use the existing native bridge command.
 - Testing notes: Verify feedback compose/history navigation from My Page, draft restoration, successful submission, and that the app-update card appears only in native runtime and opens the correct store when an update is available.
+
+## 2026-08-16 - Isolate text composer drafts by conversation
+
+- Surface: The text-input mode composer inside conversation rooms.
+- Issue: Every room read and wrote the same local-storage draft key, so text typed as a pending message in one room appeared in other rooms.
+- User impact: Users could accidentally send text intended for another conversation and could not keep separate unfinished messages per room.
+- Resolution:
+  - Scope the composer draft key by the conversation ID, falling back to the existing storage namespace only for non-room surfaces.
+  - Reload the textarea from the newly selected room's draft when the active room changes without remounting the composer.
+  - Keep the existing unscoped key for the standalone/live surface, while room drafts no longer read from or write to that shared value.
+- Data contract: None. This is local-storage namespacing only; message submission and conversation APIs are unchanged.
+- Testing notes: Verify that drafts in two rooms remain independent, returning to each room restores its own text, submitting one draft clears only that room's draft, and the standalone live surface remains usable.

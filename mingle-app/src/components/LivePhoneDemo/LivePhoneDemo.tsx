@@ -16,7 +16,7 @@ import {
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
-import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
+import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
 import { useTtsSettings } from '@/context/tts-settings'
@@ -623,26 +623,34 @@ export function resolveStableKeyboardViewportInsetPx(currentInsetPx: number, nex
     : safeNextInsetPx
 }
 
-function readPersistedComposerDraft(): string {
+export function resolveComposerDraftStorageKey(
+  conversationId?: string,
+  storageNamespace?: string,
+): string {
+  const namespace = (conversationId || storageNamespace || '').trim()
+  return buildStorageKey(LS_KEY_COMPOSER_DRAFT, namespace || undefined)
+}
+
+function readPersistedComposerDraft(storageKey: string): string {
   if (typeof window === 'undefined') return ''
 
   try {
-    const rawValue = window.localStorage.getItem(LS_KEY_COMPOSER_DRAFT)
+    const rawValue = window.localStorage.getItem(storageKey)
     return typeof rawValue === 'string' ? rawValue : ''
   } catch {
     return ''
   }
 }
 
-function persistComposerDraft(nextDraft: string): void {
+function persistComposerDraft(nextDraft: string, storageKey: string): void {
   if (typeof window === 'undefined') return
 
   try {
     if (nextDraft) {
-      window.localStorage.setItem(LS_KEY_COMPOSER_DRAFT, nextDraft)
+      window.localStorage.setItem(storageKey, nextDraft)
       return
     }
-    window.localStorage.removeItem(LS_KEY_COMPOSER_DRAFT)
+    window.localStorage.removeItem(storageKey)
   } catch {
     // Ignore local persistence failures.
   }
@@ -1380,6 +1388,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   )
   const conversationTranslationLanguagesLinked = initialTranslationLanguagesLinked !== false
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
+  const composerDraftStorageKey = useMemo(
+    () => resolveComposerDraftStorageKey(conversationId, storageNamespace),
+    [conversationId, storageNamespace],
+  )
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     conversationId && conversationTranslationLanguagesLinked ? conversationSpeechLanguages : (
       conversationId ? conversationSelectedLanguages : fallbackLanguages
@@ -1674,7 +1686,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         currentIsComposerOpen: current,
         persistedInputMode: next.inputMode,
       }))
-      const persistedComposerDraft = readPersistedComposerDraft()
+      const persistedComposerDraft = readPersistedComposerDraft(composerDraftStorageKey)
       composerDraftRef.current = persistedComposerDraft
       setComposerHasDraft(persistedComposerDraft.trim().length > 0)
       setHasHydratedLocalUiPreferences(true)
@@ -1685,7 +1697,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return () => {
       cancelled = true
     }
-  }, [conversationId, fallbackLanguages])
+  }, [composerDraftStorageKey, conversationId, fallbackLanguages])
 
   useEffect(() => {
     if (!conversationId) return
@@ -1917,7 +1929,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (textarea.value === composerDraftRef.current) return
     textarea.value = composerDraftRef.current
     syncComposerTextareaHeight(textarea)
-  }, [hasHydratedComposerDraft, syncComposerTextareaHeight])
+  }, [composerDraftStorageKey, hasHydratedComposerDraft, syncComposerTextareaHeight])
 
   useLayoutEffect(() => {
     syncComposerTextareaHeight(composerTextareaRef.current)
@@ -4068,11 +4080,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleComposerDraftChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextDraft = event.currentTarget.value
     composerDraftRef.current = nextDraft
-    persistComposerDraft(nextDraft)
+    persistComposerDraft(nextDraft, composerDraftStorageKey)
     const nextHasDraft = nextDraft.trim().length > 0
     setComposerHasDraft((current) => current === nextHasDraft ? current : nextHasDraft)
     syncComposerTextareaHeight(event.currentTarget)
-  }, [syncComposerTextareaHeight])
+  }, [composerDraftStorageKey, syncComposerTextareaHeight])
 
   const handleComposerSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -4095,7 +4107,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       textarea.value = ''
     }
     setComposerHasDraft(false)
-    persistComposerDraft('')
+    persistComposerDraft('', composerDraftStorageKey)
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
         syncComposerTextareaHeight(composerTextareaRef.current)
@@ -4103,7 +4115,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     } else {
       syncComposerTextareaHeight(composerTextareaRef.current)
     }
-  }, [composerCopy.manualSpeakerLabel, submitExternalUtterance, syncComposerTextareaHeight])
+  }, [composerCopy.manualSpeakerLabel, composerDraftStorageKey, submitExternalUtterance, syncComposerTextareaHeight])
 
   useImperativeHandle(ref, () => ({
     startRecording: async () => {
@@ -5053,7 +5065,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
           syncComposerTextareaHeight(composerTextareaRef.current)
         }
         setComposerHasDraft(false)
-        persistComposerDraft('')
+        persistComposerDraft('', composerDraftStorageKey)
         persistedInputModeRef.current = 'voice'
         setIsComposerOpen(false)
         setAdBannerPosition('bottom')
@@ -5139,6 +5151,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [
     clearConversationHistory,
     closeMenuPanel,
+    composerDraftStorageKey,
     syncComposerTextareaHeight,
     composerTextareaHeightPx,
     composerTextareaRef,

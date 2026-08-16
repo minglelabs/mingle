@@ -5,6 +5,7 @@ import {
   resolveNativeBottomBannerOverlayInsetPx,
   resolveScrollToBottomButtonBottomPx,
   resolveStableKeyboardViewportInsetPx,
+  resolveComposerDraftStorageKey,
   resizeComposerTextarea,
 } from './LivePhoneDemo'
 import { resolveLivePhoneDemoComposerCopy } from '@/i18n/live-phone-demo-composer-copy'
@@ -74,6 +75,15 @@ describe('live phone demo composer logic', () => {
       currentIsComposerOpen: true,
       persistedInputMode: 'voice',
     })).toBe(false)
+  })
+
+  it('keeps composer drafts in separate storage keys for separate conversations', () => {
+    const firstConversationKey = resolveComposerDraftStorageKey('conversation-a', 'conversation-a')
+    const secondConversationKey = resolveComposerDraftStorageKey('conversation-b', 'conversation-b')
+
+    expect(firstConversationKey).not.toBe(secondConversationKey)
+    expect(resolveComposerDraftStorageKey('conversation-a', 'conversation-a')).toBe(firstConversationKey)
+    expect(resolveComposerDraftStorageKey()).toBe('mingle_live_phone_demo_composer_draft_v1')
   })
 
   it('raises the scroll-to-bottom button above a bottom banner in native runtime', () => {
