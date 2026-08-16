@@ -11,10 +11,10 @@ import {
   sortLanguageSelectorItems,
   type LanguageSelectorSortMode,
 } from "@/components/LivePhoneDemo/language-selector.logic";
+import LanguageFlag from "@/components/language-flag";
 import {
   MAX_STT_LANGUAGE_SELECTION,
   getSttLanguageDisplayName,
-  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
   type SttLanguageCode,
 } from "@/lib/stt-languages";
@@ -61,9 +61,7 @@ function LanguageOptionButton({
         ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
         : "border-[#e5dfd5] bg-[#faf7f1]"}`}
       >
-        <span className="text-[2rem] leading-none" aria-hidden="true">
-          {option.flag}
-        </span>
+        <LanguageFlag language={option.code} className="text-[2rem] leading-none" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
@@ -165,7 +163,7 @@ export default function LanguagePreferencePicker({
               aria-label={canRemove ? `${languageName}: remove` : languageName}
               title={languageName}
             >
-              <span aria-hidden="true">{getSttLanguageFlag(code)}</span>
+              <LanguageFlag language={code} className="text-[2rem] leading-none" />
             </button>
           );
         })}

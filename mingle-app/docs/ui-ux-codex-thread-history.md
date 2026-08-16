@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-17 Shared English US/UK flag in language selectors
+
+### `2026-08-17-english-us-uk-language-flag` | UI/UX issue found
+
+1. **English was represented by a single US flag even though Soniox exposes English as one `en` language**
+   Problem: The four language selection surfaces used a single US emoji for English, while the product does not distinguish US and UK English in its language data. Unicode also has no combined US/UK flag emoji.
+   Fix: Added a shared `LanguageFlag` component that renders the existing US and UK flag emojis as a diagonal half-and-half mark only for English. All other language codes continue to use their existing emoji flags unchanged. The component is used by the conversation language selector, primary-language picker, default conversation-language picker, and app-language selector.
+   Data change: None. This is a presentation-only change.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found

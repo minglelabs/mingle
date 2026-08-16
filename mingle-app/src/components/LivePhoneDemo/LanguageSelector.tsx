@@ -27,6 +27,7 @@ import {
   type LanguageSelectorSortMode,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import LanguageFlag from "@/components/language-flag";
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
@@ -388,7 +389,7 @@ export default function LanguageSelector({
               : "border-[#e5dfd5] bg-[#faf7f1]"
           }`}
         >
-          <span className="text-[2rem] leading-none">{lang.flag}</span>
+          <LanguageFlag language={lang.code} className="text-[2rem] leading-none" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
@@ -515,13 +516,10 @@ export default function LanguageSelector({
                               : "hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_14px_26px_rgba(15,23,42,0.08)]"
                         }`}
                       >
-                        <span
-                          className={`text-[2rem] leading-none ${
-                            isSelected ? "" : "opacity-70"
-                          }`}
-                        >
-                          {lang.flag}
-                        </span>
+                        <LanguageFlag
+                          language={lang.code}
+                          className={`text-[2rem] leading-none ${isSelected ? "" : "opacity-70"}`}
+                        />
                       </button>
                     );
                   })}

@@ -9,6 +9,7 @@ import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
+import LanguageFlag from "@/components/language-flag";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
@@ -916,7 +917,9 @@ function ProfileSettingsPanel({
                         className={`group relative flex w-full items-center gap-3 px-4 py-3.5 text-left transition focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/80 ${selected ? "bg-amber-50/95 text-slate-950 shadow-[0_8px_20px_rgba(245,158,11,0.12)] ring-1 ring-inset ring-amber-300" : "bg-white text-slate-900 active:bg-gray-50"} ${index < PRIMARY_UI_LANGUAGE_OPTIONS.length - 1 ? selected ? "border-b border-amber-200" : "border-b border-gray-100" : ""}`}
                         aria-pressed={selected}
                       >
-                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg ${selected ? "border border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]" : "bg-gray-50"}`} aria-hidden="true">{option.flag}</span>
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg ${selected ? "border border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]" : "bg-gray-50"}`} aria-hidden="true">
+                          <LanguageFlag language={option.code} className="text-lg leading-none" />
+                        </span>
                         <span className={`min-w-0 flex-1 text-[15px] ${selected ? "font-bold text-slate-950" : "font-medium text-slate-900"}`}>{option.name}</span>
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition ${selected ? "border-amber-500 bg-amber-500 text-white shadow-sm" : "border-slate-300 bg-white text-transparent group-hover:border-slate-400"}`}
