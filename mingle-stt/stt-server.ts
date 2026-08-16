@@ -1318,6 +1318,16 @@ wss.on('connection', (clientWs) => {
                     ? activeFinalizeRequest
                     : null;
                 const currentSpeakerIds = Array.from(speakerStates.keys()).sort();
+                const pendingSpeakerIds = Array.from(new Set([
+                    ...Array.from(speakerStates.values())
+                        .filter((state) => hasPendingSonioxTurnText(state.currentSnapshotText))
+                        .map((state) => state.speaker),
+                    ...Array.from(speakerFrameUpdates.values())
+                        .filter((frameUpdate) => hasPendingSonioxTurnText(
+                            composeTurnText(frameUpdate.finalDeltaText, frameUpdate.nonFinalText),
+                        ))
+                        .map((frameUpdate) => frameUpdate.speaker),
+                ])).sort();
                 let boundarySpeakers: string[] = [];
                 if (
                     boundaryKind === 'end'
@@ -1357,7 +1367,7 @@ wss.on('connection', (clientWs) => {
                 }
                 if (hasBoundary) {
                     console.log(
-                        `[conn:${connId}] soniox_boundary requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} marker=${boundaryKind} markerSpeaker=${markerSpeaker} beforeSpeakers=${tokenBeforeSpeakers.join(',') || '-'} currentSpeakers=${currentSpeakerIds.join(',') || '-'} selectedSpeakers=${boundarySpeakers.join(',') || '-'} action=${boundaryHandling.action} cause=${boundaryHandling.cause} carry=${boundaryHandling.carryAllowed}`,
+                        `[conn:${connId}] soniox_boundary requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} marker=${boundaryKind} markerSpeaker=${markerSpeaker} beforeSpeakers=${tokenBeforeSpeakers.join(',') || '-'} pendingSpeakers=${pendingSpeakerIds.join(',') || '-'} currentSpeakers=${currentSpeakerIds.join(',') || '-'} selectedSpeakers=${boundarySpeakers.join(',') || '-'} action=${boundaryHandling.action} cause=${boundaryHandling.cause} carry=${boundaryHandling.carryAllowed}`,
                     );
                 }
 
