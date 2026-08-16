@@ -4,6 +4,10 @@ import {
   type DailyRow,
   type DashboardMetric,
   fillDailySeries,
+  formatDayKey,
+  parseDayKey,
+  resolveTodayKey,
+  startOfDayUtc,
 } from "@/lib/admin-dashboard-metrics";
 
 /**
@@ -15,6 +19,30 @@ const DAY_BUCKET_EXPR = (column: string) => `date_trunc('day', "${column}")`;
 
 type RawDayCount = { day: Date; value: bigint | number };
 type RawDayLatency = { day: Date; avg_ms: number | null; p95_ms: number | null };
+
+type DailyMetricSnapshot = {
+  signupCount: number;
+  dauCount: number;
+  messageCount: number;
+  usageSeconds: number;
+  sttAvgMs: number | null;
+  sttP95Ms: number | null;
+  translationAvgMs: number | null;
+  translationP95Ms: number | null;
+};
+
+type CachedDailyMetric = DailyMetricSnapshot & { day: Date };
+
+const EMPTY_DAILY_METRIC: DailyMetricSnapshot = {
+  signupCount: 0,
+  dauCount: 0,
+  messageCount: 0,
+  usageSeconds: 0,
+  sttAvgMs: null,
+  sttP95Ms: null,
+  translationAvgMs: null,
+  translationP95Ms: null,
+};
 
 function toDailyRows(rows: readonly RawDayCount[]): DailyRow[] {
   return rows.map((row) => ({ day: dayKeyFromRaw(row.day), value: Number(row.value) }));
@@ -41,6 +69,19 @@ function dayKeyFromRaw(value: Date): string {
   const month = String(value.getUTCMonth() + 1).padStart(2, "0");
   const day = String(value.getUTCDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function createCalculationRange(dayKeys: readonly string[]): AdminDashboardDateRange {
+  const firstDay = dayKeys[0];
+  const lastDay = dayKeys[dayKeys.length - 1];
+  if (!firstDay || !lastDay) {
+    throw new Error("Admin dashboard calculation requires at least one day");
+  }
+
+  const rangeStart = startOfDayUtc(firstDay);
+  const rangeEnd = startOfDayUtc(lastDay);
+  rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
+  return { dayKeys: [...dayKeys], rangeStart, rangeEnd };
 }
 
 /**
@@ -167,6 +208,143 @@ async function queryTranslationLatency(range: AdminDashboardDateRange): Promise<
   return splitLatencyRows(rows);
 }
 
+async function queryDailyMetricSnapshots(range: AdminDashboardDateRange): Promise<Map<string, DailyMetricSnapshot>> {
+  const [signups, dau, messages, usageSeconds, sttLatency, translationLatency] = await Promise.all([
+    querySignups(range),
+    queryDau(range),
+    queryMessageCount(range),
+    queryUsageSeconds(range),
+    querySttLatency(range),
+    queryTranslationLatency(range),
+  ]);
+
+  const snapshots = new Map<string, DailyMetricSnapshot>();
+  for (const day of range.dayKeys) {
+    snapshots.set(day, { ...EMPTY_DAILY_METRIC });
+  }
+
+  const applyRows = <K extends keyof DailyMetricSnapshot>(
+    rows: readonly DailyRow[],
+    field: K,
+    normalize: (value: number | null) => DailyMetricSnapshot[K],
+  ) => {
+    for (const row of rows) {
+      const snapshot = snapshots.get(row.day);
+      if (snapshot) snapshot[field] = normalize(row.value);
+    }
+  };
+
+  applyRows(signups, "signupCount", (value) => value ?? 0);
+  applyRows(dau, "dauCount", (value) => value ?? 0);
+  applyRows(messages, "messageCount", (value) => value ?? 0);
+  applyRows(usageSeconds, "usageSeconds", (value) => value ?? 0);
+  applyRows(sttLatency.avg, "sttAvgMs", (value) => value);
+  applyRows(sttLatency.p95, "sttP95Ms", (value) => value);
+  applyRows(translationLatency.avg, "translationAvgMs", (value) => value);
+  applyRows(translationLatency.p95, "translationP95Ms", (value) => value);
+
+  return snapshots;
+}
+
+async function loadCachedDailyMetrics(range: AdminDashboardDateRange): Promise<Map<string, CachedDailyMetric>> {
+  const rows = await prisma.adminDashboardDailyMetric.findMany({
+    where: {
+      day: { in: range.dayKeys.map(parseDayKey) },
+    },
+    select: {
+      day: true,
+      signupCount: true,
+      dauCount: true,
+      messageCount: true,
+      usageSeconds: true,
+      sttAvgMs: true,
+      sttP95Ms: true,
+      translationAvgMs: true,
+      translationP95Ms: true,
+    },
+  });
+
+  return new Map(rows.map((row) => [formatDayKey(row.day), row]));
+}
+
+function snapshotToCacheRow(dayKey: string, snapshot: DailyMetricSnapshot, now: Date) {
+  return {
+    day: parseDayKey(dayKey),
+    ...snapshot,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+async function persistDailyMetricSnapshots(
+  snapshots: ReadonlyMap<string, DailyMetricSnapshot>,
+  historicalDayKeys: readonly string[],
+  currentDayKey: string | undefined,
+): Promise<void> {
+  const now = new Date();
+  const historicalRows = historicalDayKeys.flatMap((dayKey) => {
+    const snapshot = snapshots.get(dayKey);
+    return snapshot ? [snapshotToCacheRow(dayKey, snapshot, now)] : [];
+  });
+
+  if (historicalRows.length > 0) {
+    await prisma.adminDashboardDailyMetric.createMany({
+      data: historicalRows,
+      skipDuplicates: true,
+    });
+  }
+
+  if (currentDayKey) {
+    const snapshot = snapshots.get(currentDayKey);
+    if (snapshot) {
+      await prisma.adminDashboardDailyMetric.upsert({
+        where: { day: parseDayKey(currentDayKey) },
+        create: snapshotToCacheRow(currentDayKey, snapshot, now),
+        update: {
+          ...snapshot,
+          updatedAt: now,
+        },
+      });
+    }
+  }
+}
+
+function snapshotFromCachedRow(row: CachedDailyMetric): DailyMetricSnapshot {
+  return {
+    signupCount: row.signupCount,
+    dauCount: row.dauCount,
+    messageCount: row.messageCount,
+    usageSeconds: row.usageSeconds,
+    sttAvgMs: row.sttAvgMs,
+    sttP95Ms: row.sttP95Ms,
+    translationAvgMs: row.translationAvgMs,
+    translationP95Ms: row.translationP95Ms,
+  };
+}
+
+async function resolveDailyMetricSnapshots(range: AdminDashboardDateRange): Promise<Map<string, DailyMetricSnapshot>> {
+  const cachedByDay = await loadCachedDailyMetrics(range);
+  const rangeEndDayKey = range.dayKeys[range.dayKeys.length - 1];
+  const currentDayKey = rangeEndDayKey === resolveTodayKey(new Date()) ? rangeEndDayKey : undefined;
+  const daysToCalculate = range.dayKeys.filter((dayKey) => dayKey === currentDayKey || !cachedByDay.has(dayKey));
+
+  if (daysToCalculate.length > 0) {
+    const calculated = await queryDailyMetricSnapshots(createCalculationRange(daysToCalculate));
+    const historicalDayKeys = daysToCalculate.filter((dayKey) => dayKey !== currentDayKey);
+    await persistDailyMetricSnapshots(calculated, historicalDayKeys, currentDayKey);
+
+    for (const dayKey of daysToCalculate) {
+      const snapshot = calculated.get(dayKey);
+      if (snapshot) cachedByDay.set(dayKey, { day: parseDayKey(dayKey), ...snapshot });
+    }
+  }
+
+  return new Map(range.dayKeys.map((dayKey) => [
+    dayKey,
+    cachedByDay.get(dayKey) ? snapshotFromCachedRow(cachedByDay.get(dayKey)!) : { ...EMPTY_DAILY_METRIC },
+  ]));
+}
+
 function buildMetric(args: {
   key: string;
   label: string;
@@ -193,14 +371,15 @@ function buildMetric(args: {
 }
 
 export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange): Promise<DashboardMetric[]> {
-  const [signups, dau, messages, usageSeconds, sttLatency, translationLatency] = await Promise.all([
-    querySignups(range),
-    queryDau(range),
-    queryMessageCount(range),
-    queryUsageSeconds(range),
-    querySttLatency(range),
-    queryTranslationLatency(range),
-  ]);
+  const snapshots = await resolveDailyMetricSnapshots(range);
+  const dailyRows = <K extends keyof DailyMetricSnapshot>(field: K): DailyRow[] => range.dayKeys.map((day) => ({
+    day,
+    value: snapshots.get(day)?.[field] ?? null,
+  }));
+  const sttAvg = dailyRows("sttAvgMs");
+  const sttP95 = dailyRows("sttP95Ms");
+  const translationAvg = dailyRows("translationAvgMs");
+  const translationP95 = dailyRows("translationP95Ms");
 
   // usage_seconds and messages lead the list -- they're the metrics that matter
   // most day-to-day, so they get the first chart slots.
@@ -211,7 +390,7 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "초",
       kind: "seconds",
       range,
-      rows: usageSeconds,
+      rows: dailyRows("usageSeconds"),
       fillValue: 0,
     }),
     buildMetric({
@@ -220,7 +399,7 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "건",
       kind: "count",
       range,
-      rows: messages,
+      rows: dailyRows("messageCount"),
       fillValue: 0,
     }),
     buildMetric({
@@ -229,7 +408,7 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "명",
       kind: "count",
       range,
-      rows: dau,
+      rows: dailyRows("dauCount"),
       fillValue: 0,
     }),
     buildMetric({
@@ -238,7 +417,7 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "명",
       kind: "count",
       range,
-      rows: signups,
+      rows: dailyRows("signupCount"),
       fillValue: 0,
     }),
     buildMetric({
@@ -247,8 +426,8 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "ms",
       kind: "milliseconds",
       range,
-      rows: sttLatency.avg,
-      secondary: { label: "p95", rows: sttLatency.p95 },
+      rows: sttAvg,
+      secondary: { label: "p95", rows: sttP95 },
       fillValue: null,
     }),
     buildMetric({
@@ -257,8 +436,8 @@ export async function loadAdminDashboardMetrics(range: AdminDashboardDateRange):
       unit: "ms",
       kind: "milliseconds",
       range,
-      rows: translationLatency.avg,
-      secondary: { label: "p95", rows: translationLatency.p95 },
+      rows: translationAvg,
+      secondary: { label: "p95", rows: translationP95 },
       fillValue: null,
     }),
   ];

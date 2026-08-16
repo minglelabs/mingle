@@ -320,3 +320,19 @@ model AppClientVersionPolicy {
   @@index([createdAt], map: "app_client_version_policies_created_at_idx")
   @@map("app_client_version_policies")
 }
+
+model AdminDashboardDailyMetric {
+  day                    DateTime @id @db.Date
+  signupCount            Int      @map("signup_count")
+  dauCount               Int      @map("dau_count")
+  messageCount           Int      @map("message_count")
+  usageSeconds           Float    @map("usage_seconds")
+  sttAvgMs               Float?   @map("stt_avg_ms")
+  sttP95Ms               Float?   @map("stt_p95_ms")
+  translationAvgMs       Float?   @map("translation_avg_ms")
+  translationP95Ms       Float?   @map("translation_p95_ms")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_dashboard_daily_metrics")
+}
