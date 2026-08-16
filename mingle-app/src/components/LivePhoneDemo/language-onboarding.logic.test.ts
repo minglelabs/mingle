@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  LANGUAGE_ONBOARDING_MAX_TARGET_LANGUAGES,
-  resolveOnboardingDefaultSourceLanguage,
-  resolveOnboardingDefaultTargetLanguages,
-  resolveUiLocaleForSourceLanguage,
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
   shouldAutoOpenLanguageOnboarding,
 } from "@/components/LivePhoneDemo/language-onboarding.logic";
 
@@ -19,48 +17,43 @@ describe("language-onboarding.logic", () => {
     });
   });
 
-  describe("resolveOnboardingDefaultSourceLanguage", () => {
-    it("prefers the first valid persisted speech language", () => {
-      expect(resolveOnboardingDefaultSourceLanguage(["ja"], "en")).toBe("ja");
+  describe("resolveOnboardingDefaultLanguage", () => {
+    it("prefers the first valid persisted language", () => {
+      expect(resolveOnboardingDefaultLanguage(["ja"], "en")).toBe("ja");
     });
 
-    it("falls back to the ui locale when no speech language is persisted", () => {
-      expect(resolveOnboardingDefaultSourceLanguage([], "ko")).toBe("ko");
+    it("falls back to the ui locale when no language is persisted", () => {
+      expect(resolveOnboardingDefaultLanguage([], "ko")).toBe("ko");
     });
 
     it("falls back to english when neither is valid", () => {
-      expect(resolveOnboardingDefaultSourceLanguage([], "xx-not-a-locale")).toBe("en");
+      expect(resolveOnboardingDefaultLanguage([], "xx-not-a-locale")).toBe("en");
+    });
+
+    it("prefers the ui locale's language over just the first entry when both are among the persisted defaults", () => {
+      // A brand-new anonymous user's persisted language list is always the fixed
+      // ['en', 'ko', 'ja'] triple (see deriveDefaultSttLanguagesForLocale), not a real
+      // recorded preference -- so for onboarding's "default to my locale" purpose, the
+      // ui locale should win over "whichever one happens to be listed first".
+      expect(resolveOnboardingDefaultLanguage(["en", "ko", "ja"], "ko")).toBe("ko");
+      expect(resolveOnboardingDefaultLanguage(["en", "ko", "ja"], "ja")).toBe("ja");
+    });
+
+    it("still prefers the first persisted language when the ui locale isn't among the persisted options", () => {
+      // Here the persisted list represents a genuine past choice (not the untouched
+      // default triple), so it should keep winning over the current browsing locale.
+      expect(resolveOnboardingDefaultLanguage(["fr"], "ko")).toBe("fr");
     });
   });
 
-  describe("resolveOnboardingDefaultTargetLanguages", () => {
-    it("sanitizes and dedupes the persisted selection", () => {
-      expect(resolveOnboardingDefaultTargetLanguages(["ko", "ko", "ja"], "en")).toEqual([
-        "ko",
-        "ja",
-      ]);
-    });
-
-    it("caps the result at the max target language count", () => {
-      const many = ["ko", "ja", "fr", "de", "es", "it", "pt"];
-      expect(resolveOnboardingDefaultTargetLanguages(many, "en")).toHaveLength(
-        LANGUAGE_ONBOARDING_MAX_TARGET_LANGUAGES,
-      );
-    });
-
-    it("falls back to the source language when nothing is selected", () => {
-      expect(resolveOnboardingDefaultTargetLanguages([], "ja")).toEqual(["ja"]);
-    });
-  });
-
-  describe("resolveUiLocaleForSourceLanguage", () => {
-    it("maps a supported speech language directly to its ui locale", () => {
-      expect(resolveUiLocaleForSourceLanguage("ja")).toBe("ja");
-      expect(resolveUiLocaleForSourceLanguage("zh-CN")).toBe("zh-CN");
+  describe("resolveUiLocaleForLanguage", () => {
+    it("maps a supported language directly to its ui locale", () => {
+      expect(resolveUiLocaleForLanguage("ja")).toBe("ja");
+      expect(resolveUiLocaleForLanguage("zh-CN")).toBe("zh-CN");
     });
 
     it("falls back to the default locale for unsupported codes", () => {
-      expect(resolveUiLocaleForSourceLanguage("not-a-real-code")).toBe("ko");
+      expect(resolveUiLocaleForLanguage("not-a-real-code")).toBe("ko");
     });
   });
 });

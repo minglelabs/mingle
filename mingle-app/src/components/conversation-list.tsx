@@ -40,11 +40,9 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import LanguageOnboardingModal from "@/components/LivePhoneDemo/LanguageOnboardingModal";
-import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/language-onboarding-copy";
 import {
-  resolveOnboardingDefaultSourceLanguage,
-  resolveOnboardingDefaultTargetLanguages,
-  resolveUiLocaleForSourceLanguage,
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
   shouldAutoOpenLanguageOnboarding,
 } from "@/components/LivePhoneDemo/language-onboarding.logic";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
@@ -1433,10 +1431,6 @@ export default function ConversationList({
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
   const [languageOnboardingModalOpen, setLanguageOnboardingModalOpen] = useState(false);
-  const languageOnboardingCopy = useMemo(
-    () => resolveLanguageOnboardingCopy(locale),
-    [locale],
-  );
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -3205,11 +3199,13 @@ export default function ConversationList({
     resetPullRefresh();
   }, [activeConversation, resetPullRefresh]);
 
-  const handleLanguageOnboardingConfirm = useCallback((sourceLanguageCode: string, targetLanguageCodes: string[]) => {
-    const normalizedTargets = sanitizeSttLanguageSelection(targetLanguageCodes, [sourceLanguageCode]);
+  const handleLanguageOnboardingConfirm = useCallback((languageCode: string) => {
+    // Seed the room's default output languages from the chosen app language the
+    // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
+    // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
+    const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
 
     try {
-      window.localStorage.setItem(LS_KEY_SPEECH_LANGUAGES, JSON.stringify([sourceLanguageCode]));
       window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
       window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
       window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
@@ -3219,7 +3215,7 @@ export default function ConversationList({
 
     setLanguageOnboardingModalOpen(false);
 
-    const nextUiLocale = resolveUiLocaleForSourceLanguage(sourceLanguageCode);
+    const nextUiLocale = resolveUiLocaleForLanguage(languageCode);
     if (nextUiLocale !== locale) {
       window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
     }
@@ -3238,15 +3234,10 @@ export default function ConversationList({
     setLanguageOnboardingModalOpen(false);
   }, []);
 
-  const languageOnboardingDefaults = useMemo(() => {
+  const languageOnboardingDefaultLanguage = useMemo(() => {
     const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
     const persisted = readPersistedLivePhoneDemoPreferences(fallbackLanguages);
-    const initialSourceLanguage = resolveOnboardingDefaultSourceLanguage(persisted.speechLanguages, locale);
-    const initialTargetLanguages = resolveOnboardingDefaultTargetLanguages(
-      persisted.selectedLanguages,
-      initialSourceLanguage,
-    );
-    return { initialSourceLanguage, initialTargetLanguages };
+    return resolveOnboardingDefaultLanguage(persisted.selectedLanguages, locale);
     // Recompute from localStorage each time the modal opens, so a reopen after an
     // earlier confirm (without a full page reload) reflects the latest saved choice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3719,10 +3710,8 @@ export default function ConversationList({
       {languageOnboardingModalOpen ? (
         <LanguageOnboardingModal
           onClose={handleLanguageOnboardingDismiss}
-          initialSourceLanguage={languageOnboardingDefaults.initialSourceLanguage}
-          initialTargetLanguages={languageOnboardingDefaults.initialTargetLanguages}
+          initialLanguage={languageOnboardingDefaultLanguage}
           uiLocale={locale}
-          copy={languageOnboardingCopy}
           onConfirm={handleLanguageOnboardingConfirm}
         />
       ) : null}

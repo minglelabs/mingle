@@ -17,9 +17,8 @@ import {
 import LanguageOnboardingModal from './LanguageOnboardingModal'
 import { resolveLanguageOnboardingCopy } from './language-onboarding-copy'
 import {
-  resolveOnboardingDefaultSourceLanguage,
-  resolveOnboardingDefaultTargetLanguages,
-  resolveUiLocaleForSourceLanguage,
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
 } from './language-onboarding.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import useRealtimeSTT from './useRealtimeSTT'
@@ -3887,13 +3886,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTranslationLanguagesLinkedChange?.(nextLinked)
   }, [onTranslationLanguagesLinkedChange, translationLanguagesLinked])
 
-  const handleLanguageOnboardingConfirm = useCallback((sourceLanguageCode: string, targetLanguageCodes: string[]) => {
-    const normalizedSource = canonicalizeSttLanguageCode(sourceLanguageCode) || sourceLanguageCode
-    const normalizedTargets = sanitizeSttLanguageSelection(targetLanguageCodes, [normalizedSource])
-
-    speechLanguagesRef.current = [normalizedSource]
-    speechLanguagesChangePendingRef.current = true
-    setSpeechLanguages([normalizedSource])
+  const handleLanguageOnboardingConfirm = useCallback((languageCode: string) => {
+    const normalizedLanguage = canonicalizeSttLanguageCode(languageCode) || languageCode
+    // Seed default output languages from the chosen app language the same way a
+    // brand-new conversation would (chosen language + en/ko/ja, deduped), not just
+    // the single picked language -- see deriveDefaultSttLanguagesForLocale.
+    const normalizedTargets = deriveDefaultSttLanguagesForLocale(normalizedLanguage)
 
     selectedLanguagesRef.current = normalizedTargets
     selectedLanguagesChangePendingRef.current = true
@@ -3910,7 +3908,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
 
     setLanguageOnboardingModalOpen(false)
 
-    const nextUiLocale = resolveUiLocaleForSourceLanguage(normalizedSource)
+    const nextUiLocale = resolveUiLocaleForLanguage(normalizedLanguage)
     if (nextUiLocale !== uiLocale) {
       window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`))
     }
@@ -5213,13 +5211,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
             {languageOnboardingModalOpen ? (
               <LanguageOnboardingModal
                 onClose={() => setLanguageOnboardingModalOpen(false)}
-                initialSourceLanguage={resolveOnboardingDefaultSourceLanguage(speechLanguages, uiLocale)}
-                initialTargetLanguages={resolveOnboardingDefaultTargetLanguages(
-                  selectedLanguages,
-                  resolveOnboardingDefaultSourceLanguage(speechLanguages, uiLocale),
-                )}
+                initialLanguage={resolveOnboardingDefaultLanguage(selectedLanguages, uiLocale)}
                 uiLocale={uiLocale}
-                copy={languageOnboardingCopy}
                 onConfirm={handleLanguageOnboardingConfirm}
               />
             ) : null}
