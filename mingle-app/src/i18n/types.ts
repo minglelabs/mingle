@@ -109,6 +109,7 @@ export type BaseAppDictionarySource = {
     postsLabel: string;
     followersLabel: string;
     followingLabel: string;
+    mutualFollowLabel?: string;
     bio: string;
     comingSoonLabel?: string;
     editProfile: string;

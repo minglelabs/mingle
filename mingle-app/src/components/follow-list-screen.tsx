@@ -4,7 +4,7 @@ import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
-import { ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
+import { Check, ChevronLeft, Loader2, Search, UserRound, X } from "lucide-react";
 import { motion, useAnimationControls } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,6 +24,8 @@ type FollowListUser = {
   handle: string | null;
   name: string | null;
   image: string | null;
+  isFollowing: boolean;
+  isFollowedBy: boolean;
 };
 
 const FOLLOW_LIST_TRANSITION = {
@@ -66,6 +68,8 @@ export default function FollowListScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(1);
+  const [pendingFollowIds, setPendingFollowIds] = useState<Set<string>>(() => new Set());
+  const [followErrorId, setFollowErrorId] = useState<string | null>(null);
 
   const labels = useMemo(() => ({
     followers: dictionary.profile.followersLabel ?? (locale === "ko" ? "팔로워" : "Followers"),
@@ -78,6 +82,9 @@ export default function FollowListScreen({
       ?? (locale === "ko" ? "목록을 불러오지 못했습니다. 다시 시도해 주세요." : "Could not load the list. Please try again."),
     userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
     clearSearch: dictionary.connect.clearSearchLabel ?? (locale === "ko" ? "검색어 지우기" : "Clear search"),
+    follow: dictionary.connect.followAction ?? (locale === "ko" ? "팔로우" : "Follow"),
+    followError: dictionary.connect.followError ?? (locale === "ko" ? "팔로우하지 못했습니다." : "Could not follow this user."),
+    mutual: dictionary.profile.mutualFollowLabel ?? (locale === "ko" ? "맞팔" : "Mutual"),
   }), [dictionary, locale]);
 
   const activeLabel = labels[activeTab];
@@ -140,6 +147,35 @@ export default function FollowListScreen({
     setLoadError(false);
     replaceFollowListSearchParams({ q: nextQuery.trim() || null });
   }, []);
+
+  const handleFollow = useCallback(async (user: FollowListUser) => {
+    if (user.isFollowing || pendingFollowIds.has(user.id)) return;
+
+    setFollowErrorId(null);
+    setPendingFollowIds((current) => new Set(current).add(user.id));
+    try {
+      const response = await fetch(
+        buildClientApiPath(`/users/${encodeURIComponent(user.id)}/follow`),
+        { method: "POST", cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("follow_failed");
+      const payload = await response.json() as { isFollowing?: unknown };
+      const isFollowing = payload.isFollowing !== false;
+      setUsers((current) => current.map((candidate) => (
+        candidate.id === user.id
+          ? { ...candidate, isFollowing, isFollowedBy: true }
+          : candidate
+      )));
+    } catch {
+      setFollowErrorId(user.id);
+    } finally {
+      setPendingFollowIds((current) => {
+        const next = new Set(current);
+        next.delete(user.id);
+        return next;
+      });
+    }
+  }, [pendingFollowIds]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -300,26 +336,52 @@ export default function FollowListScreen({
               {users.map((user) => {
                 const name = user.name?.trim() || labels.userFallback;
                 const profileHref = `/${locale}/users/${encodeURIComponent(user.handle || user.id)}`;
+                const isMutual = activeTab === "followers"
+                  ? user.isFollowing
+                  : user.isFollowedBy;
+                const isPending = pendingFollowIds.has(user.id);
                 return (
                   <li key={user.id} className="border-b border-gray-100 px-4 py-3">
-                    <Link
-                      href={profileHref}
-                      className="flex min-w-0 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
-                      aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
-                    >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
-                        {user.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={user.image} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <UserRound size={24} className="text-gray-400" aria-hidden="true" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
-                        {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
-                      </div>
-                    </Link>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Link
+                        href={profileHref}
+                        className="flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition active:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+                        aria-label={user.handle ? `${name}, ${formatHandle(user.handle)}` : name}
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-100">
+                          {user.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={user.image} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <UserRound size={24} className="text-gray-400" aria-hidden="true" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px] font-semibold text-slate-900">{name}</p>
+                          {user.handle ? <p className="truncate text-[13px] text-gray-500">{formatHandle(user.handle)}</p> : null}
+                        </div>
+                      </Link>
+
+                      {activeTab === "followers" && !user.isFollowing ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleFollow(user)}
+                          disabled={isPending}
+                          className="shrink-0 rounded-full bg-amber-500 px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-amber-600 disabled:cursor-wait disabled:opacity-60"
+                          aria-label={`${name} ${labels.follow}`}
+                        >
+                          {isPending ? "…" : labels.follow}
+                        </button>
+                      ) : isMutual ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-emerald-600">
+                          <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+                          <span>{labels.mutual}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                    {followErrorId === user.id ? (
+                      <p className="mt-1 pl-14 text-[12px] text-red-500" role="alert">{labels.followError}</p>
+                    ) : null}
                   </li>
                 );
               })}

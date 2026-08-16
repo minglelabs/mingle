@@ -15,6 +15,15 @@ const userSelect = {
 
 type FollowListDirection = "followers" | "following";
 
+type FollowListUser = {
+  id: string;
+  handle: string | null;
+  name: string | null;
+  image: string | null;
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+};
+
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
 }
@@ -73,7 +82,25 @@ export async function getProfileFollowList(
       select: { follower: { select: userSelect } },
     });
 
-    return responseJson({ users: relations.map((relation) => relation.follower) });
+    const users = relations.map((relation) => relation.follower);
+    const userIds = users.map((user) => user.id);
+    const reciprocalRelations = userIds.length === 0
+      ? []
+      : await prisma.userFollow.findMany({
+          where: {
+            followerId: userId,
+            followingId: { in: userIds },
+          },
+          select: { followingId: true },
+        });
+    const reciprocalUserIds = new Set(reciprocalRelations.map((relation) => relation.followingId));
+
+    const responseUsers: FollowListUser[] = users.map((user) => ({
+      ...user,
+      isFollowing: reciprocalUserIds.has(user.id),
+      isFollowedBy: true,
+    }));
+    return responseJson({ users: responseUsers });
   }
 
   const relations = await prisma.userFollow.findMany({
@@ -86,5 +113,23 @@ export async function getProfileFollowList(
     select: { following: { select: userSelect } },
   });
 
-  return responseJson({ users: relations.map((relation) => relation.following) });
+  const users = relations.map((relation) => relation.following);
+  const userIds = users.map((user) => user.id);
+  const reciprocalRelations = userIds.length === 0
+    ? []
+    : await prisma.userFollow.findMany({
+        where: {
+          followerId: { in: userIds },
+          followingId: userId,
+        },
+        select: { followerId: true },
+      });
+  const reciprocalUserIds = new Set(reciprocalRelations.map((relation) => relation.followerId));
+
+  const responseUsers: FollowListUser[] = users.map((user) => ({
+    ...user,
+    isFollowing: true,
+    isFollowedBy: reciprocalUserIds.has(user.id),
+  }));
+  return responseJson({ users: responseUsers });
 }

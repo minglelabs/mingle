@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Follow List Relationship Actions
+
+- Surface: My Page follower and following lists.
+- Issue: Follow-list rows showed only profile information, so users could not tell whether a listed person followed them back or follow a follower without opening that person's profile.
+- User impact: Returning a follow was unnecessarily slow, and mutual-follow relationships were not visible from either list.
+- Resolution: The followers list now shows a Follow button for people the user has not followed yet and changes to a check-marked mutual-follow label after success. The following list stays quiet for one-way follows and shows the same non-interactive mutual marker only when the other person follows back. Relationship flags are returned with each list response, and the existing follow endpoint is reused.
+- Localization: Added the mutual-follow label to all 15 primary UI locales.
+- Data change: No schema or migration change.
+
 ## 2026-08-17 - Generic Chinese Source Display Mapping
 
 - Surface: Unified conversation message bubbles and their language buttons.
