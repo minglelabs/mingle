@@ -6,17 +6,7 @@ import ProfileImageCropper, {
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
-import {
-  buildLanguageSelectorFeaturedItems,
-  buildLanguageSelectorItems,
-  filterLanguageSelectorItems,
-  resolveDefaultLanguageSelectorSortMode,
-  resolveLanguageSelectorLocale,
-  resolveLanguageSelectorSectionCopy,
-  resolveLanguageSelectorShowsSortToggle,
-  sortLanguageSelectorItems,
-  type LanguageSelectorSortMode,
-} from "@/components/LivePhoneDemo/language-selector.logic";
+import LanguagePreferencePicker from "@/components/language-preference-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
@@ -30,6 +20,7 @@ import {
 import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
+import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
@@ -40,14 +31,17 @@ import {
   type ProfileImageCropInput,
 } from "@/lib/profile-image-crop";
 import {
+  MAX_STT_LANGUAGE_SELECTION,
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
+  deriveDefaultConversationLanguages,
   getSttLanguageDisplayName,
+  sanitizeSttLanguageSelection,
   type SttLanguageCode,
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -67,6 +61,8 @@ type ProfileRecord = {
   name: string | null;
   bio: string | null;
   nationality: string | null;
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
   followersCount: number;
   followingCount: number;
 };
@@ -78,6 +74,7 @@ type ProfileDraft = {
   name: string;
   bio: string;
   nationality: SttLanguageCode | null;
+  primaryLanguages: SttLanguageCode[];
 };
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
@@ -211,52 +208,6 @@ function appendPathSearchParam(path: string, key: string, value: string): string
   return `${path}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
-function LanguageOptionButton({
-  option,
-  selected,
-  onSelect,
-}: {
-  option: ReturnType<typeof buildLanguageSelectorItems>[number];
-  selected: boolean;
-  onSelect: (code: SttLanguageCode) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(option.code)}
-      className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
-        selected
-          ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
-          : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)] hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-[0_18px_36px_rgba(15,23,42,0.08)]"
-      }`}
-      aria-pressed={selected}
-    >
-      <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${selected
-        ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
-        : "border-[#e5dfd5] bg-[#faf7f1]"}`}
-      >
-        <span className="text-[2rem] leading-none" aria-hidden="true">
-          {option.flag}
-        </span>
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
-          {option.localizedName}
-        </span>
-        <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">{option.secondaryLabel}</span>
-      </span>
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${selected
-        ? "border-amber-500 bg-amber-500 text-white"
-        : "border-slate-300 text-transparent"}`}
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className={`h-4 w-4 ${selected ? "text-white" : "text-transparent"}`} fill="none">
-          <path d="M5.5 12.5L10 17L18.5 8.5" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-    </button>
-  );
-}
-
 function ProfileAvatar({
   alt,
   flag,
@@ -330,6 +281,8 @@ function ProfileSettingsPanel({
   locale,
   onClose,
   onChangeAppLanguage,
+  initialDefaultConversationLanguages,
+  onSaveDefaultConversationLanguages,
   onSignOut,
   defaultFeedbackEmail,
   open,
@@ -339,6 +292,8 @@ function ProfileSettingsPanel({
   locale: AppLocale;
   onClose: () => void;
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
+  initialDefaultConversationLanguages: readonly string[];
+  onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
   defaultFeedbackEmail?: string;
   open: boolean;
@@ -352,7 +307,11 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "feedback" | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "defaultLanguages" | "feedback" | null>(null);
+  const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
+  ));
+  const [isSavingDefaultConversationLanguages, setIsSavingDefaultConversationLanguages] = useState(false);
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
@@ -371,6 +330,12 @@ function ProfileSettingsPanel({
     appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageDescription: dictionary.profile.appLanguageDescription
       ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
+    defaultLanguages: locale === "ko" ? "대화 기본 언어" : "Default conversation languages",
+    defaultLanguagesTitle: locale === "ko" ? "대화 기본 언어" : "Default conversation languages",
+    defaultLanguagesDescription: locale === "ko"
+      ? "새 대화방을 만들 때 사용할 언어를 원하는 순서대로 선택하세요."
+      : "Choose the languages and order used when you create a new conversation.",
+    defaultLanguagesSaveError: locale === "ko" ? "기본 언어를 저장하지 못했습니다." : "Could not save the default languages.",
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
     unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
@@ -394,6 +359,7 @@ function ProfileSettingsPanel({
     } as Record<string, string>,
   };
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
+  const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
   const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
   const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
@@ -412,6 +378,8 @@ function ProfileSettingsPanel({
       ? copy.reports
       : managementPage === "feedback"
         ? feedbackCopy.pageTitle
+        : managementPage === "defaultLanguages"
+          ? copy.defaultLanguagesTitle
         : copy.appLanguageTitle;
 
   useEffect(() => {
@@ -463,6 +431,11 @@ function ProfileSettingsPanel({
     isManagementLeavingRef.current = false;
     void managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
   }, [managementMotionControls, managementPage, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setDefaultConversationLanguages(sanitizeSttLanguageSelection(initialDefaultConversationLanguages));
+  }, [initialDefaultConversationLanguages, open]);
 
   useEffect(() => {
     if (!open) {
@@ -572,6 +545,30 @@ function ProfileSettingsPanel({
     storeAppLocale(nextLocale);
     onChangeAppLanguage(nextLocale);
   }, [locale, onChangeAppLanguage]);
+
+  const handleToggleDefaultConversationLanguage = useCallback(async (code: SttLanguageCode) => {
+    if (isSavingDefaultConversationLanguages) return;
+
+    const currentLanguages = sanitizeSttLanguageSelection(defaultConversationLanguages);
+    const selected = currentLanguages.includes(code);
+    if (selected && currentLanguages.length <= 1) return;
+    if (!selected && currentLanguages.length >= MAX_STT_LANGUAGE_SELECTION) return;
+
+    const nextLanguages = selected
+      ? currentLanguages.filter((language) => language !== code)
+      : [...currentLanguages, code];
+    setDefaultConversationLanguages(nextLanguages);
+    setIsSavingDefaultConversationLanguages(true);
+    try {
+      const saved = await onSaveDefaultConversationLanguages(nextLanguages);
+      if (!saved) {
+        setDefaultConversationLanguages(currentLanguages);
+        window.alert(copy.defaultLanguagesSaveError);
+      }
+    } finally {
+      setIsSavingDefaultConversationLanguages(false);
+    }
+  }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
 
   const handleNativeAppUpdatePress = useCallback(() => {
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
@@ -703,6 +700,15 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
+                onClick={() => setManagementPage("defaultLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.defaultLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setManagementPage("language")}
                 className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
               >
@@ -787,6 +793,20 @@ function ProfileSettingsPanel({
                 uiLocale={locale}
                 defaultFeedbackEmail={defaultFeedbackEmail}
               />
+            ) : managementPage === "defaultLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.defaultLanguagesDescription}</p>
+                <LanguagePreferencePicker
+                  selectedLanguages={defaultConversationLanguages}
+                  onToggleLanguage={(code) => void handleToggleDefaultConversationLanguage(code)}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  disabled={isSavingDefaultConversationLanguages}
+                />
+              </div>
             ) : managementPage === "language" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.appLanguageDescription}</p>
@@ -920,7 +940,7 @@ function ProfileEditPanel({
   initialBio,
   initialName,
   initialHandle,
-  initialNationality,
+  initialPrimaryLanguages,
   onClose,
   onSave,
   open,
@@ -932,7 +952,7 @@ function ProfileEditPanel({
   initialBio: string;
   initialName: string;
   initialHandle: string;
-  initialNationality: SttLanguageCode | null;
+  initialPrimaryLanguages: readonly string[];
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -944,13 +964,13 @@ function ProfileEditPanel({
   const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
   const [bio, setBio] = useState(initialBio);
-  const [nationality, setNationality] = useState<SttLanguageCode | null>(initialNationality);
+  const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialPrimaryLanguages)
+  ));
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
   });
-  const [languageQuery, setLanguageQuery] = useState("");
-  const [languageSortMode, setLanguageSortMode] = useState<LanguageSelectorSortMode>("locale");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const copy = {
@@ -969,42 +989,6 @@ function ProfileEditPanel({
     handleInvalid: dictionary.profile.handleInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
   const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
-  const languageLocaleInfo = useMemo(() => resolveLanguageSelectorLocale(locale), [locale]);
-  const defaultLanguageSortMode = useMemo(
-    () => resolveDefaultLanguageSelectorSortMode(languageLocaleInfo.source),
-    [languageLocaleInfo.source],
-  );
-  const showLanguageSortToggle = useMemo(
-    () => resolveLanguageSelectorShowsSortToggle(languageLocaleInfo.locale),
-    [languageLocaleInfo.locale],
-  );
-  const languageItems = useMemo(
-    () => buildLanguageSelectorItems(languageLocaleInfo.locale),
-    [languageLocaleInfo.locale],
-  );
-  const featuredLanguageItems = useMemo(
-    () => buildLanguageSelectorFeaturedItems(languageItems),
-    [languageItems],
-  );
-  const selectedLanguageItem = useMemo(
-    () => languageItems.find((item) => item.code === nationality) ?? null,
-    [languageItems, nationality],
-  );
-  const visibleFeaturedLanguageItems = useMemo(() => {
-    const filteredItems = filterLanguageSelectorItems(featuredLanguageItems, languageQuery);
-    return filteredItems;
-  }, [featuredLanguageItems, languageQuery]);
-  const visibleLanguageItems = useMemo(() => {
-    const filteredItems = filterLanguageSelectorItems(languageItems, languageQuery);
-    return sortLanguageSelectorItems(filteredItems, languageSortMode, languageLocaleInfo.locale);
-  }, [languageItems, languageLocaleInfo.locale, languageQuery, languageSortMode]);
-  const languageSectionCopy = useMemo(
-    () => ({
-      selected: locale === "ko" ? "현재 선택된 언어" : "Selected language",
-      ...resolveLanguageSelectorSectionCopy(locale),
-    }),
-    [locale],
-  );
   const initialImageCropScale = initialImageCrop?.scale;
   const initialImageCropX = initialImageCrop?.x;
   const initialImageCropY = initialImageCrop?.y;
@@ -1022,15 +1006,13 @@ function ProfileEditPanel({
     setName(initialName);
     setHandle(initialHandle);
     setBio(initialBio);
-    setNationality(initialNationality);
+    setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
-    setLanguageQuery("");
-    setLanguageSortMode(defaultLanguageSortMode);
     setSaveError(null);
-  }, [defaultLanguageSortMode, initialBio, initialName, initialNationality, initialHandle, normalizedInitialImageCrop, open]);
+  }, [initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1063,7 +1045,8 @@ function ProfileEditPanel({
         handle: handle.trim(),
         name: name.trim(),
         bio: bio.trim(),
-        nationality,
+        nationality: primaryLanguages[0] ?? null,
+        primaryLanguages,
       });
       if (saved === "saved") {
         onClose();
@@ -1075,7 +1058,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, nationality, onClose, onSave]);
+  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
 
   const handleBack = useCallback(async () => {
     if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
@@ -1205,106 +1188,24 @@ function ProfileEditPanel({
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
-                <div className="min-w-0 w-full max-w-full overflow-hidden rounded-[18px] border border-gray-200 bg-white p-1 shadow-sm">
-                  <div className="flex min-w-0 w-full max-w-full items-stretch gap-3 p-2">
-                    <label
-                      className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-gray-200 bg-white px-3.5 shadow-sm"
-                      style={{ flex: showLanguageSortToggle ? "1 1 0" : "1 1 100%" }}
-                    >
-                      <Search size={18} className="shrink-0 text-slate-400" aria-hidden="true" />
-                      <input
-                        type="search"
-                        value={languageQuery}
-                        onChange={(event) => setLanguageQuery(event.target.value)}
-                        placeholder={languageCopy.languageSelectorSearchPlaceholder}
-                        aria-label={languageCopy.languageSelectorSearchPlaceholder}
-                        className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400"
-                        enterKeyHint="search"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        spellCheck={false}
-                      />
-                    </label>
-
-                    {showLanguageSortToggle ? (
-                      <div className="min-w-0 rounded-[16px] border border-gray-200 bg-gray-50 p-1" style={{ flex: "1 1 0" }}>
-                        <div className="flex h-full items-stretch gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setLanguageSortMode("locale")}
-                            className={`min-w-0 flex-1 truncate rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "locale" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
-                            aria-pressed={languageSortMode === "locale"}
-                          >
-                            {languageCopy.languageSelectorSortLocaleLabel}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setLanguageSortMode("alphabetical")}
-                            className={`min-w-0 flex-1 truncate rounded-[12px] px-2 text-[0.8rem] font-semibold transition sm:text-[0.84rem] ${languageSortMode === "alphabetical" ? "bg-white text-slate-950 shadow-[0_10px_20px_rgba(15,23,42,0.08)]" : "text-slate-500 hover:text-slate-900"}`}
-                            aria-pressed={languageSortMode === "alphabetical"}
-                          >
-                            {languageCopy.languageSelectorSortAlphabeticalLabel}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="min-w-0 w-full max-w-full space-y-4 px-2 pb-2">
-                    {selectedLanguageItem ? (
-                      <section aria-labelledby="profile-selected-language-heading" className="space-y-2">
-                        <h3 id="profile-selected-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          {languageSectionCopy.selected}
-                        </h3>
-                        <LanguageOptionButton
-                          option={selectedLanguageItem}
-                          selected
-                          onSelect={setNationality}
-                        />
-                      </section>
-                    ) : null}
-
-                    {visibleFeaturedLanguageItems.length > 0 ? (
-                      <section aria-labelledby="profile-featured-language-heading" className="space-y-2">
-                        <h3 id="profile-featured-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          {languageSectionCopy.featured}
-                        </h3>
-                        <div className="space-y-2">
-                          {visibleFeaturedLanguageItems.map((option) => (
-                            <LanguageOptionButton
-                              key={`featured-${option.code}`}
-                              option={option}
-                              selected={nationality === option.code}
-                              onSelect={setNationality}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ) : null}
-
-                    <section aria-labelledby="profile-all-language-heading" className="space-y-2">
-                      <h3 id="profile-all-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                        {languageSectionCopy.all}
-                      </h3>
-                      {visibleLanguageItems.length === 0 ? (
-                        <div className="flex min-h-[160px] items-center justify-center px-6 text-center text-[13px] text-slate-500">
-                          {languageCopy.languageSelectorNoResultsLabel}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {visibleLanguageItems.map((option) => (
-                            <LanguageOptionButton
-                              key={`all-${option.code}`}
-                              option={option}
-                              selected={nationality === option.code}
-                              onSelect={setNationality}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  </div>
-                </div>
+                <LanguagePreferencePicker
+                  selectedLanguages={primaryLanguages}
+                  onToggleLanguage={(code) => {
+                    setPrimaryLanguages((current) => {
+                      const selected = current.includes(code);
+                      if (selected) {
+                        return current.length > 1 ? current.filter((language) => language !== code) : current;
+                      }
+                      return current.length < MAX_STT_LANGUAGE_SELECTION ? [...current, code] : current;
+                    });
+                  }}
+                  uiLocale={locale}
+                  searchPlaceholder={languageCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={languageCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={languageCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={languageCopy.languageSelectorNoResultsLabel}
+                  disabled={isSaving}
+                />
               </fieldset>
 
               {saveError ? (
@@ -1331,6 +1232,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     name: null,
     bio: null,
     nationality: null,
+    primaryLanguages: [],
+    defaultConversationLanguages: [],
     followersCount: 0,
     followingCount: 0,
   }));
@@ -1343,7 +1246,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
   const bio = profile.bio?.trim() || "";
-  const nationality = getNationalityOption(profile.nationality)?.locale ?? null;
+  const primaryLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(
+      profile.primaryLanguages,
+      profile.nationality ? [profile.nationality] : [],
+    ),
+    [profile.nationality, profile.primaryLanguages],
+  );
+  const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
   const nationalityFlag = getNationalityOption(nationality)?.flag;
   const nationalityName = nationality
     ? getSttLanguageDisplayName(nationality, locale)
@@ -1383,6 +1293,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           name: typeof data.name === "string" ? data.name : null,
           bio: typeof data.bio === "string" ? data.bio : null,
           nationality: typeof data.nationality === "string" ? data.nationality : null,
+          primaryLanguages: sanitizeSttLanguageSelection(
+            data.primaryLanguages,
+            typeof data.nationality === "string" ? [data.nationality] : [],
+          ),
+          defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
         });
@@ -1429,6 +1344,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           name: draft.name,
           bio: draft.bio,
           nationality: draft.nationality,
+          primaryLanguages: draft.primaryLanguages,
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -1444,23 +1360,63 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       }
 
       const saved = await response.json() as Partial<ProfileRecord>;
-      setProfile({
-        image: typeof saved.image === "string" ? saved.image : profileImageUrl,
+      setProfile((current) => ({
+        image: typeof saved.image === "string" ? saved.image : current.image || profileImageUrl,
         imageCropScale: typeof saved.imageCropScale === "number" ? saved.imageCropScale : draft.imageCrop.scale,
         imageCropX: typeof saved.imageCropX === "number" ? saved.imageCropX : draft.imageCrop.x,
         imageCropY: typeof saved.imageCropY === "number" ? saved.imageCropY : draft.imageCrop.y,
-        handle: typeof saved.handle === "string" ? saved.handle : null,
-        name: typeof saved.name === "string" ? saved.name : null,
-        bio: typeof saved.bio === "string" ? saved.bio : null,
-        nationality: typeof saved.nationality === "string" ? saved.nationality : null,
-        followersCount: typeof saved.followersCount === "number" ? saved.followersCount : 0,
-        followingCount: typeof saved.followingCount === "number" ? saved.followingCount : 0,
-      });
+        handle: typeof saved.handle === "string" ? saved.handle : current.handle,
+        name: typeof saved.name === "string" ? saved.name : current.name,
+        bio: typeof saved.bio === "string" ? saved.bio : current.bio,
+        nationality: typeof saved.nationality === "string" ? saved.nationality : draft.nationality,
+        primaryLanguages: sanitizeSttLanguageSelection(saved.primaryLanguages, draft.primaryLanguages),
+        defaultConversationLanguages: sanitizeSttLanguageSelection(
+          saved.defaultConversationLanguages,
+          current.defaultConversationLanguages,
+        ),
+        followersCount: typeof saved.followersCount === "number" ? saved.followersCount : current.followersCount,
+        followingCount: typeof saved.followingCount === "number" ? saved.followingCount : current.followingCount,
+      }));
       return "saved";
     } catch {
       return "failed";
     }
   }, [profileImageUrl]);
+
+  const defaultConversationLanguages = useMemo(() => {
+    const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
+    return storedLanguages.length > 0
+      ? storedLanguages
+      : deriveDefaultConversationLanguages(primaryLanguages, locale);
+  }, [locale, primaryLanguages, profile.defaultConversationLanguages]);
+
+  const handleSaveDefaultConversationLanguages = useCallback(async (languages: SttLanguageCode[]) => {
+    try {
+      const normalizedLanguages = sanitizeSttLanguageSelection(languages);
+      if (normalizedLanguages.length === 0) return false;
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultConversationLanguages: normalizedLanguages }),
+      });
+      if (!response.ok) return false;
+
+      const saved = await response.json() as Partial<ProfileRecord>;
+      const savedLanguages = sanitizeSttLanguageSelection(saved.defaultConversationLanguages, normalizedLanguages);
+      setProfile((current) => ({
+        ...current,
+        defaultConversationLanguages: savedLanguages,
+      }));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT, {
+          detail: savedLanguages,
+        }));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const handleSignOut = useCallback(() => {
     void signOut({ callbackUrl: signOutCallbackUrl });
@@ -1485,7 +1441,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialBio={profile.bio ?? ""}
         initialName={name}
         initialHandle={profile.handle ?? ""}
-        initialNationality={nationality}
+        initialPrimaryLanguages={primaryLanguages}
         onClose={() => setShowProfileEdit(false)}
         onSave={handleSaveProfile}
         open={showProfileEdit}
@@ -1495,6 +1451,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         locale={locale}
         onClose={() => setShowProfileSettings(false)}
         onChangeAppLanguage={handleChangeAppLanguage}
+        initialDefaultConversationLanguages={defaultConversationLanguages}
+        onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}
         defaultFeedbackEmail={session?.user?.email ?? ""}
         open={showProfileSettings}

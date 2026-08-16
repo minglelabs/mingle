@@ -48,6 +48,8 @@ model User {
   handle                String    @unique(map: "app_users_handle_key")
   bio                   String?   @db.Text
   nationality           String?
+  primaryLanguages      String[]  @default([]) @map("primary_languages")
+  defaultConversationLanguages String[] @default([]) @map("default_conversation_languages")
   firstSeenAt           DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt            DateTime  @default(now()) @map("last_seen_at")
   createdAt             DateTime  @default(now()) @map("created_at")

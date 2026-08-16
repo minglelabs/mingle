@@ -2,7 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
-import { canonicalizeSttLanguageCode } from "@/lib/stt-languages";
+import {
+  MAX_STT_LANGUAGE_SELECTION,
+  canonicalizeSttLanguageCode,
+  sanitizeSttLanguageSelection,
+} from "@/lib/stt-languages";
 import { normalizeHandle } from "@/lib/handles";
 import {
   PROFILE_IMAGE_MAX_SCALE,
@@ -61,6 +65,17 @@ function normalizeNationality(value: unknown): { value: string | null; valid: bo
   };
 }
 
+function normalizeLanguageSelection(value: unknown): { value: string[]; valid: boolean } {
+  if (value === null) return { value: [], valid: true };
+  if (!Array.isArray(value)) return { value: [], valid: false };
+
+  const normalized = sanitizeSttLanguageSelection(value);
+  return {
+    value: normalized,
+    valid: normalized.length >= 1 && normalized.length <= MAX_STT_LANGUAGE_SELECTION,
+  };
+}
+
 function normalizeCropValue(
   value: unknown,
   minimum: number,
@@ -113,6 +128,8 @@ export async function PATCH(request: NextRequest) {
     name?: string | null;
     bio?: string | null;
     nationality?: string | null;
+    primaryLanguages?: string[];
+    defaultConversationLanguages?: string[];
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -142,12 +159,35 @@ export async function PATCH(request: NextRequest) {
     data.bio = bio.value;
   }
 
-  if (Object.prototype.hasOwnProperty.call(body, "nationality")) {
+  const hasPrimaryLanguages = Object.prototype.hasOwnProperty.call(body, "primaryLanguages");
+  const hasNationality = Object.prototype.hasOwnProperty.call(body, "nationality");
+
+  if (hasNationality) {
     const nationality = normalizeNationality(body.nationality);
     if (!nationality.valid) {
       return NextResponse.json({ error: "invalid_nationality" }, { status: 400 });
     }
     data.nationality = nationality.value;
+    if (!hasPrimaryLanguages) {
+      data.primaryLanguages = nationality.value ? [nationality.value] : [];
+    }
+  }
+
+  if (hasPrimaryLanguages) {
+    const primaryLanguages = normalizeLanguageSelection(body.primaryLanguages);
+    if (!primaryLanguages.valid) {
+      return NextResponse.json({ error: "invalid_primary_languages" }, { status: 400 });
+    }
+    data.primaryLanguages = primaryLanguages.value;
+    data.nationality = primaryLanguages.value[0] ?? null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "defaultConversationLanguages")) {
+    const defaultConversationLanguages = normalizeLanguageSelection(body.defaultConversationLanguages);
+    if (!defaultConversationLanguages.valid) {
+      return NextResponse.json({ error: "invalid_default_conversation_languages" }, { status: 400 });
+    }
+    data.defaultConversationLanguages = defaultConversationLanguages.value;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {

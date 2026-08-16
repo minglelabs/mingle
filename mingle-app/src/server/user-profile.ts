@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 
 export const userProfileSelect = {
   id: true,
@@ -11,6 +12,8 @@ export const userProfileSelect = {
   handle: true,
   bio: true,
   nationality: true,
+  primaryLanguages: true,
+  defaultConversationLanguages: true,
   _count: {
     select: {
       followerRelations: true,
@@ -30,6 +33,8 @@ type SelectedUserProfile = {
   handle: string | null;
   bio: string | null;
   nationality: string | null;
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
   _count: {
     followerRelations: number;
     followingRelations: number;
@@ -46,6 +51,8 @@ export type UserProfile = {
   handle: string | null;
   bio: string | null;
   nationality: string | null;
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
   followersCount: number;
   followingCount: number;
 };
@@ -62,7 +69,16 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     handle,
     bio,
     nationality,
+    primaryLanguages,
+    defaultConversationLanguages,
   } = profile;
+  const normalizedNationality = nationality
+    ? sanitizeSttLanguageSelection([nationality])[0] ?? null
+    : null;
+  const normalizedPrimaryLanguages = sanitizeSttLanguageSelection(
+    primaryLanguages,
+    normalizedNationality ? [normalizedNationality] : [],
+  );
   return {
     id,
     name,
@@ -72,7 +88,9 @@ export function serializeUserProfile(profile: SelectedUserProfile): UserProfile 
     imageCropY,
     handle,
     bio,
-    nationality,
+    nationality: normalizedPrimaryLanguages[0] ?? normalizedNationality,
+    primaryLanguages: normalizedPrimaryLanguages,
+    defaultConversationLanguages: sanitizeSttLanguageSelection(defaultConversationLanguages),
     followersCount: _count.followerRelations,
     followingCount: _count.followingRelations,
   };

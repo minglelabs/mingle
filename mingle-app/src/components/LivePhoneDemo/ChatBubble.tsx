@@ -128,6 +128,28 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
   return targetLanguages
 }
 
+function buildLanguageOptionsForUtterance(
+  originalLanguage: string,
+  targetLanguages: readonly string[],
+): string[] {
+  const options: string[] = []
+  const seen = new Set<string>()
+  const pushLanguage = (rawLanguage: string) => {
+    const language = (rawLanguage || '').trim()
+    if (!language) return
+    const key = normalizeTranslationLanguageKey(language) || language.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    options.push(language)
+  }
+
+  // The detected source language is always the first button. The remaining
+  // buttons follow the targetLanguages snapshot captured in user selection order.
+  pushLanguage(originalLanguage)
+  for (const language of targetLanguages) pushLanguage(language)
+  return options
+}
+
 function buildCombinedUtteranceCopyText(
   originalFlag: string,
   originalText: string,
@@ -271,7 +293,7 @@ function ChatBubble({
       }
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
-  const languageOptions = [utterance.originalLang, ...targetLangs]
+  const languageOptions = buildLanguageOptionsForUtterance(utterance.originalLang, targetLangs)
   const [displayLanguage, setDisplayLanguage] = useState(() => (
     resolveInitialDisplayLanguage(
       preferredDisplayLanguage,
@@ -330,24 +352,21 @@ function ChatBubble({
           data-chat-bubble-language-badges
           className="mr-1 inline-flex items-center gap-1.5 align-middle whitespace-nowrap"
         >
-          <ChatLanguageBadge
-            lang={utterance.originalLang}
-            isOriginal
-            isSelected={isOriginalLanguageSelected}
-            onSelect={() => {
-              setDisplayLanguage(utterance.originalLang)
-            }}
-          />
-          {targetLangs.map((lang) => (
-            <ChatLanguageBadge
-              key={lang}
-              lang={lang}
-              isSelected={!isOriginalLanguageSelected && normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
-              onSelect={() => {
-                setDisplayLanguage(lang)
-              }}
-            />
-          ))}
+          {languageOptions.map((lang) => {
+            const isOriginal = normalizeTranslationLanguageKey(lang)
+              === normalizeTranslationLanguageKey(utterance.originalLang)
+            return (
+              <ChatLanguageBadge
+                key={lang}
+                lang={lang}
+                isOriginal={isOriginal}
+                isSelected={normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                onSelect={() => {
+                  setDisplayLanguage(lang)
+                }}
+              />
+            )
+          })}
         </span>
         {activeIsPending ? (
           <span

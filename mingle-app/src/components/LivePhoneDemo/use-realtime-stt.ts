@@ -839,10 +839,16 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const targetLanguages: string[] = []
   const seen = new Set<string>()
+  const translationKeysByNormalizedLanguage = new Map(
+    Object.keys(translations).map((language) => [normalizeTranslationLanguageKey(language), language]),
+  )
   const pushLanguage = (languageRaw: string) => {
     const language = (languageRaw || '').trim()
-    if (!language || seen.has(language) || !translations[language]) return
-    seen.add(language)
+    if (!language) return
+    const normalizedLanguage = normalizeTranslationLanguageKey(language)
+    const matchingTranslationKey = translationKeysByNormalizedLanguage.get(normalizedLanguage) || language
+    if (seen.has(normalizedLanguage) || !translations[matchingTranslationKey]) return
+    seen.add(normalizedLanguage)
     targetLanguages.push(language)
   }
 
@@ -851,7 +857,10 @@ export function pruneUnresolvedTranslationTargets(input: {
 
   const translationFinalized: Record<string, boolean> = {}
   for (const language of targetLanguages) {
-    const finalized = input.translationFinalized?.[language]
+    const finalizedKey = Object.keys(input.translationFinalized || {}).find((candidate) => (
+      normalizeTranslationLanguageKey(candidate) === normalizeTranslationLanguageKey(language)
+    ))
+    const finalized = finalizedKey ? input.translationFinalized?.[finalizedKey] : undefined
     if (typeof finalized === 'boolean') translationFinalized[language] = finalized
   }
 

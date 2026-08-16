@@ -7,6 +7,7 @@ import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSonioxLanguageHintCode,
   canonicalizeSttLanguageCode,
+  deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
   getSttLanguageDisplayName,
@@ -29,15 +30,21 @@ describe('STT language catalog', () => {
     expect(DEFAULT_STT_LANGUAGES).toEqual(['en', 'ko', 'ja'])
   })
 
-  it('derives locale-aware starter languages with English-first priority', () => {
-    expect(deriveDefaultSttLanguagesForLocale('ja-JP')).toEqual(['en', 'ko', 'ja'])
-    expect(deriveDefaultSttLanguagesForLocale('ko-KR')).toEqual(['en', 'ko', 'ja'])
+  it('derives locale-aware starter languages with the preferred language first', () => {
+    expect(deriveDefaultSttLanguagesForLocale('ja-JP')).toEqual(['ja', 'en', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('ko-KR')).toEqual(['ko', 'en', 'ja'])
     expect(deriveDefaultSttLanguagesForLocale('en-US')).toEqual(['en', 'ko', 'ja'])
-    expect(deriveDefaultSttLanguagesForLocale('zh-TW')).toEqual(['en', 'zh-TW', 'ko'])
-    expect(deriveDefaultSttLanguagesForLocale('zh')).toEqual(['en', 'zh-CN', 'ko'])
-    expect(deriveDefaultSttLanguagesForLocale('fr-FR')).toEqual(['en', 'fr', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('zh-TW')).toEqual(['zh-TW', 'en', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('zh')).toEqual(['zh-CN', 'en', 'ko'])
+    expect(deriveDefaultSttLanguagesForLocale('fr-FR')).toEqual(['fr', 'en', 'ko'])
     expect(deriveDefaultSttLanguagesForLocale('eo-EO')).toEqual(['en', 'ko', 'ja'])
     expect(deriveDefaultSttLanguagesForLocale('')).toEqual(['en', 'ko', 'ja'])
+  })
+
+  it('puts the profile primary language before the default trio', () => {
+    expect(deriveDefaultConversationLanguages(['ja', 'ko'], 'en')).toEqual(['ja', 'en', 'ko'])
+    expect(deriveDefaultConversationLanguages('ko', 'en')).toEqual(['ko', 'en', 'ja'])
+    expect(deriveDefaultConversationLanguages([], 'en')).toEqual(['en', 'ko', 'ja'])
   })
 
   it('exposes stable names and canonicalization for STT hints', () => {

@@ -54,6 +54,8 @@ describe("/api/profile route", () => {
       handle: "original.name",
       bio: "Hello",
       nationality: "ko",
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
       _count: { followerRelations: 2, followingRelations: 3 },
     });
 
@@ -67,6 +69,8 @@ describe("/api/profile route", () => {
       handle: "original.name",
       bio: "Hello",
       nationality: "ko",
+      primaryLanguages: ["ko"],
+      defaultConversationLanguages: [],
       followersCount: 2,
       followingCount: 3,
     });
@@ -84,6 +88,8 @@ describe("/api/profile route", () => {
         name: true,
         bio: true,
         nationality: true,
+        primaryLanguages: true,
+        defaultConversationLanguages: true,
         _count: {
           select: {
             followerRelations: true,
@@ -102,6 +108,8 @@ describe("/api/profile route", () => {
       handle: "new.name",
       bio: "New bio",
       nationality: "ja",
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
       _count: { followerRelations: 1, followingRelations: 4 },
     });
 
@@ -130,6 +138,7 @@ describe("/api/profile route", () => {
         name: "New Name",
         bio: "New bio",
         nationality: "ja",
+        primaryLanguages: ["ja"],
       },
       select: {
         id: true,
@@ -142,6 +151,8 @@ describe("/api/profile route", () => {
         name: true,
         bio: true,
         nationality: true,
+        primaryLanguages: true,
+        defaultConversationLanguages: true,
         _count: {
           select: {
             followerRelations: true,
@@ -194,6 +205,8 @@ describe("/api/profile route", () => {
       handle: null,
       bio: null,
       nationality: "cy",
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
       _count: { followerRelations: 0, followingRelations: 0 },
     });
 
@@ -205,7 +218,44 @@ describe("/api/profile route", () => {
 
     expect(response.status).toBe(200);
     expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      data: { nationality: "cy" },
+      data: { nationality: "cy", primaryLanguages: ["cy"] },
+    }));
+  });
+
+  it("preserves the selected order for primary and default conversation languages", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: null,
+      bio: null,
+      nationality: "ja",
+      primaryLanguages: ["ja", "en", "ko", "fr"],
+      defaultConversationLanguages: ["ja", "en", "ko"],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        primaryLanguages: ["ja", "en", "ko", "fr"],
+        defaultConversationLanguages: ["ja", "en", "ko"],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(expect.objectContaining({
+      nationality: "ja",
+      primaryLanguages: ["ja", "en", "ko", "fr"],
+      defaultConversationLanguages: ["ja", "en", "ko"],
+    }));
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        primaryLanguages: ["ja", "en", "ko", "fr"],
+        nationality: "ja",
+        defaultConversationLanguages: ["ja", "en", "ko"],
+      },
     }));
   });
 });

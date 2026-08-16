@@ -33,11 +33,13 @@ import {
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
+  DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
   normalizeLivePhoneDemoAdBannerPosition,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import {
+  deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
   sanitizeSttLanguageSelection,
@@ -1489,6 +1491,7 @@ type ConversationListProps = {
   initialConversationsRequireRefresh?: boolean;
   initialConversationIdToOpen?: string | null;
   initialPrimaryLanguage?: string | null;
+  initialDefaultConversationLanguages?: string[];
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
@@ -1509,6 +1512,7 @@ export default function ConversationList({
   initialConversationsRequireRefresh = false,
   initialConversationIdToOpen = null,
   initialPrimaryLanguage = null,
+  initialDefaultConversationLanguages = [],
   initialNativeUi = false,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
@@ -1578,11 +1582,23 @@ export default function ConversationList({
     [...initialListState.conversations].sort(compareConversationRecency),
   );
   const normalizedInitialPrimaryLanguage = initialPrimaryLanguage?.trim() || null;
+  const normalizedInitialDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    initialDefaultConversationLanguages,
+  );
+  const [defaultSelectedLanguages, setDefaultSelectedLanguages] = useState<string[]>(() => (
+    normalizedInitialDefaultConversationLanguages.length > 0
+      ? normalizedInitialDefaultConversationLanguages
+      : deriveDefaultConversationLanguages(normalizedInitialPrimaryLanguage, locale)
+  ));
   const [preferredDisplayLanguage, setPreferredDisplayLanguage] = useState<string | null>(
     normalizedInitialPrimaryLanguage,
   );
   useEffect(() => {
-    if (normalizedInitialPrimaryLanguage || sessionStatus !== "authenticated") return;
+    const needsProfileHydration = (
+      !normalizedInitialPrimaryLanguage
+      || normalizedInitialDefaultConversationLanguages.length === 0
+    );
+    if (!needsProfileHydration || sessionStatus !== "authenticated") return;
 
     const controller = new AbortController();
     void fetch(buildClientApiPath("/profile"), {
@@ -1591,19 +1607,58 @@ export default function ConversationList({
     })
       .then(async (response) => {
         if (!response.ok) return null;
-        return await response.json() as { nationality?: unknown };
+        return await response.json() as {
+          nationality?: unknown;
+          primaryLanguages?: unknown;
+          defaultConversationLanguages?: unknown;
+        };
       })
       .then((profile) => {
-        if (typeof profile?.nationality !== "string") return;
-        const nextLanguage = profile.nationality.trim();
+        if (!profile) return;
+        const profileLanguages = Array.isArray(profile.primaryLanguages)
+          ? profile.primaryLanguages
+          : profile.nationality;
+        const normalizedProfileLanguages = sanitizeSttLanguageSelection(profileLanguages);
+        const nextLanguage = normalizedProfileLanguages[0] || null;
         if (nextLanguage) setPreferredDisplayLanguage(nextLanguage);
+
+        const storedDefaultLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
+        setDefaultSelectedLanguages(
+          storedDefaultLanguages.length > 0
+            ? storedDefaultLanguages
+            : deriveDefaultConversationLanguages(normalizedProfileLanguages, locale),
+        );
       })
       .catch(() => {
         // The conversation UI can fall back to the utterance source language.
       });
 
     return () => controller.abort();
-  }, [normalizedInitialPrimaryLanguage, sessionStatus]);
+  }, [locale, normalizedInitialDefaultConversationLanguages.length, normalizedInitialPrimaryLanguage, sessionStatus]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleDefaultConversationLanguagesSync = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      const nextLanguages = sanitizeSttLanguageSelection(
+        Array.isArray(detail)
+          ? detail
+          : detail && typeof detail === "object" && Array.isArray((detail as { languages?: unknown }).languages)
+            ? (detail as { languages: unknown[] }).languages
+            : [],
+      );
+      if (nextLanguages.length > 0) setDefaultSelectedLanguages(nextLanguages);
+    };
+
+    window.addEventListener(
+      DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
+      handleDefaultConversationLanguagesSync as EventListener,
+    );
+    return () => window.removeEventListener(
+      DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
+      handleDefaultConversationLanguagesSync as EventListener,
+    );
+  }, []);
   const [conversationInterimPreviews, setConversationInterimPreviews] = useState<
     Record<string, LatestUtterancePayload>
   >({});
@@ -1748,10 +1803,6 @@ export default function ConversationList({
   const actionDisabled = isCreatingConversation || isImportingLegacyConversation || mutatingConversationId !== null;
   const conversationSelectionDisabled = isCreatingConversation || isImportingLegacyConversation;
   const [pullRefreshDistance, setPullRefreshDistance] = useState(0);
-  const defaultSelectedLanguages = useMemo(
-    () => deriveDefaultSttLanguagesForLocale(locale),
-    [locale],
-  );
   const effectivePullRefreshOffsetPx = isRefreshingConversations
     ? LIST_PULL_REFRESH_TRIGGER_PX
     : pullRefreshDistance;

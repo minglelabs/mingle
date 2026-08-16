@@ -12,7 +12,8 @@ export type SttLanguageOption = {
 }
 
 export const DEFAULT_STT_LANGUAGES = ['en', 'ko', 'ja'] as const satisfies readonly SttLanguageCode[]
-const DEFAULT_STT_LANGUAGE_SET = new Set<SttLanguageCode>(DEFAULT_STT_LANGUAGES)
+export const MAX_STT_LANGUAGE_SELECTION = 5
+export const DEFAULT_CONVERSATION_LANGUAGE_COUNT = 3
 
 const STT_LANGUAGE_FLAG_MAP: Record<TranslationLanguageCode, string> = {
   af: '🇿🇦',
@@ -152,7 +153,7 @@ export function sanitizeSttLanguageSelection(
     const normalized = canonicalizeSttLanguageCode(item)
     if (!normalized || deduped.includes(normalized)) continue
     deduped.push(normalized)
-    if (deduped.length >= 5) break
+    if (deduped.length >= MAX_STT_LANGUAGE_SELECTION) break
   }
 
   return deduped.length > 0
@@ -165,19 +166,28 @@ export function deriveDefaultSttLanguagesForLocale(rawLocale: string | null | un
     ? canonicalizeSttLanguageCode(rawLocale)
     : ''
 
-  if (!localeLanguage || DEFAULT_STT_LANGUAGE_SET.has(localeLanguage)) {
+  if (!localeLanguage) {
     return [...DEFAULT_STT_LANGUAGES]
   }
 
-  const prioritized: SttLanguageCode[] = ['en', localeLanguage, 'ko', 'ja']
-  const deduped: SttLanguageCode[] = []
-  for (const language of prioritized) {
-    if (deduped.includes(language)) continue
-    deduped.push(language)
-    if (deduped.length >= DEFAULT_STT_LANGUAGES.length) break
-  }
+  return sanitizeSttLanguageSelection(
+    [localeLanguage, ...DEFAULT_STT_LANGUAGES],
+    DEFAULT_STT_LANGUAGES,
+  ).slice(0, DEFAULT_CONVERSATION_LANGUAGE_COUNT)
+}
 
-  return deduped
+export function deriveDefaultConversationLanguages(
+  primaryLanguages: readonly string[] | string | null | undefined,
+  rawLocale?: string | null,
+): SttLanguageCode[] {
+  const normalizedPrimaryLanguages = Array.isArray(primaryLanguages)
+    ? sanitizeSttLanguageSelection(primaryLanguages)
+    : typeof primaryLanguages === 'string'
+      ? sanitizeSttLanguageSelection([primaryLanguages])
+      : []
+  const preferredLanguage = normalizedPrimaryLanguages[0]
+
+  return deriveDefaultSttLanguagesForLocale(preferredLanguage || rawLocale)
 }
 
 export function getSttLanguageFlag(rawValue: string): string {
