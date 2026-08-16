@@ -8,7 +8,7 @@ describe('ChatBubble', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders original bubble meta inside the bubble and stacks the timestamp under the avatar', () => {
+  it('renders one unified message bubble with language badges and a timestamp under the avatar', () => {
     vi.spyOn(Date, 'now').mockReturnValue(
       new Date('2026-03-11T13:06:10+09:00').getTime(),
     )
@@ -33,6 +33,10 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-speaker-avatar-column')
     expect(html).toContain('width="32"')
     expect(html).toContain('height="32"')
+    expect(html).toContain('data-chat-message-bubble')
+    expect(html).toContain('data-chat-bubble-language-badges')
+    expect(html).toContain('data-original-language-quote-badge')
+    expect(html).toContain('text-black')
     expect(html.indexOf('data-original-bubble-content')).toBeLessThan(
       html.indexOf('data-original-bubble-meta'),
     )
@@ -45,7 +49,7 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
       html.indexOf('data-original-bubble-row'),
     )
-    expect(html).toContain('max-width:85%')
+    expect(html).toContain('max-width:90%')
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
@@ -82,10 +86,11 @@ describe('ChatBubble', () => {
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('data-translation-state="interim"')
-    expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('data-chat-message-bubble')
+    expect(html).toContain('data-translation-bubbles')
     expect(html).toContain('text-gray-500')
-    expect(html).toContain('class="min-w-0 text-sm text-gray-400"')
-    expect(html).not.toContain('class="min-w-0 text-sm text-gray-500"')
+    expect(html).toContain('text-sm text-gray-400')
+    expect(html).not.toContain('bg-amber-50')
     expect(html).not.toContain('bg-gray-100 border border-gray-200')
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
@@ -117,8 +122,9 @@ describe('ChatBubble', () => {
     )
 
     expect(html).toContain('data-translation-state="final"')
-    expect(html).toContain('bg-amber-50 border border-amber-100')
-    expect(html).not.toContain('bg-gray-100 border border-gray-200')
+    expect(html).toContain('data-chat-message-bubble')
+    expect(html).toContain('border-gray-200 bg-white')
+    expect(html).not.toContain('bg-amber-50')
     expect(html).not.toContain('data-interim-translation-cursor')
   })
 

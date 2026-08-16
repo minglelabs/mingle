@@ -1,5 +1,14 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-16 Unified conversation message bubbles
+
+### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found
+
+1. **Original speech and translated outputs were rendered as separate stacked bubbles**
+   Problem: Each utterance used one bubble for the spoken text and separate amber bubbles for every output language. This made one message look like several unrelated messages and increased the vertical space needed to read a turn.
+   Fix: Original speech, finalized translations, and pending translation indicators now share one white message bubble. The output language codes remain available beside their text, while a row of circular language badges hangs from the lower edge of the bubble. The original-language badge is distinguished with a black double-quote badge, matching the speech/source meaning in the reference design. Existing per-text copy, copy-all, and pronunciation actions remain available.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
 ## 2026-08-16 Conversation language selector ordering
 
 ### `2026-08-16-conversation-language-featured-order` | UI/UX issue found
