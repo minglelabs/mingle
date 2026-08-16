@@ -1,5 +1,5 @@
 import { createServer } from 'http';
-import { appendFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
@@ -71,31 +71,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
 );
-const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
-
-const writeSonioxRawResponseLog = (connId: number, rawMessage: string): void => {
-    console.log(`[conn:${connId}] soniox_raw_response ${rawMessage}`);
-    if (!SONIOX_RAW_JOINED_TOKEN_LOG_FILE) return;
-
-    let message: unknown = rawMessage;
-    try {
-        message = JSON.parse(rawMessage);
-    } catch {
-        // Preserve invalid upstream payloads as raw strings in the file log.
-    }
-
-    try {
-        appendFileSync(
-            SONIOX_RAW_JOINED_TOKEN_LOG_FILE,
-            `${JSON.stringify({ timestamp: new Date().toISOString(), connId, message })}\n`,
-            'utf8',
-        );
-    } catch (error) {
-        console.warn(
-            `[stt-server] soniox_raw_response_log_failed path=${SONIOX_RAW_JOINED_TOKEN_LOG_FILE} error=${error instanceof Error ? error.message : String(error)}`,
-        );
-    }
-};
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -628,6 +603,21 @@ wss.on('connection', (clientWs) => {
                 is_final?: unknown;
                 language?: unknown;
                 speaker?: unknown;
+            };
+            const logSonioxTokens = (tokens: SonioxToken[]): void => {
+                for (const token of tokens) {
+                    const isFinal = typeof token.is_final === 'boolean'
+                        ? String(token.is_final)
+                        : 'unknown';
+                    const speaker = normalizeSpeaker(token.speaker);
+                    const language = normalizeDetectedLang(token.language);
+                    const text = typeof token.text === 'string'
+                        ? token.text
+                        : String(token.text ?? '');
+                    console.log(
+                        `is_final=${isFinal}, speaker=${speaker}, language=${language}, text=${text}`,
+                    );
+                }
             };
             type SonioxCommonSpeakerState = {
                 speaker: string;
@@ -1518,11 +1508,11 @@ wss.on('connection', (clientWs) => {
 
             sttWs.onmessage = (event) => {
                 const rawMessage = event.data.toString();
-                writeSonioxRawResponseLog(connId, rawMessage);
-                if (!isClientConnected) return;
-
                 try {
                     const msg = JSON.parse(rawMessage);
+                    const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
+                    logSonioxTokens(tokens);
+                    if (!isClientConnected) return;
 
                     if (msg.error_code) {
                         const errorCode = String(msg.error_code || '').trim();
@@ -1550,7 +1540,6 @@ wss.on('connection', (clientWs) => {
                     }
 
                     if (msg.finished) return;
-                    const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
                     if (tokens.length === 0) return;
                     processSonioxTokenBatch(tokens);
                 } catch (parseError) {
