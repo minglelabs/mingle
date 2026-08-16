@@ -18,6 +18,8 @@ The reviewed design was implemented as one deployable change set:
 - Token order is preserved around `<end>` and `<fin>`, including post-marker input.
 - A stop-flush request remains active when `<end>` arrives before its `<fin>`
   completion barrier.
+- Stop finalization also waits for audio already sent to Soniox when the first
+  provider token has not arrived yet.
 - Boundary action/cause logs and duplicate-stop suppression are explicit.
 - Live STT tests now send the configured API namespace over WebSocket.
 

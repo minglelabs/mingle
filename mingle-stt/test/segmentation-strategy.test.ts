@@ -160,16 +160,22 @@ test('keeps a stop request active when end arrives before its fin barrier', () =
     carryAllowed: false,
   });
 
-  assert.deepEqual(resolveSonioxBoundaryHandling({
+  const finHandling = resolveSonioxBoundaryHandling({
     effectiveStrategy: 'end',
     markerKind: 'fin',
     activeFinalizeCause: 'stop-flush',
-  }), {
+  });
+  assert.deepEqual(finHandling, {
     action: 'manual-full',
     cause: 'stop-flush',
     completeFinalizeRequest: true,
     carryAllowed: false,
   });
+  assert.deepEqual(selectSonioxBoundarySpeakerIds({
+    handling: finHandling,
+    currentSpeakerIds: ['speaker-arrived-after-stop'],
+    requestSpeakerIds: ['speaker-present-at-stop'],
+  }), ['speaker-present-at-stop', 'speaker-arrived-after-stop']);
 });
 
 test('flushes an unsolicited fin safely in end mode without carry', () => {

@@ -124,6 +124,7 @@ wss.on('connection', (clientWs) => {
         fallbackSource?: MingleSttFinalizeSource,
     ) => Promise<MingleSttFinalTurnPayload>) | null = null;
     let sonioxStopRequested = false;
+    let hasForwardedAudioToSoniox = false;
     let stopRecordingLifecycleStarted = false;
     let disposeSonioxSpeakerStates: (() => void) | null = null;
     const gladiaApiKey = process.env.GLADIA_API_KEY;
@@ -637,7 +638,6 @@ wss.on('connection', (clientWs) => {
                 requestId: number;
                 requestedAtMs: number;
                 cause: SonioxFinalizeRequestCause;
-                fallbackSource: MingleSttFinalizeSource;
                 lastFinalizedPayload: MingleSttFinalTurnPayload;
                 speakers: Map<string, {
                     speaker: string;
@@ -796,7 +796,6 @@ wss.on('connection', (clientWs) => {
                         requestId: ++finalizeRequestSeq,
                         requestedAtMs: now,
                         cause: 'idle-fin',
-                        fallbackSource: 'server_idle_snapshot',
                         lastFinalizedPayload: null,
                         speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
                     }, 'server_idle_snapshot');
@@ -808,7 +807,6 @@ wss.on('connection', (clientWs) => {
                     requestId: ++finalizeRequestSeq,
                     requestedAtMs: now,
                     cause: 'idle-fin',
-                    fallbackSource: 'server_timeout_fallback',
                     lastFinalizedPayload: null,
                     speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
                 };
@@ -853,9 +851,14 @@ wss.on('connection', (clientWs) => {
                     return await activeStopFinalizePromise;
                 }
                 const cohort = buildSonioxFinalizeRequestCohort(buildPendingTurnSnapshots());
-                if (cohort.length === 0) return null;
+                if (cohort.length === 0 && !hasForwardedAudioToSoniox) return null;
                 if (!sttWs || sttWs.readyState !== WebSocket.OPEN) {
                     return flushAllSpeakerTurns(fallbackSource);
+                }
+                if (cohort.length === 0) {
+                    console.log(
+                        `[conn:${connId}] soniox_stop_finalize_waiting_for_inflight_audio`,
+                    );
                 }
 
                 const now = Date.now();
@@ -878,7 +881,6 @@ wss.on('connection', (clientWs) => {
                         requestId,
                         requestedAtMs: now,
                         cause: 'stop-flush',
-                        fallbackSource,
                         lastFinalizedPayload: null,
                         speakers: new Map(cohort.map((entry) => [entry.speaker, entry])),
                         timeout,
@@ -1489,12 +1491,15 @@ wss.on('connection', (clientWs) => {
                             );
                             continue;
                         }
-                    } else if (requestSpeaker) {
+                    } else if (
+                        boundaryHandling.action === 'manual-full'
+                        && !isFinSpeakerState(speakerState)
+                    ) {
                         const decision = evaluateProviderEndpointDecision({ mergedSnapshot });
                         if (decision.action === 'finalize') {
                             const payload = emitTranscript(
                                 decision.finalText,
-                                requestSpeaker.detectedLang || speakerState.detectedLang,
+                                requestSpeaker?.detectedLang || speakerState.detectedLang,
                                 true,
                                 speakerState.speaker,
                                 { finalizeSource: 'soniox_manual' },
@@ -1749,6 +1754,7 @@ wss.on('connection', (clientWs) => {
             lastSonioxUpstreamError = null;
             finalizePendingTurnFromProvider = null;
             sonioxStopRequested = false;
+            hasForwardedAudioToSoniox = false;
             console.log(
                 `[conn:${connId}] config release=${releaseVariant} profile=${behaviorProfile} namespace=${apiNamespace || '-'} model=${currentModel} langs=${selectedLanguages.join(',')}`,
             );
@@ -1763,6 +1769,9 @@ wss.on('connection', (clientWs) => {
                 // Deepgram, Fireworks, Soniox는 바이너리 데이터를 직접 전송해야 함 (Gladia/Gladia-STT는 JSON 형식)
                 if (data.type === 'audio_chunk' && data.data?.chunk) {
                     const pcmData = Buffer.from(data.data.chunk, 'base64');
+                    if (currentModel === 'soniox' && pcmData.length > 0) {
+                        hasForwardedAudioToSoniox = true;
+                    }
                     sttWs.send(pcmData);
                 }
             } else {

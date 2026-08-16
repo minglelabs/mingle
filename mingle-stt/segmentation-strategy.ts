@@ -226,10 +226,13 @@ export function selectSonioxBoundarySpeakerIds(input: {
     ) {
         return Array.from(new Set(input.currentSpeakerIds));
     }
-    if (
-        input.handling.action === 'manual-snapshot'
-        || input.handling.action === 'manual-full'
-    ) {
+    if (input.handling.action === 'manual-full') {
+        return Array.from(new Set([
+            ...input.requestSpeakerIds,
+            ...input.currentSpeakerIds,
+        ]));
+    }
+    if (input.handling.action === 'manual-snapshot') {
         return Array.from(new Set(input.requestSpeakerIds));
     }
     return [];
