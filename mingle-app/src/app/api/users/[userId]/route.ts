@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { normalizeHandle } from "@/lib/handles";
+import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,7 @@ const userProfileSelect = {
   imageCropY: true,
   bio: true,
   nationality: true,
+  primaryLanguages: true,
   _count: {
     select: {
       followerRelations: true,
@@ -116,6 +118,10 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     imageCropY: user.imageCropY,
     bio: user.bio,
     nationality: user.nationality,
+    primaryLanguages: sanitizeSttLanguageSelection(
+      user.primaryLanguages,
+      user.nationality ? [user.nationality] : [],
+    ),
     followersCount: user._count.followerRelations,
     followingCount: user._count.followingRelations,
     isFollowing: user.followerRelations.length > 0,

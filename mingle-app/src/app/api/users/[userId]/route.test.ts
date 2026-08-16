@@ -40,6 +40,7 @@ describe("/api/users/[userId] route", () => {
       name: "미나",
       bio: "Hello",
       nationality: "ko",
+      primaryLanguages: ["ko"],
       _count: { followerRelations: 4, followingRelations: 2 },
       followerRelations: [{ followerId: "viewer_123" }],
     });
@@ -56,6 +57,7 @@ describe("/api/users/[userId] route", () => {
         name: "미나",
         bio: "Hello",
         nationality: "ko",
+        primaryLanguages: ["ko"],
         _count: { followerRelations: 4, followingRelations: 2 },
         followerRelations: [{ followerId: "viewer_123" }],
       });
@@ -72,6 +74,7 @@ describe("/api/users/[userId] route", () => {
       name: "미나",
       bio: "Hello",
       nationality: "ko",
+      primaryLanguages: ["ko"],
       followersCount: 4,
       followingCount: 2,
       isFollowing: true,

@@ -7,6 +7,7 @@ import ProfileImageCropper, {
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
+import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
@@ -37,6 +38,7 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultConversationLanguages,
   getSttLanguageDisplayName,
+  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
   type SttLanguageCode,
 } from "@/lib/stt-languages";
@@ -211,21 +213,19 @@ function appendPathSearchParam(path: string, key: string, value: string): string
 
 function ProfileAvatar({
   alt,
-  flag,
+  flags,
   imageUrl,
   imageCrop,
   size = 88,
   onClick,
 }: {
   alt: string;
-  flag?: string;
+  flags: readonly string[];
   imageUrl?: string | null;
   imageCrop?: ProfileImageCropInput;
   size?: number;
   onClick?: () => void;
 }) {
-  const badgeSize = Math.max(24, Math.round(size * 0.32));
-
   return (
     <button
       type="button"
@@ -251,15 +251,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      {flag ? (
-        <span
-          className="absolute bottom-[-2px] left-[-2px] flex items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
-          style={{ height: badgeSize, width: badgeSize, fontSize: badgeSize * 0.62, lineHeight: 1 }}
-          aria-hidden="true"
-        >
-          {flag}
-        </span>
-      ) : null}
+      <ProfileLanguageFlagStack flags={flags} size={size} />
     </button>
   );
 }
@@ -1281,6 +1273,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   );
   const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
   const nationalityFlag = getNationalityOption(nationality)?.flag;
+  const primaryLanguageFlags = primaryLanguages.map((language) => getSttLanguageFlag(language));
   const nationalityName = nationality
     ? getSttLanguageDisplayName(nationality, locale)
       ?? getNationalityOption(nationality)?.label
@@ -1526,7 +1519,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <div className="flex shrink-0 flex-col items-center">
               <ProfileAvatar
                 alt={name}
-                flag={nationalityFlag}
+                flags={primaryLanguageFlags}
                 imageUrl={profileImageUrl}
                 imageCrop={{
                   scale: profile.imageCropScale,

@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Ordered Primary Language Flags on Profile Avatars
+
+- Surface: My Page and public profile avatar badges.
+- Issue: A profile could store multiple primary languages, but the avatar showed only one language flag.
+- User impact: Multilingual users could not communicate their selected language order from the profile summary, and public profiles did not match My Page.
+- Resolution: Added a shared lower-left flag stack that preserves the saved language order, overlaps each flag slightly from left to right, and supports up to the existing five-language selection limit. Public profile responses now include the same normalized primary-language list.
+
 ## 2026-08-17 - Usage Panel Namespace Route Recovery
 
 - Surface: My Page usage panel in native v2.0.0 builds.

@@ -5,10 +5,13 @@ import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   getSttLanguageDisplayName,
+  getSttLanguageFlag,
+  sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import {
   AlertTriangle,
@@ -40,6 +43,7 @@ type PublicUserProfile = {
   imageCropY: number | null;
   bio: string | null;
   nationality: string | null;
+  primaryLanguages: string[];
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
@@ -100,19 +104,17 @@ function ProfileAvatar({
   image,
   label,
   crop,
-  flag,
+  flags,
   size = 88,
   onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
-  flag?: string | null;
+  flags: readonly string[];
   size?: number;
   onClick?: () => void;
 }) {
-  const badgeSize = Math.max(24, Math.round(size * 0.32));
-
   return (
     <button
       type="button"
@@ -136,15 +138,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      {flag ? (
-        <span
-          className="absolute bottom-[-2px] left-[-2px] flex items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
-          style={{ height: badgeSize, width: badgeSize, fontSize: badgeSize * 0.62, lineHeight: 1 }}
-          aria-hidden="true"
-        >
-          {flag}
-        </span>
-      ) : null}
+      <ProfileLanguageFlagStack flags={flags} size={size} />
     </button>
   );
 }
@@ -336,7 +330,12 @@ export default function PublicUserProfileScreen({
 
   const name = profile?.name?.trim() || copy.userFallback;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
-  const languageOption = getLanguageOption(profile?.nationality);
+  const primaryLanguages = sanitizeSttLanguageSelection(
+    profile?.primaryLanguages,
+    profile?.nationality ? [profile.nationality] : [],
+  );
+  const languageOption = getLanguageOption(primaryLanguages[0] ?? profile?.nationality);
+  const primaryLanguageFlags = primaryLanguages.map((language) => getSttLanguageFlag(language));
   const languageName = languageOption
     ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
     : null;
@@ -407,7 +406,7 @@ export default function PublicUserProfileScreen({
                   <ProfileAvatar
                     image={profile.image}
                     label={name}
-                    flag={languageOption?.flag}
+                    flags={primaryLanguageFlags}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,
