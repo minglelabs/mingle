@@ -1209,6 +1209,10 @@ wss.on('connection', (clientWs) => {
                 const tokenBeforeSpeakers = Array.from(new Set(
                     tokensBeforeBoundary.map((token) => normalizeSpeaker(token.speaker)),
                 )).sort();
+                const lastTokenBeforeSpeaker = [...tokensBeforeBoundary]
+                    .reverse()
+                    .map((token) => normalizeSpeaker(token.speaker))
+                    .find((speaker) => speaker !== 'unknown' && speaker !== '-') || '-';
 
                 if (boundaryMarker && boundaryMarker.is_final !== true) {
                     console.warn(
@@ -1349,6 +1353,11 @@ wss.on('connection', (clientWs) => {
                         handling: boundaryHandling,
                         currentSpeakerIds: speakerStates.keys(),
                         requestSpeakerIds: finalizeRequestForBoundary?.speakers.keys() || [],
+                        providerBoundarySpeakerId: markerSpeaker !== 'unknown'
+                            ? markerSpeaker
+                            : lastTokenBeforeSpeaker,
+                        beforeSpeakerIds: tokenBeforeSpeakers,
+                        pendingSpeakerIds,
                     });
                     for (const speaker of boundarySpeakers) {
                         const state = speakerStates.get(speaker);
@@ -1456,7 +1465,7 @@ wss.on('connection', (clientWs) => {
                     }
 
                     const requestSpeaker = finalizeRequestForBoundary?.speakers.get(frameUpdate.speaker) || null;
-                    if (providerOwnedBoundary) {
+                    if (providerOwnedBoundary && boundarySpeakers.includes(speakerState.speaker)) {
                         const decision = evaluateProviderEndpointDecision({ mergedSnapshot });
                         if (decision.action === 'finalize') {
                             const payload = emitTranscript(

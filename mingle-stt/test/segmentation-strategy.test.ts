@@ -195,7 +195,9 @@ test('flushes an unsolicited fin safely in end mode without carry', () => {
     handling,
     currentSpeakerIds: ['speaker-1', 'speaker-2'],
     requestSpeakerIds: [],
-  }), ['speaker-1', 'speaker-2']);
+    beforeSpeakerIds: ['speaker-2'],
+    pendingSpeakerIds: ['speaker-1', 'speaker-2'],
+  }), ['speaker-2']);
 });
 
 test('allows carry only for a manual snapshot boundary in effective fin mode', () => {
@@ -211,7 +213,7 @@ test('allows carry only for a manual snapshot boundary in effective fin mode', (
   });
 });
 
-test('provider endpoint boundaries close every pending speaker in the cohort', () => {
+test('provider endpoint boundaries target the identified speaker only', () => {
   const handling = resolveSonioxBoundaryHandling({
     effectiveStrategy: 'end',
     markerKind: 'end',
@@ -221,7 +223,40 @@ test('provider endpoint boundaries close every pending speaker in the cohort', (
     handling,
     currentSpeakerIds: ['speaker-1', 'speaker-2'],
     requestSpeakerIds: [],
-  }), ['speaker-1', 'speaker-2']);
+    providerBoundarySpeakerId: 'speaker-2',
+    beforeSpeakerIds: ['speaker-1'],
+    pendingSpeakerIds: ['speaker-1', 'speaker-2'],
+  }), ['speaker-2']);
+  assert.deepEqual(selectSonioxBoundarySpeakerIds({
+    handling,
+    currentSpeakerIds: ['speaker-1', 'speaker-2'],
+    requestSpeakerIds: [],
+    providerBoundarySpeakerId: 'unknown',
+    beforeSpeakerIds: ['speaker-1'],
+    pendingSpeakerIds: ['speaker-1', 'speaker-2'],
+  }), ['speaker-1']);
+});
+
+test('provider endpoint boundaries preserve pending turns when ownership is ambiguous', () => {
+  const handling = resolveSonioxBoundaryHandling({
+    effectiveStrategy: 'end',
+    markerKind: 'end',
+    activeFinalizeCause: null,
+  });
+  assert.deepEqual(selectSonioxBoundarySpeakerIds({
+    handling,
+    currentSpeakerIds: ['speaker-1', 'speaker-2'],
+    requestSpeakerIds: [],
+    beforeSpeakerIds: ['speaker-1', 'speaker-2'],
+    pendingSpeakerIds: ['speaker-1', 'speaker-2'],
+  }), []);
+  assert.deepEqual(selectSonioxBoundarySpeakerIds({
+    handling,
+    currentSpeakerIds: ['speaker-1', 'speaker-2'],
+    requestSpeakerIds: [],
+    beforeSpeakerIds: [],
+    pendingSpeakerIds: ['speaker-2'],
+  }), ['speaker-2']);
 });
 
 test('manual carry controller resolves without firing expiry', async () => {

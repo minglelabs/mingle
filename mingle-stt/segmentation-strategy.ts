@@ -219,12 +219,40 @@ export function selectSonioxBoundarySpeakerIds(input: {
     handling: SonioxBoundaryHandling;
     currentSpeakerIds: Iterable<string>;
     requestSpeakerIds: Iterable<string>;
+    providerBoundarySpeakerId?: string | null;
+    beforeSpeakerIds?: Iterable<string>;
+    pendingSpeakerIds?: Iterable<string>;
 }): string[] {
     if (
         input.handling.action === 'provider-endpoint'
         || input.handling.action === 'provider-fallback'
     ) {
-        return Array.from(new Set(input.currentSpeakerIds));
+        const providerBoundarySpeakerId = input.providerBoundarySpeakerId?.trim();
+        if (
+            providerBoundarySpeakerId
+            && providerBoundarySpeakerId !== 'unknown'
+            && providerBoundarySpeakerId !== '-'
+        ) {
+            return [providerBoundarySpeakerId];
+        }
+
+        const beforeSpeakerIds = Array.from(new Set(input.beforeSpeakerIds || []))
+            .map((speaker) => speaker.trim())
+            .filter((speaker) => speaker && speaker !== 'unknown' && speaker !== '-');
+        if (beforeSpeakerIds.length === 1) {
+            return beforeSpeakerIds;
+        }
+
+        const pendingSpeakerIds = Array.from(new Set(input.pendingSpeakerIds || []))
+            .map((speaker) => speaker.trim())
+            .filter((speaker) => speaker && speaker !== 'unknown' && speaker !== '-');
+        if (pendingSpeakerIds.length === 1) {
+            return pendingSpeakerIds;
+        }
+
+        // An ambiguous provider boundary must not reset every known speaker.
+        // Leave pending turns intact until a speaker can be identified safely.
+        return [];
     }
     if (input.handling.action === 'manual-full') {
         return Array.from(new Set([
