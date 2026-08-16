@@ -1,5 +1,5 @@
 import { createServer } from 'http';
-import { existsSync } from 'fs';
+import { appendFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { WebSocket, WebSocketServer } from 'ws';
 import fetch from 'node-fetch';
@@ -82,6 +82,22 @@ const SONIOX_DEBUG_TOKEN_LOGS = (() => {
     }
     return process.env.NODE_ENV !== 'production';
 })();
+const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
+
+const writeSonioxRawResponseLog = (connId: number, message: unknown): void => {
+    if (!SONIOX_RAW_JOINED_TOKEN_LOG_FILE) return;
+    try {
+        appendFileSync(
+            SONIOX_RAW_JOINED_TOKEN_LOG_FILE,
+            `${JSON.stringify({ timestamp: new Date().toISOString(), connId, message })}\n`,
+            'utf8',
+        );
+    } catch (error) {
+        console.warn(
+            `[stt-server] soniox_raw_response_log_failed path=${SONIOX_RAW_JOINED_TOKEN_LOG_FILE} error=${error instanceof Error ? error.message : String(error)}`,
+        );
+    }
+};
 
 const server = createServer();
 const wss = new WebSocketServer({ server });
@@ -1571,6 +1587,7 @@ wss.on('connection', (clientWs) => {
 
                 try {
                     const msg = JSON.parse(event.data.toString());
+                    writeSonioxRawResponseLog(connId, msg);
 
                     if (msg.error_code) {
                         const errorCode = String(msg.error_code || '').trim();
@@ -1820,6 +1837,6 @@ wss.on('connection', (clientWs) => {
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
     console.log(
-        `[stt-server] soniox_finalize_tuning defaultSilenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS}`,
+        `[stt-server] soniox_finalize_tuning defaultSilenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS} rawResponseLog=${SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '-'}`,
     );
 });
