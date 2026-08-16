@@ -10,6 +10,10 @@ export const DEFAULT_TEXT_SIZE_LEVEL = 3
 export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
 export const MAX_SONIOX_SILENCE_MS = 3000
+
+export function shouldShowSpeechSplitControl(): boolean {
+  return false
+}
 export type LivePhoneDemoAdBannerPosition = 'top' | 'bottom'
 export type LivePhoneDemoInputMode = 'voice' | 'text'
 export const DEFAULT_INPUT_MODE: LivePhoneDemoInputMode = 'voice'

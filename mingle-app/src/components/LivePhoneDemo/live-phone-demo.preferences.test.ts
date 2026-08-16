@@ -16,7 +16,14 @@ import {
   readPersistedIntegerPreference,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
+  shouldShowSpeechSplitControl,
 } from './live-phone-demo.preferences'
+
+describe('speech split control', () => {
+  it('is not exposed as a user setting', () => {
+    expect(shouldShowSpeechSplitControl()).toBe(false)
+  })
+})
 
 describe('readPersistedIntegerPreference', () => {
   it('falls back when the stored value is missing or blank', () => {

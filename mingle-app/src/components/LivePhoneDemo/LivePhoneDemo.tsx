@@ -43,6 +43,7 @@ import {
   type LivePhoneDemoInputMode,
   readPersistedLivePhoneDemoPreferences,
   resolveDisplayedLivePhoneDemoAdBannerPosition,
+  shouldShowSpeechSplitControl,
   type LivePhoneDemoAdBannerPosition,
 } from './live-phone-demo.preferences'
 import {
@@ -5489,6 +5490,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               </div>
                             </div>
 
+                            {shouldShowSpeechSplitControl() && (
                             <label className="block">
                               <div
                                 className={`mb-0 flex items-start gap-3 text-[0.8125rem] font-semibold leading-[1.05] transition-colors ${
@@ -5565,6 +5567,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                 )}
                               </div>
                             </label>
+                            )}
 
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
