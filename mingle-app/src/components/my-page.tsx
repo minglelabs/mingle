@@ -274,6 +274,8 @@ function ProfileSettingsPanel({
   locale,
   onClose,
   onChangeAppLanguage,
+  initialPrimaryLanguages,
+  onSavePrimaryLanguages,
   initialDefaultConversationLanguages,
   onSaveDefaultConversationLanguages,
   onSignOut,
@@ -285,6 +287,8 @@ function ProfileSettingsPanel({
   locale: AppLocale;
   onClose: () => void;
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
+  initialPrimaryLanguages: readonly string[];
+  onSavePrimaryLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   initialDefaultConversationLanguages: readonly string[];
   onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
@@ -300,7 +304,11 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "defaultLanguages" | "usage" | "feedback" | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "primaryLanguages" | "defaultLanguages" | "usage" | "feedback" | null>(null);
+  const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
+    sanitizeSttLanguageSelection(initialPrimaryLanguages)
+  ));
+  const [isSavingPrimaryLanguages, setIsSavingPrimaryLanguages] = useState(false);
   const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
   ));
@@ -329,6 +337,19 @@ function ProfileSettingsPanel({
       ? "새 대화방을 만들 때 사용할 언어를 원하는 순서대로 선택하세요."
       : "Choose the languages and order used when you create a new conversation.",
     defaultLanguagesSaveError: locale === "ko" ? "기본 언어를 저장하지 못했습니다." : "Could not save the default languages.",
+    primaryLanguages: dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+    primaryLanguagesTitle: dictionary.profile.primaryLanguagesTitle
+      ?? dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? (locale === "ko" ? "주 사용 언어" : "Primary languages"),
+    primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
+      ?? (locale === "ko"
+        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        : "Choose up to five primary languages in the order they should appear on your profile."),
+    primaryLanguagesSaveError: dictionary.profile.primaryLanguagesSaveError
+      ?? (locale === "ko" ? "주 사용 언어를 저장하지 못했습니다." : "Could not save your primary languages."),
     usage: {
       title: locale === "ko" ? "사용량" : "Usage",
       totalUsage: locale === "ko" ? "총 사용시간" : "Total time",
@@ -385,9 +406,11 @@ function ProfileSettingsPanel({
         ? feedbackCopy.pageTitle
         : managementPage === "usage"
           ? copy.usage.title
-        : managementPage === "defaultLanguages"
-          ? copy.defaultLanguagesTitle
-        : copy.appLanguageTitle;
+          : managementPage === "primaryLanguages"
+            ? copy.primaryLanguagesTitle
+            : managementPage === "defaultLanguages"
+              ? copy.defaultLanguagesTitle
+              : copy.appLanguageTitle;
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -443,6 +466,11 @@ function ProfileSettingsPanel({
     if (!open) return;
     setDefaultConversationLanguages(sanitizeSttLanguageSelection(initialDefaultConversationLanguages));
   }, [initialDefaultConversationLanguages, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
+  }, [initialPrimaryLanguages, open]);
 
   useEffect(() => {
     if (!open) {
@@ -576,6 +604,30 @@ function ProfileSettingsPanel({
       setIsSavingDefaultConversationLanguages(false);
     }
   }, [copy.defaultLanguagesSaveError, defaultConversationLanguages, isSavingDefaultConversationLanguages, onSaveDefaultConversationLanguages]);
+
+  const handleTogglePrimaryLanguage = useCallback(async (code: SttLanguageCode) => {
+    if (isSavingPrimaryLanguages) return;
+
+    const currentLanguages = sanitizeSttLanguageSelection(primaryLanguages);
+    const selected = currentLanguages.includes(code);
+    if (selected && currentLanguages.length <= 1) return;
+    if (!selected && currentLanguages.length >= MAX_STT_LANGUAGE_SELECTION) return;
+
+    const nextLanguages = selected
+      ? currentLanguages.filter((language) => language !== code)
+      : [...currentLanguages, code];
+    setPrimaryLanguages(nextLanguages);
+    setIsSavingPrimaryLanguages(true);
+    try {
+      const saved = await onSavePrimaryLanguages(nextLanguages);
+      if (!saved) {
+        setPrimaryLanguages(currentLanguages);
+        window.alert(copy.primaryLanguagesSaveError);
+      }
+    } finally {
+      setIsSavingPrimaryLanguages(false);
+    }
+  }, [copy.primaryLanguagesSaveError, isSavingPrimaryLanguages, onSavePrimaryLanguages, primaryLanguages]);
 
   const handleNativeAppUpdatePress = useCallback(() => {
     const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
@@ -716,6 +768,15 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
+                onClick={() => setManagementPage("primaryLanguages")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <Languages size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.primaryLanguages}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setManagementPage("defaultLanguages")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
@@ -811,6 +872,22 @@ function ProfileSettingsPanel({
               />
             ) : managementPage === "usage" ? (
               <ProfileUsageContent uiLocale={locale} copy={copy.usage} />
+            ) : managementPage === "primaryLanguages" ? (
+              <div>
+                <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.primaryLanguagesDescription}</p>
+                <LanguagePreferencePicker
+                  selectedLanguages={primaryLanguages}
+                  onToggleLanguage={(code) => void handleTogglePrimaryLanguage(code)}
+                  uiLocale={locale}
+                  searchPlaceholder={roomManagementCopy.languageSelectorSearchPlaceholder}
+                  sortLocaleLabel={roomManagementCopy.languageSelectorSortLocaleLabel}
+                  sortAlphabeticalLabel={roomManagementCopy.languageSelectorSortAlphabeticalLabel}
+                  noResultsLabel={roomManagementCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_STT_LANGUAGE_SELECTION}
+                  minLanguages={1}
+                  disabled={isSavingPrimaryLanguages}
+                />
+              </div>
             ) : managementPage === "defaultLanguages" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.defaultLanguagesDescription}</p>
@@ -999,7 +1076,9 @@ function ProfileEditPanel({
     nameLabel: dictionary.profile.profileNameLabel ?? "Name",
     namePlaceholder: dictionary.profile.profileNamePlaceholder ?? "Enter your name",
     bioLabel: dictionary.profile.bioLabel ?? "Bio",
-    nationalityLabel: dictionary.profile.nationalityLabel ?? "Primary language",
+    primaryLanguagesLabel: dictionary.profile.primaryLanguagesLabel
+      ?? dictionary.profile.nationalityLabel
+      ?? "Primary languages",
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
     saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
@@ -1205,7 +1284,7 @@ function ProfileEditPanel({
               </label>
 
               <fieldset className="min-w-0 w-full max-w-full">
-                <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.nationalityLabel}</legend>
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.primaryLanguagesLabel}</legend>
                 <LanguagePreferencePicker
                   selectedLanguages={primaryLanguages}
                   onToggleLanguage={(code) => {
@@ -1222,6 +1301,8 @@ function ProfileEditPanel({
                   sortLocaleLabel={languageCopy.languageSelectorSortLocaleLabel}
                   sortAlphabeticalLabel={languageCopy.languageSelectorSortAlphabeticalLabel}
                   noResultsLabel={languageCopy.languageSelectorNoResultsLabel}
+                  maxLanguages={MAX_STT_LANGUAGE_SELECTION}
+                  minLanguages={1}
                   disabled={isSaving}
                 />
               </fieldset>
@@ -1402,6 +1483,30 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     }
   }, [profileImageUrl]);
 
+  const handleSavePrimaryLanguages = useCallback(async (languages: SttLanguageCode[]) => {
+    try {
+      const normalizedLanguages = sanitizeSttLanguageSelection(languages);
+      if (normalizedLanguages.length === 0) return false;
+      const response = await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryLanguages: normalizedLanguages }),
+      });
+      if (!response.ok) return false;
+
+      const saved = await response.json() as Partial<ProfileRecord>;
+      const savedLanguages = sanitizeSttLanguageSelection(saved.primaryLanguages, normalizedLanguages);
+      setProfile((current) => ({
+        ...current,
+        nationality: savedLanguages[0] ?? null,
+        primaryLanguages: savedLanguages,
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const defaultConversationLanguages = useMemo(() => {
     const storedLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
     return storedLanguages.length > 0
@@ -1470,6 +1575,8 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         locale={locale}
         onClose={() => setShowProfileSettings(false)}
         onChangeAppLanguage={handleChangeAppLanguage}
+        initialPrimaryLanguages={primaryLanguages}
+        onSavePrimaryLanguages={handleSavePrimaryLanguages}
         initialDefaultConversationLanguages={defaultConversationLanguages}
         onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}

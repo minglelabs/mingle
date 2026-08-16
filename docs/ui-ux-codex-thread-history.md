@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Primary Language Settings Parity
+
+- Surface: My Page hamburger menu, primary-language settings page, and Profile Edit.
+- Issue: Primary languages were editable only as part of the broader profile form, so users who wanted to update the languages shown on their profile had to open the full editor. The profile editor and settings surface also needed to stay visually and behaviorally identical for multi-language users.
+- User impact: Changing the language badges shown on a profile was harder to discover, and users could not confirm the saved order from a focused language-only page.
+- Resolution: Added a dedicated Primary languages page to the My Page hamburger menu. It reuses the shared language preference picker already used by Profile Edit, including the selected-language flag strip, order-preserving selection, five-language limit, featured-language section, search, and locale/alphabetical sorting. Each change saves through the existing profile endpoint, updates the profile's first language field for backward compatibility, and immediately feeds the same ordered list back into My Page and Profile Edit. Profile Edit now uses the same explicit primary-language label and selection limits.
+- Data change: No schema or migration change; the existing primary_languages profile field is reused.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Per-Conversation Default Display Language
 
 - Surface: Conversation room hamburger menu, default display language panel, and unified message bubbles.

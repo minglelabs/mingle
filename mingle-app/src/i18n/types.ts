@@ -124,6 +124,10 @@ export type BaseAppDictionarySource = {
     bioLabel?: string;
     bioPlaceholder?: string;
     nationalityLabel?: string;
+    primaryLanguagesLabel?: string;
+    primaryLanguagesTitle?: string;
+    primaryLanguagesDescription?: string;
+    primaryLanguagesSaveError?: string;
     saveAction?: string;
     cancelAction?: string;
     profileSaveError?: string;
