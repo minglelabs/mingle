@@ -688,3 +688,16 @@
   - Rename the Korean settings copy to `앱 이용 언어` and clarify that it controls the Mingle UI/UX.
 - Data contract: None. Existing saved profile language values remain unchanged, and the existing nullable profile field continues to accept `null`.
 - Testing notes: Verify that selecting English as the app display language does not select English in profile editing, that a saved profile language remains unchanged after a UI-language change, and that an unset profile language shows no flag or language label.
+
+## 2026-08-16 - Mirror feedback and app updates in My Page settings
+
+- Surface: The My Page hamburger menu and its nested management panel.
+- Issue: Feedback and app-update controls were available from a conversation room, but not from the My Page settings menu. Users had to open a room before they could contact the team or check the installed app version.
+- User impact: Support and update actions were inconsistent across the two primary navigation surfaces.
+- Resolution:
+  - Added the same localized feedback entry to the My Page hamburger menu and opened the same compose/history workflow from a nested full-screen panel.
+  - Reused the existing feedback API, draft persistence key, category copy, Instagram contact link, and history presentation so messages behave consistently from either surface.
+  - Mirrored the native-only app-update card in My Page, including installed/latest version status and the native store-opening action.
+  - Kept the conversation-room menu unchanged.
+- Data contract: None. Feedback continues to use the existing `/feedback` endpoint, and app updates continue to use the existing native bridge command.
+- Testing notes: Verify feedback compose/history navigation from My Page, draft restoration, successful submission, and that the app-update card appears only in native runtime and opens the correct store when an update is available.

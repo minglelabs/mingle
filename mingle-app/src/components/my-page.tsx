@@ -5,6 +5,7 @@ import ProfileImageCropper, {
   type ProfileImageCropperChange,
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
+import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import {
   buildLanguageSelectorFeaturedItems,
   buildLanguageSelectorItems,
@@ -16,6 +17,16 @@ import {
   type LanguageSelectorSortMode,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
+import {
+  DEFAULT_NATIVE_APP_UPDATE_DETAIL,
+  NATIVE_APP_UPDATE_EVENT,
+  parseNativeAppUpdateDetail,
+  resolveNativeAppUpdateCopy,
+  type NativeAppUpdateDetail,
+  type NativeAppUpdateCopy,
+} from "@/components/LivePhoneDemo/live-phone-demo.app-update.logic";
+import { isNativeUiBridgeEnabledFromSearch } from "@/components/LivePhoneDemo/live-phone-demo.native-ui.logic";
 import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type PrimaryUiLocale } from "@/i18n";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath } from "@/lib/api-contract";
@@ -35,7 +46,7 @@ import {
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, Languages, Loader2, LogOut, Menu, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Search, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -111,6 +122,76 @@ type ReportRecord = {
 
 type SessionStatus = "loading" | "authenticated" | "unauthenticated";
 type ManagementLoadState = "idle" | "loading" | "ready" | "unauthorized" | "error";
+
+type NativeAppUpdateWindow = Window & {
+  __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown;
+  ReactNativeWebView?: {
+    postMessage?: (message: string) => void;
+  };
+};
+
+type NativeOpenUpdateStoreCommand = {
+  type: "native_open_update_store";
+  payload?: {
+    updateUrl?: string;
+  };
+};
+
+function isNativeAppRuntimeSignalPresent(): boolean {
+  if (typeof window === "undefined") return false;
+  const nativeWindow = window as NativeAppUpdateWindow;
+  return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
+    || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
+}
+
+function NativeAppUpdateCard({
+  copy,
+  installedVersion,
+  latestVersion,
+  statusMessage,
+  showUpdateAction,
+  onUpdate,
+}: {
+  copy: NativeAppUpdateCopy;
+  installedVersion: string;
+  latestVersion: string;
+  statusMessage: string;
+  showUpdateAction: boolean;
+  onUpdate: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-700">
+            {copy.sectionLabel}
+          </div>
+          <div className="mt-2 text-sm font-semibold text-gray-900">
+            {copy.installedLabel} {installedVersion}
+          </div>
+          {latestVersion ? (
+            <div className="mt-1 text-xs font-medium text-gray-600">
+              {copy.latestLabel} {latestVersion}
+            </div>
+          ) : null}
+          <div className="mt-2 text-xs leading-5 text-gray-600">
+            {statusMessage}
+          </div>
+        </div>
+        {showUpdateAction ? (
+          <button
+            type="button"
+            onClick={onUpdate}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
+            <Download size={13} strokeWidth={2.2} />
+            <span>{copy.updateButtonLabel}</span>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; flag: string }> =
   STT_LANGUAGE_OPTIONS.map(({ code, englishName, flag }) => ({
@@ -249,6 +330,7 @@ function ProfileSettingsPanel({
   onClose,
   onChangeAppLanguage,
   onSignOut,
+  defaultFeedbackEmail,
   open,
   sessionStatus,
 }: {
@@ -257,6 +339,7 @@ function ProfileSettingsPanel({
   onClose: () => void;
   onChangeAppLanguage: (locale: PrimaryUiLocale) => void;
   onSignOut: () => void;
+  defaultFeedbackEmail?: string;
   open: boolean;
   sessionStatus: SessionStatus;
 }) {
@@ -268,7 +351,9 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "feedback" | null>(null);
+  const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
+  const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
   const motionControls = useAnimationControls();
   const dragControls = useDragControls();
@@ -307,11 +392,62 @@ function ProfileSettingsPanel({
       other: dictionary.profile.reportReasonOther ?? (locale === "ko" ? "기타" : "Other"),
     } as Record<string, string>,
   };
+  const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(locale), [locale]);
+  const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(locale), [locale]);
+  const nativeAppUpdateStatus = nativeAppUpdate ?? DEFAULT_NATIVE_APP_UPDATE_DETAIL;
+  const nativeAppInstalledVersion = nativeAppUpdateStatus.clientVersion || nativeAppUpdateCopy.unknownVersionLabel;
+  const nativeAppLatestVersion = nativeAppUpdateStatus.latestVersion || "";
+  const nativeAppUpdateStatusMessage = nativeAppUpdateStatus.status === "checking"
+    ? nativeAppUpdateCopy.checkingMessage
+    : nativeAppUpdateStatus.status === "available"
+      ? nativeAppUpdateCopy.availableMessage
+      : nativeAppUpdateStatus.status === "current"
+        ? nativeAppUpdateCopy.currentMessage
+        : nativeAppUpdateCopy.unknownMessage;
+  const showNativeAppUpdateAction = nativeAppUpdateStatus.updateAvailable && Boolean(nativeAppUpdateStatus.updateUrl);
+  const managementPageTitle = managementPage === "blocked"
+    ? copy.blocked
+    : managementPage === "reports"
+      ? copy.reports
+      : managementPage === "feedback"
+        ? feedbackCopy.pageTitle
+        : copy.appLanguageTitle;
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncNativeRuntime = () => {
+      if (isNativeAppRuntimeSignalPresent()) setIsNativeAppRuntime(true);
+    };
+
+    syncNativeRuntime();
+    const nativeRuntimeTimerId = window.setTimeout(syncNativeRuntime, 0);
+    const nativeRuntimeRetryTimerId = window.setTimeout(syncNativeRuntime, 250);
+    const windowWithUpdate = window as NativeAppUpdateWindow;
+    const cachedDetail = parseNativeAppUpdateDetail(windowWithUpdate.__MINGLE_NATIVE_APP_UPDATE_STATUS);
+    const nativeUpdateTimerId = window.setTimeout(() => {
+      setNativeAppUpdate(cachedDetail || DEFAULT_NATIVE_APP_UPDATE_DETAIL);
+    }, 0);
+
+    const handleNativeAppUpdate = (event: Event) => {
+      const detail = parseNativeAppUpdateDetail((event as CustomEvent<unknown>).detail);
+      if (!detail) return;
+      setNativeAppUpdate(detail);
+    };
+
+    window.addEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
+    return () => {
+      window.clearTimeout(nativeRuntimeTimerId);
+      window.clearTimeout(nativeRuntimeRetryTimerId);
+      window.clearTimeout(nativeUpdateTimerId);
+      window.removeEventListener(NATIVE_APP_UPDATE_EVENT, handleNativeAppUpdate as EventListener);
     };
   }, []);
 
@@ -436,6 +572,28 @@ function ProfileSettingsPanel({
     onChangeAppLanguage(nextLocale);
   }, [locale, onChangeAppLanguage]);
 
+  const handleNativeAppUpdatePress = useCallback(() => {
+    const updateUrl = nativeAppUpdate?.updateUrl?.trim() || "";
+    if (!updateUrl) return;
+
+    onClose();
+    const command: NativeOpenUpdateStoreCommand = {
+      type: "native_open_update_store",
+      payload: { updateUrl },
+    };
+    const nativeWindow = typeof window === "undefined" ? null : window as NativeAppUpdateWindow;
+    if (nativeWindow?.ReactNativeWebView?.postMessage) {
+      try {
+        nativeWindow.ReactNativeWebView.postMessage(JSON.stringify(command));
+        return;
+      } catch {
+        // Fall back to browser navigation if the bridge errors.
+      }
+    }
+
+    window.location.href = updateUrl;
+  }, [nativeAppUpdate?.updateUrl, onClose]);
+
   const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
     if (!isLeftEdgeSwipeStart(localClientX)) return;
@@ -535,6 +693,15 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
+                onClick={() => setManagementPage("feedback")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <MessageCircle size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{feedbackCopy.feedbackMenuItemLabel}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setManagementPage("language")}
                 className="flex w-full items-center gap-3 px-4 py-4 text-left transition active:bg-gray-50"
               >
@@ -543,6 +710,18 @@ function ProfileSettingsPanel({
                 <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
               </button>
             </div>
+            {isNativeAppRuntime ? (
+              <div className="mt-4 px-0">
+                <NativeAppUpdateCard
+                  copy={nativeAppUpdateCopy}
+                  installedVersion={nativeAppInstalledVersion}
+                  latestVersion={nativeAppLatestVersion}
+                  statusMessage={nativeAppUpdateStatusMessage}
+                  showUpdateAction={showNativeAppUpdateAction}
+                  onUpdate={handleNativeAppUpdatePress}
+                />
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={onSignOut}
@@ -578,7 +757,7 @@ function ProfileSettingsPanel({
           style={{ touchAction: "pan-y" }}
           role="dialog"
           aria-modal="true"
-          aria-label={managementPage === "blocked" ? copy.blocked : managementPage === "reports" ? copy.reports : copy.appLanguageTitle}
+          aria-label={managementPageTitle}
         >
           <header
             className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
@@ -596,13 +775,18 @@ function ProfileSettingsPanel({
               <ChevronLeft size={25} strokeWidth={2.1} aria-hidden="true" />
             </button>
             <h2 className="truncate text-center text-[17px] font-bold">
-              {managementPage === "blocked" ? copy.blocked : managementPage === "reports" ? copy.reports : copy.appLanguageTitle}
+              {managementPageTitle}
             </h2>
             <div aria-hidden="true" />
           </header>
 
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6">
-            {managementPage === "language" ? (
+          <div className={managementPage === "feedback" ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 pb-10 pt-6"}>
+            {managementPage === "feedback" ? (
+              <ProfileFeedbackContent
+                uiLocale={locale}
+                defaultFeedbackEmail={defaultFeedbackEmail}
+              />
+            ) : managementPage === "language" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.appLanguageDescription}</p>
                 <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
@@ -1315,6 +1499,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         onClose={() => setShowProfileSettings(false)}
         onChangeAppLanguage={handleChangeAppLanguage}
         onSignOut={handleSignOut}
+        defaultFeedbackEmail={session?.user?.email ?? ""}
         open={showProfileSettings}
         sessionStatus={sessionStatus}
       />
