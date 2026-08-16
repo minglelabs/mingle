@@ -204,15 +204,21 @@ export class SonioxEndpointStrategy implements SegmentationStrategy {
     readonly id: SegmentationStrategyId = 'end';
 
     private readonly endpointDelayMs: number;
+    private readonly endpointLatencyAdjustmentLevel: number;
+    private readonly endpointSensitivity: number;
 
     constructor(endpointDelayMs: number) {
         // Soniox 허용 범위: 500~3000ms
         this.endpointDelayMs = Math.max(500, Math.min(3000, endpointDelayMs));
+        this.endpointLatencyAdjustmentLevel = resolveSonioxEndpointLatencyAdjustmentLevel();
+        this.endpointSensitivity = resolveSonioxEndpointSensitivity();
     }
 
     sonioxConfigOverrides(): Record<string, unknown> {
         return {
             enable_endpoint_detection: true,
+            endpoint_latency_adjustment_level: this.endpointLatencyAdjustmentLevel,
+            endpoint_sensitivity: this.endpointSensitivity,
             // 발화 종료 후 <end> 마커까지 최대 대기 시간. 허용 범위: 500~3000ms, 기본값 2000ms
             max_endpoint_delay_ms: this.endpointDelayMs,
         };
@@ -399,6 +405,22 @@ export function readSegmentationStrategyId(): SegmentationStrategyId {
     if (raw === 'llm') return 'llm';
     // 'fin' 이거나 값이 없으면 기존 동작(fin) 사용
     return 'fin';
+}
+
+export function resolveSonioxEndpointLatencyAdjustmentLevel(
+    raw = process.env['SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL'],
+): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(3, Math.floor(value)));
+}
+
+export function resolveSonioxEndpointSensitivity(
+    raw = process.env['SONIOX_ENDPOINT_SENSITIVITY'],
+): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(-1, Math.min(1, value));
 }
 
 export function createSegmentationStrategy(

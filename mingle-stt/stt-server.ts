@@ -9,6 +9,8 @@ import {
     readSegmentationStrategyId,
     resolveSonioxEndpointDetectionConfig,
     resolveSonioxEndpointDelayMs,
+    resolveSonioxEndpointLatencyAdjustmentLevel,
+    resolveSonioxEndpointSensitivity,
     stripEndpointMarkers,
     SilenceTimerStrategy,
 } from './segmentation-strategy';
@@ -44,7 +46,9 @@ const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
     const fullPath = resolve(process.cwd(), filename);
     if (!existsSync(fullPath)) continue;
-    loadDotenv({ path: fullPath });
+    // Keep local test overrides ahead of runtime-injected Vault values while
+    // allowing secrets such as SONIOX_API_KEY to remain Vault-managed.
+    loadDotenv({ path: fullPath, override: filename === '.env.local' });
 }
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -1112,7 +1116,7 @@ wss.on('connection', (clientWs) => {
                 }
                 sttWs!.send(JSON.stringify(sonioxConfig));
                 console.log(
-                    `[conn:${connId}] soniox_segmentation strategy=${segmentationStrategyId} endpointing=${usesSonioxEndpointDetection} maxDelayMs=${endpointDelayMs}`,
+                    `[conn:${connId}] soniox_segmentation strategy=${segmentationStrategyId} endpointing=${usesSonioxEndpointDetection} latencyLevel=${resolveSonioxEndpointLatencyAdjustmentLevel()} sensitivity=${resolveSonioxEndpointSensitivity()} maxDelayMs=${endpointDelayMs}`,
                 );
 
                 if (isClientConnected) {
