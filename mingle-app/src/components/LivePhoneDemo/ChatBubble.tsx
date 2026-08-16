@@ -205,9 +205,9 @@ function ChatLanguageBadge({
         event.stopPropagation()
         onSelect?.()
       }}
-      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white text-xl leading-none shadow-[0_2px_8px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
+      className={`relative inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-white text-[10px] leading-none shadow-[0_1px_4px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
         isSelected
-          ? 'border-amber-400 ring-2 ring-amber-200/80'
+          ? 'border-amber-400 ring-1 ring-amber-200/80'
           : 'border-gray-200/80'
       }`}
     >
@@ -216,13 +216,13 @@ function ChatLanguageBadge({
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-1 -top-1 inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_4px_rgba(15,23,42,0.18)]"
+          className="absolute -right-0.5 -top-0.5 inline-flex h-[7px] w-[7px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_2px_rgba(15,23,42,0.18)]"
         >
           <Quote
             data-original-language-quote-icon
             aria-hidden="true"
-            className="h-3.5 w-3.5"
-            strokeWidth={3.5}
+            className="h-[7px] w-[7px]"
+            strokeWidth={2.5}
           />
         </span>
       )}
@@ -323,27 +323,9 @@ function ChatBubble({
             {activeLanguage}
           </span>
         )}
-        {activeIsPending ? (
-          <span
-            data-interim-translation-cursor
-            className="inline-flex h-4 items-center gap-0.5 align-middle"
-          >
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
-            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
-          </span>
-        ) : (
-          <span data-current-bubble-text-value className="align-middle">
-            {activeText}
-            {isActiveSpeaking && <SpeakingIndicator />}
-            {isOriginalLanguageSelected && isDraft && (
-              <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
-            )}
-          </span>
-        )}
         <span
           data-chat-bubble-language-badges
-          className="ml-1 inline-flex items-center gap-1 align-middle whitespace-nowrap"
+          className="mr-1 inline-flex items-center gap-0.5 align-middle whitespace-nowrap"
         >
           <ChatLanguageBadge
             lang={utterance.originalLang}
@@ -364,6 +346,24 @@ function ChatBubble({
             />
           ))}
         </span>
+        {activeIsPending ? (
+          <span
+            data-interim-translation-cursor
+            className="inline-flex h-4 items-center gap-0.5 align-middle"
+          >
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+          </span>
+        ) : (
+          <span data-current-bubble-text-value className="align-middle">
+            {activeText}
+            {isActiveSpeaking && <SpeakingIndicator />}
+            {isOriginalLanguageSelected && isDraft && (
+              <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+            )}
+          </span>
+        )}
       </span>
     </span>
   )
