@@ -1,6 +1,8 @@
 package com.minglelabs.mingle.rn
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -115,6 +117,10 @@ class NativeRuntimeConfigModule(
         .putString(PENDING_PROFILE_LINK_URL_KEY, normalizedUrl)
         .putLong(PENDING_PROFILE_LINK_SEQUENCE_KEY, nextSequence)
         .apply()
+      Log.i(
+        "MingleProfileLink",
+        "native_record scheme=${normalizedUrl.substringBefore(":").lowercase()} sequence=$nextSequence hasNonce=${normalizedUrl.contains("linkNonce=")} nonceHint=${Uri.parse(normalizedUrl).getQueryParameter("linkNonce")?.takeLast(8) ?: ""}",
+      )
     }
 
     private fun isSupportedProfileLink(rawUrl: String): Boolean {

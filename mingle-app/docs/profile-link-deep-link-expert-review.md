@@ -15,7 +15,7 @@ TestFlight 72에서 1차 수정 후에도 문제가 남았고, TestFlight 73에�
 현재 가장 필요한 것은 새로운 추측성 수정이 아니라, 다음 세 구간 중 어디에서 두 번째 요청이 사라지는지 확인하는 것입니다.
 
 ```text
-Safari의 “앱에서 열기” 클릭
+Chrome의 “앱에서 열기” 클릭
         ↓
 iOS가 URL을 Mingle에 전달
         ↓
@@ -76,7 +76,7 @@ https://mingle-2-0-0-production.up.railway.app/{locale}/users/{userId}
 
 사용자가 보고한 실제 증상은 다음과 같습니다.
 
-1. 상대 프로필 공유 링크를 Safari에서 엽니다.
+1. 상대 프로필 공유 링크를 Chrome에서 엽니다.
 2. 브라우저의 Mingle 프로필 안내 화면에서 “앱에서 열기”를 누릅니다.
 3. 첫 번째 클릭은 정상입니다.
    - Mingle이 열립니다.
@@ -91,12 +91,12 @@ https://mingle-2-0-0-production.up.railway.app/{locale}/users/{userId}
 
 아직 다음 항목은 확정되지 않았습니다.
 
-- 두 번째 클릭 시 Safari가 실제로 custom scheme URL을 호출했는지
+- 두 번째 클릭 시 Chrome이 실제로 custom scheme URL을 호출했는지
 - iOS가 두 번째 URL을 AppDelegate에 전달했는지
 - AppDelegate에서 React Native `Linking` 이벤트까지 전달됐는지
 - React Native JS가 이벤트를 받았지만 WebView 라우팅을 실패했는지
 - 같은 상대 프로필을 다시 연 것이어서 화면상 변화가 없었던 것인지
-- Safari 또는 WebView가 이전 JavaScript bundle을 캐시하고 있었는지
+- Chrome 또는 WebView가 이전 JavaScript bundle을 캐시하고 있었는지
 
 따라서 현재 단계에서 “iOS가 URL을 막는다” 또는 “WebView가 원인이다”라고 단정하면 안 됩니다.
 
@@ -128,7 +128,7 @@ https://mingle-2-0-0-production.up.railway.app/{locale}/users/{userId}
 이 시점의 핵심 구조는 다음과 같았습니다.
 
 ```text
-Safari HTTPS /p/{userId}
+Chrome HTTPS /p/{userId}
   → mingle://profile/{userId}
   → React Native Linking
   → WebView window.location.assign(/{locale}/users/{userId})
@@ -148,7 +148,7 @@ Safari HTTPS /p/{userId}
 
 목표는 다음 두 가지였습니다.
 
-- iOS/Safari가 같은 custom URL 재실행을 중복으로 판단하지 않게 하기
+- iOS/Chrome이 같은 custom URL 재실행을 중복으로 판단하지 않게 하기
 - WebView가 동일한 프로필 route를 no-op으로 판단하지 않게 하기
 
 결과: 사용자가 TestFlight 72에서도 두 번째 “앱에서 열기”가 동작하지 않는다고 보고했습니다.
@@ -199,19 +199,20 @@ Safari HTTPS /p/{userId}
 
 `mingle-app/src/components/profile-link-install-screen.tsx`
 
-현재 버튼은 다음 작업을 합니다.
+현재 후속 구현은 브라우저의 기본 링크 이동을 사용합니다.
 
-1. `launchNonceRef`를 증가시킵니다.
-2. 현재 클릭 횟수에 따라 `mingle` 또는 `mingleprofile` scheme을 선택합니다.
-3. `Date.now()`와 클릭 sequence를 합쳐 nonce를 만듭니다.
-4. `window.location.assign(customSchemeUrl)`을 호출합니다.
+1. 실제 `<a href>` 요소를 렌더링해 Chrome의 사용자 클릭 activation을 유지합니다.
+2. 클릭 직전에 `launchNonceRef`를 증가시키고 `href`에 새 nonce를 반영합니다.
+3. 브라우저의 기본 anchor navigation으로 canonical `mingle://` scheme을 실행합니다.
+4. 브라우저 버튼 자체에서는 `window.location.assign()`을 사용하지 않습니다. WebView 내부의 최종 HTTPS 이동은 native shell이 계속 `window.location.assign()`으로 처리합니다.
 
 주의할 점:
 
 - 이 코드는 브라우저 페이지가 최신 Railway bundle을 사용하고 있을 때만 적용됩니다.
-- Safari가 이미 이전 client bundle을 캐시하고 있다면 새 scheme 전환 코드가 실행되지 않을 수 있습니다.
+- Chrome이 이미 이전 client bundle을 캐시하고 있다면 새 anchor/nonce 코드가 실행되지 않을 수 있습니다.
 - `launchNonceRef`는 페이지가 새로 로드되면 0으로 초기화됩니다.
-- scheme을 번갈아 사용하더라도 iOS가 두 번째 URL을 실제로 앱에 전달했는지는 별도 검증이 필요합니다.
+- 73번에서 추가했던 scheme 번갈아 사용은 canonical scheme을 매번 새 nonce로 실행하는 방식으로 정리했습니다.
+- Chrome이 두 번째 URL을 실제로 앱에 전달했는지는 여전히 native trace로 확인해야 합니다.
 
 ### 5.2 React Native URL 수신
 
@@ -235,10 +236,11 @@ URL parse
   → 준비됐으면 WebView에 window.location.assign(destination) 주입
 ```
 
-현재 dedupe 기준은 raw URL 문자열입니다.
+현재 dedupe 기준은 raw URL 문자열이며, 동일 URL은 짧은 중복 전달 구간(1.5초)에서만 무시합니다.
 
 ```text
 lastHandledProfileLinkRef.current === rawUrl
+  && Date.now() - lastHandledProfileLinkAtRef.current < 1500
 ```
 
 따라서 같은 raw URL은 한 번만 처리하고, nonce가 다른 URL은 새 요청으로 처리합니다.
@@ -256,6 +258,8 @@ application(_:open:options:)
   → NativeRuntimeConfigModule.recordIncomingProfileLink(url)
   → RCTLinkingManager.application(...)
 ```
+
+앱이 완전히 종료된 cold start에서 launch option에 URL이 들어오는 경우에도 같은 pending 저장을 수행합니다. AppDelegate는 scheme, sequence, nonce 존재 여부를 native log에 남깁니다.
 
 Universal Link는 다음 callback으로 들어옵니다.
 
@@ -307,7 +311,7 @@ window.location.assign("https://mingle-2-0-0-production.up.railway.app/ko/users/
 - 현재 Git worktree clean
 - 시뮬레이터는 사용하지 않았습니다.
 
-중요하게도 위 검증은 **실제 iPhone의 Safari → Mingle warm-start 딥링크 2회 연속 시나리오를 검증하지 않습니다.**
+중요하게도 위 검증은 **실제 iPhone의 Chrome → Mingle warm-start 딥링크 2회 연속 시나리오를 검증하지 않습니다.**
 
 현재까지 확보하지 못한 증거:
 
@@ -320,20 +324,20 @@ window.location.assign("https://mingle-2-0-0-production.up.railway.app/ko/users/
 
 ## 7. 전문가가 우선 확인해야 할 가설
 
-### 가설 A. 두 번째 클릭이 iOS까지 도달하지 않음
+### 가설 A. 두 번째 클릭이 Chrome에서 iOS까지 도달하지 않음
 
 가능한 원인:
 
-- Safari의 custom scheme 외부 실행 정책
-- `window.location.assign()`이 같은 페이지에서 두 번째 외부 scheme 실행을 막음
-- scheme query가 달라도 Safari/WebKit이 앱 실행을 dedupe함
+- Chrome의 custom scheme 외부 실행 정책
+- 브라우저의 `window.location.assign()` 방식이 사용자 activation을 잃음
+- scheme query가 달라도 Chrome/WebKit이 앱 실행을 dedupe함
 - `mingleprofile` scheme이 실제 설치된 73번 bundle에 등록되지 않음
 - 사용자가 실제로는 이전 browser bundle의 버튼을 누르고 있음
 
 확인 방법:
 
 - AppDelegate의 open URL 로그 확인
-- Safari Web Inspector에서 두 번째 버튼 클릭 시 실행 URL 확인
+- Chrome DevTools에서 두 번째 버튼 클릭 직전 `browser_open` 로그와 실행 URL 확인
 - iOS 설치 앱의 Info.plist에서 `mingle`/`mingleprofile` 등록 여부 확인
 
 ### 가설 B. iOS callback은 오지만 React Native JS 이벤트가 누락됨
@@ -388,7 +392,7 @@ window.location.assign("https://mingle-2-0-0-production.up.railway.app/ko/users/
 ## 8. 반드시 지켜야 할 검수 주의사항
 
 1. TestFlight 72가 아니라 반드시 **2.0.0 (73)** 을 사용해야 합니다.
-2. Safari의 기존 탭이 오래 열려 있으면 이전 JS bundle일 수 있으므로, 새 탭 또는 비공개 탭에서 공유 링크를 다시 열어야 합니다.
+2. Chrome의 기존 탭이 오래 열려 있으면 이전 JS bundle일 수 있으므로, 새 탭 또는 시크릿 탭에서 공유 링크를 다시 열어야 합니다.
 3. 앱을 테스트하기 전 TestFlight에서 Mingle을 완전히 종료한 cold-start 케이스와, 이미 Mingle이 열려 있는 warm-start 케이스를 각각 분리해야 합니다.
 4. 첫 번째 대상과 두 번째 대상을 서로 다른 사용자로 테스트해야 “같은 화면이라 변하지 않은 것”과 “라우팅 실패”를 구분할 수 있습니다.
 5. 앱을 단순히 foreground로 올린 것인지, 실제로 두 번째 URL을 처리한 것인지 로그로 구분해야 합니다.
@@ -459,7 +463,7 @@ profile_link_webview_navigation_state
 
 ```text
 web click 없음
-  → Safari/browser page cache 또는 버튼 실행 문제
+  → Chrome/browser page cache 또는 버튼 실행 문제
 
 web click 있음, AppDelegate 없음
   → iOS custom scheme 전달/등록/외부 실행 문제
@@ -479,7 +483,7 @@ WebView navigation state 있음, 화면 대상 불일치
 
 ## 10. 검수자가 답을 주었으면 하는 질문
 
-1. iOS에서 앱이 이미 실행 중인 상태로 Safari custom scheme을 두 번 호출할 때, query nonce 또는 scheme alias가 있어도 `application(_:open:options:)` callback이 항상 호출되는 것이 맞습니까?
+1. iOS에서 앱이 이미 실행 중인 상태로 Chrome custom scheme을 두 번 호출할 때, query nonce가 달라져도 `application(_:open:options:)` callback이 항상 호출되는 것이 맞습니까?
 2. RN New Architecture에서 `RCTLinkingManager`의 warm URL event를 AppDelegate callback과 함께 안정적으로 보장하려면 별도 native event queue가 필요합니까?
 3. `window.location.assign()` 대신 `Linking.openURL()` 또는 별도 native module 호출을 사용해야 하는 경로가 있습니까?
 4. `mingleprofile`처럼 두 번째 custom scheme을 등록하는 방식이 iOS에서 실효성이 있습니까, 아니면 근본 원인을 가리는 임시 우회입니까?
@@ -495,13 +499,13 @@ WebView navigation state 있음, 화면 대상 불일치
 ### iOS cold start
 
 - Mingle 강제 종료
-- Safari에서 상대 A의 `/p/{userIdA}` 열기
+- Chrome에서 상대 A의 `/p/{userIdA}` 열기
 - “앱에서 열기” 클릭
 - Mingle이 실행되고 A 프로필 표시
 
 ### iOS warm start, 다른 사용자
 
-- Safari로 복귀
+- Chrome으로 복귀
 - 상대 B의 `/p/{userIdB}` 열기
 - “앱에서 열기” 클릭
 - Mingle이 foreground가 되고 B 프로필 표시
@@ -527,6 +531,11 @@ WebView navigation state 있음, 화면 대상 불일치
 
 ## 12. 현재 결론
 
-현재까지의 코드 검증과 TestFlight 업로드는 성공했지만, 실제 사용자 기기에서 두 번째 링크가 실패하는 핵심 지점은 아직 관측되지 않았습니다. 72번에서 단순 nonce 변경이 실패했고 73번에서 scheme alias와 native pending queue까지 추가했는데도 문제가 남았으므로, 다음 작업은 또 다른 추측성 URL 변형보다 **실제 iPhone의 두 번째 클릭이 어느 callback 단계에서 끊기는지 계측하는 것**이 우선입니다.
+현재 결정한 후속 방향은 Chrome을 실제 사용 경로로 전제하고 다음 네 가지를 함께 적용하는 것입니다.
 
-전문가 검수에서는 반드시 `Safari click → AppDelegate → Linking → pending consume → WebView navigation`의 trace를 한 번에 확보한 뒤, 실패 단계에 한정해 수정 방향을 제시해 주시기 바랍니다.
+1. 브라우저의 `window.location.assign()` 대신 실제 anchor 기본 이동을 사용해 클릭 activation을 보존합니다.
+2. scheme을 번갈아 바꾸는 임시 우회는 제거하고 canonical `mingle://` + 매 클릭 nonce를 사용합니다.
+3. native pending 소비를 앱 active 직후와 짧은 재시도 구간에서 반복해 warm-start 이벤트 순서 경쟁을 완화합니다.
+4. 브라우저 클릭, AppDelegate 기록, Linking 수신, pending 소비, WebView route 주입을 `[MingleProfileLink]` trace로 남깁니다.
+
+이 변경은 특정 브라우저 원인을 확정한 것이 아니라, 사용자가 실제로 사용하는 Chrome 경로에서 user activation과 native pending fallback을 강화한 것입니다. TestFlight 74에서 실제 iPhone의 `Chrome click → AppDelegate → Linking/pending → WebView navigation` trace를 확인한 뒤, 남아 있는 실패 단계에 한정해 추가 수정해야 합니다.

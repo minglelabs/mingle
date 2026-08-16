@@ -35,6 +35,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
       launchOptions: launchOptions
     )
 
+    if let launchURL = launchOptions?[.url] as? URL {
+      NativeRuntimeConfigModule.recordIncomingProfileLink(launchURL)
+    }
+
     return true
   }
 

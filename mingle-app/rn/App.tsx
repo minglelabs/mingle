@@ -405,6 +405,25 @@ const DEFAULT_WS_FALLBACK_URL = resolveDistinctFallbackTarget(
   DEFAULT_WS_URL,
   normalizeWsUrl(RUNTIME_FALLBACK_WS_URL),
 );
+const PROFILE_LINK_DUPLICATE_WINDOW_MS = 1_500;
+
+function getProfileLinkUserIdHint(userId: string): string {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return '';
+  return normalizedUserId.length <= 6 ? normalizedUserId : `…${normalizedUserId.slice(-6)}`;
+}
+
+function recordProfileLinkTrace(event: string, details: Record<string, unknown> = {}): void {
+  try {
+    console.info('[MingleProfileLink]', JSON.stringify({
+      event,
+      at: Date.now(),
+      ...details,
+    }));
+  } catch {
+    // Diagnostic logging must never affect navigation.
+  }
+}
 
 function parseOptionalSonioxManualFinalizeSilenceMs(value: unknown): number | undefined {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -1163,6 +1182,8 @@ function AppInner(): React.JSX.Element {
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
   const pendingProfileLinkUserIdRef = useRef<string | null>(null);
   const lastHandledProfileLinkRef = useRef('');
+  const lastHandledProfileLinkAtRef = useRef(0);
+  const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const profileLinkNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
@@ -1344,10 +1365,21 @@ function AppInner(): React.JSX.Element {
 
     if (!isPageReadyRef.current || !webViewRef.current) {
       pendingProfileLinkUserIdRef.current = normalizedUserId;
+      recordProfileLinkTrace('native_profile_route_pending', {
+        userIdHint: getProfileLinkUserIdHint(normalizedUserId),
+        pageReady: isPageReadyRef.current,
+        hasWebView: Boolean(webViewRef.current),
+        navigationSequence: profileLinkNavigationSequenceRef.current,
+      });
       return;
     }
 
     pendingProfileLinkUserIdRef.current = null;
+    recordProfileLinkTrace('native_profile_route_injected', {
+      userIdHint: getProfileLinkUserIdHint(normalizedUserId),
+      navigationSequence: profileLinkNavigationSequenceRef.current,
+      destinationHasNonce: destination.includes('profileLinkNonce='),
+    });
     webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(destination)}); true;`);
   }, [activeWebAppBaseUrl, nativeAvailable, webLocale]);
   const handleIncomingProfileLink = useCallback((rawUrl: string) => {
@@ -1359,19 +1391,34 @@ function AppInner(): React.JSX.Element {
     const parsed = candidateOrigins
       .map((origin) => parseNativeProfileLink(rawUrl, origin))
       .find((value) => value !== null);
-    if (!parsed) return false;
+    if (!parsed) {
+      recordProfileLinkTrace('native_profile_link_rejected');
+      return false;
+    }
 
+    recordProfileLinkTrace('native_profile_link_received', {
+      source: parsed.source,
+      userIdHint: getProfileLinkUserIdHint(parsed.userId),
+    });
     navigateWebViewToProfile(parsed.userId);
     return true;
   }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
   const handleIncomingProfileLinkOnce = useCallback((rawUrl: string) => {
     const normalizedUrl = rawUrl.trim();
     if (!normalizedUrl) return false;
-    if (lastHandledProfileLinkRef.current === normalizedUrl) return true;
+    const now = Date.now();
+    if (
+      lastHandledProfileLinkRef.current === normalizedUrl
+      && now - lastHandledProfileLinkAtRef.current < PROFILE_LINK_DUPLICATE_WINDOW_MS
+    ) {
+      recordProfileLinkTrace('native_profile_link_duplicate_ignored');
+      return true;
+    }
 
     const handled = handleIncomingProfileLink(normalizedUrl);
     if (handled) {
       lastHandledProfileLinkRef.current = normalizedUrl;
+      lastHandledProfileLinkAtRef.current = now;
     }
     return handled;
   }, [handleIncomingProfileLink]);
@@ -1383,6 +1430,9 @@ function AppInner(): React.JSX.Element {
       const pending = await getPendingProfileLink();
       if (!pending || typeof pending !== 'object' || typeof pending.url !== 'string') return;
 
+      recordProfileLinkTrace('native_pending_profile_link_found', {
+        sequence: typeof pending.sequence === 'number' ? pending.sequence : 0,
+      });
       const handled = handleIncomingProfileLinkOnce(pending.url);
       if (!handled) return;
 
@@ -1390,18 +1440,38 @@ function AppInner(): React.JSX.Element {
         ? pending.sequence
         : 0;
       await NATIVE_CONVERSATION_RESTORE_STORAGE.clearPendingProfileLink?.(sequence);
+      recordProfileLinkTrace('native_pending_profile_link_consumed', { sequence });
     } catch {
       // The regular React Native Linking event remains the primary path.
+      recordProfileLinkTrace('native_pending_profile_link_error');
     }
   }, [handleIncomingProfileLinkOnce]);
+  const schedulePendingProfileLinkConsumption = useCallback(() => {
+    pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingProfileLinkRetryTimersRef.current = [];
+
+    void consumePendingProfileLink();
+    [150, 500, 1_200].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        void consumePendingProfileLink();
+      }, delayMs);
+      pendingProfileLinkRetryTimersRef.current.push(timer);
+    });
+  }, [consumePendingProfileLink]);
   const handleShouldStartLoadWithRequest = useCallback((request: WebViewNavigation) => {
     const rawUrl = typeof request.url === 'string' ? request.url.trim() : '';
-    if (rawUrl && handleIncomingProfileLinkOnce(rawUrl)) return false;
+    if (rawUrl && handleIncomingProfileLinkOnce(rawUrl)) {
+      recordProfileLinkTrace('webview_profile_link_intercepted');
+      return false;
+    }
     return true;
   }, [handleIncomingProfileLinkOnce]);
   const flushPendingProfileLinkToWeb = useCallback(() => {
     const pendingUserId = pendingProfileLinkUserIdRef.current;
     if (!pendingUserId || !isPageReadyRef.current) return;
+    recordProfileLinkTrace('native_pending_profile_route_flushed', {
+      userIdHint: getProfileLinkUserIdHint(pendingUserId),
+    });
     navigateWebViewToProfile(pendingUserId);
   }, [navigateWebViewToProfile]);
   useEffect(() => {
@@ -1423,37 +1493,41 @@ function AppInner(): React.JSX.Element {
     let mounted = true;
     const handleUrl = (rawUrl: string | null | undefined) => {
       if (!mounted || typeof rawUrl !== 'string') return;
+      recordProfileLinkTrace('react_native_linking_event');
       handleIncomingProfileLinkOnce(rawUrl);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
       // Ignore malformed or unavailable initial URLs.
     });
-    void consumePendingProfileLink();
+    schedulePendingProfileLinkConsumption();
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleUrl(url);
-      void consumePendingProfileLink();
+      schedulePendingProfileLinkConsumption();
     });
 
     return () => {
       mounted = false;
       subscription.remove();
+      pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+      pendingProfileLinkRetryTimersRef.current = [];
     };
-  }, [consumePendingProfileLink, handleIncomingProfileLinkOnce]);
+  }, [handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
       const becameActive = previousState !== 'active' && nextState === 'active';
       previousState = nextState;
       if (becameActive) {
-        void consumePendingProfileLink();
+        recordProfileLinkTrace('app_state_active_for_profile_link');
+        schedulePendingProfileLinkConsumption();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [consumePendingProfileLink]);
+  }, [schedulePendingProfileLinkConsumption]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],

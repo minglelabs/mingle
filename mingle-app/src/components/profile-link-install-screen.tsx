@@ -5,11 +5,10 @@ import {
   Play,
   Smartphone,
 } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type MouseEvent } from "react";
 import {
   buildProfileAppUrl,
   isValidProfileLinkUserId,
-  PROFILE_APP_FALLBACK_SCHEME,
   PROFILE_APP_SCHEME,
 } from "@/lib/profile-link";
 
@@ -67,15 +66,28 @@ export default function ProfileLinkInstallScreen({
   );
   const launchNonceRef = useRef(0);
 
-  const handleOpenInApp = () => {
-    if (!appUrl) return;
+  const handleOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!appUrl) {
+      event.preventDefault();
+      return;
+    }
+
     launchNonceRef.current += 1;
     const launchNonce = String(Date.now()) + "-" + String(launchNonceRef.current);
-    const scheme = launchNonceRef.current % 2 === 0
-      ? PROFILE_APP_FALLBACK_SCHEME
-      : PROFILE_APP_SCHEME;
-    const launchUrl = buildProfileAppUrl(userId, launchNonce, scheme) ?? appUrl;
-    window.location.assign(launchUrl);
+    const launchUrl = buildProfileAppUrl(userId, launchNonce, PROFILE_APP_SCHEME) ?? appUrl;
+
+    // Keep this as a real anchor navigation. Chrome treats the browser's
+    // default action as the user's activation, which is more reliable for
+    // repeatedly opening a custom URL scheme than window.location.assign().
+    // Updating href in the click handler also gives every attempt a fresh URL
+    // without losing the browser gesture.
+    event.currentTarget.href = launchUrl;
+    console.info("[MingleProfileLink] browser_open", {
+      attempt: launchNonceRef.current,
+      scheme: PROFILE_APP_SCHEME,
+      hasNonce: true,
+      nonceHint: launchNonce.slice(-8),
+    });
   };
 
   if (!isValid) {
@@ -100,14 +112,14 @@ export default function ProfileLinkInstallScreen({
         </div>
         <h1 className="mt-6 text-center text-2xl font-bold tracking-tight">{copy.title}</h1>
 
-        <button
-          type="button"
+        <a
+          href={appUrl}
           onClick={handleOpenInApp}
           className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-base font-semibold text-white transition active:scale-[0.99]"
         >
           <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
           {copy.openInApp}
-        </button>
+        </a>
 
         <div className="mt-5 grid gap-3">
           {iosAppStoreUrl && (!isAndroid || isIos) ? (

@@ -1158,6 +1158,18 @@ class NativeRuntimeConfigModule: NSObject {
         let nextSequence = defaults.integer(forKey: pendingProfileLinkSequenceKey) + 1
         defaults.set(normalizedURL, forKey: pendingProfileLinkUrlKey)
         defaults.set(nextSequence, forKey: pendingProfileLinkSequenceKey)
+        let nonceHint = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == "linkNonce" })?
+            .value?
+            .suffix(8) ?? ""
+        NSLog(
+            "[MingleProfileLink] native_record scheme=%@ sequence=%ld hasNonce=%@ nonceHint=%@",
+            (url.scheme ?? "").lowercased(),
+            nextSequence,
+            url.query?.contains("linkNonce=") == true ? "true" : "false",
+            String(nonceHint)
+        )
     }
 
     private static func pendingProfileLinkPayload() -> [String: Any]? {
