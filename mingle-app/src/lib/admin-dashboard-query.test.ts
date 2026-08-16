@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   queryRawUnsafe: vi.fn(),
 }));
 
-vi.mock("@/lib/admin-dashboard-prisma", () => ({
-  adminDashboardPrisma: {
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
     adminDashboardDailyMetric: {
       findMany: mocks.findMany,
       createMany: mocks.createMany,

@@ -1,4 +1,4 @@
-import { adminDashboardPrisma as prisma } from "@/lib/admin-dashboard-prisma";
+import { prisma } from "@/lib/prisma";
 import {
   type AdminDashboardDateRange,
   type DailyRow,
