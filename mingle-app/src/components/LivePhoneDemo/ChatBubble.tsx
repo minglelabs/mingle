@@ -3,7 +3,6 @@
 import { memo, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { Quote } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import {
@@ -218,11 +217,15 @@ function ChatLanguageBadge({
           aria-hidden="true"
           className="absolute -right-0.5 -top-0.5 inline-flex h-[7px] w-[7px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_2px_rgba(15,23,42,0.18)]"
         >
-          <Quote
+          <Image
             data-original-language-quote-icon
             aria-hidden="true"
-            className="h-[7px] w-[7px]"
-            strokeWidth={2.5}
+            src="/chat/original-language-quote.png"
+            alt=""
+            width={7}
+            height={7}
+            className="h-[6px] w-[6px] object-contain"
+            unoptimized
           />
         </span>
       )}
