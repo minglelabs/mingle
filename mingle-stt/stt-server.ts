@@ -604,20 +604,21 @@ wss.on('connection', (clientWs) => {
                 language?: unknown;
                 speaker?: unknown;
             };
-            const logSonioxTokens = (tokens: SonioxToken[]): void => {
-                for (const token of tokens) {
-                    const isFinal = typeof token.is_final === 'boolean'
-                        ? String(token.is_final)
-                        : 'unknown';
-                    const speaker = normalizeSpeaker(token.speaker);
-                    const language = normalizeDetectedLang(token.language);
-                    const text = typeof token.text === 'string'
-                        ? token.text
-                        : String(token.text ?? '');
-                    console.log(
-                        `is_final=${isFinal}, speaker=${speaker}, language=${language}, text=${text}`,
-                    );
-                }
+            const logSonioxTokenBatch = (tokens: SonioxToken[]): void => {
+                if (tokens.length === 0) return;
+                const summarize = (values: string[]): string => {
+                    const uniqueValues = Array.from(new Set(values));
+                    return uniqueValues.length === 1 ? uniqueValues[0]! : 'mixed';
+                };
+                const isFinal = summarize(tokens.map((token) => (
+                    typeof token.is_final === 'boolean' ? String(token.is_final) : 'unknown'
+                )));
+                const speaker = summarize(tokens.map((token) => normalizeSpeaker(token.speaker)));
+                const language = summarize(tokens.map((token) => normalizeDetectedLang(token.language)));
+                const text = tokens.map((token) => (
+                    typeof token.text === 'string' ? token.text : String(token.text ?? '')
+                )).join('');
+                console.log(`is_final=${isFinal}, speaker=${speaker}, language=${language}, text=${text}`);
             };
             type SonioxCommonSpeakerState = {
                 speaker: string;
@@ -1511,7 +1512,7 @@ wss.on('connection', (clientWs) => {
                 try {
                     const msg = JSON.parse(rawMessage);
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
-                    logSonioxTokens(tokens);
+                    logSonioxTokenBatch(tokens);
                     if (!isClientConnected) return;
 
                     if (msg.error_code) {
