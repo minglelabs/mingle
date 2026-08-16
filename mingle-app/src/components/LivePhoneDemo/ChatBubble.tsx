@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useState } from 'react'
+import { memo, useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
@@ -96,6 +96,54 @@ function normalizeTranslationLanguageKey(rawLanguage: string): string {
   return normalizeTranslationLanguageCode(rawLanguage).toLowerCase()
 }
 
+function findLanguageByKey(
+  languages: readonly string[],
+  targetKey: string,
+): string | null {
+  return languages.find((language) => normalizeTranslationLanguageKey(language) === targetKey) || null
+}
+
+export function resolveOriginalDisplayLanguage(
+  originalLanguage: string,
+  candidateLanguages: readonly string[] = [],
+  roomLanguageOrder: readonly string[] = [],
+): string {
+  if (normalizeTranslationLanguageKey(originalLanguage) !== 'zh') {
+    return originalLanguage
+  }
+
+  // Soniox reports generic Chinese as zh, while Gemini/translation targets
+  // use the script-specific zh-CN/zh-TW labels. Represent that source with
+  // one display language, preferring Simplified Chinese whenever both exist.
+  const roomSimplifiedChinese = findLanguageByKey(roomLanguageOrder, 'zh-cn')
+  if (roomSimplifiedChinese) return roomSimplifiedChinese
+
+  const roomTraditionalChinese = findLanguageByKey(roomLanguageOrder, 'zh-tw')
+  if (roomTraditionalChinese) return roomTraditionalChinese
+
+  if (roomLanguageOrder.length > 0) return 'zh-CN'
+
+  return (
+    findLanguageByKey(candidateLanguages, 'zh-cn')
+    || findLanguageByKey(candidateLanguages, 'zh-tw')
+    || 'zh-CN'
+  )
+}
+
+function normalizeLanguageKeyForOriginalDisplay(
+  rawLanguage: string,
+  originalDisplayLanguage: string,
+): string {
+  const normalized = normalizeTranslationLanguageKey(rawLanguage)
+  if (
+    normalized === 'zh'
+    && normalizeTranslationLanguageKey(originalDisplayLanguage) !== 'zh'
+  ) {
+    return normalizeTranslationLanguageKey(originalDisplayLanguage)
+  }
+  return normalized
+}
+
 function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
   const normalized = normalizeLanguageCode(rawLanguage)
   if (!normalized || normalized === 'unknown') {
@@ -104,8 +152,12 @@ function getOriginalLanguageBadgeLabel(rawLanguage: string): string {
   return rawLanguage
 }
 
-function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
-  const sourceLanguage = normalizeTranslationLanguageKey(utterance.originalLang)
+function buildTargetLanguagesForUtterance(
+  utterance: Utterance,
+  originalDisplayLanguage = utterance.originalLang,
+): string[] {
+  const sourceLanguage = normalizeTranslationLanguageKey(originalDisplayLanguage)
+  const hasGenericChineseSource = normalizeTranslationLanguageKey(utterance.originalLang) === 'zh'
   const keepSourceLanguageBubble = (
     utterance.sourceLanguagesMixed === true
     || utterance.sourceTextHasForeignScript === true
@@ -117,6 +169,12 @@ function buildTargetLanguagesForUtterance(utterance: Utterance): string[] {
     const language = (rawLanguage || '').trim()
     if (!language) return
     const normalized = normalizeTranslationLanguageKey(language)
+    if (
+      hasGenericChineseSource
+      && (normalized === 'zh' || normalized === sourceLanguage)
+    ) {
+      return
+    }
     if (!keepSourceLanguageBubble && sourceLanguage && normalized === sourceLanguage) return
     const key = normalized || language.toLowerCase()
     if (seen.has(key)) return
@@ -139,7 +197,7 @@ function buildLanguageOptionsForUtterance(
   const availableLanguages = [originalLanguage, ...targetLanguages]
   const availableByKey = new Map<string, string>()
   for (const language of availableLanguages) {
-    const key = normalizeTranslationLanguageKey(language)
+    const key = normalizeLanguageKeyForOriginalDisplay(language, originalLanguage)
     if (key && !availableByKey.has(key)) availableByKey.set(key, language)
   }
 
@@ -160,7 +218,7 @@ function buildLanguageOptionsForUtterance(
     : [originalLanguage, ...targetLanguages]
 
   for (const language of orderedCandidates) {
-    const normalizedKey = normalizeTranslationLanguageKey(language)
+    const normalizedKey = normalizeLanguageKeyForOriginalDisplay(language, originalLanguage)
     pushLanguage(normalizedKey ? (availableByKey.get(normalizedKey) || language) : language)
   }
 
@@ -203,10 +261,10 @@ export function resolveInitialDisplayLanguage(
 ): string {
   const availableLanguages = [originalLanguage, ...targetLanguages]
   const findAvailableLanguage = (rawLanguage: string | null | undefined) => {
-    const languageKey = normalizeTranslationLanguageKey(rawLanguage || '')
+    const languageKey = normalizeLanguageKeyForOriginalDisplay(rawLanguage || '', originalLanguage)
     if (!languageKey) return null
     return availableLanguages.find((language) => (
-      normalizeTranslationLanguageKey(language) === languageKey
+      normalizeLanguageKeyForOriginalDisplay(language, originalLanguage) === languageKey
     )) || null
   }
 
@@ -217,7 +275,7 @@ export function resolveInitialDisplayLanguage(
 
   const originalKey = normalizeTranslationLanguageKey(originalLanguage)
   for (const preferredLanguage of preferredLanguages || []) {
-    const preferredKey = normalizeTranslationLanguageKey(preferredLanguage)
+    const preferredKey = normalizeLanguageKeyForOriginalDisplay(preferredLanguage, originalLanguage)
     if (!preferredKey) continue
 
     if (preferredKey === originalKey) {
@@ -320,8 +378,17 @@ function ChatBubble({
   speakingPlaybackKey,
   shouldAnimateEntrance = true,
 }: ChatBubbleProps) {
-  const flag = getSttLanguageFlag(utterance.originalLang)
-  const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(utterance.originalLang)
+  const originalDisplayLanguage = resolveOriginalDisplayLanguage(
+    utterance.originalLang,
+    [
+      ...(utterance.targetLanguages || []),
+      ...Object.keys(utterance.translations || {}),
+      ...Object.keys(utterance.translationFinalized || {}),
+    ],
+    languageOrder,
+  )
+  const flag = getSttLanguageFlag(originalDisplayLanguage)
+  const originalLanguageBadgeLabel = getOriginalLanguageBadgeLabel(originalDisplayLanguage)
   const avatar = getSpeakerAvatar(
     utterance.speaker,
     utterance.speakerAvatarSeed,
@@ -332,10 +399,7 @@ function ChatBubble({
   const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
-  const targetLangs = useMemo(
-    () => buildTargetLanguagesForUtterance(utterance),
-    [utterance],
-  )
+  const targetLangs = buildTargetLanguagesForUtterance(utterance, originalDisplayLanguage)
   const translationEntries = targetLangs
     .map((lang) => {
       const text = findLanguageRecordValue(utterance.translations, lang) || ''
@@ -348,7 +412,7 @@ function ChatBubble({
   })
   const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
   const languageOptions = buildLanguageOptionsForUtterance(
-    utterance.originalLang,
+    originalDisplayLanguage,
     targetLangs,
     languageOrder,
   )
@@ -358,16 +422,16 @@ function ChatBubble({
         ? preferredDisplayLanguages
         : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
       defaultDisplayLanguage,
-      utterance.originalLang,
+      originalDisplayLanguage,
       targetLangs,
       languageOrder,
     )
   ))
   const activeLanguage = languageOptions.find((language) => (
     normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
-  )) || utterance.originalLang
+  )) || originalDisplayLanguage
   const isOriginalLanguageSelected = normalizeTranslationLanguageKey(activeLanguage)
-    === normalizeTranslationLanguageKey(utterance.originalLang)
+    === normalizeTranslationLanguageKey(originalDisplayLanguage)
   const activeTranslationEntry = isOriginalLanguageSelected
     ? null
     : translationEntries.find((entry) => (
@@ -416,7 +480,7 @@ function ChatBubble({
         >
           {languageOptions.map((lang) => {
             const isOriginal = normalizeTranslationLanguageKey(lang)
-              === normalizeTranslationLanguageKey(utterance.originalLang)
+              === normalizeTranslationLanguageKey(originalDisplayLanguage)
             return (
               <ChatLanguageBadge
                 key={lang}

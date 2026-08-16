@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Generic Chinese Source Display Mapping
+
+- Surface: Unified conversation message bubbles and their language buttons.
+- Issue: Soniox can report a Chinese source as the generic zh code while the translation provider returns a script-specific zh-CN or zh-TW code. The bubble treated those codes as unrelated languages, so one Chinese utterance could render two Chinese buttons and attach the original-language quote badge to the wrong button.
+- User impact: Users saw duplicate Chinese choices and could not tell which button represented the spoken source.
+- Resolution: The bubble now resolves a generic zh source to one display language. It prefers zh-CN when that code is in the current conversation language order, otherwise zh-TW when that is present, and otherwise uses zh-CN. The generic source and the chosen script-specific alias are removed from the translation target list so only one source button is rendered. If both script variants are configured, zh-CN carries the original-language badge while zh-TW remains available as a separate user-selected translation target. Legacy generic zh entries in the room order are normalized to the same display button.
+- Data/provider boundary: Soniox and translation payloads remain unchanged; this is a display-layer compatibility mapping and does not alter stored language codes or API requests.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Primary Language Settings Parity
 
 - Surface: My Page hamburger menu, primary-language settings page, and Profile Edit.
