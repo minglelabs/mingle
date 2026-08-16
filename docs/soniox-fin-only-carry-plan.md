@@ -1,10 +1,30 @@
 # Soniox `fin`-Only Carry Separation Plan
 
-- Status: Draft for technical review
+- Status: Implemented and locally verified
 - Baseline branch: `codex/soniox-endpoint-devbox`
 - Baseline commit: `15076953`
 - Scope: `mingle-stt` Soniox real-time utterance segmentation
-- Runtime behavior change: Not implemented in this document
+- Runtime behavior change: Implemented after technical review
+
+## Implementation status (2026-08-16)
+
+The reviewed design was implemented as one deployable change set:
+
+- Requested and effective modes are resolved once, including `llm -> fin` fallback.
+- Manual-finalize and provider-endpoint decisions are separate, so endpoint
+  decisions cannot return carry.
+- Speaker state is a discriminated `fin`/`end` union; only `fin` owns a
+  `ManualFinalizeCarryController`.
+- Token order is preserved around `<end>` and `<fin>`, including post-marker input.
+- A stop-flush request remains active when `<end>` arrives before its `<fin>`
+  completion barrier.
+- Boundary action/cause logs and duplicate-stop suppression are explicit.
+- Live STT tests now send the configured API namespace over WebSocket.
+
+Validation included STT unit/build checks, the full app unit suite, an
+`ios/v1.1.4` live stop suite, and a real Soniox `<end>` generated from a fixture
+with trailing silence. Effective `end` produced zero carry lifecycle events and
+no final transcript containing a boundary marker.
 
 ## 1. Executive summary
 

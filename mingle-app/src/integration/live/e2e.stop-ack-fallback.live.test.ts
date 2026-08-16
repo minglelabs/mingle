@@ -24,6 +24,7 @@ describeWithFixtureCandidates('e2e regression: stop ack fallback path', () => {
     const stt = await streamAudioFixtureToStt({
       fixture: fixtureEntry.fixture,
       sttWsUrl: env.sttWsUrl,
+      apiNamespace: env.apiNamespace,
       sourceLanguageHint: env.sourceLanguageHint,
       sttModel: env.sttModel,
       streamChunkMs: env.streamChunkMs,

@@ -632,6 +632,7 @@ export type StreamAudioToSttResult = {
 export async function streamAudioFixtureToStt(args: {
   fixture: Pcm16MonoWav
   sttWsUrl: string
+  apiNamespace: string
   sourceLanguageHint: string
   sttModel: string
   streamChunkMs: number
@@ -660,6 +661,7 @@ export async function streamAudioFixtureToStt(args: {
     languages: [args.sourceLanguageHint],
     stt_model: args.sttModel,
     lang_hints_strict: true,
+    ...(args.apiNamespace ? { api_namespace: args.apiNamespace } : {}),
     ...(args.wsInitOverrides || {}),
   }))
   await waitForReady(ws, args.wsReadyTimeoutMs)

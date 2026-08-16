@@ -20,6 +20,7 @@ describeWithFixtureCandidates('e2e regression: soniox endpoint compatibility', (
     const stt = await streamAudioFixtureToStt({
       fixture: fixtureEntry.fixture,
       sttWsUrl: env.sttWsUrl,
+      apiNamespace: env.apiNamespace,
       sourceLanguageHint: env.sourceLanguageHint,
       sttModel: env.sttModel,
       streamChunkMs: env.streamChunkMs,
