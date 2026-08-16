@@ -6346,11 +6346,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   className="pointer-events-none absolute inset-x-0 z-30 flex justify-center"
                   style={{ bottom: copyToastBottomOffsetPx }}
                 >
-                  <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2.5 shadow-[0_4px_16px_rgba(15,23,42,0.14),0_1px_4px_rgba(15,23,42,0.07)]">
-                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <div className="flex items-center gap-2 rounded-full bg-black px-4 py-2.5 text-white shadow-[0_4px_16px_rgba(15,23,42,0.24),0_1px_4px_rgba(0,0,0,0.2)]">
+                    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-black">
                       <Check className="h-3 w-3" strokeWidth={3} />
                     </span>
-                    <span className="text-[14px] font-medium text-gray-800">
+                    <span className="text-[14px] font-medium text-white">
                       {floatingToastMessage}
                     </span>
                   </div>

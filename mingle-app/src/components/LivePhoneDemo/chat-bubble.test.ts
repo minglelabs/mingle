@@ -63,13 +63,13 @@ describe('ChatBubble', () => {
     expect(html.indexOf('data-chat-bubble-language-badges')).toBeLessThan(
       html.indexOf('data-current-bubble-text-value'),
     )
-    expect(html).toContain('aria-label="Copy All"')
+    expect(html).toContain('aria-label="Copy"')
     expect(html).toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
     expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
-      html.indexOf('aria-label="Copy All"'),
+      html.indexOf('aria-label="Copy"'),
     )
     expect(html).toContain('class="align-middle"')
   })
@@ -102,13 +102,13 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-sm text-gray-400')
     expect(html).not.toContain('bg-amber-50')
     expect(html).not.toContain('bg-gray-100 border border-gray-200')
-    expect(html).toContain('aria-label="Copy All"')
+    expect(html).toContain('aria-label="Copy"')
     expect(html).toContain('data-message-copy-button')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
     expect(html).not.toContain('data-original-bubble-body')
     expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
-      html.indexOf('aria-label="Copy All"'),
+      html.indexOf('aria-label="Copy"'),
     )
     expect(html).not.toContain('data-interim-translation-cursor')
   })

@@ -215,16 +215,16 @@ function ChatLanguageBadge({
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 inline-flex h-[7px] w-[7px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_2px_rgba(15,23,42,0.18)]"
+          className="absolute -right-1 -top-1 inline-flex h-[10px] w-[10px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
         >
           <Image
             data-original-language-quote-icon
             aria-hidden="true"
             src="/chat/original-language-quote.png"
             alt=""
-            width={7}
-            height={7}
-            className="h-[6px] w-[6px] object-contain"
+            width={10}
+            height={10}
+            className="h-[10px] w-[10px] object-contain"
             unoptimized
           />
         </span>
@@ -443,8 +443,8 @@ function ChatBubble({
         </div>
 
         <MessageCopyButton
-          label={copyActionCopy.copyAllBubblesLabel}
-          text={combinedUtteranceCopyText}
+          label={copyActionCopy.copyBubbleLabel}
+          text={activeText}
           className="mb-3 h-5 self-end items-start pb-1"
         />
       </div>
