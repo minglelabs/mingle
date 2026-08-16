@@ -28,7 +28,6 @@ export type SonioxFinalizeRequestSpeaker = {
     detectedLang: string;
 };
 
-const ENDPOINT_MARKER_RE = /<\/?(?:end|fin)>/i;
 const ENDPOINT_MARKER_RE_GLOBAL = /<\/?(?:end|fin)>/gi;
 
 export function normalizeDetectedLang(rawLanguage: unknown): string {
@@ -76,8 +75,9 @@ export function buildSonioxDebugTokenRuns(tokens: SonioxDebugTokenLike[]): Sonio
     const runs: SonioxDebugTokenRun[] = [];
 
     for (const token of tokens) {
-        const text = typeof token.text === 'string' ? token.text : '';
-        if (!text || ENDPOINT_MARKER_RE.test(text)) {
+        const rawText = typeof token.text === 'string' ? token.text : '';
+        const text = rawText.replace(ENDPOINT_MARKER_RE_GLOBAL, '');
+        if (!text) {
             continue;
         }
 

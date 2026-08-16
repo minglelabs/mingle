@@ -595,6 +595,7 @@ async function streamAudioFixtureToStt(fixture: Pcm16MonoWav): Promise<FinalTurn
     languages: [SOURCE_LANGUAGE_HINT],
     stt_model: STT_MODEL,
     lang_hints_strict: true,
+    ...(API_NAMESPACE ? { api_namespace: API_NAMESPACE } : {}),
   }))
   await waitForReady(ws, WS_READY_TIMEOUT_MS)
 

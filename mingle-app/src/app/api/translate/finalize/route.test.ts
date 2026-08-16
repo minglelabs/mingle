@@ -296,7 +296,7 @@ describe('/api/translate/finalize route', () => {
     expect(json.ttsAudioMime).toBe('audio/mpeg')
   })
 
-  it('uses previous-state fallback for blank interim Gemini JSON while keeping diagnostic logs', async () => {
+  it('uses previous-state fallback for blank interim Gemini JSON without translation logs', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '{"en":" ","ko":" "}',
@@ -335,22 +335,8 @@ describe('/api/translate/finalize route', () => {
       })
       expect(json.provider).toBe('gemini')
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] gemini_blank_translations',
-      ))
-      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] gemini_unparseable_json',
-      ))
-      expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] provider_empty_response',
-      ))
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        '[translate/finalize] fallback_from_current_turn_previous_state',
-        expect.objectContaining({
-          fallbackLanguages: ['en', 'ko'],
-          reason: 'blank_translations',
-        }),
-      )
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
+      expect(consoleWarnSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -385,15 +371,7 @@ describe('/api/translate/finalize route', () => {
         ja: 'こんにちは',
       })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] missing_target_languages',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"missingTargetLanguages":["en"]',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"returnedLanguages":["ja"]',
-      ))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -437,15 +415,7 @@ describe('/api/translate/finalize route', () => {
         ja: 'こんにちは',
       })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] missing_target_languages',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"missingTargetLanguages":["en"]',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"returnedLanguages":["ja"]',
-      ))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -487,15 +457,7 @@ describe('/api/translate/finalize route', () => {
         ja: 'こんにちは',
       })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] missing_target_languages',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"missingTargetLanguages":["en"]',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"returnedLanguages":["ja"]',
-      ))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -529,15 +491,7 @@ describe('/api/translate/finalize route', () => {
         ja: 'こんにちは',
       })
       expect(mockGenerateContent).toHaveBeenCalledTimes(1)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] missing_target_languages',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"missingTargetLanguages":["en"]',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"returnedLanguages":["ja"]',
-      ))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -568,12 +522,7 @@ describe('/api/translate/finalize route', () => {
 
       expect(res.status).toBe(502)
       expect(json).toEqual({ error: 'empty_translation_response' })
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] gemini_blank_translations',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] provider_empty_response',
-      ))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -1517,7 +1466,7 @@ describe('/api/translate/finalize route', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('logs versioned route context when returning 502', async () => {
+  it('does not log Gemini translation details when returning 502', async () => {
     mockGenerateContent.mockResolvedValue({
       response: {
         text: () => '',
@@ -1543,17 +1492,7 @@ describe('/api/translate/finalize route', () => {
 
       expect(res.status).toBe(502)
       expect(json).toEqual({ error: 'empty_translation_response' })
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '[translate/finalize] provider_empty_response',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(
-        '"path":"/api/ios/v1.0.2/translate/finalize"',
-      ))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"method":"POST"'))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"sourceLanguage":"en"'))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"targetLanguages":["ko"]'))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"isFinal":true'))
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('"responseStatus":502'))
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleErrorSpy.mockRestore()
@@ -1735,30 +1674,7 @@ describe('/api/translate/finalize route', () => {
         'ja',
         'ko',
       ])
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        '[translate/finalize] prompt',
-        expect.objectContaining({
-          sourceLanguage: 'ja',
-          shouldRedetectSourceLanguage: true,
-          targetLanguages: ['en', 'ja', 'ko'],
-          systemPrompt: expect.not.stringContaining('\n'),
-          userPrompt: expect.not.stringContaining('\n'),
-        }),
-      )
-      expect(consoleInfoSpy).toHaveBeenCalledWith(
-        '[translate/finalize] gemini_response',
-        expect.objectContaining({
-          shouldRedetectSourceLanguage: true,
-          provider: 'gemini',
-          model: 'gemini-2.5-flash-lite',
-          rawResponse: '{"sourceLanguage":"ko","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요","ja":"こんにちは","en":"Hello"}',
-          usage: {
-            input_tokens: 12,
-            output_tokens: 18,
-            total_tokens: 30,
-          },
-        }),
-      )
+      expect(consoleInfoSpy).not.toHaveBeenCalled()
       expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       consoleInfoSpy.mockRestore()

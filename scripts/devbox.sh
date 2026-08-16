@@ -5096,24 +5096,6 @@ $(ngrok_plan_capacity_hint)"
     return 0
   fi
 
-  local stt_raw_log_file="$ROOT_DIR/.devbox-logs/stt-raw.log"
-  local shared_stt_raw_log_file=""
-  local git_common_dir=""
-  local repo_root_from_common=""
-  prepare_generated_file "$stt_raw_log_file"
-  if git_common_dir="$(git -C "$ROOT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
-    if repo_root_from_common="$(cd "$git_common_dir/.." 2>/dev/null && pwd -P)"; then
-      shared_stt_raw_log_file="$repo_root_from_common/.devbox-logs/stt-raw.log"
-      if [[ "$shared_stt_raw_log_file" != "$stt_raw_log_file" ]]; then
-        mkdir -p "$(dirname "$shared_stt_raw_log_file")"
-        ln -sfn "$stt_raw_log_file" "$shared_stt_raw_log_file"
-        log "stt soniox inbound log symlink: $shared_stt_raw_log_file -> $stt_raw_log_file"
-      fi
-    fi
-  fi
-  log "stt soniox inbound log: $stt_raw_log_file"
-  log "tail stt soniox log: tail -f $stt_raw_log_file"
-
   log "starting mingle-stt(port=$DEVBOX_STT_PORT) + mingle-app(port=$DEVBOX_WEB_PORT)"
   (
     cd "$ROOT_DIR/mingle-stt"
@@ -5124,7 +5106,7 @@ $(ngrok_plan_capacity_hint)"
       . "$runtime_stt_env_file"
       set +a
     fi
-    PORT="$DEVBOX_STT_PORT" SONIOX_RAW_JOINED_TOKEN_LOG_FILE="$stt_raw_log_file" pnpm dev
+    PORT="$DEVBOX_STT_PORT" pnpm dev
   ) &
   pids+=("$!")
 

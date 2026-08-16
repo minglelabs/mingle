@@ -120,6 +120,7 @@ type TranslateContext = {
   text: string
   sourceLanguage: string
   targetLanguages: string[]
+  provider: TranslationProvider
   shouldRedetectSourceLanguage: boolean
   immediatePreviousTurn: RecentTurnContext | null
   currentTurnPreviousState: CurrentTurnPreviousState | null
@@ -626,7 +627,7 @@ function parseFinalizeTestFaultMode(value: unknown): FinalizeTestFaultMode | nul
 }
 
 function logTranslateFinalizeInfo(event: string, payload: Record<string, unknown>) {
-  if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
+  if (!ENABLE_VERBOSE_TRANSLATE_LOGS || isGeminiTranslationLog(event, payload)) return
   console.info(`[translate/finalize] ${event}`, payload)
 }
 
@@ -641,7 +642,17 @@ function stringifyTranslateFinalizePayload(payload: Record<string, unknown>): st
 }
 
 function logTranslateFinalizeError(event: string, payload: Record<string, unknown>) {
+  if (isGeminiTranslationLog(event, payload)) return
   console.error(`[translate/finalize] ${event} ${stringifyTranslateFinalizePayload(payload)}`)
+}
+
+function logTranslateFinalizeWarning(event: string, payload: Record<string, unknown>) {
+  if (isGeminiTranslationLog(event, payload)) return
+  console.warn(`[translate/finalize] ${event}`, payload)
+}
+
+function isGeminiTranslationLog(_event: string, payload: Record<string, unknown>): boolean {
+  return payload.provider === 'gemini'
 }
 
 function summarizeUnknownError(error: unknown): Record<string, unknown> {
@@ -675,6 +686,7 @@ function buildTranslateFinalizeLogContext(ctx: TranslateContext): Record<string,
     method: ctx.requestMeta.requestMethod,
     clientBundleRev: ctx.requestMeta.clientBundleRev,
     sessionKeyHint: ctx.requestMeta.sessionKeyHint,
+    provider: ctx.provider,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
@@ -684,6 +696,7 @@ function buildTranslateFinalizeLogContext(ctx: TranslateContext): Record<string,
 }
 
 function logParsedTranslations(event: string, payload: {
+  provider: TranslationProvider
   sourceLanguage: string
   targetLanguages: string[]
   isFinal: boolean
@@ -692,7 +705,7 @@ function logParsedTranslations(event: string, payload: {
   translations: Record<string, string>
   usage?: Record<string, unknown>
 }) {
-  if (!ENABLE_VERBOSE_TRANSLATE_LOGS) return
+  if (!ENABLE_VERBOSE_TRANSLATE_LOGS || isGeminiTranslationLog(event, payload)) return
   console.info(`[translate/finalize] ${event}`, payload)
 }
 
@@ -1018,6 +1031,7 @@ async function translateWithGemini(
   const genAI = new GoogleGenerativeAI(config.apiKey)
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
   const promptLogPayload = {
+    provider: config.provider,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
@@ -1027,7 +1041,7 @@ async function translateWithGemini(
     userPrompt,
   }
   logTranslateFinalizeInfo('prompt', promptLogPayload)
-  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage && config.provider !== 'gemini') {
     console.info('[translate/finalize] prompt', formatPromptConsoleLog(promptLogPayload))
   }
   const responseSchema = buildGeminiResponseSchema(ctx.targetLanguages, {
@@ -1049,7 +1063,7 @@ async function translateWithGemini(
       if (!isRetryableGeminiError(error)) throw error
       const retryInMs = resolveProviderRetryDelayMs(error)
       if (!shouldRetryProviderError(error)) {
-        console.warn('[translate/finalize] provider_retry_skipped', {
+        logTranslateFinalizeWarning('provider_retry_skipped', {
           ...buildTranslateFinalizeLogContext(ctx),
           provider: config.provider,
           model: config.model,
@@ -1059,7 +1073,7 @@ async function translateWithGemini(
         throw error
       }
 
-      console.warn('[translate/finalize] provider_retry_scheduled', {
+      logTranslateFinalizeWarning('provider_retry_scheduled', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: config.provider,
         model: config.model,
@@ -1107,7 +1121,7 @@ async function translateWithGemini(
   }
 
   logTranslateFinalizeInfo('gemini_response', responseLogPayload)
-  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage) {
+  if (process.env.NODE_ENV !== 'production' && ctx.shouldRedetectSourceLanguage && config.provider !== 'gemini') {
     console.info('[translate/finalize] gemini_response', responseLogPayload)
   }
 
@@ -1189,6 +1203,7 @@ async function translateWithGemini(
   }
 
   logParsedTranslations('gemini_parsed_translations', {
+    provider: config.provider,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     isFinal: ctx.isFinal,
@@ -1373,7 +1388,7 @@ async function createOpenAICompatibleCompletion(
     if (!ctx.isFinal || !isRetryableOpenAICompatibleError(error)) throw error
     const retryInMs = resolveProviderRetryDelayMs(error)
     if (!shouldRetryProviderError(error)) {
-      console.warn('[translate/finalize] provider_retry_skipped', {
+      logTranslateFinalizeWarning('provider_retry_skipped', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: config.provider,
         model: config.model,
@@ -1383,7 +1398,7 @@ async function createOpenAICompatibleCompletion(
       throw error
     }
 
-    console.warn('[translate/finalize] provider_retry_scheduled', {
+    logTranslateFinalizeWarning('provider_retry_scheduled', {
       ...buildTranslateFinalizeLogContext(ctx),
       provider: config.provider,
       model: config.model,
@@ -1402,6 +1417,7 @@ async function translateWithOpenAICompatible(
 ): Promise<TranslationEngineResult | null> {
   const { systemPrompt, userPrompt } = buildPrompt(ctx)
   const promptLogPayload = {
+    provider: config.provider,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     shouldRedetectSourceLanguage: ctx.shouldRedetectSourceLanguage,
@@ -1508,6 +1524,7 @@ async function translateWithOpenAICompatible(
   }
 
   logParsedTranslations(`${config.provider}_parsed_translations`, {
+    provider: config.provider,
     sourceLanguage: ctx.sourceLanguage,
     targetLanguages: ctx.targetLanguages,
     isFinal: ctx.isFinal,
@@ -1671,6 +1688,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     text,
     sourceLanguage,
     targetLanguages,
+    provider: providerConfig.provider,
     shouldRedetectSourceLanguage,
     immediatePreviousTurn,
     currentTurnPreviousState,
@@ -1678,6 +1696,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     requestMeta,
   }
   logTranslateFinalizeInfo('request', {
+    provider: providerConfig.provider,
     sourceLanguage,
     targetLanguages,
     shouldRedetectSourceLanguage,
@@ -1763,7 +1782,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
     const activeProviderRateLimitCooldownMs = resolveActiveProviderRateLimitCooldownMs(providerConfig)
     if (activeProviderRateLimitCooldownMs !== null) {
       providerRequestFailureReason = 'provider_rate_limit_cooldown'
-      console.warn('[translate/finalize] provider_rate_limit_cooldown_active', {
+      logTranslateFinalizeWarning('provider_rate_limit_cooldown_active', {
         ...buildTranslateFinalizeLogContext(ctx),
         provider: providerConfig.provider,
         model: providerConfig.model,
@@ -1791,7 +1810,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         providerRequestFailureReason = 'provider_error'
         const retryInMs = rememberProviderRateLimitCooldown(providerConfig, error)
         if (retryInMs !== null) {
-          console.warn('[translate/finalize] provider_rate_limit_cooldown_started', {
+          logTranslateFinalizeWarning('provider_rate_limit_cooldown_started', {
             ...buildTranslateFinalizeLogContext(ctx),
             provider: providerConfig.provider,
             model: providerConfig.model,
@@ -1815,7 +1834,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         shouldUsePreviousStateFallback(selectedResult.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
-        console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
+        logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
           reason: 'blank_translations',
@@ -1848,7 +1867,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         && shouldUsePreviousStateFallback(providerConfig.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
-        console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
+        logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
           reason: providerRequestFailureReason || 'provider_empty_response',
@@ -1943,7 +1962,7 @@ export async function handleTranslateFinalizeV1(request: NextRequest) {
         && shouldUsePreviousStateFallback(selectedResult.provider)
         && Object.keys(fallbackTranslations).length > 0
       ) {
-        console.warn('[translate/finalize] fallback_from_current_turn_previous_state', {
+        logTranslateFinalizeWarning('fallback_from_current_turn_previous_state', {
           ...buildTranslateFinalizeLogContext(ctx),
           fallbackLanguages: Object.keys(fallbackTranslations),
           reason: 'target_language_miss',

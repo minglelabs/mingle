@@ -25,6 +25,7 @@ describeWithFixtureCandidates('e2e regression: stop chain integrity', () => {
     const stt = await streamAudioFixtureToStt({
       fixture: fixtureEntry.fixture,
       sttWsUrl: env.sttWsUrl,
+      apiNamespace: env.apiNamespace,
       sourceLanguageHint: env.sourceLanguageHint,
       sttModel: env.sttModel,
       streamChunkMs: env.streamChunkMs,

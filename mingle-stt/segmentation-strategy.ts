@@ -1,419 +1,444 @@
-/**
- * segmentation-strategy.ts
- *
- * 발화 분리(Utterance Segmentation) 전략 인터페이스와 구현체.
- *
- * 전략 선택: SONIOX_SEGMENTATION_STRATEGY 환경변수
- *   'silence-timer'    (기본값) — transcript 진행이 멈추면 finalize 명령 전송
- *   'soniox-endpoint'            — enable_endpoint_detection: true, Soniox 마커 기반
- *   'llm-segmentation'           — (Phase 2 미구현) silence-timer로 fallback
- */
-
-// ===== 공용 헬퍼 =====
-
 export const ENDPOINT_MARKER_RE = /<\/?(?:end|fin)>/i;
 export const ENDPOINT_MARKER_RE_GLOBAL = /<\/?(?:end|fin)>/gi;
+
+export type SegmentationStrategyId = 'fin' | 'end' | 'llm';
+export type EffectiveSegmentationStrategyId = 'fin' | 'end';
+export type SonioxBoundaryMarker = 'fin' | 'end';
+
+export type SonioxSegmentationRuntime =
+    | {
+          requested: 'fin' | 'llm';
+          effective: 'fin';
+          endpointDetection: false;
+          carryPolicy: 'manual-finalize-snapshot';
+          endpointDelayMs: number;
+      }
+    | {
+          requested: 'end';
+          effective: 'end';
+          endpointDetection: true;
+          carryPolicy: 'none';
+          endpointDelayMs: number;
+      };
+
+export type NoSegmentationDecision = { action: 'none' };
+
+export type ManualFinalizeDecision =
+    | NoSegmentationDecision
+    | {
+          action: 'finalize';
+          kind: 'manual-finalize';
+          finalText: string;
+          carryText: string;
+          usedSnapshotBoundary: true;
+      };
+
+export type ProviderEndpointDecision =
+    | NoSegmentationDecision
+    | {
+          action: 'finalize';
+          kind: 'provider-endpoint';
+          finalText: string;
+      };
+
+export type SonioxBoundaryTokenLike = {
+    text?: unknown;
+    start_ms?: unknown;
+    end_ms?: unknown;
+    is_final?: unknown;
+    speaker?: unknown;
+};
+
+export type SonioxBoundaryPartition<T extends SonioxBoundaryTokenLike> = {
+    before: T[];
+    marker: T | null;
+    markerKind: SonioxBoundaryMarker | null;
+    after: T[];
+};
+
+export type SonioxFinalizeRequestCause = 'idle-fin' | 'stop-flush';
+
+export type SonioxBoundaryHandling =
+    | {
+          action: 'none';
+          cause: 'unsolicited';
+          completeFinalizeRequest: false;
+          carryAllowed: false;
+      }
+    | {
+          action: 'provider-endpoint';
+          cause: 'provider-endpoint' | 'provider-endpoint-during-stop';
+          completeFinalizeRequest: false;
+          carryAllowed: false;
+      }
+    | {
+          action: 'provider-fallback';
+          cause: 'unsolicited-fin';
+          completeFinalizeRequest: false;
+          carryAllowed: false;
+      }
+    | {
+          action: 'manual-snapshot';
+          cause: SonioxFinalizeRequestCause;
+          completeFinalizeRequest: true;
+          carryAllowed: true;
+      }
+    | {
+          action: 'manual-full';
+          cause: SonioxFinalizeRequestCause;
+          completeFinalizeRequest: true;
+          carryAllowed: false;
+      };
 
 export function stripEndpointMarkers(text: string): string {
     return text.replace(ENDPOINT_MARKER_RE_GLOBAL, '');
 }
 
-export function extractFirstEndpointMarker(text: string): string {
-    const match = ENDPOINT_MARKER_RE.exec(text);
-    return match ? match[0] : '<fin>';
+export function parseSonioxBoundaryMarker(rawText: unknown): SonioxBoundaryMarker | null {
+    if (typeof rawText !== 'string') return null;
+    const match = /<\/?(end|fin)>/i.exec(rawText);
+    if (!match) return null;
+    return match[1]?.toLowerCase() === 'end' ? 'end' : 'fin';
 }
 
-export function splitTurnAtFirstEndpointMarker(text: string): { finalText: string; carryText: string } {
-    const markerMatch = ENDPOINT_MARKER_RE.exec(text);
-    if (!markerMatch) {
-        return { finalText: text.trim(), carryText: '' };
+/**
+ * Preserve token order around the first provider boundary marker.
+ * Soniox documents the marker as a standalone final token at the end of a
+ * segment, but splitting residual text keeps an anomalous combined token safe.
+ */
+export function partitionSonioxTokensAtFirstBoundary<T extends SonioxBoundaryTokenLike>(
+    tokens: readonly T[],
+): SonioxBoundaryPartition<T> {
+    const before: T[] = [];
+
+    for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index]!;
+        const tokenText = typeof token.text === 'string' ? token.text : '';
+        const markerMatch = ENDPOINT_MARKER_RE.exec(tokenText);
+        if (!markerMatch) {
+            before.push(token);
+            continue;
+        }
+
+        const markerKind = parseSonioxBoundaryMarker(markerMatch[0]);
+        const markerStart = markerMatch.index;
+        const markerEnd = markerStart + markerMatch[0].length;
+        const prefix = tokenText.slice(0, markerStart);
+        const suffix = tokenText.slice(markerEnd);
+        if (prefix) {
+            before.push({ ...token, text: prefix } as T);
+        }
+
+        const after: T[] = [];
+        if (suffix) {
+            // The suffix belongs to the next turn. Reusing the combined token's
+            // timestamp would make the turn watermark discard it immediately.
+            const suffixToken = { ...token, text: suffix };
+            delete suffixToken.start_ms;
+            delete suffixToken.end_ms;
+            after.push(suffixToken as T);
+        }
+        after.push(...tokens.slice(index + 1));
+
+        return {
+            before,
+            marker: { ...token, text: markerMatch[0] } as T,
+            markerKind,
+            after,
+        };
     }
-    const markerEndIndex = markerMatch.index + markerMatch[0].length;
+
+    return { before, marker: null, markerKind: null, after: [] };
+}
+
+/**
+ * Resolve boundary ownership without mutating request state. In end mode an
+ * <end> received during stop closes the utterance but deliberately leaves the
+ * stop-flush request active; its later <fin> is the completion barrier.
+ */
+export function resolveSonioxBoundaryHandling(input: {
+    effectiveStrategy: EffectiveSegmentationStrategyId;
+    markerKind: SonioxBoundaryMarker | null;
+    activeFinalizeCause: SonioxFinalizeRequestCause | null;
+}): SonioxBoundaryHandling {
+    if (!input.markerKind) {
+        return {
+            action: 'none',
+            cause: 'unsolicited',
+            completeFinalizeRequest: false,
+            carryAllowed: false,
+        };
+    }
+
+    if (input.effectiveStrategy === 'end' && input.markerKind === 'end') {
+        return {
+            action: 'provider-endpoint',
+            cause: input.activeFinalizeCause === 'stop-flush'
+                ? 'provider-endpoint-during-stop'
+                : 'provider-endpoint',
+            completeFinalizeRequest: false,
+            carryAllowed: false,
+        };
+    }
+
+    if (!input.activeFinalizeCause) {
+        if (input.effectiveStrategy === 'end' && input.markerKind === 'fin') {
+            return {
+                action: 'provider-fallback',
+                cause: 'unsolicited-fin',
+                completeFinalizeRequest: false,
+                carryAllowed: false,
+            };
+        }
+        return {
+            action: 'none',
+            cause: 'unsolicited',
+            completeFinalizeRequest: false,
+            carryAllowed: false,
+        };
+    }
+
+    if (input.effectiveStrategy === 'fin') {
+        return {
+            action: 'manual-snapshot',
+            cause: input.activeFinalizeCause,
+            completeFinalizeRequest: true,
+            carryAllowed: true,
+        };
+    }
+
     return {
-        finalText: text.slice(0, markerEndIndex).trim(),
-        carryText: text.slice(markerEndIndex).trim(),
+        action: 'manual-full',
+        cause: input.activeFinalizeCause,
+        completeFinalizeRequest: true,
+        carryAllowed: false,
     };
 }
 
-// ===== 전략 타입 =====
-
-export type SegmentationStrategyId = 'fin' | 'end' | 'llm';
-
-/** onTokenFrame()이 돌려주는 결정 */
-export type SegmentationDecision =
-    | { action: 'none' }
-    | {
-          action: 'finalize';
-          text: string;
-          /** 마커 이후 텍스트 — 다음 발화의 carry로 쓸 것 */
-          carryText: string;
-          /** snapshot 기반으로 split한 경우 true — carry에 punctuation strip 不要 */
-          usedSnapshotBoundary: boolean;
-      }
-    | { action: 'send-finalize-command' };
-
-/**
- * 토큰 프레임 컨텍스트.
- * startSonioxConnection 내의 onmessage 핸들러가 구성해 전략에 전달한다.
- */
-export interface TokenFrameContext {
-    finalizedText: string;
-    latestNonFinalText: string;
-    /** composeTurnText(finalizedText, latestNonFinalText) */
-    mergedSnapshot: string;
-    /** 이번 프레임에 <end>/<fin> 마커 토큰이 있었는지 */
-    hasEndpointToken: boolean;
-    /** 첫 번째 마커 토큰 텍스트 */
-    endpointMarkerText: string;
-    hasProgressTokenBeyondWatermark: boolean;
-    /** maybeTriggerSonioxManualFinalize 에서 기록한 finalize 직전 merged text 길이 */
-    finalizeSnapshotTextLen: number | null;
-    /** 이전 프레임 전까지 누적 텍스트가 있었는지 */
-    hadPendingTextBeforeFrame: boolean;
-}
-
-/** 전략 인터페이스 */
-export interface SegmentationStrategy {
-    readonly id: SegmentationStrategyId;
-
-    /** Soniox onopen 설정에 스프레드할 오버라이드 */
-    sonioxConfigOverrides(): Record<string, unknown>;
-
-    /**
-     * manual finalize 직전 캡처한 merged text 길이 (snapshot 기반 split에 사용).
-     * SonioxEndpointStrategy는 항상 null을 반환한다.
-     */
-    getSnapshotTextLen(): number | null;
-
-    /**
-     * 토큰 프레임 수신 후 호출.
-     * endpoint 마커 감지 또는 snapshot 기반 split이 필요한지 판단.
-     */
-    onTokenFrame(ctx: TokenFrameContext): SegmentationDecision;
-
-    /**
-     * transcript 누적 텍스트 진행 여부 알림.
-     * SilenceTimerStrategy는 이 콜백에서 타이머를 관리한다.
-     */
-    onTranscriptProgress(hasPending: boolean, added: boolean): void;
-
-    /** cleanup / stop_recording 시 타이머 등 정리 */
-    dispose(): void;
-}
-
-// ===== 공통: endpoint 마커 기반 finalize 판단 로직 =====
-// SilenceTimerStrategy와 SonioxEndpointStrategy 둘 다 endpoint 마커가 도착하면 finalize한다.
-// 차이는 마커가 어떤 경로로 오는가:
-//   SilenceTimer  → 서버가 { type: 'finalize' } 보낸 후 Soniox가 <fin> 응답
-//   SonioxEndpoint → enable_endpoint_detection=true 상태에서 Soniox가 자체 <end> 생성
-
-export function evaluateEndpointMarkerDecision(ctx: TokenFrameContext): SegmentationDecision {
-    if (!ctx.hasEndpointToken) return { action: 'none' };
-
-    const mergedHasEndpointMarker = ENDPOINT_MARKER_RE.test(ctx.mergedSnapshot);
-    const hasPendingTextSnapshot =
-        stripEndpointMarkers(ctx.mergedSnapshot).trim().length > 0;
-
+export function selectSonioxBoundarySpeakerIds(input: {
+    handling: SonioxBoundaryHandling;
+    currentSpeakerIds: Iterable<string>;
+    requestSpeakerIds: Iterable<string>;
+    providerBoundarySpeakerId?: string | null;
+    beforeSpeakerIds?: Iterable<string>;
+    pendingSpeakerIds?: Iterable<string>;
+}): string[] {
     if (
-        !ctx.hasProgressTokenBeyondWatermark &&
-        !mergedHasEndpointMarker &&
-        !hasPendingTextSnapshot
+        input.handling.action === 'provider-endpoint'
+        || input.handling.action === 'provider-fallback'
     ) {
-        return { action: 'none' };
+        const providerBoundarySpeakerId = input.providerBoundarySpeakerId?.trim();
+        if (
+            providerBoundarySpeakerId
+            && providerBoundarySpeakerId !== 'unknown'
+            && providerBoundarySpeakerId !== '-'
+        ) {
+            return [providerBoundarySpeakerId];
+        }
+
+        const beforeSpeakerIds = Array.from(new Set(input.beforeSpeakerIds || []))
+            .map((speaker) => speaker.trim())
+            .filter((speaker) => speaker && speaker !== 'unknown' && speaker !== '-');
+        if (beforeSpeakerIds.length === 1) {
+            return beforeSpeakerIds;
+        }
+
+        const pendingSpeakerIds = Array.from(new Set(input.pendingSpeakerIds || []))
+            .map((speaker) => speaker.trim())
+            .filter((speaker) => speaker && speaker !== 'unknown' && speaker !== '-');
+        if (pendingSpeakerIds.length === 1) {
+            return pendingSpeakerIds;
+        }
+
+        // An ambiguous provider boundary must not reset every known speaker.
+        // Leave pending turns intact until a speaker can be identified safely.
+        return [];
     }
-
-    const mergedAtEndpoint = ctx.mergedSnapshot.trim();
-
-    // --- Snapshot 기반 split (SilenceTimer 전략에서 manual finalize 후 도착한 <fin>) ---
-    if (ctx.finalizeSnapshotTextLen !== null && ctx.finalizeSnapshotTextLen >= 0) {
-        return buildSnapshotDecision(mergedAtEndpoint, ctx.finalizeSnapshotTextLen);
+    if (input.handling.action === 'manual-full') {
+        return Array.from(new Set([
+            ...input.requestSpeakerIds,
+            ...input.currentSpeakerIds,
+        ]));
     }
-
-    // --- 마커 위치 기반 split ---
-    return buildMarkerDecision(mergedAtEndpoint);
+    if (input.handling.action === 'manual-snapshot') {
+        return Array.from(new Set(input.requestSpeakerIds));
+    }
+    return [];
 }
 
-function buildSnapshotDecision(mergedAtEndpoint: string, snapshotLen: number): SegmentationDecision {
-    let snapshotBoundary = Math.min(Math.max(0, snapshotLen), mergedAtEndpoint.length);
-    snapshotBoundary = snapBoundaryForwardInsideAsciiWord(mergedAtEndpoint, snapshotBoundary);
+export function evaluateManualFinalizeDecision(input: {
+    mergedSnapshot: string;
+    snapshotTextLen: number;
+}): ManualFinalizeDecision {
+    const mergedAtFinalize = stripEndpointMarkers(input.mergedSnapshot).trim();
+    if (!mergedAtFinalize) return { action: 'none' };
 
-    const textUpToSnapshot = mergedAtEndpoint.slice(0, snapshotBoundary);
-    const textAfterSnapshot = mergedAtEndpoint.slice(snapshotBoundary);
+    let snapshotBoundary = Math.min(
+        Math.max(0, input.snapshotTextLen),
+        mergedAtFinalize.length,
+    );
+    snapshotBoundary = snapBoundaryForwardInsideWord(mergedAtFinalize, snapshotBoundary);
 
-    const marker = extractFirstEndpointMarker(mergedAtEndpoint);
-    const finalTextToEmit = `${stripEndpointMarkers(textUpToSnapshot).trim()}${marker}`.trim();
-    const carryTextToEmit = stripEndpointMarkers(textAfterSnapshot).trim();
-
-    if (!stripEndpointMarkers(finalTextToEmit).trim()) {
-        return { action: 'none' };
-    }
+    const finalText = mergedAtFinalize.slice(0, snapshotBoundary).trim();
+    const carryText = mergedAtFinalize.slice(snapshotBoundary).trim();
+    if (!finalText) return { action: 'none' };
 
     return {
         action: 'finalize',
-        text: finalTextToEmit,
-        carryText: carryTextToEmit,
+        kind: 'manual-finalize',
+        finalText,
+        carryText,
         usedSnapshotBoundary: true,
     };
 }
 
-function buildMarkerDecision(mergedAtEndpoint: string): SegmentationDecision {
-    const { finalText, carryText } = splitTurnAtFirstEndpointMarker(mergedAtEndpoint);
-    let finalTextToEmit = finalText;
-    let carryTextToEmit = carryText;
-
-    if (!stripEndpointMarkers(finalTextToEmit).trim() && carryTextToEmit) {
-        // endpoint 마커가 텍스트 앞에 왔을 때 recover
-        finalTextToEmit = `${carryTextToEmit}${extractFirstEndpointMarker(finalTextToEmit)}`.trim();
-        carryTextToEmit = '';
-    }
-
-    if (!stripEndpointMarkers(finalTextToEmit).trim()) {
-        return { action: 'none' };
-    }
-
+export function evaluateProviderEndpointDecision(input: {
+    mergedSnapshot: string;
+}): ProviderEndpointDecision {
+    const finalText = stripEndpointMarkers(input.mergedSnapshot).trim();
+    if (!finalText) return { action: 'none' };
     return {
         action: 'finalize',
-        text: finalTextToEmit,
-        carryText: carryTextToEmit,
-        usedSnapshotBoundary: false,
+        kind: 'provider-endpoint',
+        finalText,
     };
 }
 
-function snapBoundaryForwardInsideAsciiWord(text: string, boundary: number): number {
+function snapBoundaryForwardInsideWord(text: string, boundary: number): number {
     if (boundary <= 0 || boundary >= text.length) return boundary;
-    const prevChar = text[boundary - 1] ?? '';
-    const currChar = text[boundary] ?? '';
+    const previousCharacter = text[boundary - 1] ?? '';
+    const currentCharacter = text[boundary] ?? '';
+    if (previousCharacter === ' ' || currentCharacter === ' ') return boundary;
 
-    // 경계가 이미 공백 위치라면 스냅 불필요
-    if (prevChar === ' ' || currChar === ' ') return boundary;
-
-    // 경계가 단어 중간에 걸린 경우 — 다음 공백(혹은 끝)까지 forward snap
-    // 이렇게 하면 한국어/CJK 단어도 중간에서 잘리지 않는다
-    let snapped = boundary;
-    while (snapped < text.length && text[snapped] !== ' ') {
-        snapped += 1;
+    let snappedBoundary = boundary;
+    while (snappedBoundary < text.length && text[snappedBoundary] !== ' ') {
+        snappedBoundary += 1;
     }
-    return snapped;
+    return snappedBoundary;
 }
 
-// ===== 전략 A: SonioxEndpointStrategy =====
-// enable_endpoint_detection: true → Soniox가 자체적으로 <end> 마커를 생성한다.
-// 서버는 마커를 받으면 즉시 finalize. manual finalize 타이머는 사용하지 않는다.
+/** Timer and provisional-state ownership for manual-finalize carry only. */
+export class ManualFinalizeCarryController {
+    private expiryTimer: ReturnType<typeof setTimeout> | null = null;
+    private provisional = false;
 
-export class SonioxEndpointStrategy implements SegmentationStrategy {
-    readonly id: SegmentationStrategyId = 'end';
+    constructor(
+        private readonly expiryMs: number,
+        private readonly onExpiry: () => void,
+    ) {}
 
-    private readonly endpointDelayMs: number;
-
-    constructor(endpointDelayMs: number) {
-        // Soniox 허용 범위: 500~3000ms
-        this.endpointDelayMs = Math.max(500, Math.min(3000, endpointDelayMs));
+    get isProvisional(): boolean {
+        return this.provisional;
     }
 
-    sonioxConfigOverrides(): Record<string, unknown> {
-        return {
-            enable_endpoint_detection: true,
-            // 발화 종료 후 <end> 마커까지 최대 대기 시간. 허용 범위: 500~3000ms, 기본값 2000ms
-            max_endpoint_delay_ms: this.endpointDelayMs,
-        };
+    begin(): void {
+        this.reset();
+        this.provisional = true;
+        this.expiryTimer = setTimeout(() => {
+            this.expiryTimer = null;
+            if (!this.provisional) return;
+            this.onExpiry();
+        }, this.expiryMs);
     }
 
-    getSnapshotTextLen(): number | null { return null; }
-
-    onTokenFrame(ctx: TokenFrameContext): SegmentationDecision {
-        return evaluateEndpointMarkerDecision(ctx);
+    resolve(): void {
+        this.provisional = false;
+        this.clearExpiryTimer();
     }
 
-    onTranscriptProgress(_hasPending: boolean, _added: boolean): void {
-        // 타이머 없음
+    reset(): void {
+        this.provisional = false;
+        this.clearExpiryTimer();
     }
 
     dispose(): void {
-        // no-op
+        this.reset();
+    }
+
+    private clearExpiryTimer(): void {
+        if (!this.expiryTimer) return;
+        clearTimeout(this.expiryTimer);
+        this.expiryTimer = null;
     }
 }
-
-// ===== 전략 B: SilenceTimerStrategy (기본값) =====
-// enable_endpoint_detection: false → Soniox 자체 마커 비활성.
-// transcript 진행이 silenceMs 동안 멈추면 { type: 'finalize' } 전송.
-// finalize 후 Soniox가 <fin>을 돌려보내면 evaluateEndpointMarker()가 처리.
-
-export interface SilenceTimerStrategyOptions {
-    silenceMs: number;
-    cooldownMs: number;
-    /** { type: 'finalize' }를 Soniox WS로 실제 전송하는 콜백 */
-    sendFinalizeCommand: (snapshotTextLen: number) => void;
-    /** carry 만료 시 emitFinalTurn 호출하는 콜백 */
-    onCarryExpiry: () => void;
-}
-
-export class SilenceTimerStrategy implements SegmentationStrategy {
-    readonly id: SegmentationStrategyId = 'fin';
-
-    private readonly silenceMs: number;
-    private readonly cooldownMs: number;
-    private readonly sendFinalizeCommand: (snapshotTextLen: number) => void;
-    private readonly onCarryExpiry: () => void;
-
-    private hasPending = false;
-    private finalizeSent = false;
-    private lastFinalizeAtMs = 0;
-    private lastProgressAtMs = 0;
-    private finalizeTimer: ReturnType<typeof setTimeout> | null = null;
-    private carryExpiryTimer: ReturnType<typeof setTimeout> | null = null;
-    /** manual finalize 직전 merged text 길이 (snapshot 기반 split에 사용) */
-    private snapshotTextLen: number | null = null;
-    /** 현재 merged text 길이 — sendFinalizeCommand 시 캡처 */
-    currentMergedTextLen = 0;
-
-    constructor(opts: SilenceTimerStrategyOptions) {
-        this.silenceMs = opts.silenceMs;
-        this.cooldownMs = opts.cooldownMs;
-        this.sendFinalizeCommand = opts.sendFinalizeCommand;
-        this.onCarryExpiry = opts.onCarryExpiry;
-    }
-
-    sonioxConfigOverrides(): Record<string, unknown> {
-        return { enable_endpoint_detection: false };
-    }
-
-    getSnapshotTextLen(): number | null {
-        return this.snapshotTextLen;
-    }
-
-    onTokenFrame(ctx: TokenFrameContext): SegmentationDecision {
-        // snapshotTextLen을 ctx에서 갱신 (서버가 결정한 snapshot을 전략이 기억)
-        if (ctx.finalizeSnapshotTextLen !== null) {
-            this.snapshotTextLen = ctx.finalizeSnapshotTextLen;
-        }
-        const ctxWithSnapshot: TokenFrameContext = {
-            ...ctx,
-            finalizeSnapshotTextLen: this.snapshotTextLen,
-        };
-        const decision = evaluateEndpointMarkerDecision(ctxWithSnapshot);
-        if (decision.action === 'finalize') {
-            // snapshot 소비 완료
-            this.snapshotTextLen = null;
-        }
-        return decision;
-    }
-
-    onTranscriptProgress(hasPending: boolean, added: boolean): void {
-        this.hasPending = hasPending;
-
-        if (!hasPending) {
-            this.clearFinalizeTimer();
-            return;
-        }
-
-        if (added) {
-            this.finalizeSent = false;
-            this.lastProgressAtMs = Date.now();
-            this.scheduleFinalizeCheck();
-        }
-    }
-
-    /** carry 텍스트가 생긴 직후 호출 — carry 만료 타이머 설정 */
-    scheduleCarryExpiry(): void {
-        this.clearCarryExpiryTimer();
-        const expiryMs = this.silenceMs + this.cooldownMs;
-        this.carryExpiryTimer = setTimeout(() => {
-            this.carryExpiryTimer = null;
-            this.onCarryExpiry();
-        }, expiryMs);
-    }
-
-    clearCarryExpiryTimer(): void {
-        if (this.carryExpiryTimer) {
-            clearTimeout(this.carryExpiryTimer);
-            this.carryExpiryTimer = null;
-        }
-    }
-
-    /** resetSonioxSegmentState / cleanup 에서 호출 */
-    resetState(): void {
-        this.clearFinalizeTimer();
-        this.clearCarryExpiryTimer();
-        this.hasPending = false;
-        this.finalizeSent = false;
-        this.lastFinalizeAtMs = 0;
-        this.lastProgressAtMs = 0;
-        this.snapshotTextLen = null;
-        this.currentMergedTextLen = 0;
-    }
-
-    dispose(): void {
-        this.clearFinalizeTimer();
-        this.clearCarryExpiryTimer();
-    }
-
-    // --- 내부 ---
-
-    private clearFinalizeTimer(): void {
-        if (this.finalizeTimer) {
-            clearTimeout(this.finalizeTimer);
-            this.finalizeTimer = null;
-        }
-    }
-
-    private scheduleFinalizeCheck(): void {
-        if (this.finalizeSent) return;
-        this.clearFinalizeTimer();
-        this.finalizeTimer = setTimeout(() => this.maybeTrigger(), this.silenceMs);
-    }
-
-    private maybeTrigger(): void {
-        this.finalizeTimer = null;
-        if (!this.hasPending) return;
-        if (this.finalizeSent) return;
-
-        const now = Date.now();
-        if (this.lastProgressAtMs <= 0) this.lastProgressAtMs = now;
-
-        const elapsedSince = now - this.lastProgressAtMs;
-        if (elapsedSince < this.silenceMs) {
-            const wait = Math.max(1, this.silenceMs - elapsedSince);
-            this.finalizeTimer = setTimeout(() => this.maybeTrigger(), wait);
-            return;
-        }
-
-        const elapsedSinceLastFinalize = now - this.lastFinalizeAtMs;
-        if (elapsedSinceLastFinalize < this.cooldownMs) {
-            const wait = Math.max(1, this.cooldownMs - elapsedSinceLastFinalize);
-            this.finalizeTimer = setTimeout(() => this.maybeTrigger(), wait);
-            return;
-        }
-
-        this.snapshotTextLen = this.currentMergedTextLen;
-        this.finalizeSent = true;
-        this.lastFinalizeAtMs = now;
-        this.sendFinalizeCommand(this.currentMergedTextLen);
-    }
-}
-
-// ===== Factory =====
 
 export function readSegmentationStrategyId(): SegmentationStrategyId {
     const raw = (process.env['SONIOX_SEGMENTATION_STRATEGY'] ?? '').trim().toLowerCase();
     if (raw === 'end') return 'end';
     if (raw === 'llm') return 'llm';
-    // 'fin' 이거나 값이 없으면 기존 동작(fin) 사용
     return 'fin';
 }
 
-export function createSegmentationStrategy(
-    id: SegmentationStrategyId,
-    opts: SilenceTimerStrategyOptions,
-): SegmentationStrategy {
-    switch (id) {
-        case 'end':
-            return new SonioxEndpointStrategy(opts.silenceMs);
-        case 'llm':
-            // Phase 2: LLM 전략 구현 전까지 fin으로 fallback
-            console.warn('[stt-server] llm segmentation not yet implemented; using fin');
-            return new SilenceTimerStrategy(opts);
-        case 'fin':
-        default:
-            return new SilenceTimerStrategy(opts);
+export function resolveSonioxSegmentationRuntime(
+    requested: SegmentationStrategyId,
+    configuredSilenceMs: number,
+): SonioxSegmentationRuntime {
+    if (requested === 'end') {
+        return {
+            requested,
+            effective: 'end',
+            endpointDetection: true,
+            carryPolicy: 'none',
+            endpointDelayMs: 2000,
+        };
     }
+
+    return {
+        requested,
+        effective: 'fin',
+        endpointDetection: false,
+        carryPolicy: 'manual-finalize-snapshot',
+        endpointDelayMs: configuredSilenceMs,
+    };
+}
+
+export function resolveSonioxEndpointLatencyAdjustmentLevel(
+    raw = process.env['SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL'],
+): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(3, Math.floor(value)));
+}
+
+export function resolveSonioxEndpointSensitivity(
+    raw = process.env['SONIOX_ENDPOINT_SENSITIVITY'],
+): number {
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(-1, Math.min(1, value));
+}
+
+export function buildSonioxEndpointDetectionConfig(
+    runtime: SonioxSegmentationRuntime,
+): Record<string, unknown> {
+    if (!runtime.endpointDetection) {
+        return { enable_endpoint_detection: false };
+    }
+
+    return {
+        enable_endpoint_detection: true,
+        endpoint_latency_adjustment_level: resolveSonioxEndpointLatencyAdjustmentLevel(),
+        endpoint_sensitivity: resolveSonioxEndpointSensitivity(),
+        max_endpoint_delay_ms: Math.max(500, Math.min(3000, runtime.endpointDelayMs)),
+    };
+}
+
+// Compatibility helpers retained for focused configuration tests.
+export function resolveSonioxEndpointDetectionConfig(
+    id: SegmentationStrategyId,
+    endpointDelayMs: number,
+): Record<string, unknown> {
+    const runtime = resolveSonioxSegmentationRuntime(id, endpointDelayMs);
+    return buildSonioxEndpointDetectionConfig(
+        runtime.effective === 'end'
+            ? { ...runtime, endpointDelayMs }
+            : runtime,
+    );
+}
+
+export function resolveSonioxEndpointDelayMs(
+    id: SegmentationStrategyId,
+    configuredSilenceMs: number,
+): number {
+    return resolveSonioxSegmentationRuntime(id, configuredSilenceMs).endpointDelayMs;
 }
