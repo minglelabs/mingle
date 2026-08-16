@@ -12,8 +12,6 @@ import {
     partitionSonioxTokensAtFirstBoundary,
     readSegmentationStrategyId,
     resolveSonioxBoundaryHandling,
-    resolveSonioxEndpointLatencyAdjustmentLevel,
-    resolveSonioxEndpointSensitivity,
     resolveSonioxSegmentationRuntime,
     selectSonioxBoundarySpeakerIds,
     stripEndpointMarkers,
@@ -22,8 +20,6 @@ import {
 } from './segmentation-strategy';
 import {
     buildSonioxFinalizeRequestCohort,
-    buildSonioxDebugTokenRuns,
-    formatSonioxDebugTokenRun,
     getNextTurnDetectedLang,
     hasPendingSonioxTurnText,
     mergeDetectedLang,
@@ -75,17 +71,19 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
     (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
 );
-const SONIOX_DEBUG_TOKEN_LOGS = (() => {
-    const raw = (process.env.SONIOX_DEBUG_TOKEN_LOGS || '').trim().toLowerCase();
-    if (raw) {
-        return ['1', 'true', 'yes', 'on'].includes(raw);
-    }
-    return process.env.NODE_ENV !== 'production';
-})();
 const SONIOX_RAW_JOINED_TOKEN_LOG_FILE = (process.env.SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '').trim();
 
-const writeSonioxRawResponseLog = (connId: number, message: unknown): void => {
+const writeSonioxRawResponseLog = (connId: number, rawMessage: string): void => {
+    console.log(`[conn:${connId}] soniox_raw_response ${rawMessage}`);
     if (!SONIOX_RAW_JOINED_TOKEN_LOG_FILE) return;
+
+    let message: unknown = rawMessage;
+    try {
+        message = JSON.parse(rawMessage);
+    } catch {
+        // Preserve invalid upstream payloads as raw strings in the file log.
+    }
+
     try {
         appendFileSync(
             SONIOX_RAW_JOINED_TOKEN_LOG_FILE,
@@ -871,11 +869,6 @@ wss.on('connection', (clientWs) => {
                 if (!sttWs || sttWs.readyState !== WebSocket.OPEN) {
                     return flushAllSpeakerTurns(fallbackSource);
                 }
-                if (cohort.length === 0) {
-                    console.log(
-                        `[conn:${connId}] soniox_stop_finalize_waiting_for_inflight_audio`,
-                    );
-                }
 
                 const now = Date.now();
                 if (activeFinalizeRequest?.timeout) {
@@ -971,12 +964,6 @@ wss.on('connection', (clientWs) => {
                         },
                     }));
                 }
-                if (isFinal) {
-                    console.log(
-                        `[conn:${connId}] stt_final source=${finalizeSource || '-'} speaker=${cleanedSpeaker} language=${cleanedLang} text=${JSON.stringify(cleanedText)}`,
-                    );
-                }
-
                 return {
                     text: cleanedText,
                     language: cleanedLang,
@@ -1053,9 +1040,6 @@ wss.on('connection', (clientWs) => {
                 state.currentSnapshotText = composeTurnText('', carryText);
                 state.currentSnapshotEndMs = carryEndMs;
                 state.carry.begin();
-                console.log(
-                    `[conn:${connId}] soniox_carry_created requested=${segmentationRuntime.requested} effective=fin speaker=${state.speaker} chars=${carryText.length}`,
-                );
                 emitTranscript(
                     carryText,
                     state.detectedLang,
@@ -1073,9 +1057,6 @@ wss.on('connection', (clientWs) => {
                     const state = speakerStates.get(requestSpeaker.speaker);
                     if (!state) continue;
                     if (!isFinSpeakerState(state)) {
-                        console.warn(
-                            `[conn:${connId}] ignored_manual_snapshot_carry effective=${state.mode} cause=${request.cause}`,
-                        );
                         continue;
                     }
 
@@ -1140,9 +1121,6 @@ wss.on('connection', (clientWs) => {
                                 && currentState.latestNonFinalText.trim()
                                 && !currentState.providerFinalizedText.trim()
                             ) {
-                                console.log(
-                                    `[conn:${connId}] soniox_carry_resolved requested=${segmentationRuntime.requested} effective=fin speaker=${speaker} resolution=expiry_final`,
-                                );
                                 finalizeSpeakerTurn(speaker, 'server_carry_expiry');
                                 refreshGlobalFinalizeScheduling();
                             }
@@ -1200,9 +1178,6 @@ wss.on('connection', (clientWs) => {
                     });
                 }
                 sttWs!.send(JSON.stringify(sonioxConfig));
-                console.log(
-                    `[conn:${connId}] soniox_segmentation requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} endpointing=${usesSonioxEndpointDetection} carry=${segmentationRuntime.carryPolicy} latencyLevel=${resolveSonioxEndpointLatencyAdjustmentLevel()} sensitivity=${resolveSonioxEndpointSensitivity()} maxDelayMs=${endpointDelayMs}`,
-                );
 
                 if (isClientConnected) {
                     sendReadyStatus();
@@ -1218,7 +1193,6 @@ wss.on('connection', (clientWs) => {
                 const tokensBeforeBoundary = partition.before;
                 const boundaryMarker = partition.marker;
                 const boundaryKind: SonioxBoundaryMarker | null = partition.markerKind;
-                const hasBoundary = boundaryKind !== null;
                 const markerSpeaker = boundaryMarker
                     ? normalizeSpeaker(boundaryMarker.speaker)
                     : '-';
@@ -1229,17 +1203,6 @@ wss.on('connection', (clientWs) => {
                     .reverse()
                     .map((token) => normalizeSpeaker(token.speaker))
                     .find((speaker) => speaker !== 'unknown' && speaker !== '-') || '-';
-
-                if (boundaryMarker && boundaryMarker.is_final !== true) {
-                    console.warn(
-                        `[conn:${connId}] soniox_boundary_anomaly marker=${boundaryKind} reason=non_final_marker`,
-                    );
-                }
-                if (hasBoundary && partition.after.length > 0) {
-                    console.warn(
-                        `[conn:${connId}] soniox_boundary_anomaly marker=${boundaryKind} reason=tokens_after_marker count=${partition.after.length}`,
-                    );
-                }
 
                 const speakerFrameUpdates = new Map<string, SonioxSpeakerFrameUpdate>();
                 const getSpeakerFrameUpdate = (speaker: string): SonioxSpeakerFrameUpdate => {
@@ -1349,21 +1312,6 @@ wss.on('connection', (clientWs) => {
                         .map((frameUpdate) => frameUpdate.speaker),
                 ])).sort();
                 let boundarySpeakers: string[] = [];
-                if (
-                    boundaryKind === 'end'
-                    && segmentationRuntime.effective === 'fin'
-                    && finalizeRequestForBoundary
-                ) {
-                    console.warn(
-                        `[conn:${connId}] soniox_boundary_anomaly marker=end effective=fin reason=manual_finalize_marker_mismatch`,
-                    );
-                }
-                if (boundaryKind === 'fin' && !finalizeRequestForBoundary) {
-                    console.warn(
-                        `[conn:${connId}] soniox_boundary_anomaly marker=fin effective=${segmentationRuntime.effective} reason=unsolicited_finalize_marker`,
-                    );
-                }
-
                 if (providerOwnedBoundary || finalizeRequestForBoundary) {
                     boundarySpeakers = selectSonioxBoundarySpeakerIds({
                         handling: boundaryHandling,
@@ -1390,12 +1338,6 @@ wss.on('connection', (clientWs) => {
                         });
                     }
                 }
-                if (hasBoundary) {
-                    console.log(
-                        `[conn:${connId}] soniox_boundary requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} marker=${boundaryKind} markerSpeaker=${markerSpeaker} beforeSpeakers=${tokenBeforeSpeakers.join(',') || '-'} pendingSpeakers=${pendingSpeakerIds.join(',') || '-'} currentSpeakers=${currentSpeakerIds.join(',') || '-'} selectedSpeakers=${boundarySpeakers.join(',') || '-'} action=${boundaryHandling.action} cause=${boundaryHandling.cause} carry=${boundaryHandling.carryAllowed}`,
-                    );
-                }
-
                 let lastFinalizedPayloadForBatch: MingleSttFinalTurnPayload = null;
                 for (const frameUpdate of speakerFrameUpdates.values()) {
                     const speakerState = getSpeakerState(frameUpdate.speaker);
@@ -1419,7 +1361,6 @@ wss.on('connection', (clientWs) => {
                             `${stripEndpointMarkers(frameUpdate.finalDeltaText)}${frameUpdate.nonFinalText}`,
                         ).trim();
                         if (carryRaw) {
-                            let resolution = 'provider_confirmed';
                             if (!incomingClean.startsWith(carryRaw)) {
                                 const carryPrefix = carryRaw.replace(/[.!?]+\s*$/, '').trim();
                                 if (carryPrefix) {
@@ -1427,12 +1368,8 @@ wss.on('connection', (clientWs) => {
                                         ? `${carryPrefix} ${speakerState.providerFinalizedText}`
                                         : carryPrefix;
                                 }
-                                resolution = 'provider_replaced';
                             }
                             speakerState.carry.resolve();
-                            console.log(
-                                `[conn:${connId}] soniox_carry_resolved requested=${segmentationRuntime.requested} effective=fin speaker=${speakerState.speaker} resolution=${resolution}`,
-                            );
                         }
                     }
                     if (frameUpdate.finalDeltaText) {
@@ -1449,9 +1386,6 @@ wss.on('connection', (clientWs) => {
                                 || !incoming.startsWith(previousCarry);
                             if (hasProgress) {
                                 speakerState.carry.resolve();
-                                console.log(
-                                    `[conn:${connId}] soniox_carry_resolved requested=${segmentationRuntime.requested} effective=fin speaker=${speakerState.speaker} resolution=provider_progress`,
-                                );
                             }
                         }
                         speakerState.latestNonFinalText = frameUpdate.nonFinalText;
@@ -1583,11 +1517,12 @@ wss.on('connection', (clientWs) => {
             };
 
             sttWs.onmessage = (event) => {
+                const rawMessage = event.data.toString();
+                writeSonioxRawResponseLog(connId, rawMessage);
                 if (!isClientConnected) return;
 
                 try {
-                    const msg = JSON.parse(event.data.toString());
-                    writeSonioxRawResponseLog(connId, msg);
+                    const msg = JSON.parse(rawMessage);
 
                     if (msg.error_code) {
                         const errorCode = String(msg.error_code || '').trim();
@@ -1617,11 +1552,6 @@ wss.on('connection', (clientWs) => {
                     if (msg.finished) return;
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
                     if (tokens.length === 0) return;
-                    if (SONIOX_DEBUG_TOKEN_LOGS) {
-                        for (const run of buildSonioxDebugTokenRuns(tokens)) {
-                            console.log(formatSonioxDebugTokenRun(run));
-                        }
-                    }
                     processSonioxTokenBatch(tokens);
                 } catch (parseError) {
                     console.error('Error parsing Soniox message:', parseError);
@@ -1836,7 +1766,4 @@ wss.on('connection', (clientWs) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`[stt-server] listening on 0.0.0.0:${PORT}`);
-    console.log(
-        `[stt-server] soniox_finalize_tuning defaultSilenceMs=${SONIOX_MANUAL_FINALIZE_SILENCE_MS_DEFAULT} cooldownMs=${SONIOX_MANUAL_FINALIZE_COOLDOWN_MS} useLanguageHints=${SONIOX_USE_LANGUAGE_HINTS} debugTokenLogs=${SONIOX_DEBUG_TOKEN_LOGS} rawResponseLog=${SONIOX_RAW_JOINED_TOKEN_LOG_FILE || '-'}`,
-    );
 });
