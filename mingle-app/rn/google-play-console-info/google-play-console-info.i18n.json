@@ -25,7 +25,7 @@
       "defaultTrack": "internal",
       "defaultReleaseStatus": "draft",
       "changesNotSentForReview": false,
-      "releaseName": "2.0.0 (69)",
+      "releaseName": "2.0.0 (70)",
       "releaseNotes": {
         "en-US": "Version 2.0.0 adds messenger-style tabs, profile sharing, more reliable iOS navigation, and continuous STT while switching tabs.",
         "ar": "Version 2.0.0 adds messenger-style tabs, profile sharing, more reliable iOS navigation, and continuous STT while switching tabs.",

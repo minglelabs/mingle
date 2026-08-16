@@ -725,3 +725,16 @@
   - Preserve the invalid-link message and platform-specific store filtering.
 - Data contract: None. Deep-link validation, app URL handling, and store URLs are unchanged.
 - Testing notes: Verify the valid profile-link screen on iOS, Android, and desktop, confirm the app and store actions remain visible, and confirm invalid links still show their error state.
+
+## 2026-08-16 - Save profile QR codes to the device gallery
+
+- Surface: The QR download action on the profile-sharing screen in the native app.
+- Issue: The web implementation created an anchor for a data URL. That works as a browser download, but the React Native WebView did not handle the download, so tapping the button could show a success message without creating a device image.
+- User impact: Users could not find the downloaded QR code in the iPhone Photos app or Android gallery.
+- Resolution:
+  - Send the generated PNG data URL through the WebView-to-native bridge when the screen is running in the app.
+  - Save the image to the iOS Photos library through `PHPhotoLibrary` and to the Android Pictures/Mingle media collection through `MediaStore`.
+  - Request iOS add-only photo access and support legacy Android storage permission handling while keeping modern Android storage permission-free.
+  - Return a native success or failure event to the web screen so the status message reflects the actual save result.
+- Data contract: Added only a native WebView command/event pair; no server or database changes.
+- Testing notes: On iOS, tap QR download and confirm the image appears in Photos after granting permission. On Android, confirm it appears in Pictures/Mingle or the device gallery, and verify denied permission shows a failure message.

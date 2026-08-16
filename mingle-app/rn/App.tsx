@@ -6,6 +6,7 @@ import {
   Image,
   Linking,
   NativeModules,
+  PermissionsAndroid,
   Platform,
   Pressable,
   StatusBar,
@@ -122,6 +123,9 @@ type NativeConversationRestoreStorageModule = {
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
   recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
+};
+type NativeQrImageModule = {
+  savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
 };
 type NativeAdModule = {
   default?: (() => {
@@ -439,6 +443,7 @@ const NATIVE_TTS_EVENT = 'mingle:native-tts';
 const NATIVE_UI_EVENT = 'mingle:native-ui';
 const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
+const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
@@ -628,6 +633,14 @@ type NativeQrScannerOpenCommand = {
   payload?: NativeQrScannerRequest;
 };
 
+type NativeQrSaveCommand = {
+  type: 'native_qr_save';
+  payload?: {
+    dataUrl?: string;
+    fileName?: string;
+  };
+};
+
 type NativeHistoryDebugCommand = {
   type: 'native_history_debug';
   payload?: Record<string, unknown>;
@@ -691,6 +704,7 @@ type WebViewCommand =
   | NativeAuthAckCommand
   | NativeAuthResetCommand
   | NativeQrScannerOpenCommand
+  | NativeQrSaveCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
@@ -740,6 +754,9 @@ type NativeAuthEvent =
 type NativeQrScannerEvent =
   | { type: 'result'; value: string }
   | { type: 'cancel' }
+  | { type: 'error'; message: string };
+type NativeQrSaveEvent =
+  | { type: 'success' }
   | { type: 'error'; message: string };
 type RecommendUpdatePrompt = {
   title: string;
@@ -1892,6 +1909,51 @@ function AppInner(): React.JSX.Element {
     emitQrScannerToWeb({ type: 'cancel' });
   }, [emitQrScannerToWeb]);
 
+  const emitQrSaveToWeb = useCallback((payload: NativeQrSaveEvent) => {
+    if (!isPageReadyRef.current || !webViewRef.current) return;
+
+    const serialized = JSON.stringify(payload);
+    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_QR_SAVE_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const handleNativeQrSave = useCallback(async (payload?: NativeQrSaveCommand['payload']) => {
+    const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl.trim() : '';
+    const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : '';
+    const nativeQrImageModule = (NativeModules as {
+      NativeQrImageModule?: NativeQrImageModule;
+    }).NativeQrImageModule;
+
+    if (!/^data:image\/png;base64,/i.test(dataUrl) || dataUrl.length > 5_000_000) {
+      emitQrSaveToWeb({ type: 'error', message: 'native_qr_invalid_image' });
+      return;
+    }
+    if (!nativeQrImageModule || typeof nativeQrImageModule.savePng !== 'function') {
+      emitQrSaveToWeb({ type: 'error', message: 'native_qr_save_unavailable' });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) < 29) {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('native_qr_photo_permission_denied');
+        }
+      }
+
+      await nativeQrImageModule.savePng(dataUrl, fileName || 'mingle-profile.png');
+      emitQrSaveToWeb({ type: 'success' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (__DEV__) {
+        console.warn(`[NativeQrImage] save failed: ${message}`);
+      }
+      emitQrSaveToWeb({ type: 'error', message: message || 'native_qr_save_failed' });
+    }
+  }, [emitQrSaveToWeb]);
+
   const emitToWeb = useCallback((payload: NativeSttEvent) => {
     const queueId = payload.type === 'message' && !payload.queueId
       ? `native-stt-${Date.now()}-${++nativeSttMessageSequenceRef.current}`
@@ -2438,6 +2500,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_qr_save') {
+      void handleNativeQrSave(parsed.payload);
+      return;
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -2652,6 +2719,7 @@ function AppInner(): React.JSX.Element {
     emitTtsToWeb,
     handleDebugWebViewRemount,
     handleNativeAuthStart,
+    handleNativeQrSave,
     handleNativeStart,
     handleNativeStop,
     rememberCurrentWebUrl,

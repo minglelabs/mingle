@@ -35,6 +35,11 @@ type NativeQrScannerEventDetail = {
   message?: string;
 };
 
+type NativeQrSaveEventDetail = {
+  type?: "success" | "error";
+  message?: string;
+};
+
 const PROFILE_SHARE_TRANSITION = {
   duration: 0.32,
   ease: [0.22, 1, 0.36, 1] as const,
@@ -103,6 +108,7 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
       : "QR scanning is available in the Mingle app.",
     qrInvalid: locale === "ko" ? "Mingle 프로필 QR이 아닙니다." : "This is not a Mingle profile QR code.",
     qrScanFailed: locale === "ko" ? "QR 코드를 처리하지 못했습니다." : "Could not process this QR code.",
+    qrSaving: locale === "ko" ? "QR 코드를 저장하는 중..." : "Saving your QR code...",
     qrDownloaded: locale === "ko" ? "QR 코드를 저장했습니다." : "QR code downloaded.",
     qrDownloadFailed: locale === "ko" ? "QR 코드 저장에 실패했습니다." : "Could not download the QR code.",
   };
@@ -256,10 +262,28 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
       return;
     }
 
+    const fileName = `mingle-profile-${profileUserId || "profile"}.png`;
+    const bridgeWindow = window as NativeBridgeWindow;
+    if (typeof bridgeWindow.ReactNativeWebView?.postMessage === "function") {
+      try {
+        showStatus(copy.qrSaving);
+        bridgeWindow.ReactNativeWebView.postMessage(JSON.stringify({
+          type: "native_qr_save",
+          payload: {
+            dataUrl: qrDataUrl,
+            fileName,
+          },
+        }));
+      } catch {
+        showStatus(copy.qrDownloadFailed);
+      }
+      return;
+    }
+
     try {
       const anchor = document.createElement("a");
       anchor.href = qrDataUrl;
-      anchor.download = `mingle-profile-${profileUserId || "profile"}.png`;
+      anchor.download = fileName;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -267,7 +291,7 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
     } catch {
       showStatus(copy.qrDownloadFailed);
     }
-  }, [copy.qrDownloadFailed, copy.qrDownloaded, copy.qrUnavailable, profileUserId, qrDataUrl, showStatus]);
+  }, [copy.qrDownloadFailed, copy.qrDownloaded, copy.qrSaving, copy.qrUnavailable, profileUserId, qrDataUrl, showStatus]);
 
   const handleShareProfile = useCallback(async () => {
     if (!profileUrl) {
@@ -312,6 +336,23 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
     window.addEventListener("mingle:native-qr-scanner", handleNativeQrScannerEvent);
     return () => window.removeEventListener("mingle:native-qr-scanner", handleNativeQrScannerEvent);
   }, [copy.qrInvalid, locale, router, showStatus]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleNativeQrSaveEvent = (event: Event) => {
+      const detail = (event as CustomEvent<NativeQrSaveEventDetail>).detail;
+      if (!detail) return;
+      if (detail.type === "success") {
+        showStatus(copy.qrDownloaded);
+      } else if (detail.type === "error") {
+        showStatus(copy.qrDownloadFailed);
+      }
+    };
+
+    window.addEventListener("mingle:native-qr-save", handleNativeQrSaveEvent);
+    return () => window.removeEventListener("mingle:native-qr-save", handleNativeQrSaveEvent);
+  }, [copy.qrDownloadFailed, copy.qrDownloaded, showStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

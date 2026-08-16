@@ -9,6 +9,7 @@ class NativeRuntimeConfigPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
     listOf(
       NativeRuntimeConfigModule(reactContext),
+      NativeQrImageModule(reactContext),
       NativeSTTModule(reactContext),
     )
 

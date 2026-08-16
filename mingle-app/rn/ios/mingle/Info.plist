@@ -51,6 +51,8 @@
 	<string>Mingle uses your microphone for real-time speech translation.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Mingle uses your camera to scan profile QR codes.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Mingle saves QR codes to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>
 	<string>$(NEXT_PUBLIC_SITE_URL)</string>
 	<key>MingleWebAppScheme</key>
