@@ -101,37 +101,45 @@ function ProfileAvatar({
   label,
   crop,
   flag,
+  size = 88,
   onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
   flag?: string | null;
+  size?: number;
   onClick?: () => void;
 }) {
+  const badgeSize = Math.max(24, Math.round(size * 0.32));
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="relative flex h-24 w-24 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+      className="relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80"
+      style={{ height: size, width: size }}
       aria-label={label}
     >
-      <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full">
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={image}
             alt={label}
+            width={size}
+            height={size}
             className="h-full w-full object-cover"
-            style={{ transform: buildProfileImageTransform(96, crop) }}
+            style={{ transform: buildProfileImageTransform(size, crop) }}
           />
         ) : (
-          <UserRound size={52} className="text-gray-400" aria-hidden="true" />
+          <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
-      </span>
+      </div>
       {flag ? (
         <span
-          className="absolute bottom-[-2px] left-[-2px] flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-white text-[1.05rem] leading-none shadow-sm"
+          className="absolute bottom-[-2px] left-[-2px] flex items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
+          style={{ height: badgeSize, width: badgeSize, fontSize: badgeSize * 0.62, lineHeight: 1 }}
           aria-hidden="true"
         >
           {flag}
@@ -332,6 +340,12 @@ export default function PublicUserProfileScreen({
   const languageName = languageOption
     ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
     : null;
+  const handleOpenProfileShare = useCallback(() => {
+    if (!profile) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set("profileUserId", profile.id);
+    router.push(`/${locale}/mypage/share?${searchParams.toString()}`);
+  }, [locale, profile, router]);
 
   return (
     <motion.main
@@ -346,7 +360,7 @@ export default function PublicUserProfileScreen({
       style={{ touchAction: "pan-y" }}
     >
       <header
-        className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+        className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center px-4"
         style={{
           height: "calc(54px + env(safe-area-inset-top, 44px))",
           paddingTop: "env(safe-area-inset-top, 44px)",
@@ -364,13 +378,13 @@ export default function PublicUserProfileScreen({
         <div aria-hidden="true" />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-7">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex justify-center pt-12 text-gray-400" aria-live="polite">
+          <div className="flex justify-center px-4 pt-12 text-gray-400" aria-live="polite">
             <Loader2 size={26} className="animate-spin" aria-label={copy.loading} />
           </div>
         ) : loadError || !profile ? (
-          <p className="pt-12 text-center text-[14px] text-gray-500" role="alert">{copy.profileLoadError}</p>
+          <p className="px-4 pt-12 text-center text-[14px] text-gray-500" role="alert">{copy.profileLoadError}</p>
         ) : (
           <>
             <ProfileImagePreview
@@ -387,50 +401,65 @@ export default function PublicUserProfileScreen({
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}
             />
-            <section className="flex flex-col items-center text-center">
-              <ProfileAvatar
-                image={profile.image}
-                label={name}
-                flag={languageOption?.flag}
-                crop={{
-                  scale: profile.imageCropScale,
-                  x: profile.imageCropX,
-                  y: profile.imageCropY,
-                }}
-                onClick={() => setShowProfileImagePreview(true)}
-              />
-              <h2 className="mt-4 text-[20px] font-bold">{name}</h2>
-              {profile.handle ? <p className="mt-1 text-[14px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
-              {bio ? <p className="mt-3 max-w-[320px] whitespace-pre-wrap text-[14px] leading-relaxed text-gray-700">{bio}</p> : null}
-              <div className="mt-5 flex items-center gap-8 text-center">
-                <div>
-                  <p className="text-[18px] font-semibold">{profile.followersCount}</p>
-                  <p className="mt-1 text-[12px] text-gray-500">{dictionary.profile.followersLabel}</p>
+            <section className="px-4 pb-4 pt-5">
+              <div className="flex items-center gap-6 pl-2">
+                <div className="flex shrink-0 flex-col items-center">
+                  <ProfileAvatar
+                    image={profile.image}
+                    label={name}
+                    flag={languageOption?.flag}
+                    crop={{
+                      scale: profile.imageCropScale,
+                      x: profile.imageCropX,
+                      y: profile.imageCropY,
+                    }}
+                    onClick={() => setShowProfileImagePreview(true)}
+                  />
                 </div>
-                <div>
-                  <p className="text-[18px] font-semibold">{profile.followingCount}</p>
-                  <p className="mt-1 text-[12px] text-gray-500">{dictionary.profile.followingLabel}</p>
+                <div className="min-w-0 flex-1 grid grid-cols-2 gap-1 text-center">
+                  <div className="rounded-xl px-2 py-1">
+                    <p className="text-[18px] font-semibold leading-tight">{profile.followersCount}</p>
+                    <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followersLabel}</p>
+                  </div>
+                  <div className="rounded-xl px-2 py-1">
+                    <p className="text-[18px] font-semibold leading-tight">{profile.followingCount}</p>
+                    <p className="mt-0.5 text-[13px] text-gray-500">{dictionary.profile.followingLabel}</p>
+                  </div>
                 </div>
               </div>
-            </section>
 
-            <section className="mt-7 space-y-3">
-              <button
-                type="button"
-                onClick={() => void handleToggleFollow()}
-                disabled={isActionPending || profile.isBlocked}
-                className={`flex h-11 w-full items-center justify-center rounded-xl text-[14px] font-semibold transition disabled:opacity-50 ${
-                  profile.isFollowing ? "border border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
-                }`}
-              >
-                {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
-              </button>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="mt-4 pl-2">
+                <p className="text-[15px] font-semibold text-slate-950">{name}</p>
+                {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+                {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleToggleFollow()}
+                  disabled={isActionPending || profile.isBlocked}
+                  className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition disabled:opacity-50 ${
+                    profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
+                  }`}
+                >
+                  {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenProfileShare}
+                  className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+                >
+                  {dictionary.profile.shareProfile}
+                </button>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => void handleToggleBlock()}
                   disabled={isActionPending}
-                  className="flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-[14px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
+                  className="flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
                 >
                   <UserX size={17} strokeWidth={2} aria-hidden="true" />
                   {profile.isBlocked ? copy.unblock : copy.block}
@@ -442,14 +471,14 @@ export default function PublicUserProfileScreen({
                     setActionError(false);
                     setReportOpen(true);
                   }}
-                  className="flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-[14px] font-semibold text-rose-600 transition active:bg-rose-100"
+                  className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 text-[13px] font-semibold text-rose-600 transition active:bg-rose-100"
                 >
                   <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
                   {copy.report}
                 </button>
               </div>
               {actionError ? (
-                <p className="text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
+                <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
               ) : null}
             </section>
           </>

@@ -25,6 +25,13 @@
    Fix: Profile targets are now queued until the WebView is ready, intercepted for both external app links and in-WebView profile links, and opened with a history-preserving navigation to the localized public profile route. The destination carries the platform API namespace and native runtime flags so the target page uses the same 2.0.0 session as the rest of the app. Back/edge-swipe navigation can therefore return to the page that was open before the shared profile.
    Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
 
+### `2026-08-16-public-profile-layout-parity` | UI/UX issue found
+
+1. **Public profiles used a different layout from My Page**
+   Problem: Opening another user's profile showed a centered card with vertically stacked counts, while My Page used the compact avatar-and-stats layout with the name, handle, bio, and actions beneath it. The difference made the same profile information feel like two separate product surfaces.
+   Fix: The public profile now follows the My Page layout and spacing, keeps the profile image preview and language display behavior, removes the edit action for other users, and uses the same action row for follow and profile sharing. Block and report remain available as secondary actions. Profile sharing now accepts the selected public user ID so a shared profile's QR/link represents that user rather than the signed-in account.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
 ## 2026-08-08 Native STT continuity across the My Page tab
 
 ### `2026-08-08-native-stt-mypage-event-loss` | UI/UX issue found

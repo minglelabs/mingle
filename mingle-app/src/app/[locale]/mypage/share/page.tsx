@@ -20,6 +20,7 @@ export default async function ProfileSharePage({ params, searchParams }: Profile
       dictionary={getDictionary(locale)}
       locale={locale}
       initialHandle={typeof resolvedSearchParams.profileHandle === "string" ? resolvedSearchParams.profileHandle : ""}
+      initialUserId={typeof resolvedSearchParams.profileUserId === "string" ? resolvedSearchParams.profileUserId : ""}
     />
   );
 }

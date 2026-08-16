@@ -1,6 +1,7 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
+import { buildClientApiPath } from "@/lib/api-contract";
 import {
   ChevronLeft,
   Download,
@@ -21,6 +22,7 @@ type ProfileShareScreenProps = {
   dictionary: AppDictionary;
   locale: AppLocale;
   initialHandle?: string;
+  initialUserId?: string;
 };
 
 type NativeBridgeWindow = Window & {
@@ -71,7 +73,12 @@ async function copyTextToClipboard(value: string): Promise<void> {
   }
 }
 
-export default function ProfileShareScreen({ dictionary, locale, initialHandle = "" }: ProfileShareScreenProps) {
+export default function ProfileShareScreen({
+  dictionary,
+  locale,
+  initialHandle = "",
+  initialUserId = "",
+}: ProfileShareScreenProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const motionControls = useAnimationControls();
@@ -87,8 +94,12 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
   const isMountedRef = useRef(false);
 
   const sessionUserId = session?.user?.id ?? "";
+  const requestedUserId = initialUserId.trim();
   const profileUserId = profileRecordId || sessionUserId;
-  const name = profileName || session?.user?.name?.trim() || dictionary.titles.my;
+  const fallbackUserName = dictionary.connect.userFallbackLabel
+    ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user");
+  const name = profileName
+    || (requestedUserId ? fallbackUserName : session?.user?.name?.trim() || dictionary.titles.my);
   const profileHandle = formatHandle(rawHandle);
   const profileUrl = useMemo(() => {
     if (typeof window === "undefined" || !profileUserId) return "";
@@ -114,10 +125,16 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
   };
 
   useEffect(() => {
-    if (!sessionUserId) return;
+    if (!requestedUserId && !sessionUserId) return;
 
     let cancelled = false;
-    void fetch("/api/profile", { cache: "no-store" })
+    setProfileRecordId(requestedUserId);
+    setProfileName("");
+    setRawHandle(initialHandle.trim());
+    const endpoint = requestedUserId
+      ? buildClientApiPath(`/users/${encodeURIComponent(requestedUserId)}`)
+      : buildClientApiPath("/profile");
+    void fetch(endpoint, { cache: "no-store" })
       .then(async (response) => (response.ok
         ? response.json() as Promise<{ id?: unknown; name?: unknown; handle?: unknown }>
         : null))
@@ -134,7 +151,7 @@ export default function ProfileShareScreen({ dictionary, locale, initialHandle =
     return () => {
       cancelled = true;
     };
-  }, [sessionUserId]);
+  }, [initialHandle, requestedUserId, sessionUserId]);
 
   useEffect(() => {
     if (!profileUrl) {
