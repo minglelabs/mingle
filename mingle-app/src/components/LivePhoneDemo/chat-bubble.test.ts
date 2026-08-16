@@ -40,6 +40,7 @@ describe('ChatBubble', () => {
     expect(html).toContain('text-black')
     expect(html).not.toContain('“”')
     expect(html).toContain('h-[30px] w-[30px]')
+    expect(html).toContain('h-[11px] w-[11px]')
     expect(html).toContain('data-display-language="en"')
     expect((html.match(/data-chat-message-bubble/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge/g) || []).length).toBe(1)

@@ -215,16 +215,16 @@ function ChatLanguageBadge({
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-0.5 -top-0.5 inline-flex h-[7px] w-[7px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_2px_rgba(15,23,42,0.18)]"
+          className="absolute -right-1 -top-1 inline-flex h-[12px] w-[12px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
         >
           <Image
             data-original-language-quote-icon
             aria-hidden="true"
             src="/chat/original-language-quote.png"
             alt=""
-            width={7}
-            height={7}
-            className="h-[6px] w-[6px] object-contain"
+            width={12}
+            height={12}
+            className="h-[11px] w-[11px] object-contain"
             unoptimized
           />
         </span>
@@ -328,7 +328,7 @@ function ChatBubble({
         )}
         <span
           data-chat-bubble-language-badges
-          className="mr-1 inline-flex items-center gap-1 align-middle whitespace-nowrap"
+          className="mr-1 inline-flex items-center gap-1.5 align-middle whitespace-nowrap"
         >
           <ChatLanguageBadge
             lang={utterance.originalLang}
