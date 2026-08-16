@@ -76,9 +76,9 @@ Railway domain with `wss://<domain>/stt`.
 
 ## Database Migration
 
-This change does not add a Prisma migration. When the Railway database is ready,
-apply the existing migrations to the Railway database before production traffic
-is switched:
+The admin dashboard daily snapshot cache adds the
+`20260816120000_add_admin_dashboard_daily_metrics` Prisma migration. Apply all
+pending migrations to the Railway database before production traffic is switched:
 
 ```bash
 railway run pnpm --dir mingle-app db:migrate:deploy
