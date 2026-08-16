@@ -204,7 +204,7 @@ function ChatLanguageBadge({
         event.stopPropagation()
         onSelect?.()
       }}
-      className={`relative inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border bg-white text-[10px] leading-none shadow-[0_1px_4px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
+      className={`relative inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border bg-white text-[17px] leading-none shadow-[0_2px_7px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
         isSelected
           ? 'border-amber-400 ring-1 ring-amber-200/80'
           : 'border-gray-200/80'
@@ -215,16 +215,16 @@ function ChatLanguageBadge({
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-1 -top-1 inline-flex h-[10px] w-[10px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_3px_rgba(15,23,42,0.18)]"
+          className="absolute -right-0.5 -top-0.5 inline-flex h-[7px] w-[7px] items-center justify-center overflow-hidden rounded-full border border-white bg-white text-black shadow-[0_1px_2px_rgba(15,23,42,0.18)]"
         >
           <Image
             data-original-language-quote-icon
             aria-hidden="true"
             src="/chat/original-language-quote.png"
             alt=""
-            width={10}
-            height={10}
-            className="h-[10px] w-[10px] object-contain"
+            width={7}
+            height={7}
+            className="h-[6px] w-[6px] object-contain"
             unoptimized
           />
         </span>
@@ -328,7 +328,7 @@ function ChatBubble({
         )}
         <span
           data-chat-bubble-language-badges
-          className="mr-1 inline-flex items-center gap-0.5 align-middle whitespace-nowrap"
+          className="mr-1 inline-flex items-center gap-1 align-middle whitespace-nowrap"
         >
           <ChatLanguageBadge
             lang={utterance.originalLang}
