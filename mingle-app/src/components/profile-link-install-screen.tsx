@@ -3,12 +3,10 @@
 import {
   Apple,
   ArrowUpRight,
-  CheckCircle2,
-  Download,
   Play,
   Smartphone,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   buildProfileAppUrl,
   isValidProfileLinkUserId,
@@ -22,25 +20,14 @@ type ProfileLinkInstallScreenProps = {
 
 function getCopy(isKorean: boolean) {
   return {
-    title: isKorean ? "Mingle에서 프로필을 열어보세요" : "Open this profile in Mingle",
-    description: isKorean
-      ? "프로필 공유 링크는 Mingle 앱에서만 열 수 있습니다. 앱을 설치한 뒤 다시 열어주세요."
-      : "Profile sharing links open in the Mingle app. Install the app, then open this link again.",
+    title: isKorean ? "Mingle에서 프로필 열기" : "Open profile in Mingle",
     openInApp: isKorean ? "앱에서 열기" : "Open in app",
-    openHint: isKorean
-      ? "앱이 이미 설치되어 있다면 바로 프로필로 이동합니다."
-      : "If Mingle is installed, this opens the profile directly.",
-    downloadTitle: isKorean ? "Mingle 설치하기" : "Install Mingle",
-    downloadDescription: isKorean
-      ? "아래 스토어에서 앱을 설치할 수 있습니다."
-      : "Choose your app store to install Mingle.",
-    appStore: isKorean ? "App Store에서 받기" : "Download on the App Store",
-    playStore: isKorean ? "Google Play에서 받기" : "Get it on Google Play",
+    appStore: isKorean ? "App Store에서 설치" : "App Store",
+    playStore: isKorean ? "Google Play에서 설치" : "Google Play",
     invalidTitle: isKorean ? "잘못된 프로필 링크입니다" : "This profile link is invalid",
     invalidDescription: isKorean
       ? "QR 코드가 손상되었거나 더 이상 사용할 수 없는 링크입니다."
       : "The QR code may be damaged or the link is no longer available.",
-    verified: isKorean ? "Mingle 프로필 링크 확인됨" : "Verified Mingle profile link",
   };
 }
 
@@ -49,7 +36,6 @@ export default function ProfileLinkInstallScreen({
   iosAppStoreUrl,
   androidPlayStoreUrl,
 }: ProfileLinkInstallScreenProps) {
-  const [openAttempted, setOpenAttempted] = useState(false);
   const isKorean = useMemo(
     () => typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("ko"),
     [],
@@ -68,7 +54,6 @@ export default function ProfileLinkInstallScreen({
 
   const handleOpenInApp = () => {
     if (!appUrl) return;
-    setOpenAttempted(true);
     window.location.href = appUrl;
   };
 
@@ -92,12 +77,7 @@ export default function ProfileLinkInstallScreen({
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#f3c35a] text-3xl font-black text-slate-950 shadow-sm">
           M
         </div>
-        <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold text-emerald-600">
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          <span>{copy.verified}</span>
-        </div>
-        <h1 className="mt-4 text-center text-2xl font-bold tracking-tight">{copy.title}</h1>
-        <p className="mt-3 text-center text-sm leading-6 text-slate-500">{copy.description}</p>
+        <h1 className="mt-6 text-center text-2xl font-bold tracking-tight">{copy.title}</h1>
 
         <button
           type="button"
@@ -107,15 +87,8 @@ export default function ProfileLinkInstallScreen({
           <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
           {copy.openInApp}
         </button>
-        <p className="mt-2 text-center text-xs text-slate-400">{copy.openHint}</p>
 
-        <div className="my-7 flex items-center gap-3 text-xs text-slate-300">
-          <span className="h-px flex-1 bg-slate-200" />
-          <span>{copy.downloadTitle}</span>
-          <span className="h-px flex-1 bg-slate-200" />
-        </div>
-        <p className="mb-4 text-center text-sm text-slate-500">{copy.downloadDescription}</p>
-        <div className="grid gap-3">
+        <div className="mt-5 grid gap-3">
           {iosAppStoreUrl && (!isAndroid || isIos) ? (
             <a
               href={iosAppStoreUrl}
@@ -137,12 +110,6 @@ export default function ProfileLinkInstallScreen({
             </a>
           ) : null}
         </div>
-        {openAttempted ? (
-          <p className="mt-5 flex items-center justify-center gap-2 text-xs text-amber-600">
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {isKorean ? "앱이 열리지 않으면 아래 스토어에서 설치해 주세요." : "If the app did not open, install it from a store below."}
-          </p>
-        ) : null}
       </section>
     </main>
   );

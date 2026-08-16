@@ -713,3 +713,15 @@
   - Keep the existing unscoped key for the standalone/live surface, while room drafts no longer read from or write to that shared value.
 - Data contract: None. This is local-storage namespacing only; message submission and conversation APIs are unchanged.
 - Testing notes: Verify that drafts in two rooms remain independent, returning to each room restores its own text, submitting one draft clears only that room's draft, and the standalone live surface remains usable.
+
+## 2026-08-16 - Simplify the profile-link install screen
+
+- Surface: The browser fallback screen shown when opening a shared Mingle profile link.
+- Issue: The screen repeated the same information across a verification label, title description, button hint, installation divider, store description, and fallback notice.
+- User impact: The primary actions were buried in a tall card, making it harder to immediately open the profile or install Mingle.
+- Resolution:
+  - Keep only the Mingle mark, a short profile-opening title, the `Open in app` action, and the relevant store buttons.
+  - Remove redundant verification, explanatory, divider, and post-click guidance text from the valid-link state.
+  - Preserve the invalid-link message and platform-specific store filtering.
+- Data contract: None. Deep-link validation, app URL handling, and store URLs are unchanged.
+- Testing notes: Verify the valid profile-link screen on iOS, Android, and desktop, confirm the app and store actions remain visible, and confirm invalid links still show their error state.
