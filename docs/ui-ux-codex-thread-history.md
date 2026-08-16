@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Usage Panel Namespace Route Recovery
+
+- Surface: My Page usage panel in native v2.0.0 builds.
+- Issue: The usage panel requested `/api/ios/v2.0.0/profile/usage` or `/api/android/v2.0.0/profile/usage`, but only the unversioned profile usage route existed.
+- User impact: Native users saw the generic usage-load error even though the underlying usage query and database schema were available.
+- Resolution: Added iOS and Android v2.0.0 namespace route adapters that delegate to the shared profile usage handler.
+
 ## 2026-08-17 - Enlarged Selected Language Flags in Profile Settings
 
 - Surface: My Page primary-language and default-conversation-language pickers.
