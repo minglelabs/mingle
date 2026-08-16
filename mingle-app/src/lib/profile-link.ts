@@ -41,10 +41,12 @@ export function buildProfileLinkUrl(baseUrl: string, userId: string): string | n
   }
 }
 
-export function buildProfileAppUrl(userId: string): string | null {
+export function buildProfileAppUrl(userId: string, launchNonce?: string): string | null {
   const normalizedUserId = normalizeProfileLinkUserId(userId);
   if (!normalizedUserId) return null;
-  return `${PROFILE_APP_SCHEME}://${PROFILE_APP_SCHEME_HOST}/${encodeURIComponent(normalizedUserId)}`;
+  const normalizedNonce = launchNonce?.trim();
+  const query = normalizedNonce ? `?linkNonce=${encodeURIComponent(normalizedNonce)}` : "";
+  return `${PROFILE_APP_SCHEME}://${PROFILE_APP_SCHEME_HOST}/${encodeURIComponent(normalizedUserId)}${query}`;
 }
 
 function readProfilePathUserId(pathname: string): string | null {

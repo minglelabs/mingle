@@ -13,6 +13,7 @@ export type NativeProfileWebUrlOptions = {
   userId: string;
   apiNamespace?: string;
   nativeStt?: boolean;
+  linkNonce?: string;
 };
 
 function normalizeUserId(rawValue: string): string | null {
@@ -32,6 +33,7 @@ export function buildNativeProfileWebUrl({
   userId,
   apiNamespace,
   nativeStt,
+  linkNonce,
 }: NativeProfileWebUrlOptions): string | null {
   const normalizedUserId = normalizeUserId(userId);
   const normalizedLocale = locale.trim().replace(/^\/+|\/+$/g, "");
@@ -58,6 +60,9 @@ export function buildNativeProfileWebUrl({
   }
   if (typeof nativeStt === "boolean") {
     destination.searchParams.set("nativeStt", nativeStt ? "1" : "0");
+  }
+  if (linkNonce?.trim()) {
+    destination.searchParams.set("profileLinkNonce", linkNonce.trim());
   }
 
   return destination.toString();

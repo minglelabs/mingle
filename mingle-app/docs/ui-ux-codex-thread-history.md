@@ -32,6 +32,13 @@
    Fix: The public profile now follows the My Page layout and spacing, keeps the profile image preview and language display behavior, removes the edit action for other users, and uses the same action row for follow and profile sharing. Block and report remain available as secondary actions. Profile sharing now accepts the selected public user ID so a shared profile's QR/link represents that user rather than the signed-in account.
    Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
 
+### `2026-08-16-repeated-profile-link-open` | UI/UX issue found
+
+1. **Opening the same shared profile link a second time could bring Mingle to the foreground without changing the WebView profile**
+   Problem: The browser fallback always launched the identical `mingle://profile/{userId}` URL, while a warm native app depended on a single URL event and then navigated to a destination with the same route URL. Repeating the action could therefore be treated as a duplicate launch or appear to be a no-op when the same profile was already visible.
+   Fix: Browser launches now add a per-tap nonce, and native WebView profile destinations add a fresh navigation nonce so every launch is delivered as a distinct request and creates a new history entry while keeping the immutable user ID as the actual profile target.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
 ## 2026-08-08 Native STT continuity across the My Page tab
 
 ### `2026-08-08-native-stt-mypage-event-loss` | UI/UX issue found

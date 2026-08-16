@@ -13,6 +13,7 @@ describe("profile links", () => {
     expect(buildProfileLinkPath("cmg123abc")).toBe("/p/cmg123abc");
     expect(buildProfileLinkUrl(origin, "cmg123abc")).toBe(`${origin}/p/cmg123abc`);
     expect(buildProfileAppUrl("cmg123abc")).toBe("mingle://profile/cmg123abc");
+    expect(buildProfileAppUrl("cmg123abc", "launch-1")).toBe("mingle://profile/cmg123abc?linkNonce=launch-1");
   });
 
   it("accepts only Mingle profile links for the configured origin", () => {

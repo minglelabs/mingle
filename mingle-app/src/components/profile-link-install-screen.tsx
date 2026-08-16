@@ -6,7 +6,7 @@ import {
   Play,
   Smartphone,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   buildProfileAppUrl,
   isValidProfileLinkUserId,
@@ -51,10 +51,14 @@ export default function ProfileLinkInstallScreen({
     () => typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent),
     [],
   );
+  const launchNonceRef = useRef(0);
 
   const handleOpenInApp = () => {
     if (!appUrl) return;
-    window.location.href = appUrl;
+    launchNonceRef.current += 1;
+    const launchNonce = String(Date.now()) + "-" + String(launchNonceRef.current);
+    const launchUrl = buildProfileAppUrl(userId, launchNonce) ?? appUrl;
+    window.location.assign(launchUrl);
   };
 
   if (!isValid) {

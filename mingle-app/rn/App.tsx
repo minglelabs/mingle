@@ -1156,6 +1156,7 @@ function AppInner(): React.JSX.Element {
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
   const pendingProfileLinkUserIdRef = useRef<string | null>(null);
+  const profileLinkNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
   const pendingAuthEventRef = useRef<NativeAuthEvent | null>(null);
@@ -1322,12 +1323,15 @@ function AppInner(): React.JSX.Element {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
+    profileLinkNavigationSequenceRef.current += 1;
+    const linkNonce = String(Date.now()) + '-' + String(profileLinkNavigationSequenceRef.current);
     const destination = buildNativeProfileWebUrl({
       baseUrl: activeWebAppBaseUrl,
       locale: webLocale,
       userId: normalizedUserId,
       apiNamespace: VALIDATED_API_NAMESPACE,
       nativeStt: nativeAvailable,
+      linkNonce,
     });
     if (!destination) return;
 

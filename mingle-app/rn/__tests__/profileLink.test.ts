@@ -11,7 +11,7 @@ describe('native profile links', () => {
   });
 
   it('accepts the custom-scheme fallback link', () => {
-    expect(parseNativeProfileLink('mingle://profile/cmg123abc', origin)).toEqual({
+    expect(parseNativeProfileLink('mingle://profile/cmg123abc?linkNonce=launch-1', origin)).toEqual({
       source: 'mingle',
       userId: 'cmg123abc',
     });
@@ -30,6 +30,7 @@ describe('native profile links', () => {
       userId: 'cmg123abc',
       apiNamespace: 'ios/v2.0.0',
       nativeStt: false,
+      linkNonce: 'launch-1',
     });
 
     expect(result).not.toBeNull();
@@ -39,6 +40,7 @@ describe('native profile links', () => {
     expect(url.searchParams.get('nativeAuth')).toBe('1');
     expect(url.searchParams.get('apiNamespace')).toBe('ios/v2.0.0');
     expect(url.searchParams.get('nativeStt')).toBe('0');
+    expect(url.searchParams.get('profileLinkNonce')).toBe('launch-1');
     expect(url.hash).toBe('');
   });
 
