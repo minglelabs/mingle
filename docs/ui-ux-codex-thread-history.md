@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - My Page Usage Summary
+
+- Surface: My Page hamburger menu and usage detail panel.
+- Issue: Users had no in-app view of their accumulated speech activity, message volume, or conversation count.
+- User impact: Personal usage history was difficult to understand, and there was no way to compare speech recognition activity with translation language usage.
+- Resolution: Added a Usage menu item and a slide-in usage panel with total time, total messages, total conversation rooms, speech-language time/message breakdowns, and translation-language message counts. The panel keeps the existing edge-swipe back interaction and loads private usage data only when opened.
+
 ## 2026-08-16 - Admin Dashboard Daily Metric Loading Delay
 
 - Surface: `mingle-app/src/app/admin/dashboard/page.tsx`, `mingle-app/src/lib/admin-dashboard-query.ts`, `mingle-app/prisma/schema.prisma`

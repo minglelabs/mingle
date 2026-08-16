@@ -6,6 +6,7 @@ import ProfileImageCropper, {
 } from "@/components/profile-image-cropper";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
+import ProfileUsageContent from "@/components/profile-usage-content";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
@@ -41,7 +42,7 @@ import {
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
+import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -307,7 +308,7 @@ function ProfileSettingsPanel({
   const [reportsLoadState, setReportsLoadState] = useState<ManagementLoadState>("idle");
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
-  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "defaultLanguages" | "feedback" | null>(null);
+  const [managementPage, setManagementPage] = useState<"blocked" | "reports" | "language" | "defaultLanguages" | "usage" | "feedback" | null>(null);
   const [defaultConversationLanguages, setDefaultConversationLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialDefaultConversationLanguages)
   ));
@@ -336,6 +337,18 @@ function ProfileSettingsPanel({
       ? "새 대화방을 만들 때 사용할 언어를 원하는 순서대로 선택하세요."
       : "Choose the languages and order used when you create a new conversation.",
     defaultLanguagesSaveError: locale === "ko" ? "기본 언어를 저장하지 못했습니다." : "Could not save the default languages.",
+    usage: {
+      title: locale === "ko" ? "사용량" : "Usage",
+      totalUsage: locale === "ko" ? "총 사용시간" : "Total time",
+      messages: locale === "ko" ? "메시지" : "Messages",
+      conversations: locale === "ko" ? "대화방" : "Conversations",
+      speechLanguages: locale === "ko" ? "음성 인식 언어별" : "By speech language",
+      translationLanguages: locale === "ko" ? "번역 언어별 메시지" : "Messages by translation language",
+      messageCountSuffix: locale === "ko" ? "개" : "messages",
+      noData: locale === "ko" ? "아직 사용량이 없습니다." : "No usage yet.",
+      loadError: locale === "ko" ? "사용량을 불러오지 못했습니다." : "Could not load your usage.",
+      unknownLanguage: locale === "ko" ? "알 수 없는 언어" : "Unknown language",
+    },
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
     unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
@@ -378,6 +391,8 @@ function ProfileSettingsPanel({
       ? copy.reports
       : managementPage === "feedback"
         ? feedbackCopy.pageTitle
+        : managementPage === "usage"
+          ? copy.usage.title
         : managementPage === "defaultLanguages"
           ? copy.defaultLanguagesTitle
         : copy.appLanguageTitle;
@@ -700,6 +715,15 @@ function ProfileSettingsPanel({
               </button>
               <button
                 type="button"
+                onClick={() => setManagementPage("usage")}
+                className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
+              >
+                <BarChart3 size={20} strokeWidth={2} className="text-gray-600" aria-hidden="true" />
+                <span className="min-w-0 flex-1 text-[15px] font-semibold">{copy.usage.title}</span>
+                <ChevronRight size={19} strokeWidth={2} className="text-gray-400" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
                 onClick={() => setManagementPage("defaultLanguages")}
                 className="flex w-full items-center gap-3 border-b border-gray-100 px-4 py-4 text-left transition active:bg-gray-50"
               >
@@ -793,6 +817,8 @@ function ProfileSettingsPanel({
                 uiLocale={locale}
                 defaultFeedbackEmail={defaultFeedbackEmail}
               />
+            ) : managementPage === "usage" ? (
+              <ProfileUsageContent uiLocale={locale} copy={copy.usage} />
             ) : managementPage === "defaultLanguages" ? (
               <div>
                 <p className="mb-5 text-[13px] leading-relaxed text-gray-500">{copy.defaultLanguagesDescription}</p>
