@@ -1,6 +1,11 @@
 const PROFILE_LINK_USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const PROFILE_APP_SCHEME = "mingle:";
+const PROFILE_APP_FALLBACK_SCHEME = "mingleprofile:";
 const PROFILE_APP_SCHEME_HOST = "profile";
+const PROFILE_APP_SCHEMES = new Set([
+  PROFILE_APP_SCHEME,
+  PROFILE_APP_FALLBACK_SCHEME,
+]);
 
 export type NativeProfileLink = {
   userId: string;
@@ -79,7 +84,7 @@ export function parseNativeProfileLink(rawValue: string, allowedHttpsOrigin: str
     return null;
   }
 
-  if (url.protocol === PROFILE_APP_SCHEME) {
+  if (PROFILE_APP_SCHEMES.has(url.protocol)) {
     if (url.hostname !== PROFILE_APP_SCHEME_HOST) return null;
     const userId = normalizeUserId(url.pathname.replace(/^\//, ""));
     return userId ? { userId, source: "mingle" } : null;

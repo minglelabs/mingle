@@ -28,6 +28,13 @@ RCT_EXTERN_METHOD(getMicrophonePermissionStatus:(RCTPromiseResolveBlock)resolve
 RCT_EXTERN_METHOD(getRuntimeConfig:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(getPendingProfileLink:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(clearPendingProfileLink:(nonnull NSNumber *)sequence
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(rememberConversationRestoreUrl:(NSString *)url
                   conversationId:(NSString *)conversationId
                   createdAtMs:(nonnull NSNumber *)createdAtMs

@@ -1122,6 +1122,8 @@ class NativeRuntimeConfigModule: NSObject {
     private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
     private static let conversationRestoreConversationIdKey = "mingle.nativeConversationRestore.conversationId"
     private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
+    private static let pendingProfileLinkUrlKey = "mingle.nativeProfileLink.url"
+    private static let pendingProfileLinkSequenceKey = "mingle.nativeProfileLink.sequence"
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -1134,6 +1136,38 @@ class NativeRuntimeConfigModule: NSObject {
             return 0
         }
         return NSNumber(value: value)
+    }
+
+    private static func isProfileLinkURL(_ url: URL) -> Bool {
+        let scheme = (url.scheme ?? "").lowercased()
+        if scheme == "mingle" || scheme == "mingleprofile" {
+            return url.host?.lowercased() == "profile"
+        }
+        if scheme == "https" {
+            return url.path.split(separator: "/").first.map(String.init) == "p"
+        }
+        return false
+    }
+
+    static func recordIncomingProfileLink(_ url: URL) {
+        guard isProfileLinkURL(url) else { return }
+        let normalizedURL = url.absoluteString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedURL.isEmpty else { return }
+
+        let defaults = UserDefaults.standard
+        let nextSequence = defaults.integer(forKey: pendingProfileLinkSequenceKey) + 1
+        defaults.set(normalizedURL, forKey: pendingProfileLinkUrlKey)
+        defaults.set(nextSequence, forKey: pendingProfileLinkSequenceKey)
+    }
+
+    private static func pendingProfileLinkPayload() -> [String: Any]? {
+        guard let url = UserDefaults.standard.string(forKey: pendingProfileLinkUrlKey), !url.isEmpty else {
+            return nil
+        }
+        return [
+            "url": url,
+            "sequence": UserDefaults.standard.integer(forKey: pendingProfileLinkSequenceKey),
+        ]
     }
 
     private static func runtimeConfigPayload() -> [String: Any] {
@@ -1178,6 +1212,30 @@ class NativeRuntimeConfigModule: NSObject {
         rejecter reject: RCTPromiseRejectBlock
     ) {
         resolve(Self.runtimeConfigPayload())
+    }
+
+    @objc(getPendingProfileLink:rejecter:)
+    func getPendingProfileLink(
+        _ resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        resolve(Self.pendingProfileLinkPayload() ?? NSNull())
+    }
+
+    @objc(clearPendingProfileLink:resolver:rejecter:)
+    func clearPendingProfileLink(
+        _ sequence: NSNumber,
+        resolver resolve: RCTPromiseResolveBlock,
+        rejecter reject: RCTPromiseRejectBlock
+    ) {
+        let defaults = UserDefaults.standard
+        let expectedSequence = sequence.intValue
+        let currentSequence = defaults.integer(forKey: Self.pendingProfileLinkSequenceKey)
+        if expectedSequence <= 0 || expectedSequence == currentSequence {
+            defaults.removeObject(forKey: Self.pendingProfileLinkUrlKey)
+            defaults.removeObject(forKey: Self.pendingProfileLinkSequenceKey)
+        }
+        resolve(true)
     }
 
     @objc(rememberConversationRestoreUrl:conversationId:createdAtMs:resolver:rejecter:)

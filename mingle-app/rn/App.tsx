@@ -122,7 +122,13 @@ type NativeConversationRestoreStorageModule = {
     createdAtMs: number,
   ) => Promise<unknown> | void;
   clearConversationRestoreUrl?: () => Promise<unknown> | void;
+  getPendingProfileLink?: () => Promise<NativePendingProfileLink | null>;
+  clearPendingProfileLink?: (sequence: number) => Promise<unknown> | void;
   recordHistoryDebug?: (payload: string) => Promise<unknown> | void;
+};
+type NativePendingProfileLink = {
+  url?: unknown;
+  sequence?: unknown;
 };
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
@@ -1156,6 +1162,7 @@ function AppInner(): React.JSX.Element {
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
   const pendingProfileLinkUserIdRef = useRef<string | null>(null);
+  const lastHandledProfileLinkRef = useRef('');
   const profileLinkNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
@@ -1357,11 +1364,41 @@ function AppInner(): React.JSX.Element {
     navigateWebViewToProfile(parsed.userId);
     return true;
   }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
+  const handleIncomingProfileLinkOnce = useCallback((rawUrl: string) => {
+    const normalizedUrl = rawUrl.trim();
+    if (!normalizedUrl) return false;
+    if (lastHandledProfileLinkRef.current === normalizedUrl) return true;
+
+    const handled = handleIncomingProfileLink(normalizedUrl);
+    if (handled) {
+      lastHandledProfileLinkRef.current = normalizedUrl;
+    }
+    return handled;
+  }, [handleIncomingProfileLink]);
+  const consumePendingProfileLink = useCallback(async () => {
+    const getPendingProfileLink = NATIVE_CONVERSATION_RESTORE_STORAGE.getPendingProfileLink;
+    if (!getPendingProfileLink) return;
+
+    try {
+      const pending = await getPendingProfileLink();
+      if (!pending || typeof pending !== 'object' || typeof pending.url !== 'string') return;
+
+      const handled = handleIncomingProfileLinkOnce(pending.url);
+      if (!handled) return;
+
+      const sequence = typeof pending.sequence === 'number' && Number.isFinite(pending.sequence)
+        ? pending.sequence
+        : 0;
+      await NATIVE_CONVERSATION_RESTORE_STORAGE.clearPendingProfileLink?.(sequence);
+    } catch {
+      // The regular React Native Linking event remains the primary path.
+    }
+  }, [handleIncomingProfileLinkOnce]);
   const handleShouldStartLoadWithRequest = useCallback((request: WebViewNavigation) => {
     const rawUrl = typeof request.url === 'string' ? request.url.trim() : '';
-    if (rawUrl && handleIncomingProfileLink(rawUrl)) return false;
+    if (rawUrl && handleIncomingProfileLinkOnce(rawUrl)) return false;
     return true;
-  }, [handleIncomingProfileLink]);
+  }, [handleIncomingProfileLinkOnce]);
   const flushPendingProfileLinkToWeb = useCallback(() => {
     const pendingUserId = pendingProfileLinkUserIdRef.current;
     if (!pendingUserId || !isPageReadyRef.current) return;
@@ -1386,21 +1423,37 @@ function AppInner(): React.JSX.Element {
     let mounted = true;
     const handleUrl = (rawUrl: string | null | undefined) => {
       if (!mounted || typeof rawUrl !== 'string') return;
-      handleIncomingProfileLink(rawUrl);
+      handleIncomingProfileLinkOnce(rawUrl);
     };
 
     void Linking.getInitialURL().then(handleUrl).catch(() => {
       // Ignore malformed or unavailable initial URLs.
     });
+    void consumePendingProfileLink();
     const subscription = Linking.addEventListener('url', ({ url }) => {
       handleUrl(url);
+      void consumePendingProfileLink();
     });
 
     return () => {
       mounted = false;
       subscription.remove();
     };
-  }, [handleIncomingProfileLink]);
+  }, [consumePendingProfileLink, handleIncomingProfileLinkOnce]);
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const becameActive = previousState !== 'active' && nextState === 'active';
+      previousState = nextState;
+      if (becameActive) {
+        void consumePendingProfileLink();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [consumePendingProfileLink]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],

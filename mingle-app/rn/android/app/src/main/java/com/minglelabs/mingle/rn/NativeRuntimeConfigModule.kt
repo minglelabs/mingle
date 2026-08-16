@@ -1,6 +1,7 @@
 package com.minglelabs.mingle.rn
 
 import android.content.Context
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -66,10 +67,60 @@ class NativeRuntimeConfigModule(
     promise.resolve(true)
   }
 
-  private companion object {
+  @ReactMethod
+  fun getPendingProfileLink(promise: Promise) {
+    val url = restorePrefs.getString(PENDING_PROFILE_LINK_URL_KEY, "") ?: ""
+    if (url.isEmpty()) {
+      promise.resolve(null)
+      return
+    }
+
+    promise.resolve(Arguments.createMap().apply {
+      putString("url", url)
+      putDouble(
+        "sequence",
+        restorePrefs.getLong(PENDING_PROFILE_LINK_SEQUENCE_KEY, 0L).toDouble(),
+      )
+    })
+  }
+
+  @ReactMethod
+  fun clearPendingProfileLink(sequence: Double, promise: Promise) {
+    val expectedSequence = sequence.toLong()
+    val currentSequence = restorePrefs.getLong(PENDING_PROFILE_LINK_SEQUENCE_KEY, 0L)
+    if (expectedSequence <= 0L || expectedSequence == currentSequence) {
+      restorePrefs.edit()
+        .remove(PENDING_PROFILE_LINK_URL_KEY)
+        .remove(PENDING_PROFILE_LINK_SEQUENCE_KEY)
+        .apply()
+    }
+    promise.resolve(true)
+  }
+
+  companion object {
     const val RESTORE_PREFS_NAME = "mingle_native_conversation_restore"
     const val RESTORE_URL_KEY = "url"
     const val RESTORE_CONVERSATION_ID_KEY = "conversation_id"
     const val RESTORE_CREATED_AT_MS_KEY = "created_at_ms"
+    const val PENDING_PROFILE_LINK_URL_KEY = "profile_link_url"
+    const val PENDING_PROFILE_LINK_SEQUENCE_KEY = "profile_link_sequence"
+
+    fun recordIncomingProfileLink(context: Context, rawUrl: String?) {
+      val normalizedUrl = rawUrl?.trim() ?: return
+      if (!isSupportedProfileLink(normalizedUrl)) return
+
+      val prefs = context.getSharedPreferences(RESTORE_PREFS_NAME, Context.MODE_PRIVATE)
+      val nextSequence = prefs.getLong(PENDING_PROFILE_LINK_SEQUENCE_KEY, 0L) + 1L
+      prefs.edit()
+        .putString(PENDING_PROFILE_LINK_URL_KEY, normalizedUrl)
+        .putLong(PENDING_PROFILE_LINK_SEQUENCE_KEY, nextSequence)
+        .apply()
+    }
+
+    private fun isSupportedProfileLink(rawUrl: String): Boolean {
+      val lower = rawUrl.lowercase()
+      return (lower.startsWith("mingle://profile/") || lower.startsWith("mingleprofile://profile/"))
+        || (lower.startsWith("https://mingle-2-0-0-production.up.railway.app/p/"))
+    }
   }
 }

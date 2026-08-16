@@ -15,6 +15,10 @@ describe('native profile links', () => {
       source: 'mingle',
       userId: 'cmg123abc',
     });
+    expect(parseNativeProfileLink('mingleprofile://profile/cmg123abc?linkNonce=launch-2', origin)).toEqual({
+      source: 'mingle',
+      userId: 'cmg123abc',
+    });
   });
 
   it('rejects non-Mingle hosts and malformed profile references', () => {

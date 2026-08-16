@@ -14,6 +14,7 @@ describe("profile links", () => {
     expect(buildProfileLinkUrl(origin, "cmg123abc")).toBe(`${origin}/p/cmg123abc`);
     expect(buildProfileAppUrl("cmg123abc")).toBe("mingle://profile/cmg123abc");
     expect(buildProfileAppUrl("cmg123abc", "launch-1")).toBe("mingle://profile/cmg123abc?linkNonce=launch-1");
+    expect(buildProfileAppUrl("cmg123abc", "launch-2", "mingleprofile")).toBe("mingleprofile://profile/cmg123abc?linkNonce=launch-2");
   });
 
   it("accepts only Mingle profile links for the configured origin", () => {
@@ -23,6 +24,10 @@ describe("profile links", () => {
     });
     expect(parseMingleProfileLink("https://example.com/p/cmg123abc", [origin])).toBeNull();
     expect(parseMingleProfileLink("mingle://profile/cmg123abc", [origin])).toEqual({
+      source: "mingle",
+      userId: "cmg123abc",
+    });
+    expect(parseMingleProfileLink("mingleprofile://profile/cmg123abc?linkNonce=launch-2", [origin])).toEqual({
       source: "mingle",
       userId: "cmg123abc",
     });

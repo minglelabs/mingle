@@ -1,6 +1,12 @@
 export const PROFILE_LINK_PATH_PREFIX = "/p/";
 export const PROFILE_APP_SCHEME = "mingle";
+export const PROFILE_APP_FALLBACK_SCHEME = "mingleprofile";
 export const PROFILE_APP_SCHEME_HOST = "profile";
+
+export const PROFILE_APP_SCHEMES = [
+  PROFILE_APP_SCHEME,
+  PROFILE_APP_FALLBACK_SCHEME,
+] as const;
 
 const PROFILE_LINK_USER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -41,12 +47,19 @@ export function buildProfileLinkUrl(baseUrl: string, userId: string): string | n
   }
 }
 
-export function buildProfileAppUrl(userId: string, launchNonce?: string): string | null {
+export function buildProfileAppUrl(
+  userId: string,
+  launchNonce?: string,
+  scheme: (typeof PROFILE_APP_SCHEMES)[number] = PROFILE_APP_SCHEME,
+): string | null {
   const normalizedUserId = normalizeProfileLinkUserId(userId);
   if (!normalizedUserId) return null;
+  const normalizedScheme = PROFILE_APP_SCHEMES.includes(scheme)
+    ? scheme
+    : PROFILE_APP_SCHEME;
   const normalizedNonce = launchNonce?.trim();
   const query = normalizedNonce ? `?linkNonce=${encodeURIComponent(normalizedNonce)}` : "";
-  return `${PROFILE_APP_SCHEME}://${PROFILE_APP_SCHEME_HOST}/${encodeURIComponent(normalizedUserId)}${query}`;
+  return `${normalizedScheme}://${PROFILE_APP_SCHEME_HOST}/${encodeURIComponent(normalizedUserId)}${query}`;
 }
 
 function readProfilePathUserId(pathname: string): string | null {
@@ -73,7 +86,7 @@ export function parseMingleProfileLink(
     return null;
   }
 
-  if (url.protocol === `${PROFILE_APP_SCHEME}:`) {
+  if (PROFILE_APP_SCHEMES.some((scheme) => url.protocol === `${scheme}:`)) {
     const userId = readMingleSchemeUserId(url);
     return userId ? { userId, source: "mingle" } : null;
   }

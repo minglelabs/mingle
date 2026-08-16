@@ -36,8 +36,15 @@
 
 1. **Opening the same shared profile link a second time could bring Mingle to the foreground without changing the WebView profile**
    Problem: The browser fallback always launched the identical `mingle://profile/{userId}` URL, while a warm native app depended on a single URL event and then navigated to a destination with the same route URL. Repeating the action could therefore be treated as a duplicate launch or appear to be a no-op when the same profile was already visible.
-   Fix: Browser launches now add a per-tap nonce, and native WebView profile destinations add a fresh navigation nonce so every launch is delivered as a distinct request and creates a new history entry while keeping the immutable user ID as the actual profile target.
-   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+   Fix: Browser launches now add a per-tap nonce and alternate between two registered Mingle profile schemes so iOS does not collapse repeated custom-scheme launches. The native shell also persists the latest profile URL at the app delegate/activity boundary and consumes it again when the app becomes active, covering warm-start event delivery gaps. Native WebView profile destinations add a fresh navigation nonce so every accepted launch creates a new history entry while keeping the immutable user ID as the actual profile target.
+   Status: Follow-up fix implemented in-thread on 2026-08-16 after TestFlight 72 still reproduced the issue. Physical-device verification is pending.
+
+### `2026-08-16-app-store-profile-link-install-branding` | UI/UX issue found
+
+1. **The App Store install button used a generic outline apple instead of the recognizable Apple mark**
+   Problem: The button used the Lucide `Apple` outline icon, which did not match the Apple logo users expect when choosing the App Store.
+   Fix: The install page now renders a filled Apple mark directly in the button while keeping the existing store link and localized label unchanged.
+   Status: Implemented in-thread on 2026-08-16. Physical-device/browser verification is pending.
 
 ## 2026-08-08 Native STT continuity across the My Page tab
 

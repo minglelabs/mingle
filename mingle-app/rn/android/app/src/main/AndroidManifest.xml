@@ -64,6 +64,14 @@
                 android:scheme="mingle"
                 android:host="profile" />
         </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="mingleprofile"
+                android:host="profile" />
+        </intent-filter>
       </activity>
     </application>
 </manifest>

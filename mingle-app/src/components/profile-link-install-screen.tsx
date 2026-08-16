@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Apple,
   ArrowUpRight,
   Play,
   Smartphone,
@@ -10,6 +9,8 @@ import { useMemo, useRef } from "react";
 import {
   buildProfileAppUrl,
   isValidProfileLinkUserId,
+  PROFILE_APP_FALLBACK_SCHEME,
+  PROFILE_APP_SCHEME,
 } from "@/lib/profile-link";
 
 type ProfileLinkInstallScreenProps = {
@@ -29,6 +30,19 @@ function getCopy(isKorean: boolean) {
       ? "QR 코드가 손상되었거나 더 이상 사용할 수 없는 링크입니다."
       : "The QR code may be damaged or the link is no longer available.",
   };
+}
+
+function AppleLogo() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5 shrink-0"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
+      <path d="M15.464 3.784c.8-.96 1.336-2.296 1.188-3.624-1.152.048-2.544.768-3.376 1.728-.736.848-1.384 2.2-1.208 3.496 1.288.1 2.6-.648 3.396-1.6ZM20.88 17.028c-.036-.016-3.1-1.188-3.132-4.716-.028-2.948 2.408-4.356 2.52-4.42-1.392-2.036-3.564-2.264-4.328-2.296-1.8-.144-3.512 1.072-4.428 1.072-.948 0-2.415-1.078-3.96-1.047-2.04.032-3.92 1.176-4.968 3.008-2.136 3.704-.544 9.136 1.512 12.128 1 1.464 2.168 3.104 3.72 3.048 1.48-.064 2.04-.968 3.832-.968 1.768 0 2.272.968 3.84.936 1.6-.032 2.608-1.464 3.576-2.936 1.128-1.648 1.592-3.248 1.616-3.328-.036-.016-.764-.292-1.8-.481Z" />
+    </svg>
+  );
 }
 
 export default function ProfileLinkInstallScreen({
@@ -57,7 +71,10 @@ export default function ProfileLinkInstallScreen({
     if (!appUrl) return;
     launchNonceRef.current += 1;
     const launchNonce = String(Date.now()) + "-" + String(launchNonceRef.current);
-    const launchUrl = buildProfileAppUrl(userId, launchNonce) ?? appUrl;
+    const scheme = launchNonceRef.current % 2 === 0
+      ? PROFILE_APP_FALLBACK_SCHEME
+      : PROFILE_APP_SCHEME;
+    const launchUrl = buildProfileAppUrl(userId, launchNonce, scheme) ?? appUrl;
     window.location.assign(launchUrl);
   };
 
@@ -99,7 +116,7 @@ export default function ProfileLinkInstallScreen({
               className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3.5 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
               rel="noreferrer"
             >
-              <Apple className="h-5 w-5" aria-hidden="true" />
+              <AppleLogo />
               {copy.appStore}
             </a>
           ) : null}

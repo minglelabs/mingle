@@ -43,6 +43,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+    NativeRuntimeConfigModule.recordIncomingProfileLink(url)
     return RCTLinkingManager.application(app, open: url, options: options)
   }
 
@@ -51,6 +52,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
+    if let webpageURL = userActivity.webpageURL {
+      NativeRuntimeConfigModule.recordIncomingProfileLink(webpageURL)
+    }
     return RCTLinkingManager.application(
       application,
       continue: userActivity,
