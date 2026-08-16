@@ -18,6 +18,13 @@
 
    Status: Implemented in-thread on 2026-08-16. iOS simulator and Android debug builds passed; production Android App Links remain inactive until the Google Play app-signing SHA-256 fingerprint is configured.
 
+### `2026-08-16-profile-link-webview-routing` | UI/UX issue found
+
+1. **Opening a shared profile link launched Mingle but did not reliably open the target profile**
+   Problem: A profile link could reach the native shell while the WebView was still loading, or could be opened from a link inside the WebView without being routed through the profile handler. The resulting app launch left the user on the screen that was already open. The profile destination also omitted the active 2.0.0 API namespace and native WebView flags.
+   Fix: Profile targets are now queued until the WebView is ready, intercepted for both external app links and in-WebView profile links, and opened with a history-preserving navigation to the localized public profile route. The destination carries the platform API namespace and native runtime flags so the target page uses the same 2.0.0 session as the rest of the app. Back/edge-swipe navigation can therefore return to the page that was open before the shared profile.
+   Status: Implemented in-thread on 2026-08-16. Physical-device verification is pending.
+
 ## 2026-08-08 Native STT continuity across the My Page tab
 
 ### `2026-08-08-native-stt-mypage-event-loss` | UI/UX issue found

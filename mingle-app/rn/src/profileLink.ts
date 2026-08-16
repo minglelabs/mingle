@@ -7,6 +7,14 @@ export type NativeProfileLink = {
   source: "https" | "mingle";
 };
 
+export type NativeProfileWebUrlOptions = {
+  baseUrl: string;
+  locale: string;
+  userId: string;
+  apiNamespace?: string;
+  nativeStt?: boolean;
+};
+
 function normalizeUserId(rawValue: string): string | null {
   let decodedValue = rawValue.trim();
   try {
@@ -16,6 +24,43 @@ function normalizeUserId(rawValue: string): string | null {
   }
 
   return PROFILE_LINK_USER_ID_PATTERN.test(decodedValue) ? decodedValue : null;
+}
+
+export function buildNativeProfileWebUrl({
+  baseUrl,
+  locale,
+  userId,
+  apiNamespace,
+  nativeStt,
+}: NativeProfileWebUrlOptions): string | null {
+  const normalizedUserId = normalizeUserId(userId);
+  const normalizedLocale = locale.trim().replace(/^\/+|\/+$/g, "");
+  if (!normalizedUserId || !normalizedLocale) return null;
+
+  let destination: URL;
+  try {
+    const base = new URL(baseUrl);
+    if (base.protocol !== "http:" && base.protocol !== "https:") {
+      return null;
+    }
+    const basePath = base.pathname.replace(/\/+$/, "");
+    destination = new URL(
+      `${base.origin}${basePath}/${encodeURIComponent(normalizedLocale)}/users/${encodeURIComponent(normalizedUserId)}`,
+    );
+  } catch {
+    return null;
+  }
+
+  destination.searchParams.set("nativeUi", "1");
+  destination.searchParams.set("nativeAuth", "1");
+  if (apiNamespace?.trim()) {
+    destination.searchParams.set("apiNamespace", apiNamespace.trim());
+  }
+  if (typeof nativeStt === "boolean") {
+    destination.searchParams.set("nativeStt", nativeStt ? "1" : "0");
+  }
+
+  return destination.toString();
 }
 
 export function parseNativeProfileLink(rawValue: string, allowedHttpsOrigin: string): NativeProfileLink | null {

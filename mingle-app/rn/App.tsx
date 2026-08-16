@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -91,7 +91,7 @@ import {
 import NativeQrScanner, {
   type NativeQrScannerRequest,
 } from './src/nativeQrScanner';
-import { parseNativeProfileLink } from './src/profileLink';
+import { buildNativeProfileWebUrl, parseNativeProfileLink } from './src/profileLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -1322,15 +1322,23 @@ function AppInner(): React.JSX.Element {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
+    const destination = buildNativeProfileWebUrl({
+      baseUrl: activeWebAppBaseUrl,
+      locale: webLocale,
+      userId: normalizedUserId,
+      apiNamespace: VALIDATED_API_NAMESPACE,
+      nativeStt: nativeAvailable,
+    });
+    if (!destination) return;
+
     if (!isPageReadyRef.current || !webViewRef.current) {
       pendingProfileLinkUserIdRef.current = normalizedUserId;
       return;
     }
 
-    const destination = `${activeWebAppBaseUrl}/${webLocale}/users/${encodeURIComponent(normalizedUserId)}`;
     pendingProfileLinkUserIdRef.current = null;
     webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(destination)}); true;`);
-  }, [activeWebAppBaseUrl, webLocale]);
+  }, [activeWebAppBaseUrl, nativeAvailable, webLocale]);
   const handleIncomingProfileLink = useCallback((rawUrl: string) => {
     const candidateOrigins = [
       activeWebAppBaseUrl,
@@ -1345,6 +1353,11 @@ function AppInner(): React.JSX.Element {
     navigateWebViewToProfile(parsed.userId);
     return true;
   }, [activeWebAppBaseUrl, navigateWebViewToProfile]);
+  const handleShouldStartLoadWithRequest = useCallback((request: WebViewNavigation) => {
+    const rawUrl = typeof request.url === 'string' ? request.url.trim() : '';
+    if (rawUrl && handleIncomingProfileLink(rawUrl)) return false;
+    return true;
+  }, [handleIncomingProfileLink]);
   const flushPendingProfileLinkToWeb = useCallback(() => {
     const pendingUserId = pendingProfileLinkUserIdRef.current;
     if (!pendingUserId || !isPageReadyRef.current) return;
@@ -3014,6 +3027,7 @@ function AppInner(): React.JSX.Element {
             })}
             injectedJavaScript={WEBVIEW_NAVIGATION_BRIDGE_SCRIPT}
             onMessage={handleWebMessage}
+            onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
             onLoadStart={handleLoadStart}
             onLoadEnd={handleLoadEnd}
             onError={handleLoadError}
