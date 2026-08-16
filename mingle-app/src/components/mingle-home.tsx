@@ -41,11 +41,13 @@ type MingleHomeProps = {
   conversationTitle?: string;
   conversationId?: string;
   preferredDisplayLanguage?: string | null;
+  preferredDisplayLanguages?: string[];
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
   initialSpeechLanguages?: string[];
   initialTranslationLanguagesLinked?: boolean;
+  initialDefaultDisplayLanguage?: string | null;
   autoStartOnMount?: boolean;
   onAutoStartHandled?: () => void;
   isVisible?: boolean;
@@ -67,6 +69,7 @@ type MingleHomeProps = {
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void;
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void;
+  onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
 };
 
 export type MingleHomeRef = {
@@ -1810,11 +1813,13 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
           preferredDisplayLanguage={props.preferredDisplayLanguage}
+          preferredDisplayLanguages={props.preferredDisplayLanguages}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
           initialSpeechLanguages={props.initialSpeechLanguages}
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
+          initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}
           isVisible={props.isVisible}
           enableNativeBannerBridge={props.enableNativeBannerBridge}
           onStartRecordingRequested={props.onStartRecordingRequested}
@@ -1825,6 +1830,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
           onSpeechLanguagesChange={props.onSpeechLanguagesChange}
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
+          onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
         />
       ) : (
         <div className="flex h-full min-h-0 w-full items-center justify-center bg-white text-slate-400">

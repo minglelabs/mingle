@@ -1491,6 +1491,7 @@ type ConversationListProps = {
   initialConversationsRequireRefresh?: boolean;
   initialConversationIdToOpen?: string | null;
   initialPrimaryLanguage?: string | null;
+  initialPrimaryLanguages?: string[];
   initialDefaultConversationLanguages?: string[];
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
@@ -1512,6 +1513,7 @@ export default function ConversationList({
   initialConversationsRequireRefresh = false,
   initialConversationIdToOpen = null,
   initialPrimaryLanguage = null,
+  initialPrimaryLanguages = [],
   initialDefaultConversationLanguages = [],
   initialNativeUi = false,
   initialNativeBannerPosition,
@@ -1582,6 +1584,10 @@ export default function ConversationList({
     [...initialListState.conversations].sort(compareConversationRecency),
   );
   const normalizedInitialPrimaryLanguage = initialPrimaryLanguage?.trim() || null;
+  const normalizedInitialPrimaryLanguages = sanitizeSttLanguageSelection(
+    initialPrimaryLanguages,
+    normalizedInitialPrimaryLanguage ? [normalizedInitialPrimaryLanguage] : [],
+  );
   const normalizedInitialDefaultConversationLanguages = sanitizeSttLanguageSelection(
     initialDefaultConversationLanguages,
   );
@@ -1590,12 +1596,13 @@ export default function ConversationList({
       ? normalizedInitialDefaultConversationLanguages
       : deriveDefaultConversationLanguages(normalizedInitialPrimaryLanguage, locale)
   ));
-  const [preferredDisplayLanguage, setPreferredDisplayLanguage] = useState<string | null>(
-    normalizedInitialPrimaryLanguage,
+  const [preferredDisplayLanguages, setPreferredDisplayLanguages] = useState<string[]>(
+    normalizedInitialPrimaryLanguages,
   );
+  const preferredDisplayLanguage = preferredDisplayLanguages[0] ?? null;
   useEffect(() => {
     const needsProfileHydration = (
-      !normalizedInitialPrimaryLanguage
+      normalizedInitialPrimaryLanguages.length === 0
       || normalizedInitialDefaultConversationLanguages.length === 0
     );
     if (!needsProfileHydration || sessionStatus !== "authenticated") return;
@@ -1619,8 +1626,7 @@ export default function ConversationList({
           ? profile.primaryLanguages
           : profile.nationality;
         const normalizedProfileLanguages = sanitizeSttLanguageSelection(profileLanguages);
-        const nextLanguage = normalizedProfileLanguages[0] || null;
-        if (nextLanguage) setPreferredDisplayLanguage(nextLanguage);
+        setPreferredDisplayLanguages(normalizedProfileLanguages);
 
         const storedDefaultLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
         setDefaultSelectedLanguages(
@@ -1634,7 +1640,7 @@ export default function ConversationList({
       });
 
     return () => controller.abort();
-  }, [locale, normalizedInitialDefaultConversationLanguages.length, normalizedInitialPrimaryLanguage, sessionStatus]);
+  }, [locale, normalizedInitialDefaultConversationLanguages.length, normalizedInitialPrimaryLanguages.length, sessionStatus]);
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -2516,6 +2522,68 @@ export default function ConversationList({
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
   }, [defaultSelectedLanguages]);
+
+  const handleConversationDefaultDisplayLanguageChange = useCallback((
+    conversationId: string,
+    nextDefaultDisplayLanguage: string | null,
+  ) => {
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return;
+
+    const normalizedDefaultDisplayLanguage = nextDefaultDisplayLanguage
+      ? sanitizeSttLanguageSelection([nextDefaultDisplayLanguage])[0] ?? null
+      : null;
+    if (nextDefaultDisplayLanguage && !normalizedDefaultDisplayLanguage) return;
+
+    const previousDefaultDisplayLanguage = previousConversation.defaultDisplayLanguage ?? null;
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
+          }
+        : conversation
+    )));
+
+    void fetch(buildConversationApiPath(`/${conversationId}`), {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+      },
+      body: JSON.stringify({ defaultDisplayLanguage: normalizedDefaultDisplayLanguage }),
+    })
+      .then(readConversationResponse)
+      .then((nextConversation) => {
+        if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return;
+        setConversations((current) => upsertConversation(current, nextConversation));
+      })
+      .catch((error: unknown) => {
+        const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+        logConversationMutationFailure({
+          label: "default-display-language",
+          conversationId,
+          method: "PATCH",
+          path: buildConversationApiPath(`/${conversationId}`),
+          error,
+          stale,
+        });
+        if (stale) return;
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                defaultDisplayLanguage: previousDefaultDisplayLanguage,
+              }
+            : conversation
+        )));
+      });
+  }, []);
 
   const clearConversationInterimPreview = useCallback((conversationId: string) => {
     setConversationInterimPreviews((current) => {
@@ -4305,11 +4373,13 @@ export default function ConversationList({
                         conversationTitle={conversation.title}
                         conversationId={conversation.id}
                         preferredDisplayLanguage={preferredDisplayLanguage}
+                        preferredDisplayLanguages={preferredDisplayLanguages}
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
                         initialSelectedLanguages={conversation.selectedLanguages}
                         initialSpeechLanguages={conversation.speechLanguages}
                         initialTranslationLanguagesLinked={conversation.translationLanguagesLinked !== false}
+                        initialDefaultDisplayLanguage={conversation.defaultDisplayLanguage ?? null}
                         autoStartOnMount={conversation.id === autoStartConversationId}
                         onAutoStartHandled={() => {
                           setAutoStartConversationId((current) => (
@@ -4339,6 +4409,9 @@ export default function ConversationList({
                         }}
                         onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
                           handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
+                        }}
+                        onDefaultDisplayLanguageChange={(defaultDisplayLanguage) => {
+                          handleConversationDefaultDisplayLanguageChange(conversation.id, defaultDisplayLanguage);
                         }}
                       />
                     </Suspense>

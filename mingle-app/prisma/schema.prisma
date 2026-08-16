@@ -255,6 +255,7 @@ model AppConversationChannel {
   selectedLanguages          String[]  @default([]) @map("selected_languages")
   speechLanguages            String[]  @default([]) @map("speech_languages")
   translationLanguagesLinked Boolean   @default(true) @map("translation_languages_linked")
+  defaultDisplayLanguage     String?   @map("default_display_language")
   pausedAt                   DateTime? @map("paused_at")
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")

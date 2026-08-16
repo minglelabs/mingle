@@ -68,6 +68,7 @@ export default async function V110ConversationsEntry({
   };
   let initialConversations: ConversationChannelSummary[] = [];
   let initialPrimaryLanguage: string | null = null;
+  let initialPrimaryLanguages: string[] = [];
   let initialDefaultConversationLanguages: string[] = [];
   if (!isExplicitNativeTabRoot) {
     const userId = await findUserIdForIdentity(identity);
@@ -80,6 +81,7 @@ export default async function V110ConversationsEntry({
       ]);
       initialConversations = nextConversations;
       initialPrimaryLanguage = profile?.nationality ?? null;
+      initialPrimaryLanguages = profile?.primaryLanguages ?? [];
       initialDefaultConversationLanguages = profile?.defaultConversationLanguages ?? [];
     }
   }
@@ -92,6 +94,7 @@ export default async function V110ConversationsEntry({
       initialConversationsRequireRefresh={isExplicitNativeTabRoot}
       initialConversationIdToOpen={initialConversationId || null}
       initialPrimaryLanguage={initialPrimaryLanguage}
+      initialPrimaryLanguages={initialPrimaryLanguages}
       initialDefaultConversationLanguages={initialDefaultConversationLanguages}
       initialNativeUi={initialNativeUi}
       initialNativeBannerPosition={readSearchParamValue(searchParams, "nativeBannerPosition")}

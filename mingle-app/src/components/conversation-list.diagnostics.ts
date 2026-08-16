@@ -3,6 +3,7 @@ export type ConversationMutationFailureLabel =
   | "selected-languages"
   | "speech-languages"
   | "translation-linked"
+  | "default-display-language"
   | "route-open"
   | "popstate-open"
   | "create";

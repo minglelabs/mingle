@@ -21,6 +21,7 @@ export type ConversationChannelSummary = {
   selectedLanguages?: string[];
   speechLanguages?: string[];
   translationLanguagesLinked?: boolean;
+  defaultDisplayLanguage?: string | null;
   latestMessagePreview?: string;
   latestMessageAt?: string | null;
   latestSpeaker?: string | null;
@@ -67,6 +68,7 @@ type ConversationChannelRecord = {
   selectedLanguages: string[];
   speechLanguages: string[];
   translationLanguagesLinked: boolean;
+  defaultDisplayLanguage: string | null;
   createdAt: Date;
   updatedAt: Date;
   pausedAt: Date | null;
@@ -85,6 +87,7 @@ const conversationChannelSelect = {
   selectedLanguages: true,
   speechLanguages: true,
   translationLanguagesLinked: true,
+  defaultDisplayLanguage: true,
   createdAt: true,
   updatedAt: true,
   pausedAt: true,
@@ -174,6 +177,7 @@ function serializeConversationChannel(
     selectedLanguages: effectiveSelectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
+    defaultDisplayLanguage: record.defaultDisplayLanguage?.trim() || null,
     latestMessagePreview,
     latestMessageAt: latestMessageAt || null,
     latestSpeaker: latestSpeaker || null,
@@ -626,6 +630,61 @@ export async function updateConversationChannelTranslationLanguagesLinked(args: 
       ...(shouldSyncSelectedLanguages
         ? { selectedLanguages: speechLanguages }
         : {}),
+    },
+    select: conversationChannelSelect,
+  });
+
+  return serializeConversationChannelWithPreview(record);
+}
+
+export async function updateConversationChannelDefaultDisplayLanguage(args: {
+  conversationId: string;
+  userId: string;
+  defaultDisplayLanguage: string | null;
+}): Promise<ConversationChannelSummary | null> {
+  const normalizedDefaultDisplayLanguage = args.defaultDisplayLanguage
+    ? sanitizeSttLanguageSelection([args.defaultDisplayLanguage])[0] ?? null
+    : null;
+
+  if (args.defaultDisplayLanguage && !normalizedDefaultDisplayLanguage) {
+    throw new Error("invalid_default_display_language");
+  }
+
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ownerUserId: args.userId,
+      ...buildVisibleConversationWhere(),
+    },
+    select: {
+      id: true,
+      selectedLanguages: true,
+      speechLanguages: true,
+      translationLanguagesLinked: true,
+    },
+  });
+
+  if (!existing) {
+    return null;
+  }
+
+  if (normalizedDefaultDisplayLanguage) {
+    const roomLanguages = existing.translationLanguagesLinked
+      ? existing.speechLanguages
+      : existing.selectedLanguages;
+    const normalizedRoomLanguages = sanitizeSttLanguageSelection(
+      roomLanguages,
+      existing.selectedLanguages,
+    );
+    if (!normalizedRoomLanguages.includes(normalizedDefaultDisplayLanguage)) {
+      throw new Error("invalid_default_display_language");
+    }
+  }
+
+  const record = await prisma.appConversationChannel.update({
+    where: { id: args.conversationId },
+    data: {
+      defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
     },
     select: conversationChannelSelect,
   });

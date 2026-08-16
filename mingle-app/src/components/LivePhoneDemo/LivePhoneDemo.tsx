@@ -5,7 +5,7 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
-import ChatBubble from './ChatBubble'
+import ChatBubble, { resolveInitialDisplayLanguage } from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
 import {
@@ -25,6 +25,7 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
+  getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
 } from '@/lib/stt-languages'
 import {
@@ -893,7 +894,7 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management'
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'display-language'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 type LivePhoneDemoMenuMotionState = {
@@ -958,7 +959,10 @@ function LivePhoneDemoPanelHeader({
 }
 
 function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuScreen {
-  return value === 'root' || value === 'feedback' || value === 'conversation-management'
+  return value === 'root'
+    || value === 'feedback'
+    || value === 'conversation-management'
+    || value === 'display-language'
 }
 
 function resolveMenuScreenForDepth(
@@ -966,6 +970,7 @@ function resolveMenuScreenForDepth(
   preferredScreen?: LivePhoneDemoMenuScreen,
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
+  if (depth >= 3) return preferredScreen === 'display-language' ? 'display-language' : 'conversation-management'
   return preferredScreen === 'conversation-management' ? 'conversation-management' : 'feedback'
 }
 
@@ -1087,11 +1092,13 @@ interface LivePhoneDemoProps {
   conversationTitle?: string
   conversationId?: string
   preferredDisplayLanguage?: string | null
+  preferredDisplayLanguages?: string[]
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
   initialSpeechLanguages?: string[]
   initialTranslationLanguagesLinked?: boolean
+  initialDefaultDisplayLanguage?: string | null
   autoStartOnMount?: boolean
   onAutoStartHandled?: () => void
   isVisible?: boolean
@@ -1107,6 +1114,7 @@ interface LivePhoneDemoProps {
   onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void
+  onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1206,6 +1214,8 @@ type LivePhoneDemoChatMessageRowProps = {
   utterance: Utterance
   uiLocale: string
   preferredDisplayLanguage?: string | null
+  preferredDisplayLanguages?: readonly string[]
+  defaultDisplayLanguage?: string | null
   languageOrder: readonly string[]
   isDraft: boolean
   onPlayOriginal: (utterance: Utterance) => void
@@ -1234,6 +1244,8 @@ function LivePhoneDemoChatMessageRow({
   utterance,
   uiLocale,
   preferredDisplayLanguage,
+  preferredDisplayLanguages,
+  defaultDisplayLanguage,
   languageOrder,
   isDraft,
   onPlayOriginal,
@@ -1252,6 +1264,8 @@ function LivePhoneDemoChatMessageRow({
         utterance={utterance}
         uiLocale={uiLocale}
         preferredDisplayLanguage={preferredDisplayLanguage}
+        preferredDisplayLanguages={preferredDisplayLanguages}
+        defaultDisplayLanguage={defaultDisplayLanguage}
         languageOrder={languageOrder}
         isDraft={isDraft}
         onPlayOriginal={onPlayOriginal}
@@ -1270,6 +1284,8 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.utterance !== next.utterance) return false
     if (prev.uiLocale !== next.uiLocale) return false
     if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
+    if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
+    if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
     if (prev.languageOrder !== next.languageOrder) return false
     if (prev.isDraft !== next.isDraft) return false
     if (prev.onPlayOriginal !== next.onPlayOriginal) return false
@@ -1372,11 +1388,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   conversationTitle,
   conversationId,
   preferredDisplayLanguage,
+  preferredDisplayLanguages,
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
   initialSpeechLanguages,
   initialTranslationLanguagesLinked,
+  initialDefaultDisplayLanguage,
   isVisible = true,
   enableNativeBannerBridge = true,
   onStartRecordingRequested,
@@ -1387,6 +1405,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
+  onDefaultDisplayLanguageChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
@@ -1398,6 +1417,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [conversationSelectedLanguages, initialSpeechLanguages],
   )
   const conversationTranslationLanguagesLinked = initialTranslationLanguagesLinked !== false
+  const normalizedPreferredDisplayLanguages = useMemo(
+    () => sanitizeSttLanguageSelection(
+      preferredDisplayLanguages,
+      preferredDisplayLanguage ? [preferredDisplayLanguage] : [],
+    ),
+    [preferredDisplayLanguage, preferredDisplayLanguages],
+  )
+  const [defaultDisplayLanguage, setDefaultDisplayLanguage] = useState<string | null>(
+    initialDefaultDisplayLanguage?.trim() || null,
+  )
+  useEffect(() => {
+    setDefaultDisplayLanguage(initialDefaultDisplayLanguage?.trim() || null)
+  }, [conversationId, initialDefaultDisplayLanguage])
   const nativeAppUpdateCopy = useMemo(() => resolveNativeAppUpdateCopy(uiLocale), [uiLocale])
   const composerDraftStorageKey = useMemo(
     () => resolveComposerDraftStorageKey(conversationId, storageNamespace),
@@ -1421,6 +1453,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const feedbackCopy = useMemo(() => resolveLivePhoneDemoFeedbackCopy(uiLocale), [uiLocale])
   const deleteConversationCopy = useMemo(() => resolveLivePhoneDemoConversationDeleteCopy(uiLocale), [uiLocale])
   const roomManagementCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(uiLocale), [uiLocale])
+  const defaultDisplayLanguageCopy = useMemo(() => {
+    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
+    return {
+      menuItemLabel: roomManagementCopy.defaultDisplayLanguageMenuItemLabel
+        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
+      pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle
+        || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
+      autoLabel: roomManagementCopy.defaultDisplayLanguageAutoLabel
+        || (isKorean ? '자동' : 'Automatic'),
+      autoDescription: roomManagementCopy.defaultDisplayLanguageAutoDescription
+        || (isKorean ? '주 사용 언어와 원문을 기준으로 표시합니다.' : 'Uses your primary language and the message source.'),
+    }
+  }, [roomManagementCopy, uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -1469,6 +1514,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     () => (translationLanguagesLinked ? speechLanguages : selectedLanguages),
     [selectedLanguages, speechLanguages, translationLanguagesLinked],
   )
+  const normalizedDisplayLanguageOptions = useMemo(
+    () => sanitizeSttLanguageSelection(effectiveTranslationLanguages),
+    [effectiveTranslationLanguages],
+  )
+  const activeDefaultDisplayLanguage = useMemo(() => {
+    const requestedLanguage = canonicalizeSttLanguageCode(defaultDisplayLanguage || '')
+    if (!requestedLanguage) return null
+    return normalizedDisplayLanguageOptions.includes(requestedLanguage) ? requestedLanguage : null
+  }, [defaultDisplayLanguage, normalizedDisplayLanguageOptions])
+  const autoDisplayLanguage = useMemo(
+    () => resolveInitialDisplayLanguage(
+      normalizedPreferredDisplayLanguages,
+      null,
+      '',
+      normalizedDisplayLanguageOptions,
+      normalizedDisplayLanguageOptions,
+    ),
+    [normalizedDisplayLanguageOptions, normalizedPreferredDisplayLanguages],
+  )
+  const displayLanguageSelectionKey = [
+    activeDefaultDisplayLanguage || 'auto',
+    normalizedPreferredDisplayLanguages.join(','),
+    normalizedDisplayLanguageOptions.join(','),
+  ].join('|')
   const languageSelectorButtonLanguages = useMemo(
     () => buildLanguageSelectorButtonCodes(speechLanguages, effectiveTranslationLanguages),
     [effectiveTranslationLanguages, speechLanguages],
@@ -2276,7 +2345,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     },
   ) => {
     const previousDepth = menuHistoryDepthRef.current
-    const boundedDepth = Math.max(0, Math.min(2, nextDepth))
+    const boundedDepth = Math.max(0, Math.min(3, nextDepth))
     const nextEnterMode = options?.enterMode ?? 'animate'
     const nextExitMode = options?.exitMode ?? 'animate'
     const nextScreenTransitionMode = options?.screenTransitionMode ?? 'animate'
@@ -2449,6 +2518,21 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     pushMenuHistoryEntry(2, 'conversation-management')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
+  const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'display-language' || !conversationId) return
+    pushMenuHistoryEntry(3, 'display-language')
+  }, [conversationId, menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleDefaultDisplayLanguageSelect = useCallback((nextLanguage: string | null) => {
+    const normalizedLanguage = nextLanguage
+      ? canonicalizeSttLanguageCode(nextLanguage) || null
+      : null
+    if (normalizedLanguage && !normalizedDisplayLanguageOptions.includes(normalizedLanguage)) return
+
+    setDefaultDisplayLanguage(normalizedLanguage)
+    onDefaultDisplayLanguageChange?.(normalizedLanguage)
+  }, [normalizedDisplayLanguageOptions, onDefaultDisplayLanguageChange])
+
   const handleDeleteConversationMenuItemPress = useCallback(() => {
     setDeleteConversationDialogOpen(true)
   }, [])
@@ -2620,7 +2704,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         && typeof state[MENU_HISTORY_STATE_KEY] === 'number'
       )
       const nextStateDepth = hasMenuDepthState
-        ? Math.max(0, Math.min(2, Number(state?.[MENU_HISTORY_STATE_KEY])))
+        ? Math.max(0, Math.min(3, Number(state?.[MENU_HISTORY_STATE_KEY])))
         : 0
       const nextStateScreen = (
         state
@@ -6141,6 +6225,22 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                             </span>
                           </button>
 
+                          {conversationId && (
+                            <button
+                              type="button"
+                              onClick={handleDefaultDisplayLanguageMenuItemPress}
+                              className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                            >
+                              <span className="min-w-0 flex-1">{defaultDisplayLanguageCopy.menuItemLabel}</span>
+                              <span className="flex shrink-0 items-center gap-2 text-gray-500">
+                                <span className="text-[0.9rem]">
+                                  {getSttLanguageFlag(activeDefaultDisplayLanguage || autoDisplayLanguage)}
+                                </span>
+                                <ChevronRight size={18} strokeWidth={2.4} />
+                              </span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={handleDeleteConversationMenuItemPress}
@@ -6155,6 +6255,96 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                               <ChevronRight size={18} strokeWidth={2.4} />
                             </span>
                           </button>
+                        </div>
+                      </div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'display-language' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'display-language'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'display-language' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'display-language' ? 4 : 1,
+                      }}
+                    >
+                      <LivePhoneDemoPanelHeader
+                        title={defaultDisplayLanguageCopy.pageTitle}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        onBack={requestMenuBackStep}
+                      />
+
+                      <div
+                        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+                        style={{
+                          paddingBottom: 'max(calc(env(safe-area-inset-bottom) + 16px), 20px)',
+                        }}
+                      >
+                        <div className="space-y-2 px-4 py-4">
+                          <button
+                            type="button"
+                            role="radio"
+                            aria-checked={activeDefaultDisplayLanguage === null}
+                            onClick={() => handleDefaultDisplayLanguageSelect(null)}
+                            className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                              activeDefaultDisplayLanguage === null
+                                ? 'border-amber-300 bg-amber-50/70'
+                                : 'border-gray-200 bg-white hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg">
+                              ✨
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[0.98rem] font-semibold text-gray-900">
+                                {defaultDisplayLanguageCopy.autoLabel}
+                              </span>
+                              <span className="mt-0.5 block text-[0.78rem] leading-5 text-gray-500">
+                                {defaultDisplayLanguageCopy.autoDescription}
+                              </span>
+                            </span>
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                              activeDefaultDisplayLanguage === null
+                                ? 'bg-amber-500 text-white'
+                                : 'bg-gray-100 text-transparent'
+                            }`}>
+                              <Check size={14} strokeWidth={2.8} />
+                            </span>
+                          </button>
+
+                          {normalizedDisplayLanguageOptions.map((language) => {
+                            const isSelected = activeDefaultDisplayLanguage === language
+                            const displayName = getSttLanguageDisplayName(language, uiLocale) || language
+
+                            return (
+                              <button
+                                key={language}
+                                type="button"
+                                role="radio"
+                                aria-checked={isSelected}
+                                onClick={() => handleDefaultDisplayLanguageSelect(language)}
+                                className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/80 ${
+                                  isSelected
+                                    ? 'border-amber-300 bg-amber-50/70'
+                                    : 'border-gray-200 bg-white hover:bg-gray-50'
+                                }`}
+                              >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-50 text-[1.45rem]">
+                                  {getSttLanguageFlag(language)}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate text-[0.98rem] font-semibold text-gray-900">
+                                  {displayName}
+                                </span>
+                                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                                  isSelected ? 'bg-amber-500 text-white' : 'bg-gray-100 text-transparent'
+                                }`}>
+                                  <Check size={14} strokeWidth={2.8} />
+                                </span>
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     </motion.section>
@@ -6198,10 +6388,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
               {displayUtterances.map((u) => (
                 <MemoizedLivePhoneDemoChatMessageRow
-                  key={`${u.id}:${preferredDisplayLanguage || ''}`}
+                  key={`${u.id}:${displayLanguageSelectionKey}`}
                   utterance={u}
                   uiLocale={uiLocale}
                   preferredDisplayLanguage={preferredDisplayLanguage}
+                  preferredDisplayLanguages={normalizedPreferredDisplayLanguages}
+                  defaultDisplayLanguage={activeDefaultDisplayLanguage}
                   languageOrder={effectiveTranslationLanguages}
                   isDraft={draftUtteranceIds.has(u.id)}
                   onPlayOriginal={handlePlayOriginalBubbleTts}

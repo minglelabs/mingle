@@ -12,6 +12,7 @@ import {
   updateConversationChannelSelectedLanguages,
   updateConversationChannelSpeechLanguages,
   updateConversationChannelTranslationLanguagesLinked,
+  updateConversationChannelDefaultDisplayLanguage,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
@@ -85,6 +86,7 @@ export async function patchConversationResponse(
     selectedLanguages?: unknown;
     speechLanguages?: unknown;
     translationLanguagesLinked?: unknown;
+    defaultDisplayLanguage?: unknown;
     title?: unknown;
   };
   try {
@@ -97,15 +99,30 @@ export async function patchConversationResponse(
   const hasSelectedLanguages = body.selectedLanguages !== undefined;
   const hasSpeechLanguages = body.speechLanguages !== undefined;
   const hasTranslationLanguagesLinked = body.translationLanguagesLinked !== undefined;
+  const hasDefaultDisplayLanguage = body.defaultDisplayLanguage !== undefined;
   const hasTitle = typeof body.title === "string";
 
-  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasTitle) {
+  if (!hasStatus && !hasSelectedLanguages && !hasSpeechLanguages && !hasTranslationLanguagesLinked && !hasDefaultDisplayLanguage && !hasTitle) {
     return NextResponse.json({ error: "invalid_patch" }, { status: 400 });
   }
 
   if (hasTranslationLanguagesLinked && typeof body.translationLanguagesLinked !== "boolean") {
     return NextResponse.json({ error: "invalid_translation_languages_linked" }, { status: 400 });
   }
+
+  if (
+    hasDefaultDisplayLanguage
+    && body.defaultDisplayLanguage !== null
+    && typeof body.defaultDisplayLanguage !== "string"
+  ) {
+    return NextResponse.json({ error: "invalid_default_display_language" }, { status: 400 });
+  }
+
+  const requestedDefaultDisplayLanguage = hasDefaultDisplayLanguage
+    ? (typeof body.defaultDisplayLanguage === "string"
+      ? body.defaultDisplayLanguage.trim() || null
+      : null)
+    : null;
 
   const selectedLanguages = hasSelectedLanguages
     ? sanitizeSttLanguageSelection(body.selectedLanguages)
@@ -168,6 +185,24 @@ export async function patchConversationResponse(
       userId: resolvedUser.userId,
       translationLanguagesLinked: body.translationLanguagesLinked as boolean,
     });
+    if (!conversation) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+  }
+
+  if (hasDefaultDisplayLanguage) {
+    try {
+      conversation = await updateConversationChannelDefaultDisplayLanguage({
+        conversationId,
+        userId: resolvedUser.userId,
+        defaultDisplayLanguage: requestedDefaultDisplayLanguage,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "invalid_default_display_language") {
+        return NextResponse.json({ error: "invalid_default_display_language" }, { status: 400 });
+      }
+      throw error;
+    }
     if (!conversation) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }

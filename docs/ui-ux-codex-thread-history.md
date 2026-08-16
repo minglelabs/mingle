@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Per-Conversation Default Display Language
+
+- Surface: Conversation room hamburger menu, default display language panel, and unified message bubbles.
+- Issue: A bubble's initially visible language depended on the detected source language or an incomplete single-language preference, and there was no room-level control for changing that default.
+- User impact: The same conversation could open in an unexpected language for different messages, while multilingual users had no way to choose a stable display preference without changing the room's language list.
+- Resolution: Added a per-conversation nullable display-language preference. `Automatic` now checks the user's primary languages in saved order, first matching the message's original language or then the room's configured language list; when none match, it falls back to the first room language. An explicit room selection overrides automatic resolution when that language is available. The hamburger menu exposes the setting and keeps the existing room-language order in the picker, while the original-language quote badge remains attached to the matching language button.
+- Data change: Added the nullable `default_display_language` column to `app_conversation_channels`; the migration SQL is intentionally separate so the production database can be updated manually.
+
 ## 2026-08-17 - Room Language Order With Per-Message Original Badge
 
 - Surface: Language buttons inside each conversation message bubble.

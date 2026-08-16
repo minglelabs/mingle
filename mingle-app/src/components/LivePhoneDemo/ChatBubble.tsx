@@ -71,6 +71,8 @@ interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
   preferredDisplayLanguage?: string | null
+  preferredDisplayLanguages?: readonly string[]
+  defaultDisplayLanguage?: string | null
   languageOrder?: readonly string[]
   isDraft?: boolean
   onPlayOriginal?: (utterance: Utterance) => void
@@ -192,18 +194,52 @@ function findLanguageRecordValue<T>(
   return matchingKey ? record[matchingKey] : undefined
 }
 
-function resolveInitialDisplayLanguage(
-  preferredLanguage: string | null | undefined,
+export function resolveInitialDisplayLanguage(
+  preferredLanguages: readonly string[] | null | undefined,
+  explicitDisplayLanguage: string | null | undefined,
   originalLanguage: string,
-  targetLanguages: string[],
+  targetLanguages: readonly string[],
+  roomLanguageOrder: readonly string[] = [],
 ): string {
   const availableLanguages = [originalLanguage, ...targetLanguages]
-  const preferredKey = normalizeTranslationLanguageKey(preferredLanguage || '')
-  if (preferredKey) {
-    const preferredMatch = availableLanguages.find((language) => (
+  const findAvailableLanguage = (rawLanguage: string | null | undefined) => {
+    const languageKey = normalizeTranslationLanguageKey(rawLanguage || '')
+    if (!languageKey) return null
+    return availableLanguages.find((language) => (
+      normalizeTranslationLanguageKey(language) === languageKey
+    )) || null
+  }
+
+  const explicitMatch = findAvailableLanguage(explicitDisplayLanguage)
+  if (explicitMatch) {
+    return explicitMatch
+  }
+
+  const originalKey = normalizeTranslationLanguageKey(originalLanguage)
+  for (const preferredLanguage of preferredLanguages || []) {
+    const preferredKey = normalizeTranslationLanguageKey(preferredLanguage)
+    if (!preferredKey) continue
+
+    if (preferredKey === originalKey) {
+      return originalLanguage
+    }
+
+    const roomLanguage = roomLanguageOrder.find((language) => (
       normalizeTranslationLanguageKey(language) === preferredKey
     ))
-    if (preferredMatch) return preferredMatch
+    if (!roomLanguage) continue
+
+    const roomLanguageMatch = findAvailableLanguage(roomLanguage)
+    if (roomLanguageMatch) {
+      return roomLanguageMatch
+    }
+  }
+
+  for (const roomLanguage of roomLanguageOrder) {
+    const roomLanguageMatch = findAvailableLanguage(roomLanguage)
+    if (roomLanguageMatch) {
+      return roomLanguageMatch
+    }
   }
 
   return availableLanguages[0] || originalLanguage
@@ -274,6 +310,8 @@ function ChatBubble({
   utterance,
   uiLocale,
   preferredDisplayLanguage,
+  preferredDisplayLanguages,
+  defaultDisplayLanguage,
   languageOrder,
   isDraft = false,
   onPlayOriginal,
@@ -316,9 +354,13 @@ function ChatBubble({
   )
   const [displayLanguage, setDisplayLanguage] = useState(() => (
     resolveInitialDisplayLanguage(
-      preferredDisplayLanguage,
+      preferredDisplayLanguages?.length
+        ? preferredDisplayLanguages
+        : (preferredDisplayLanguage ? [preferredDisplayLanguage] : []),
+      defaultDisplayLanguage,
       utterance.originalLang,
       targetLangs,
+      languageOrder,
     )
   ))
   const activeLanguage = languageOptions.find((language) => (
@@ -513,6 +555,8 @@ function ChatBubble({
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
   if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
+  if (prev.preferredDisplayLanguages !== next.preferredDisplayLanguages) return false
+  if (prev.defaultDisplayLanguage !== next.defaultDisplayLanguage) return false
   if (prev.languageOrder !== next.languageOrder) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
