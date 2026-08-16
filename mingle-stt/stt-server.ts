@@ -1499,7 +1499,8 @@ wss.on('connection', (clientWs) => {
                 try {
                     const msg = JSON.parse(rawMessage);
                     const tokens = (Array.isArray(msg.tokens) ? msg.tokens : []) as SonioxToken[];
-                    logSonioxTokenBatch(tokens);
+                    // Uncomment the next line for one-response Soniox token diagnostics.
+                    // logSonioxTokenBatch(tokens);
                     if (!isClientConnected) return;
 
                     if (msg.error_code) {
