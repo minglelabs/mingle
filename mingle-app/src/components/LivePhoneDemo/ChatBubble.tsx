@@ -196,7 +196,14 @@ function ChatLanguageBadge({
       aria-label={`${isOriginal ? 'Original' : 'Translation'} language ${languageLabel}`}
       aria-pressed={isSelected}
       title={languageLabel}
-      onClick={onSelect}
+      onPointerDown={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      onTouchEnd={(event) => event.stopPropagation()}
+      onDoubleClick={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onSelect?.()
+      }}
       className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white text-xl leading-none shadow-[0_2px_8px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
         isSelected
           ? 'border-amber-400 ring-2 ring-amber-200/80'
@@ -208,9 +215,9 @@ function ChatLanguageBadge({
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-1 -top-1 inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-white bg-white text-[14px] font-black leading-[0.65] tracking-[-0.24em] text-black shadow-[0_1px_4px_rgba(15,23,42,0.18)]"
+          className="absolute -right-1 -top-1 inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-white bg-white text-[18px] font-black leading-[0.5] text-black shadow-[0_1px_4px_rgba(15,23,42,0.18)]"
         >
-          “”
+          ”
         </span>
       )}
     </button>
@@ -292,11 +299,11 @@ function ChatBubble({
   )
 
   const activeBubbleText = (
-    <div
+    <span
       data-current-bubble-content
       className="min-w-0"
     >
-      <p
+      <span
         data-current-bubble-text
         style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
         className={originalTextClassName}
@@ -328,18 +335,41 @@ function ChatBubble({
             )}
           </span>
         )}
-      </p>
-    </div>
+        <span
+          data-chat-bubble-language-badges
+          className="ml-1 inline-flex items-center gap-1 align-middle whitespace-nowrap"
+        >
+          <ChatLanguageBadge
+            lang={utterance.originalLang}
+            isOriginal
+            isSelected={isOriginalLanguageSelected}
+            onSelect={() => {
+              setDisplayLanguage(utterance.originalLang)
+            }}
+          />
+          {targetLangs.map((lang) => (
+            <ChatLanguageBadge
+              key={lang}
+              lang={lang}
+              isSelected={!isOriginalLanguageSelected && normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+              onSelect={() => {
+                setDisplayLanguage(lang)
+              }}
+            />
+          ))}
+        </span>
+      </span>
+    </span>
   )
 
   const activeBubbleBody = activeIsPending ? (
-    <div
+    <span
       data-translation-bubble-body
       data-translation-state="interim"
-      className="block w-full rounded-xl bg-transparent px-0 py-0"
+      className="inline rounded-xl bg-transparent px-0 py-0"
     >
       {activeBubbleText}
-    </div>
+    </span>
   ) : (
     <CopyableBubbleSurface
       {...(isOriginalLanguageSelected ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
@@ -352,7 +382,7 @@ function ChatBubble({
         ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
         : (() => onPlayTranslation?.(utterance, activeLanguage, activeText))}
       style={{ maxWidth: '100%' }}
-      className="block w-full rounded-xl bg-transparent px-0 py-0 shadow-none"
+      className="inline rounded-xl bg-transparent px-0 py-0 shadow-none"
     >
       {activeBubbleText}
     </CopyableBubbleSurface>
@@ -385,13 +415,13 @@ function ChatBubble({
         <div
           data-chat-message-bubble-stack
           style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
-          className="relative min-w-0 w-fit pb-3"
+          className="min-w-0 w-fit"
         >
           <div
             data-chat-message-bubble
             data-display-language={activeLanguage}
             data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
-            className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 pb-5 pt-2 shadow-sm"
+            className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
           >
             <div
               data-original-bubble-row
@@ -400,30 +430,6 @@ function ChatBubble({
             >
               {activeBubbleBody}
             </div>
-          </div>
-
-          <div
-            data-chat-bubble-language-badges
-            className="absolute bottom-0 right-3 flex items-center gap-1.5"
-          >
-            <ChatLanguageBadge
-              lang={utterance.originalLang}
-              isOriginal
-              isSelected={isOriginalLanguageSelected}
-              onSelect={() => {
-                setDisplayLanguage(utterance.originalLang)
-              }}
-            />
-            {targetLangs.map((lang) => (
-              <ChatLanguageBadge
-                key={lang}
-                lang={lang}
-                isSelected={!isOriginalLanguageSelected && normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
-                onSelect={() => {
-                  setDisplayLanguage(lang)
-                }}
-              />
-            ))}
           </div>
         </div>
 

@@ -37,6 +37,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-bubble-language-badges')
     expect(html).toContain('data-original-language-quote-badge')
     expect(html).toContain('text-black')
+    expect(html).toContain('>”</span>')
+    expect(html).not.toContain('“”')
     expect(html).toContain('data-display-language="en"')
     expect((html.match(/data-chat-message-bubble/g) || []).length).toBe(1)
     expect((html.match(/data-chat-language-badge/g) || []).length).toBe(1)
@@ -57,6 +59,9 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
     expect(html).toContain('data-current-bubble-text-value')
+    expect(html.indexOf('data-current-bubble-text-value')).toBeLessThan(
+      html.indexOf('data-chat-bubble-language-badges'),
+    )
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
