@@ -1488,6 +1488,7 @@ type ConversationListProps = {
   initialConversations: ConversationChannelSummary[];
   initialConversationsRequireRefresh?: boolean;
   initialConversationIdToOpen?: string | null;
+  initialPrimaryLanguage?: string | null;
   initialNativeUi?: boolean;
   initialNativeBannerPosition?: string;
   initialNativeTopInsetPx?: number;
@@ -1507,6 +1508,7 @@ export default function ConversationList({
   initialConversations,
   initialConversationsRequireRefresh = false,
   initialConversationIdToOpen = null,
+  initialPrimaryLanguage = null,
   initialNativeUi = false,
   initialNativeBannerPosition,
   initialNativeTopInsetPx = 0,
@@ -1575,6 +1577,33 @@ export default function ConversationList({
   const [conversations, setConversations] = useState<ConversationChannelSummary[]>(
     [...initialListState.conversations].sort(compareConversationRecency),
   );
+  const normalizedInitialPrimaryLanguage = initialPrimaryLanguage?.trim() || null;
+  const [preferredDisplayLanguage, setPreferredDisplayLanguage] = useState<string | null>(
+    normalizedInitialPrimaryLanguage,
+  );
+  useEffect(() => {
+    if (normalizedInitialPrimaryLanguage || sessionStatus !== "authenticated") return;
+
+    const controller = new AbortController();
+    void fetch(buildClientApiPath("/profile"), {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json() as { nationality?: unknown };
+      })
+      .then((profile) => {
+        if (typeof profile?.nationality !== "string") return;
+        const nextLanguage = profile.nationality.trim();
+        if (nextLanguage) setPreferredDisplayLanguage(nextLanguage);
+      })
+      .catch(() => {
+        // The conversation UI can fall back to the utterance source language.
+      });
+
+    return () => controller.abort();
+  }, [normalizedInitialPrimaryLanguage, sessionStatus]);
   const [conversationInterimPreviews, setConversationInterimPreviews] = useState<
     Record<string, LatestUtterancePayload>
   >({});
@@ -4224,6 +4253,7 @@ export default function ConversationList({
                         }}
                         conversationTitle={conversation.title}
                         conversationId={conversation.id}
+                        preferredDisplayLanguage={preferredDisplayLanguage}
                         sessionKeyOverride={conversation.sessionKey}
                         storageNamespace={conversation.id}
                         initialSelectedLanguages={conversation.selectedLanguages}

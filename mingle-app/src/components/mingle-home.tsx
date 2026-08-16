@@ -40,6 +40,7 @@ type MingleHomeProps = {
   onConversationDeleted?: () => void;
   conversationTitle?: string;
   conversationId?: string;
+  preferredDisplayLanguage?: string | null;
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
@@ -1808,6 +1809,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onConversationDeleted={props.onConversationDeleted}
           conversationTitle={props.conversationTitle}
           conversationId={props.conversationId}
+          preferredDisplayLanguage={props.preferredDisplayLanguage}
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}

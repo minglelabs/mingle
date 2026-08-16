@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
@@ -70,6 +70,7 @@ export interface Utterance {
 interface ChatBubbleProps {
   utterance: Utterance
   uiLocale: string
+  preferredDisplayLanguage?: string | null
   isDraft?: boolean
   onPlayOriginal?: (utterance: Utterance) => void
   onPlayTranslation?: (utterance: Utterance, language: string, text: string) => void
@@ -141,43 +142,85 @@ function buildCombinedUtteranceCopyText(
   return lines.join('\n')
 }
 
+function findLanguageRecordValue<T>(
+  record: Record<string, T> | undefined,
+  language: string,
+): T | undefined {
+  if (!record) return undefined
+
+  const targetKey = normalizeTranslationLanguageKey(language)
+  const matchingKey = Object.keys(record).find((key) => (
+    normalizeTranslationLanguageKey(key) === targetKey
+  ))
+  return matchingKey ? record[matchingKey] : undefined
+}
+
+function resolveInitialDisplayLanguage(
+  preferredLanguage: string | null | undefined,
+  originalLanguage: string,
+  targetLanguages: string[],
+): string {
+  const availableLanguages = [originalLanguage, ...targetLanguages]
+  const preferredKey = normalizeTranslationLanguageKey(preferredLanguage || '')
+  if (preferredKey) {
+    const preferredMatch = availableLanguages.find((language) => (
+      normalizeTranslationLanguageKey(language) === preferredKey
+    ))
+    if (preferredMatch) return preferredMatch
+  }
+
+  return availableLanguages[0] || originalLanguage
+}
+
 function ChatLanguageBadge({
   lang,
   isOriginal = false,
+  isSelected = false,
+  onSelect,
 }: {
   lang: string
   isOriginal?: boolean
+  isSelected?: boolean
+  onSelect?: () => void
 }) {
   const languageLabel = isOriginal
     ? getOriginalLanguageBadgeLabel(lang)
     : lang
 
   return (
-    <span
+    <button
+      type="button"
       data-chat-language-badge
       data-chat-language={lang}
       data-chat-language-role={isOriginal ? 'original' : 'translation'}
       aria-label={`${isOriginal ? 'Original' : 'Translation'} language ${languageLabel}`}
+      aria-pressed={isSelected}
       title={languageLabel}
-      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200/80 bg-white text-xl leading-none shadow-[0_2px_8px_rgba(15,23,42,0.12)]"
+      onClick={onSelect}
+      className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border bg-white text-xl leading-none shadow-[0_2px_8px_rgba(15,23,42,0.12)] transition-transform active:scale-95 ${
+        isSelected
+          ? 'border-amber-400 ring-2 ring-amber-200/80'
+          : 'border-gray-200/80'
+      }`}
     >
       <span aria-hidden="true">{getSttLanguageFlag(lang)}</span>
       {isOriginal && (
         <span
           data-original-language-quote-badge
           aria-hidden="true"
-          className="absolute -right-1.5 -top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-white bg-white text-[10px] font-black leading-none tracking-[-0.14em] text-black shadow-[0_1px_4px_rgba(15,23,42,0.18)]"
+          className="absolute -right-1 -top-1 inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full border border-white bg-white text-[14px] font-black leading-[0.65] tracking-[-0.24em] text-black shadow-[0_1px_4px_rgba(15,23,42,0.18)]"
         >
           “”
         </span>
       )}
-    </span>
+    </button>
   )
 }
 
 function ChatBubble({
   utterance,
   uiLocale,
+  preferredDisplayLanguage,
   isDraft = false,
   onPlayOriginal,
   onPlayTranslation,
@@ -195,30 +238,124 @@ function ChatBubble({
   const speakerLabel = (utterance.speaker || '').trim() || 'speaker'
   const copyActionCopy = resolveLivePhoneDemoCopyActionCopy(uiLocale)
   const ttsActionCopy = resolveLivePhoneDemoTtsActionCopy(uiLocale)
-  const isOriginalSpeaking = !!speakingPlaybackKey
-    && speakingPlaybackKey === buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
   // Keep target language list fixed per utterance so language toggles
   // do not retroactively add/remove bubbles on old messages.
-  const targetLangs = buildTargetLanguagesForUtterance(utterance)
+  const targetLangs = useMemo(
+    () => buildTargetLanguagesForUtterance(utterance),
+    [utterance],
+  )
   const translationEntries = targetLangs
-    .filter(lang => utterance.translations[lang])
-    .map(lang => ({
-      lang,
-      text: utterance.translations[lang],
-      state: utterance.translationFinalized?.[lang] === false
-        ? 'interim' as const
-        : 'final' as const,
-    }))
-  const pendingLangs = targetLangs
-    .filter(lang => !utterance.translations[lang])
+    .map((lang) => {
+      const text = findLanguageRecordValue(utterance.translations, lang) || ''
+      const finalized = findLanguageRecordValue(utterance.translationFinalized, lang)
+      return {
+        lang,
+        text,
+        state: text && finalized !== false ? 'final' as const : 'interim' as const,
+      }
+  })
+  const completedTranslationEntries = translationEntries.filter(({ text }) => Boolean(text))
+  const languageOptions = [utterance.originalLang, ...targetLangs]
+  const [displayLanguage, setDisplayLanguage] = useState(() => (
+    resolveInitialDisplayLanguage(
+      preferredDisplayLanguage,
+      utterance.originalLang,
+      targetLangs,
+    )
+  ))
+  const activeLanguage = languageOptions.find((language) => (
+    normalizeTranslationLanguageKey(language) === normalizeTranslationLanguageKey(displayLanguage)
+  )) || utterance.originalLang
+  const isOriginalLanguageSelected = normalizeTranslationLanguageKey(activeLanguage)
+    === normalizeTranslationLanguageKey(utterance.originalLang)
+  const activeTranslationEntry = isOriginalLanguageSelected
+    ? null
+    : translationEntries.find((entry) => (
+      normalizeTranslationLanguageKey(entry.lang) === normalizeTranslationLanguageKey(activeLanguage)
+    )) || null
+  const activeText = isOriginalLanguageSelected
+    ? utterance.originalText
+    : activeTranslationEntry?.text || ''
+  const activeIsPending = !isOriginalLanguageSelected && !activeText
+  const activePlaybackKey = isOriginalLanguageSelected
+    ? buildOriginalPlaybackKey(utterance.id, utterance.originalLang)
+    : buildTranslationPlaybackKey(utterance.id, activeLanguage)
+  const isActiveSpeaking = !!speakingPlaybackKey && speakingPlaybackKey === activePlaybackKey
   const originalTextClassName = isDraft
     ? `${bubbleTextClassName} text-gray-400`
-    : `${bubbleTextClassName} text-gray-900`
+    : `${bubbleTextClassName} ${isOriginalLanguageSelected ? 'text-gray-900' : activeTranslationEntry?.state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`
   const hasTimestamp = hasRenderableChatBubbleTimestamp(utterance.createdAtMs)
   const combinedUtteranceCopyText = buildCombinedUtteranceCopyText(
     flag,
     utterance.originalText,
-    translationEntries,
+    completedTranslationEntries,
+  )
+
+  const activeBubbleText = (
+    <div
+      data-current-bubble-content
+      className="min-w-0"
+    >
+      <p
+        data-current-bubble-text
+        style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
+        className={originalTextClassName}
+      >
+        {isOriginalLanguageSelected ? (
+          <span data-original-bubble-meta className="sr-only">
+            {originalLanguageBadgeLabel}
+          </span>
+        ) : (
+          <span data-translation-bubble-meta className="sr-only">
+            {activeLanguage}
+          </span>
+        )}
+        {activeIsPending ? (
+          <span
+            data-interim-translation-cursor
+            className="inline-flex h-4 items-center gap-0.5 align-middle"
+          >
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
+            <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
+          </span>
+        ) : (
+          <span data-current-bubble-text-value className="align-middle">
+            {activeText}
+            {isActiveSpeaking && <SpeakingIndicator />}
+            {isOriginalLanguageSelected && isDraft && (
+              <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
+            )}
+          </span>
+        )}
+      </p>
+    </div>
+  )
+
+  const activeBubbleBody = activeIsPending ? (
+    <div
+      data-translation-bubble-body
+      data-translation-state="interim"
+      className="block w-full rounded-xl bg-transparent px-0 py-0"
+    >
+      {activeBubbleText}
+    </div>
+  ) : (
+    <CopyableBubbleSurface
+      {...(isOriginalLanguageSelected ? { 'data-original-bubble-body': true } : { 'data-translation-bubble-body': true })}
+      text={activeText}
+      allText={combinedUtteranceCopyText}
+      copyBubbleLabel={copyActionCopy.copyBubbleLabel}
+      copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
+      playPronunciationLabel={isOriginalLanguageSelected && isDraft ? undefined : ttsActionCopy.playPronunciationLabel}
+      onPlayPronunciation={isOriginalLanguageSelected
+        ? (!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined)
+        : (() => onPlayTranslation?.(utterance, activeLanguage, activeText))}
+      style={{ maxWidth: '100%' }}
+      className="block w-full rounded-xl bg-transparent px-0 py-0 shadow-none"
+    >
+      {activeBubbleText}
+    </CopyableBubbleSurface>
   )
 
   const bubbleContent = (
@@ -252,129 +389,40 @@ function ChatBubble({
         >
           <div
             data-chat-message-bubble
+            data-display-language={activeLanguage}
+            data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
             className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 pb-5 pt-2 shadow-sm"
           >
-            <div data-original-bubble-row className="w-full">
-              <CopyableBubbleSurface
-                data-original-bubble-body
-                text={utterance.originalText}
-                allText={combinedUtteranceCopyText}
-                copyBubbleLabel={copyActionCopy.copyBubbleLabel}
-                copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
-                playPronunciationLabel={!isDraft ? ttsActionCopy.playPronunciationLabel : undefined}
-                onPlayPronunciation={!isDraft ? (() => onPlayOriginal?.(utterance)) : undefined}
-                style={{ maxWidth: '100%' }}
-                className="block w-full rounded-xl bg-transparent px-0 py-0 shadow-none"
-              >
-                <div data-original-bubble-content className="min-w-0">
-                  <p style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={originalTextClassName}>
-                    <span
-                      data-original-bubble-meta
-                      className="sr-only"
-                    >
-                      {originalLanguageBadgeLabel}
-                    </span>
-                    <span data-original-bubble-text className="align-middle">
-                      {utterance.originalText}
-                      {isOriginalSpeaking && <SpeakingIndicator />}
-                      {isDraft && (
-                        <span className="ml-0.5 inline-block h-3 w-1 rounded-full bg-amber-400 align-middle animate-pulse" />
-                      )}
-                    </span>
-                  </p>
-                </div>
-              </CopyableBubbleSurface>
+            <div
+              data-original-bubble-row
+              data-translation-bubble-row
+              className="w-full"
+            >
+              {activeBubbleBody}
             </div>
-
-            {(translationEntries.length > 0 || pendingLangs.length > 0) && (
-              <div
-                data-translation-bubbles
-                className="mt-2 space-y-1 border-t border-gray-100/90 pt-2"
-              >
-                {translationEntries.map(({ lang, text, state }) => (
-                  <div
-                    key={lang}
-                    data-translation-bubble-row
-                    data-translation-state={state}
-                    className="flex w-full items-start"
-                  >
-                    <CopyableBubbleSurface
-                      data-translation-bubble-body
-                      text={text}
-                      allText={combinedUtteranceCopyText}
-                      copyBubbleLabel={copyActionCopy.copyBubbleLabel}
-                      copyAllBubblesLabel={copyActionCopy.copyAllBubblesLabel}
-                      playPronunciationLabel={ttsActionCopy.playPronunciationLabel}
-                      onPlayPronunciation={() => onPlayTranslation?.(utterance, lang, text)}
-                      style={{ maxWidth: '100%' }}
-                      className="block w-full rounded-xl bg-transparent px-0 py-0 shadow-none"
-                    >
-                      <p
-                        data-translation-bubble-content
-                        style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                        className={`${bubbleTextClassName} ${state === 'interim' ? 'text-gray-400' : 'text-gray-700'}`}
-                      >
-                        <span
-                          data-translation-bubble-meta
-                          aria-label={`Translation language ${lang}`}
-                          className={`mr-1.5 inline-flex items-center whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-[10px] font-semibold uppercase leading-none ${state === 'interim' ? 'text-gray-500' : 'text-amber-500'}`}
-                        >
-                          {lang}
-                        </span>
-                        <span data-translation-bubble-text className="align-middle">
-                          {text}
-                          {speakingPlaybackKey === buildTranslationPlaybackKey(utterance.id, lang) && (
-                            <SpeakingIndicator />
-                          )}
-                        </span>
-                      </p>
-                    </CopyableBubbleSurface>
-                  </div>
-                ))}
-
-                {pendingLangs.map((lang) => (
-                  <div
-                    key={`pending-${lang}`}
-                    data-translation-bubble-row
-                    data-translation-state="interim"
-                    className="flex w-full items-start"
-                  >
-                    <div
-                      data-translation-bubble-body
-                      className="w-full rounded-xl bg-transparent px-0 py-0"
-                    >
-                      <p
-                        data-translation-bubble-content
-                        style={{ lineHeight: CHAT_BUBBLE_TEXT_LINE_HEIGHT }}
-                        className={`${bubbleTextClassName} text-gray-400`}
-                      >
-                        <span
-                          data-translation-bubble-meta
-                          aria-label={`Translation language ${lang}`}
-                          className="mr-1.5 inline-flex items-center whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-[10px] font-semibold uppercase leading-none text-amber-400"
-                        >
-                          {lang}
-                        </span>
-                        <span className="inline-flex h-4 items-center gap-0.5 align-middle">
-                          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '0ms' }} />
-                          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '150ms' }} />
-                          <span className="h-1 w-1 animate-bounce rounded-full bg-amber-400" style={{ animationDelay: '300ms' }} />
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
           <div
             data-chat-bubble-language-badges
             className="absolute bottom-0 right-3 flex items-center gap-1.5"
           >
-            <ChatLanguageBadge lang={utterance.originalLang} isOriginal />
+            <ChatLanguageBadge
+              lang={utterance.originalLang}
+              isOriginal
+              isSelected={isOriginalLanguageSelected}
+              onSelect={() => {
+                setDisplayLanguage(utterance.originalLang)
+              }}
+            />
             {targetLangs.map((lang) => (
-              <ChatLanguageBadge key={lang} lang={lang} />
+              <ChatLanguageBadge
+                key={lang}
+                lang={lang}
+                isSelected={!isOriginalLanguageSelected && normalizeTranslationLanguageKey(activeLanguage) === normalizeTranslationLanguageKey(lang)}
+                onSelect={() => {
+                  setDisplayLanguage(lang)
+                }}
+              />
             ))}
           </div>
         </div>
@@ -410,6 +458,7 @@ function ChatBubble({
 
 function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boolean {
   if (prev.uiLocale !== next.uiLocale) return false
+  if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
   if (prev.isDraft !== next.isDraft) return false
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false

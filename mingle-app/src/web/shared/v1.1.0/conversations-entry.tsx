@@ -5,6 +5,7 @@ import {
   listConversationChannelsForUser,
   type ConversationChannelSummary,
 } from "@/lib/app-conversations";
+import { getUserProfile } from "@/server/user-profile";
 import { getDictionary } from "@/i18n";
 import type { AppLocale } from "@/i18n/config";
 import {
@@ -66,12 +67,18 @@ export default async function V110ConversationsEntry({
     ),
   };
   let initialConversations: ConversationChannelSummary[] = [];
+  let initialPrimaryLanguage: string | null = null;
   if (!isExplicitNativeTabRoot) {
     const userId = await findUserIdForIdentity(identity);
     if (userId) {
-      initialConversations = await listConversationChannelsForUser(userId, {
-        includeMessageSummaries: true,
-      });
+      const [nextConversations, profile] = await Promise.all([
+        listConversationChannelsForUser(userId, {
+          includeMessageSummaries: true,
+        }),
+        getUserProfile(userId),
+      ]);
+      initialConversations = nextConversations;
+      initialPrimaryLanguage = profile?.nationality ?? null;
     }
   }
 
@@ -82,6 +89,7 @@ export default async function V110ConversationsEntry({
       initialConversations={initialConversations}
       initialConversationsRequireRefresh={isExplicitNativeTabRoot}
       initialConversationIdToOpen={initialConversationId || null}
+      initialPrimaryLanguage={initialPrimaryLanguage}
       initialNativeUi={initialNativeUi}
       initialNativeBannerPosition={readSearchParamValue(searchParams, "nativeBannerPosition")}
       initialNativeTopInsetPx={parseNativeInsetPx(readSearchParamValue(searchParams, "nativeTopInsetPx"))}

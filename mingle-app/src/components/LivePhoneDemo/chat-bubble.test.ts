@@ -37,7 +37,10 @@ describe('ChatBubble', () => {
     expect(html).toContain('data-chat-bubble-language-badges')
     expect(html).toContain('data-original-language-quote-badge')
     expect(html).toContain('text-black')
-    expect(html.indexOf('data-original-bubble-content')).toBeLessThan(
+    expect(html).toContain('data-display-language="en"')
+    expect((html.match(/data-chat-message-bubble/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge/g) || []).length).toBe(1)
+    expect(html.indexOf('data-current-bubble-content')).toBeLessThan(
       html.indexOf('data-original-bubble-meta'),
     )
     expect(html.indexOf('data-original-bubble-meta')).toBeLessThan(
@@ -53,7 +56,7 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-original-bubble-tail')
     expect(html).not.toContain('border-bottom-left-radius:1px')
     expect(html).not.toContain('data-original-bubble-content" class="min-w-0 flex-1"')
-    expect(html).toContain('data-original-bubble-text')
+    expect(html).toContain('data-current-bubble-text-value')
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
     expect(html).toContain('data-copyable-bubble')
@@ -81,28 +84,30 @@ describe('ChatBubble', () => {
           },
         },
         uiLocale: 'en',
+        preferredDisplayLanguage: 'ko',
       }),
     )
 
     expect(html).toContain('부분 번역')
     expect(html).toContain('data-translation-state="interim"')
     expect(html).toContain('data-chat-message-bubble')
-    expect(html).toContain('data-translation-bubbles')
-    expect(html).toContain('text-gray-500')
+    expect(html).toContain('data-display-language="ko"')
+    expect(html).toContain('data-translation-bubble-body')
     expect(html).toContain('text-sm text-gray-400')
     expect(html).not.toContain('bg-amber-50')
     expect(html).not.toContain('bg-gray-100 border border-gray-200')
     expect(html).toContain('aria-label="Copy All"')
     expect(html).toContain('data-message-copy-button')
     expect((html.match(/data-message-copy-button/g) || []).length).toBe(1)
-    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
-    expect(html.indexOf('data-original-bubble-body')).toBeLessThan(
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
+    expect(html).not.toContain('data-original-bubble-body')
+    expect(html.indexOf('data-translation-bubble-body')).toBeLessThan(
       html.indexOf('aria-label="Copy All"'),
     )
     expect(html).not.toContain('data-interim-translation-cursor')
   })
 
-  it('renders a finalized translation with the existing amber treatment', () => {
+  it('renders one finalized translation when its language badge is selected', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {
         utterance: {
@@ -118,10 +123,12 @@ describe('ChatBubble', () => {
           },
         },
         uiLocale: 'en',
+        preferredDisplayLanguage: 'ko',
       }),
     )
 
     expect(html).toContain('data-translation-state="final"')
+    expect(html).toContain('data-display-language="ko"')
     expect(html).toContain('data-chat-message-bubble')
     expect(html).toContain('border-gray-200 bg-white')
     expect(html).not.toContain('bg-amber-50')
@@ -140,11 +147,14 @@ describe('ChatBubble', () => {
           },
         },
         uiLocale: 'en',
+        preferredDisplayLanguage: 'ko',
       }),
     )
 
     expect(html).toContain('data-translation-state="final"')
-    expect(html).toContain('bg-amber-50 border border-amber-100')
+    expect(html).toContain('data-display-language="ko"')
+    expect(html).toContain('Saved translation')
+    expect(html).not.toContain('bg-amber-50')
   })
 
   it('renders draft original bubbles with the same bubble structure and a live cursor', () => {
@@ -207,10 +217,13 @@ describe('ChatBubble', () => {
           },
         },
         uiLocale: 'en',
+        preferredDisplayLanguage: 'ko',
       }),
     )
 
-    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(2)
+    expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge/g) || []).length).toBe(2)
+    expect((html.match(/data-original-language-quote-badge/g) || []).length).toBe(1)
     expect(html).not.toContain('data-message-tts-button')
   })
 

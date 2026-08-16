@@ -1086,6 +1086,7 @@ interface LivePhoneDemoProps {
   onConversationDeleted?: () => void
   conversationTitle?: string
   conversationId?: string
+  preferredDisplayLanguage?: string | null
   sessionKeyOverride?: string
   storageNamespace?: string
   initialSelectedLanguages?: string[]
@@ -1204,6 +1205,7 @@ function buildTranslationBubblePlaybackKey(utteranceId: string, language: string
 type LivePhoneDemoChatMessageRowProps = {
   utterance: Utterance
   uiLocale: string
+  preferredDisplayLanguage?: string | null
   isDraft: boolean
   onPlayOriginal: (utterance: Utterance) => void
   onPlayTranslation: (utterance: Utterance, language: string, text: string) => void
@@ -1230,6 +1232,7 @@ function isPlaybackKeyForUtterance(playbackKey: string | undefined, utteranceId:
 function LivePhoneDemoChatMessageRow({
   utterance,
   uiLocale,
+  preferredDisplayLanguage,
   isDraft,
   onPlayOriginal,
   onPlayTranslation,
@@ -1246,6 +1249,7 @@ function LivePhoneDemoChatMessageRow({
       <ChatBubble
         utterance={utterance}
         uiLocale={uiLocale}
+        preferredDisplayLanguage={preferredDisplayLanguage}
         isDraft={isDraft}
         onPlayOriginal={onPlayOriginal}
         onPlayTranslation={onPlayTranslation}
@@ -1262,6 +1266,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
   function areLivePhoneDemoChatMessageRowsEqual(prev, next) {
     if (prev.utterance !== next.utterance) return false
     if (prev.uiLocale !== next.uiLocale) return false
+    if (prev.preferredDisplayLanguage !== next.preferredDisplayLanguage) return false
     if (prev.isDraft !== next.isDraft) return false
     if (prev.onPlayOriginal !== next.onPlayOriginal) return false
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
@@ -1362,6 +1367,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onConversationDeleted,
   conversationTitle,
   conversationId,
+  preferredDisplayLanguage,
   sessionKeyOverride,
   storageNamespace,
   initialSelectedLanguages,
@@ -6188,9 +6194,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
               {displayUtterances.map((u) => (
                 <MemoizedLivePhoneDemoChatMessageRow
-                  key={u.id}
+                  key={`${u.id}:${preferredDisplayLanguage || ''}`}
                   utterance={u}
                   uiLocale={uiLocale}
+                  preferredDisplayLanguage={preferredDisplayLanguage}
                   isDraft={draftUtteranceIds.has(u.id)}
                   onPlayOriginal={handlePlayOriginalBubbleTts}
                   onPlayTranslation={handlePlayTranslationBubbleTts}
