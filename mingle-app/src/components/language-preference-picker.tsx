@@ -148,7 +148,7 @@ export default function LanguagePreferencePicker({
   return (
     <div className="min-w-0 w-full max-w-full space-y-3">
       <div
-        className="flex min-h-12 items-center gap-2 overflow-x-auto rounded-[18px] border border-gray-200 bg-white px-3 py-2 shadow-sm"
+        className="flex min-h-14 items-center gap-2 overflow-x-auto rounded-[18px] border border-gray-200 bg-white px-3 py-2 shadow-sm"
         aria-labelledby={headingId}
       >
         <span id={headingId} className="sr-only">Selected languages</span>
@@ -161,7 +161,7 @@ export default function LanguagePreferencePicker({
               type="button"
               onClick={() => handleToggle(code)}
               disabled={!canRemove}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-[1.55rem] leading-none shadow-sm transition active:scale-95 disabled:cursor-default"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 border-amber-400 bg-white text-[2rem] leading-none shadow-[0_14px_28px_rgba(245,158,11,0.14)] transition active:scale-95 disabled:cursor-default"
               aria-label={canRemove ? `${languageName}: remove` : languageName}
               title={languageName}
             >

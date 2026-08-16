@@ -1,5 +1,12 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Enlarged Selected Language Flags in Profile Settings
+
+- Surface: My Page primary-language and default-conversation-language pickers.
+- Issue: The selected-language flags were smaller than the selected-language strip in the in-room language selector, making the active order harder to scan.
+- User impact: Users could not recognize their selected language order at a glance when editing profile or conversation defaults.
+- Resolution: Matched the selected flag buttons to the room selector's 56px circular flags, including the larger emoji treatment and selected amber outline.
+
 ## 2026-08-17 - My Page Usage Summary
 
 - Surface: My Page hamburger menu and usage detail panel.
