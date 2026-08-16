@@ -65,7 +65,7 @@ type ProfileDraft = {
   handle: string;
   name: string;
   bio: string;
-  nationality: SttLanguageCode;
+  nationality: SttLanguageCode | null;
 };
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
@@ -122,10 +122,6 @@ const LANGUAGE_OPTIONS: ReadonlyArray<{ locale: SttLanguageCode; label: string; 
 function getNationalityOption(value: string | null | undefined) {
   const normalized = typeof value === "string" ? canonicalizeSttLanguageCode(value) : "";
   return LANGUAGE_OPTIONS.find((option) => option.locale === normalized) ?? null;
-}
-
-function getFallbackNationality(locale: AppLocale): SttLanguageCode {
-  return getNationalityOption(locale)?.locale ?? "ko";
 }
 
 function appendPathSearchParam(path: string, key: string, value: string): string {
@@ -285,10 +281,10 @@ function ProfileSettingsPanel({
     title: dictionary.profile.menuSettingsTitle ?? (locale === "ko" ? "메뉴 및 설정" : "Menu and settings"),
     blocked: dictionary.profile.blockedUsersLabel ?? (locale === "ko" ? "차단한 사용자" : "Blocked users"),
     reports: dictionary.profile.reportsLabel ?? (locale === "ko" ? "신고 내역" : "Reports"),
-    appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 언어" : "App language"),
-    appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 언어" : "App language"),
+    appLanguage: dictionary.profile.appLanguageLabel ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
+    appLanguageTitle: dictionary.profile.appLanguageTitle ?? (locale === "ko" ? "앱 이용 언어" : "App language"),
     appLanguageDescription: dictionary.profile.appLanguageDescription
-      ?? (locale === "ko" ? "Mingle 앱 화면에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
+      ?? (locale === "ko" ? "Mingle UI와 UX에 사용할 언어를 선택하세요." : "Choose the language used for the Mingle interface."),
     noBlocked: dictionary.profile.noBlockedUsers ?? (locale === "ko" ? "차단한 사용자가 없습니다." : "You have not blocked anyone."),
     noReports: dictionary.profile.noReports ?? (locale === "ko" ? "신고 내역이 없습니다." : "You have not submitted any reports."),
     unblock: dictionary.profile.unblockAction ?? (locale === "ko" ? "차단 해제" : "Unblock"),
@@ -751,7 +747,7 @@ function ProfileEditPanel({
   initialBio: string;
   initialName: string;
   initialHandle: string;
-  initialNationality: SttLanguageCode;
+  initialNationality: SttLanguageCode | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -763,7 +759,7 @@ function ProfileEditPanel({
   const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
   const [bio, setBio] = useState(initialBio);
-  const [nationality, setNationality] = useState<SttLanguageCode>(initialNationality);
+  const [nationality, setNationality] = useState<SttLanguageCode | null>(initialNationality);
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
@@ -1166,12 +1162,13 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const profileImageUrl = profile.image || session?.user?.image || null;
   const name = profile.name?.trim() || fallbackName;
   const bio = profile.bio?.trim() || "";
-  const nationality = getNationalityOption(profile.nationality)?.locale
-    ?? getFallbackNationality(locale);
+  const nationality = getNationalityOption(profile.nationality)?.locale ?? null;
   const nationalityFlag = getNationalityOption(nationality)?.flag;
-  const nationalityName = getSttLanguageDisplayName(nationality, locale)
-    ?? getNationalityOption(nationality)?.label
-    ?? nationality;
+  const nationalityName = nationality
+    ? getSttLanguageDisplayName(nationality, locale)
+      ?? getNationalityOption(nationality)?.label
+      ?? nationality
+    : null;
   const profileSharePath = buildNativeAwareTabPath(`/${locale}/mypage/share`, searchParams);
   const profileShareHref = profile.handle
     ? appendPathSearchParam(profileSharePath, "profileHandle", profile.handle)

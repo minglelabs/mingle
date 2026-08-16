@@ -675,3 +675,16 @@
 - Resolution: Added a left-edge-only horizontal drag that dismisses the notification panel to the right after the same distance or velocity threshold used by the surrounding screens. Vertical scrolling remains available because the panel keeps `touchAction: pan-y`, and taps outside the panel or on the header arrow retain their existing behavior.
 - Data contract: None.
 - Testing notes: Verify that a rightward gesture beginning within the first 32px closes the panel, a vertical list scroll does not close it, and gestures beginning away from the left edge do not take over the interaction.
+
+## 2026-08-16 - Separate app display language from profile primary language
+
+- Surface: My Page app-language settings and the profile-edit primary-language selector.
+- Issue: When a profile did not yet have a saved primary language, My Page used the current UI locale as a fallback. This made the app display language and the profile's primary language appear to be one setting, even though they represent different user choices.
+- User impact: Changing or viewing the Mingle interface language could silently change the language shown on the user's profile, and a profile without a choice could incorrectly display the UI language's flag and name.
+- Resolution:
+  - Keep the app display language in the route/local-storage preference used to render the Mingle UI.
+  - Keep the profile primary language in the existing profile field and preserve its nullable state; never derive it from the UI locale.
+  - Hide the profile language badge and preview label when the user has not selected a profile primary language yet.
+  - Rename the Korean settings copy to `앱 이용 언어` and clarify that it controls the Mingle UI/UX.
+- Data contract: None. Existing saved profile language values remain unchanged, and the existing nullable profile field continues to accept `null`.
+- Testing notes: Verify that selecting English as the app display language does not select English in profile editing, that a saved profile language remains unchanged after a UI-language change, and that an unset profile language shows no flag or language label.
