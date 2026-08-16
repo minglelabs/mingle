@@ -113,7 +113,7 @@ export default function ProfileLinkInstallScreen({
         <h1 className="mt-6 text-center text-2xl font-bold tracking-tight">{copy.title}</h1>
 
         <a
-          href={appUrl}
+          href={appUrl ?? "#"}
           onClick={handleOpenInApp}
           className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-base font-semibold text-white transition active:scale-[0.99]"
         >
