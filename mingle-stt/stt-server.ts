@@ -1203,6 +1203,12 @@ wss.on('connection', (clientWs) => {
                 const boundaryMarker = partition.marker;
                 const boundaryKind: SonioxBoundaryMarker | null = partition.markerKind;
                 const hasBoundary = boundaryKind !== null;
+                const markerSpeaker = boundaryMarker
+                    ? normalizeSpeaker(boundaryMarker.speaker)
+                    : '-';
+                const tokenBeforeSpeakers = Array.from(new Set(
+                    tokensBeforeBoundary.map((token) => normalizeSpeaker(token.speaker)),
+                )).sort();
 
                 if (boundaryMarker && boundaryMarker.is_final !== true) {
                     console.warn(
@@ -1311,12 +1317,8 @@ wss.on('connection', (clientWs) => {
                 const finalizeRequestForBoundary = boundaryHandling.completeFinalizeRequest
                     ? activeFinalizeRequest
                     : null;
-
-                if (hasBoundary) {
-                    console.log(
-                        `[conn:${connId}] soniox_boundary requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} marker=${boundaryKind} action=${boundaryHandling.action} cause=${boundaryHandling.cause} carry=${boundaryHandling.carryAllowed}`,
-                    );
-                }
+                const currentSpeakerIds = Array.from(speakerStates.keys()).sort();
+                let boundarySpeakers: string[] = [];
                 if (
                     boundaryKind === 'end'
                     && segmentationRuntime.effective === 'fin'
@@ -1333,7 +1335,7 @@ wss.on('connection', (clientWs) => {
                 }
 
                 if (providerOwnedBoundary || finalizeRequestForBoundary) {
-                    const boundarySpeakers = selectSonioxBoundarySpeakerIds({
+                    boundarySpeakers = selectSonioxBoundarySpeakerIds({
                         handling: boundaryHandling,
                         currentSpeakerIds: speakerStates.keys(),
                         requestSpeakerIds: finalizeRequestForBoundary?.speakers.keys() || [],
@@ -1352,6 +1354,11 @@ wss.on('connection', (clientWs) => {
                             hasTimestampedProgressBeyondWatermark: false,
                         });
                     }
+                }
+                if (hasBoundary) {
+                    console.log(
+                        `[conn:${connId}] soniox_boundary requested=${segmentationRuntime.requested} effective=${segmentationRuntime.effective} marker=${boundaryKind} markerSpeaker=${markerSpeaker} beforeSpeakers=${tokenBeforeSpeakers.join(',') || '-'} currentSpeakers=${currentSpeakerIds.join(',') || '-'} selectedSpeakers=${boundarySpeakers.join(',') || '-'} action=${boundaryHandling.action} cause=${boundaryHandling.cause} carry=${boundaryHandling.carryAllowed}`,
+                    );
                 }
 
                 let lastFinalizedPayloadForBatch: MingleSttFinalTurnPayload = null;
