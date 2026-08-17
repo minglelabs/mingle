@@ -590,7 +590,6 @@ type NativeSttStartPayload = {
   aecEnabled?: boolean;
   apiNamespace?: string;
   behaviorProfile?: string;
-  sonioxLanguageHints?: string[];
   sonioxManualFinalizeSilenceMs?: number;
 };
 
@@ -2500,12 +2499,6 @@ function AppInner(): React.JSX.Element {
     const aecEnabled = payload?.aecEnabled === true;
     const apiNamespace = typeof payload?.apiNamespace === 'string' ? payload.apiNamespace.trim() : '';
     const behaviorProfile = typeof payload?.behaviorProfile === 'string' ? payload.behaviorProfile.trim() : '';
-    const sonioxLanguageHints = Array.isArray(payload?.sonioxLanguageHints)
-      ? payload.sonioxLanguageHints
-        .filter((language): language is string => typeof language === 'string')
-        .map(language => language.trim())
-        .filter(Boolean)
-      : [];
     const sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
       payload?.sonioxManualFinalizeSilenceMs,
     );
@@ -2519,7 +2512,6 @@ function AppInner(): React.JSX.Element {
       aecEnabled,
       ...(apiNamespace ? { apiNamespace } : {}),
       ...(behaviorProfile ? { behaviorProfile } : {}),
-      sonioxLanguageHints,
       ...(typeof sonioxManualFinalizeSilenceMs === 'number'
         ? { sonioxManualFinalizeSilenceMs }
         : {}),

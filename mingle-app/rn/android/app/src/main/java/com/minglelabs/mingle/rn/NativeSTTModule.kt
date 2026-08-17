@@ -24,7 +24,6 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -53,7 +52,6 @@ class NativeSTTModule(
     val apiNamespace: String,
     val releaseVariant: String,
     val behaviorProfile: String,
-    val sonioxLanguageHints: List<String>,
     val sonioxManualFinalizeSilenceMs: Int?,
   )
 
@@ -146,7 +144,6 @@ class NativeSTTModule(
       apiNamespace = options.getString("apiNamespace")?.trim().orEmpty(),
       releaseVariant = options.getString("releaseVariant")?.trim().orEmpty(),
       behaviorProfile = options.getString("behaviorProfile")?.trim().orEmpty(),
-      sonioxLanguageHints = normalizeStringArray(options.getArray("sonioxLanguageHints")),
       sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
         if (options.hasKey("sonioxManualFinalizeSilenceMs") && !options.isNull("sonioxManualFinalizeSilenceMs")) {
           options.getDouble("sonioxManualFinalizeSilenceMs")
@@ -254,17 +251,6 @@ class NativeSTTModule(
       true
     }
 
-  private fun normalizeStringArray(array: ReadableArray?): List<String> {
-    if (array == null) return emptyList()
-    val seen = LinkedHashSet<String>()
-    for (index in 0 until array.size()) {
-      val value = array.getString(index)?.trim().orEmpty()
-      if (value.isEmpty()) continue
-      seen.add(value)
-    }
-    return seen.toList()
-  }
-
   private fun startSession(
     options: StartOptions,
     promise: Promise,
@@ -321,9 +307,6 @@ class NativeSTTModule(
           }
           options.sonioxManualFinalizeSilenceMs?.let {
             config.put("soniox_manual_finalize_silence_ms", it)
-          }
-          if (options.sonioxLanguageHints.isNotEmpty()) {
-            config.put("soniox_language_hints", options.sonioxLanguageHints)
           }
           webSocket.send(config.toString())
           Log.i(

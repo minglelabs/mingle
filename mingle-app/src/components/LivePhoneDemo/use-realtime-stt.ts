@@ -319,7 +319,6 @@ type NativeSttStartCommand = {
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
-    sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
   }
 }
@@ -1044,7 +1043,6 @@ export function buildFinalizedUtterancePayload(
 interface UseRealtimeSTTOptions {
   languages?: string[]
   targetLanguages?: string[]
-  speechLanguages?: string[]
   onLimitReached?: () => void
   onTtsRequested?: (utteranceId: string, language: string) => void
   onTtsAudio?: (utteranceId: string, audioBlob: Blob, language: string, ttsText?: string) => void
@@ -2202,7 +2200,6 @@ const LOAD_BATCH_SIZE = LOCAL_UTTERANCE_CACHE_LIMIT
 export default function useRealtimeSTT({
   languages,
   targetLanguages,
-  speechLanguages,
   onLimitReached,
   onTtsRequested,
   onTtsAudio,
@@ -2219,10 +2216,6 @@ export default function useRealtimeSTT({
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
     [languages, targetLanguages],
-  )
-  const effectiveSpeechLanguages = useMemo(
-    () => speechLanguages ?? languages ?? effectiveTargetLanguages,
-    [effectiveTargetLanguages, languages, speechLanguages],
   )
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle')
   const connectionStatusRef = useRef<ConnectionStatus>(connectionStatus)
@@ -2403,7 +2396,6 @@ export default function useRealtimeSTT({
   const targetLanguagesRef = useRef(effectiveTargetLanguages)
   targetLanguagesRef.current = effectiveTargetLanguages
   const connectionErrorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sonioxLanguageHintsEnabledRef = useRef(false)
 
   const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
   const bumpPendingTurnRenderVersion = useCallback(() => {
@@ -4201,10 +4193,6 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
-      sonioxLanguageHintsEnabledRef.current = message.soniox_language_hints_enabled === true
-      logSttDebug('transport.ready', {
-        sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
-      })
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
       if (!hasActiveSessionRef.current) {
@@ -4471,7 +4459,6 @@ export default function useRealtimeSTT({
     if (isStoppingRef.current) return
     const useNativeStt = shouldUseNativeSttBridge()
     const targetLanguages = [...getCurrentTargetLanguages()]
-    const currentSpeechLanguages = [...effectiveSpeechLanguages]
     useNativeSttRef.current = useNativeStt
     if (shouldOpenNativeMicSettingsOnRetry({
       useNativeStt,
@@ -4528,7 +4515,6 @@ export default function useRealtimeSTT({
       if (useNativeStt) {
         claimCurrentNativeSttOwner()
         const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
-        const sonioxLanguageHints = buildSonioxLanguageHints(currentSpeechLanguages)
         logSttDebug('native.start.begin')
         const posted = sendNativeSttCommand({
           type: 'native_stt_start',
@@ -4540,7 +4526,6 @@ export default function useRealtimeSTT({
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
-            sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
           },
         })
@@ -4584,14 +4569,12 @@ export default function useRealtimeSTT({
 
       socket.onopen = () => {
         const runtimeBehaviorContext = resolveSttRuntimeBehaviorContext()
-        const sonioxLanguageHints = buildSonioxLanguageHints(currentSpeechLanguages)
         const config = {
           sample_rate: context.sampleRate,
           stt_model: 'soniox',
           api_namespace: runtimeBehaviorContext.apiNamespace,
           release_variant: runtimeBehaviorContext.releaseVariant,
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
-          soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
         }
         socket.send(JSON.stringify(config))
@@ -4636,7 +4619,7 @@ export default function useRealtimeSTT({
       setConnectionStatus('error')
       scheduleConnectionErrorReset()
     }
-  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, effectiveSpeechLanguages, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
+  }, [bumpPendingTurnRenderVersion, claimCurrentNativeSttOwner, cleanup, clearAllPendingTurnTranslationRuntime, conversationId, enableAec, getCurrentTargetLanguages, handleSttServerMessage, handleSttTransportClose, handleSttTransportError, normalizedUsageLimitSec, releaseCurrentNativeSttOwner, scheduleConnectionErrorReset, sendNativeSttCommand, sonioxManualFinalizeSilenceMs, usageSec])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

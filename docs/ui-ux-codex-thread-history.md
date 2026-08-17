@@ -900,3 +900,17 @@
   - Preserve any non-empty server values so reopening onboarding on an existing account cannot overwrite explicit profile settings.
 - Data contract: No schema or migration changes. The existing `primary_languages` and `default_conversation_languages` fields are updated through the existing `/profile` endpoint; the app UI locale remains local-only.
 - Testing notes: Not run in this task by request. Verify a new signup stores the selected language first in both profile arrays, existing non-empty arrays remain unchanged, and a legacy pending onboarding marker still claims the selected language correctly.
+
+## 2026-08-17 - Simplify room language selection and empty-room guidance
+
+- Surface: The conversation-room language picker and the empty message area shown when a new room has no messages.
+- Issue: The picker separated speech input languages from translation output languages and exposed Soniox language hints, while the empty room only showed a play-button prompt and arrow. The empty state also did not explain that Mingle can recognize any spoken language.
+- User impact: Users had to reason about two language concepts that are no longer part of the room experience, and a new room did not clearly communicate its language recognition coverage.
+- Resolution:
+  - Make the room picker a single translation-language list and remove the input/output tabs, linked-language control, and speech restart control.
+  - Use the selected room language list as the translation and default-display-language candidate source; keep legacy speech fields only for compatibility.
+  - Stop sending Soniox language hints from web and native STT start flows, and make the STT server always use provider language identification without hint restrictions.
+  - Replace the empty play prompt and arrow with a white centered onboarding block using the copy “아무 언어로 말해보세요!” and “언어를 선택하지 않아도 밍글이 알아듣고 번역해드려요”.
+  - Add a horizontally scrollable carousel of 60 supported language flags without pagination indicators. Hide the block when a draft, voice transcript, or text message is present.
+- Data contract: No Prisma migration. Existing speech-language and linked-language fields remain readable for backward compatibility, but the selected-language field is authoritative for room translation behavior.
+- Testing notes: Not run in this task by request. Verify the single language list, the 60-flag horizontal carousel, English US/UK flag treatment, and empty-state dismissal after text or voice input.

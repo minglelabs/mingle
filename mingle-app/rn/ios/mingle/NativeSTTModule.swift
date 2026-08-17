@@ -845,7 +845,6 @@ class NativeSTTModule: RCTEventEmitter {
         apiNamespace: String,
         releaseVariant: String,
         behaviorProfile: String,
-        sonioxLanguageHints: [String],
         sonioxManualFinalizeSilenceMs: Int?,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
@@ -941,9 +940,6 @@ class NativeSTTModule: RCTEventEmitter {
         if let sonioxManualFinalizeSilenceMs {
             configPayload["soniox_manual_finalize_silence_ms"] = sonioxManualFinalizeSilenceMs
         }
-        if !sonioxLanguageHints.isEmpty {
-            configPayload["soniox_language_hints"] = sonioxLanguageHints
-        }
         sendJson(configPayload)
 
         emitStatus("running")
@@ -977,9 +973,6 @@ class NativeSTTModule: RCTEventEmitter {
         let apiNamespace = (options["apiNamespace"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let releaseVariant = (options["releaseVariant"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let behaviorProfile = (options["behaviorProfile"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let sonioxLanguageHints = (options["sonioxLanguageHints"] as? [String] ?? [])
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
         let sonioxManualFinalizeSilenceMs = parseOptionalSonioxManualFinalizeSilenceMs(
             options["sonioxManualFinalizeSilenceMs"]
         )
@@ -995,7 +988,6 @@ class NativeSTTModule: RCTEventEmitter {
                 apiNamespace: apiNamespace,
                 releaseVariant: releaseVariant,
                 behaviorProfile: behaviorProfile,
-                sonioxLanguageHints: sonioxLanguageHints,
                 sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                 resolve: resolve,
                 reject: reject
@@ -1016,7 +1008,6 @@ class NativeSTTModule: RCTEventEmitter {
                             apiNamespace: apiNamespace,
                             releaseVariant: releaseVariant,
                             behaviorProfile: behaviorProfile,
-                            sonioxLanguageHints: sonioxLanguageHints,
                             sonioxManualFinalizeSilenceMs: sonioxManualFinalizeSilenceMs,
                             resolve: resolve,
                             reject: reject

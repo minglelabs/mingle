@@ -161,9 +161,6 @@ function serializeConversationChannel(
     ? [...record.speechLanguages]
     : [...selectedLanguages];
   const translationLanguagesLinked = record.translationLanguagesLinked !== false;
-  const effectiveSelectedLanguages = translationLanguagesLinked
-    ? [...speechLanguages]
-    : selectedLanguages;
 
   return {
     id: record.id,
@@ -174,7 +171,7 @@ function serializeConversationChannel(
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
       : {}),
-    selectedLanguages: effectiveSelectedLanguages,
+    selectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
     defaultDisplayLanguage: record.defaultDisplayLanguage?.trim() || null,
@@ -418,9 +415,9 @@ export async function createConversationChannelForUser(
   const resolvedSpeechLanguages = normalizedSpeechLanguages.length > 0
     ? normalizedSpeechLanguages
     : [...normalizedSelectedLanguages];
-  const resolvedSelectedLanguages = translationLanguagesLinked
-    ? [...resolvedSpeechLanguages]
-    : normalizedSelectedLanguages;
+  const resolvedSelectedLanguages = normalizedSelectedLanguages.length > 0
+    ? normalizedSelectedLanguages
+    : [...resolvedSpeechLanguages];
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -573,7 +570,7 @@ export async function updateConversationChannelSpeechLanguages(args: {
       ownerUserId: args.userId,
       ...buildVisibleConversationWhere(),
     },
-    select: { id: true, translationLanguagesLinked: true },
+    select: { id: true },
   });
 
   if (!existing) {
@@ -584,9 +581,6 @@ export async function updateConversationChannelSpeechLanguages(args: {
     where: { id: args.conversationId },
     data: {
       speechLanguages: normalizedSpeechLanguages,
-      ...(existing.translationLanguagesLinked !== false
-        ? { selectedLanguages: normalizedSpeechLanguages }
-        : {}),
     },
     select: conversationChannelSelect,
   });
@@ -605,31 +599,17 @@ export async function updateConversationChannelTranslationLanguagesLinked(args: 
       ownerUserId: args.userId,
       ...buildVisibleConversationWhere(),
     },
-    select: {
-      id: true,
-      selectedLanguages: true,
-      speechLanguages: true,
-      translationLanguagesLinked: true,
-    },
+    select: { id: true },
   });
 
   if (!existing) {
     return null;
   }
 
-  const speechLanguages = existing.speechLanguages.length > 0
-    ? existing.speechLanguages
-    : existing.selectedLanguages;
-  const shouldSyncSelectedLanguages =
-    args.translationLanguagesLinked || existing.translationLanguagesLinked !== false;
-
   const record = await prisma.appConversationChannel.update({
     where: { id: args.conversationId },
     data: {
       translationLanguagesLinked: args.translationLanguagesLinked,
-      ...(shouldSyncSelectedLanguages
-        ? { selectedLanguages: speechLanguages }
-        : {}),
     },
     select: conversationChannelSelect,
   });
@@ -659,8 +639,6 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
     select: {
       id: true,
       selectedLanguages: true,
-      speechLanguages: true,
-      translationLanguagesLinked: true,
     },
   });
 
@@ -669,11 +647,8 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
   }
 
   if (normalizedDefaultDisplayLanguage) {
-    const roomLanguages = existing.translationLanguagesLinked
-      ? existing.speechLanguages
-      : existing.selectedLanguages;
     const normalizedRoomLanguages = sanitizeSttLanguageSelection(
-      roomLanguages,
+      existing.selectedLanguages,
       existing.selectedLanguages,
     );
     if (!normalizedRoomLanguages.includes(normalizedDefaultDisplayLanguage)) {

@@ -201,7 +201,6 @@ type NativeSttStartCommand = {
     apiNamespace: string
     releaseVariant: MingleClientReleaseVariant
     behaviorProfile: MingleBehaviorProfile
-    sonioxLanguageHints: string[]
     sonioxManualFinalizeSilenceMs: number
   }
 }
@@ -1851,7 +1850,6 @@ export default function useRealtimeSTT({
   const nativeStopRequestedRef = useRef(false)
   const targetLanguagesRef = useRef([...languages])
   const connectionErrorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const sonioxLanguageHintsEnabledRef = useRef(false)
 
   const getCurrentTargetLanguages = useCallback(() => targetLanguagesRef.current, [])
   const bumpPendingTurnRenderVersion = useCallback(() => {
@@ -3138,10 +3136,6 @@ export default function useRealtimeSTT({
 
   const handleSttServerMessage = useCallback((message: Record<string, unknown>) => {
     if (message.status === 'ready') {
-      sonioxLanguageHintsEnabledRef.current = message.soniox_language_hints_enabled === true
-      logSttDebug('transport.ready', {
-        sonioxLanguageHintsEnabled: sonioxLanguageHintsEnabledRef.current,
-      })
       setConnectionStatus('ready')
       lastAudioChunkAtRef.current = Date.now()
       if (!hasActiveSessionRef.current) {
@@ -3425,7 +3419,6 @@ export default function useRealtimeSTT({
       bumpPendingTurnRenderVersion()
 
       if (useNativeStt) {
-        const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         const runtimeBehaviorContext = resolveLegacySttRuntimeBehaviorContext()
         logSttDebug('native.start.begin')
         const posted = sendNativeSttCommand({
@@ -3437,7 +3430,6 @@ export default function useRealtimeSTT({
             apiNamespace: runtimeBehaviorContext.apiNamespace,
             releaseVariant: runtimeBehaviorContext.releaseVariant,
             behaviorProfile: runtimeBehaviorContext.behaviorProfile,
-            sonioxLanguageHints,
             sonioxManualFinalizeSilenceMs,
           },
         })
@@ -3480,14 +3472,12 @@ export default function useRealtimeSTT({
 
       socket.onopen = () => {
         const runtimeBehaviorContext = resolveLegacySttRuntimeBehaviorContext()
-        const sonioxLanguageHints = buildSonioxLanguageHints(targetLanguages)
         const config = {
           sample_rate: context.sampleRate,
           stt_model: 'soniox',
           api_namespace: runtimeBehaviorContext.apiNamespace,
           release_variant: runtimeBehaviorContext.releaseVariant,
           behavior_profile: runtimeBehaviorContext.behaviorProfile,
-          soniox_language_hints: sonioxLanguageHints,
           soniox_manual_finalize_silence_ms: sonioxManualFinalizeSilenceMs,
         }
         socket.send(JSON.stringify(config))

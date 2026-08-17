@@ -1775,7 +1775,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           ref={livePhoneDemoRef}
           enableAutoTTS
           uiLocale={props.locale}
-          tapPlayToStartLabel={props.dictionary.demo.tapPlayToStart}
           usageLimitReachedLabel={props.dictionary.demo.usageLimitReached}
           usageLimitRetryHintLabel={props.dictionary.demo.usageLimitRetryHint}
           connectingLabel={props.dictionary.demo.connecting}

@@ -70,10 +70,6 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
     if (!Number.isFinite(raw)) return 1200;
     return Math.max(300, Math.min(5000, Math.floor(raw)));
 })();
-const SONIOX_USE_LANGUAGE_HINTS = ['1', 'true', 'yes', 'on'].includes(
-    (process.env.SONIOX_USE_LANGUAGE_HINTS || '').trim().toLowerCase(),
-);
-
 const server = createServer();
 const wss = new WebSocketServer({ server });
 
@@ -145,7 +141,7 @@ wss.on('connection', (clientWs) => {
         if (clientWs.readyState !== WebSocket.OPEN) return;
         clientWs.send(JSON.stringify(
             releaseRuntime.buildReadyPayload({
-                sonioxLanguageHintsEnabled: SONIOX_USE_LANGUAGE_HINTS,
+                sonioxLanguageHintsEnabled: false,
             }),
         ));
     };
@@ -1135,14 +1131,6 @@ wss.on('connection', (clientWs) => {
             };
 
             sttWs.onopen = () => {
-                const sonioxLanguageHints = (
-                    Array.isArray(config.soniox_language_hints) && config.soniox_language_hints.length > 0
-                        ? config.soniox_language_hints
-                        : config.languages
-                )
-                    .filter((language): language is string => typeof language === 'string')
-                    .map((language) => language.trim())
-                    .filter(Boolean);
                 const sonioxConfig = {
                     api_key: sonioxApiKey,
                     model: 'stt-rt-v5',
@@ -1153,12 +1141,6 @@ wss.on('connection', (clientWs) => {
                     enable_speaker_diarization: true,
                     ...buildSonioxEndpointDetectionConfig(segmentationRuntime),
                 };
-                if (SONIOX_USE_LANGUAGE_HINTS && sonioxLanguageHints.length > 0) {
-                    Object.assign(sonioxConfig, {
-                        language_hints: sonioxLanguageHints,
-                        language_hints_strict: config.lang_hints_strict !== false,
-                    });
-                }
                 sttWs!.send(JSON.stringify(sonioxConfig));
 
                 if (isClientConnected) {

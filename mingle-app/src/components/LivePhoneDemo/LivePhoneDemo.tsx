@@ -8,6 +8,7 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import ConversationEmptyState from './ConversationEmptyState'
 import {
   buildLanguageSelectorHistoryState,
   buildLanguageSelectorButtonCodes,
@@ -186,8 +187,6 @@ const MENU_BACKDROP_TRANSITION = {
 }
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
-const EMPTY_STATE_ARROW_END_Y = 78
-const EMPTY_STATE_ARROW_HEAD_Y = 72
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
@@ -1056,7 +1055,6 @@ interface LivePhoneDemoProps {
   onLimitReached?: () => void
   enableAutoTTS?: boolean
   uiLocale: string
-  tapPlayToStartLabel: string
   usageLimitReachedLabel: string
   usageLimitRetryHintLabel: string
   connectingLabel: string
@@ -1354,7 +1352,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLimitReached,
   enableAutoTTS = false,
   uiLocale,
-  tapPlayToStartLabel,
   usageLimitReachedLabel,
   usageLimitRetryHintLabel,
   connectingLabel,
@@ -1436,9 +1433,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     [conversationId, storageNamespace],
   )
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
-    conversationId && conversationTranslationLanguagesLinked ? conversationSpeechLanguages : (
-      conversationId ? conversationSelectedLanguages : fallbackLanguages
-    ),
+    conversationId ? conversationSelectedLanguages : fallbackLanguages,
   )
   const [speechLanguages, setSpeechLanguages] = useState<string[]>(
     conversationId ? conversationSpeechLanguages : fallbackLanguages,
@@ -1507,19 +1502,16 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const silenceSliderUpgradeToastLastShownAtRef = useRef(0)
   const floatingToastTimerRef = useRef<number | null>(null)
   const effectiveTranslationLanguages = useMemo(
-    () => (translationLanguagesLinked ? speechLanguages : selectedLanguages),
-    [selectedLanguages, speechLanguages, translationLanguagesLinked],
+    () => selectedLanguages,
+    [selectedLanguages],
   )
   const normalizedDisplayLanguageOptions = useMemo(
     () => sanitizeSttLanguageSelection([
       ...effectiveTranslationLanguages,
       ...conversationSelectedLanguages,
-      ...(conversationTranslationLanguagesLinked ? conversationSpeechLanguages : []),
     ]),
     [
       conversationSelectedLanguages,
-      conversationSpeechLanguages,
-      conversationTranslationLanguagesLinked,
       effectiveTranslationLanguages,
     ],
   )
@@ -1547,8 +1539,8 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     normalizedDisplayLanguageOptions.join(','),
   ].join('|')
   const languageSelectorButtonLanguages = useMemo(
-    () => buildLanguageSelectorButtonCodes(speechLanguages, effectiveTranslationLanguages),
-    [effectiveTranslationLanguages, speechLanguages],
+    () => buildLanguageSelectorButtonCodes(selectedLanguages, []),
+    [selectedLanguages],
   )
 
   const {
@@ -1763,7 +1755,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       const nextIsSilenceFinalizeSliderLocked = isLegacySonioxSilenceSliderNamespace(clientApiNamespace)
       setIsSilenceFinalizeSliderLocked(nextIsSilenceFinalizeSliderLocked)
       if (!conversationId) {
-        setSelectedLanguages(next.translationLanguagesLinked ? next.speechLanguages : next.selectedLanguages)
+        setSelectedLanguages(next.selectedLanguages)
         setSpeechLanguages(next.speechLanguages)
         setTranslationLanguagesLinked(next.translationLanguagesLinked)
       }
@@ -1797,9 +1789,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     schedule(() => {
       if (cancelled) return
 
-      const nextSelectedLanguages = conversationTranslationLanguagesLinked
-        ? conversationSpeechLanguages
-        : conversationSelectedLanguages
+      const nextSelectedLanguages = conversationSelectedLanguages
       setSelectedLanguages((current) => {
         if (areLanguageSelectionsEqual(current, nextSelectedLanguages)) {
           return current
@@ -3488,7 +3478,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     demoTypingTranslations,
   } = useRealtimeSTT({
     targetLanguages: effectiveTranslationLanguages,
-    speechLanguages,
     onLimitReached,
     onTtsRequested: handleTtsRequested,
     onTtsAudio: handleTtsAudio,
@@ -4049,7 +4038,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   }, [forceStopTtsPlayback])
 
   const handleToggleSelectedLanguage = useCallback((code: string) => {
-    if (translationLanguagesLinked) return
     const normalizedCode = canonicalizeSttLanguageCode(code)
     if (!normalizedCode) return
     const currentLanguages = selectedLanguagesRef.current
@@ -4059,7 +4047,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     selectedLanguagesRef.current = nextLanguages
     selectedLanguagesChangePendingRef.current = true
     setSelectedLanguages(nextLanguages)
-  }, [translationLanguagesLinked])
+  }, [])
 
   const handleToggleSpeechLanguage = useCallback((code: string) => {
     const normalizedCode = canonicalizeSttLanguageCode(code)
@@ -4071,21 +4059,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     speechLanguagesRef.current = nextLanguages
     speechLanguagesChangePendingRef.current = true
     setSpeechLanguages(nextLanguages)
-    if (translationLanguagesLinked) {
-      selectedLanguagesRef.current = nextLanguages
-      setSelectedLanguages(nextLanguages)
-    }
-  }, [translationLanguagesLinked])
+  }, [])
 
   const handleTranslationLanguagesLinkedChange = useCallback((nextLinked: boolean) => {
     setTranslationLanguagesLinked(nextLinked)
-    if (nextLinked || translationLanguagesLinked) {
-      // When unlinking, seed the independent translation list from the current shared speech list.
-      selectedLanguagesRef.current = [...speechLanguagesRef.current]
-      setSelectedLanguages([...speechLanguagesRef.current])
-    }
     onTranslationLanguagesLinkedChange?.(nextLinked)
-  }, [onTranslationLanguagesLinkedChange, translationLanguagesLinked])
+  }, [onTranslationLanguagesLinkedChange])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
@@ -5052,6 +5031,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
+    && !composerHasDraft
   const bottomBarTopPaddingPx = isComposerOpen
     ? COMPOSER_MODE_TOP_MARGIN_PX
     : VOICE_MODE_TOP_MARGIN_PX
@@ -5360,22 +5340,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isOpen={langSelectorOpen}
                   onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
                   selectedLanguages={selectedLanguages}
-                  speechLanguages={speechLanguages}
-                  translationLanguagesLinked={translationLanguagesLinked}
                   onToggleLanguage={handleToggleSelectedLanguage}
-                  onToggleSpeechLanguage={handleToggleSpeechLanguage}
-                  onTranslationLanguagesLinkedChange={handleTranslationLanguagesLinkedChange}
-                  sttControl={{
-                    isReady,
-                    isConnecting: showConnectingOverlay,
-                    isLimitReached,
-                    showRipple,
-                    rippleScale,
-                    startLabel: VOICE_MODE_START_LABEL,
-                    stopLabel: VOICE_MODE_STOP_LABEL,
-                    onToggle: handleMicClick,
-                    onPointerDown: handleMicPointerDown,
-                  }}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}
@@ -6530,42 +6495,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {showEmptyState && (
-              <div
-                data-qa="live-demo-empty-state"
-                className="pointer-events-none absolute inset-0 z-10"
-              >
-                <p
-                  data-qa="live-demo-empty-state-message"
-                  className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
-                  style={{ top: '48%' }}
-                >
-                  {tapPlayToStartLabel}
-                </p>
-                <div
-                  data-qa="live-demo-empty-state-arrow"
-                  className="absolute left-1/2 w-7 -translate-x-1/2"
-                  style={{
-                    top: 'calc(48% + 24px)',
-                    bottom: '16px',
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 100"
-                    preserveAspectRatio="none"
-                    className="h-full w-full text-gray-300/95"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <ConversationEmptyState uiLocale={uiLocale} />
             )}
             <AnimatePresence>
               {showConnectingOverlay && (

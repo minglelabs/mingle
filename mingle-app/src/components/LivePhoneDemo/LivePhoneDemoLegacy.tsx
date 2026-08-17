@@ -8,6 +8,7 @@ import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
 import type { Utterance } from './ChatBubble'
 import LanguageSelector from './LanguageSelector'
+import ConversationEmptyState from './ConversationEmptyState'
 import {
   buildLanguageSelectorHistoryState,
   clearLanguageSelectorHistoryState,
@@ -129,8 +130,6 @@ const MENU_HISTORY_STATE_KEY = '__mingle_live_phone_demo_menu_depth'
 const LANG_SELECTOR_IOS_HISTORY_SETTLE_WINDOW_MS = 300
 const WEB_CANVAS_BASE_WIDTH_PX = 400
 const NATIVE_AD_BANNER_DEFAULT_HEIGHT_PX = 50
-const EMPTY_STATE_ARROW_END_Y = 78
-const EMPTY_STATE_ARROW_HEAD_Y = 72
 const COMPOSER_TEXTAREA_MIN_HEIGHT_PX = 36
 const COMPOSER_TEXTAREA_MAX_HEIGHT_PX = 104
 const COMPOSER_TEXTAREA_LINE_HEIGHT_PX = 22
@@ -686,7 +685,6 @@ interface LivePhoneDemoProps {
   onLimitReached?: () => void
   enableAutoTTS?: boolean
   uiLocale: string
-  tapPlayToStartLabel: string
   usageLimitReachedLabel: string
   usageLimitRetryHintLabel: string
   connectingLabel: string
@@ -821,7 +819,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onLimitReached,
   enableAutoTTS = false,
   uiLocale,
-  tapPlayToStartLabel,
   usageLimitReachedLabel,
   usageLimitRetryHintLabel,
   connectingLabel,
@@ -3345,6 +3342,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     && !isActive
     && !isError
     && !isLimitReached
+    && !composerDraft.trim()
   const bottomBarPaddingBottom = `max(calc(env(safe-area-inset-bottom) + ${16 + activeKeyboardInsetPx}px), ${20 + activeKeyboardInsetPx}px)`
   const composerCanSend = composerDraft.trim().length > 0
   // Hidden by default to avoid exposing account actions in demo/review builds.
@@ -3416,11 +3414,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   isOpen={langSelectorOpen}
                   onClose={() => closeLanguageSelector({ syncHistory: 'back' })}
                   selectedLanguages={selectedLanguages}
-                  speechLanguages={selectedLanguages}
-                  translationLanguagesLinked={true}
                   onToggleLanguage={handleToggleLanguage}
-                  onToggleSpeechLanguage={handleToggleLanguage}
-                  onTranslationLanguagesLinkedChange={() => {}}
                   uiLocale={uiLocale}
                   copy={roomManagementCopy}
                   triggerRef={langSelectorButtonRef}
@@ -4452,37 +4446,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
               )}
             </AnimatePresence>
             {showEmptyState && (
-              <div className="pointer-events-none absolute inset-0 z-10">
-                <p
-                  className="absolute inset-x-0 -translate-y-1/2 px-8 text-center text-base font-medium text-gray-400"
-                  style={{ top: '48%' }}
-                >
-                  {tapPlayToStartLabel}
-                </p>
-                <div
-                  className="absolute left-1/2 w-7 -translate-x-1/2"
-                  style={{
-                    top: 'calc(48% + 24px)',
-                    bottom: '16px',
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 100"
-                    preserveAspectRatio="none"
-                    className="h-full w-full text-gray-300/95"
-                    aria-hidden="true"
-                  >
-                    <path
-                      d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </div>
-              </div>
+              <ConversationEmptyState uiLocale={uiLocale} />
             )}
           </div>
 

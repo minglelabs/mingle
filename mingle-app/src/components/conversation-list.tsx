@@ -566,10 +566,6 @@ function readLegacySingleRoomSnapshot(): LegacySingleRoomSnapshot | null {
     } catch {
       translationLanguagesLinked = true;
     }
-    if (translationLanguagesLinked) {
-      selectedLanguages = [...speechLanguages];
-    }
-
     const hasUtterances = typeof utterancesRaw === "string" && utterancesRaw.trim().length > 0;
     const hasUsage = typeof usageRaw === "string" && usageRaw.trim().length > 0 && usageRaw.trim() !== "0";
     const hasSessionKey = sessionKey.length > 0;
@@ -972,8 +968,7 @@ function mapConversationSummaryToItem(
     selectedLanguages,
   );
   const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
-  const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
-  const languageCodes = effectiveSelectedLanguages;
+  const languageCodes = selectedLanguages;
   const avatar = getSpeakerAvatar(
     latestSpeaker || conversation.sessionKey,
     latestSpeakerAvatarSeed || conversation.id,
@@ -999,7 +994,7 @@ function mapConversationSummaryToItem(
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     pausedAt: conversation.pausedAt,
-    selectedLanguages: effectiveSelectedLanguages,
+    selectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
     languageCodes,
@@ -2493,12 +2488,6 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
-    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
@@ -2571,12 +2560,6 @@ export default function ConversationList({
       previousConversation.speechLanguages,
       previousConversation.selectedLanguages,
     );
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
-    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
@@ -2585,9 +2568,6 @@ export default function ConversationList({
         ? {
             ...conversation,
             speechLanguages: [...normalizedSpeechLanguages],
-            ...(previousTranslationLanguagesLinked
-              ? { selectedLanguages: [...normalizedSpeechLanguages] }
-              : {}),
           }
         : conversation
     )));
@@ -2621,9 +2601,6 @@ export default function ConversationList({
             ? {
                 ...conversation,
                 speechLanguages: [...previousSpeechLanguages],
-                ...(previousTranslationLanguagesLinked
-                  ? { selectedLanguages: [...previousSelectedLanguages] }
-                  : {}),
               }
             : conversation
         )));
@@ -2641,19 +2618,7 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
     const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-    const speechLanguages = sanitizeSttLanguageSelection(
-      previousConversation.speechLanguages,
-      previousSelectedLanguages,
-    );
-    const nextSelectedLanguages =
-      nextTranslationLanguagesLinked || previousTranslationLanguagesLinked
-        ? speechLanguages
-        : previousSelectedLanguages;
 
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
@@ -2662,7 +2627,6 @@ export default function ConversationList({
       conversation.id === conversationId
         ? {
             ...conversation,
-            selectedLanguages: [...nextSelectedLanguages],
             translationLanguagesLinked: nextTranslationLanguagesLinked,
           }
         : conversation
@@ -2696,7 +2660,6 @@ export default function ConversationList({
           conversation.id === conversationId
             ? {
                 ...conversation,
-                selectedLanguages: [...previousSelectedLanguages],
                 translationLanguagesLinked: previousTranslationLanguagesLinked,
               }
             : conversation
@@ -2704,7 +2667,7 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
-  }, [defaultSelectedLanguages]);
+  }, []);
 
   const handleConversationDefaultDisplayLanguageChange = useCallback((
     conversationId: string,
