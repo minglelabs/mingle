@@ -837,3 +837,16 @@
   - Remove the current installation token during logout so a previous account does not continue receiving notifications on a shared device.
 - Data contract: Added the authenticated `/push-tokens` endpoint and the `app_user_push_tokens` table. The iOS and Android v2.0.0 API wrappers use the same version namespace as the native builds.
 - Testing notes: On a real iPhone and Android device, verify the permission prompt appears after authentication, a follow produces an OS notification while Mingle is backgrounded, the existing in-app notification remains available, and logout removes delivery for the previous account.
+
+## 2026-08-17 - Derive conversation display language from room settings
+
+- Surface: Conversation management → default display language picker and the language used to initialize message bubbles.
+- Issue: The picker exposed an `Automatic` option that could resolve against languages present in existing message translations. A room that originally had only Korean messages could therefore show only Korean even after English was added to the room's selected languages.
+- User impact: Users could not choose every language configured for the room, and the displayed default language could change based on historical transcript data rather than the room configuration.
+- Resolution:
+  - Removed the `Automatic` picker option and its localized copy.
+  - Build picker candidates from the room-selected language settings, preserving the configured order and retaining newly added languages even when older messages do not contain those translations.
+  - Preserve an explicitly saved valid room default. For legacy or invalid values, resolve the concrete default by the first matching profile primary language, then the first room-selected language; message rendering still falls back to the utterance language when that message has no translation for the room default.
+  - Keep the stored nullable field for backward compatibility; no database or API contract changes are required.
+- Data contract: None. Existing conversation language and default-display-language fields remain compatible.
+- Testing notes: Not run in this task by request. Verify a Korean+English room exposes both choices after Korean-only messages, profile primary-language order selects the first matching room language, and an unavailable message translation falls back to the utterance language.

@@ -31,8 +31,6 @@ export type LivePhoneDemoRoomManagementCopy = {
   renameErrorToastLabel: string
   defaultDisplayLanguageMenuItemLabel: string
   defaultDisplayLanguagePageTitle: string
-  defaultDisplayLanguageAutoLabel: string
-  defaultDisplayLanguageAutoDescription: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
@@ -62,8 +60,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '대화방 이름 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.',
     defaultDisplayLanguageMenuItemLabel: '디폴트 표시 언어',
     defaultDisplayLanguagePageTitle: '디폴트 표시 언어',
-    defaultDisplayLanguageAutoLabel: '자동',
-    defaultDisplayLanguageAutoDescription: '주 사용 언어와 원문을 기준으로 표시합니다.',
   },
   en: {
     menuItemLabel: 'Conversation management',
@@ -91,8 +87,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Failed to update the conversation name. Please try again.',
     defaultDisplayLanguageMenuItemLabel: 'Default display language',
     defaultDisplayLanguagePageTitle: 'Default display language',
-    defaultDisplayLanguageAutoLabel: 'Automatic',
-    defaultDisplayLanguageAutoDescription: 'Uses your primary language and the message source.',
   },
   ja: {
     menuItemLabel: '会話ルーム管理',
@@ -120,8 +114,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '会話名を変更できませんでした。しばらくしてからもう一度お試しください。',
     defaultDisplayLanguageMenuItemLabel: 'デフォルト表示言語',
     defaultDisplayLanguagePageTitle: 'デフォルト表示言語',
-    defaultDisplayLanguageAutoLabel: '自動',
-    defaultDisplayLanguageAutoDescription: '主な使用言語と原文を基準に表示します。',
   },
   'zh-CN': {
     menuItemLabel: '会话房间管理',
@@ -149,8 +141,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '更新会话名称失败。请稍后再试。',
     defaultDisplayLanguageMenuItemLabel: '默认显示语言',
     defaultDisplayLanguagePageTitle: '默认显示语言',
-    defaultDisplayLanguageAutoLabel: '自动',
-    defaultDisplayLanguageAutoDescription: '根据主要语言和原文显示。',
   },
   'zh-TW': {
     menuItemLabel: '對話房間管理',
@@ -178,8 +168,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '更新對話名稱失敗。請稍後再試。',
     defaultDisplayLanguageMenuItemLabel: '預設顯示語言',
     defaultDisplayLanguagePageTitle: '預設顯示語言',
-    defaultDisplayLanguageAutoLabel: '自動',
-    defaultDisplayLanguageAutoDescription: '依照主要語言與原文顯示。',
   },
   fr: {
     menuItemLabel: 'Gestion de la conversation',
@@ -207,8 +195,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: "Impossible de modifier le nom de la conversation. Veuillez reessayer.",
     defaultDisplayLanguageMenuItemLabel: 'Langue d’affichage par défaut',
     defaultDisplayLanguagePageTitle: 'Langue d’affichage par défaut',
-    defaultDisplayLanguageAutoLabel: 'Automatique',
-    defaultDisplayLanguageAutoDescription: 'Utilise votre langue principale et la langue source.',
   },
   de: {
     menuItemLabel: 'Verwaltung des Gesprächs',
@@ -236,8 +222,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Der Gesprachsname konnte nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
     defaultDisplayLanguageMenuItemLabel: 'Standard-Anzeigesprache',
     defaultDisplayLanguagePageTitle: 'Standard-Anzeigesprache',
-    defaultDisplayLanguageAutoLabel: 'Automatisch',
-    defaultDisplayLanguageAutoDescription: 'Verwendet Ihre Hauptsprache und die Quellsprache.',
   },
   es: {
     menuItemLabel: 'Gestion de la conversacion',
@@ -265,8 +249,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'No se pudo actualizar el nombre de la conversacion. Intentalo de nuevo.',
     defaultDisplayLanguageMenuItemLabel: 'Idioma de visualización predeterminado',
     defaultDisplayLanguagePageTitle: 'Idioma de visualización predeterminado',
-    defaultDisplayLanguageAutoLabel: 'Automático',
-    defaultDisplayLanguageAutoDescription: 'Usa tu idioma principal y el idioma original.',
   },
   pt: {
     menuItemLabel: 'Gerenciamento da conversa',
@@ -294,8 +276,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Nao foi possivel atualizar o nome da conversa. Tente novamente.',
     defaultDisplayLanguageMenuItemLabel: 'Idioma de exibição padrão',
     defaultDisplayLanguagePageTitle: 'Idioma de exibição padrão',
-    defaultDisplayLanguageAutoLabel: 'Automático',
-    defaultDisplayLanguageAutoDescription: 'Usa seu idioma principal e o idioma original.',
   },
   it: {
     menuItemLabel: 'Gestione della conversazione',
@@ -323,8 +303,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Impossibile aggiornare il nome della conversazione. Riprova.',
     defaultDisplayLanguageMenuItemLabel: 'Lingua di visualizzazione predefinita',
     defaultDisplayLanguagePageTitle: 'Lingua di visualizzazione predefinita',
-    defaultDisplayLanguageAutoLabel: 'Automatico',
-    defaultDisplayLanguageAutoDescription: 'Usa la lingua principale e la lingua originale.',
   },
   ru: {
     menuItemLabel: 'Управление разговором',
@@ -352,8 +330,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Не удалось обновить название разговора. Повторите попытку позже.',
     defaultDisplayLanguageMenuItemLabel: 'Язык отображения по умолчанию',
     defaultDisplayLanguagePageTitle: 'Язык отображения по умолчанию',
-    defaultDisplayLanguageAutoLabel: 'Автоматически',
-    defaultDisplayLanguageAutoDescription: 'Использует основной язык и исходный язык сообщения.',
   },
   ar: {
     menuItemLabel: 'إدارة المحادثة',
@@ -381,8 +357,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'تعذر تحديث اسم المحادثة. يرجى المحاولة مرة أخرى لاحقًا.',
     defaultDisplayLanguageMenuItemLabel: 'لغة العرض الافتراضية',
     defaultDisplayLanguagePageTitle: 'لغة العرض الافتراضية',
-    defaultDisplayLanguageAutoLabel: 'تلقائي',
-    defaultDisplayLanguageAutoDescription: 'يستخدم لغتك الأساسية ولغة الرسالة الأصلية.',
   },
   hi: {
     menuItemLabel: 'बातचीत प्रबंधन',
@@ -410,8 +384,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'बातचीत का नाम अपडेट नहीं हो सका। कृपया फिर से प्रयास करें।',
     defaultDisplayLanguageMenuItemLabel: 'डिफ़ॉल्ट प्रदर्शन भाषा',
     defaultDisplayLanguagePageTitle: 'डिफ़ॉल्ट प्रदर्शन भाषा',
-    defaultDisplayLanguageAutoLabel: 'स्वचालित',
-    defaultDisplayLanguageAutoDescription: 'आपकी मुख्य भाषा और मूल संदेश के आधार पर।',
   },
   th: {
     menuItemLabel: 'จัดการห้องสนทนา',
@@ -439,8 +411,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'ไม่สามารถอัปเดตชื่อห้องสนทนาได้ โปรดลองอีกครั้ง',
     defaultDisplayLanguageMenuItemLabel: 'ภาษาที่แสดงเริ่มต้น',
     defaultDisplayLanguagePageTitle: 'ภาษาที่แสดงเริ่มต้น',
-    defaultDisplayLanguageAutoLabel: 'อัตโนมัติ',
-    defaultDisplayLanguageAutoDescription: 'ใช้ภาษาหลักและภาษาต้นฉบับของข้อความ',
   },
   vi: {
     menuItemLabel: 'Quan ly cuoc tro chuyen',
@@ -468,8 +438,6 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Khong the cap nhat ten cuoc tro chuyen. Vui long thu lai.',
     defaultDisplayLanguageMenuItemLabel: 'Ngôn ngữ hiển thị mặc định',
     defaultDisplayLanguagePageTitle: 'Ngôn ngữ hiển thị mặc định',
-    defaultDisplayLanguageAutoLabel: 'Tự động',
-    defaultDisplayLanguageAutoDescription: 'Dùng ngôn ngữ chính và ngôn ngữ gốc của tin nhắn.',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoRoomManagementCopy>
 
