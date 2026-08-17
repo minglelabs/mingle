@@ -887,3 +887,16 @@
   - Keep the stored nullable field for backward compatibility; no database or API contract changes are required.
 - Data contract: None. Existing conversation language and default-display-language fields remain compatible.
 - Testing notes: Not run in this task by request. Verify a Korean+English room exposes both choices after Korean-only messages, profile primary-language order selects the first matching room language, and an unavailable message translation falls back to the utterance language.
+
+## 2026-08-17 - Seed profile languages from first-launch language choice
+
+- Surface: The first-launch language onboarding flow and the first authenticated profile hydration after signup.
+- Issue: The onboarding choice was saved locally and could seed `defaultConversationLanguages`, but it did not populate the new user's `primaryLanguages`. This left the profile language priority empty even though the user had already made an explicit language choice.
+- User impact: A newly signed-up user could see the selected language used for conversation defaults while profile-based language priority and later display-language resolution still had no first preference.
+- Resolution:
+  - Keep the app UI language as a local-storage preference and queue the onboarding choice locally until authentication is available.
+  - After signup or the first authenticated session, use the selected onboarding language as the first `primaryLanguages` value when that profile field is empty.
+  - Use the selected language as the first `defaultConversationLanguages` value, followed by the existing default candidates, when that profile field is empty.
+  - Preserve any non-empty server values so reopening onboarding on an existing account cannot overwrite explicit profile settings.
+- Data contract: No schema or migration changes. The existing `primary_languages` and `default_conversation_languages` fields are updated through the existing `/profile` endpoint; the app UI locale remains local-only.
+- Testing notes: Not run in this task by request. Verify a new signup stores the selected language first in both profile arrays, existing non-empty arrays remain unchanged, and a legacy pending onboarding marker still claims the selected language correctly.

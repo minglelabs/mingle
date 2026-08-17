@@ -34,6 +34,7 @@ import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+  LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
@@ -413,11 +414,72 @@ function readPendingDefaultConversationLanguages(): string[] {
   }
 }
 
-function clearPendingDefaultConversationLanguages(): void {
+function readPendingPrimaryLanguages(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_PENDING_PRIMARY_LANGUAGES);
+    if (!rawValue) return [];
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue));
+  } catch {
+    return [];
+  }
+}
+
+type ProfileLanguagePreferencesPayload = {
+  primaryLanguages?: unknown;
+  defaultConversationLanguages?: unknown;
+};
+
+type ResolvedOnboardingLanguagePreferences = {
+  primaryLanguages: string[];
+  defaultConversationLanguages: string[];
+  patch: {
+    primaryLanguages?: string[];
+    defaultConversationLanguages?: string[];
+  };
+};
+
+function resolveOnboardingLanguagePreferences(
+  profile: ProfileLanguagePreferencesPayload,
+  pendingPrimaryLanguages: readonly string[],
+  pendingDefaultConversationLanguages: readonly string[],
+): ResolvedOnboardingLanguagePreferences {
+  const serverPrimaryLanguages = sanitizeSttLanguageSelection(profile.primaryLanguages);
+  const serverDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    profile.defaultConversationLanguages,
+  );
+  const fallbackPrimaryLanguages = sanitizeSttLanguageSelection(pendingPrimaryLanguages);
+  const fallbackDefaultConversationLanguages = sanitizeSttLanguageSelection(
+    pendingDefaultConversationLanguages,
+  );
+  const primaryLanguages = serverPrimaryLanguages.length > 0
+    ? serverPrimaryLanguages
+    : fallbackPrimaryLanguages;
+  const defaultConversationLanguages = serverDefaultConversationLanguages.length > 0
+    ? serverDefaultConversationLanguages
+    : fallbackDefaultConversationLanguages;
+
+  return {
+    primaryLanguages,
+    defaultConversationLanguages,
+    patch: {
+      ...(serverPrimaryLanguages.length === 0 && primaryLanguages.length > 0
+        ? { primaryLanguages }
+        : {}),
+      ...(serverDefaultConversationLanguages.length === 0 && defaultConversationLanguages.length > 0
+        ? { defaultConversationLanguages }
+        : {}),
+    },
+  };
+}
+
+function clearPendingLanguagePreferences(): void {
   if (typeof window === "undefined") return;
 
   try {
     window.localStorage.removeItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES);
+    window.localStorage.removeItem(LS_KEY_PENDING_PRIMARY_LANGUAGES);
   } catch {
     // Keep the marker when storage is temporarily unavailable so the next authenticated launch retries.
   }
@@ -1837,56 +1899,62 @@ export default function ConversationList({
 
     const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
     if (pendingDefaultLanguages.length === 0) return;
+    const pendingPrimaryLanguages = readPendingPrimaryLanguages();
+    const onboardingPrimaryLanguages = pendingPrimaryLanguages.length > 0
+      ? pendingPrimaryLanguages
+      : pendingDefaultLanguages.slice(0, 1);
 
     let cancelled = false;
 
-    const syncPendingDefaultLanguages = async () => {
+    const syncPendingLanguagePreferences = async () => {
       try {
         const profileResponse = await fetch(buildClientApiPath("/profile"), {
           cache: "no-store",
         });
         if (!profileResponse.ok) return;
 
-        const profile = await profileResponse.json() as {
-          defaultConversationLanguages?: unknown;
-        };
+        const profile = await profileResponse.json() as ProfileLanguagePreferencesPayload;
         if (cancelled) return;
 
-        const serverDefaultLanguages = sanitizeSttLanguageSelection(
-          profile.defaultConversationLanguages,
+        const resolvedPreferences = resolveOnboardingLanguagePreferences(
+          profile,
+          onboardingPrimaryLanguages,
+          pendingDefaultLanguages,
         );
-        if (serverDefaultLanguages.length > 0) {
+
+        if (Object.keys(resolvedPreferences.patch).length === 0) {
           defaultConversationLanguagesSyncVersionRef.current += 1;
-          setDefaultSelectedLanguages(serverDefaultLanguages);
-          clearPendingDefaultConversationLanguages();
+          setPreferredDisplayLanguages(resolvedPreferences.primaryLanguages);
+          setDefaultSelectedLanguages(resolvedPreferences.defaultConversationLanguages);
+          clearPendingLanguagePreferences();
           return;
         }
 
         const saveResponse = await fetch(buildClientApiPath("/profile"), {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ defaultConversationLanguages: pendingDefaultLanguages }),
+          body: JSON.stringify(resolvedPreferences.patch),
         });
         if (!saveResponse.ok || cancelled) return;
 
-        const savedProfile = await saveResponse.json() as {
-          defaultConversationLanguages?: unknown;
-        };
+        const savedProfile = await saveResponse.json() as ProfileLanguagePreferencesPayload;
         if (cancelled) return;
 
-        const savedDefaultLanguages = sanitizeSttLanguageSelection(
-          savedProfile.defaultConversationLanguages,
-          pendingDefaultLanguages,
+        const savedPreferences = resolveOnboardingLanguagePreferences(
+          savedProfile,
+          resolvedPreferences.primaryLanguages,
+          resolvedPreferences.defaultConversationLanguages,
         );
         defaultConversationLanguagesSyncVersionRef.current += 1;
-        setDefaultSelectedLanguages(savedDefaultLanguages);
-        clearPendingDefaultConversationLanguages();
+        setPreferredDisplayLanguages(savedPreferences.primaryLanguages);
+        setDefaultSelectedLanguages(savedPreferences.defaultConversationLanguages);
+        clearPendingLanguagePreferences();
       } catch {
         // Keep the pending marker so a later authenticated launch can retry the claim.
       }
     };
 
-    void syncPendingDefaultLanguages();
+    void syncPendingLanguagePreferences();
 
     return () => {
       cancelled = true;
@@ -4148,6 +4216,10 @@ export default function ConversationList({
     // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
     // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
     const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
+    const normalizedPrimaryLanguages = sanitizeSttLanguageSelection(
+      [languageCode],
+      normalizedTargets.slice(0, 1),
+    );
 
     try {
       window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
@@ -4156,26 +4228,48 @@ export default function ConversationList({
         LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
         JSON.stringify(normalizedTargets),
       );
+      window.localStorage.setItem(
+        LS_KEY_PENDING_PRIMARY_LANGUAGES,
+        JSON.stringify(normalizedPrimaryLanguages),
+      );
     } catch {
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
     }
 
+    let savedPrimaryLanguages = normalizedPrimaryLanguages;
     let savedDefaultLanguages = normalizedTargets;
     if (sessionStatus === "authenticated") {
       try {
-        const response = await fetch(buildClientApiPath("/profile"), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ defaultConversationLanguages: normalizedTargets }),
+        const profileResponse = await fetch(buildClientApiPath("/profile"), {
+          cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!profileResponse.ok) return;
 
-        const saved = await response.json() as { defaultConversationLanguages?: unknown };
-        savedDefaultLanguages = sanitizeSttLanguageSelection(
-          saved.defaultConversationLanguages,
+        const profile = await profileResponse.json() as ProfileLanguagePreferencesPayload;
+        let resolvedPreferences = resolveOnboardingLanguagePreferences(
+          profile,
+          normalizedPrimaryLanguages,
           normalizedTargets,
         );
-        clearPendingDefaultConversationLanguages();
+        if (Object.keys(resolvedPreferences.patch).length > 0) {
+          const saveResponse = await fetch(buildClientApiPath("/profile"), {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(resolvedPreferences.patch),
+          });
+          if (!saveResponse.ok) return;
+
+          const savedProfile = await saveResponse.json() as ProfileLanguagePreferencesPayload;
+          resolvedPreferences = resolveOnboardingLanguagePreferences(
+            savedProfile,
+            resolvedPreferences.primaryLanguages,
+            resolvedPreferences.defaultConversationLanguages,
+          );
+        }
+
+        savedPrimaryLanguages = resolvedPreferences.primaryLanguages;
+        savedDefaultLanguages = resolvedPreferences.defaultConversationLanguages;
+        clearPendingLanguagePreferences();
       } catch {
         return;
       }
@@ -4188,6 +4282,7 @@ export default function ConversationList({
     }
 
     defaultConversationLanguagesSyncVersionRef.current += 1;
+    setPreferredDisplayLanguages(savedPrimaryLanguages);
     setDefaultSelectedLanguages(savedDefaultLanguages);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT, {
