@@ -28,6 +28,34 @@ function summarizeCallbackUrl(rawValue: string): string {
   }
 }
 
+function summarizeNextAuthCookieNames(cookieNames: string[]): string {
+  const nextAuthCookieNames = [...new Set(
+    cookieNames.filter((cookieName) => cookieName.includes("next-auth.")),
+  )].sort();
+  return nextAuthCookieNames.join(",") || "-";
+}
+
+function summarizeResponseSetCookieNames(response: Response): string {
+  const headers = response.headers as Headers & {
+    getSetCookie?: () => string[];
+  };
+  const setCookieHeaders = typeof headers.getSetCookie === "function"
+    ? headers.getSetCookie()
+    : [];
+
+  if (setCookieHeaders.length > 0) {
+    return summarizeNextAuthCookieNames(
+      setCookieHeaders.map((setCookieHeader) => setCookieHeader.split("=", 1)[0].trim()),
+    );
+  }
+
+  const combinedSetCookieHeader = response.headers.get("set-cookie") || "";
+  const cookieNames = [...combinedSetCookieHeader.matchAll(
+    /(?:^|,\s*)((?:__Host-|__Secure-)?next-auth\.[^=;,\s]+)=/g,
+  )].map((match) => match[1] || "");
+  return summarizeNextAuthCookieNames(cookieNames);
+}
+
 function resolveAction(nextauth: string[] | undefined): string {
   const action = nextauth?.[0];
   if (typeof action !== "string") return "";
@@ -95,9 +123,22 @@ function summarizeOAuthCookieState(request: NextRequest, action: string): string
     : "";
 
   return ` origin=${request.nextUrl.origin}`
+    + ` host=${summarizeText(request.headers.get("host") || "-", 120) || "-"}`
+    + ` xForwardedHost=${summarizeText(request.headers.get("x-forwarded-host") || "-", 120) || "-"}`
+    + ` xForwardedProto=${summarizeText(request.headers.get("x-forwarded-proto") || "-", 32) || "-"}`
+    + ` requestCookieNames=${summarizeNextAuthCookieNames(request.cookies.getAll().map(({ name }) => name))}`
     + ` stateCookie=${request.cookies.has(`${cookiePrefix}next-auth.state`) ? "1" : "0"}`
     + ` pkceCookie=${request.cookies.has(`${cookiePrefix}next-auth.pkce.code_verifier`) ? "1" : "0"}`
     + ` nonceCookie=${request.cookies.has(`${cookiePrefix}next-auth.nonce`) ? "1" : "0"}`;
+}
+
+function logNextAuthResponse(response: Response, method: string, action: string, provider: string): void {
+  if (action !== "signin") return;
+  console.info(
+    `[nextauth] response method=${method} action=${action} provider=${provider}`
+      + ` status=${response.status}`
+      + ` setCookieNames=${summarizeResponseSetCookieNames(response)}`,
+  );
 }
 
 export async function GET(request: NextRequest, context: AppRouteContext) {
@@ -110,7 +151,13 @@ export async function GET(request: NextRequest, context: AppRouteContext) {
   console.info(
     `[nextauth] method=GET action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}${summarizeOAuthCookieState(request, action)}`,
   );
-  return NextAuth(request, { params }, resolveRouteAuthOptions(authOptions, params?.nextauth));
+  const response = await NextAuth(
+    request,
+    { params },
+    resolveRouteAuthOptions(authOptions, params?.nextauth),
+  );
+  logNextAuthResponse(response, "GET", action, provider);
+  return response;
 }
 
 export async function POST(request: NextRequest, context: AppRouteContext) {
@@ -123,5 +170,11 @@ export async function POST(request: NextRequest, context: AppRouteContext) {
   console.info(
     `[nextauth] method=POST action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}${summarizeOAuthCookieState(request, action)}`,
   );
-  return NextAuth(request, { params }, resolveRouteAuthOptions(authOptions, params?.nextauth));
+  const response = await NextAuth(
+    request,
+    { params },
+    resolveRouteAuthOptions(authOptions, params?.nextauth),
+  );
+  logNextAuthResponse(response, "POST", action, provider);
+  return response;
 }
