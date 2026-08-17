@@ -160,7 +160,7 @@ export default function LanguageOnboardingModal({
             <div className="space-y-1.5 text-center">
               <p
                 id={titleId}
-                className="text-[1.85rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+                className="text-[1.3rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
               >
                 {copy.title}
               </p>
