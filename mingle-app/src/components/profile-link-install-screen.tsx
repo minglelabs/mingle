@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowUpRight,
   Play,
   Smartphone,
 } from "lucide-react";
@@ -11,16 +10,28 @@ import {
   isValidProfileLinkUserId,
   PROFILE_APP_SCHEME,
 } from "@/lib/profile-link";
+import { buildProfileImageTransform } from "@/lib/profile-image-crop";
+import { formatHandle } from "@/lib/handles";
 import {
   getProfileLinkInstallCopy,
   type ProfileLinkInstallLocale,
 } from "@/components/profile-link-install-copy";
+
+export type ProfileLinkInstallProfile = {
+  name: string | null;
+  handle: string | null;
+  image: string | null;
+  imageCropScale: number | null;
+  imageCropX: number | null;
+  imageCropY: number | null;
+};
 
 type ProfileLinkInstallScreenProps = {
   userId: string;
   iosAppStoreUrl: string;
   androidPlayStoreUrl: string;
   locale: ProfileLinkInstallLocale;
+  profile: ProfileLinkInstallProfile | null;
 };
 
 function AppleLogo() {
@@ -41,6 +52,7 @@ export default function ProfileLinkInstallScreen({
   iosAppStoreUrl,
   androidPlayStoreUrl,
   locale,
+  profile,
 }: ProfileLinkInstallScreenProps) {
   const copy = getProfileLinkInstallCopy(locale);
   const isValid = isValidProfileLinkUserId(userId);
@@ -54,6 +66,8 @@ export default function ProfileLinkInstallScreen({
     [],
   );
   const launchNonceRef = useRef(0);
+  const profileName = profile?.name?.trim() || (locale === "ko" ? "밍글 사용자" : "Mingle user");
+  const profileHandle = formatHandle(profile?.handle);
 
   const handleOpenInApp = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!appUrl) {
@@ -96,17 +110,51 @@ export default function ProfileLinkInstallScreen({
   return (
     <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(145deg,#1295e8_0%,#3569ed_52%,#7338f2_100%)] px-5 py-10 text-slate-950">
       <section className="w-full max-w-md rounded-[2rem] bg-white/95 p-7 shadow-[0_24px_70px_rgba(22,50,140,0.28)] backdrop-blur">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#f3c35a] text-3xl font-black text-slate-950 shadow-sm">
-          M
-        </div>
+        {profile ? (
+          <div className="mx-auto flex max-w-[18rem] items-center justify-center gap-3.5">
+            <div className="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm">
+              {profile.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.image}
+                  alt={profileName}
+                  width={72}
+                  height={72}
+                  className="h-full w-full object-cover"
+                  style={{
+                    transform: buildProfileImageTransform(72, {
+                      scale: profile.imageCropScale,
+                      x: profile.imageCropX,
+                      y: profile.imageCropY,
+                    }),
+                  }}
+                />
+              ) : (
+                <span className="text-2xl font-bold text-slate-400" aria-hidden="true">M</span>
+              )}
+            </div>
+            <div className="min-w-0 text-left">
+              <p className="truncate text-lg font-bold tracking-tight text-slate-950">{profileName}</p>
+              {profileHandle ? (
+                <p className="mt-0.5 truncate text-sm font-medium text-slate-500">{profileHandle}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#F3C35A] shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/mingle-icon.png" alt="" className="h-full w-full rounded-[1.4rem]" aria-hidden="true" />
+          </div>
+        )}
         <h1 className="mt-6 text-center text-2xl font-bold tracking-tight">{copy.title}</h1>
 
         <a
           href={appUrl ?? "#"}
           onClick={handleOpenInApp}
-          className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-4 text-base font-semibold text-white transition active:scale-[0.99]"
+          className="mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#F3C35A] px-5 py-4 text-base font-semibold text-[#2D2A1E] shadow-[0_10px_24px_rgba(243,195,90,0.28)] transition hover:bg-[#EAB54A] active:scale-[0.99]"
         >
-          <ArrowUpRight className="h-5 w-5" aria-hidden="true" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mingle-icon.png" alt="" className="h-5 w-5 rounded-[5px]" aria-hidden="true" />
           {copy.openInApp}
         </a>
 

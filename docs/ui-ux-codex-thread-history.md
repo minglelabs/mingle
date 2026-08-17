@@ -946,3 +946,15 @@
   - Use the existing profile endpoint with a session fallback, so the row remains useful when the profile request is temporarily unavailable.
 - Data contract: None. No schema or migration changes are required; the existing profile endpoint supplies the record.
 - Testing notes: Verify the hamburger menu opens the participant page, the current user is listed once, and the back button returns to the menu.
+
+## 2026-08-17 - Personalize the shared profile install screen
+
+- Surface: The browser page opened from a shared Mingle profile link.
+- Issue: The page showed a generic Mingle mark above the profile-opening title, and the primary app-opening action used a generic arrow icon and dark button styling.
+- User impact: The recipient could not immediately identify whose profile the link represented, and the main action did not visually match Mingle's brand.
+- Resolution:
+  - Load the linked profile preview on the server and show its photo, display name, and handle in an Instagram-style header above the title.
+  - Replace the generic action icon with the Mingle icon and use the Mingle key color `#F3C35A` for the app-opening button.
+  - Keep a Mingle icon fallback when the linked profile preview is unavailable, so the install action remains usable.
+- Data contract: No schema or API changes. The existing profile data is read server-side for the public shared-link preview.
+- Testing notes: Verify a shared link shows the correct profile photo, name, and handle, the button uses the Mingle icon and key color, and a missing preview still leaves the app-opening action available.
