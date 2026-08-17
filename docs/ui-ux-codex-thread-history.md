@@ -933,3 +933,16 @@
 - The native iOS/Android shell now sends the profile target into the existing WebView as an event instead of replacing the WebView URL with a standalone profile route.
 - The root client layout listens for that event and renders the existing public profile surface as a right-to-left overlay, preserving the underlying page and supporting the existing back gesture/history behavior.
 - The overlay hides the native ad banner while open and restores the current page's banner zone after closing.
+
+## 2026-08-17 - Add a conversation participant list
+
+- Surface: The hamburger menu in a conversation room.
+- Issue: The room had no participant list entry, even though the room experience is beginning to expose participant-oriented actions.
+- User impact: Users had no dedicated place to confirm who is currently in the room.
+- Resolution:
+  - Add a `Participants` menu item alongside the existing conversation-management and feedback entries.
+  - Open a dedicated full-screen menu page with the same slide transition and history-backed back navigation as the other menu pages.
+  - Show the authenticated user's profile as the single participant record for the current one-person room, including avatar, display name, handle, language flag, and a self label.
+  - Use the existing profile endpoint with a session fallback, so the row remains useful when the profile request is temporarily unavailable.
+- Data contract: None. No schema or migration changes are required; the existing profile endpoint supplies the record.
+- Testing notes: Verify the hamburger menu opens the participant page, the current user is listed once, and the back button returns to the menu.

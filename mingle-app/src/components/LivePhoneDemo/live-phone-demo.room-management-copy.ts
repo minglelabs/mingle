@@ -28,6 +28,12 @@ export type LivePhoneDemoRoomManagementCopy = {
   renameErrorToastLabel: string
   defaultDisplayLanguageMenuItemLabel: string
   defaultDisplayLanguagePageTitle: string
+  participantsMenuItemLabel?: string
+  participantsPageTitle?: string
+  participantsSelfLabel?: string
+  participantsLoadingLabel?: string
+  participantsErrorLabel?: string
+  participantsRetryLabel?: string
 }
 
 const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
@@ -54,6 +60,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '대화방 이름 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.',
     defaultDisplayLanguageMenuItemLabel: '디폴트 표시 언어',
     defaultDisplayLanguagePageTitle: '디폴트 표시 언어',
+    participantsMenuItemLabel: '참여자',
+    participantsPageTitle: '참여자',
+    participantsSelfLabel: '나',
+    participantsLoadingLabel: '불러오는 중...',
+    participantsErrorLabel: '참여자 정보를 불러오지 못했습니다.',
+    participantsRetryLabel: '다시 시도',
   },
   en: {
     menuItemLabel: 'Conversation management',
@@ -78,6 +90,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Failed to update the conversation name. Please try again.',
     defaultDisplayLanguageMenuItemLabel: 'Default display language',
     defaultDisplayLanguagePageTitle: 'Default display language',
+    participantsMenuItemLabel: 'Participants',
+    participantsPageTitle: 'Participants',
+    participantsSelfLabel: 'You',
+    participantsLoadingLabel: 'Loading...',
+    participantsErrorLabel: 'Could not load participants.',
+    participantsRetryLabel: 'Try again',
   },
   ja: {
     menuItemLabel: '会話ルーム管理',
@@ -102,6 +120,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '会話名を変更できませんでした。しばらくしてからもう一度お試しください。',
     defaultDisplayLanguageMenuItemLabel: 'デフォルト表示言語',
     defaultDisplayLanguagePageTitle: 'デフォルト表示言語',
+    participantsMenuItemLabel: '参加者',
+    participantsPageTitle: '参加者',
+    participantsSelfLabel: '自分',
+    participantsLoadingLabel: '読み込み中...',
+    participantsErrorLabel: '参加者情報を読み込めませんでした。',
+    participantsRetryLabel: '再試行',
   },
   'zh-CN': {
     menuItemLabel: '会话房间管理',
@@ -126,6 +150,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '更新会话名称失败。请稍后再试。',
     defaultDisplayLanguageMenuItemLabel: '默认显示语言',
     defaultDisplayLanguagePageTitle: '默认显示语言',
+    participantsMenuItemLabel: '参与者',
+    participantsPageTitle: '参与者',
+    participantsSelfLabel: '你',
+    participantsLoadingLabel: '加载中...',
+    participantsErrorLabel: '无法加载参与者信息。',
+    participantsRetryLabel: '重试',
   },
   'zh-TW': {
     menuItemLabel: '對話房間管理',
@@ -150,6 +180,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: '更新對話名稱失敗。請稍後再試。',
     defaultDisplayLanguageMenuItemLabel: '預設顯示語言',
     defaultDisplayLanguagePageTitle: '預設顯示語言',
+    participantsMenuItemLabel: '參與者',
+    participantsPageTitle: '參與者',
+    participantsSelfLabel: '你',
+    participantsLoadingLabel: '載入中...',
+    participantsErrorLabel: '無法載入參與者資訊。',
+    participantsRetryLabel: '重試',
   },
   fr: {
     menuItemLabel: 'Gestion de la conversation',
@@ -174,6 +210,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: "Impossible de modifier le nom de la conversation. Veuillez reessayer.",
     defaultDisplayLanguageMenuItemLabel: 'Langue d’affichage par défaut',
     defaultDisplayLanguagePageTitle: 'Langue d’affichage par défaut',
+    participantsMenuItemLabel: 'Participants',
+    participantsPageTitle: 'Participants',
+    participantsSelfLabel: 'Vous',
+    participantsLoadingLabel: 'Chargement...',
+    participantsErrorLabel: 'Impossible de charger les participants.',
+    participantsRetryLabel: 'Réessayer',
   },
   de: {
     menuItemLabel: 'Verwaltung des Gesprächs',
@@ -198,6 +240,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Der Gesprachsname konnte nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
     defaultDisplayLanguageMenuItemLabel: 'Standard-Anzeigesprache',
     defaultDisplayLanguagePageTitle: 'Standard-Anzeigesprache',
+    participantsMenuItemLabel: 'Teilnehmer',
+    participantsPageTitle: 'Teilnehmer',
+    participantsSelfLabel: 'Du',
+    participantsLoadingLabel: 'Wird geladen...',
+    participantsErrorLabel: 'Teilnehmer konnten nicht geladen werden.',
+    participantsRetryLabel: 'Erneut versuchen',
   },
   es: {
     menuItemLabel: 'Gestion de la conversacion',
@@ -222,6 +270,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'No se pudo actualizar el nombre de la conversacion. Intentalo de nuevo.',
     defaultDisplayLanguageMenuItemLabel: 'Idioma de visualización predeterminado',
     defaultDisplayLanguagePageTitle: 'Idioma de visualización predeterminado',
+    participantsMenuItemLabel: 'Participantes',
+    participantsPageTitle: 'Participantes',
+    participantsSelfLabel: 'Tú',
+    participantsLoadingLabel: 'Cargando...',
+    participantsErrorLabel: 'No se pudieron cargar los participantes.',
+    participantsRetryLabel: 'Intentar de nuevo',
   },
   pt: {
     menuItemLabel: 'Gerenciamento da conversa',
@@ -246,6 +300,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Nao foi possivel atualizar o nome da conversa. Tente novamente.',
     defaultDisplayLanguageMenuItemLabel: 'Idioma de exibição padrão',
     defaultDisplayLanguagePageTitle: 'Idioma de exibição padrão',
+    participantsMenuItemLabel: 'Participantes',
+    participantsPageTitle: 'Participantes',
+    participantsSelfLabel: 'Você',
+    participantsLoadingLabel: 'Carregando...',
+    participantsErrorLabel: 'Não foi possível carregar os participantes.',
+    participantsRetryLabel: 'Tentar novamente',
   },
   it: {
     menuItemLabel: 'Gestione della conversazione',
@@ -270,6 +330,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Impossibile aggiornare il nome della conversazione. Riprova.',
     defaultDisplayLanguageMenuItemLabel: 'Lingua di visualizzazione predefinita',
     defaultDisplayLanguagePageTitle: 'Lingua di visualizzazione predefinita',
+    participantsMenuItemLabel: 'Partecipanti',
+    participantsPageTitle: 'Partecipanti',
+    participantsSelfLabel: 'Tu',
+    participantsLoadingLabel: 'Caricamento...',
+    participantsErrorLabel: 'Impossibile caricare i partecipanti.',
+    participantsRetryLabel: 'Riprova',
   },
   ru: {
     menuItemLabel: 'Управление разговором',
@@ -294,6 +360,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Не удалось обновить название разговора. Повторите попытку позже.',
     defaultDisplayLanguageMenuItemLabel: 'Язык отображения по умолчанию',
     defaultDisplayLanguagePageTitle: 'Язык отображения по умолчанию',
+    participantsMenuItemLabel: 'Участники',
+    participantsPageTitle: 'Участники',
+    participantsSelfLabel: 'Вы',
+    participantsLoadingLabel: 'Загрузка...',
+    participantsErrorLabel: 'Не удалось загрузить участников.',
+    participantsRetryLabel: 'Повторить',
   },
   ar: {
     menuItemLabel: 'إدارة المحادثة',
@@ -318,6 +390,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'تعذر تحديث اسم المحادثة. يرجى المحاولة مرة أخرى لاحقًا.',
     defaultDisplayLanguageMenuItemLabel: 'لغة العرض الافتراضية',
     defaultDisplayLanguagePageTitle: 'لغة العرض الافتراضية',
+    participantsMenuItemLabel: 'المشاركون',
+    participantsPageTitle: 'المشاركون',
+    participantsSelfLabel: 'أنت',
+    participantsLoadingLabel: 'جارٍ التحميل...',
+    participantsErrorLabel: 'تعذر تحميل المشاركين.',
+    participantsRetryLabel: 'إعادة المحاولة',
   },
   hi: {
     menuItemLabel: 'बातचीत प्रबंधन',
@@ -342,6 +420,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'बातचीत का नाम अपडेट नहीं हो सका। कृपया फिर से प्रयास करें।',
     defaultDisplayLanguageMenuItemLabel: 'डिफ़ॉल्ट प्रदर्शन भाषा',
     defaultDisplayLanguagePageTitle: 'डिफ़ॉल्ट प्रदर्शन भाषा',
+    participantsMenuItemLabel: 'प्रतिभागी',
+    participantsPageTitle: 'प्रतिभागी',
+    participantsSelfLabel: 'आप',
+    participantsLoadingLabel: 'लोड हो रहा है...',
+    participantsErrorLabel: 'प्रतिभागियों को लोड नहीं किया जा सका।',
+    participantsRetryLabel: 'फिर से कोशिश करें',
   },
   th: {
     menuItemLabel: 'จัดการห้องสนทนา',
@@ -366,6 +450,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'ไม่สามารถอัปเดตชื่อห้องสนทนาได้ โปรดลองอีกครั้ง',
     defaultDisplayLanguageMenuItemLabel: 'ภาษาที่แสดงเริ่มต้น',
     defaultDisplayLanguagePageTitle: 'ภาษาที่แสดงเริ่มต้น',
+    participantsMenuItemLabel: 'ผู้เข้าร่วม',
+    participantsPageTitle: 'ผู้เข้าร่วม',
+    participantsSelfLabel: 'คุณ',
+    participantsLoadingLabel: 'กำลังโหลด...',
+    participantsErrorLabel: 'ไม่สามารถโหลดข้อมูลผู้เข้าร่วมได้',
+    participantsRetryLabel: 'ลองอีกครั้ง',
   },
   vi: {
     menuItemLabel: 'Quan ly cuoc tro chuyen',
@@ -390,6 +480,12 @@ const ROOM_MANAGEMENT_COPY_BY_LOCALE = {
     renameErrorToastLabel: 'Khong the cap nhat ten cuoc tro chuyen. Vui long thu lai.',
     defaultDisplayLanguageMenuItemLabel: 'Ngôn ngữ hiển thị mặc định',
     defaultDisplayLanguagePageTitle: 'Ngôn ngữ hiển thị mặc định',
+    participantsMenuItemLabel: 'Người tham gia',
+    participantsPageTitle: 'Người tham gia',
+    participantsSelfLabel: 'Bạn',
+    participantsLoadingLabel: 'Đang tải...',
+    participantsErrorLabel: 'Không thể tải danh sách người tham gia.',
+    participantsRetryLabel: 'Thử lại',
   },
 } satisfies Record<LegalDocumentLocale, LivePhoneDemoRoomManagementCopy>
 

@@ -3,6 +3,7 @@
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
+import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import { toast } from 'sonner'
 import PhoneFrame from './PhoneFrame'
 import ChatBubble from './ChatBubble'
@@ -893,7 +894,7 @@ type FeedbackHistoryResponse = {
   threads: FeedbackHistoryThread[]
 }
 
-type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'display-language'
+type LivePhoneDemoMenuScreen = 'root' | 'feedback' | 'conversation-management' | 'participants' | 'display-language'
 type LivePhoneDemoMenuTransitionMode = 'animate' | 'instant'
 type LivePhoneDemoMenuScreenDirection = 'forward' | 'back'
 type LivePhoneDemoMenuMotionState = {
@@ -961,6 +962,7 @@ function isLivePhoneDemoMenuScreen(value: unknown): value is LivePhoneDemoMenuSc
   return value === 'root'
     || value === 'feedback'
     || value === 'conversation-management'
+    || value === 'participants'
     || value === 'display-language'
 }
 
@@ -969,8 +971,14 @@ function resolveMenuScreenForDepth(
   preferredScreen?: LivePhoneDemoMenuScreen,
 ): LivePhoneDemoMenuScreen {
   if (depth <= 1) return 'root'
-  if (depth >= 3) return preferredScreen === 'display-language' ? 'display-language' : 'conversation-management'
-  return preferredScreen === 'conversation-management' ? 'conversation-management' : 'feedback'
+  if (depth >= 3) {
+    if (preferredScreen === 'display-language') return 'display-language'
+    if (preferredScreen === 'participants') return 'participants'
+    return 'conversation-management'
+  }
+  if (preferredScreen === 'conversation-management') return 'conversation-management'
+  if (preferredScreen === 'participants') return 'participants'
+  return 'feedback'
 }
 
 function buildMenuHistoryState(
@@ -1455,6 +1463,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
       pageTitle: roomManagementCopy.defaultDisplayLanguagePageTitle
         || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
+    }
+  }, [roomManagementCopy, uiLocale])
+  const participantsCopy = useMemo(() => {
+    const isKorean = uiLocale.trim().toLowerCase().startsWith('ko')
+    return {
+      menuItemLabel: roomManagementCopy.participantsMenuItemLabel
+        || (isKorean ? '참여자' : 'Participants'),
+      pageTitle: roomManagementCopy.participantsPageTitle
+        || (isKorean ? '참여자' : 'Participants'),
+      selfLabel: roomManagementCopy.participantsSelfLabel
+        || (isKorean ? '나' : 'You'),
+      loadingLabel: roomManagementCopy.participantsLoadingLabel
+        || (isKorean ? '불러오는 중...' : 'Loading...'),
+      errorLabel: roomManagementCopy.participantsErrorLabel
+        || (isKorean ? '참여자 정보를 불러오지 못했습니다.' : 'Could not load participants.'),
+      retryLabel: roomManagementCopy.participantsRetryLabel
+        || (isKorean ? '다시 시도' : 'Try again'),
     }
   }, [roomManagementCopy, uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
@@ -2513,6 +2538,11 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const handleConversationManagementMenuItemPress = useCallback(() => {
     if (!menuOpen || menuScreen === 'conversation-management') return
     pushMenuHistoryEntry(2, 'conversation-management')
+  }, [menuOpen, menuScreen, pushMenuHistoryEntry])
+
+  const handleParticipantsMenuItemPress = useCallback(() => {
+    if (!menuOpen || menuScreen === 'participants') return
+    pushMenuHistoryEntry(2, 'participants')
   }, [menuOpen, menuScreen, pushMenuHistoryEntry])
 
   const handleDefaultDisplayLanguageMenuItemPress = useCallback(() => {
@@ -5790,6 +5820,19 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         <div className="px-4 pb-4">
                           <button
                             type="button"
+                            onClick={handleParticipantsMenuItemPress}
+                            className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
+                          >
+                            <span className="min-w-0 flex-1">{participantsCopy.menuItemLabel}</span>
+                            <span className="shrink-0 text-gray-500">
+                              <ChevronRight size={18} strokeWidth={2.4} />
+                            </span>
+                          </button>
+                        </div>
+
+                        <div className="px-4 pb-4">
+                          <button
+                            type="button"
                             onClick={handleFeedbackMenuItemPress}
                             className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-3 text-left text-[0.98rem] font-medium text-gray-900 transition-colors hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300"
                           >
@@ -6228,6 +6271,30 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                           </button>
                         </div>
                       </div>
+                    </motion.section>
+
+                    <motion.section
+                      initial={false}
+                      animate={menuScreen === 'participants' ? { x: '0%', opacity: 1 } : { x: '8%', opacity: 0 }}
+                      transition={resolveMenuContentTransition(menuScreenTransitionMode)}
+                      aria-hidden={menuScreen !== 'participants'}
+                      className="absolute inset-0 flex h-full min-w-0 flex-col bg-white"
+                      style={{
+                        pointerEvents: menuScreen === 'participants' ? 'auto' : 'none',
+                        zIndex: menuScreen === 'participants' ? 4 : 1,
+                      }}
+                    >
+                      <ConversationParticipantsPanel
+                        active={menuScreen === 'participants'}
+                        uiLocale={uiLocale}
+                        pageTitle={participantsCopy.pageTitle}
+                        backLabel={roomManagementCopy.backButtonLabel}
+                        selfLabel={participantsCopy.selfLabel}
+                        loadingLabel={participantsCopy.loadingLabel}
+                        errorLabel={participantsCopy.errorLabel}
+                        retryLabel={participantsCopy.retryLabel}
+                        onBack={requestMenuBackStep}
+                      />
                     </motion.section>
 
                     <motion.section
