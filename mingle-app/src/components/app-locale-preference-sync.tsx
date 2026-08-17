@@ -1,27 +1,26 @@
 "use client";
 
 import {
-  isPrimaryUiLocale,
   resolveAppSupportedLocaleTag,
-  type PrimaryUiLocale,
+  type AppSupportedLocale,
 } from "@/i18n/mingle-locales";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 export const APP_LOCALE_STORAGE_KEY = "mingle.appLocale";
 
-export function readStoredAppLocale(): PrimaryUiLocale | null {
+export function readStoredAppLocale(): AppSupportedLocale | null {
   if (typeof window === "undefined") return null;
 
   try {
     const value = window.localStorage.getItem(APP_LOCALE_STORAGE_KEY) ?? "";
-    return isPrimaryUiLocale(value) ? value : null;
+    return resolveAppSupportedLocaleTag(value);
   } catch {
     return null;
   }
 }
 
-export function storeAppLocale(locale: PrimaryUiLocale): void {
+export function storeAppLocale(locale: AppSupportedLocale): void {
   if (typeof window === "undefined") return;
 
   try {
@@ -31,7 +30,7 @@ export function storeAppLocale(locale: PrimaryUiLocale): void {
   }
 }
 
-function replaceLocaleSegment(pathname: string, locale: PrimaryUiLocale): string | null {
+function replaceLocaleSegment(pathname: string, locale: AppSupportedLocale): string | null {
   const segments = pathname.split("/").filter(Boolean);
   const currentSegment = segments[0] ?? "";
   const currentLocale = resolveAppSupportedLocaleTag(currentSegment);

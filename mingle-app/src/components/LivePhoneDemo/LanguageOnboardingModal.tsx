@@ -14,7 +14,8 @@ import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/langua
 import LanguageFlag from "@/components/language-flag";
 
 interface LanguageOnboardingModalProps {
-  onClose: () => void;
+  onClose?: () => void;
+  dismissible?: boolean;
   initialLanguage: string;
   uiLocale: string;
   onConfirm: (language: string) => void | Promise<void>;
@@ -24,6 +25,7 @@ interface LanguageOnboardingModalProps {
 // state initializers below always pick up the latest defaults with no reset effect.
 export default function LanguageOnboardingModal({
   onClose,
+  dismissible = true,
   initialLanguage,
   uiLocale,
   onConfirm,
@@ -52,7 +54,7 @@ export default function LanguageOnboardingModal({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || isConfirming) return;
+      if (!dismissible || !onClose || event.key !== "Escape" || isConfirming) return;
       event.preventDefault();
       onClose();
     };
@@ -61,7 +63,7 @@ export default function LanguageOnboardingModal({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isConfirming, onClose]);
+  }, [dismissible, isConfirming, onClose]);
 
   // The list stays in the app's current ui locale regardless of which output
   // language is tentatively selected -- unlike the old "my language" step, this
@@ -146,10 +148,9 @@ export default function LanguageOnboardingModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      // Sits above the conversation list's unauthenticated auth overlay (z-200) so the
-      // language choice is made before sign-up, not hidden behind it. Both live in the
-      // root stacking context -- this modal portals to <body>, and the auth overlay's
-      // parent <main> is position:relative with z-index:auto -- so they compare directly.
+      // Portal to the document root so the picker remains above app overlays. The
+      // first-entry flow also withholds the authentication surface until this picker
+      // is complete, so the language choice is never presented as a late cover layer.
       style={{ zIndex: 250 }}
     >
       <div
@@ -159,15 +160,17 @@ export default function LanguageOnboardingModal({
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div aria-hidden="true" style={{ height: "env(safe-area-inset-top, 0px)" }} />
           <div className="flex h-12 items-center justify-end px-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isConfirming}
-              className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-wait disabled:opacity-50"
-              aria-label={copy.closeLabel}
-            >
-              <X size={20} strokeWidth={2.4} />
-            </button>
+            {dismissible && onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isConfirming}
+                className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-wait disabled:opacity-50"
+                aria-label={copy.closeLabel}
+              >
+                <X size={20} strokeWidth={2.4} />
+              </button>
+            ) : null}
           </div>
 
           <div className="space-y-4 px-4 pb-4 pt-0">

@@ -1,5 +1,15 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - First-Launch Language Gate Before Authentication
+
+- Surface: First app launch, language onboarding, locale transition, and the unauthenticated login screen.
+- Issue: The login surface mounted as soon as the session became unauthenticated, while the language picker opened later from a client effect and only covered it with a higher z-index. After confirmation, closing the picker before changing the locale briefly exposed the previous locale's login copy.
+- User impact: New users saw a login screen flash before language selection and then saw the login copy change from the device locale to the selected language, making the first-launch flow feel unstable.
+- Resolution: Added an explicit language bootstrap phase. The app now renders a neutral preparation shell while local onboarding state and session state settle, mounts no authentication surface during required first-launch language selection, keeps the shell visible while changing locale, and only renders login after the selected locale is ready. The first-launch picker is non-dismissible so the user must choose a language before authentication.
+- Data ownership: Pre-auth language choices remain in local storage. A pending default-language marker is claimed after authentication; an existing account default wins, and only an account with no saved default receives the anonymous selection through the existing profile endpoint. No primary-language or nationality fields are changed.
+- Data change: No schema or migration change; existing profile language fields and local storage are reused.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Language Onboarding Persistence Before Navigation
 
 - Surface: First-entry language onboarding and the room menu's language picker.

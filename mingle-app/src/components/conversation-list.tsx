@@ -4,6 +4,7 @@ import type { AppLocale } from "@/i18n/config";
 import type { AppDictionary } from "@/i18n/types";
 import type { ConversationChannelSummary } from "@/lib/app-conversations";
 import { getConversationDictionary } from "@/i18n/conversations";
+import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
 import {
@@ -32,6 +33,7 @@ import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePho
 import {
   LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
+  LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
@@ -157,6 +159,7 @@ let recentSearchesSnapshotRaw = "__initial__";
 type ConversationOverlayExitMode = "animate" | "instant";
 type ConversationOverlayEnterMode = "animate" | "instant";
 type SearchOverlayTransitionMode = "animate" | "instant";
+type LanguageOnboardingPhase = "resolving" | "selection" | "locale-switching" | "ready";
 type ConversationOverlayTransitionState = {
   enterMode: ConversationOverlayEnterMode;
   exitMode: ConversationOverlayExitMode;
@@ -396,6 +399,28 @@ function areConversationLocalStatsSnapshotsEqual(
 function isNativeAppRuntime(): boolean {
   return typeof window !== "undefined"
     && typeof window.ReactNativeWebView?.postMessage === "function";
+}
+
+function readPendingDefaultConversationLanguages(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const rawValue = window.localStorage.getItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES);
+    if (!rawValue) return [];
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue));
+  } catch {
+    return [];
+  }
+}
+
+function clearPendingDefaultConversationLanguages(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES);
+  } catch {
+    // Keep the marker when storage is temporarily unavailable so the next authenticated launch retries.
+  }
 }
 
 function shouldSkipCreateConversationMicWarmup(): boolean {
@@ -1648,10 +1673,13 @@ export default function ConversationList({
         setPreferredDisplayLanguages(normalizedProfileLanguages);
 
         const storedDefaultLanguages = sanitizeSttLanguageSelection(profile.defaultConversationLanguages);
+        const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
         setDefaultSelectedLanguages(
           storedDefaultLanguages.length > 0
             ? storedDefaultLanguages
-            : deriveDefaultConversationLanguages(normalizedProfileLanguages, locale),
+            : pendingDefaultLanguages.length > 0
+              ? pendingDefaultLanguages
+              : deriveDefaultConversationLanguages(normalizedProfileLanguages, locale),
         );
       })
       .catch(() => {
@@ -1660,6 +1688,7 @@ export default function ConversationList({
 
     return () => controller.abort();
   }, [locale, normalizedInitialDefaultConversationLanguages.length, normalizedInitialPrimaryLanguages.length, sessionStatus]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -1699,7 +1728,8 @@ export default function ConversationList({
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
-  const [languageOnboardingModalOpen, setLanguageOnboardingModalOpen] = useState(false);
+  const [languageOnboardingPhase, setLanguageOnboardingPhase] = useState<LanguageOnboardingPhase>("resolving");
+  const languageOnboardingModalOpen = languageOnboardingPhase === "selection";
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -1800,6 +1830,68 @@ export default function ConversationList({
         : resolveEffectiveNativeBannerInsetPx(runtimeNativeConversationBottomInsetPx, estimatedNativeBannerInsetPx))
     : 0;
   const conversationListScrollPaddingBottomPx = CONVERSATION_CREATE_BUTTON_HEIGHT_PX + 20;
+
+  useEffect(() => {
+    if (languageOnboardingPhase !== "ready") return;
+    if (sessionStatus !== "authenticated" || !authenticatedUserId) return;
+
+    const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
+    if (pendingDefaultLanguages.length === 0) return;
+
+    let cancelled = false;
+
+    const syncPendingDefaultLanguages = async () => {
+      try {
+        const profileResponse = await fetch(buildClientApiPath("/profile"), {
+          cache: "no-store",
+        });
+        if (!profileResponse.ok) return;
+
+        const profile = await profileResponse.json() as {
+          defaultConversationLanguages?: unknown;
+        };
+        if (cancelled) return;
+
+        const serverDefaultLanguages = sanitizeSttLanguageSelection(
+          profile.defaultConversationLanguages,
+        );
+        if (serverDefaultLanguages.length > 0) {
+          defaultConversationLanguagesSyncVersionRef.current += 1;
+          setDefaultSelectedLanguages(serverDefaultLanguages);
+          clearPendingDefaultConversationLanguages();
+          return;
+        }
+
+        const saveResponse = await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ defaultConversationLanguages: pendingDefaultLanguages }),
+        });
+        if (!saveResponse.ok || cancelled) return;
+
+        const savedProfile = await saveResponse.json() as {
+          defaultConversationLanguages?: unknown;
+        };
+        if (cancelled) return;
+
+        const savedDefaultLanguages = sanitizeSttLanguageSelection(
+          savedProfile.defaultConversationLanguages,
+          pendingDefaultLanguages,
+        );
+        defaultConversationLanguagesSyncVersionRef.current += 1;
+        setDefaultSelectedLanguages(savedDefaultLanguages);
+        clearPendingDefaultConversationLanguages();
+      } catch {
+        // Keep the pending marker so a later authenticated launch can retry the claim.
+      }
+    };
+
+    void syncPendingDefaultLanguages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticatedUserId, languageOnboardingPhase, sessionStatus]);
 
   const conversationItems = useMemo(
     () => conversations.map((conversation) => (
@@ -2848,9 +2940,11 @@ export default function ConversationList({
       hasConfirmedLanguageOnboarding = false;
     }
 
-    if (shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)) {
-      setLanguageOnboardingModalOpen(true);
-    }
+    setLanguageOnboardingPhase(
+      shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)
+        ? "selection"
+        : "ready",
+    );
   }, []);
 
   useEffect(() => {
@@ -4133,12 +4227,16 @@ export default function ConversationList({
     try {
       window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
       window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
+      window.localStorage.setItem(
+        LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+        JSON.stringify(normalizedTargets),
+      );
     } catch {
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
     }
 
     let savedDefaultLanguages = normalizedTargets;
-    if (sessionStatus !== "unauthenticated") {
+    if (sessionStatus === "authenticated") {
       try {
         const response = await fetch(buildClientApiPath("/profile"), {
           method: "PATCH",
@@ -4152,6 +4250,7 @@ export default function ConversationList({
           saved.defaultConversationLanguages,
           normalizedTargets,
         );
+        clearPendingDefaultConversationLanguages();
       } catch {
         return;
       }
@@ -4171,26 +4270,16 @@ export default function ConversationList({
       }));
     }
 
-    setLanguageOnboardingModalOpen(false);
-
     const nextUiLocale = resolveUiLocaleForLanguage(savedDefaultLanguages[0] ?? languageCode);
+    storeAppLocale(nextUiLocale);
     if (nextUiLocale !== locale) {
+      setLanguageOnboardingPhase("locale-switching");
       window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
+      return;
     }
-  }, [locale, sessionStatus]);
 
-  // Closing without picking (X / Escape) should still count as "seen" -- this is a
-  // one-time first-entry prompt, not a gate the user must complete. Without this, only
-  // handleLanguageOnboardingConfirm sets the flag, so a dismissed modal reopens on every
-  // future visit until the user finally taps 시작하기.
-  const handleLanguageOnboardingDismiss = useCallback(() => {
-    try {
-      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
-    } catch {
-      // Ignore storage failures; the onboarding modal will simply reopen next launch.
-    }
-    setLanguageOnboardingModalOpen(false);
-  }, []);
+    setLanguageOnboardingPhase("ready");
+  }, [locale, sessionStatus]);
 
   const languageOnboardingDefaultLanguage = useMemo(() => {
     const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
@@ -4200,13 +4289,30 @@ export default function ConversationList({
     // earlier confirm (without a full page reload) reflects the latest saved choice.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, languageOnboardingModalOpen]);
+  const shouldShowLanguageBootstrapShell = languageOnboardingPhase === "resolving"
+    || languageOnboardingPhase === "locale-switching"
+    || (languageOnboardingPhase === "ready" && sessionStatus === "loading");
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
       <NativePushRegistration />
 
-      {sessionStatus === "unauthenticated" ? (
+      {shouldShowLanguageBootstrapShell ? (
+        <div
+          className="absolute inset-0 z-[300] flex min-h-0 w-full items-center justify-center bg-[#fcfbf8]"
+          role="status"
+          aria-live="polite"
+          aria-label={locale === "ko" ? "Mingle 준비 중" : "Preparing Mingle"}
+        >
+          <div className="flex flex-col items-center gap-5">
+            <MingleWordmark />
+            <Loader2 size={22} className="animate-spin text-amber-500" aria-hidden />
+          </div>
+        </div>
+      ) : null}
+
+      {sessionStatus === "unauthenticated" && languageOnboardingPhase === "ready" ? (
         <div
           className="absolute inset-0 z-[200] flex min-h-0 w-full overflow-hidden bg-white"
           role="dialog"
@@ -4757,7 +4863,7 @@ export default function ConversationList({
 
       {languageOnboardingModalOpen ? (
         <LanguageOnboardingModal
-          onClose={handleLanguageOnboardingDismiss}
+          dismissible={false}
           initialLanguage={languageOnboardingDefaultLanguage}
           uiLocale={locale}
           onConfirm={handleLanguageOnboardingConfirm}
