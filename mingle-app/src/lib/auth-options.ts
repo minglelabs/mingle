@@ -343,15 +343,38 @@ const authBaseUrl = (
 // The long-lived JWT is still removed immediately by NextAuth signOut.
 const AUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 100;
 const useSecureOauthCookies = authBaseUrl.startsWith("https://");
-const oauthCookieSameSite = (useSecureOauthCookies ? "none" : "lax") as "none" | "lax";
 const oauthCookiePrefix = useSecureOauthCookies ? "__Secure-" : "";
-const oauthTransientCookieOptions = {
-  httpOnly: true,
-  sameSite: oauthCookieSameSite,
-  path: "/",
-  secure: useSecureOauthCookies,
-  maxAge: 60 * 15,
-};
+
+type OAuthCookieSameSite = "lax" | "none";
+
+function buildOAuthCookies(sameSite: OAuthCookieSameSite) {
+  const oauthTransientCookieOptions = {
+    httpOnly: true,
+    sameSite,
+    path: "/",
+    secure: useSecureOauthCookies,
+    maxAge: 60 * 15,
+  } as const;
+
+  return {
+    callbackUrl: {
+      name: `${oauthCookiePrefix}next-auth.callback-url`,
+      options: oauthTransientCookieOptions,
+    },
+    pkceCodeVerifier: {
+      name: `${oauthCookiePrefix}next-auth.pkce.code_verifier`,
+      options: oauthTransientCookieOptions,
+    },
+    state: {
+      name: `${oauthCookiePrefix}next-auth.state`,
+      options: oauthTransientCookieOptions,
+    },
+    nonce: {
+      name: `${oauthCookiePrefix}next-auth.nonce`,
+      options: oauthTransientCookieOptions,
+    },
+  };
+}
 
 function createNextAuthAdapter(): Adapter {
   const adapter = PrismaAdapter(prisma) as Adapter;
@@ -392,25 +415,10 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
     strategy: "jwt",
     maxAge: AUTH_SESSION_MAX_AGE_SECONDS,
   },
-  cookies: {
-    // Apple returns OAuth callback via cross-site POST(form_post), so Lax cookies can be dropped.
-    callbackUrl: {
-      name: `${oauthCookiePrefix}next-auth.callback-url`,
-      options: oauthTransientCookieOptions,
-    },
-    pkceCodeVerifier: {
-      name: `${oauthCookiePrefix}next-auth.pkce.code_verifier`,
-      options: oauthTransientCookieOptions,
-    },
-    state: {
-      name: `${oauthCookiePrefix}next-auth.state`,
-      options: oauthTransientCookieOptions,
-    },
-    nonce: {
-      name: `${oauthCookiePrefix}next-auth.nonce`,
-      options: oauthTransientCookieOptions,
-    },
-  },
+  // Google returns to this app with a top-level GET, so Lax is sufficient and
+  // avoids relying on cross-site cookie behavior in iOS ASWebAuthenticationSession.
+  // Apple uses form_post, so getAuthOptions("apple") swaps these cookies to None.
+  cookies: buildOAuthCookies("lax"),
   events: {
     async signIn({ user }) {
       const userId = normalizeUserId(user?.id);
@@ -478,9 +486,11 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
   },
 };
 
-export function getAuthOptions(): NextAuthOptions {
+export function getAuthOptions(oauthProvider?: string): NextAuthOptions {
+  const useAppleFormPostCookies = oauthProvider?.trim().toLowerCase() === "apple";
   return {
     ...authOptionsBase,
+    cookies: useAppleFormPostCookies ? buildOAuthCookies("none") : authOptionsBase.cookies,
     providers: buildProviders(),
   };
 }

@@ -82,28 +82,46 @@ function resolveRouteAuthOptions(baseAuthOptions: NextAuthOptions, nextauth: str
   };
 }
 
+function summarizeOAuthCookieState(request: NextRequest, action: string): string {
+  if (action !== "callback") return "";
+
+  const cookiePrefix = (
+    process.env.NEXTAUTH_URL
+    || process.env.AUTH_URL
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || request.nextUrl.origin
+  ).trim().startsWith("https://")
+    ? "__Secure-"
+    : "";
+
+  return ` origin=${request.nextUrl.origin}`
+    + ` stateCookie=${request.cookies.has(`${cookiePrefix}next-auth.state`) ? "1" : "0"}`
+    + ` pkceCookie=${request.cookies.has(`${cookiePrefix}next-auth.pkce.code_verifier`) ? "1" : "0"}`
+    + ` nonceCookie=${request.cookies.has(`${cookiePrefix}next-auth.nonce`) ? "1" : "0"}`;
+}
+
 export async function GET(request: NextRequest, context: AppRouteContext) {
   const params = await context.params;
-  const authOptions = getAuthOptions();
   const action = resolveAction(params?.nextauth);
   const provider = summarizeText(params?.nextauth?.[1] || "-", 48) || "-";
+  const authOptions = getAuthOptions(provider);
   const callbackUrl = summarizeCallbackUrl(request.nextUrl.searchParams.get("callbackUrl") || "");
   const error = summarizeText(request.nextUrl.searchParams.get("error") || "-", 64) || "-";
   console.info(
-    `[nextauth] method=GET action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}`,
+    `[nextauth] method=GET action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}${summarizeOAuthCookieState(request, action)}`,
   );
   return NextAuth(request, { params }, resolveRouteAuthOptions(authOptions, params?.nextauth));
 }
 
 export async function POST(request: NextRequest, context: AppRouteContext) {
   const params = await context.params;
-  const authOptions = getAuthOptions();
   const action = resolveAction(params?.nextauth);
   const provider = summarizeText(params?.nextauth?.[1] || "-", 48) || "-";
+  const authOptions = getAuthOptions(provider);
   const callbackUrl = summarizeCallbackUrl(request.nextUrl.searchParams.get("callbackUrl") || "");
   const error = summarizeText(request.nextUrl.searchParams.get("error") || "-", 64) || "-";
   console.info(
-    `[nextauth] method=POST action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}`,
+    `[nextauth] method=POST action=${action || "-"} provider=${provider} callback=${callbackUrl} error=${error}${summarizeOAuthCookieState(request, action)}`,
   );
   return NextAuth(request, { params }, resolveRouteAuthOptions(authOptions, params?.nextauth));
 }

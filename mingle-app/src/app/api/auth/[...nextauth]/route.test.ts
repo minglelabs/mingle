@@ -54,6 +54,7 @@ describe("/api/auth/[...nextauth] route", () => {
     );
 
     expect(nextAuthMock).toHaveBeenCalledTimes(1);
+    expect(getAuthOptionsMock).toHaveBeenCalledWith("email-password");
     const options = nextAuthMock.mock.calls[0]?.[2] as NextAuthOptions;
     const providerIds = (options.providers || []).map((provider) => provider.id);
     expect(providerIds).toEqual(["email-password"]);
@@ -66,6 +67,7 @@ describe("/api/auth/[...nextauth] route", () => {
     );
 
     expect(nextAuthMock).toHaveBeenCalledTimes(1);
+    expect(getAuthOptionsMock).toHaveBeenCalledWith("google");
     const options = nextAuthMock.mock.calls[0]?.[2] as NextAuthOptions;
     const providers = options.providers || [];
     const providerIds = providers.map((provider) => provider.id);

@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - iOS Google OAuth First-Attempt Recovery
+
+- Surface: Native iOS Google sign-in after signing out from an Apple-authenticated session.
+- Issue: The OAuth transient cookies used `SameSite=None` for every provider because Apple returns through a cross-site `form_post`. In iOS `ASWebAuthenticationSession`, the first Google callback could therefore arrive without the NextAuth state cookie even though the next attempt succeeded.
+- User impact: The first Google sign-in attempt showed an OAuth error, while retrying immediately appeared to fix the problem.
+- Resolution: Google and other top-level GET OAuth callbacks now use `SameSite=Lax`; Apple keeps `SameSite=None` for its `form_post` callback. The auth route also records callback cookie presence without logging cookie values, making device verification safer.
+- Status: Implemented in the 2.0.0 worktree on 2026-08-17. Physical-device verification after deployment is pending.
+
 ## 2026-08-17 - Follow List Relationship Actions
 
 - Surface: My Page follower and following lists.
