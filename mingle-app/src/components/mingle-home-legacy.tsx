@@ -8,6 +8,7 @@ import type { AppDictionary } from "@/i18n/types";
 import LivePhoneDemoLegacy from "@/components/LivePhoneDemo/LivePhoneDemoLegacy";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
+import { unregisterNativePushToken } from "@/lib/native-push";
 
 type MingleHomeProps = {
   dictionary: AppDictionary;
@@ -939,7 +940,9 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
 
   const handleSignOut = useCallback(() => {
     if (isDeletingAccount) return;
-    void signOut({ callbackUrl: signedOutCallbackUrl });
+    void unregisterNativePushToken().finally(() => {
+      void signOut({ callbackUrl: signedOutCallbackUrl });
+    });
   }, [isDeletingAccount, signedOutCallbackUrl]);
 
   const handleDeleteAccount = useCallback(async () => {
@@ -952,6 +955,7 @@ export default function MingleHomeLegacy(props: MingleHomeProps) {
       if (!response.ok) {
         throw new Error("account_delete_failed");
       }
+      await unregisterNativePushToken();
       await signOut({ callbackUrl: signedOutCallbackUrl });
     } catch {
       window.alert(props.dictionary.profile.deleteAccountFailed);

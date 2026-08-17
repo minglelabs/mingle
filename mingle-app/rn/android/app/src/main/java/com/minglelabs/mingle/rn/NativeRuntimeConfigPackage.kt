@@ -11,6 +11,7 @@ class NativeRuntimeConfigPackage : ReactPackage {
       NativeRuntimeConfigModule(reactContext),
       NativeQrImageModule(reactContext),
       NativeSTTModule(reactContext),
+      NativePushNotificationModule(reactContext),
     )
 
   override fun createViewManagers(

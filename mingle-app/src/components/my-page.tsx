@@ -25,6 +25,7 @@ import { PRIMARY_UI_LANGUAGE_OPTIONS, type AppDictionary, type AppLocale, type P
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
+import { unregisterNativePushToken } from "@/lib/native-push";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildProfileImageTransform,
@@ -1544,7 +1545,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }, []);
 
   const handleSignOut = useCallback(() => {
-    void signOut({ callbackUrl: signOutCallbackUrl });
+    void unregisterNativePushToken().finally(() => {
+      void signOut({ callbackUrl: signOutCallbackUrl });
+    });
   }, [signOutCallbackUrl]);
 
   const handleChangeAppLanguage = useCallback((nextLocale: PrimaryUiLocale) => {

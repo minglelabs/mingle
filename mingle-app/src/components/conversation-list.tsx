@@ -81,6 +81,7 @@ import {
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
 import NotificationPanel from "@/components/notification-panel";
+import NativePushRegistration from "@/components/native-push-registration";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import {
   readConversationListCache,
@@ -4019,6 +4020,8 @@ export default function ConversationList({
 
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
+
+      <NativePushRegistration />
 
       {sessionStatus === "unauthenticated" ? (
         <div

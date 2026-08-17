@@ -1,6 +1,8 @@
 import AVFoundation
 import Foundation
 import React
+import UIKit
+import UserNotifications
 
 final class MingleAudioSessionCoordinator {
     static let shared = MingleAudioSessionCoordinator()
@@ -1292,5 +1294,173 @@ class NativeRuntimeConfigModule: NSObject {
         }
         let boundedPayload = String(payload.prefix(4_000))
         NSLog("[MingleHistoryDebug] %@", boundedPayload)
+    }
+}
+
+@objc(NativePushNotificationModule)
+class NativePushNotificationModule: RCTEventEmitter {
+    private static let tokenKey = "mingle.nativePush.token"
+    private static let installationIdKey = "mingle.nativePush.installationId"
+    private static weak var sharedModule: NativePushNotificationModule?
+
+    private var pendingResolve: RCTPromiseResolveBlock?
+    private var pendingRegistrationTimeout: DispatchWorkItem?
+
+    override init() {
+        super.init()
+        Self.sharedModule = self
+    }
+
+    override static func requiresMainQueueSetup() -> Bool {
+        true
+    }
+
+    override func supportedEvents() -> [String]! {
+        ["registration", "opened"]
+    }
+
+    private static func installationId() -> String {
+        if let existing = UserDefaults.standard.string(forKey: installationIdKey), !existing.isEmpty {
+            return existing
+        }
+
+        let value = UUID().uuidString.lowercased()
+        UserDefaults.standard.set(value, forKey: installationIdKey)
+        return value
+    }
+
+    private static func pushEnvironment() -> String {
+        let configured = NativeSTTModule.readRuntimeConfigValue("MinglePushEnvironment").lowercased()
+        return configured == "sandbox" ? "sandbox" : "production"
+    }
+
+    private static func cachedToken() -> String {
+        UserDefaults.standard.string(forKey: tokenKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func permissionName(_ settings: UNNotificationSettings) -> String {
+        switch settings.authorizationStatus {
+        case .authorized:
+            return "authorized"
+        case .provisional:
+            return "provisional"
+        case .denied:
+            return "denied"
+        case .ephemeral:
+            return "ephemeral"
+        case .notDetermined:
+            return "not_determined"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private static func registrationPayload(
+        token: String? = nil,
+        permission: String = "unknown"
+    ) -> [String: Any] {
+        [
+            "token": token ?? cachedToken(),
+            "installationId": installationId(),
+            "platform": "ios",
+            "environment": pushEnvironment(),
+            "permission": permission,
+        ]
+    }
+
+    private func finishRegistration(token: String? = nil, permission: String = "unknown") {
+        pendingRegistrationTimeout?.cancel()
+        pendingRegistrationTimeout = nil
+        let payload = Self.registrationPayload(token: token, permission: permission)
+        pendingResolve?(payload)
+        pendingResolve = nil
+        sendEvent(withName: "registration", body: payload)
+    }
+
+    private func readPermissionAndResolve(
+        _ resolve: @escaping RCTPromiseResolveBlock
+    ) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                resolve(Self.registrationPayload(permission: Self.permissionName(settings)))
+            }
+        }
+    }
+
+    @objc(registerForPushNotifications:rejecter:)
+    func registerForPushNotifications(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async {
+            UNUserNotificationCenter.current().requestAuthorization(
+                options: [.alert, .badge, .sound]
+            ) { [weak self] granted, _ in
+                DispatchQueue.main.async {
+                    guard let self else {
+                        resolve(Self.registrationPayload(permission: granted ? "authorized" : "denied"))
+                        return
+                    }
+                    guard granted else {
+                        self.readPermissionAndResolve(resolve)
+                        return
+                    }
+
+                    self.pendingResolve = resolve
+                    let timeout = DispatchWorkItem { [weak self] in
+                        guard let self else { return }
+                        self.finishRegistration(permission: "authorized")
+                    }
+                    self.pendingRegistrationTimeout?.cancel()
+                    self.pendingRegistrationTimeout = timeout
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: timeout)
+                    UIApplication.shared.registerForRemoteNotifications()
+
+                    // A cached token lets a returning user register immediately while
+                    // iOS refreshes the APNs token in the background.
+                    if !Self.cachedToken().isEmpty {
+                        self.finishRegistration(token: Self.cachedToken(), permission: "authorized")
+                    }
+                }
+            }
+        }
+    }
+
+    @objc(getRegistrationInfo:rejecter:)
+    func getRegistrationInfo(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                resolve(Self.registrationPayload(permission: Self.permissionName(settings)))
+            }
+        }
+    }
+
+    static func didRegisterForRemoteNotifications(_ deviceToken: Data) {
+        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        guard !token.isEmpty else { return }
+        UserDefaults.standard.set(token, forKey: tokenKey)
+        DispatchQueue.main.async {
+            sharedModule?.finishRegistration(token: token, permission: "authorized")
+        }
+    }
+
+    static func didFailToRegisterForRemoteNotifications(_ error: Error) {
+        NSLog("[NativePushNotification] APNs registration failed: %@", error.localizedDescription)
+        DispatchQueue.main.async {
+            sharedModule?.finishRegistration(permission: "registration_failed")
+        }
+    }
+
+    static func didReceiveNotification(_ userInfo: [AnyHashable: Any]) {
+        let payload = userInfo.reduce(into: [String: Any]()) { result, entry in
+            guard let key = entry.key as? String else { return }
+            result[key] = entry.value
+        }
+        DispatchQueue.main.async {
+            sharedModule?.sendEvent(withName: "opened", body: payload)
+        }
     }
 }

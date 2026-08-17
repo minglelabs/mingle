@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { sendPushNotificationForUserNotification } from "@/server/push-notifications";
 
 export const runtime = "nodejs";
 
@@ -91,13 +92,19 @@ export async function POST(_request: NextRequest, { params }: FollowRouteProps) 
   }
 
   if (created) {
-    await prisma.userNotification.create({
+    const notification = await prisma.userNotification.create({
       data: {
         recipientId: result.followingId,
         actorId: result.followerId,
         type: "follow",
       },
     });
+
+    try {
+      await sendPushNotificationForUserNotification(notification.id);
+    } catch (error) {
+      console.error("[PushNotifications] follow notification delivery failed", error);
+    }
   }
 
   return jsonResult(true);

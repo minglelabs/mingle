@@ -133,6 +133,19 @@ type NativePendingProfileLink = {
 type NativeQrImageModule = {
   savePng?: (dataUrl: string, fileName: string) => Promise<unknown>;
 };
+type NativePushRegistrationInfo = {
+  token?: unknown;
+  installationId?: unknown;
+  platform?: unknown;
+  environment?: unknown;
+  permission?: unknown;
+  appVersion?: unknown;
+  apiNamespace?: unknown;
+};
+type NativePushNotificationModule = {
+  registerForPushNotifications?: () => Promise<NativePushRegistrationInfo>;
+  getRegistrationInfo?: () => Promise<NativePushRegistrationInfo>;
+};
 type NativeAdModule = {
   default?: (() => {
     initialize?: () => Promise<unknown>;
@@ -470,6 +483,8 @@ const NATIVE_AUTH_EVENT = 'mingle:native-auth';
 const NATIVE_QR_SCANNER_EVENT = 'mingle:native-qr-scanner';
 const NATIVE_QR_SAVE_EVENT = 'mingle:native-qr-save';
 const NATIVE_QR_SCANNER_QUEUE_LIMIT = 8;
+const NATIVE_PUSH_TOKEN_EVENT = 'mingle:native-push-token';
+const NATIVE_PUSH_REGISTRATION_QUEUE_LIMIT = 4;
 const WEB_CANVAS_BASE_WIDTH_PX = 400;
 const NATIVE_AD_BANNER_MIN_HEIGHT_PX = 48;
 const NATIVE_AD_BANNER_MAX_HEIGHT_PX = 120;
@@ -666,6 +681,10 @@ type NativeQrSaveCommand = {
   };
 };
 
+type NativePushRegisterCommand = {
+  type: 'native_push_register';
+};
+
 type NativeHistoryDebugCommand = {
   type: 'native_history_debug';
   payload?: Record<string, unknown>;
@@ -730,6 +749,7 @@ type WebViewCommand =
   | NativeAuthResetCommand
   | NativeQrScannerOpenCommand
   | NativeQrSaveCommand
+  | NativePushRegisterCommand
   | NativeNavigationStateCommand
   | NativeHistoryDebugCommand
   | NativeOpenUpdateStoreCommand
@@ -1180,6 +1200,7 @@ function AppInner(): React.JSX.Element {
   const nativeSttMessageSequenceRef = useRef(0);
   const pendingNativeSttMessagesRef = useRef<Extract<NativeSttEvent, { type: 'message' }>[]>([]);
   const pendingNativeQrScannerEventsRef = useRef<NativeQrScannerEvent[]>([]);
+  const pendingNativePushRegistrationsRef = useRef<NativePushRegistrationInfo[]>([]);
   const pendingProfileLinkUserIdRef = useRef<string | null>(null);
   const lastHandledProfileLinkRef = useRef('');
   const lastHandledProfileLinkAtRef = useRef(0);
@@ -2098,6 +2119,82 @@ function AppInner(): React.JSX.Element {
     }
   }, [emitQrSaveToWeb]);
 
+  const emitPushRegistrationToWeb = useCallback((payload: NativePushRegistrationInfo) => {
+    const normalizedPayload: NativePushRegistrationInfo = {
+      ...payload,
+      platform: typeof payload.platform === 'string' && payload.platform.trim()
+        ? payload.platform.trim()
+        : Platform.OS,
+      appVersion: typeof payload.appVersion === 'string' && payload.appVersion.trim()
+        ? payload.appVersion.trim()
+        : RUNTIME_CLIENT_INFO.clientVersion,
+      apiNamespace: typeof payload.apiNamespace === 'string' && payload.apiNamespace.trim()
+        ? payload.apiNamespace.trim()
+        : VALIDATED_API_NAMESPACE,
+    };
+    if (!isPageReadyRef.current || !webViewRef.current) {
+      pendingNativePushRegistrationsRef.current = [normalizedPayload].slice(
+        -NATIVE_PUSH_REGISTRATION_QUEUE_LIMIT,
+      );
+      return;
+    }
+
+    const serialized = JSON.stringify(normalizedPayload);
+    const script = `window.__MINGLE_LAST_NATIVE_PUSH_TOKEN = ${serialized}; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PUSH_TOKEN_EVENT)}, { detail: ${serialized} })); true;`;
+    webViewRef.current.injectJavaScript(script);
+  }, []);
+
+  const flushPendingNativePushRegistrationsToWeb = useCallback(() => {
+    if (!isPageReadyRef.current) return;
+    const pendingRegistrations = pendingNativePushRegistrationsRef.current.splice(0);
+    pendingRegistrations.forEach((registration) => emitPushRegistrationToWeb(registration));
+  }, [emitPushRegistrationToWeb]);
+
+  const requestNativePushRegistration = useCallback(async () => {
+    const nativePushModule = (NativeModules as {
+      NativePushNotificationModule?: NativePushNotificationModule;
+    }).NativePushNotificationModule;
+    if (!nativePushModule?.registerForPushNotifications) {
+      emitPushRegistrationToWeb({
+        platform: Platform.OS,
+        permission: 'unavailable',
+      });
+      return;
+    }
+
+    try {
+      if (Platform.OS === 'android' && Number(Platform.Version) >= 33) {
+        const permissions = PermissionsAndroid.PERMISSIONS as typeof PermissionsAndroid.PERMISSIONS & {
+          POST_NOTIFICATIONS?: string;
+        };
+        const permissionName = permissions.POST_NOTIFICATIONS || 'android.permission.POST_NOTIFICATIONS';
+        const permissionResult = await PermissionsAndroid.request(permissionName);
+        if (permissionResult !== PermissionsAndroid.RESULTS.GRANTED) {
+          emitPushRegistrationToWeb({
+            platform: 'android',
+            environment: 'production',
+            permission: permissionResult === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+              ? 'never_ask_again'
+              : 'denied',
+          });
+          return;
+        }
+      }
+
+      const registration = await nativePushModule.registerForPushNotifications();
+      emitPushRegistrationToWeb(registration);
+    } catch (error: unknown) {
+      if (__DEV__) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[NativePushNotification] registration failed: ${message}`);
+      }
+      emitPushRegistrationToWeb({
+        platform: Platform.OS,
+        permission: 'registration_failed',
+      });
+    }
+  }, [emitPushRegistrationToWeb]);
+
   const emitToWeb = useCallback((payload: NativeSttEvent) => {
     const queueId = payload.type === 'message' && !payload.queueId
       ? `native-stt-${Date.now()}-${++nativeSttMessageSequenceRef.current}`
@@ -2649,6 +2746,11 @@ function AppInner(): React.JSX.Element {
       return;
     }
 
+    if (parsed.type === 'native_push_register') {
+      void requestNativePushRegistration();
+      return;
+    }
+
     if (parsed.type === 'native_navigation_state') {
       const url = typeof parsed.payload?.url === 'string' ? parsed.payload.url : '';
       rememberCurrentWebUrl(url);
@@ -2997,6 +3099,7 @@ function AppInner(): React.JSX.Element {
     emitToWeb({ type: 'status', status: nativeStatusRef.current });
     flushPendingNativeSttMessagesToWeb();
     flushPendingQrScannerEventsToWeb();
+    flushPendingNativePushRegistrationsToWeb();
     flushPendingProfileLinkToWeb();
     emitToWeb({ type: 'capabilities', openAppSettings: true });
     void emitCurrentMicPermissionToWeb();
@@ -3060,7 +3163,7 @@ function AppInner(): React.JSX.Element {
       `);
     }
 
-  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
+  }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
     if (activateWebFallback()) return;

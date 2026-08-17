@@ -67,6 +67,7 @@ model User {
   followerRelations      UserFollow[]             @relation("UserFollowers")
   receivedNotifications  UserNotification[]       @relation("UserNotificationsReceived")
   sentNotifications      UserNotification[]       @relation("UserNotificationsSent")
+  pushTokens              UserPushToken[]
   blockingRelations      UserBlock[]              @relation("UserBlocking")
   blockedByRelations     UserBlock[]              @relation("UserBlockedBy")
   sentUserReports        UserReport[]             @relation("UserReportsSent")
@@ -106,6 +107,25 @@ model UserNotification {
   @@index([recipientId, readAt, createdAt], map: "app_user_notifications_recipient_read_created_idx")
   @@index([actorId, createdAt], map: "app_user_notifications_actor_created_at_idx")
   @@map("app_user_notifications")
+}
+
+model UserPushToken {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  installationId String   @map("installation_id")
+  platform       String
+  token          String   @unique
+  environment    String   @default("production")
+  appVersion     String?  @map("app_version")
+  apiNamespace   String?  @map("api_namespace")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([installationId, platform], map: "app_user_push_tokens_installation_platform_uidx")
+  @@index([userId, platform], map: "app_user_push_tokens_user_platform_idx")
+  @@map("app_user_push_tokens")
 }
 
 model UserBlock {

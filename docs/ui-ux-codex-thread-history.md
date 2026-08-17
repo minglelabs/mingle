@@ -824,3 +824,16 @@
   - Return a native success or failure event to the web screen so the status message reflects the actual save result.
 - Data contract: Added only a native WebView command/event pair; no server or database changes.
 - Testing notes: On iOS, tap QR download and confirm the image appears in Photos after granting permission. On Android, confirm it appears in Pictures/Mingle or the device gallery, and verify denied permission shows a failure message.
+
+## 2026-08-17 - Request native permission for account notifications
+
+- Surface: The authenticated native app session, before the existing conversation-list notification panel is used.
+- Issue: The app stored follow notifications on the server and rendered them only when the user opened the in-app panel. There was no operating-system notification when the app was backgrounded or closed.
+- User impact: Users could miss a new follower unless they manually opened Mingle and checked the notification panel.
+- Resolution:
+  - Request iOS notification permission and Android 13+ `POST_NOTIFICATIONS` permission only after the WebView session is authenticated.
+  - Register one APNs or FCM token per native installation and associate it with the signed-in Mingle account.
+  - Keep the existing in-app notification panel and mark-read behavior unchanged; native push is an additional delivery surface.
+  - Remove the current installation token during logout so a previous account does not continue receiving notifications on a shared device.
+- Data contract: Added the authenticated `/push-tokens` endpoint and the `app_user_push_tokens` table. The iOS and Android v2.0.0 API wrappers use the same version namespace as the native builds.
+- Testing notes: On a real iPhone and Android device, verify the permission prompt appears after authentication, a follow produces an OS notification while Mingle is backgrounded, the existing in-app notification remains available, and logout removes delivery for the previous account.

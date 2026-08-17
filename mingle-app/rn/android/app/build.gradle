@@ -93,7 +93,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 71
+def appVersionCode = 72
 def appVersionName = "2.0.0"
 
 def normalizeRuntimeConfigValue = { String value ->
@@ -216,6 +216,10 @@ def runtimeAdBannerHeightPx = readEnvOrPropertyOrDefault("RN_AD_BANNER_HEIGHT_PX
 def runtimeAdmobAppIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_APP_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_APP_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_APP_ID_ANDROID"], "ca-app-pub-7057041881494735~1471126891")
 def runtimeAdmobBannerUnitIdAndroid = readEnvOrPropertyOrDefault("RN_ADMOB_BANNER_UNIT_ID_ANDROID", repoDevboxEnvProperties, ["RN_ADMOB_BANNER_UNIT_ID_ANDROID", "NEXT_PUBLIC_RN_ADMOB_BANNER_UNIT_ID_ANDROID"], "ca-app-pub-7057041881494735/6522262692")
 def runtimeQaBridgeEnabled = readEnvOrPropertyOrDefault("RN_QA_BRIDGE_ENABLED", repoDevboxEnvProperties, ["RN_QA_BRIDGE_ENABLED", "NEXT_PUBLIC_RN_QA_BRIDGE_ENABLED"], "0")
+def runtimeFirebaseProjectId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_PROJECT_ID", repoDevboxEnvProperties, ["MINGLE_FIREBASE_PROJECT_ID"], "")
+def runtimeFirebaseApplicationId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_APPLICATION_ID", repoDevboxEnvProperties, ["MINGLE_FIREBASE_APPLICATION_ID"], "")
+def runtimeFirebaseApiKey = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_API_KEY", repoDevboxEnvProperties, ["MINGLE_FIREBASE_API_KEY"], "")
+def runtimeFirebaseMessagingSenderId = readEnvOrPropertyOrDefault("MINGLE_FIREBASE_MESSAGING_SENDER_ID", repoDevboxEnvProperties, ["MINGLE_FIREBASE_MESSAGING_SENDER_ID"], "")
 if (!(runtimeAdmobAppIdAndroid ==~ /^ca-app-pub-\d+~\d+$/)) {
     throw new GradleException("Invalid RN_ADMOB_APP_ID_ANDROID resolved for Android runtime: ${runtimeAdmobAppIdAndroid}")
 }
@@ -298,6 +302,10 @@ android {
         buildConfigField "String", "MINGLE_AD_BANNER_HEIGHT_PX", quoteBuildConfigString(runtimeAdBannerHeightPx)
         buildConfigField "String", "MINGLE_AD_BANNER_UNIT_ID_ANDROID", quoteBuildConfigString(runtimeAdmobBannerUnitIdAndroid)
         buildConfigField "String", "MINGLE_QA_BRIDGE_ENABLED", quoteBuildConfigString(runtimeQaBridgeEnabled)
+        buildConfigField "String", "MINGLE_FIREBASE_PROJECT_ID", quoteBuildConfigString(runtimeFirebaseProjectId)
+        buildConfigField "String", "MINGLE_FIREBASE_APPLICATION_ID", quoteBuildConfigString(runtimeFirebaseApplicationId)
+        buildConfigField "String", "MINGLE_FIREBASE_API_KEY", quoteBuildConfigString(runtimeFirebaseApiKey)
+        buildConfigField "String", "MINGLE_FIREBASE_MESSAGING_SENDER_ID", quoteBuildConfigString(runtimeFirebaseMessagingSenderId)
     }
     signingConfigs {
         debug {
@@ -332,6 +340,7 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+    implementation("com.google.firebase:firebase-messaging:24.1.0")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
