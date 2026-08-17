@@ -108,7 +108,7 @@ export default function LanguageOnboardingModal({
               : "border-[#e5dfd5] bg-[#faf7f1]"
           }`}
         >
-          <span className="text-[2rem] leading-none">{lang.flag}</span>
+          <span className="translate-y-[0.12em] text-[2rem] leading-none">{lang.flag}</span>
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
@@ -145,14 +145,7 @@ export default function LanguageOnboardingModal({
       >
         <header className="shrink-0 border-b border-gray-100 bg-[#fcfbf8]">
           <div aria-hidden="true" style={{ height: "env(safe-area-inset-top, 0px)" }} />
-          <div className="relative flex h-14 items-center justify-between gap-3 px-4">
-            <span className="h-[38px] w-[40px] shrink-0" aria-hidden="true" />
-            <p
-              id={titleId}
-              className="pointer-events-none absolute left-1/2 top-1/2 w-[calc(100%-88px)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[1rem] font-semibold tracking-[-0.02em] text-slate-950"
-            >
-              {copy.title}
-            </p>
+          <div className="flex h-12 items-center justify-end px-2">
             <button
               type="button"
               onClick={onClose}
@@ -163,9 +156,16 @@ export default function LanguageOnboardingModal({
             </button>
           </div>
 
-          <div className="space-y-3 px-4 pb-3 pt-1">
-            <p className="text-[0.82rem] leading-snug text-slate-500">{copy.descriptionLabel}</p>
-            <p className="text-[0.82rem] leading-snug text-slate-500">{copy.speechAppealLabel}</p>
+          <div className="space-y-4 px-4 pb-4 pt-0">
+            <div className="space-y-1.5 text-center">
+              <p
+                id={titleId}
+                className="text-[1.85rem] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+              >
+                {copy.title}
+              </p>
+              <p className="text-[0.82rem] leading-snug text-slate-500">{copy.descriptionLabel}</p>
+            </div>
 
             <div className="flex h-12 min-w-0 items-center gap-2.5 rounded-[16px] border border-[#e6dfd2] bg-white px-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
               <Search size={18} className="shrink-0 text-slate-400" />

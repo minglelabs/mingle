@@ -4,9 +4,9 @@ import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/langua
 
 describe("resolveLanguageOnboardingCopy", () => {
   it("returns the matching locale's copy", () => {
-    expect(resolveLanguageOnboardingCopy("ko").title).toBe("보고 싶은 언어를 선택해주세요");
-    expect(resolveLanguageOnboardingCopy("en").title).toBe("Choose the language you want to see");
-    expect(resolveLanguageOnboardingCopy("ja").title).toBe("見たい言語を選択してください");
+    expect(resolveLanguageOnboardingCopy("ko").title).toBe("가장 편한 언어를 선택해주세요");
+    expect(resolveLanguageOnboardingCopy("en").title).toBe("Choose your most comfortable language");
+    expect(resolveLanguageOnboardingCopy("ja").title).toBe("一番使いやすい言語を選択してください");
   });
 
   it("keeps Simplified and Traditional Chinese copy distinct", () => {

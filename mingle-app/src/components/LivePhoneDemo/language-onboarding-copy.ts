@@ -9,7 +9,6 @@ export type LanguageOnboardingCopy = {
   menuItemLabel: string
   title: string
   descriptionLabel: string
-  speechAppealLabel: string
   searchPlaceholder: string
   noResultsLabel: string
   confirmButtonLabel: string
@@ -22,9 +21,8 @@ export type LanguageOnboardingCopy = {
 const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   ko: {
     menuItemLabel: '언어',
-    title: '보고 싶은 언어를 선택해주세요',
-    descriptionLabel: '상대방의 메시지를 번역해서 보여줄 언어예요.',
-    speechAppealLabel: '말할 때는 어떤 언어를 써도 괜찮아요. 자동으로 알아듣고 번역해요.',
+    title: '가장 편한 언어를 선택해주세요',
+    descriptionLabel: '선택된 언어는 앱의 기본 언어로 쓰여요.',
     searchPlaceholder: '언어 검색',
     noResultsLabel: '검색 결과가 없어요.',
     confirmButtonLabel: '시작하기',
@@ -35,9 +33,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   en: {
     menuItemLabel: 'Language',
-    title: 'Choose the language you want to see',
-    descriptionLabel: "The other person's messages will be translated into this language.",
-    speechAppealLabel: 'Speak in any language you like — Mingle picks it up and translates it automatically.',
+    title: 'Choose your most comfortable language',
+    descriptionLabel: "This becomes your app's default language.",
     searchPlaceholder: 'Search languages',
     noResultsLabel: 'No matching languages.',
     confirmButtonLabel: 'Get started',
@@ -48,9 +45,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ja: {
     menuItemLabel: '言語',
-    title: '見たい言語を選択してください',
-    descriptionLabel: '相手のメッセージを翻訳して表示する言語です。',
-    speechAppealLabel: '話すときはどの言語でも大丈夫です。自動で認識して翻訳します。',
+    title: '一番使いやすい言語を選択してください',
+    descriptionLabel: '選択した言語がアプリの基本言語になります。',
     searchPlaceholder: '言語を検索',
     noResultsLabel: '一致する言語がありません。',
     confirmButtonLabel: 'はじめる',
@@ -61,9 +57,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   'zh-CN': {
     menuItemLabel: '语言',
-    title: '请选择您想查看的语言',
-    descriptionLabel: '对方的消息将翻译成这种语言显示给您。',
-    speechAppealLabel: '说话时用任何语言都可以，会自动识别并翻译。',
+    title: '请选择您最习惯的语言',
+    descriptionLabel: '选择的语言将成为应用的默认语言。',
     searchPlaceholder: '搜索语言',
     noResultsLabel: '没有找到匹配的语言。',
     confirmButtonLabel: '开始使用',
@@ -74,9 +69,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   'zh-TW': {
     menuItemLabel: '語言',
-    title: '請選擇您想查看的語言',
-    descriptionLabel: '對方的訊息將翻譯成這個語言顯示給您。',
-    speechAppealLabel: '說話時用任何語言都可以，會自動辨識並翻譯。',
+    title: '請選擇您最習慣的語言',
+    descriptionLabel: '選擇的語言會成為應用程式的預設語言。',
     searchPlaceholder: '搜尋語言',
     noResultsLabel: '找不到符合的語言。',
     confirmButtonLabel: '開始使用',
@@ -87,9 +81,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   fr: {
     menuItemLabel: 'Langue',
-    title: 'Choisissez la langue que vous voulez voir',
-    descriptionLabel: 'Les messages de votre interlocuteur seront traduits dans cette langue.',
-    speechAppealLabel: 'Parlez dans la langue de votre choix : elle est reconnue et traduite automatiquement.',
+    title: 'Choisissez la langue avec laquelle vous êtes le plus à l’aise',
+    descriptionLabel: 'La langue choisie devient la langue par défaut de l’appli.',
     searchPlaceholder: 'Rechercher une langue',
     noResultsLabel: 'Aucune langue correspondante.',
     confirmButtonLabel: 'Commencer',
@@ -100,9 +93,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   de: {
     menuItemLabel: 'Sprache',
-    title: 'Wähle die Sprache, die du sehen möchtest',
-    descriptionLabel: 'Die Nachrichten deines Gesprächspartners werden in diese Sprache übersetzt.',
-    speechAppealLabel: 'Sprich in jeder Sprache, die du möchtest – sie wird automatisch erkannt und übersetzt.',
+    title: 'Wähle die Sprache, die dir am angenehmsten ist',
+    descriptionLabel: 'Die gewählte Sprache wird die Standardsprache der App.',
     searchPlaceholder: 'Sprache suchen',
     noResultsLabel: 'Keine passende Sprache gefunden.',
     confirmButtonLabel: 'Loslegen',
@@ -113,9 +105,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   es: {
     menuItemLabel: 'Idioma',
-    title: 'Elige el idioma que quieres ver',
-    descriptionLabel: 'Los mensajes de la otra persona se traducirán a este idioma.',
-    speechAppealLabel: 'Habla en el idioma que prefieras: se reconoce y traduce automáticamente.',
+    title: 'Elige el idioma con el que te sientas más cómodo',
+    descriptionLabel: 'El idioma elegido será el idioma predeterminado de la app.',
     searchPlaceholder: 'Buscar idioma',
     noResultsLabel: 'No se encontraron idiomas.',
     confirmButtonLabel: 'Empezar',
@@ -126,9 +117,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   pt: {
     menuItemLabel: 'Idioma',
-    title: 'Escolha o idioma que você quer ver',
-    descriptionLabel: 'As mensagens da outra pessoa serão traduzidas para este idioma.',
-    speechAppealLabel: 'Fale no idioma que preferir — é reconhecido e traduzido automaticamente.',
+    title: 'Escolha o idioma com o qual você se sente mais confortável',
+    descriptionLabel: 'O idioma escolhido se torna o idioma padrão do app.',
     searchPlaceholder: 'Buscar idioma',
     noResultsLabel: 'Nenhum idioma encontrado.',
     confirmButtonLabel: 'Começar',
@@ -139,9 +129,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   it: {
     menuItemLabel: 'Lingua',
-    title: 'Scegli la lingua che vuoi vedere',
-    descriptionLabel: 'I messaggi dell’altra persona verranno tradotti in questa lingua.',
-    speechAppealLabel: 'Parla nella lingua che preferisci: viene riconosciuta e tradotta automaticamente.',
+    title: 'Scegli la lingua con cui ti senti più a tuo agio',
+    descriptionLabel: 'La lingua scelta diventa la lingua predefinita dell’app.',
     searchPlaceholder: 'Cerca lingua',
     noResultsLabel: 'Nessuna lingua trovata.',
     confirmButtonLabel: 'Inizia',
@@ -152,9 +141,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ru: {
     menuItemLabel: 'Язык',
-    title: 'Выберите язык, который хотите видеть',
-    descriptionLabel: 'Сообщения собеседника будут переведены на этот язык.',
-    speechAppealLabel: 'Говорите на любом удобном языке — он распознаётся и переводится автоматически.',
+    title: 'Выберите язык, который вам удобнее всего',
+    descriptionLabel: 'Выбранный язык станет языком приложения по умолчанию.',
     searchPlaceholder: 'Поиск языка',
     noResultsLabel: 'Совпадений не найдено.',
     confirmButtonLabel: 'Начать',
@@ -165,9 +153,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   ar: {
     menuItemLabel: 'اللغة',
-    title: 'اختر اللغة التي تريد رؤيتها',
-    descriptionLabel: 'سيتم ترجمة رسائل الطرف الآخر إلى هذه اللغة.',
-    speechAppealLabel: 'تحدث بأي لغة تريدها، سيتم التعرف عليها وترجمتها تلقائيًا.',
+    title: 'اختر اللغة الأكثر راحة بالنسبة لك',
+    descriptionLabel: 'ستصبح اللغة المختارة هي اللغة الافتراضية للتطبيق.',
     searchPlaceholder: 'ابحث عن لغة',
     noResultsLabel: 'لا توجد لغات مطابقة.',
     confirmButtonLabel: 'ابدأ',
@@ -178,9 +165,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   hi: {
     menuItemLabel: 'भाषा',
-    title: 'आप जो भाषा देखना चाहते हैं उसे चुनें',
-    descriptionLabel: 'सामने वाले के संदेश इसी भाषा में अनुवाद करके दिखाए जाएंगे।',
-    speechAppealLabel: 'आप किसी भी भाषा में बोल सकते हैं, इसे अपने आप पहचानकर अनुवाद कर दिया जाएगा।',
+    title: 'अपनी सबसे सहज भाषा चुनें',
+    descriptionLabel: 'चुनी गई भाषा ऐप की डिफ़ॉल्ट भाषा बन जाएगी।',
     searchPlaceholder: 'भाषा खोजें',
     noResultsLabel: 'कोई मिलती-जुलती भाषा नहीं मिली।',
     confirmButtonLabel: 'शुरू करें',
@@ -191,9 +177,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   th: {
     menuItemLabel: 'ภาษา',
-    title: 'เลือกภาษาที่คุณต้องการดู',
-    descriptionLabel: 'ข้อความของอีกฝ่ายจะถูกแปลเป็นภาษานี้ให้คุณดู',
-    speechAppealLabel: 'พูดภาษาอะไรก็ได้ตามที่คุณสะดวก ระบบจะจดจำและแปลให้โดยอัตโนมัติ',
+    title: 'เลือกภาษาที่คุณถนัดที่สุด',
+    descriptionLabel: 'ภาษาที่เลือกจะกลายเป็นภาษาเริ่มต้นของแอป',
     searchPlaceholder: 'ค้นหาภาษา',
     noResultsLabel: 'ไม่พบภาษาที่ตรงกัน',
     confirmButtonLabel: 'เริ่มเลย',
@@ -204,9 +189,8 @@ const LANGUAGE_ONBOARDING_COPY_BY_LOCALE = {
   },
   vi: {
     menuItemLabel: 'Ngôn ngữ',
-    title: 'Chọn ngôn ngữ bạn muốn xem',
-    descriptionLabel: 'Tin nhắn của người kia sẽ được dịch sang ngôn ngữ này.',
-    speechAppealLabel: 'Bạn có thể nói bất kỳ ngôn ngữ nào mình muốn, hệ thống sẽ tự động nhận diện và dịch.',
+    title: 'Chọn ngôn ngữ bạn thấy thoải mái nhất',
+    descriptionLabel: 'Ngôn ngữ đã chọn sẽ trở thành ngôn ngữ mặc định của ứng dụng.',
     searchPlaceholder: 'Tìm ngôn ngữ',
     noResultsLabel: 'Không tìm thấy ngôn ngữ phù hợp.',
     confirmButtonLabel: 'Bắt đầu',
