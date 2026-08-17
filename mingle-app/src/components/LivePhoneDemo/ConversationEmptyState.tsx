@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { ChevronDown } from 'lucide-react'
 import { resolveSupportedLocaleTag } from '@/i18n/config'
 import { STT_LANGUAGE_OPTIONS, getSttLanguageDisplayName } from '@/lib/stt-languages'
 import LanguageFlag from '@/components/language-flag'
@@ -13,7 +12,7 @@ type ConversationEmptyStateCopy = {
 
 const EMPTY_STATE_COPY_BY_LOCALE: Partial<Record<string, ConversationEmptyStateCopy>> = {
   ko: {
-    title: '시작 버튼을 누른 후\n아무 언어로 말해보세요!',
+    title: 'Start 버튼을 누른 후\n아무 언어로 말해보세요!',
     description: '언어를 선택하지 않아도 밍글이 알아듣고 번역해드려요',
     supportLabel: '60개 언어 실시간 지원',
     carouselLabel: '지원 언어 목록',
@@ -108,6 +107,8 @@ const EMPTY_STATE_LANGUAGE_OPTIONS = STT_LANGUAGE_OPTIONS.slice(0, 60)
 const EMPTY_STATE_LANGUAGE_CAROUSEL_GROUP_COUNT = 3
 const EMPTY_STATE_LANGUAGE_CAROUSEL_SPEED_PX_PER_SECOND = 18
 const EMPTY_STATE_LANGUAGE_CAROUSEL_RESUME_DELAY_MS = 1400
+const EMPTY_STATE_ARROW_END_Y = 78
+const EMPTY_STATE_ARROW_HEAD_Y = 72
 
 function resolveEmptyStateCopy(uiLocale: string): ConversationEmptyStateCopy {
   const locale = resolveSupportedLocaleTag(uiLocale) ?? 'en'
@@ -313,12 +314,24 @@ export default function ConversationEmptyState({ uiLocale }: ConversationEmptySt
         </div>
 
         <div
-          data-qa="live-demo-empty-state-start-guide"
+          data-qa="live-demo-empty-state-arrow"
           aria-hidden="true"
-          className="mt-3 flex h-[clamp(4.5rem,15vh,7rem)] w-full flex-col items-center"
+          className="mt-3 h-[clamp(4.5rem,15vh,7rem)] w-7"
         >
-          <span className="w-px flex-1 rounded-full bg-slate-300/75" />
-          <ChevronDown size={18} strokeWidth={1.7} className="shrink-0 text-slate-300" />
+          <svg
+            viewBox="0 0 24 100"
+            preserveAspectRatio="none"
+            className="h-full w-full text-gray-300/95"
+          >
+            <path
+              d={`M12 4V${EMPTY_STATE_ARROW_END_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L4 ${EMPTY_STATE_ARROW_HEAD_Y}M12 ${EMPTY_STATE_ARROW_END_Y}L20 ${EMPTY_STATE_ARROW_HEAD_Y}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
       </div>
     </div>

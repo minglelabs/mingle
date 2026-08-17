@@ -52,7 +52,7 @@
 
 1. **The empty conversation screen showed supported flags but did not clearly connect language recognition to the Start action**
    Problem: The empty room could say that any language was supported, but the carousel did not move automatically, the flags had no visible language names, and the screen did not guide the user toward the Start button.
-   Fix: The 60-language carousel now auto-scrolls slowly in a seamless loop, pauses during touch, pointer, wheel, or keyboard interaction, and resumes after a short delay. Each flag has a localized language name beneath it. The main instruction now tells the user to press Start before speaking, and a subtle gray vertical guide with a downward chevron connects the carousel to the bottom voice control. The existing white visual treatment and absence of carousel position indicators are preserved.
+   Fix: The 60-language carousel now auto-scrolls slowly in a seamless loop, pauses during touch, pointer, wheel, or keyboard interaction, and resumes after a short delay. Each flag has a localized language name beneath it. The main instruction now tells the user to press Start before speaking, and the existing stretched gray SVG arrow design connects the carousel to the bottom voice control. The existing white visual treatment and absence of carousel position indicators are preserved.
    Data change: None. This is a presentation-only change.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
