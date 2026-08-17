@@ -283,7 +283,7 @@ async function sendFcmNotification(
             priority: "HIGH",
             notification: {
               channel_id: "mingle_notifications",
-              icon: "ic_launcher",
+              icon: "mingle_notification",
               sound: "default",
               click_action: "MINGLE_NOTIFICATION_OPEN",
             },

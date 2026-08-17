@@ -51,7 +51,7 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     } else {
       Notification.Builder(this)
     }
-      .setSmallIcon(R.mipmap.ic_launcher)
+      .setSmallIcon(R.drawable.mingle_notification)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(Notification.BigTextStyle().bigText(body))

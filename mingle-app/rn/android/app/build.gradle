@@ -93,7 +93,7 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = false
-def appVersionCode = 74
+def appVersionCode = 75
 def appVersionName = "2.0.0"
 
 def normalizeRuntimeConfigValue = { String value ->
@@ -102,6 +102,9 @@ def normalizeRuntimeConfigValue = { String value ->
     }
 
     def trimmed = value.trim()
+    if (trimmed.equalsIgnoreCase("null")) {
+        return ""
+    }
     if (trimmed.length() >= 2) {
         def hasMatchingSingleQuotes = trimmed.startsWith("'") && trimmed.endsWith("'")
         def hasMatchingDoubleQuotes = trimmed.startsWith("\"") && trimmed.endsWith("\"")

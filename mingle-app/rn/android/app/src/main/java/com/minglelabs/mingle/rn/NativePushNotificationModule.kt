@@ -102,7 +102,7 @@ class NativePushNotificationModule(
         .apply()
     }
 
-    private fun ensureFirebaseApp(context: Context): FirebaseApp? {
+    fun ensureFirebaseApp(context: Context): FirebaseApp? {
       try {
         return FirebaseApp.getInstance()
       } catch (_: IllegalStateException) {
@@ -114,7 +114,13 @@ class NativePushNotificationModule(
       val applicationId = BuildConfig.MINGLE_FIREBASE_APPLICATION_ID.trim()
       val apiKey = BuildConfig.MINGLE_FIREBASE_API_KEY.trim()
       val senderId = BuildConfig.MINGLE_FIREBASE_MESSAGING_SENDER_ID.trim()
-      if (projectId.isEmpty() || applicationId.isEmpty() || apiKey.isEmpty() || senderId.isEmpty()) {
+      if (
+        projectId.isEmpty() ||
+        applicationId.isEmpty() ||
+        applicationId.equals("null", ignoreCase = true) ||
+        apiKey.isEmpty() ||
+        senderId.isEmpty()
+      ) {
         return null
       }
 
