@@ -1208,6 +1208,7 @@ function AppInner(): React.JSX.Element {
   const lastHandledProfileLinkRef = useRef('');
   const lastHandledProfileLinkAtRef = useRef(0);
   const pendingProfileLinkRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pendingProfileRouteRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const profileLinkNavigationSequenceRef = useRef(0);
   const currentTtsPlaybackRef = useRef<{ utteranceId: string; playbackId: string } | null>(null);
   const nativeAuthInFlightRef = useRef<NativeAuthProvider | null>(null);
@@ -1371,9 +1372,20 @@ function AppInner(): React.JSX.Element {
     lastWebViewUrlRef.current = normalizedUrl;
     syncConversationRestoreFromUrl(normalizedUrl);
   }, [syncConversationRestoreFromUrl]);
-  const navigateWebViewToProfile = useCallback((userId: string) => {
+  const clearPendingProfileRouteRetries = useCallback(() => {
+    pendingProfileRouteRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pendingProfileRouteRetryTimersRef.current = [];
+  }, []);
+  const dispatchProfileLinkToWebView = useCallback((userId: string, allowWhenPageNotReady = false) => {
     const normalizedUserId = userId.trim();
-    if (!normalizedUserId) return;
+    const webView = webViewRef.current;
+    if (
+      !normalizedUserId
+      || !webView
+      || (!isPageReadyRef.current && !allowWhenPageNotReady)
+    ) {
+      return false;
+    }
 
     profileLinkNavigationSequenceRef.current += 1;
     const linkNonce = String(Date.now()) + '-' + String(profileLinkNavigationSequenceRef.current);
@@ -1383,25 +1395,52 @@ function AppInner(): React.JSX.Element {
       navigationSequence: profileLinkNavigationSequenceRef.current,
     });
 
-    if (!isPageReadyRef.current || !webViewRef.current) {
-      pendingProfileLinkUserIdRef.current = normalizedUserId;
-      recordProfileLinkTrace('native_profile_route_pending', {
-        userIdHint: getProfileLinkUserIdHint(normalizedUserId),
-        pageReady: isPageReadyRef.current,
-        hasWebView: Boolean(webViewRef.current),
-        navigationSequence: profileLinkNavigationSequenceRef.current,
-      });
-      return;
-    }
-
-    pendingProfileLinkUserIdRef.current = null;
     recordProfileLinkTrace('native_profile_overlay_event_dispatched', {
       userIdHint: getProfileLinkUserIdHint(normalizedUserId),
       navigationSequence: profileLinkNavigationSequenceRef.current,
       linkNonce,
+      pageReady: isPageReadyRef.current,
+      forced: allowWhenPageNotReady && !isPageReadyRef.current,
     });
-    webViewRef.current.injectJavaScript(eventScript);
+    webView.injectJavaScript(eventScript);
+    return true;
   }, []);
+  const schedulePendingProfileRouteFlush = useCallback((allowWhenPageNotReady = false) => {
+    clearPendingProfileRouteRetries();
+    [0, 150, 500, 1_200, 3_000].forEach((delayMs) => {
+      const timer = setTimeout(() => {
+        const pendingUserId = pendingProfileLinkUserIdRef.current;
+        if (!pendingUserId) return;
+
+        // A warm-started WKWebView can leave the ref false without emitting a
+        // matching loadEnd event. Retry against the existing WebView as well as
+        // waiting for the normal loadEnd flush path.
+        if (dispatchProfileLinkToWebView(pendingUserId, allowWhenPageNotReady)) {
+          pendingProfileLinkUserIdRef.current = null;
+          clearPendingProfileRouteRetries();
+        }
+      }, delayMs);
+      pendingProfileRouteRetryTimersRef.current.push(timer);
+    });
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
+  const navigateWebViewToProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    if (dispatchProfileLinkToWebView(normalizedUserId)) {
+      pendingProfileLinkUserIdRef.current = null;
+      clearPendingProfileRouteRetries();
+      return;
+    }
+
+    pendingProfileLinkUserIdRef.current = normalizedUserId;
+    recordProfileLinkTrace('native_profile_route_pending', {
+      userIdHint: getProfileLinkUserIdHint(normalizedUserId),
+      pageReady: isPageReadyRef.current,
+      hasWebView: Boolean(webViewRef.current),
+    });
+    schedulePendingProfileRouteFlush();
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView, schedulePendingProfileRouteFlush]);
   const handleIncomingProfileLink = useCallback((rawUrl: string) => {
     const candidateOrigins = [
       activeWebAppBaseUrl,
@@ -1430,6 +1469,7 @@ function AppInner(): React.JSX.Element {
     if (
       lastHandledProfileLinkRef.current === normalizedUrl
       && now - lastHandledProfileLinkAtRef.current < PROFILE_LINK_DUPLICATE_WINDOW_MS
+      && !pendingProfileLinkUserIdRef.current
     ) {
       recordProfileLinkTrace('native_profile_link_duplicate_ignored');
       return true;
@@ -1492,8 +1532,11 @@ function AppInner(): React.JSX.Element {
     recordProfileLinkTrace('native_pending_profile_route_flushed', {
       userIdHint: getProfileLinkUserIdHint(pendingUserId),
     });
-    navigateWebViewToProfile(pendingUserId);
-  }, [navigateWebViewToProfile]);
+    if (dispatchProfileLinkToWebView(pendingUserId)) {
+      pendingProfileLinkUserIdRef.current = null;
+      clearPendingProfileRouteRetries();
+    }
+  }, [clearPendingProfileRouteRetries, dispatchProfileLinkToWebView]);
   useEffect(() => {
     setDebugRemountWebUrl('');
   }, [baseWebUrl]);
@@ -1531,8 +1574,9 @@ function AppInner(): React.JSX.Element {
       subscription.remove();
       pendingProfileLinkRetryTimersRef.current.forEach((timer) => clearTimeout(timer));
       pendingProfileLinkRetryTimersRef.current = [];
+      clearPendingProfileRouteRetries();
     };
-  }, [handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
+  }, [clearPendingProfileRouteRetries, handleIncomingProfileLinkOnce, schedulePendingProfileLinkConsumption]);
   useEffect(() => {
     let previousState = AppState.currentState;
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -1541,13 +1585,14 @@ function AppInner(): React.JSX.Element {
       if (becameActive) {
         recordProfileLinkTrace('app_state_active_for_profile_link');
         schedulePendingProfileLinkConsumption();
+        schedulePendingProfileRouteFlush(true);
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [schedulePendingProfileLinkConsumption]);
+  }, [schedulePendingProfileLinkConsumption, schedulePendingProfileRouteFlush]);
   const trustedNativeAuthOrigin = useMemo(
     () => resolveTrustedOrigin(activeWebAppBaseUrl),
     [activeWebAppBaseUrl],
