@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
+import LanguageFlag from '@/components/language-flag'
 import {
   hasRenderableChatBubbleTimestamp,
 } from './chat-bubble.timestamp'
@@ -341,7 +342,7 @@ function ChatLanguageBadge({
           : 'border-gray-200/80'
       }`}
     >
-      <span aria-hidden="true">{getSttLanguageFlag(lang)}</span>
+      <LanguageFlag language={lang} className="text-[17px] leading-none" />
       {isOriginal && (
         <span
           data-original-language-quote-badge

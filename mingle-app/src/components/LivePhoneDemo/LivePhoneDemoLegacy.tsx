@@ -14,6 +14,7 @@ import {
   isLanguageSelectorHistoryOpen,
 } from './language-selector.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
+import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
 import { getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt-legacy'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
@@ -24,7 +25,6 @@ import {
   DEFAULT_STT_LANGUAGES,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
-  getSttLanguageFlag,
 } from '@/lib/stt-languages'
 import {
   DEFAULT_INPUT_MODE,
@@ -3400,7 +3400,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                     className="text-[1.35rem]"
                     title={lang.toUpperCase()}
                   >
-                    {getSttLanguageFlag(lang)}
+                    <LanguageFlag language={lang} className="text-[1.35rem] leading-none" />
                   </span>
                 ))}
                 <ChevronDown
@@ -3544,7 +3544,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                         className={`${chatBubbleTextClassName} min-w-0 flex-1 truncate font-normal text-gray-900`}
                                       >
                                         <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                          <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                          <LanguageFlag language={textSizePreviewLanguage} className="text-base leading-none" />
                                           <span className="text-[11px] font-semibold uppercase leading-none">
                                             {textSizePreviewBadgeLabel}
                                           </span>
@@ -3607,7 +3607,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                                                       className={`${optionTextClassName} truncate font-normal text-gray-900`}
                                                     >
                                                       <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-400">
-                                                        <span className="text-base leading-none">{getSttLanguageFlag(textSizePreviewLanguage)}</span>
+                                                        <LanguageFlag language={textSizePreviewLanguage} className="text-base leading-none" />
                                                         <span className="text-[11px] font-semibold uppercase leading-none">
                                                           {textSizePreviewBadgeLabel}
                                                         </span>
@@ -4314,7 +4314,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   <div className="min-w-0">
                     <p style={{ lineHeight: LIVE_CHAT_BUBBLE_TEXT_LINE_HEIGHT }} className={`${chatBubbleTextClassName} text-gray-600`}>
                       <span className="mr-1.5 inline-flex items-center gap-1 whitespace-nowrap align-middle rounded-full px-1 py-0.5 text-gray-500">
-                        <span className="text-base leading-none">{getSttLanguageFlag(demoTypingLang)}</span>
+                        <LanguageFlag language={demoTypingLang} className="text-base leading-none" />
                         <span className="text-[11px] font-semibold uppercase leading-none">{demoTypingLang}</span>
                       </span>
                       <span className="align-middle">

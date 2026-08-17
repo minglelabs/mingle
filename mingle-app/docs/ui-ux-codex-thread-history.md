@@ -10,6 +10,13 @@
    Data change: None. This is a presentation-only change.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
+### `2026-08-17-english-us-uk-conversation-display` | UI/UX issue found
+
+1. **The English flag reverted to the US-only emoji after leaving the language selector**
+   Problem: The conversation room's message language buttons, room header, default display-language menu, and preview rows still rendered the legacy string flag helper directly. English therefore appeared as only the US flag even though the selectors used the combined mark.
+   Fix: Conversation-room display paths now use the shared `LanguageFlag` component, including the current and legacy room implementations. English keeps the diagonal US/UK emoji treatment, while all other language flags remain unchanged.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found
