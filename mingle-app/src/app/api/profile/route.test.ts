@@ -258,4 +258,55 @@ describe("/api/profile route", () => {
       },
     }));
   });
+
+  it("updates birthDate when valid and old enough", async () => {
+    mockUserUpdate.mockResolvedValue({
+      id: "user_123",
+      name: null,
+      image: null,
+      handle: null,
+      bio: null,
+      nationality: null,
+      primaryLanguages: [],
+      defaultConversationLanguages: [],
+      _count: { followerRelations: 0, followingRelations: 0 },
+    });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        birthDate: "1995-05-20",
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockUserUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        birthDate: new Date("1995-05-20T00:00:00.000Z"),
+      },
+    }));
+  });
+
+  it("rejects birthDate when underage or invalid", async () => {
+    const invalidResponse = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        birthDate: "invalid-date",
+      }),
+    }));
+    expect(invalidResponse.status).toBe(400);
+    expect(await invalidResponse.json()).toEqual({ error: "invalid_birth_date" });
+
+    const underageResponse = await PATCH(new NextRequest("https://example.com/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        birthDate: "2025-01-01",
+      }),
+    }));
+    expect(underageResponse.status).toBe(400);
+    expect(await underageResponse.json()).toEqual({ error: "minimum_age_required" });
+  });
 });

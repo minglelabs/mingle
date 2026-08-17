@@ -42,8 +42,6 @@ export async function POST(request: Request) {
   const email = normalizeEmail(payload?.email);
   const name = normalizeName(payload?.name);
   const password = typeof payload?.password === "string" ? payload.password : "";
-  const primaryLanguages = sanitizeSttLanguageSelection(payload?.primaryLanguages);
-  const birthDate = parseBirthDate(payload?.birthDate);
 
   if (!email || !name || !password) {
     return NextResponse.json({ error: "missing_required_fields" }, { status: 400 });
@@ -54,24 +52,28 @@ export async function POST(request: Request) {
   if (!validatePassword(password)) {
     return NextResponse.json({ error: "invalid_password" }, { status: 400 });
   }
-  if (
-    !Array.isArray(payload?.primaryLanguages)
-    || payload.primaryLanguages.length > MAX_STT_LANGUAGE_SELECTION
-    || primaryLanguages.length < 1
-    || primaryLanguages.length > MAX_STT_LANGUAGE_SELECTION
-  ) {
-    return NextResponse.json({ error: "invalid_primary_languages" }, { status: 400 });
+
+  let primaryLanguages = sanitizeSttLanguageSelection(payload?.primaryLanguages);
+  if (primaryLanguages.length === 0) {
+    primaryLanguages = ["en"];
   }
-  if (!birthDate) {
-    return NextResponse.json({ error: "invalid_birth_date" }, { status: 400 });
-  }
-  const birthDateParts = {
-    year: birthDate.getUTCFullYear(),
-    month: birthDate.getUTCMonth() + 1,
-    day: birthDate.getUTCDate(),
-  };
-  if (!isOldEnoughForSignup(birthDateParts)) {
-    return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+
+  let birthDate: Date | null = null;
+  if (payload?.birthDate !== undefined && payload?.birthDate !== null) {
+    birthDate = parseBirthDate(payload.birthDate);
+    if (!birthDate) {
+      return NextResponse.json({ error: "invalid_birth_date" }, { status: 400 });
+    }
+    const birthDateParts = {
+      year: birthDate.getUTCFullYear(),
+      month: birthDate.getUTCMonth() + 1,
+      day: birthDate.getUTCDate(),
+    };
+    if (!isOldEnoughForSignup(birthDateParts)) {
+      return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+    }
+  } else {
+    birthDate = parseBirthDate("2000-01-01");
   }
 
   const passwordHash = hashPassword(password);

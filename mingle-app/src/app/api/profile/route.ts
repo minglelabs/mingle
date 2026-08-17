@@ -9,6 +9,10 @@ import {
 } from "@/lib/stt-languages";
 import { normalizeHandle } from "@/lib/handles";
 import {
+  isOldEnoughForSignup,
+  parseBirthDate,
+} from "@/lib/birth-date";
+import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
 } from "@/lib/profile-image-crop";
@@ -130,6 +134,7 @@ export async function PATCH(request: NextRequest) {
     nationality?: string | null;
     primaryLanguages?: string[];
     defaultConversationLanguages?: string[];
+    birthDate?: Date | null;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -188,6 +193,26 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "invalid_default_conversation_languages" }, { status: 400 });
     }
     data.defaultConversationLanguages = defaultConversationLanguages.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "birthDate")) {
+    if (body.birthDate === null) {
+      data.birthDate = null;
+    } else {
+      const birthDate = parseBirthDate(body.birthDate);
+      if (!birthDate) {
+        return NextResponse.json({ error: "invalid_birth_date" }, { status: 400 });
+      }
+      const birthDateParts = {
+        year: birthDate.getUTCFullYear(),
+        month: birthDate.getUTCMonth() + 1,
+        day: birthDate.getUTCDate(),
+      };
+      if (!isOldEnoughForSignup(birthDateParts)) {
+        return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
+      }
+      data.birthDate = birthDate;
+    }
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "imageCropScale")) {

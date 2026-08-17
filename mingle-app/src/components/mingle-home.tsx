@@ -29,18 +29,13 @@ import {
 } from "@/components/mingle-home.auth-contract";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
-import { resolveSignupCopy } from "@/i18n/signup-copy";
-import LanguagePreferencePicker from "@/components/language-preference-picker";
-import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import {
-  formatBirthDate,
-  isOldEnoughForSignup,
-  type BirthDateParts,
-} from "@/lib/birth-date";
+  readPendingBirthDate,
+  readPendingPrimaryLanguages,
+} from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import {
   deriveDefaultSttLanguagesForLocale,
   sanitizeSttLanguageSelection,
-  type SttLanguageCode,
 } from "@/lib/stt-languages";
 
 type MingleHomeProps = {
@@ -155,21 +150,13 @@ type NativeAuthPendingResponse =
 
 type LegalSheetKind = "privacy" | "terms";
 type EmailAuthSheetMode = "login" | "signup" | "forgot";
-type SignupStep = "account" | "languages" | "birth-date";
 type EmailAuthErrorCode =
   | "required"
   | "invalid_email"
   | "password_mismatch"
-  | "primary_language_required"
-  | "birth_date_required"
-  | "minimum_age_required";
+  | "email_already_registered";
 const LEGAL_SHEET_EXIT_MS = 240;
 const EMAIL_SHEET_EXIT_MS = 240;
-const DEFAULT_SIGNUP_BIRTH_DATE: BirthDateParts = {
-  year: 2000,
-  month: 1,
-  day: 1,
-};
 
 type MingleWindowWithNativeAuthCache = Window & {
   __MINGLE_LAST_NATIVE_AUTH_EVENT?: NativeAuthBridgeEvent;
@@ -425,11 +412,6 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   const [signupName, setSignupName] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
-  const [signupStep, setSignupStep] = useState<SignupStep>("account");
-  const [signupPrimaryLanguages, setSignupPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
-    deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1)
-  ));
-  const [signupBirthDate, setSignupBirthDate] = useState<BirthDateParts>(DEFAULT_SIGNUP_BIRTH_DATE);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const pendingNativeProviderRef = useRef<NativeAuthProvider | null>(null);
@@ -468,19 +450,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     : emailSheetMode === "forgot"
       ? 2
       : 0;
-  const signupCopy = useMemo(() => resolveSignupCopy(props.locale), [props.locale]);
   const emailAuthErrorMessage = emailAuthErrorCode === "required"
     ? props.dictionary.profile.emailRequiredFieldsMessage
     : emailAuthErrorCode === "invalid_email"
       ? props.dictionary.profile.emailInvalidFormatMessage
       : emailAuthErrorCode === "password_mismatch"
         ? props.dictionary.profile.emailPasswordMismatchMessage
-        : emailAuthErrorCode === "primary_language_required"
-          ? signupCopy.primaryLanguagesRequired
-          : emailAuthErrorCode === "birth_date_required"
-            ? signupCopy.birthDateRequired
-            : emailAuthErrorCode === "minimum_age_required"
-              ? signupCopy.birthDateUnderage
         : "";
   const legalSheetUrl = legalSheetKind === "privacy"
     ? privacyPolicyUrl
@@ -507,10 +482,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
   }, []);
 
   const resetSignupSetup = useCallback(() => {
-    setSignupStep("account");
-    setSignupPrimaryLanguages(deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1));
-    setSignupBirthDate(DEFAULT_SIGNUP_BIRTH_DATE);
-  }, [props.locale]);
+    setEmailAuthErrorCode(null);
+  }, []);
 
   const clearNativeAuthTimeout = useCallback(() => {
     if (nativeAuthTimeoutRef.current) {
@@ -1003,90 +976,35 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     props.dictionary.profile.emailAuthFailedMessage,
   ]);
 
-  const handleSignupAccountContinue = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (isEmailSubmitting) return;
-
-    const email = signupEmail.trim().toLowerCase();
-    const name = signupName.trim();
-    const password = signupPassword.trim();
-    const passwordConfirm = signupPasswordConfirm.trim();
-    if (!email || !name || !password || !passwordConfirm) {
-      setEmailAuthErrorCode("required");
-      return;
-    }
-    if (!isValidEmailAddress(email)) {
-      setEmailAuthErrorCode("invalid_email");
-      return;
-    }
-    if (password !== passwordConfirm) {
-      setEmailAuthErrorCode("password_mismatch");
-      return;
-    }
-
-    setEmailAuthErrorCode(null);
-    setSignupStep("languages");
-  }, [isEmailSubmitting, signupEmail, signupName, signupPassword, signupPasswordConfirm]);
-
-  const handleSignupLanguagesContinue = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (isEmailSubmitting) return;
-    if (signupPrimaryLanguages.length === 0) {
-      setEmailAuthErrorCode("primary_language_required");
-      return;
-    }
-
-    setEmailAuthErrorCode(null);
-    setSignupStep("birth-date");
-  }, [isEmailSubmitting, signupPrimaryLanguages.length]);
-
-  const handleSignupStepBack = useCallback(() => {
-    if (isEmailSubmitting) return;
-    setEmailAuthErrorCode(null);
-    setSignupStep((current) => current === "birth-date" ? "languages" : "account");
-  }, [isEmailSubmitting]);
-
   const handleEmailSignUpSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isEmailSubmitting) return;
 
-    if (signupPrimaryLanguages.length === 0) {
-      setEmailAuthErrorCode("primary_language_required");
-      setSignupStep("languages");
-      return;
-    }
-    const birthDateValue = formatBirthDate(signupBirthDate);
-    if (!birthDateValue) {
-      setEmailAuthErrorCode("birth_date_required");
-      return;
-    }
-    if (!isOldEnoughForSignup(signupBirthDate)) {
-      setEmailAuthErrorCode("minimum_age_required");
-      return;
-    }
-
     const email = signupEmail.trim().toLowerCase();
     const name = signupName.trim();
     const password = signupPassword.trim();
     const passwordConfirm = signupPasswordConfirm.trim();
     if (!email || !name || !password || !passwordConfirm) {
       setEmailAuthErrorCode("required");
-      setSignupStep("account");
       return;
     }
     if (!isValidEmailAddress(email)) {
       setEmailAuthErrorCode("invalid_email");
-      setSignupStep("account");
       return;
     }
     if (password !== passwordConfirm) {
       setEmailAuthErrorCode("password_mismatch");
-      setSignupStep("account");
       return;
     }
 
     setEmailAuthErrorCode(null);
     setIsEmailSubmitting(true);
+
+    const pendingPrimaryLanguages = readPendingPrimaryLanguages();
+    const primaryLanguages = pendingPrimaryLanguages.length > 0
+      ? pendingPrimaryLanguages
+      : deriveDefaultSttLanguagesForLocale(props.locale).slice(0, 1);
+    const pendingBirthDate = readPendingBirthDate() ?? "2000-01-01";
 
     try {
       const signupResponse = await fetch("/api/auth/signup", {
@@ -1096,21 +1014,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           email,
           name,
           password,
-          primaryLanguages: signupPrimaryLanguages,
-          birthDate: birthDateValue,
+          primaryLanguages,
+          birthDate: pendingBirthDate,
         }),
       });
       if (!signupResponse.ok && signupResponse.status !== 409) {
         setIsEmailSubmitting(false);
-        const responseBody = await signupResponse.json().catch(() => null) as { error?: unknown } | null;
-        if (responseBody?.error === "minimum_age_required") {
-          setEmailAuthErrorCode("minimum_age_required");
-          return;
-        }
-        if (responseBody?.error === "invalid_birth_date") {
-          setEmailAuthErrorCode("birth_date_required");
-          return;
-        }
         window.alert(props.dictionary.profile.emailAuthNotReadyMessage);
         return;
       }
@@ -1144,10 +1053,9 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     isEmailSubmitting,
     props.dictionary.profile.emailAuthFailedMessage,
     props.dictionary.profile.emailAuthNotReadyMessage,
-    signupBirthDate,
+    props.locale,
     signupEmail,
     signupName,
-    signupPrimaryLanguages,
     signupPassword,
     signupPasswordConfirm,
   ]);
@@ -1688,40 +1596,12 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
 
                   <div className="max-h-[88vh] w-1/3 shrink-0 overflow-y-auto px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">
                     <div className="relative">
-                      {signupStep !== "account" ? (
-                        <button
-                          type="button"
-                          onClick={handleSignupStepBack}
-                          disabled={emailSheetDisabled}
-                          aria-label={signupCopy.backAction}
-                          className="absolute -left-2 top-0 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <ChevronLeft size={24} strokeWidth={2.2} />
-                        </button>
-                      ) : null}
-                      <div className={signupStep === "account" ? "" : "pl-8"}>
-                        <p className="text-[0.72rem] font-bold uppercase tracking-[0.14em] text-amber-600">
-                          {signupStep === "account"
-                            ? signupCopy.accountStep
-                            : signupStep === "languages"
-                              ? signupCopy.languageStep
-                              : signupCopy.birthDateStep}
-                        </p>
-                        <h2 className="mt-1 text-[1.85rem] font-bold leading-tight">
-                          {signupStep === "account"
-                            ? props.dictionary.profile.emailAuthSignupTitle
-                            : signupStep === "languages"
-                              ? signupCopy.primaryLanguagesTitle
-                              : signupCopy.birthDateTitle}
-                        </h2>
-                        <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
-                          {signupStep === "account"
-                            ? props.dictionary.profile.emailAuthSignupSubtitle
-                            : signupStep === "languages"
-                              ? signupCopy.primaryLanguagesDescription
-                              : signupCopy.birthDateDescription}
-                        </p>
-                      </div>
+                      <h2 className="text-[1.85rem] font-bold leading-tight">
+                        {props.dictionary.profile.emailAuthSignupTitle}
+                      </h2>
+                      <p className="mt-2 text-[1rem] leading-relaxed text-slate-500">
+                        {props.dictionary.profile.emailAuthSignupSubtitle}
+                      </p>
                       <button
                         type="button"
                         onClick={handleCloseEmailSheet}
@@ -1733,182 +1613,104 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                       </button>
                     </div>
 
-                    <div className="mt-5 flex items-center gap-2" aria-label={`${signupCopy.accountStep}, ${signupCopy.languageStep}, ${signupCopy.birthDateStep}`}>
-                      {["account", "languages", "birth-date"].map((step, index) => {
-                        const isActive = step === signupStep;
-                        return (
-                          <span
-                            key={step}
-                            className={`h-1.5 flex-1 rounded-full transition-colors ${isActive || index < ["account", "languages", "birth-date"].indexOf(signupStep)
-                              ? "bg-[#F3C35A]"
-                              : "bg-slate-200"}`}
-                          />
-                        );
-                      })}
-                    </div>
+                    <form className="mt-6" onSubmit={handleEmailSignUpSubmit}>
+                      <label className="text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.emailFieldLabel}
+                      </label>
+                      <input
+                        value={signupEmail}
+                        onChange={(event) => {
+                          setSignupEmail(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="email"
+                        inputMode="email"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.emailFieldPlaceholder}
+                      />
 
-                    {signupStep === "account" ? (
-                      <form className="mt-6" onSubmit={handleSignupAccountContinue}>
-                        <label className="text-[0.82rem] font-semibold text-slate-800">
-                          {props.dictionary.profile.emailFieldLabel}
-                        </label>
-                        <input
-                          value={signupEmail}
-                          onChange={(event) => {
-                            setSignupEmail(event.target.value);
-                            setEmailAuthErrorCode(null);
-                          }}
-                          disabled={emailSheetDisabled}
-                          autoComplete="email"
-                          inputMode="email"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
-                          placeholder={props.dictionary.profile.emailFieldPlaceholder}
-                        />
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.nameFieldLabel}
+                      </label>
+                      <input
+                        value={signupName}
+                        onChange={(event) => {
+                          setSignupName(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="name"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.nameFieldPlaceholder}
+                      />
 
-                        <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
-                          {props.dictionary.profile.nameFieldLabel}
-                        </label>
-                        <input
-                          value={signupName}
-                          onChange={(event) => {
-                            setSignupName(event.target.value);
-                            setEmailAuthErrorCode(null);
-                          }}
-                          disabled={emailSheetDisabled}
-                          autoComplete="name"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
-                          placeholder={props.dictionary.profile.nameFieldPlaceholder}
-                        />
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.passwordFieldLabel}
+                      </label>
+                      <input
+                        value={signupPassword}
+                        onChange={(event) => {
+                          setSignupPassword(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="new-password"
+                        type="password"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.passwordFieldPlaceholder}
+                      />
 
-                        <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
-                          {props.dictionary.profile.passwordFieldLabel}
-                        </label>
-                        <input
-                          value={signupPassword}
-                          onChange={(event) => {
-                            setSignupPassword(event.target.value);
-                            setEmailAuthErrorCode(null);
-                          }}
-                          disabled={emailSheetDisabled}
-                          autoComplete="new-password"
-                          type="password"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
-                          placeholder={props.dictionary.profile.passwordFieldPlaceholder}
-                        />
+                      <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
+                        {props.dictionary.profile.passwordConfirmFieldLabel}
+                      </label>
+                      <input
+                        value={signupPasswordConfirm}
+                        onChange={(event) => {
+                          setSignupPasswordConfirm(event.target.value);
+                          setEmailAuthErrorCode(null);
+                        }}
+                        disabled={emailSheetDisabled}
+                        autoComplete="new-password"
+                        type="password"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
+                        placeholder={props.dictionary.profile.passwordConfirmFieldPlaceholder}
+                      />
 
-                        <label className="mt-4 block text-[0.82rem] font-semibold text-slate-800">
-                          {props.dictionary.profile.passwordConfirmFieldLabel}
-                        </label>
-                        <input
-                          value={signupPasswordConfirm}
-                          onChange={(event) => {
-                            setSignupPasswordConfirm(event.target.value);
-                            setEmailAuthErrorCode(null);
-                          }}
-                          disabled={emailSheetDisabled}
-                          autoComplete="new-password"
-                          type="password"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[1rem] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white"
-                          placeholder={props.dictionary.profile.passwordConfirmFieldPlaceholder}
-                        />
+                      {emailAuthErrorCode ? (
+                        <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
+                      ) : null}
 
-                        {emailAuthErrorCode ? (
-                          <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
-                        ) : null}
+                      <button
+                        type="submit"
+                        disabled={emailSheetDisabled}
+                        className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {isEmailSubmitting ? (
+                          <Loader2 size={20} className="animate-spin text-white" aria-hidden />
+                        ) : (
+                          props.dictionary.profile.emailAuthSignupButton
+                        )}
+                      </button>
 
+                      <div className="mt-6 flex items-center gap-3 text-[0.9rem] text-slate-500">
+                        <span className="h-px flex-1 bg-slate-200" />
+                        <span>{props.dictionary.profile.orLabel}</span>
+                        <span className="h-px flex-1 bg-slate-200" />
+                      </div>
+
+                      <p className="mt-5 text-center text-[1rem] text-slate-500">
+                        {props.dictionary.profile.emailAlreadyAccountPrompt}{" "}
                         <button
-                          type="submit"
+                          type="button"
+                          onClick={() => handleSwitchEmailSheetMode("login")}
                           disabled={emailSheetDisabled}
-                          className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
+                          className="font-semibold text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          {signupCopy.continueAction}
+                          {props.dictionary.profile.emailBackToLoginLink}
                         </button>
-
-                        <div className="mt-6 flex items-center gap-3 text-[0.9rem] text-slate-500">
-                          <span className="h-px flex-1 bg-slate-200" />
-                          <span>{props.dictionary.profile.orLabel}</span>
-                          <span className="h-px flex-1 bg-slate-200" />
-                        </div>
-
-                        <p className="mt-5 text-center text-[1rem] text-slate-500">
-                          {props.dictionary.profile.emailAlreadyAccountPrompt}{" "}
-                          <button
-                            type="button"
-                            onClick={() => handleSwitchEmailSheetMode("login")}
-                            disabled={emailSheetDisabled}
-                            className="font-semibold text-slate-900 underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {props.dictionary.profile.emailBackToLoginLink}
-                          </button>
-                        </p>
-                      </form>
-                    ) : null}
-
-                    {signupStep === "languages" ? (
-                      <form className="mt-6" onSubmit={handleSignupLanguagesContinue}>
-                        <LanguagePreferencePicker
-                          selectedLanguages={signupPrimaryLanguages}
-                          onToggleLanguage={(code) => {
-                            setSignupPrimaryLanguages((current) => sanitizeSttLanguageSelection(
-                              current.includes(code)
-                                ? current.filter((language) => language !== code)
-                                : [...current, code],
-                            ));
-                            setEmailAuthErrorCode(null);
-                          }}
-                          uiLocale={props.locale}
-                          searchPlaceholder={signupCopy.languageSearchPlaceholder}
-                          sortLocaleLabel={signupCopy.languageSortLocaleLabel}
-                          sortAlphabeticalLabel={signupCopy.languageSortAlphabeticalLabel}
-                          noResultsLabel={signupCopy.languageNoResultsLabel}
-                          maxLanguages={5}
-                          minLanguages={1}
-                          disabled={emailSheetDisabled}
-                        />
-                        {emailAuthErrorCode ? (
-                          <p className="mt-3 text-sm text-rose-600">{emailAuthErrorMessage}</p>
-                        ) : null}
-                        <button
-                          type="submit"
-                          disabled={emailSheetDisabled}
-                          className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
-                        >
-                          {signupCopy.continueAction}
-                        </button>
-                      </form>
-                    ) : null}
-
-                    {signupStep === "birth-date" ? (
-                      <form className="mt-7" onSubmit={handleEmailSignUpSubmit}>
-                        <SignupBirthDatePicker
-                          value={signupBirthDate}
-                          onChange={(nextValue) => {
-                            setSignupBirthDate(nextValue);
-                            setEmailAuthErrorCode(null);
-                          }}
-                          yearLabel={signupCopy.yearLabel}
-                          monthLabel={signupCopy.monthLabel}
-                          dayLabel={signupCopy.dayLabel}
-                        />
-                        <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-center text-[0.86rem] leading-relaxed text-amber-900">
-                          {signupCopy.birthDateAgeHint}
-                        </div>
-                        {emailAuthErrorCode ? (
-                          <p className="mt-3 text-center text-sm text-rose-600">{emailAuthErrorMessage}</p>
-                        ) : null}
-                        <button
-                          type="submit"
-                          disabled={emailSheetDisabled}
-                          className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-xl bg-[#111111] text-[1rem] font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-400"
-                        >
-                          {isEmailSubmitting ? (
-                            <Loader2 size={18} className="animate-spin" aria-hidden />
-                          ) : (
-                            signupCopy.createAccountAction
-                          )}
-                        </button>
-                      </form>
-                    ) : null}
+                      </p>
+                    </form>
                   </div>
 
                   <div className="w-1/3 shrink-0 px-5 pb-[calc(1.4rem+env(safe-area-inset-bottom))] pt-4">

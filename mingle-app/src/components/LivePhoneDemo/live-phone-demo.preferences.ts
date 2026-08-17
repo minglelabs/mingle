@@ -5,11 +5,75 @@ export const LS_KEY_SPEECH_LANGUAGES = 'mingle_demo_speech_languages'
 export const LS_KEY_TRANSLATION_LANGUAGES_LINKED = 'mingle_demo_translation_languages_linked'
 export const LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES = 'mingle_demo_pending_default_conversation_languages'
 export const LS_KEY_PENDING_PRIMARY_LANGUAGES = 'mingle_demo_pending_primary_languages'
+export const LS_KEY_PENDING_BIRTH_DATE = 'mingle_demo_pending_birth_date'
 export const DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT = 'mingle:default-conversation-languages-sync'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
 export const LS_KEY_INPUT_MODE = 'mingle_demo_input_mode'
 export const LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED = 'mingle_demo_language_onboarding_confirmed_v1'
+
+function getLocalStorage(): Storage | null {
+  if (typeof globalThis === 'undefined') return null
+  return typeof globalThis.localStorage === 'undefined' ? null : globalThis.localStorage
+}
+
+export function readPendingPrimaryLanguages(): string[] {
+  const storage = getLocalStorage()
+  if (!storage) return []
+  try {
+    const rawValue = storage.getItem(LS_KEY_PENDING_PRIMARY_LANGUAGES)
+    if (!rawValue) return []
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue))
+  } catch {
+    return []
+  }
+}
+
+export function readPendingDefaultConversationLanguages(): string[] {
+  const storage = getLocalStorage()
+  if (!storage) return []
+  try {
+    const rawValue = storage.getItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES)
+    if (!rawValue) return []
+    return sanitizeSttLanguageSelection(JSON.parse(rawValue))
+  } catch {
+    return []
+  }
+}
+
+export function readPendingBirthDate(): string | null {
+  const storage = getLocalStorage()
+  if (!storage) return null
+  try {
+    const rawValue = storage.getItem(LS_KEY_PENDING_BIRTH_DATE)
+    if (!rawValue) return null
+    const trimmed = rawValue.trim()
+    return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null
+  } catch {
+    return null
+  }
+}
+
+export function clearPendingBirthDate(): void {
+  const storage = getLocalStorage()
+  if (!storage) return
+  try {
+    storage.removeItem(LS_KEY_PENDING_BIRTH_DATE)
+  } catch {
+    // Ignore storage failures
+  }
+}
+
+export function clearPendingLanguagePreferences(): void {
+  const storage = getLocalStorage()
+  if (!storage) return
+  try {
+    storage.removeItem(LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES)
+    storage.removeItem(LS_KEY_PENDING_PRIMARY_LANGUAGES)
+  } catch {
+    // Ignore storage failures
+  }
+}
 export const DEFAULT_TEXT_SIZE_LEVEL = 3
 export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
