@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Remove App Language From Conversation Menu
+
+- Surface: Conversation room's top-right hamburger menu.
+- Issue: The menu included a top-level Language action that opened the app-wide language onboarding flow, even though the menu is intended for settings belonging to the current conversation.
+- User impact: Users could interpret the app display-language control as a room language setting and change global UI behavior from inside one conversation.
+- Resolution: Removed the app-language action, its room-level onboarding modal trigger, and the unused callback path from the conversation room. Room language controls remain available through the existing speech/translation selector, while app language stays in the app-wide settings flow.
+- Data change: No schema or migration change.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - First-Launch Language Gate Before Authentication
 
 - Surface: First app launch, language onboarding, locale transition, and the unauthenticated login screen.

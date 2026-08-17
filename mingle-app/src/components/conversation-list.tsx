@@ -2638,81 +2638,6 @@ export default function ConversationList({
       });
   }, [defaultSelectedLanguages]);
 
-  const handleConversationLanguageOnboardingConfirm = useCallback(async (
-    conversationId: string,
-    nextSelectedLanguages: string[],
-    nextTranslationLanguagesLinked: boolean,
-  ): Promise<boolean> => {
-    const normalizedSelectedLanguages = sanitizeSttLanguageSelection(
-      nextSelectedLanguages,
-      defaultSelectedLanguages,
-    );
-    if (normalizedSelectedLanguages.length === 0) return false;
-
-    const previousConversation = conversationsRef.current.find(
-      (conversation) => conversation.id === conversationId,
-    );
-    if (!previousConversation) return false;
-
-    const previousSelectedLanguages = sanitizeSttLanguageSelection(
-      previousConversation.selectedLanguages,
-      defaultSelectedLanguages,
-    );
-    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
-    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
-    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
-
-    setConversations((current) => current.map((conversation) => (
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            selectedLanguages: [...normalizedSelectedLanguages],
-            translationLanguagesLinked: nextTranslationLanguagesLinked,
-          }
-        : conversation
-    )));
-
-    try {
-      const response = await fetch(buildConversationApiPath(`/${conversationId}`), {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
-        },
-        body: JSON.stringify({
-          selectedLanguages: normalizedSelectedLanguages,
-          translationLanguagesLinked: nextTranslationLanguagesLinked,
-        }),
-      });
-      const nextConversation = await readConversationResponse(response);
-      if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return false;
-      setConversations((current) => upsertConversation(current, nextConversation));
-      return true;
-    } catch (error: unknown) {
-      const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
-      logConversationMutationFailure({
-        label: "language-onboarding",
-        conversationId,
-        method: "PATCH",
-        path: buildConversationApiPath(`/${conversationId}`),
-        error,
-        stale,
-      });
-      if (!stale) {
-        setConversations((current) => current.map((conversation) => (
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                selectedLanguages: [...previousSelectedLanguages],
-                translationLanguagesLinked: previousTranslationLanguagesLinked,
-              }
-            : conversation
-        )));
-      }
-      return false;
-    }
-  }, [defaultSelectedLanguages]);
-
   const handleConversationDefaultDisplayLanguageChange = useCallback((
     conversationId: string,
     nextDefaultDisplayLanguage: string | null,
@@ -4708,13 +4633,6 @@ export default function ConversationList({
                         onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
                           handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
                         }}
-                        onLanguageOnboardingConfirm={(selectedLanguages, translationLanguagesLinked) => (
-                          handleConversationLanguageOnboardingConfirm(
-                            conversation.id,
-                            selectedLanguages,
-                            translationLanguagesLinked,
-                          )
-                        )}
                         onDefaultDisplayLanguageChange={(defaultDisplayLanguage) => {
                           handleConversationDefaultDisplayLanguageChange(conversation.id, defaultDisplayLanguage);
                         }}
