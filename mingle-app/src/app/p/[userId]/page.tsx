@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import ProfileLinkInstallScreen from "@/components/profile-link-install-screen";
+import { resolveProfileLinkInstallLocale } from "@/components/profile-link-install-copy";
 import { isValidProfileLinkUserId } from "@/lib/profile-link";
 
 const DEFAULT_IOS_APP_STORE_URL = "https://apps.apple.com/app/id6759795134";
@@ -19,10 +21,13 @@ function decodePathSegment(rawValue: string): string {
 export default async function ProfileLinkPage({ params }: ProfileLinkPageProps) {
   const { userId: rawUserId } = await params;
   const userId = decodePathSegment(rawUserId);
+  const requestHeaders = await headers();
+  const locale = resolveProfileLinkInstallLocale(requestHeaders.get("accept-language"));
 
   return (
     <ProfileLinkInstallScreen
       userId={userId}
+      locale={locale}
       iosAppStoreUrl={process.env.IOS_APPSTORE_URL?.trim() || DEFAULT_IOS_APP_STORE_URL}
       androidPlayStoreUrl={process.env.ANDROID_PLAYSTORE_URL?.trim() || DEFAULT_ANDROID_PLAY_STORE_URL}
     />

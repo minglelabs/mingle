@@ -11,25 +11,17 @@ import {
   isValidProfileLinkUserId,
   PROFILE_APP_SCHEME,
 } from "@/lib/profile-link";
+import {
+  getProfileLinkInstallCopy,
+  type ProfileLinkInstallLocale,
+} from "@/components/profile-link-install-copy";
 
 type ProfileLinkInstallScreenProps = {
   userId: string;
   iosAppStoreUrl: string;
   androidPlayStoreUrl: string;
+  locale: ProfileLinkInstallLocale;
 };
-
-function getCopy(isKorean: boolean) {
-  return {
-    title: isKorean ? "Mingle에서 프로필 열기" : "Open profile in Mingle",
-    openInApp: isKorean ? "앱에서 열기" : "Open in app",
-    appStore: isKorean ? "App Store에서 설치" : "App Store",
-    playStore: isKorean ? "Google Play에서 설치" : "Google Play",
-    invalidTitle: isKorean ? "잘못된 프로필 링크입니다" : "This profile link is invalid",
-    invalidDescription: isKorean
-      ? "QR 코드가 손상되었거나 더 이상 사용할 수 없는 링크입니다."
-      : "The QR code may be damaged or the link is no longer available.",
-  };
-}
 
 function AppleLogo() {
   return (
@@ -48,12 +40,9 @@ export default function ProfileLinkInstallScreen({
   userId,
   iosAppStoreUrl,
   androidPlayStoreUrl,
+  locale,
 }: ProfileLinkInstallScreenProps) {
-  const isKorean = useMemo(
-    () => typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("ko"),
-    [],
-  );
-  const copy = getCopy(isKorean);
+  const copy = getProfileLinkInstallCopy(locale);
   const isValid = isValidProfileLinkUserId(userId);
   const appUrl = isValid ? buildProfileAppUrl(userId) : null;
   const isAndroid = useMemo(

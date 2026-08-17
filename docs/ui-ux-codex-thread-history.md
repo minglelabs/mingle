@@ -1,5 +1,17 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Localize shared profile link actions with an English fallback
+
+- Surface: The browser fallback screen shown when a user opens a shared Mingle profile link.
+- Issue: The primary action was labeled `앱에서 열기` in Korean and `Open in app` in English, which did not identify Mingle as the destination. The screen also detected Korean only in the client and was not connected to the locale routing system.
+- User impact: Users could not immediately tell which app the primary action would open, and the first-render language behavior was implicit rather than having a clear default.
+- Resolution:
+  - Rename the primary action to `밍글 앱에서 열기` in Korean and `Open in Mingle` in English.
+  - Read the browser `Accept-Language` header on the `/p/{userId}` server route rather than redirecting the shared link into a locale-prefixed path.
+  - Keep Korean only when Korean is the highest-priority supported browser language; use English for English, unsupported languages, missing headers, and crawlers.
+- Data contract: None. The stable `/p/{userId}` URL, app deep link, and store links are unchanged.
+- Testing notes: Verify the action text and first-render language on Korean, English, unsupported-language, and missing-language browser requests, then verify the custom-scheme launch and store links remain unchanged.
+
 ## 2026-08-17 - Remove App Language From Conversation Menu
 
 - Surface: Conversation room's top-right hamburger menu.
