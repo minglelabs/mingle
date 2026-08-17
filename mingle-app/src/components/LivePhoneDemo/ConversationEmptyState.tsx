@@ -316,7 +316,7 @@ export default function ConversationEmptyState({ uiLocale }: ConversationEmptySt
         <div
           data-qa="live-demo-empty-state-arrow"
           aria-hidden="true"
-          className="mt-3 h-[clamp(4.5rem,15vh,7rem)] w-7"
+          className="mt-3 h-[clamp(7rem,24vh,12rem)] w-7"
         >
           <svg
             viewBox="0 0 24 100"
