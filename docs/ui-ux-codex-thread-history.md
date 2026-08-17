@@ -1,5 +1,14 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Language Onboarding Persistence Before Navigation
+
+- Surface: First-entry language onboarding and the room menu's language picker.
+- Issue: Selecting a language updated room state and storage through passive effects, while changing the UI locale navigated immediately. The component could unmount before the selected languages or translation-link state reached the API. The global onboarding picker also did not update the in-memory defaults or the authenticated profile used by new conversations.
+- User impact: A user could choose a language, see the app move to the new locale, and then reopen the room with the previous language settings. New rooms could likewise continue using stale default languages.
+- Resolution: Onboarding choices now write local preferences synchronously, await one room PATCH containing both selected languages and the translation-link flag before locale navigation, and roll back the optimistic room state when that request fails. The global picker now synchronizes the active default-language state and event, persists authenticated users through the profile endpoint, and only navigates after that save succeeds.
+- Data change: No schema or migration change; existing conversation and profile language fields are reused.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - iOS Google OAuth First-Attempt Recovery
 
 - Surface: Native iOS Google sign-in after signing out from an Apple-authenticated session.

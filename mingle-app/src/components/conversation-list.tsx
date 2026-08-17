@@ -1613,6 +1613,7 @@ export default function ConversationList({
       ? normalizedInitialDefaultConversationLanguages
       : deriveDefaultConversationLanguages(normalizedInitialPrimaryLanguage, locale)
   ));
+  const defaultConversationLanguagesSyncVersionRef = useRef(0);
   const [preferredDisplayLanguages, setPreferredDisplayLanguages] = useState<string[]>(
     normalizedInitialPrimaryLanguages,
   );
@@ -1625,6 +1626,7 @@ export default function ConversationList({
     if (!needsProfileHydration || sessionStatus !== "authenticated") return;
 
     const controller = new AbortController();
+    const hydrationVersion = defaultConversationLanguagesSyncVersionRef.current;
     void fetch(buildClientApiPath("/profile"), {
       cache: "no-store",
       signal: controller.signal,
@@ -1638,7 +1640,7 @@ export default function ConversationList({
         };
       })
       .then((profile) => {
-        if (!profile) return;
+        if (!profile || hydrationVersion !== defaultConversationLanguagesSyncVersionRef.current) return;
         const profileLanguages = Array.isArray(profile.primaryLanguages)
           ? profile.primaryLanguages
           : profile.nationality;
@@ -1670,7 +1672,10 @@ export default function ConversationList({
             ? (detail as { languages: unknown[] }).languages
             : [],
       );
-      if (nextLanguages.length > 0) setDefaultSelectedLanguages(nextLanguages);
+      if (nextLanguages.length > 0) {
+        defaultConversationLanguagesSyncVersionRef.current += 1;
+        setDefaultSelectedLanguages(nextLanguages);
+      }
     };
 
     window.addEventListener(
@@ -2539,6 +2544,81 @@ export default function ConversationList({
         // Language sync failures inside an already-open room must not surface as
         // "failed to open" — the optimistic rollback above is the visible signal.
       });
+  }, [defaultSelectedLanguages]);
+
+  const handleConversationLanguageOnboardingConfirm = useCallback(async (
+    conversationId: string,
+    nextSelectedLanguages: string[],
+    nextTranslationLanguagesLinked: boolean,
+  ): Promise<boolean> => {
+    const normalizedSelectedLanguages = sanitizeSttLanguageSelection(
+      nextSelectedLanguages,
+      defaultSelectedLanguages,
+    );
+    if (normalizedSelectedLanguages.length === 0) return false;
+
+    const previousConversation = conversationsRef.current.find(
+      (conversation) => conversation.id === conversationId,
+    );
+    if (!previousConversation) return false;
+
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked = previousConversation.translationLanguagesLinked !== false;
+    const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
+    languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
+
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId
+        ? {
+            ...conversation,
+            selectedLanguages: [...normalizedSelectedLanguages],
+            translationLanguagesLinked: nextTranslationLanguagesLinked,
+          }
+        : conversation
+    )));
+
+    try {
+      const response = await fetch(buildConversationApiPath(`/${conversationId}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...buildConversationRequestHeaders(initialTrackingIdentityRef.current),
+        },
+        body: JSON.stringify({
+          selectedLanguages: normalizedSelectedLanguages,
+          translationLanguagesLinked: nextTranslationLanguagesLinked,
+        }),
+      });
+      const nextConversation = await readConversationResponse(response);
+      if (languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion) return false;
+      setConversations((current) => upsertConversation(current, nextConversation));
+      return true;
+    } catch (error: unknown) {
+      const stale = languageSettingsSyncVersionRef.current.get(conversationId) !== nextVersion;
+      logConversationMutationFailure({
+        label: "language-onboarding",
+        conversationId,
+        method: "PATCH",
+        path: buildConversationApiPath(`/${conversationId}`),
+        error,
+        stale,
+      });
+      if (!stale) {
+        setConversations((current) => current.map((conversation) => (
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                selectedLanguages: [...previousSelectedLanguages],
+                translationLanguagesLinked: previousTranslationLanguagesLinked,
+              }
+            : conversation
+        )));
+      }
+      return false;
+    }
   }, [defaultSelectedLanguages]);
 
   const handleConversationDefaultDisplayLanguageChange = useCallback((
@@ -4044,7 +4124,7 @@ export default function ConversationList({
     resetPullRefresh();
   }, [activeConversation, resetPullRefresh]);
 
-  const handleLanguageOnboardingConfirm = useCallback((languageCode: string) => {
+  const handleLanguageOnboardingConfirm = useCallback(async (languageCode: string) => {
     // Seed the room's default output languages from the chosen app language the
     // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
     // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
@@ -4053,18 +4133,51 @@ export default function ConversationList({
     try {
       window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
       window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    let savedDefaultLanguages = normalizedTargets;
+    if (sessionStatus !== "unauthenticated") {
+      try {
+        const response = await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ defaultConversationLanguages: normalizedTargets }),
+        });
+        if (!response.ok) return;
+
+        const saved = await response.json() as { defaultConversationLanguages?: unknown };
+        savedDefaultLanguages = sanitizeSttLanguageSelection(
+          saved.defaultConversationLanguages,
+          normalizedTargets,
+        );
+      } catch {
+        return;
+      }
+    }
+
+    try {
       window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
     } catch {
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
     }
 
+    defaultConversationLanguagesSyncVersionRef.current += 1;
+    setDefaultSelectedLanguages(savedDefaultLanguages);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT, {
+        detail: savedDefaultLanguages,
+      }));
+    }
+
     setLanguageOnboardingModalOpen(false);
 
-    const nextUiLocale = resolveUiLocaleForLanguage(languageCode);
+    const nextUiLocale = resolveUiLocaleForLanguage(savedDefaultLanguages[0] ?? languageCode);
     if (nextUiLocale !== locale) {
       window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
     }
-  }, [locale]);
+  }, [locale, sessionStatus]);
 
   // Closing without picking (X / Escape) should still count as "seen" -- this is a
   // one-time first-entry prompt, not a gate the user must complete. Without this, only
@@ -4489,6 +4602,13 @@ export default function ConversationList({
                         onTranslationLanguagesLinkedChange={(translationLanguagesLinked) => {
                           handleConversationTranslationLanguagesLinkedChange(conversation.id, translationLanguagesLinked);
                         }}
+                        onLanguageOnboardingConfirm={(selectedLanguages, translationLanguagesLinked) => (
+                          handleConversationLanguageOnboardingConfirm(
+                            conversation.id,
+                            selectedLanguages,
+                            translationLanguagesLinked,
+                          )
+                        )}
                         onDefaultDisplayLanguageChange={(defaultDisplayLanguage) => {
                           handleConversationDefaultDisplayLanguageChange(conversation.id, defaultDisplayLanguage);
                         }}

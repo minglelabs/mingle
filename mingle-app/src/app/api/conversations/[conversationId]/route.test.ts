@@ -409,6 +409,49 @@ describe("/api/conversations/[conversationId] route", () => {
     });
   });
 
+  it("updates selected languages and the translation link setting together", async () => {
+    mockSanitizeSttLanguageSelection.mockReturnValue(["en", "ko"]);
+    mockUpdateConversationChannelSelectedLanguages.mockResolvedValue({
+      id: "conv_1",
+      selectedLanguages: ["en", "ko"],
+    });
+    mockUpdateConversationChannelTranslationLanguagesLinked.mockResolvedValue({
+      id: "conv_1",
+      selectedLanguages: ["en", "ko"],
+      translationLanguagesLinked: false,
+    });
+
+    const response = await PATCH(
+      new NextRequest("https://example.com/api/conversations/conv_1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedLanguages: ["en", "ko"],
+          translationLanguagesLinked: false,
+        }),
+      }),
+      { params: Promise.resolve({ conversationId: "conv_1" }) },
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.conversation).toEqual({
+      id: "conv_1",
+      selectedLanguages: ["en", "ko"],
+      translationLanguagesLinked: false,
+    });
+    expect(mockUpdateConversationChannelSelectedLanguages).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      selectedLanguages: ["en", "ko"],
+    });
+    expect(mockUpdateConversationChannelTranslationLanguagesLinked).toHaveBeenCalledWith({
+      conversationId: "conv_1",
+      userId: "tracked_user_123",
+      translationLanguagesLinked: false,
+    });
+  });
+
   it("updates the translation language link setting for a guest request", async () => {
     mockUpdateConversationChannelTranslationLanguagesLinked.mockResolvedValue({
       id: "conv_1",

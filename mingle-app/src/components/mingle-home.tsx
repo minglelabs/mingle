@@ -66,9 +66,13 @@ type MingleHomeProps = {
     usageSec: number;
     messageCount: number;
   }) => void;
-  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void;
-  onSpeechLanguagesChange?: (speechLanguages: string[]) => void;
-  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void;
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void | Promise<void>;
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void | Promise<void>;
+  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>;
+  onLanguageOnboardingConfirm?: (
+    selectedLanguages: string[],
+    translationLanguagesLinked: boolean,
+  ) => boolean | Promise<boolean>;
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void;
 };
 
@@ -1830,6 +1834,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           onSelectedLanguagesChange={props.onSelectedLanguagesChange}
           onSpeechLanguagesChange={props.onSpeechLanguagesChange}
           onTranslationLanguagesLinkedChange={props.onTranslationLanguagesLinkedChange}
+          onLanguageOnboardingConfirm={props.onLanguageOnboardingConfirm}
           onDefaultDisplayLanguageChange={props.onDefaultDisplayLanguageChange}
         />
       ) : (

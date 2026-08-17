@@ -3,6 +3,7 @@ export type ConversationMutationFailureLabel =
   | "selected-languages"
   | "speech-languages"
   | "translation-linked"
+  | "language-onboarding"
   | "default-display-language"
   | "route-open"
   | "popstate-open"
@@ -108,6 +109,5 @@ export function logConversationMutationFailure(
 ): void {
   if (!isConversationDiagnosticsEnabled()) return;
   const summary = buildConversationMutationFailureSummary(context);
-  // eslint-disable-next-line no-console
   console.warn("[mingle][conversation-list] mutation failure", summary);
 }

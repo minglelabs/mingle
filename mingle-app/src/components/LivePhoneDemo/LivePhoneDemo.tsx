@@ -32,6 +32,7 @@ import {
   DEFAULT_STT_LANGUAGES,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
+  getSttLanguageFlag,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
 } from '@/lib/stt-languages'
@@ -1119,9 +1120,13 @@ interface LivePhoneDemoProps {
     usageSec: number
     messageCount: number
   }) => void
-  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
-  onSpeechLanguagesChange?: (speechLanguages: string[]) => void
-  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void | Promise<void>
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void | Promise<void>
+  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
+  onLanguageOnboardingConfirm?: (
+    selectedLanguages: string[],
+    translationLanguagesLinked: boolean,
+  ) => boolean | Promise<boolean>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
 }
 
@@ -1413,6 +1418,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
+  onLanguageOnboardingConfirm,
   onDefaultDisplayLanguageChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
@@ -4091,7 +4097,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTranslationLanguagesLinkedChange?.(nextLinked)
   }, [onTranslationLanguagesLinkedChange, translationLanguagesLinked])
 
-  const handleLanguageOnboardingConfirm = useCallback((languageCode: string) => {
+  const handleLanguageOnboardingConfirm = useCallback(async (languageCode: string) => {
     const normalizedLanguage = canonicalizeSttLanguageCode(languageCode) || languageCode
     // Seed default output languages from the chosen app language the same way a
     // brand-new conversation would (chosen language + en/ko/ja, deduped), not just
@@ -4099,11 +4105,33 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     const normalizedTargets = deriveDefaultSttLanguagesForLocale(normalizedLanguage)
 
     selectedLanguagesRef.current = normalizedTargets
-    selectedLanguagesChangePendingRef.current = true
+    // Persist the onboarding choice directly before a possible locale navigation.
+    // The normal selected-language effect is intentionally bypassed here because
+    // navigation can unmount this component before that passive effect runs.
+    selectedLanguagesChangePendingRef.current = false
     setSelectedLanguages(normalizedTargets)
 
     setTranslationLanguagesLinked(false)
-    onTranslationLanguagesLinkedChange?.(false)
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets))
+      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, '0')
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    let persisted = true
+    try {
+      if (onLanguageOnboardingConfirm) {
+        persisted = await onLanguageOnboardingConfirm(normalizedTargets, false)
+      } else {
+        await onSelectedLanguagesChange?.(normalizedTargets)
+        await onTranslationLanguagesLinkedChange?.(false)
+      }
+    } catch {
+      persisted = false
+    }
+    if (!persisted) return
 
     try {
       window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, '1')
@@ -4117,7 +4145,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     if (nextUiLocale !== uiLocale) {
       window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`))
     }
-  }, [onTranslationLanguagesLinkedChange, uiLocale])
+  }, [onLanguageOnboardingConfirm, onSelectedLanguagesChange, onTranslationLanguagesLinkedChange, uiLocale])
 
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return

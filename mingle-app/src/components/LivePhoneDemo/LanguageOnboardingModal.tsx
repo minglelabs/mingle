@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Search, X } from "lucide-react";
+import { Check, Loader2, Search, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useId, useMemo, useState } from "react";
 import {
@@ -16,7 +16,7 @@ interface LanguageOnboardingModalProps {
   onClose: () => void;
   initialLanguage: string;
   uiLocale: string;
-  onConfirm: (language: string) => void;
+  onConfirm: (language: string) => void | Promise<void>;
 }
 
 // Rendered only while the picker is open (see LivePhoneDemo.tsx), so mount-time
@@ -30,6 +30,7 @@ export default function LanguageOnboardingModal({
   const titleId = useId();
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState(initialLanguage);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   // The modal's own copy previews in whichever language is tentatively tapped
   // (not just the checkmark) so the picker itself demonstrates the effect of
@@ -50,7 +51,7 @@ export default function LanguageOnboardingModal({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || isConfirming) return;
       event.preventDefault();
       onClose();
     };
@@ -59,7 +60,7 @@ export default function LanguageOnboardingModal({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [isConfirming, onClose]);
 
   // The list stays in the app's current ui locale regardless of which output
   // language is tentatively selected -- unlike the old "my language" step, this
@@ -80,8 +81,14 @@ export default function LanguageOnboardingModal({
 
   if (typeof document === "undefined") return null;
 
-  const handleConfirm = () => {
-    onConfirm(language);
+  const handleConfirm = async () => {
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      await onConfirm(language);
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   // Row layout matches LanguageSelector.tsx (the in-room language picker) so the
@@ -93,6 +100,7 @@ export default function LanguageOnboardingModal({
       <button
         key={lang.code}
         type="button"
+        disabled={isConfirming}
         onClick={() => setLanguage(lang.code)}
         aria-pressed={isSelected}
         className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
@@ -153,7 +161,8 @@ export default function LanguageOnboardingModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              disabled={isConfirming}
+              className="inline-flex h-[38px] min-w-[40px] shrink-0 items-center justify-center px-1 text-gray-700 transition-colors hover:text-gray-900 active:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-wait disabled:opacity-50"
               aria-label={copy.closeLabel}
             >
               <X size={20} strokeWidth={2.4} />
@@ -176,6 +185,7 @@ export default function LanguageOnboardingModal({
               <input
                 type="search"
                 value={query}
+                disabled={isConfirming}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={copy.searchPlaceholder}
                 className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-slate-400"
@@ -233,8 +243,11 @@ export default function LanguageOnboardingModal({
           <button
             type="button"
             onClick={handleConfirm}
-            className="flex h-12 w-full items-center justify-center rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600"
+            disabled={isConfirming}
+            aria-busy={isConfirming}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-amber-500 text-[0.95rem] font-semibold text-white shadow-[0_16px_32px_rgba(245,158,11,0.28)] transition hover:-translate-y-[1px] hover:bg-amber-600 disabled:cursor-wait disabled:opacity-70"
           >
+            {isConfirming ? <Loader2 size={16} className="animate-spin" aria-hidden /> : null}
             {copy.confirmButtonLabel}
           </button>
         </footer>
