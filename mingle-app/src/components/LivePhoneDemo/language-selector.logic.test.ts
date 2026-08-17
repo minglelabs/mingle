@@ -9,6 +9,8 @@ import {
   clearLanguageSelectorHistoryState,
   filterLanguageSelectorItems,
   isLanguageSelectorHistoryOpen,
+  LANGUAGE_SELECTOR_PRIORITY_CODES,
+  partitionLanguageSelectorItemsByPriority,
   registerDeselectedLanguageCode,
   resolveDefaultLanguageSelectorSortMode,
   resolveLanguageSelectorShowsSortToggle,
@@ -191,5 +193,96 @@ describe("language-selector.logic", () => {
     expect(
       buildLanguageSelectorButtonCodes(["en", "ko", "zh-CN", "ja"], ["fr", "de", "es"]),
     ).toEqual(["en", "ko", "zh-CN", "ja", "fr"]);
+  });
+
+  describe("partitionLanguageSelectorItemsByPriority", () => {
+    it("pulls priority-language codes into their own bucket, in a fixed priority order", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician galego",
+        },
+        {
+          code: "ja",
+          flag: "🇯🇵",
+          englishName: "Japanese",
+          localizedName: "Japanese",
+          nativeName: "日本語",
+          secondaryLabel: "Japanese / 日本語",
+          searchText: "japanese nihongo",
+        },
+        {
+          code: "en",
+          flag: "🇺🇸",
+          englishName: "English",
+          localizedName: "English",
+          nativeName: "English",
+          secondaryLabel: "English",
+          searchText: "english",
+        },
+      ];
+
+      const { priorityItems, otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      // "en" ranks before "ja" in LANGUAGE_SELECTOR_PRIORITY_CODES, so priority
+      // order wins even though the input order (and any alphabetical sort) would
+      // put "ja" first -- this is the fix for a low-traffic language like Galician
+      // outranking major languages at the top of the picker.
+      expect(priorityItems.map((item) => item.code)).toEqual(["en", "ja"]);
+      expect(otherItems.map((item) => item.code)).toEqual(["gl"]);
+    });
+
+    it("leaves the incoming order of non-priority items untouched", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "bg",
+          flag: "🇧🇬",
+          englishName: "Bulgarian",
+          localizedName: "Bulgarian",
+          nativeName: "Български",
+          secondaryLabel: "Bulgarian / Български",
+          searchText: "bulgarian",
+        },
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician",
+        },
+      ];
+      expect(items.some((item) => (LANGUAGE_SELECTOR_PRIORITY_CODES as readonly string[]).includes(item.code)))
+        .toBe(false);
+
+      const { otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      expect(otherItems.map((item) => item.code)).toEqual(["bg", "gl"]);
+    });
+
+    it("returns an empty priority bucket when nothing in the list is a priority language", () => {
+      const items: LanguageSelectorItem[] = [
+        {
+          code: "gl",
+          flag: "🇪🇸",
+          englishName: "Galician",
+          localizedName: "Galician",
+          nativeName: "Galego",
+          secondaryLabel: "Galician / Galego",
+          searchText: "galician",
+        },
+      ];
+
+      const { priorityItems, otherItems } = partitionLanguageSelectorItemsByPriority(items);
+
+      expect(priorityItems).toEqual([]);
+      expect(otherItems.map((item) => item.code)).toEqual(["gl"]);
+    });
   });
 });

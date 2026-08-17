@@ -301,9 +301,10 @@ function isDevelopmentTunnelUrl(raw: string): boolean {
     const normalized = hostname.toLowerCase();
     return normalized.endsWith('.ngrok-free.dev')
       || normalized.endsWith('.ngrok-free.app')
+      || normalized.endsWith('.trycloudflare.com')
       || normalized === 'mingle-app-devbox.photo-for-passport.com';
   } catch {
-    return /(\.ngrok-free\.(dev|app)|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
+    return /(\.ngrok-free\.(dev|app)|\.trycloudflare\.com|mingle-app-devbox\.photo-for-passport\.com)/i.test(raw);
   }
 }
 
