@@ -32,6 +32,14 @@
    Data change: None. This is an ordering-only API and presentation fix.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
+### `2026-08-17-notification-profile-hide-admob` | UI/UX issue found
+
+1. **The native AdMob banner remained visible behind a profile opened from a notification**
+   Problem: Tapping a notification actor opened the public profile as a stacked surface above the notification drawer, but the native banner zone still treated the underlying conversations list as active. The profile therefore inherited a banner that should not compete with the profile details.
+   Fix: Entering a notification profile posts the native `hidden` banner zone. Closing the profile through its header, edge/native back, or browser history restores the conversations-list `list` zone while keeping the notification drawer underneath.
+   Data change: None. This is a native banner visibility and overlay-state fix.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found

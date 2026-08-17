@@ -2835,6 +2835,7 @@ export default function ConversationList({
   }, []);
 
   const openNotificationProfile = useCallback((userId: string) => {
+    postNativeBannerZone("hidden");
     notificationProfileIdRef.current = userId;
     if (typeof window !== "undefined") {
       const currentState = window.history.state;
@@ -2848,6 +2849,7 @@ export default function ConversationList({
   }, []);
 
   const closeNotificationProfile = useCallback(() => {
+    postNativeBannerZone("list");
     if (
       typeof window !== "undefined"
       && window.history.state
@@ -2870,6 +2872,7 @@ export default function ConversationList({
 
     const handleNotificationProfilePopState = () => {
       if (!notificationProfileIdRef.current) return;
+      postNativeBannerZone("list");
       setNotificationProfileId(null);
     };
 
