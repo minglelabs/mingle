@@ -51,7 +51,7 @@ class NativePushNotificationModule(
     }
 
     try {
-      FirebaseMessaging.getInstance(firebaseApp).token
+      FirebaseMessaging.getInstance().token
         .addOnCompleteListener { task ->
           if (task.isSuccessful) {
             val token = task.result ?: ""
