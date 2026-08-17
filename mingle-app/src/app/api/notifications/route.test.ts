@@ -111,7 +111,7 @@ describe("/api/notifications route", () => {
     expect(mockNotificationFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { recipientId: "user_123", type: "follow" },
       take: 2,
-      orderBy: [{ readAt: "asc" }, { createdAt: "desc" }],
+      orderBy: { createdAt: "desc" },
     }));
     expect(mockUserFollowFindMany).toHaveBeenCalledWith({
       where: {

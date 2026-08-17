@@ -39,10 +39,7 @@ export async function GET(request: NextRequest) {
         recipientId: viewerId,
         type: "follow",
       },
-      orderBy: [
-        { readAt: "asc" },
-        { createdAt: "desc" },
-      ],
+      orderBy: { createdAt: "desc" },
       take: limit,
       select: {
         id: true,

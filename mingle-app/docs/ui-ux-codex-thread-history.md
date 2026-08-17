@@ -24,6 +24,14 @@
    Fix: Language indicators now keep language codes until render time and use the shared `LanguageFlag` component across those surfaces. Nationality-only flags remain unchanged because they represent a country, not the English language.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
+### `2026-08-17-notification-newest-first-order` | UI/UX issue found
+
+1. **The notification drawer could show older read notifications above newer ones**
+   Problem: The notifications API sorted by `readAt` before `createdAt`. Once notifications had been marked read at different times, an older read timestamp took precedence and made newer follow notifications appear lower in the first-tab notification drawer.
+   Fix: Notifications are now fetched in descending creation time. The existing unread/read sections remain in place, while each section preserves newest-first order.
+   Data change: None. This is an ordering-only API and presentation fix.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found
