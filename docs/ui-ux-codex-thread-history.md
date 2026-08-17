@@ -1,5 +1,17 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Open the Current User's Profile From Participants
+
+- Surface: Conversation room hamburger menu, participants page, and profile detail panel.
+- Issue: Participant rows forwarded the user ID correctly, but the public user route rejected the current user's own ID with `use_profile_endpoint`. As a result, the only participant in a solo room appeared tappable but the profile detail panel showed a load failure.
+- User impact: Users could not inspect their own participant record from a room, even though the same right-to-left profile surface was available for other users.
+- Resolution:
+  - When the selected participant is the signed-in user, load the existing private `/profile` response into the same public-style detail panel.
+  - Keep the right-to-left slide-in and back behavior unchanged.
+  - Hide follow, block, and report actions for the current user while keeping profile sharing available.
+- Data change: None. The existing public user route continues to reject direct self-profile requests; only the client-side profile surface selects `/profile` for the current user.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Collect Primary Languages and Birth Date During Signup
 
 - Surface: Email/password signup sheet.

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { motion, useAnimationControls, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type PublicUserProfileScreenProps = {
@@ -153,6 +154,7 @@ export default function PublicUserProfileScreen({
   userId,
   onClose,
 }: PublicUserProfileScreenProps) {
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const motionControls = useAnimationControls();
   const isMountedRef = useRef(false);
@@ -170,15 +172,28 @@ export default function PublicUserProfileScreen({
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
+  const normalizedUserId = userId.trim();
+  const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
+  const isOwnProfile = Boolean(sessionUserId && sessionUserId === normalizedUserId);
 
   useEffect(() => {
+    if (sessionStatus === "loading") return;
+
     let cancelled = false;
     setIsLoading(true);
     setLoadError(false);
-    void fetch(buildClientApiPath(`/users/${encodeURIComponent(userId)}`), { cache: "no-store" })
+    const profilePath: `/${string}` = isOwnProfile
+      ? "/profile"
+      : `/users/${encodeURIComponent(normalizedUserId)}`;
+    void fetch(buildClientApiPath(profilePath), { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("profile_load_failed");
-        return response.json() as Promise<PublicUserProfile>;
+        const data = await response.json() as Partial<PublicUserProfile>;
+        return {
+          ...data,
+          isFollowing: data.isFollowing === true,
+          isBlocked: data.isBlocked === true,
+        } as PublicUserProfile;
       })
       .then((data) => {
         if (cancelled) return;
@@ -194,7 +209,7 @@ export default function PublicUserProfileScreen({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [isOwnProfile, normalizedUserId, sessionStatus]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -252,7 +267,7 @@ export default function PublicUserProfileScreen({
   }, [handleBack, motionControls, viewportWidth]);
 
   const handleToggleFollow = useCallback(async () => {
-    if (!profile || isActionPending || profile.isBlocked) return;
+    if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
     setIsActionPending(true);
     setActionError(false);
     const nextIsFollowing = !profile.isFollowing;
@@ -268,10 +283,10 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [isActionPending, profile]);
+  }, [isActionPending, isOwnProfile, profile]);
 
   const handleToggleBlock = useCallback(async () => {
-    if (!profile || isActionPending) return;
+    if (isOwnProfile || !profile || isActionPending) return;
     const nextIsBlocked = !profile.isBlocked;
     if (typeof window !== "undefined") {
       const confirmed = window.confirm(nextIsBlocked ? copy.blockConfirm : copy.unblockConfirm);
@@ -296,11 +311,11 @@ export default function PublicUserProfileScreen({
     } finally {
       setIsActionPending(false);
     }
-  }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, profile]);
+  }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
 
   const handleReportSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!profile || reportPending) return;
+    if (isOwnProfile || !profile || reportPending) return;
     setReportPending(true);
     setReportSubmitted(false);
     setActionError(false);
@@ -325,7 +340,7 @@ export default function PublicUserProfileScreen({
     } finally {
       setReportPending(false);
     }
-  }, [profile, reportMessage, reportPending, reportReason]);
+  }, [isOwnProfile, profile, reportMessage, reportPending, reportReason]);
 
   const name = profile?.name?.trim() || copy.userFallback;
   const bio = profile?.bio?.trim() || (locale === "ko" ? "" : "");
@@ -432,48 +447,52 @@ export default function PublicUserProfileScreen({
               </div>
 
               <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleToggleFollow()}
-                  disabled={isActionPending || profile.isBlocked}
-                  className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition disabled:opacity-50 ${
-                    profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
-                  }`}
-                >
-                  {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
-                </button>
+                {!isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleFollow()}
+                    disabled={isActionPending || profile.isBlocked}
+                    className={`flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition disabled:opacity-50 ${
+                      profile.isFollowing ? "border-amber-200 bg-amber-50 text-amber-700" : "bg-amber-500 text-white active:bg-amber-600"
+                    }`}
+                  >
+                    {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleOpenProfileShare}
-                  className="flex h-10 min-w-0 flex-1 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100"
+                  className={`${isOwnProfile ? "w-full" : "flex-1"} flex h-10 min-w-0 items-center justify-center rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100`}
                 >
                   {dictionary.profile.shareProfile}
                 </button>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleToggleBlock()}
-                  disabled={isActionPending}
-                  className="flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
-                >
-                  <UserX size={17} strokeWidth={2} aria-hidden="true" />
-                  {profile.isBlocked ? copy.unblock : copy.block}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReportSubmitted(false);
-                    setActionError(false);
-                    setReportOpen(true);
-                  }}
-                  className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 text-[13px] font-semibold text-rose-600 transition active:bg-rose-100"
-                >
-                  <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
-                  {copy.report}
-                </button>
-              </div>
+              {!isOwnProfile ? (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleBlock()}
+                    disabled={isActionPending}
+                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
+                  >
+                    <UserX size={17} strokeWidth={2} aria-hidden="true" />
+                    {profile.isBlocked ? copy.unblock : copy.block}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReportSubmitted(false);
+                      setActionError(false);
+                      setReportOpen(true);
+                    }}
+                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 text-[13px] font-semibold text-rose-600 transition active:bg-rose-100"
+                  >
+                    <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
+                    {copy.report}
+                  </button>
+                </div>
+              ) : null}
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
               ) : null}
