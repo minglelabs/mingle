@@ -134,6 +134,7 @@ const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE
 const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
 const NOTIFICATION_PROFILE_HISTORY_KEY = "__MINGLE_NOTIFICATION_PROFILE__";
+const CONVERSATION_PROFILE_HISTORY_KEY = "__MINGLE_CONVERSATION_PROFILE__";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
@@ -1671,6 +1672,7 @@ export default function ConversationList({
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationProfileId, setNotificationProfileId] = useState<string | null>(null);
+  const [conversationProfileId, setConversationProfileId] = useState<string | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
@@ -1799,6 +1801,7 @@ export default function ConversationList({
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
   const notificationProfileIdRef = useRef<string | null>(null);
+  const conversationProfileIdRef = useRef<string | null>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
@@ -2848,6 +2851,22 @@ export default function ConversationList({
     setNotificationProfileId(userId);
   }, []);
 
+  const openConversationProfile = useCallback((userId: string) => {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) return;
+
+    postNativeBannerZone("hidden");
+    conversationProfileIdRef.current = normalizedUserId;
+    if (typeof window !== "undefined") {
+      const currentState = window.history.state;
+      const nextState = currentState && typeof currentState === "object"
+        ? { ...currentState, [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId }
+        : { [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId };
+      window.history.pushState(nextState, "", window.location.href);
+    }
+    setConversationProfileId(normalizedUserId);
+  }, []);
+
   const closeNotificationProfile = useCallback(() => {
     postNativeBannerZone("list");
     if (
@@ -2863,9 +2882,28 @@ export default function ConversationList({
     setNotificationProfileId(null);
   }, []);
 
+  const closeConversationProfile = useCallback(() => {
+    postNativeBannerZone("hidden");
+    if (
+      typeof window !== "undefined"
+      && window.history.state
+      && typeof window.history.state === "object"
+      && CONVERSATION_PROFILE_HISTORY_KEY in window.history.state
+    ) {
+      window.history.back();
+      return;
+    }
+    conversationProfileIdRef.current = null;
+    setConversationProfileId(null);
+  }, []);
+
   useEffect(() => {
     notificationProfileIdRef.current = notificationProfileId;
   }, [notificationProfileId]);
+
+  useEffect(() => {
+    conversationProfileIdRef.current = conversationProfileId;
+  }, [conversationProfileId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2878,6 +2916,20 @@ export default function ConversationList({
 
     window.addEventListener("popstate", handleNotificationProfilePopState);
     return () => window.removeEventListener("popstate", handleNotificationProfilePopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleConversationProfilePopState = () => {
+      if (!conversationProfileIdRef.current) return;
+      postNativeBannerZone("hidden");
+      conversationProfileIdRef.current = null;
+      setConversationProfileId(null);
+    };
+
+    window.addEventListener("popstate", handleConversationProfilePopState);
+    return () => window.removeEventListener("popstate", handleConversationProfilePopState);
   }, []);
 
   useEffect(() => {
@@ -3828,6 +3880,10 @@ export default function ConversationList({
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
+    if (conversationProfileId) {
+      closeConversationProfile();
+      return true;
+    }
     if (notificationProfileId) {
       closeNotificationProfile();
       return true;
@@ -3846,9 +3902,11 @@ export default function ConversationList({
   }, 5), [
     activeConversation,
     closeConversationOverlay,
+    closeConversationProfile,
     closeNotifications,
     closeNotificationProfile,
     closeSearchOverlay,
+    conversationProfileId,
     isCreatingConversation,
     notificationProfileId,
     showNotifications,
@@ -4363,6 +4421,15 @@ export default function ConversationList({
         />
       ) : null}
 
+      {conversationProfileId ? (
+        <PublicUserProfileScreen
+          dictionary={dictionary}
+          locale={locale}
+          userId={conversationProfileId}
+          onClose={closeConversationProfile}
+        />
+      ) : null}
+
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -4658,6 +4725,7 @@ export default function ConversationList({
                         locale={locale}
                         headerMode="conversation"
                         onBack={handleCloseActiveConversation}
+                        onOpenProfile={openConversationProfile}
                         onConversationDeleted={() => {
                           handleConversationDeleted(conversation.id);
                         }}

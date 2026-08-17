@@ -1121,6 +1121,7 @@ interface LivePhoneDemoProps {
   onSpeechLanguagesChange?: (speechLanguages: string[]) => void | Promise<void>
   onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
+  onOpenProfile?: (userId: string) => void
 }
 
 const TTS_AUDIO_WAIT_TIMEOUT_MS = 3000
@@ -1411,6 +1412,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
   onDefaultDisplayLanguageChange,
+  onOpenProfile,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
@@ -6293,6 +6295,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                         loadingLabel={participantsCopy.loadingLabel}
                         errorLabel={participantsCopy.errorLabel}
                         retryLabel={participantsCopy.retryLabel}
+                        onOpenProfile={onOpenProfile}
                         onBack={requestMenuBackStep}
                       />
                     </motion.section>

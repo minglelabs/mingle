@@ -1,5 +1,17 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Open Participant Profiles From Conversation Rooms
+
+- Surface: Conversation room hamburger menu, participants page, and participant profile row.
+- Issue: The participants page showed the current user as a static record, so tapping the participant did not open the existing public profile surface. The row also repeated the first primary-language value as text below an avatar that already displayed the same language as a flag badge.
+- User impact: Users could not inspect a participant's public profile from the room, and the duplicated language indicator made the participant record look visually inconsistent.
+- Resolution:
+  - Make the participant record open the existing right-to-left public profile panel for that participant.
+  - Preserve the room underneath the profile panel and close the profile with the existing back gesture or close transition.
+  - Remove the duplicated text language row; the avatar's ordered primary-language flag stack remains the single language indicator.
+- Data change: None. The profile uses the existing `/users/{userId}` endpoint and existing primary-language fields.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Localize shared profile link actions with an English fallback
 
 - Surface: The browser fallback screen shown when a user opens a shared Mingle profile link.

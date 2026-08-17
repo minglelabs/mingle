@@ -1,6 +1,5 @@
 "use client";
 
-import LanguageFlag from "@/components/language-flag";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
@@ -21,6 +20,7 @@ type ConversationParticipantsPanelProps = {
   loadingLabel: string;
   errorLabel: string;
   retryLabel: string;
+  onOpenProfile?: (userId: string) => void;
   onBack: () => void;
 };
 
@@ -99,6 +99,7 @@ export default function ConversationParticipantsPanel({
   loadingLabel,
   errorLabel,
   retryLabel,
+  onOpenProfile,
   onBack,
 }: ConversationParticipantsPanelProps) {
   const { data: session } = useSession();
@@ -166,7 +167,12 @@ export default function ConversationParticipantsPanel({
         ) : null}
 
         {profile ? (
-          <div className="rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+          <button
+            type="button"
+            onClick={() => onOpenProfile?.(profile.id)}
+            disabled={!onOpenProfile}
+            className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3.5 text-left shadow-[0_8px_20px_rgba(15,23,42,0.04)] transition hover:border-gray-300 hover:bg-gray-50 active:bg-gray-50 disabled:cursor-default disabled:hover:border-gray-200 disabled:hover:bg-white"
+          >
             <div className="flex items-center gap-3">
               <div className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-visible rounded-full bg-gray-100">
                 <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-gray-100">
@@ -201,15 +207,9 @@ export default function ConversationParticipantsPanel({
                   </span>
                 </div>
                 {displayHandle ? <p className="mt-0.5 truncate text-[0.82rem] text-gray-500">{displayHandle}</p> : null}
-                {displayLanguages.length > 0 ? (
-                  <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[0.78rem] text-gray-500">
-                    <LanguageFlag language={displayLanguages[0]} className="text-[0.9rem] leading-none" />
-                    <span className="truncate">{displayLanguages[0]}</span>
-                  </div>
-                ) : null}
               </div>
             </div>
-          </div>
+          </button>
         ) : null}
 
         {loadState === "error" ? (
