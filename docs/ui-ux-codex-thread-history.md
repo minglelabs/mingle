@@ -1,5 +1,19 @@
 # UI/UX Codex Thread History
 
+## 2026-08-17 - Collect Primary Languages and Birth Date During Signup
+
+- Surface: Email/password signup sheet.
+- Issue: Signup created an account after collecting only credentials, so the app had no reliable primary-language choice or exact age information at account creation.
+- User impact: New users could not be guided through the language preference needed for Mingle personalization, and an age policy could not distinguish a birthday that had already occurred from one that had not.
+- Resolution:
+  - Split signup into three compact steps: account details, primary languages, and age check.
+  - Reuse the full language preference picker and allow one to five primary languages.
+  - Collect year, month, and day together in a custom wheel-style selector rather than native select controls.
+  - Keep the birth date private and explain that it is used only for age verification.
+- Age policy: The server enforces a minimum age of 12 using the exact birth date. On 2026-08-17, the newest generally eligible year is 2014; 2014 dates after August 17 remain unavailable until their twelfth birthday. This keeps the policy accurate rather than allowing all 2015-born users before they turn 12.
+- Data change: Added nullable `app_users.birth_date` as a date-only field. Existing OAuth accounts remain compatible and can complete any future profile-age collection flow separately.
+- Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-17 - Open Participant Profiles From Conversation Rooms
 
 - Surface: Conversation room hamburger menu, participants page, and participant profile row.

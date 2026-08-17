@@ -35,6 +35,11 @@ function makeInvalidJsonRequest(): Request {
   });
 }
 
+const validSignupDetails = {
+  primaryLanguages: ["ko"],
+  birthDate: "2000-01-01",
+};
+
 describe("/api/auth/signup route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -97,6 +102,7 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "Member",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
@@ -118,6 +124,7 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "  Member Name  ",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
@@ -134,6 +141,7 @@ describe("/api/auth/signup route", () => {
       email: "Member@Example.com",
       name: "  New Member  ",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 
@@ -145,6 +153,9 @@ describe("/api/auth/signup route", () => {
         email: string;
         name: string;
         passwordHash: string;
+        nationality: string;
+        primaryLanguages: string[];
+        birthDate: Date;
         firstSeenAt: Date;
         lastSeenAt: Date;
       };
@@ -152,6 +163,9 @@ describe("/api/auth/signup route", () => {
     expect(createCall.data.email).toBe("member@example.com");
     expect(createCall.data.name).toBe("New Member");
     expect(createCall.data.passwordHash.startsWith("pbkdf2_sha256$")).toBe(true);
+    expect(createCall.data.nationality).toBe("ko");
+    expect(createCall.data.primaryLanguages).toEqual(["ko"]);
+    expect(createCall.data.birthDate).toEqual(new Date("2000-01-01T00:00:00.000Z"));
     expect(createCall.data.firstSeenAt).toBeInstanceOf(Date);
     expect(createCall.data.lastSeenAt).toBeInstanceOf(Date);
   });
@@ -164,6 +178,7 @@ describe("/api/auth/signup route", () => {
       email: "member@example.com",
       name: "Member",
       password: "password123",
+      ...validSignupDetails,
     }));
     const json = await response.json();
 

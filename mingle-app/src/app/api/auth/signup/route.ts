@@ -2,11 +2,21 @@ import { NextResponse } from "next/server";
 import { hashPassword, isValidEmail, normalizeEmail, validatePassword } from "@/lib/email-password-auth";
 import { prisma } from "@/lib/prisma";
 import { createWithDefaultHandle } from "@/lib/handles";
+import {
+  isOldEnoughForSignup,
+  parseBirthDate,
+} from "@/lib/birth-date";
+import {
+  MAX_STT_LANGUAGE_SELECTION,
+  sanitizeSttLanguageSelection,
+} from "@/lib/stt-languages";
 
 type SignupPayload = {
   email?: unknown;
   name?: unknown;
   password?: unknown;
+  primaryLanguages?: unknown;
+  birthDate?: unknown;
 };
 
 function normalizeName(rawValue: unknown): string {
@@ -32,6 +42,8 @@ export async function POST(request: Request) {
   const email = normalizeEmail(payload?.email);
   const name = normalizeName(payload?.name);
   const password = typeof payload?.password === "string" ? payload.password : "";
+  const primaryLanguages = sanitizeSttLanguageSelection(payload?.primaryLanguages);
+  const birthDate = parseBirthDate(payload?.birthDate);
 
   if (!email || !name || !password) {
     return NextResponse.json({ error: "missing_required_fields" }, { status: 400 });
@@ -41,6 +53,25 @@ export async function POST(request: Request) {
   }
   if (!validatePassword(password)) {
     return NextResponse.json({ error: "invalid_password" }, { status: 400 });
+  }
+  if (
+    !Array.isArray(payload?.primaryLanguages)
+    || payload.primaryLanguages.length > MAX_STT_LANGUAGE_SELECTION
+    || primaryLanguages.length < 1
+    || primaryLanguages.length > MAX_STT_LANGUAGE_SELECTION
+  ) {
+    return NextResponse.json({ error: "invalid_primary_languages" }, { status: 400 });
+  }
+  if (!birthDate) {
+    return NextResponse.json({ error: "invalid_birth_date" }, { status: 400 });
+  }
+  const birthDateParts = {
+    year: birthDate.getUTCFullYear(),
+    month: birthDate.getUTCMonth() + 1,
+    day: birthDate.getUTCDate(),
+  };
+  if (!isOldEnoughForSignup(birthDateParts)) {
+    return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
   }
 
   const passwordHash = hashPassword(password);
@@ -64,6 +95,9 @@ export async function POST(request: Request) {
         name,
         handle,
         passwordHash,
+        nationality: primaryLanguages[0] ?? null,
+        primaryLanguages,
+        birthDate,
         firstSeenAt: now,
         lastSeenAt: now,
       },
