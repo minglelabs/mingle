@@ -4236,8 +4236,8 @@ export default function ConversationList({
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
     }
 
-    let savedPrimaryLanguages = normalizedPrimaryLanguages;
-    let savedDefaultLanguages = normalizedTargets;
+    let savedPrimaryLanguages: string[] = normalizedPrimaryLanguages;
+    let savedDefaultLanguages: string[] = normalizedTargets;
     if (sessionStatus === "authenticated") {
       try {
         const profileResponse = await fetch(buildClientApiPath("/profile"), {
