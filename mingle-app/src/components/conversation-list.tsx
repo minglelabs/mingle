@@ -2488,6 +2488,13 @@ export default function ConversationList({
     );
     if (!previousConversation) return;
 
+    const previousSelectedLanguages = sanitizeSttLanguageSelection(
+      previousConversation.selectedLanguages,
+      defaultSelectedLanguages,
+    );
+    const previousTranslationLanguagesLinked =
+      previousConversation.translationLanguagesLinked !== false;
+
     const nextVersion = (languageSettingsSyncVersionRef.current.get(conversationId) ?? 0) + 1;
     languageSettingsSyncVersionRef.current.set(conversationId, nextVersion);
 
