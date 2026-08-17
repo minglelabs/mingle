@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 import AppLocalePreferenceSync from "@/components/app-locale-preference-sync";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import MobileCanvasShell from "@/components/mobile-canvas-shell";
+import NativeProfileLinkOverlay from "@/components/native-profile-link-overlay";
 import { TtsSettingsProvider } from "@/context/tts-settings";
 import { getAuthOptions } from "@/lib/auth-options";
 import { DEFAULT_LOCALE } from "@/i18n";
@@ -81,7 +82,10 @@ export default async function RootLayout({
         <AppLocalePreferenceSync />
         <TtsSettingsProvider>
           <AuthSessionProvider session={session}>
-            <MobileCanvasShell>{children}</MobileCanvasShell>
+            <MobileCanvasShell>
+              {children}
+              <NativeProfileLinkOverlay />
+            </MobileCanvasShell>
             <Toaster
               position="bottom-center"
               closeButton={false}

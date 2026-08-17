@@ -91,7 +91,10 @@ import {
 import NativeQrScanner, {
   type NativeQrScannerRequest,
 } from './src/nativeQrScanner';
-import { buildNativeProfileWebUrl, parseNativeProfileLink } from './src/profileLink';
+import {
+  buildNativeProfileLinkEventScript,
+  parseNativeProfileLink,
+} from './src/profileLink';
 
 type RuntimeEnvMap = Record<string, string | undefined>;
 type WebViewLoadErrorEvent = { nativeEvent: { description?: string } };
@@ -1374,15 +1377,11 @@ function AppInner(): React.JSX.Element {
 
     profileLinkNavigationSequenceRef.current += 1;
     const linkNonce = String(Date.now()) + '-' + String(profileLinkNavigationSequenceRef.current);
-    const destination = buildNativeProfileWebUrl({
-      baseUrl: activeWebAppBaseUrl,
-      locale: webLocale,
+    const eventScript = buildNativeProfileLinkEventScript({
       userId: normalizedUserId,
-      apiNamespace: VALIDATED_API_NAMESPACE,
-      nativeStt: nativeAvailable,
       linkNonce,
+      navigationSequence: profileLinkNavigationSequenceRef.current,
     });
-    if (!destination) return;
 
     if (!isPageReadyRef.current || !webViewRef.current) {
       pendingProfileLinkUserIdRef.current = normalizedUserId;
@@ -1396,13 +1395,13 @@ function AppInner(): React.JSX.Element {
     }
 
     pendingProfileLinkUserIdRef.current = null;
-    recordProfileLinkTrace('native_profile_route_injected', {
+    recordProfileLinkTrace('native_profile_overlay_event_dispatched', {
       userIdHint: getProfileLinkUserIdHint(normalizedUserId),
       navigationSequence: profileLinkNavigationSequenceRef.current,
-      destinationHasNonce: destination.includes('profileLinkNonce='),
+      linkNonce,
     });
-    webViewRef.current.injectJavaScript(`window.location.assign(${JSON.stringify(destination)}); true;`);
-  }, [activeWebAppBaseUrl, nativeAvailable, webLocale]);
+    webViewRef.current.injectJavaScript(eventScript);
+  }, []);
   const handleIncomingProfileLink = useCallback((rawUrl: string) => {
     const candidateOrigins = [
       activeWebAppBaseUrl,

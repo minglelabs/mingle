@@ -1,4 +1,8 @@
-import { buildNativeProfileWebUrl, parseNativeProfileLink } from '../src/profileLink';
+import {
+  buildNativeProfileLinkEventScript,
+  buildNativeProfileWebUrl,
+  parseNativeProfileLink,
+} from '../src/profileLink';
 
 describe('native profile links', () => {
   const origin = 'https://mingle-2-0-0-production.up.railway.app';
@@ -54,5 +58,18 @@ describe('native profile links', () => {
       locale: 'ko',
       userId: 'not valid',
     })).toBeNull();
+  });
+
+  it('dispatches an overlay event without replacing the current WebView route', () => {
+    const script = buildNativeProfileLinkEventScript({
+      userId: 'cmg123abc',
+      linkNonce: 'launch-2',
+      navigationSequence: 2,
+    });
+
+    expect(script).toContain('mingle:native-profile-link');
+    expect(script).toContain('__MINGLE_PENDING_NATIVE_PROFILE_LINK');
+    expect(script).toContain('cmg123abc');
+    expect(script).not.toContain('window.location.assign');
   });
 });

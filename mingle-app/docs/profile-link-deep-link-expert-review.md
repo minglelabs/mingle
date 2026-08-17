@@ -539,3 +539,19 @@ WebView navigation state 있음, 화면 대상 불일치
 4. 브라우저 클릭, AppDelegate 기록, Linking 수신, pending 소비, WebView route 주입을 `[MingleProfileLink]` trace로 남깁니다.
 
 이 변경은 특정 브라우저 원인을 확정한 것이 아니라, 사용자가 실제로 사용하는 Chrome 경로에서 user activation과 native pending fallback을 강화한 것입니다. TestFlight 74에서 실제 iPhone의 `Chrome click → AppDelegate → Linking/pending → WebView navigation` trace를 확인한 뒤, 남아 있는 실패 단계에 한정해 추가 수정해야 합니다.
+
+## 13. 2026-08-17 구현 방향 변경
+
+사용자가 요구한 최종 동작은 프로필 전용 route로 이동하는 것이 아니라, 현재 Mingle 화면을 유지한 채 오른쪽에서 공개 프로필 화면이 슬라이드되어 나오는 것입니다. 이에 따라 native WebView 목적지를 `/{locale}/users/{userId}`로 교체하던 방식은 제거했습니다.
+
+현재 native shell은 다음 이벤트를 현재 WebView에 주입합니다.
+
+```text
+mingle:native-profile-link
+  → root client layout의 NativeProfileLinkOverlay
+  → PublicUserProfileScreen 고정 오버레이
+```
+
+이 오버레이는 대화방, 탐색, 마이페이지 등 현재 route와 무관하게 root layout에서 수신합니다. 이벤트를 처리하기 전에 전역 pending window key도 함께 기록하므로 WebView hydration보다 native 주입이 먼저 끝나는 경우에도 대상 프로필을 잃지 않습니다. 동일 사용자의 링크도 요청 sequence가 달라지면 새 화면 인스턴스로 다시 엽니다.
+
+오버레이가 열릴 때 native 광고 영역을 숨기고, 뒤로가기 또는 오른쪽 스와이프로 닫히면 원래 route에 맞는 banner zone을 복원합니다. 이 변경을 실제 기기에서 사용하려면 웹 배포와 함께 native 앱을 새로 빌드해야 합니다.

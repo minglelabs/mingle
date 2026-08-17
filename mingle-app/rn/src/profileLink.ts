@@ -7,6 +7,9 @@ const PROFILE_APP_SCHEMES = new Set([
   PROFILE_APP_FALLBACK_SCHEME,
 ]);
 
+export const NATIVE_PROFILE_LINK_EVENT = "mingle:native-profile-link";
+export const NATIVE_PROFILE_LINK_WINDOW_KEY = "__MINGLE_PENDING_NATIVE_PROFILE_LINK";
+
 export type NativeProfileLink = {
   userId: string;
   source: "https" | "mingle";
@@ -20,6 +23,19 @@ export type NativeProfileWebUrlOptions = {
   nativeStt?: boolean;
   linkNonce?: string;
 };
+
+export type NativeProfileLinkOverlayRequest = {
+  userId: string;
+  linkNonce: string;
+  navigationSequence: number;
+};
+
+export function buildNativeProfileLinkEventScript(
+  request: NativeProfileLinkOverlayRequest,
+): string {
+  const serializedRequest = JSON.stringify(request);
+  return `(function () { const detail = ${serializedRequest}; window[${JSON.stringify(NATIVE_PROFILE_LINK_WINDOW_KEY)}] = detail; window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_PROFILE_LINK_EVENT)}, { detail })); })(); true;`;
+}
 
 function normalizeUserId(rawValue: string): string | null {
   let decodedValue = rawValue.trim();

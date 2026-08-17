@@ -926,3 +926,10 @@
   - Add a horizontally scrollable carousel of 60 supported language flags without pagination indicators. Hide the block when a draft, voice transcript, or text message is present.
 - Data contract: No Prisma migration. Existing speech-language and linked-language fields remain readable for backward compatibility, but the selected-language field is authoritative for room translation behavior.
 - Testing notes: Not run in this task by request. Verify the single language list, the 60-flag horizontal carousel, English US/UK flag treatment, and empty-state dismissal after text or voice input.
+
+## 2026-08-17 - Open shared profiles as an in-app overlay
+
+- A shared profile link launched from the browser must open the requested public profile on top of the currently visible Mingle page, regardless of the active tab or current conversation.
+- The native iOS/Android shell now sends the profile target into the existing WebView as an event instead of replacing the WebView URL with a standalone profile route.
+- The root client layout listens for that event and renders the existing public profile surface as a right-to-left overlay, preserving the underlying page and supporting the existing back gesture/history behavior.
+- The overlay hides the native ad banner while open and restores the current page's banner zone after closing.
