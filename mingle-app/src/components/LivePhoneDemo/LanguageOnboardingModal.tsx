@@ -137,7 +137,11 @@ export default function LanguageOnboardingModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      style={{ zIndex: 150 }}
+      // Sits above the conversation list's unauthenticated auth overlay (z-200) so the
+      // language choice is made before sign-up, not hidden behind it. Both live in the
+      // root stacking context -- this modal portals to <body>, and the auth overlay's
+      // parent <main> is position:relative with z-index:auto -- so they compare directly.
+      style={{ zIndex: 250 }}
     >
       <div
         className="mx-auto flex h-full w-full max-w-[540px] flex-col bg-[#fcfbf8] text-slate-950 shadow-[0_32px_80px_rgba(15,23,42,0.16)]"
