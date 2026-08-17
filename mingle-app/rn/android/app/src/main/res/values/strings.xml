@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Mingle</string>
+    <string name="mingle_notifications_channel_id">mingle_notifications</string>
 </resources>

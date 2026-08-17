@@ -22,6 +22,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    MingleFirebaseMessagingService.ensureNotificationChannel(this)
     if (BuildConfig.DEBUG || BuildConfig.MINGLE_QA_BRIDGE_ENABLED == "1") {
       WebView.setWebContentsDebuggingEnabled(true)
     }

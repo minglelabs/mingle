@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -31,7 +32,7 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
       ?: "You have a new notification."
     val notificationId = message.data["notificationId"] ?: message.messageId ?: System.currentTimeMillis().toString()
 
-    ensureNotificationChannel()
+    ensureNotificationChannel(this)
     val openIntent = Intent(this, MainActivity::class.java).apply {
       action = "MINGLE_NOTIFICATION_OPEN"
       flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -61,22 +62,22 @@ class MingleFirebaseMessagingService : FirebaseMessagingService() {
     getSystemService(NotificationManager::class.java).notify(notificationId.hashCode(), builder.build())
   }
 
-  private fun ensureNotificationChannel() {
-    if (Build.VERSION.SDK_INT < 26) return
-    val manager = getSystemService(NotificationManager::class.java)
-    if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-    manager.createNotificationChannel(
-      NotificationChannel(
-        CHANNEL_ID,
-        "Mingle notifications",
-        NotificationManager.IMPORTANCE_HIGH,
-      ).apply {
-        description = "Notifications from Mingle"
-      },
-    )
-  }
-
   companion object {
     const val CHANNEL_ID = "mingle_notifications"
+
+    fun ensureNotificationChannel(context: Context) {
+      if (Build.VERSION.SDK_INT < 26) return
+      val manager = context.getSystemService(NotificationManager::class.java)
+      if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+      manager.createNotificationChannel(
+        NotificationChannel(
+          CHANNEL_ID,
+          "Mingle notifications",
+          NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+          description = "Notifications from Mingle"
+        },
+      )
+    }
   }
 }
