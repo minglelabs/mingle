@@ -181,6 +181,32 @@ export function filterLanguageSelectorItems(
   return items.filter((item) => item.searchText.includes(normalizedQuery));
 }
 
+/** Languages shown ahead of the alphabetical/locale-sorted rest of the picker --
+ * without this, a locale-collation quirk (e.g. Galician sorting before "가"/"a")
+ * can put a low-traffic language at the very top of the list, ahead of languages
+ * with far more speakers. Order here IS the display order within this bucket. */
+export const LANGUAGE_SELECTOR_PRIORITY_CODES: readonly SttLanguageCode[] = [
+  "en", "ko", "ja", "zh-CN", "zh-TW", "es", "fr", "de", "pt", "it", "ru", "ar", "hi", "th", "vi",
+];
+
+export function partitionLanguageSelectorItemsByPriority<T extends { code: string }>(
+  items: readonly T[],
+): { priorityItems: T[]; otherItems: T[] } {
+  const priorityRank = new Map<string, number>(
+    LANGUAGE_SELECTOR_PRIORITY_CODES.map((code, index) => [code, index]),
+  );
+
+  const priorityItems: T[] = [];
+  const otherItems: T[] = [];
+  for (const item of items) {
+    if (priorityRank.has(item.code)) priorityItems.push(item);
+    else otherItems.push(item);
+  }
+  priorityItems.sort((left, right) => priorityRank.get(left.code)! - priorityRank.get(right.code)!);
+
+  return { priorityItems, otherItems };
+}
+
 export function sortLanguageSelectorItems(
   items: readonly LanguageSelectorItem[],
   sortMode: LanguageSelectorSortMode,

@@ -29,13 +29,23 @@ import {
 } from "@/components/LivePhoneDemo/live-phone-demo.usage-format";
 import { resolveLivePhoneDemoConversationDeleteCopy } from "@/components/LivePhoneDemo/live-phone-demo.delete-copy";
 import {
+  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   normalizeLivePhoneDemoAdBannerPosition,
+  readPersistedBooleanPreference,
+  readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
 } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
+import LanguageOnboardingModal from "@/components/LivePhoneDemo/LanguageOnboardingModal";
+import {
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
+  shouldAutoOpenLanguageOnboarding,
+} from "@/components/LivePhoneDemo/language-onboarding.logic";
+import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
 import {
   deriveDefaultSttLanguagesForLocale,
   getSttLanguageFlag,
@@ -1542,6 +1552,7 @@ export default function ConversationList({
   const [autoStartConversationId, setAutoStartConversationId] = useState<string | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isNativeRuntime, setIsNativeRuntime] = useState(false);
+  const [languageOnboardingModalOpen, setLanguageOnboardingModalOpen] = useState(false);
   const [nativeSttStatus, setNativeSttStatus] = useState<string | null>(null);
   const [overlayEnterMode, setOverlayEnterMode] = useState<ConversationOverlayEnterMode>("animate");
   const [overlayExitMode, setOverlayExitMode] = useState<ConversationOverlayExitMode>("animate");
@@ -2477,8 +2488,23 @@ export default function ConversationList({
     // iOS can deliver a delayed popstate while the visible WebView snapshot is
     // already on the next entry; the marker lets the handlers use the entry
     // that caused the gesture instead of guessing from the transient URL.
-    if (readConversationHistoryRouteFromState(window.history.state) !== undefined) return;
-    replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
+    if (readConversationHistoryRouteFromState(window.history.state) === undefined) {
+      replaceConversationOverlayUrl(readConversationIdFromLocation(), "initial-route-marker");
+    }
+
+    let hasConfirmedLanguageOnboarding = false;
+    try {
+      hasConfirmedLanguageOnboarding = readPersistedBooleanPreference(
+        window.localStorage.getItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED),
+        false,
+      );
+    } catch {
+      hasConfirmedLanguageOnboarding = false;
+    }
+
+    if (shouldAutoOpenLanguageOnboarding(hasConfirmedLanguageOnboarding)) {
+      setLanguageOnboardingModalOpen(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -3652,6 +3678,50 @@ export default function ConversationList({
     resetPullRefresh();
   }, [activeConversation, resetPullRefresh]);
 
+  const handleLanguageOnboardingConfirm = useCallback((languageCode: string) => {
+    // Seed the room's default output languages from the chosen app language the
+    // same way a brand-new conversation would (chosen language + en/ko/ja, deduped),
+    // not just the single picked language -- see deriveDefaultSttLanguagesForLocale.
+    const normalizedTargets = deriveDefaultSttLanguagesForLocale(languageCode);
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets));
+      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, "0");
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    setLanguageOnboardingModalOpen(false);
+
+    const nextUiLocale = resolveUiLocaleForLanguage(languageCode);
+    if (nextUiLocale !== locale) {
+      window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`));
+    }
+  }, [locale]);
+
+  // Closing without picking (X / Escape) should still count as "seen" -- this is a
+  // one-time first-entry prompt, not a gate the user must complete. Without this, only
+  // handleLanguageOnboardingConfirm sets the flag, so a dismissed modal reopens on every
+  // future visit until the user finally taps 시작하기.
+  const handleLanguageOnboardingDismiss = useCallback(() => {
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, "1");
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+    setLanguageOnboardingModalOpen(false);
+  }, []);
+
+  const languageOnboardingDefaultLanguage = useMemo(() => {
+    const fallbackLanguages = deriveDefaultSttLanguagesForLocale(locale);
+    const persisted = readPersistedLivePhoneDemoPreferences(fallbackLanguages);
+    return resolveOnboardingDefaultLanguage(persisted.selectedLanguages, locale);
+    // Recompute from localStorage each time the modal opens, so a reopen after an
+    // earlier confirm (without a full page reload) reflects the latest saved choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, languageOnboardingModalOpen]);
+
   return (
     <main className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-white text-slate-900">
 
@@ -4108,6 +4178,15 @@ export default function ConversationList({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {languageOnboardingModalOpen ? (
+        <LanguageOnboardingModal
+          onClose={handleLanguageOnboardingDismiss}
+          initialLanguage={languageOnboardingDefaultLanguage}
+          uiLocale={locale}
+          onConfirm={handleLanguageOnboardingConfirm}
+        />
+      ) : null}
     </main>
   );
 }

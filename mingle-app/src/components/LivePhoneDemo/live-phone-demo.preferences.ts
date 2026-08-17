@@ -6,6 +6,7 @@ export const LS_KEY_TRANSLATION_LANGUAGES_LINKED = 'mingle_demo_translation_lang
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
 export const LS_KEY_INPUT_MODE = 'mingle_demo_input_mode'
+export const LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED = 'mingle_demo_language_onboarding_confirmed_v1'
 export const DEFAULT_TEXT_SIZE_LEVEL = 3
 export const DEFAULT_SONIOX_SILENCE_MS = 500
 export const MIN_SONIOX_SILENCE_MS = 500
