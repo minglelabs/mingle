@@ -2823,6 +2823,7 @@ run_ios_mobile_install() {
     write_rn_mobile_ads_app_json "$runtime_admob_app_id_android" "$runtime_admob_app_id_ios"
     NEXT_PUBLIC_API_NAMESPACE="$IOS_RN_REQUIRED_API_NAMESPACE" \
     xcodebuild \
+      -allowProvisioningUpdates \
       -workspace "$workspace_path" \
       -scheme mingle \
       -configuration "$configuration" \

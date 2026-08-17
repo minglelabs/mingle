@@ -14,17 +14,25 @@ import {
   clearLanguageSelectorHistoryState,
   isLanguageSelectorHistoryOpen,
 } from './language-selector.logic'
+import LanguageOnboardingModal from './LanguageOnboardingModal'
+import { resolveLanguageOnboardingCopy } from './language-onboarding-copy'
+import {
+  resolveOnboardingDefaultLanguage,
+  resolveUiLocaleForLanguage,
+} from './language-onboarding.logic'
 import TranslationBubbleRow from './TranslationBubbleRow'
 import LanguageFlag from '@/components/language-flag'
 import useRealtimeSTT from './useRealtimeSTT'
 import { buildStorageKey, getOrCreateSessionKey, getOrCreateTrackingUserId, mergeDisplayUtterances } from './use-realtime-stt'
 import MingleWordmark from '@/components/mingle-wordmark'
 import { buildClientApiPath, clientApiNamespace } from '@/lib/api-contract'
+import { buildPathWithCurrentSearchParams } from '@/lib/build-path-with-search-params'
 import { useTtsSettings } from '@/context/tts-settings'
 import {
   DEFAULT_STT_LANGUAGES,
   canonicalizeSttLanguageCode,
   deriveDefaultSttLanguagesForLocale,
+  getSttLanguageFlag,
   getSttLanguageDisplayName,
   sanitizeSttLanguageSelection,
 } from '@/lib/stt-languages'
@@ -34,6 +42,7 @@ import {
   DEFAULT_TEXT_SIZE_LEVEL,
   LS_KEY_AD_BANNER_POSITION,
   LS_KEY_INPUT_MODE,
+  LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED,
   LS_KEY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TEXT_SIZE_LEVEL,
@@ -1111,9 +1120,13 @@ interface LivePhoneDemoProps {
     usageSec: number
     messageCount: number
   }) => void
-  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void
-  onSpeechLanguagesChange?: (speechLanguages: string[]) => void
-  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void
+  onSelectedLanguagesChange?: (selectedLanguages: string[]) => void | Promise<void>
+  onSpeechLanguagesChange?: (speechLanguages: string[]) => void | Promise<void>
+  onTranslationLanguagesLinkedChange?: (translationLanguagesLinked: boolean) => void | Promise<void>
+  onLanguageOnboardingConfirm?: (
+    selectedLanguages: string[],
+    translationLanguagesLinked: boolean,
+  ) => boolean | Promise<boolean>
   onDefaultDisplayLanguageChange?: (defaultDisplayLanguage: string | null) => void
 }
 
@@ -1405,6 +1418,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onSelectedLanguagesChange,
   onSpeechLanguagesChange,
   onTranslationLanguagesLinkedChange,
+  onLanguageOnboardingConfirm,
   onDefaultDisplayLanguageChange,
 }, ref) {
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
@@ -1462,6 +1476,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
         || (isKorean ? '디폴트 표시 언어' : 'Default display language'),
     }
   }, [roomManagementCopy, uiLocale])
+  const languageOnboardingCopy = useMemo(() => resolveLanguageOnboardingCopy(uiLocale), [uiLocale])
   const accountPreferencesApiPath = ACCOUNT_PREFERENCES_API_PATH
   const copyActionCopy = useMemo(() => resolveLivePhoneDemoCopyActionCopy(uiLocale), [uiLocale])
   const ttsActionCopy = useMemo(() => resolveLivePhoneDemoTtsActionCopy(uiLocale), [uiLocale])
@@ -1605,6 +1620,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   const initialDefaultFeedbackEmailRef = useRef(defaultFeedbackEmail.trim())
   const [hasHydratedFeedbackDraft, setHasHydratedFeedbackDraft] = useState(false)
   const [hasHydratedLocalUiPreferences, setHasHydratedLocalUiPreferences] = useState(false)
+  const [languageOnboardingModalOpen, setLanguageOnboardingModalOpen] = useState(false)
   const [hasHydratedComposerDraft, setHasHydratedComposerDraft] = useState(false)
   const [menuEnterMode, setMenuEnterMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
   const [menuExitMode, setMenuExitMode] = useState<LivePhoneDemoMenuTransitionMode>('animate')
@@ -1779,7 +1795,6 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       setComposerHasDraft(persistedComposerDraft.trim().length > 0)
       setHasHydratedLocalUiPreferences(true)
       setHasHydratedComposerDraft(true)
-
     })
 
     return () => {
@@ -4088,6 +4103,56 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     onTranslationLanguagesLinkedChange?.(nextLinked)
   }, [onTranslationLanguagesLinkedChange, translationLanguagesLinked])
 
+  const handleLanguageOnboardingConfirm = useCallback(async (languageCode: string) => {
+    const normalizedLanguage = canonicalizeSttLanguageCode(languageCode) || languageCode
+    // Seed default output languages from the chosen app language the same way a
+    // brand-new conversation would (chosen language + en/ko/ja, deduped), not just
+    // the single picked language -- see deriveDefaultSttLanguagesForLocale.
+    const normalizedTargets = deriveDefaultSttLanguagesForLocale(normalizedLanguage)
+
+    selectedLanguagesRef.current = normalizedTargets
+    // Persist the onboarding choice directly before a possible locale navigation.
+    // The normal selected-language effect is intentionally bypassed here because
+    // navigation can unmount this component before that passive effect runs.
+    selectedLanguagesChangePendingRef.current = false
+    setSelectedLanguages(normalizedTargets)
+
+    setTranslationLanguagesLinked(false)
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGES, JSON.stringify(normalizedTargets))
+      window.localStorage.setItem(LS_KEY_TRANSLATION_LANGUAGES_LINKED, '0')
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    let persisted = true
+    try {
+      if (onLanguageOnboardingConfirm) {
+        persisted = await onLanguageOnboardingConfirm(normalizedTargets, false)
+      } else {
+        await onSelectedLanguagesChange?.(normalizedTargets)
+        await onTranslationLanguagesLinkedChange?.(false)
+      }
+    } catch {
+      persisted = false
+    }
+    if (!persisted) return
+
+    try {
+      window.localStorage.setItem(LS_KEY_LANGUAGE_ONBOARDING_CONFIRMED, '1')
+    } catch {
+      // Ignore storage failures; the onboarding modal will simply reopen next launch.
+    }
+
+    setLanguageOnboardingModalOpen(false)
+
+    const nextUiLocale = resolveUiLocaleForLanguage(normalizedLanguage)
+    if (nextUiLocale !== uiLocale) {
+      window.location.assign(buildPathWithCurrentSearchParams(`/${nextUiLocale}/conversations`))
+    }
+  }, [onLanguageOnboardingConfirm, onSelectedLanguagesChange, onTranslationLanguagesLinkedChange, uiLocale])
+
   const handleMicPointerDown = useCallback(() => {
     if (!enableAutoTTS || isActive) return
     void primeAudioPlayback()
@@ -5383,6 +5448,14 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                 />
               ) : null}
             </div>
+            {languageOnboardingModalOpen ? (
+              <LanguageOnboardingModal
+                onClose={() => setLanguageOnboardingModalOpen(false)}
+                initialLanguage={resolveOnboardingDefaultLanguage(selectedLanguages, uiLocale)}
+                uiLocale={uiLocale}
+                onConfirm={handleLanguageOnboardingConfirm}
+              />
+            ) : null}
             {showMenuButton ? (
               <div className="relative">
                 <button
@@ -5475,6 +5548,23 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                       >
                         <div className="px-4 py-4">
                           <div className="space-y-4">
+                            <div className="block">
+                              <button
+                                type="button"
+                                data-qa="live-demo-menu-language-button"
+                                onClick={() => setLanguageOnboardingModalOpen(true)}
+                                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-left shadow-sm transition duration-200 hover:border-gray-300 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]"
+                              >
+                                <span className="flex items-center gap-2 text-[0.8125rem] font-semibold text-gray-700">
+                                  <span className="text-base leading-none">
+                                    {getSttLanguageFlag(speechLanguages[0] || uiLocale)}
+                                  </span>
+                                  {languageOnboardingCopy.menuItemLabel}
+                                </span>
+                                <ChevronRight size={16} strokeWidth={2.3} className="shrink-0 text-gray-400" />
+                              </button>
+                            </div>
+
                             <div className="block">
                               <div className="mb-1 flex items-start justify-between gap-3 text-[0.8125rem] leading-[1.05] text-gray-700">
                                 <span className="min-w-0 flex-1 pt-2 font-semibold">{textSizeLabel}</span>
