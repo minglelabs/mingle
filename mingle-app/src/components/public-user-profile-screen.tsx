@@ -10,7 +10,6 @@ import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
   getSttLanguageDisplayName,
-  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import {
@@ -104,14 +103,14 @@ function ProfileAvatar({
   image,
   label,
   crop,
-  flags,
+  languages,
   size = 88,
   onClick,
 }: {
   image: string | null;
   label: string;
   crop?: ProfileImageCropInput;
-  flags: readonly string[];
+  languages: readonly string[];
   size?: number;
   onClick?: () => void;
 }) {
@@ -138,7 +137,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      <ProfileLanguageFlagStack flags={flags} size={size} />
+      <ProfileLanguageFlagStack languages={languages} size={size} />
     </button>
   );
 }
@@ -335,7 +334,6 @@ export default function PublicUserProfileScreen({
     profile?.nationality ? [profile.nationality] : [],
   );
   const languageOption = getLanguageOption(primaryLanguages[0] ?? profile?.nationality);
-  const primaryLanguageFlags = primaryLanguages.map((language) => getSttLanguageFlag(language));
   const languageName = languageOption
     ? getSttLanguageDisplayName(languageOption.code, locale) ?? languageOption.englishName
     : null;
@@ -395,7 +393,7 @@ export default function PublicUserProfileScreen({
                 x: profile.imageCropX,
                 y: profile.imageCropY,
               }}
-              flag={languageOption?.flag}
+              language={languageOption?.code}
               languageName={languageName}
               closeLabel={dictionary.profile.settingsCloseLabel ?? copy.back}
               onClose={() => setShowProfileImagePreview(false)}
@@ -406,7 +404,7 @@ export default function PublicUserProfileScreen({
                   <ProfileAvatar
                     image={profile.image}
                     label={name}
-                    flags={primaryLanguageFlags}
+                    languages={primaryLanguages}
                     crop={{
                       scale: profile.imageCropScale,
                       x: profile.imageCropX,

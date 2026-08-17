@@ -1,10 +1,10 @@
 "use client";
 
 import { buildClientApiPath } from "@/lib/api-contract";
+import LanguageFlag from "@/components/language-flag";
 import {
   canonicalizeSttLanguageCode,
   getSttLanguageDisplayName,
-  getSttLanguageFlag,
 } from "@/lib/stt-languages";
 import type { AppLocale } from "@/i18n";
 import { BarChart3, Clock3, Loader2, MessageCircle, MessagesSquare } from "lucide-react";
@@ -108,7 +108,7 @@ function LanguageBreakdownSection({
             className={`flex items-center gap-3 px-4 py-3.5 ${index < rows.length - 1 ? "border-b border-gray-100" : ""}`}
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-50 text-[20px]" aria-hidden="true">
-              {normalized ? getSttLanguageFlag(normalized) : "🌐"}
+              {normalized ? <LanguageFlag language={normalized} className="text-[20px] leading-none" /> : "🌐"}
             </span>
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-slate-900">
               {getLanguageLabel(row.language, locale, copy.unknownLanguage)}

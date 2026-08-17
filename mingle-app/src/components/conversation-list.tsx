@@ -41,7 +41,6 @@ import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDe
 import {
   deriveDefaultConversationLanguages,
   deriveDefaultSttLanguagesForLocale,
-  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
 } from "@/lib/stt-languages";
 import {
@@ -106,6 +105,7 @@ import {
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
 import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
 import MingleWordmark from "@/components/mingle-wordmark";
@@ -240,7 +240,7 @@ interface ConversationItem {
   selectedLanguages: string[];
   speechLanguages: string[];
   translationLanguagesLinked: boolean;
-  languageFlags: string;
+  languageCodes: string[];
   isInterimPreview: boolean;
 }
 
@@ -875,7 +875,7 @@ function mapConversationSummaryToItem(
   );
   const translationLanguagesLinked = conversation.translationLanguagesLinked !== false;
   const effectiveSelectedLanguages = translationLanguagesLinked ? speechLanguages : selectedLanguages;
-  const languageFlags = effectiveSelectedLanguages.map((language) => getSttLanguageFlag(language)).join(" ");
+  const languageCodes = effectiveSelectedLanguages;
   const avatar = getSpeakerAvatar(
     latestSpeaker || conversation.sessionKey,
     latestSpeakerAvatarSeed || conversation.id,
@@ -904,7 +904,7 @@ function mapConversationSummaryToItem(
     selectedLanguages: effectiveSelectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
-    languageFlags,
+    languageCodes,
     isInterimPreview: Boolean(normalizedInterimPreview),
   };
 }
@@ -1196,9 +1196,15 @@ function ConversationRow({
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-[15px] font-semibold text-slate-900">{item.title}</span>
-            {item.languageFlags ? (
-              <span className="shrink-0 text-[1rem] leading-none" aria-hidden>
-                {item.languageFlags}
+            {item.languageCodes.length > 0 ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-[1rem] leading-none" aria-hidden>
+                {item.languageCodes.map((language, index) => (
+                  <LanguageFlag
+                    key={`${language}-${index}`}
+                    language={language}
+                    className="text-[1rem] leading-none"
+                  />
+                ))}
               </span>
             ) : null}
           </div>

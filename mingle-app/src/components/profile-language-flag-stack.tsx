@@ -1,14 +1,16 @@
+import LanguageFlag from "@/components/language-flag";
+
 type ProfileLanguageFlagStackProps = {
-  flags: readonly string[];
+  languages: readonly string[];
   size: number;
 };
 
 export default function ProfileLanguageFlagStack({
-  flags,
+  languages,
   size,
 }: ProfileLanguageFlagStackProps) {
-  const visibleFlags = flags.filter((flag) => flag.trim().length > 0);
-  if (visibleFlags.length === 0) return null;
+  const visibleLanguages = languages.filter((language) => language.trim().length > 0);
+  if (visibleLanguages.length === 0) return null;
 
   const badgeSize = Math.max(24, Math.round(size * 0.32));
   const overlap = Math.round(badgeSize * 0.4);
@@ -18,9 +20,9 @@ export default function ProfileLanguageFlagStack({
       className="absolute bottom-[-2px] left-[-2px] z-10 flex items-center"
       aria-hidden="true"
     >
-      {visibleFlags.map((flag, index) => (
+      {visibleLanguages.map((language, index) => (
         <span
-          key={`${flag}-${index}`}
+          key={`${language}-${index}`}
           className="relative flex shrink-0 items-center justify-center rounded-full border-2 border-white bg-white shadow-sm"
           style={{
             height: badgeSize,
@@ -31,7 +33,7 @@ export default function ProfileLanguageFlagStack({
             zIndex: index + 1,
           }}
         >
-          {flag}
+          <LanguageFlag language={language} className="leading-none" />
         </span>
       ))}
     </span>

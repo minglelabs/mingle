@@ -39,7 +39,6 @@ import {
   canonicalizeSttLanguageCode,
   deriveDefaultConversationLanguages,
   getSttLanguageDisplayName,
-  getSttLanguageFlag,
   sanitizeSttLanguageSelection,
   type SttLanguageCode,
 } from "@/lib/stt-languages";
@@ -214,14 +213,14 @@ function appendPathSearchParam(path: string, key: string, value: string): string
 
 function ProfileAvatar({
   alt,
-  flags,
+  languages,
   imageUrl,
   imageCrop,
   size = 88,
   onClick,
 }: {
   alt: string;
-  flags: readonly string[];
+  languages: readonly string[];
   imageUrl?: string | null;
   imageCrop?: ProfileImageCropInput;
   size?: number;
@@ -252,7 +251,7 @@ function ProfileAvatar({
           <UserRound size={Math.round(size * 0.58)} className="text-gray-400" aria-hidden="true" />
         )}
       </div>
-      <ProfileLanguageFlagStack flags={flags} size={size} />
+      <ProfileLanguageFlagStack languages={languages} size={size} />
     </button>
   );
 }
@@ -1357,7 +1356,6 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   );
   const nationality = getNationalityOption(profile.nationality || primaryLanguages[0] || null)?.locale ?? null;
   const nationalityFlag = getNationalityOption(nationality)?.flag;
-  const primaryLanguageFlags = primaryLanguages.map((language) => getSttLanguageFlag(language));
   const nationalityName = nationality
     ? getSttLanguageDisplayName(nationality, locale)
       ?? getNationalityOption(nationality)?.label
@@ -1629,7 +1627,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             <div className="flex shrink-0 flex-col items-center">
               <ProfileAvatar
                 alt={name}
-                flags={primaryLanguageFlags}
+                languages={primaryLanguages}
                 imageUrl={profileImageUrl}
                 imageCrop={{
                   scale: profile.imageCropScale,

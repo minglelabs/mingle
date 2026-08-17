@@ -17,6 +17,13 @@
    Fix: Conversation-room display paths now use the shared `LanguageFlag` component, including the current and legacy room implementations. English keeps the diagonal US/UK emoji treatment, while all other language flags remain unchanged.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
+### `2026-08-17-english-us-uk-all-language-surfaces` | UI/UX issue found
+
+1. **Some language indicators outside the conversation room still showed only the US flag for English**
+   Problem: Conversation-list rows, profile language stacks, usage breakdowns, and public profile image previews still rendered the old string flag helper or stored rendered flag strings. English therefore appeared inconsistently across the app.
+   Fix: Language indicators now keep language codes until render time and use the shared `LanguageFlag` component across those surfaces. Nationality-only flags remain unchanged because they represent a country, not the English language.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found

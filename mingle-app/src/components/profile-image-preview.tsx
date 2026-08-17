@@ -1,6 +1,7 @@
 "use client";
 
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
+import LanguageFlag from "@/components/language-flag";
 import { X, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -9,6 +10,7 @@ type ProfileImagePreviewProps = {
   image: string | null;
   alt: string;
   crop?: ProfileImageCropInput;
+  language?: string | null;
   flag?: string | null;
   languageName?: string | null;
   closeLabel: string;
@@ -22,6 +24,7 @@ export default function ProfileImagePreview({
   image,
   alt,
   crop,
+  language,
   flag,
   languageName,
   closeLabel,
@@ -95,9 +98,13 @@ export default function ProfileImagePreview({
           )}
         </div>
 
-        {flag || languageName ? (
+        {language || flag || languageName ? (
           <div className="mt-5 flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-white backdrop-blur-sm">
-            {flag ? <span className="text-[1.45rem] leading-none" aria-hidden="true">{flag}</span> : null}
+            {language ? (
+              <LanguageFlag language={language} className="text-[1.45rem] leading-none" />
+            ) : flag ? (
+              <span className="text-[1.45rem] leading-none" aria-hidden="true">{flag}</span>
+            ) : null}
             {languageName ? <span className="text-[15px] font-semibold">{languageName}</span> : null}
           </div>
         ) : null}
