@@ -847,6 +847,15 @@
 - Data contract: Added the authenticated `/push-tokens` endpoint and the `app_user_push_tokens` table. The iOS and Android v2.0.0 API wrappers use the same version namespace as the native builds.
 - Testing notes: On a real iPhone and Android device, verify the permission prompt appears after authentication, a follow produces an OS notification while Mingle is backgrounded, the existing in-app notification remains available, and logout removes delivery for the previous account.
 
+## 2026-08-17 - Use the shared English flag treatment in onboarding
+
+- Surface: The first-launch language onboarding picker shown above the messenger tabs.
+- Issue: English used the single US flag in the onboarding rows, while the rest of the app represented English with the established split US/UK flag treatment.
+- User impact: The same English choice looked inconsistent depending on whether it was selected during first launch or from another language picker.
+- Resolution: Reuse the shared `LanguageFlag` component for onboarding rows so English renders as the US/UK split flag and all other languages retain their existing flags.
+- Data contract: None.
+- Testing notes: Not run in this task by request. Verify the English row on the first-launch picker shows the US/UK split flag and that other language rows remain unchanged.
+
 ## 2026-08-17 - Derive conversation display language from room settings
 
 - Surface: Conversation management → default display language picker and the language used to initialize message bubbles.

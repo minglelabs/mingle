@@ -11,6 +11,7 @@ import {
   type LanguageSelectorItem,
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import { resolveLanguageOnboardingCopy } from "@/components/LivePhoneDemo/language-onboarding-copy";
+import LanguageFlag from "@/components/language-flag";
 
 interface LanguageOnboardingModalProps {
   onClose: () => void;
@@ -116,7 +117,7 @@ export default function LanguageOnboardingModal({
               : "border-[#e5dfd5] bg-[#faf7f1]"
           }`}
         >
-          <span className="translate-y-[0.12em] text-[2rem] leading-none">{lang.flag}</span>
+          <LanguageFlag language={lang.code} className="translate-y-[0.12em] text-[2rem] leading-none" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
