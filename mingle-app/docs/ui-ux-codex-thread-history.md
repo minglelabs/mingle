@@ -40,6 +40,14 @@
    Data change: None. This is a native banner visibility and overlay-state fix.
    Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
 
+### `2026-08-17-conversation-target-language-selector-copy` | UI/UX issue found
+
+1. **The target-language selector header used a long sentence that could be clipped in narrower locales**
+   Problem: The Korean header asked “어떤 언어들로 번역해드릴까요?” and the corresponding localized sentences were long enough to be truncated in the compact top bar. The explanatory meaning also competed with the page title.
+   Fix: Replaced the top-bar title with the concise localized equivalent of “번역 언어 선택” / “Select Target Languages”. Added a smaller explanatory sentence at the top of the scrollable content explaining that multiple selected languages are translated simultaneously. All supported room-management locales now have the same description field.
+   Data change: None. This is a copy and layout-only change.
+   Status: Implemented in-thread on 2026-08-17. Physical-device verification is pending.
+
 ## 2026-08-16 Unified conversation message bubbles
 
 ### `2026-08-16-unified-message-bubble-language-badges` | UI/UX issue found

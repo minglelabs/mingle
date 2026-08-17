@@ -511,12 +511,15 @@ export default function LanguageSelector({
             paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           }}
         >
+          <p className="px-1 pb-1 pt-4 text-[0.78rem] leading-5 text-slate-500">
+            {copy.languageSelectorDescription}
+          </p>
           {filteredFeaturedItems.length === 0 && filteredLanguageItems.length === 0 ? (
             <div className="flex h-full min-h-[240px] items-center justify-center px-6 text-center text-sm text-slate-500">
               {copy.languageSelectorNoResultsLabel}
             </div>
           ) : (
-            <div className="space-y-5 py-4">
+            <div className="space-y-5 pb-4 pt-3">
               {filteredFeaturedItems.length > 0 ? (
                 <section aria-labelledby="conversation-featured-language-heading" className="space-y-2">
                   <h3 id="conversation-featured-language-heading" className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
