@@ -42,8 +42,8 @@ describe('ChatBubble', () => {
     expect(html).toContain('h-[30px] w-[30px]')
     expect(html).toContain('h-[11px] w-[11px]')
     expect(html).toContain('data-display-language="en"')
-    expect((html.match(/data-chat-message-bubble/g) || []).length).toBe(1)
-    expect((html.match(/data-chat-language-badge/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-message-bubble="true"/g) || []).length).toBe(1)
+    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(1)
     expect(html.indexOf('data-current-bubble-content')).toBeLessThan(
       html.indexOf('data-original-bubble-meta'),
     )
@@ -92,6 +92,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
+        languageOrder: ['ko'],
       }),
     )
 
@@ -161,6 +162,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
+        languageOrder: ['ko'],
       }),
     )
 
@@ -185,6 +187,7 @@ describe('ChatBubble', () => {
         },
         uiLocale: 'en',
         preferredDisplayLanguage: 'ko',
+        languageOrder: ['ko'],
       }),
     )
 
@@ -259,7 +262,7 @@ describe('ChatBubble', () => {
     )
 
     expect((html.match(/data-copyable-bubble-double-tap-action="play-pronunciation"/g) || []).length).toBe(1)
-    expect((html.match(/data-chat-language-badge/g) || []).length).toBe(2)
+    expect((html.match(/data-chat-language-badge="true"/g) || []).length).toBe(2)
     expect((html.match(/data-original-language-quote-badge/g) || []).length).toBe(1)
     expect(html).not.toContain('data-message-tts-button')
   })

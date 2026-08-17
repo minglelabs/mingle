@@ -65,6 +65,8 @@ describe("profile follow list routes", () => {
         handle: "mina.song",
         name: "Mina",
         image: null,
+        isFollowing: false,
+        isFollowedBy: true,
       }],
     });
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
@@ -98,6 +100,8 @@ describe("profile follow list routes", () => {
         handle: "alex",
         name: "Alex",
         image: "https://example.com/alex.png",
+        isFollowing: true,
+        isFollowedBy: false,
       }],
     });
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
