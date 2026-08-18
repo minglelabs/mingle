@@ -2,7 +2,7 @@ flowchart TD
     %% === PROJECT GOALS ===
     %% Ultimate Goal: Mingle - 소셜링 중심의 실시간 번역 앱으로 외국인과 깊이 있는 대화 가능하게
     %% Current Goal: Mingle 프리토타입 검증 및 핵심 기능 구현
-    %% @lastActive: nextjs_build_type_errors_fix
+    %% @lastActive: deactivate_client_api_path_endpoint_fix
 
     %% === START ===
     %% @project_start [start, closed]
@@ -1405,9 +1405,12 @@ flowchart TD
     %% @nextjs_build_type_errors_fix [ai-task, closed, 2026-08-18, ai]
     nextjs_build_type_errors_fix("Next.js 빌드 타입 에러 해결<br/><sub>mingle-home 이메일 가입 버튼 키 이름 수정 및<br/>알림/언어선택/사전 테스트의 TS 컴파일 오류를<br/>수정하여 next build TypeScript 검증 통과</sub>")
 
+    %% @deactivate_client_api_path_endpoint_fix [ai-task, closed, 2026-08-18, ai]
+    deactivate_client_api_path_endpoint_fix("회원 비활성화 API 경로 및 네임스페이스 라우트 보완<br/><sub>buildClientApiPath 중복 /api 접두사 버그(/account/deactivate)를 수정하고<br/>버전별 네임스페이스(iOS/Android v1.1.0~v2.0.0) 라우트를 연결해<br/>모바일 및 웹 클라이언트에서 200 정상 응답 처리</sub>")
+
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        nextjs_build_type_errors_fix
+        deactivate_client_api_path_endpoint_fix
     end
 
     %% === STYLES ===
@@ -1416,7 +1419,8 @@ flowchart TD
     style onboarding_language_and_birthdate_flow_revamp fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style admin_dashboard_cache_policy_and_flush_support fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style mypage_account_deactivation_support fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
-    style nextjs_build_type_errors_fix fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style nextjs_build_type_errors_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivate_client_api_path_endpoint_fix fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Ultimate Goal (opened, green)
     style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

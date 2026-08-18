@@ -697,7 +697,7 @@ function ProfileSettingsPanel({
     if (isDeactivating) return;
     setIsDeactivating(true);
     try {
-      const response = await fetch(buildClientApiPath("/api/account/deactivate"), {
+      const response = await fetch(buildClientApiPath("/account/deactivate"), {
         method: "POST",
       });
       if (!response.ok) {
