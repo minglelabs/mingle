@@ -317,6 +317,8 @@ function ProfileSettingsPanel({
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [isDeactivating, setIsDeactivating] = useState(false);
   const motionControls = useAnimationControls();
   const dragControls = useDragControls();
   const managementMotionControls = useAnimationControls();
@@ -373,6 +375,11 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
+    deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화" : "Deactivate Account"),
+    deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
+    deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
+    deactivateLogoutOnlyAction: dictionary.profile.deactivateAccountLogoutOnlyAction ?? (locale === "ko" ? "로그아웃만 하기" : "Just Log Out"),
+    deactivateFailed: dictionary.profile.deactivateAccountFailed ?? (locale === "ko" ? "계정을 비활성화하지 못했습니다." : "Failed to deactivate account."),
     reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
     userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
     myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
@@ -686,6 +693,25 @@ function ProfileSettingsPanel({
     await managementMotionControls.start({ x: 0, transition: PROFILE_EDIT_TRANSITION });
   }, [managementMotionControls]);
 
+  const handleDeactivate = useCallback(async () => {
+    if (isDeactivating) return;
+    setIsDeactivating(true);
+    try {
+      const response = await fetch(buildClientApiPath("/api/account/deactivate"), {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to deactivate account");
+      }
+      await unregisterNativePushToken();
+      await signOut({ callbackUrl: `/${locale}/mypage` });
+    } catch (err) {
+      console.error("Account deactivation failed", err);
+      alert(copy.deactivateFailed);
+      setIsDeactivating(false);
+    }
+  }, [copy.deactivateFailed, isDeactivating, locale]);
+
   return (
     <AnimatePresence>
       {open ? (
@@ -816,11 +842,74 @@ function ProfileSettingsPanel({
               <LogOut size={17} strokeWidth={2.1} aria-hidden="true" />
               {copy.logout}
             </button>
+            <button
+              type="button"
+              onClick={() => setIsDeactivateModalOpen(true)}
+              disabled={sessionStatus !== "authenticated"}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-[13px] font-medium text-gray-400 transition hover:text-gray-600 active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <UserRoundX size={15} strokeWidth={2} aria-hidden="true" />
+              {copy.deactivateAccount}
+            </button>
           </div>
           <button type="button" onClick={onClose} className="absolute right-3 top-[calc(env(safe-area-inset-top,44px)+8px)] flex h-9 w-9 items-center justify-center rounded-full text-gray-400 active:bg-gray-100" aria-label={copy.close}>
             <X size={18} aria-hidden="true" />
           </button>
         </motion.section>
+      ) : null}
+      {isDeactivateModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => {
+            if (isDeactivating) return;
+            setIsDeactivateModalOpen(false);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.deactivateConfirmTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.deactivateConfirmTitle}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDeactivate()}
+                disabled={isDeactivating}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeactivating ? (
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                ) : (
+                  copy.deactivateAction
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeactivateModalOpen(false);
+                  onSignOut();
+                }}
+                disabled={isDeactivating}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {copy.deactivateLogoutOnlyAction}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
       ) : null}
       {open && managementPage ? (
         <motion.section

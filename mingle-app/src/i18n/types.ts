@@ -237,6 +237,11 @@ export type BaseAppDictionarySource = {
     emailPasswordMismatchMessage: string;
     logout: string;
     deleteAccount: string;
+    deactivateAccount?: string;
+    deactivateAccountConfirmTitle?: string;
+    deactivateAccountAction?: string;
+    deactivateAccountLogoutOnlyAction?: string;
+    deactivateAccountFailed?: string;
     menuLabel: string;
     deleteAccountConfirm: string;
     deleteAccountConfirmAction: string;
