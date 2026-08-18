@@ -42,6 +42,7 @@ function buildUserWhere(viewerId: string, query: string) {
   const normalizedQuery = query.trim().slice(0, MAX_SEARCH_LENGTH);
 
   return {
+    isActive: true,
     AND: [
       { blockingRelations: { none: { blockedId: viewerId } } },
       { blockedByRelations: { none: { blockerId: viewerId } } },

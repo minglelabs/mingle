@@ -80,8 +80,8 @@ describe("/api/users/[userId] route", () => {
       isFollowing: true,
       isBlocked: false,
     });
-    expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "@Mina.Song" } }));
-    expect(mockUserFindUnique).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { handle: "mina.song" } }));
+    expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "@Mina.Song", isActive: true } }));
+    expect(mockUserFindUnique).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { handle: "mina.song", isActive: true } }));
     expect(mockUserBlockFindFirst).toHaveBeenCalledWith({
       where: {
         OR: [
@@ -99,7 +99,7 @@ describe("/api/users/[userId] route", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "user_456" } }));
+    expect(mockUserFindUnique).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { id: "user_456", isActive: true } }));
     expect(mockUserFindUnique).toHaveBeenCalledTimes(1);
   });
 });

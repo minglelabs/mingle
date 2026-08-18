@@ -76,7 +76,7 @@ describe("/api/profile route", () => {
     });
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(mockUserFindUnique).toHaveBeenCalledWith({
-      where: { id: "user_123" },
+      where: { id: "user_123", isActive: true },
       select: {
         id: true,
         image: true,
@@ -92,8 +92,12 @@ describe("/api/profile route", () => {
         defaultConversationLanguages: true,
         _count: {
           select: {
-            followerRelations: true,
-            followingRelations: true,
+            followerRelations: {
+              where: { follower: { isActive: true } },
+            },
+            followingRelations: {
+              where: { following: { isActive: true } },
+            },
           },
         },
       },
@@ -155,8 +159,12 @@ describe("/api/profile route", () => {
         defaultConversationLanguages: true,
         _count: {
           select: {
-            followerRelations: true,
-            followingRelations: true,
+            followerRelations: {
+              where: { follower: { isActive: true } },
+            },
+            followingRelations: {
+              where: { following: { isActive: true } },
+            },
           },
         },
       },

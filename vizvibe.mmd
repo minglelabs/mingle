@@ -2,7 +2,7 @@ flowchart TD
     %% === PROJECT GOALS ===
     %% Ultimate Goal: Mingle - 소셜링 중심의 실시간 번역 앱으로 외국인과 깊이 있는 대화 가능하게
     %% Current Goal: Mingle 프리토타입 검증 및 핵심 기능 구현
-    %% @lastActive: deactivate_signout_redirect_to_auth_home_fix
+    %% @lastActive: deactivated_user_exclusion_from_search_and_follow_stats
 
     %% === START ===
     %% @project_start [start, closed]
@@ -1411,9 +1411,12 @@ flowchart TD
     %% @deactivate_signout_redirect_to_auth_home_fix [ai-task, closed, 2026-08-18, ai]
     deactivate_signout_redirect_to_auth_home_fix("로그아웃/비활성화 시 홈 로그인 화면 리다이렉트 전환<br/><sub>비활성화/로그아웃 후 mypage 탭에 머무는 현상을 해결하기 위해<br/>signOutCallbackUrl을 홈(/locale)으로 전환하고 window.location.replace로<br/>로그인/온보딩 화면으로 즉시 완전 전환되도록 개선</sub>")
 
+    %% @deactivated_user_exclusion_from_search_and_follow_stats [ai-task, closed, 2026-08-18, ai]
+    deactivated_user_exclusion_from_search_and_follow_stats("비활성화 계정 검색 및 팔로워/팔로잉 집계 제외<br/><sub>탐색 탭 검색(isActive: true) 및 팔로워/팔로잉 목록/수 카운트 시<br/>비활성화된 계정을 제외하도록 Prisma 쿼리 조건을 보완하여<br/>비활성화 유저가 타인에게 노출되지 않도록 완전 격리</sub>")
+
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        deactivate_signout_redirect_to_auth_home_fix
+        deactivated_user_exclusion_from_search_and_follow_stats
     end
 
     %% === STYLES ===
@@ -1424,7 +1427,8 @@ flowchart TD
     style mypage_account_deactivation_support fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style nextjs_build_type_errors_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
     style deactivate_client_api_path_endpoint_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
-    style deactivate_signout_redirect_to_auth_home_fix fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style deactivate_signout_redirect_to_auth_home_fix fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style deactivated_user_exclusion_from_search_and_follow_stats fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Ultimate Goal (opened, green)
     style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

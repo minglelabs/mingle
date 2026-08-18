@@ -16,8 +16,12 @@ export const userProfileSelect = {
   defaultConversationLanguages: true,
   _count: {
     select: {
-      followerRelations: true,
-      followingRelations: true,
+      followerRelations: {
+        where: { follower: { isActive: true } },
+      },
+      followingRelations: {
+        where: { following: { isActive: true } },
+      },
     },
   },
 } as const;
@@ -101,7 +105,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   if (!normalizedUserId) return null;
 
   const profile = await prisma.user.findUnique({
-    where: { id: normalizedUserId },
+    where: { id: normalizedUserId, isActive: true },
     select: userProfileSelect,
   });
 
