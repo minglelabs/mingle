@@ -444,12 +444,78 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
             email: email ?? undefined,
             externalUserId: userId,
             lastSeenAt: now,
+            isActive: true,
+            deactivatedAt: null,
           },
         }),
       );
     },
   },
   callbacks: {
+    async signIn({ user }) {
+      const userId = normalizeUserId(user?.id);
+      if (!userId) return true;
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          isDeleted: true,
+          scheduledDeleteAt: true,
+          withdrawnAt: true,
+        },
+      }).catch(() => null);
+
+      if (!dbUser) return true;
+
+      // Already dangled — deny login (next OAuth sign-in will create a fresh account
+      // because Account records were deleted during dangling)
+      if (dbUser.isDeleted) return false;
+
+      const now = new Date();
+
+      // Grace period has elapsed — dangle the account now and deny this login
+      if (dbUser.scheduledDeleteAt && dbUser.scheduledDeleteAt <= now) {
+        const garbageEmail = `__deleted_${userId}@mingle.internal`;
+        try {
+          await Promise.all([
+            // Remove OAuth account links so next sign-in creates a fresh account
+            prisma.account.deleteMany({ where: { userId } }),
+            // Anonymize the user record
+            prisma.user.update({
+              where: { id: userId },
+              data: {
+                isDeleted: true,
+                deletedAt: now,
+                isActive: false,
+                email: garbageEmail,
+                passwordHash: null,
+                externalUserId: null,
+                withdrawnAt: null,
+                scheduledDeleteAt: null,
+              },
+            }),
+          ]);
+        } catch {
+          // Best-effort — deny login even if anonymization partially fails
+        }
+        return false;
+      }
+
+      // Within grace period — restore the account (cancel withdrawal)
+      if (dbUser.scheduledDeleteAt && dbUser.scheduledDeleteAt > now) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            isActive: true,
+            deactivatedAt: null,
+            withdrawnAt: null,
+            scheduledDeleteAt: null,
+          },
+        }).catch(() => null);
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;

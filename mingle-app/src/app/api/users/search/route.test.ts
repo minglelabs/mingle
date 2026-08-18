@@ -84,6 +84,7 @@ describe("/api/users/search route", () => {
     });
     expect(mockUserFindMany).toHaveBeenCalledWith({
       where: {
+        isActive: true,
         AND: [
           { id: { not: "user_123" } },
           { blockingRelations: { none: { blockedId: "user_123" } } },

@@ -51,7 +51,7 @@ async function resolveFollowTarget(
   }
 
   const target = await prisma.user.findUnique({
-    where: { id: followingId },
+    where: { id: followingId, isActive: true },
     select: { id: true },
   });
   if (!target) {

@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
 
   const users = await prisma.user.findMany({
     where: {
+      isActive: true,
       AND: [
         { id: { not: userId } },
         {

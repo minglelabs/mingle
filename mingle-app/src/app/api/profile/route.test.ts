@@ -92,8 +92,12 @@ describe("/api/profile route", () => {
         defaultConversationLanguages: true,
         _count: {
           select: {
-            followerRelations: true,
-            followingRelations: true,
+            followerRelations: {
+              where: { follower: { isActive: true } },
+            },
+            followingRelations: {
+              where: { following: { isActive: true } },
+            },
           },
         },
       },
@@ -155,8 +159,12 @@ describe("/api/profile route", () => {
         defaultConversationLanguages: true,
         _count: {
           select: {
-            followerRelations: true,
-            followingRelations: true,
+            followerRelations: {
+              where: { follower: { isActive: true } },
+            },
+            followingRelations: {
+              where: { following: { isActive: true } },
+            },
           },
         },
       },

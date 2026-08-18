@@ -40,8 +40,12 @@ const userProfileSelect = {
   primaryLanguages: true,
   _count: {
     select: {
-      followerRelations: true,
-      followingRelations: true,
+      followerRelations: {
+        where: { follower: { isActive: true } },
+      },
+      followingRelations: {
+        where: { following: { isActive: true } },
+      },
     },
   },
   followerRelations: {
@@ -65,7 +69,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
     ? userReference.slice(1)
     : userReference).value;
   const userById = await prisma.user.findUnique({
-    where: { id: userReference },
+    where: { id: userReference, isActive: true },
     select: {
       ...userProfileSelect,
       followerRelations: {
@@ -76,7 +80,7 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
   });
   const user = userById ?? (normalizedHandle
     ? await prisma.user.findUnique({
-        where: { handle: normalizedHandle },
+        where: { handle: normalizedHandle, isActive: true },
         select: {
           ...userProfileSelect,
           followerRelations: {

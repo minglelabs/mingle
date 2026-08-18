@@ -58,7 +58,8 @@ export default function FollowListScreen({
   const router = useRouter();
   const motionControls = useAnimationControls();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // isEdge: true → 엣지 스와이프(뒤로가기), false → 탭 전환 스와이프
+  const touchStartRef = useRef<{ x: number; y: number; isEdge: boolean } | null>(null);
   const requestSequenceRef = useRef(0);
   const isMountedRef = useRef(false);
   const isLeavingRef = useRef(false);
@@ -113,9 +114,8 @@ export default function FollowListScreen({
     }
 
     const localClientX = touch.clientX - event.currentTarget.getBoundingClientRect().left;
-    touchStartRef.current = isLeftEdgeSwipeStart(localClientX)
-      ? { x: touch.clientX, y: touch.clientY }
-      : null;
+    const isEdge = isLeftEdgeSwipeStart(localClientX);
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, isEdge };
   }, []);
 
   const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLElement>) => {
@@ -128,11 +128,36 @@ export default function FollowListScreen({
 
     const deltaX = touch.clientX - start.x;
     const deltaY = Math.abs(touch.clientY - start.y);
-    const closeThreshold = Math.max(FOLLOW_LIST_SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
-    if (deltaX >= closeThreshold && deltaX > deltaY * 1.2) {
-      void handleBack();
+
+    // 수직 스크롤이 우세하면 제스처 무시
+    if (deltaY > Math.abs(deltaX) * 0.8) return;
+
+    if (start.isEdge) {
+      // 왼쪽 엣지 스와이프 → 전체 페이지 닫기
+      const closeThreshold = Math.max(FOLLOW_LIST_SWIPE_THRESHOLD_PX, viewportWidth * 0.2);
+      if (deltaX >= closeThreshold && deltaX > deltaY * 1.2) {
+        void handleBack();
+      }
+    } else {
+      // 일반 수평 스와이프 → 탭 전환
+      const tabSwipeThreshold = Math.max(40, viewportWidth * 0.12);
+      if (Math.abs(deltaX) >= tabSwipeThreshold && Math.abs(deltaX) > deltaY * 1.2) {
+        if (deltaX < 0 && activeTab === "followers") {
+          // 왼쪽으로 스와이프 → 팔로잉 탭으로
+          setActiveTab("following");
+          setIsLoading(true);
+          setLoadError(false);
+          replaceFollowListSearchParams({ tab: "following" });
+        } else if (deltaX > 0 && activeTab === "following") {
+          // 오른쪽으로 스와이프 → 팔로워 탭으로
+          setActiveTab("followers");
+          setIsLoading(true);
+          setLoadError(false);
+          replaceFollowListSearchParams({ tab: "followers" });
+        }
+      }
     }
-  }, [handleBack, viewportWidth]);
+  }, [handleBack, viewportWidth, activeTab]);
 
   const handleTabChange = useCallback((nextTab: FollowListTab) => {
     setActiveTab(nextTab);

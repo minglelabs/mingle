@@ -244,6 +244,12 @@ export type BaseAppDictionarySource = {
     deactivateAccountAction?: string;
     deactivateAccountLogoutOnlyAction?: string;
     deactivateAccountFailed?: string;
+    accountActionSelectTitle?: string;
+    withdrawAccount?: string;
+    withdrawAccountConfirmTitle?: string;
+    withdrawAccountConfirmMessage?: string;
+    withdrawAccountAction?: string;
+    withdrawAccountFailed?: string;
     menuLabel: string;
     deleteAccountConfirm: string;
     deleteAccountConfirmAction: string;
