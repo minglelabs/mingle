@@ -280,6 +280,7 @@ function ProfileSettingsPanel({
   initialDefaultConversationLanguages,
   onSaveDefaultConversationLanguages,
   onSignOut,
+  signOutCallbackUrl,
   defaultFeedbackEmail,
   open,
   sessionStatus,
@@ -293,6 +294,7 @@ function ProfileSettingsPanel({
   initialDefaultConversationLanguages: readonly string[];
   onSaveDefaultConversationLanguages: (languages: SttLanguageCode[]) => Promise<boolean>;
   onSignOut: () => void;
+  signOutCallbackUrl: string;
   defaultFeedbackEmail?: string;
   open: boolean;
   sessionStatus: SessionStatus;
@@ -704,13 +706,16 @@ function ProfileSettingsPanel({
         throw new Error("Failed to deactivate account");
       }
       await unregisterNativePushToken();
-      await signOut({ callbackUrl: `/${locale}/mypage` });
+      await signOut({ callbackUrl: signOutCallbackUrl });
+      if (typeof window !== "undefined") {
+        window.location.replace(signOutCallbackUrl);
+      }
     } catch (err) {
       console.error("Account deactivation failed", err);
       alert(copy.deactivateFailed);
       setIsDeactivating(false);
     }
-  }, [copy.deactivateFailed, isDeactivating, locale]);
+  }, [copy.deactivateFailed, isDeactivating, signOutCallbackUrl]);
 
   return (
     <AnimatePresence>
@@ -1458,7 +1463,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const followListPath = buildNativeAwareTabPath(`/${locale}/mypage/follows`, searchParams);
   const followersHref = appendPathSearchParam(followListPath, "tab", "followers");
   const followingHref = appendPathSearchParam(followListPath, "tab", "following");
-  const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}/conversations`, searchParams, {
+  const signOutCallbackUrl = buildNativeAwareTabPath(`/${locale}`, searchParams, {
     skipConversationRestore: true,
     tabRoot: true,
   });
@@ -1486,7 +1491,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           nationality: typeof data.nationality === "string" ? data.nationality : null,
           primaryLanguages: sanitizeSttLanguageSelection(
             data.primaryLanguages,
-            typeof data.nationality === "string" ? [data.nationality] : [],
+            typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
@@ -1552,27 +1557,20 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
       const saved = await response.json() as Partial<ProfileRecord>;
       setProfile((current) => ({
-        image: typeof saved.image === "string" ? saved.image : current.image || profileImageUrl,
-        imageCropScale: typeof saved.imageCropScale === "number" ? saved.imageCropScale : draft.imageCrop.scale,
-        imageCropX: typeof saved.imageCropX === "number" ? saved.imageCropX : draft.imageCrop.x,
-        imageCropY: typeof saved.imageCropY === "number" ? saved.imageCropY : draft.imageCrop.y,
+        ...current,
         handle: typeof saved.handle === "string" ? saved.handle : current.handle,
-        name: typeof saved.name === "string" ? saved.name : current.name,
         bio: typeof saved.bio === "string" ? saved.bio : current.bio,
-        nationality: typeof saved.nationality === "string" ? saved.nationality : draft.nationality,
-        primaryLanguages: sanitizeSttLanguageSelection(saved.primaryLanguages, draft.primaryLanguages),
-        defaultConversationLanguages: sanitizeSttLanguageSelection(
-          saved.defaultConversationLanguages,
-          current.defaultConversationLanguages,
+        nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
+        primaryLanguages: sanitizeSttLanguageSelection(
+          saved.primaryLanguages,
+          typeof saved.nationality === "string" && saved.nationality ? [saved.nationality] : [],
         ),
-        followersCount: typeof saved.followersCount === "number" ? saved.followersCount : current.followersCount,
-        followingCount: typeof saved.followingCount === "number" ? saved.followingCount : current.followingCount,
       }));
       return "saved";
     } catch {
       return "failed";
     }
-  }, [profileImageUrl]);
+  }, []);
 
   const handleSavePrimaryLanguages = useCallback(async (languages: SttLanguageCode[]) => {
     try {
@@ -1586,11 +1584,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       if (!response.ok) return false;
 
       const saved = await response.json() as Partial<ProfileRecord>;
-      const savedLanguages = sanitizeSttLanguageSelection(saved.primaryLanguages, normalizedLanguages);
       setProfile((current) => ({
         ...current,
-        nationality: savedLanguages[0] ?? null,
-        primaryLanguages: savedLanguages,
+        primaryLanguages: sanitizeSttLanguageSelection(saved.primaryLanguages, normalizedLanguages),
       }));
       return true;
     } catch {
@@ -1635,7 +1631,11 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
   const handleSignOut = useCallback(() => {
     void unregisterNativePushToken().finally(() => {
-      void signOut({ callbackUrl: signOutCallbackUrl });
+      void signOut({ callbackUrl: signOutCallbackUrl }).then(() => {
+        if (typeof window !== "undefined") {
+          window.location.replace(signOutCallbackUrl);
+        }
+      });
     });
   }, [signOutCallbackUrl]);
 
@@ -1673,6 +1673,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialDefaultConversationLanguages={defaultConversationLanguages}
         onSaveDefaultConversationLanguages={handleSaveDefaultConversationLanguages}
         onSignOut={handleSignOut}
+        signOutCallbackUrl={signOutCallbackUrl}
         defaultFeedbackEmail={session?.user?.email ?? ""}
         open={showProfileSettings}
         sessionStatus={sessionStatus}
