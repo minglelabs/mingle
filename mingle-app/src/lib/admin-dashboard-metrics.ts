@@ -1,8 +1,11 @@
 export const ADMIN_DASHBOARD_DEFAULT_DAYS = 30;
+export const ADMIN_DASHBOARD_MAX_DAYS = 365;
 // app_messages.created_at etc. are stored as naive UTC instants, so bucket
 // days in UTC too -- matches the DB's own basis instead of converting.
 export const ADMIN_DASHBOARD_TIME_ZONE = "UTC";
-export const ADMIN_DASHBOARD_RANGE_OPTIONS = [7, 30, 90] as const;
+export const ADMIN_DASHBOARD_PRESET_OPTIONS = [7, 30, 90] as const;
+/** @deprecated Use ADMIN_DASHBOARD_PRESET_OPTIONS */
+export const ADMIN_DASHBOARD_RANGE_OPTIONS = ADMIN_DASHBOARD_PRESET_OPTIONS;
 
 /** Logical chart plot area, in svg units. Shared by the server-side geometry builder
  * (buildChartGeometry) and the client hover component so their coordinate spaces
@@ -10,12 +13,19 @@ export const ADMIN_DASHBOARD_RANGE_OPTIONS = [7, 30, 90] as const;
 export const ADMIN_DASHBOARD_CHART_WIDTH = 560;
 export const ADMIN_DASHBOARD_CHART_HEIGHT = 140;
 
-export type AdminDashboardRange = (typeof ADMIN_DASHBOARD_RANGE_OPTIONS)[number];
+/**
+ * 오늘 + 어제는 데이터가 아직 완전히 집계되지 않을 수 있으므로 캐시 대상에서 제외한다.
+ * 이 값 = 실시간으로 항상 재집계할 최근 N일 수.
+ */
+export const ADMIN_DASHBOARD_UNCACHEABLE_TRAILING_DAYS = 2;
+
+/** 프리셋([7, 30, 90])과 커스텀 숫자(1~365)를 모두 포괄하는 기간 타입. */
+export type AdminDashboardRange = number;
 
 export function normalizeDashboardDays(value: unknown): AdminDashboardRange {
   const parsed = Number(value);
-  const match = ADMIN_DASHBOARD_RANGE_OPTIONS.find((option) => option === parsed);
-  return match ?? ADMIN_DASHBOARD_DEFAULT_DAYS;
+  if (!Number.isFinite(parsed) || parsed < 1) return ADMIN_DASHBOARD_DEFAULT_DAYS;
+  return Math.min(ADMIN_DASHBOARD_MAX_DAYS, Math.round(parsed));
 }
 
 /** 서버 로컬 타임존과 무관하게 지정 타임존의 '오늘'을 구한다. en-CA는 YYYY-MM-DD로 포맷된다. */
@@ -45,6 +55,23 @@ export function resolveAdminDashboardRange(now: Date, days: AdminDashboardRange)
   const rangeEnd = startOfDayUtc(todayKey);
   rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 1);
   return { dayKeys, rangeStart, rangeEnd };
+}
+
+/**
+ * 캐시 저장/조회 대상에서 제외할 날짜 키 집합을 반환한다.
+ * 오늘과 어제는 데이터가 아직 완전히 정산되지 않을 수 있으므로 항상 실시간 집계한다.
+ */
+export function resolveUncacheableDayKeys(
+  now: Date,
+  timeZone: string = ADMIN_DASHBOARD_TIME_ZONE,
+  trailingDays: number = ADMIN_DASHBOARD_UNCACHEABLE_TRAILING_DAYS,
+): Set<string> {
+  const todayKey = resolveTodayKey(now, timeZone);
+  const keys = new Set<string>();
+  for (let i = 0; i < trailingDays; i += 1) {
+    keys.add(shiftDayKey(todayKey, -i));
+  }
+  return keys;
 }
 
 export type MetricKind = "count" | "seconds" | "milliseconds";

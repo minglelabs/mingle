@@ -6,7 +6,7 @@ import { ADMIN_SESSION_COOKIE_NAME, verifyAdminSessionToken } from "@/lib/admin-
 import {
   ADMIN_DASHBOARD_CHART_HEIGHT,
   ADMIN_DASHBOARD_CHART_WIDTH,
-  ADMIN_DASHBOARD_RANGE_OPTIONS,
+  ADMIN_DASHBOARD_PRESET_OPTIONS,
   type DashboardMetric,
   buildChartGeometry,
   buildCumulativeSeries,
@@ -158,7 +158,7 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
         </div>
       </header>
 
-      <RangeNav options={ADMIN_DASHBOARD_RANGE_OPTIONS} activeDays={days} />
+      <RangeNav presetOptions={ADMIN_DASHBOARD_PRESET_OPTIONS} activeDays={days} />
 
       <section className="mx-auto mt-6 w-full max-w-6xl px-4">
         <h2 className="mb-2 text-sm font-semibold text-[#52514e]">일자별 추이</h2>

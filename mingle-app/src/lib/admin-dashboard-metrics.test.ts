@@ -14,6 +14,7 @@ import {
   niceCeil,
   normalizeDashboardDays,
   resolveTodayKey,
+  resolveUncacheableDayKeys,
   resolveXAxisTicks,
   shiftDayKey,
   startOfDayUtc,
@@ -47,12 +48,21 @@ describe("x-axis ticks", () => {
 });
 
 describe("range + timezone", () => {
-  it("accepts only the offered ranges and falls back to 30", () => {
+  it("accepts preset ranges and any valid custom number up to 365, falls back to 30 for invalid input", () => {
+    // 프리셋 그대로
     expect(normalizeDashboardDays("7")).toBe(7);
     expect(normalizeDashboardDays(90)).toBe(90);
-    expect(normalizeDashboardDays("14")).toBe(30);
+    // 커스텀 숫자
+    expect(normalizeDashboardDays("60")).toBe(60);
+    expect(normalizeDashboardDays(180)).toBe(180);
+    expect(normalizeDashboardDays("365")).toBe(365);
+    // 최대값 클램프
+    expect(normalizeDashboardDays(400)).toBe(365);
+    // 잘못된 입력 → 기본값 30
     expect(normalizeDashboardDays(undefined)).toBe(30);
     expect(normalizeDashboardDays("drop table")).toBe(30);
+    expect(normalizeDashboardDays(0)).toBe(30);
+    expect(normalizeDashboardDays(-5)).toBe(30);
   });
 
   it("resolves the UTC day, matching how created_at is stored", () => {
@@ -63,7 +73,26 @@ describe("range + timezone", () => {
   it("maps a day key back to UTC midnight with no offset", () => {
     expect(startOfDayUtc("2026-08-04").toISOString()).toBe("2026-08-04T00:00:00.000Z");
   });
+
+  it("resolveUncacheableDayKeys returns today and yesterday as uncacheable", () => {
+    const now = new Date("2026-08-18T15:00:00Z");
+    const keys = resolveUncacheableDayKeys(now, "UTC");
+    expect(keys.has("2026-08-18")).toBe(true); // today
+    expect(keys.has("2026-08-17")).toBe(true); // yesterday
+    expect(keys.has("2026-08-16")).toBe(false); // 2 days ago → cacheable
+    expect(keys.size).toBe(2);
+  });
+
+  it("resolveUncacheableDayKeys respects custom trailingDays", () => {
+    const now = new Date("2026-08-18T15:00:00Z");
+    const keys = resolveUncacheableDayKeys(now, "UTC", 3);
+    expect(keys.has("2026-08-18")).toBe(true);
+    expect(keys.has("2026-08-17")).toBe(true);
+    expect(keys.has("2026-08-16")).toBe(true);
+    expect(keys.size).toBe(3);
+  });
 });
+
 
 describe("day keys", () => {
   it("formats a date using UTC fields", () => {

@@ -7,7 +7,7 @@ import {
   fillDailySeries,
   formatDayKey,
   parseDayKey,
-  resolveTodayKey,
+  resolveUncacheableDayKeys,
   startOfDayUtc,
 } from "@/lib/admin-dashboard-metrics";
 
@@ -312,24 +312,28 @@ export type LoadAdminDashboardOptions = {
   forceRefresh?: boolean;
 };
 
-export async function clearAdminDashboardCache(): Promise<void> {
-  await prisma.adminDashboardDailyMetric.deleteMany();
+export async function clearAdminDashboardCache(cacheableDayKeys: readonly string[]): Promise<void> {
+  if (cacheableDayKeys.length === 0) return;
+  await prisma.adminDashboardDailyMetric.deleteMany({
+    where: { day: { in: cacheableDayKeys.map(parseDayKey) } },
+  });
 }
 
 async function resolveDailyMetricSnapshots(
   range: AdminDashboardDateRange,
   options?: LoadAdminDashboardOptions,
 ): Promise<Map<string, DailyMetricSnapshot>> {
-  const todayKey = resolveTodayKey(new Date(), ADMIN_DASHBOARD_TIME_ZONE);
+  // 오늘 + 어제는 데이터가 완전히 집계되지 않을 수 있으므로 항상 실시간 집계한다.
+  const uncacheableKeys = resolveUncacheableDayKeys(new Date(), ADMIN_DASHBOARD_TIME_ZONE);
   const isForceRefresh = Boolean(options?.forceRefresh);
 
   if (isForceRefresh) {
     const calculated = await queryDailyMetricSnapshots(range);
-    const historicalDayKeys = range.dayKeys.filter((dayKey) => dayKey !== todayKey);
+    const historicalDayKeys = range.dayKeys.filter((dayKey) => !uncacheableKeys.has(dayKey));
 
     await prisma.adminDashboardDailyMetric.deleteMany({
       where: {
-        day: { in: range.dayKeys.map(parseDayKey) },
+        day: { in: historicalDayKeys.map(parseDayKey) },
       },
     });
 
@@ -345,28 +349,28 @@ async function resolveDailyMetricSnapshots(
     );
   }
 
-  // Historical days only for cache lookup -- today's data is never read from or written to cache.
-  const historicalDayKeysInRange = range.dayKeys.filter((dayKey) => dayKey !== todayKey);
-  const cachedByDay = historicalDayKeysInRange.length > 0
+  // 캐시 조회/저장은 uncacheable 날짜(오늘+어제)를 제외한 날짜에만 수행한다.
+  const cacheableDayKeysInRange = range.dayKeys.filter((dayKey) => !uncacheableKeys.has(dayKey));
+  const cachedByDay = cacheableDayKeysInRange.length > 0
     ? await loadCachedDailyMetrics({
         ...range,
-        dayKeys: historicalDayKeysInRange,
+        dayKeys: cacheableDayKeysInRange,
       })
     : new Map<string, CachedDailyMetric>();
 
-  const missingHistoricalDays = historicalDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
-  const hasToday = range.dayKeys.includes(todayKey);
-  const daysToCalculate = hasToday ? [...missingHistoricalDays, todayKey] : missingHistoricalDays;
+  const missingCacheableDays = cacheableDayKeysInRange.filter((dayKey) => !cachedByDay.has(dayKey));
+  const uncacheableDaysInRange = range.dayKeys.filter((dayKey) => uncacheableKeys.has(dayKey));
+  const daysToCalculate = [...missingCacheableDays, ...uncacheableDaysInRange];
 
   if (daysToCalculate.length > 0) {
     const calculated = await queryDailyMetricSnapshots(createCalculationRange(daysToCalculate));
-    const historicalDaysToPersist = daysToCalculate.filter((dayKey) => dayKey !== todayKey);
+    const daysToPersist = daysToCalculate.filter((dayKey) => !uncacheableKeys.has(dayKey));
 
-    if (historicalDaysToPersist.length > 0) {
-      await persistDailyMetricSnapshots(calculated, historicalDaysToPersist);
+    if (daysToPersist.length > 0) {
+      await persistDailyMetricSnapshots(calculated, daysToPersist);
     }
 
-    for (const dayKey of missingHistoricalDays) {
+    for (const dayKey of missingCacheableDays) {
       const snapshot = calculated.get(dayKey);
       if (snapshot) {
         cachedByDay.set(dayKey, { day: parseDayKey(dayKey), ...snapshot });
@@ -375,7 +379,7 @@ async function resolveDailyMetricSnapshots(
 
     return new Map(
       range.dayKeys.map((dayKey) => {
-        if (dayKey === todayKey) {
+        if (uncacheableKeys.has(dayKey)) {
           return [dayKey, calculated.get(dayKey) ?? { ...EMPTY_DAILY_METRIC }];
         }
         const cached = cachedByDay.get(dayKey);
@@ -391,6 +395,7 @@ async function resolveDailyMetricSnapshots(
     ]),
   );
 }
+
 
 function buildMetric(args: {
   key: string;
