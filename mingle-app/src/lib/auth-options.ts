@@ -444,6 +444,8 @@ const authOptionsBase: Omit<NextAuthOptions, "providers"> = {
             email: email ?? undefined,
             externalUserId: userId,
             lastSeenAt: now,
+            isActive: true,
+            deactivatedAt: null,
           },
         }),
       );

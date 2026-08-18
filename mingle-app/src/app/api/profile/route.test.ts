@@ -76,7 +76,7 @@ describe("/api/profile route", () => {
     });
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(mockUserFindUnique).toHaveBeenCalledWith({
-      where: { id: "user_123", isActive: true },
+      where: { id: "user_123" },
       select: {
         id: true,
         image: true,
