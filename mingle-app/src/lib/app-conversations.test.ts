@@ -81,7 +81,7 @@ describe("app-conversations", () => {
 
     expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        ownerUserId: "user-1",
+        members: { some: { userId: "user-1" } },
         OR: [
           { isDeleted: false },
           { isDeleted: null },

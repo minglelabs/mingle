@@ -107,6 +107,8 @@ export const koDictionary: BaseAppDictionarySource = {
     unblockAction: "차단 해제",
     unblockError: "차단을 해제하지 못했습니다.",
     blockAction: "차단",
+    chatAction: "대화하기",
+    chatOpenError: "대화방을 열지 못했습니다.",
     unblockConfirm: "차단을 해제하시겠습니까?",
     blockConfirm: "이 사용자를 차단하시겠습니까?",
     blockError: "차단 상태를 변경하지 못했습니다.",

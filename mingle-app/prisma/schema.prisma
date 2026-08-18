@@ -59,6 +59,8 @@ model User {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   messages               AppMessage[]
+  sentMessages           AppMessage[]             @relation("AppMessageSender")
+  conversationMemberships AppConversationMember[]
   eventLogs              AppEventLog[]
   feedbackEntries        AppFeedback[]
   versionPoliciesCreated AppClientVersionPolicy[]
@@ -183,6 +185,9 @@ model UserReportReply {
 model AppMessage {
   id                          String   @id @default(cuid())
   userId                      String?  @map("user_id")
+  conversationId              String?  @map("conversation_id")
+  senderId                    String?  @map("sender_id")
+  kind                        String   @default("speech")
   sessionKey                  String?  @map("session_key")
   clientMessageId             String?  @map("client_message_id")
   isDeleted                   Boolean? @map("is_deleted")
@@ -198,11 +203,15 @@ model AppMessage {
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
-  user      User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
-  contents  AppMessageContent[]
-  eventLogs AppEventLog[]
+  user         User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sender       User?                   @relation("AppMessageSender", fields: [senderId], references: [id], onDelete: SetNull)
+  conversation AppConversationChannel? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  contents     AppMessageContent[]
+  eventLogs    AppEventLog[]
 
   @@unique([sessionKey, clientMessageId], map: "app_messages_session_client_message_uidx")
+  @@unique([conversationId, clientMessageId], map: "app_messages_conversation_client_message_uidx")
+  @@index([conversationId, createdAt(sort: Desc)], map: "app_messages_conversation_created_at_desc_idx")
   @@index([userId, createdAt], map: "app_messages_user_created_at_idx")
   @@index([sessionKey, createdAt], map: "app_messages_session_created_at_idx")
   @@index([sessionKey, createdAt(sort: Desc)], map: "app_messages_session_created_at_desc_idx")
@@ -283,12 +292,39 @@ model AppConversationChannel {
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  owner    User                    @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members  AppConversationMember[]
+  messages AppMessage[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@map("app_conversation_channels")
+}
+
+model AppConversationMember {
+  id              String    @id @default(cuid())
+  conversationId  String    @map("conversation_id")
+  userId          String    @map("user_id")
+  role            String    @default("member")
+  // Extra languages this member wants messages translated into, on top of
+  // their own signup language (User.primaryLanguages[0]). Empty means
+  // "just my signup language" — the onboarding choice is the default and is
+  // never duplicated into this column. Unlike AppConversationChannel's
+  // defaultDisplayLanguage (one value, set by the room's owner — meant for
+  // solo interpreter rooms), this is per member, so each person in a shared
+  // room can read in their own set of languages.
+  displayLanguages String[]  @default([]) @map("display_languages")
+  lastReadAt      DateTime? @map("last_read_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  conversation AppConversationChannel @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId], map: "app_conversation_members_conversation_user_uidx")
+  @@index([userId, createdAt], map: "app_conversation_members_user_created_at_idx")
+  @@map("app_conversation_members")
 }
 
 model AppFeedback {

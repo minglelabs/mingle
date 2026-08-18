@@ -1,8 +1,6 @@
 # Claude Instructions
 
 ## Development Server
-- DO NOT run development server automatically
-- User will run the server manually when needed
 
 ### mingle-landing (port 4000)
 ```bash

@@ -81,6 +81,16 @@ interface ChatBubbleProps {
   bubbleTextClassName?: string
   speakingPlaybackKey?: string
   shouldAnimateEntrance?: boolean
+  /**
+   * Overrides the generated animal avatar with a real profile photo — for
+   * screens (like direct messages) where the speaker is a known account
+   * rather than an anonymous room participant. Falls back to the existing
+   * seed-based avatar when omitted, so STT rooms are unaffected.
+   */
+  avatarSrc?: string | null
+  avatarAlt?: string
+  /** When set, the avatar becomes a button — used to open the speaker's profile. */
+  onAvatarClick?: () => void
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -378,6 +388,9 @@ function ChatBubble({
   bubbleTextClassName = 'text-sm',
   speakingPlaybackKey,
   shouldAnimateEntrance = true,
+  avatarSrc,
+  avatarAlt,
+  onAvatarClick,
 }: ChatBubbleProps) {
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
     utterance.originalLang,
@@ -546,16 +559,34 @@ function ChatBubble({
   const bubbleContent = (
     <>
       <div data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
-        <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-          <Image
-            src={avatar.src}
-            alt={`${speakerLabel} ${avatar.name} avatar`}
-            className="h-8 w-8 rounded-full bg-white object-cover"
-            width={32}
-            height={32}
-            unoptimized
-          />
-        </div>
+        {onAvatarClick ? (
+          <button
+            type="button"
+            onClick={onAvatarClick}
+            aria-label={avatarAlt || `${speakerLabel} ${avatar.name} avatar`}
+            className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5 transition active:scale-95"
+          >
+            <Image
+              src={avatarSrc || avatar.src}
+              alt={avatarAlt || `${speakerLabel} ${avatar.name} avatar`}
+              className="h-8 w-8 rounded-full bg-white object-cover"
+              width={32}
+              height={32}
+              unoptimized
+            />
+          </button>
+        ) : (
+          <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+            <Image
+              src={avatarSrc || avatar.src}
+              alt={avatarAlt || `${speakerLabel} ${avatar.name} avatar`}
+              className="h-8 w-8 rounded-full bg-white object-cover"
+              width={32}
+              height={32}
+              unoptimized
+            />
+          </div>
+        )}
         {hasTimestamp && (
           <ChatBubbleTimestamp
             createdAtMs={utterance.createdAtMs}
@@ -627,6 +658,9 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
   if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+  if (prev.avatarSrc !== next.avatarSrc) return false
+  if (prev.avatarAlt !== next.avatarAlt) return false
+  if (prev.onAvatarClick !== next.onAvatarClick) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance

@@ -107,6 +107,8 @@ export const enDictionary: BaseAppDictionarySource = {
     unblockAction: "Unblock",
     unblockError: "Could not unblock this user.",
     blockAction: "Block",
+    chatAction: "Message",
+    chatOpenError: "Could not open the conversation.",
     unblockConfirm: "Unblock this user?",
     blockConfirm: "Block this user?",
     blockError: "Could not update the block status.",

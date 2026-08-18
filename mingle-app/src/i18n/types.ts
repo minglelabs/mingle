@@ -145,6 +145,8 @@ export type BaseAppDictionarySource = {
     reportStatusResolved?: string;
     reportStatusRejected?: string;
     blockAction?: string;
+    chatAction?: string;
+    chatOpenError?: string;
     unblockConfirm?: string;
     blockConfirm?: string;
     blockError?: string;

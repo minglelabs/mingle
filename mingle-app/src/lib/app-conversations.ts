@@ -5,6 +5,8 @@ import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
+export const APP_CONVERSATION_MEMBER_ROLE_OWNER = "owner";
+export const APP_CONVERSATION_MEMBER_ROLE_MEMBER = "member";
 export const CONVERSATION_HYDRATION_MESSAGE_LIMIT = 100;
 
 export type AppConversationChannelStatus =
@@ -380,7 +382,12 @@ export async function listConversationChannelsForUser(
   userId: string,
   options: ListConversationChannelsForUserOptions = {},
 ): Promise<ConversationChannelSummary[]> {
-  return listConversationChannelsForOwner({ ownerUserId: userId }, options);
+  // Membership, not ownership: a direct-message room has to reach the invited
+  // user's list too. Every pre-existing room was backfilled with an owner
+  // membership row, so solo rooms resolve exactly as they did before.
+  return listConversationChannelsForOwner({
+    members: { some: { userId } },
+  }, options);
 }
 
 export async function listConversationChannelsForExternalUserId(
@@ -451,6 +458,9 @@ export async function createConversationChannelForUser(
             speechLanguages: resolvedSpeechLanguages,
             translationLanguagesLinked,
             pausedAt: new Date(),
+            members: {
+              create: { userId, role: APP_CONVERSATION_MEMBER_ROLE_OWNER },
+            },
           },
           select: conversationChannelSelect,
         });

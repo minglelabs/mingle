@@ -17,6 +17,7 @@ import {
   Check,
   ChevronLeft,
   Loader2,
+  MessageCircle,
   UserRound,
   UserX,
   X,
@@ -69,6 +70,9 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
     follow: dictionary.connect.followAction ?? (isKorean ? "팔로우" : "Follow"),
     following: dictionary.connect.followingAction ?? (isKorean ? "팔로잉" : "Following"),
     block: dictionary.profile.blockAction ?? (isKorean ? "차단" : "Block"),
+    chat: dictionary.profile.chatAction ?? (isKorean ? "대화하기" : "Message"),
+    chatOpenError: dictionary.profile.chatOpenError
+      ?? (isKorean ? "대화방을 열지 못했습니다." : "Could not open the conversation."),
     unblock: dictionary.profile.unblockAction ?? (isKorean ? "차단 해제" : "Unblock"),
     report: dictionary.profile.reportAction ?? (isKorean ? "신고" : "Report"),
     blockConfirm: dictionary.profile.blockConfirm
@@ -171,6 +175,8 @@ export default function PublicUserProfileScreen({
   const [reportPending, setReportPending] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
+  const [chatError, setChatError] = useState(false);
   const copy = useMemo(() => getCopy(dictionary, locale), [dictionary, locale]);
   const normalizedUserId = userId.trim();
   const sessionUserId = typeof session?.user?.id === "string" ? session.user.id.trim() : "";
@@ -359,6 +365,30 @@ export default function PublicUserProfileScreen({
     router.push(`/${locale}/mypage/share?${searchParams.toString()}`);
   }, [locale, profile, router]);
 
+  const handleOpenChat = useCallback(async () => {
+    if (!profile || isOpeningChat || profile.isBlocked) return;
+    setIsOpeningChat(true);
+    setChatError(false);
+    try {
+      const response = await fetch(
+        buildClientApiPath(`/users/${encodeURIComponent(profile.id)}/conversation`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locale }),
+        },
+      );
+      if (!response.ok) throw new Error("chat_open_failed");
+      const payload = await response.json() as { conversation?: { id?: string } };
+      const conversationId = payload.conversation?.id;
+      if (!conversationId) throw new Error("chat_open_failed");
+      router.push(`/${locale}/chats/${encodeURIComponent(conversationId)}`);
+    } catch {
+      setChatError(true);
+      setIsOpeningChat(false);
+    }
+  }, [isOpeningChat, locale, profile, router]);
+
   return (
     <motion.main
       initial={{ x: "100%" }}
@@ -469,29 +499,44 @@ export default function PublicUserProfileScreen({
               </div>
 
               {!isOwnProfile ? (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <>
                   <button
                     type="button"
-                    onClick={() => void handleToggleBlock()}
-                    disabled={isActionPending}
-                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
+                    onClick={() => void handleOpenChat()}
+                    disabled={isOpeningChat || profile.isBlocked}
+                    className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 text-[13px] font-semibold text-amber-700 transition active:bg-amber-100 disabled:opacity-50"
                   >
-                    <UserX size={17} strokeWidth={2} aria-hidden="true" />
-                    {profile.isBlocked ? copy.unblock : copy.block}
+                    <MessageCircle size={17} strokeWidth={2} aria-hidden="true" />
+                    {isOpeningChat ? "…" : copy.chat}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReportSubmitted(false);
-                      setActionError(false);
-                      setReportOpen(true);
-                    }}
-                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 text-[13px] font-semibold text-rose-600 transition active:bg-rose-100"
-                  >
-                    <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
-                    {copy.report}
-                  </button>
-                </div>
+                  {chatError ? (
+                    <p className="mt-1.5 text-center text-[13px] text-red-500" role="alert">{copy.chatOpenError}</p>
+                  ) : null}
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleToggleBlock()}
+                      disabled={isActionPending}
+                      className="flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-[13px] font-semibold text-slate-800 transition active:bg-gray-50 disabled:opacity-50"
+                    >
+                      <UserX size={17} strokeWidth={2} aria-hidden="true" />
+                      {profile.isBlocked ? copy.unblock : copy.block}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReportSubmitted(false);
+                        setActionError(false);
+                        setReportOpen(true);
+                      }}
+                      className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 text-[13px] font-semibold text-rose-600 transition active:bg-rose-100"
+                    >
+                      <AlertTriangle size={17} strokeWidth={2} aria-hidden="true" />
+                      {copy.report}
+                    </button>
+                  </div>
+                </>
               ) : null}
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
