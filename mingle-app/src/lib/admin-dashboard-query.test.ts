@@ -5,6 +5,7 @@ import { parseDayKey, resolveTodayKey, startOfDayUtc } from "./admin-dashboard-m
 const mocks = vi.hoisted(() => ({
   findMany: vi.fn(),
   createMany: vi.fn(),
+  deleteMany: vi.fn(),
   upsert: vi.fn(),
   queryRawUnsafe: vi.fn(),
 }));
@@ -14,13 +15,14 @@ vi.mock("@/lib/prisma", () => ({
     adminDashboardDailyMetric: {
       findMany: mocks.findMany,
       createMany: mocks.createMany,
+      deleteMany: mocks.deleteMany,
       upsert: mocks.upsert,
     },
     $queryRawUnsafe: mocks.queryRawUnsafe,
   },
 }));
 
-import { loadAdminDashboardMetrics } from "./admin-dashboard-query";
+import { clearAdminDashboardCache, loadAdminDashboardMetrics } from "./admin-dashboard-query";
 
 function makeRange(dayKeys: string[]): AdminDashboardDateRange {
   const rangeStart = startOfDayUtc(dayKeys[0]);
@@ -35,9 +37,9 @@ function rawDay(dayKey: string): Date {
 
 function setRawMetricResults(dayKey: string): void {
   mocks.queryRawUnsafe
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 2n }])
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 3n }])
-    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 4n }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(2) }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(3) }])
+    .mockResolvedValueOnce([{ day: rawDay(dayKey), value: BigInt(4) }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), value: 5 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 100, p95_ms: 180 }])
     .mockResolvedValueOnce([{ day: rawDay(dayKey), avg_ms: 220, p95_ms: 360 }]);
@@ -48,7 +50,7 @@ afterEach(() => {
 });
 
 describe("loadAdminDashboardMetrics", () => {
-  it("uses cached daily rows without querying source tables", async () => {
+  it("uses cached daily rows without querying source tables for historical days", async () => {
     const dayKeys = ["2026-08-02", "2026-08-03", "2026-08-04"];
     mocks.findMany.mockResolvedValue(dayKeys.map((day, index) => ({
       day: rawDay(day),
@@ -101,29 +103,47 @@ describe("loadAdminDashboardMetrics", () => {
     expect(metrics[4].secondarySeries?.points.map((point) => point.value)).toEqual([null, 180, null]);
   });
 
-  it("refreshes only the current day while retaining the cached history", async () => {
+  it("queries the current day on the fly without saving it to DB cache", async () => {
     const today = resolveTodayKey(new Date());
-    mocks.findMany.mockResolvedValue([{
-      day: rawDay(today),
-      signupCount: 1,
-      dauCount: 1,
-      messageCount: 1,
-      usageSeconds: 1,
-      sttAvgMs: 1,
-      sttP95Ms: 1,
-      translationAvgMs: 1,
-      translationP95Ms: 1,
-    }]);
+    // Historical findMany should not be called with today
+    mocks.findMany.mockResolvedValue([]);
     setRawMetricResults(today);
-    mocks.upsert.mockResolvedValue({});
 
     const metrics = await loadAdminDashboardMetrics(makeRange([today]));
 
     expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    // Today is NOT persisted into cache
     expect(mocks.createMany).not.toHaveBeenCalled();
-    expect(mocks.upsert).toHaveBeenCalledTimes(1);
-    expect(mocks.upsert.mock.calls[0][0].where.day).toEqual(rawDay(today));
+    expect(mocks.upsert).not.toHaveBeenCalled();
     expect(metrics[0].points[0].value).toBe(5);
     expect(metrics[4].points[0].value).toBe(100);
   });
+
+  it("forceRefresh deletes existing cache and recalculates everything, persisting only historical days", async () => {
+    const today = resolveTodayKey(new Date());
+    const dayKeys = ["2026-08-02", "2026-08-03", today];
+    setRawMetricResults("2026-08-02");
+    mocks.deleteMany.mockResolvedValue({ count: 3 });
+    mocks.createMany.mockResolvedValue({ count: 2 });
+
+    const metrics = await loadAdminDashboardMetrics(makeRange(dayKeys), { forceRefresh: true });
+
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.queryRawUnsafe).toHaveBeenCalledTimes(6);
+    expect(mocks.deleteMany).toHaveBeenCalledTimes(1);
+    expect(mocks.createMany).toHaveBeenCalledTimes(1);
+    // Only the 2 historical days are persisted, not today
+    expect(mocks.createMany.mock.calls[0][0].data).toHaveLength(2);
+    expect(metrics[0].points).toHaveLength(3);
+  });
 });
+
+describe("clearAdminDashboardCache", () => {
+  it("deletes all cached metric records", async () => {
+    mocks.deleteMany.mockResolvedValue({ count: 10 });
+    await clearAdminDashboardCache();
+    expect(mocks.deleteMany).toHaveBeenCalledWith();
+  });
+});
+

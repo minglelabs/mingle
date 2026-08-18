@@ -2,7 +2,7 @@ flowchart TD
     %% === PROJECT GOALS ===
     %% Ultimate Goal: Mingle - 소셜링 중심의 실시간 번역 앱으로 외국인과 깊이 있는 대화 가능하게
     %% Current Goal: Mingle 프리토타입 검증 및 핵심 기능 구현
-    %% @lastActive: onboarding_language_and_birthdate_flow_revamp
+    %% @lastActive: admin_dashboard_cache_policy_and_flush_support
 
     %% === START ===
     %% @project_start [start, closed]
@@ -1396,15 +1396,19 @@ flowchart TD
     %% @onboarding_language_and_birthdate_flow_revamp [ai-task, closed, 2026-08-17, ai]
     onboarding_language_and_birthdate_flow_revamp("온보딩 언어/생년월일 및 가입 개편<br/><sub>가입 전 언어 선택→생년월일(12세 이상) 확인 후<br/>로그인 화면 진입 플로우로 전면 개편하고<br/>이메일 가입 단순화 및 로그인 후 프로필 동기화</sub>")
 
+    %% @admin_dashboard_cache_policy_and_flush_support [ai-task, closed, 2026-08-18, ai]
+    admin_dashboard_cache_policy_and_flush_support("대시보드 당일 실시간 쿼리 및 캐시 초기화<br/><sub>당일 데이터의 실시간 변동을 반영하기 위해<br/>오늘 날짜 캐시 저장을 제외하고 실시간 계산하며<br/>전체 캐시 삭제 및 강제 재계산 기능/버튼 추가</sub>")
+
     %% === RECENT WORK HIGHLIGHT ===
     subgraph recent [RECENT]
-        onboarding_language_and_birthdate_flow_revamp
+        admin_dashboard_cache_policy_and_flush_support
     end
 
     %% === STYLES ===
     %% Start node (closed, purple)
     style project_start fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:2px
-    style onboarding_language_and_birthdate_flow_revamp fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
+    style onboarding_language_and_birthdate_flow_revamp fill:#1a1a2e,stroke:#a78bfa,color:#c4b5fd,stroke-width:1px
+    style admin_dashboard_cache_policy_and_flush_support fill:#2d1f4e,stroke:#c084fc,color:#e9d5ff,stroke-width:2px
 
     %% Ultimate Goal (opened, green)
     style ultimate_goal fill:#1a1a2e,stroke:#4ade80,color:#86efac,stroke-width:1px

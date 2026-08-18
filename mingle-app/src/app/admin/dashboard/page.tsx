@@ -139,8 +139,9 @@ export default async function AdminDashboardPage({ searchParams }: DashboardPage
 
   const params = await searchParams;
   const days = normalizeDashboardDays(takeFirst(params.days));
+  const forceRefresh = takeFirst(params.refresh) === "true" || takeFirst(params.refresh) === "1";
   const range = resolveAdminDashboardRange(new Date(), days);
-  const metrics = await loadAdminDashboardMetrics(range);
+  const metrics = await loadAdminDashboardMetrics(range, { forceRefresh });
   const cumulativeMetrics = metrics.filter((metric) => metric.kind !== "milliseconds");
 
   return (
