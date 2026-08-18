@@ -39,7 +39,7 @@ describe("language-selector.logic", () => {
       .toContain("Chinese Simplified");
     expect(items.find((item) => item.code === "zh-TW")?.secondaryLabel)
       .toContain("Chinese Traditional");
-    expect(items.some((item) => item.code === "zh")).toBe(false);
+    expect(items.some((item) => (item.code as string) === "zh")).toBe(false);
   });
 
   it("filters by English and native language names", () => {

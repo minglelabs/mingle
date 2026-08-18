@@ -133,7 +133,7 @@ describe("/api/notifications route", () => {
   });
 
   it("marks all unread follow notifications for the viewer as read", async () => {
-    const response = await PATCH(new NextRequest("https://example.com/api/notifications", { method: "PATCH" }));
+    const response = await PATCH();
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ isRead: true, updatedCount: 1 });
@@ -150,7 +150,7 @@ describe("/api/notifications route", () => {
   it("requires an authenticated viewer when marking all notifications as read", async () => {
     mockGetServerSession.mockResolvedValue(null);
 
-    const response = await PATCH(new NextRequest("https://example.com/api/notifications", { method: "PATCH" }));
+    const response = await PATCH();
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "unauthorized" });

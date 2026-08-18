@@ -1689,7 +1689,7 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
                         {isEmailSubmitting ? (
                           <Loader2 size={20} className="animate-spin text-white" aria-hidden />
                         ) : (
-                          props.dictionary.profile.emailAuthSignupButton
+                          props.dictionary.profile.emailAuthSignupTitle
                         )}
                       </button>
 
