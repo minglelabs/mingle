@@ -319,8 +319,11 @@ function ProfileSettingsPanel({
   const [isNativeAppRuntime, setIsNativeAppRuntime] = useState(false);
   const [nativeAppUpdate, setNativeAppUpdate] = useState<NativeAppUpdateDetail | null>(null);
   const [viewportWidth, setViewportWidth] = useState(1);
+  const [isAccountActionModalOpen, setIsAccountActionModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [isWithdrawConfirmModalOpen, setIsWithdrawConfirmModalOpen] = useState(false);
   const [isDeactivating, setIsDeactivating] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const motionControls = useAnimationControls();
   const dragControls = useDragControls();
   const managementMotionControls = useAnimationControls();
@@ -377,11 +380,17 @@ function ProfileSettingsPanel({
     loadError: dictionary.profile.settingsLoadError ?? (locale === "ko" ? "관리 내역을 불러오지 못했습니다." : "Could not load your activity."),
     authRequired: dictionary.profile.settingsAuthRequired ?? (locale === "ko" ? "로그인 후 확인할 수 있습니다." : "Sign in to view this history."),
     logout: dictionary.profile.logout,
-    deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화" : "Deactivate Account"),
+    deactivateAccount: dictionary.profile.deactivateAccount ?? (locale === "ko" ? "계정 비활성화/탈퇴" : "Deactivate / Delete Account"),
     deactivateConfirmTitle: dictionary.profile.deactivateAccountConfirmTitle ?? (locale === "ko" ? "비활성화하시겠습니까?" : "Do you want to deactivate your account?"),
     deactivateAction: dictionary.profile.deactivateAccountAction ?? (locale === "ko" ? "비활성화" : "Deactivate"),
     deactivateLogoutOnlyAction: dictionary.profile.deactivateAccountLogoutOnlyAction ?? (locale === "ko" ? "로그아웃만 하기" : "Just Log Out"),
     deactivateFailed: dictionary.profile.deactivateAccountFailed ?? (locale === "ko" ? "계정을 비활성화하지 못했습니다." : "Failed to deactivate account."),
+    accountActionSelectTitle: dictionary.profile.accountActionSelectTitle ?? (locale === "ko" ? "비활성화 또는 탈퇴" : "Deactivate or Delete"),
+    withdrawAccount: dictionary.profile.withdrawAccount ?? (locale === "ko" ? "회원탈퇴" : "Delete Account"),
+    withdrawAccountConfirmTitle: dictionary.profile.withdrawAccountConfirmTitle ?? (locale === "ko" ? "회원탈퇴 안내" : "Account Deletion Notice"),
+    withdrawAccountConfirmMessage: dictionary.profile.withdrawAccountConfirmMessage ?? (locale === "ko" ? "30일 동안 비활성화되며, 그 안에는 언제든 로그인하면 다시 살릴 수 있습니다." : "Your account will be deactivated for 30 days. You can restore it anytime by logging back in during this period."),
+    withdrawAccountAction: dictionary.profile.withdrawAccountAction ?? (locale === "ko" ? "탈퇴하기" : "Delete Account"),
+    withdrawAccountFailed: dictionary.profile.withdrawAccountFailed ?? (locale === "ko" ? "탈퇴 처리에 실패했습니다." : "Failed to delete account."),
     reportedUser: dictionary.profile.settingsReportedUserLabel ?? (locale === "ko" ? "신고한 사용자" : "Reported user"),
     userFallback: dictionary.connect.userFallbackLabel ?? (locale === "ko" ? "Mingle 사용자" : "Mingle user"),
     myMessage: dictionary.profile.settingsMyMessageLabel ?? (locale === "ko" ? "신고 내용" : "Your report"),
@@ -717,6 +726,28 @@ function ProfileSettingsPanel({
     }
   }, [copy.deactivateFailed, isDeactivating, signOutCallbackUrl]);
 
+  const handleWithdraw = useCallback(async () => {
+    if (isWithdrawing) return;
+    setIsWithdrawing(true);
+    try {
+      const response = await fetch(buildClientApiPath("/account/withdraw"), {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to withdraw account");
+      }
+      await unregisterNativePushToken();
+      await signOut({ callbackUrl: signOutCallbackUrl });
+      if (typeof window !== "undefined") {
+        window.location.replace(signOutCallbackUrl);
+      }
+    } catch (err) {
+      console.error("Account withdrawal failed", err);
+      alert(copy.withdrawAccountFailed);
+      setIsWithdrawing(false);
+    }
+  }, [copy.withdrawAccountFailed, isWithdrawing, signOutCallbackUrl]);
+
   return (
     <AnimatePresence>
       {open ? (
@@ -849,7 +880,7 @@ function ProfileSettingsPanel({
             </button>
             <button
               type="button"
-              onClick={() => setIsDeactivateModalOpen(true)}
+              onClick={() => setIsAccountActionModalOpen(true)}
               disabled={sessionStatus !== "authenticated"}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-transparent px-4 py-2 text-[13px] font-medium text-gray-400 transition hover:text-gray-600 active:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -861,6 +892,108 @@ function ProfileSettingsPanel({
             <X size={18} aria-hidden="true" />
           </button>
         </motion.section>
+      ) : null}
+      {isAccountActionModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => setIsAccountActionModalOpen(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.accountActionSelectTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.accountActionSelectTitle}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountActionModalOpen(false);
+                  setIsWithdrawConfirmModalOpen(true);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+              >
+                {copy.withdrawAccount}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountActionModalOpen(false);
+                  setIsDeactivateModalOpen(true);
+                }}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700"
+              >
+                {copy.deactivateAction}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+      {isWithdrawConfirmModalOpen ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => {
+            if (isWithdrawing) return;
+            setIsWithdrawConfirmModalOpen(false);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.withdrawAccountConfirmTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-5 shadow-xl text-center"
+          >
+            <p className="text-[16px] font-bold text-gray-900">
+              {copy.withdrawAccountConfirmTitle}
+            </p>
+            <p className="mt-2.5 text-[13px] leading-relaxed text-gray-500">
+              {copy.withdrawAccountConfirmMessage}
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleWithdraw()}
+                disabled={isWithdrawing}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 text-[13px] font-medium text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isWithdrawing ? (
+                  <Loader2 size={16} className="animate-spin text-gray-400" />
+                ) : (
+                  copy.withdrawAccountAction
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsWithdrawConfirmModalOpen(false)}
+                disabled={isWithdrawing}
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-amber-500 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {locale === "ko" ? "취소" : "Cancel"}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
       ) : null}
       {isDeactivateModalOpen ? (
         <motion.div
