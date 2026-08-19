@@ -91,6 +91,13 @@ interface ChatBubbleProps {
   avatarAlt?: string
   /** When set, the avatar becomes a button — used to open the speaker's profile. */
   onAvatarClick?: () => void
+  /**
+   * 'end' puts the avatar after the bubble and pushes the row to the right —
+   * used by screens (like direct messages) that distinguish the viewer's own
+   * messages from the other party's. Defaults to the STT room's fixed
+   * avatar-then-bubble layout.
+   */
+  align?: 'start' | 'end'
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -391,6 +398,7 @@ function ChatBubble({
   avatarSrc,
   avatarAlt,
   onAvatarClick,
+  align = 'start',
 }: ChatBubbleProps) {
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
     utterance.originalLang,
@@ -556,9 +564,8 @@ function ChatBubble({
     </CopyableBubbleSurface>
   )
 
-  const bubbleContent = (
-    <>
-      <div data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
+  const avatarColumn = (
+      <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
         {onAvatarClick ? (
           <button
             type="button"
@@ -597,7 +604,10 @@ function ChatBubble({
           />
         )}
       </div>
-      <div className="flex min-w-0 flex-1 items-end gap-1.5">
+  )
+
+  const messageColumn = (
+      <div key="message" className={`flex min-w-0 flex-1 items-end gap-1.5 ${align === 'end' ? 'flex-row-reverse' : ''}`}>
         <div
           data-chat-message-bubble-stack
           style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
@@ -625,12 +635,15 @@ function ChatBubble({
           className="mb-3 h-5 self-end items-start pb-1"
         />
       </div>
-    </>
   )
+
+  const bubbleContent = align === 'end'
+    ? <>{messageColumn}{avatarColumn}</>
+    : <>{avatarColumn}{messageColumn}</>
 
   if (!shouldAnimateEntrance) {
     return (
-      <div className="flex items-start gap-1.5">
+      <div className={`flex items-start gap-1.5 ${align === 'end' ? 'w-full justify-end' : ''}`}>
         {bubbleContent}
       </div>
     )
@@ -641,7 +654,7 @@ function ChatBubble({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex items-start gap-1.5"
+      className={`flex items-start gap-1.5 ${align === 'end' ? 'w-full justify-end' : ''}`}
     >
       {bubbleContent}
     </motion.div>
@@ -661,6 +674,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.avatarSrc !== next.avatarSrc) return false
   if (prev.avatarAlt !== next.avatarAlt) return false
   if (prev.onAvatarClick !== next.onAvatarClick) return false
+  if (prev.align !== next.align) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance

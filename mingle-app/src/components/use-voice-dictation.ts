@@ -69,17 +69,22 @@ function postNativeCommand(command: object): boolean {
 export default function useVoiceDictation(args: {
   conversationId: string;
   onDraftChange: (draft: string) => void;
+  /**
+   * Called with each finalized turn's text as soon as the recognizer settles
+   * on it, so the message goes out immediately — the same as speaking into
+   * the interpreter room, rather than sitting in the composer for review.
+   */
+  onFinalizedTurn?: (text: string, language: string) => void;
 }): VoiceDictationState {
-  const { conversationId, onDraftChange } = args;
+  const { conversationId, onDraftChange, onFinalizedTurn } = args;
 
   const [isRecording, setIsRecording] = useState(false);
   const [language, setLanguage] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // The draft text as it stood when recording began; dictation appends to it
-  // rather than replacing whatever the user had already typed.
+  // The draft text as it stood when recording began; only the first finalized
+  // turn is prepended with it, since every turn after that has already sent.
   const baseTextRef = useRef("");
-  const finalizedTurnsRef = useRef<string[]>([]);
   const partialTurnRef = useRef("");
 
   const ownerKey = `dm-dictation-${useId()}`;
@@ -96,7 +101,7 @@ export default function useVoiceDictation(args: {
   const emitDraft = useCallback(() => {
     onDraftChange(composeDictationDraft({
       baseText: baseTextRef.current,
-      finalizedTurns: finalizedTurnsRef.current,
+      finalizedTurns: [],
       partialTurn: partialTurnRef.current,
     }));
   }, [onDraftChange]);
@@ -120,7 +125,6 @@ export default function useVoiceDictation(args: {
     releaseNativeSttOwner(ownerKey);
     setIsRecording(false);
     baseTextRef.current = "";
-    finalizedTurnsRef.current = [];
     partialTurnRef.current = "";
     if (wasOwner) {
       postNativeCommand({
@@ -137,7 +141,6 @@ export default function useVoiceDictation(args: {
     }
 
     baseTextRef.current = currentDraft;
-    finalizedTurnsRef.current = [];
     partialTurnRef.current = "";
     setError(null);
 
@@ -189,11 +192,18 @@ export default function useVoiceDictation(args: {
       const transcript = parseDictationTranscript(detail.raw);
       if (!transcript) return;
 
+      const turnLanguage = transcript.language || language;
       if (transcript.language) setLanguage(transcript.language);
 
       if (transcript.isFinal) {
-        finalizedTurnsRef.current = [...finalizedTurnsRef.current, transcript.text];
         partialTurnRef.current = "";
+        const finalizedText = transcript.text.trim();
+        if (finalizedText) {
+          const base = baseTextRef.current;
+          baseTextRef.current = "";
+          const textToSend = base ? `${base} ${finalizedText}`.trim() : finalizedText;
+          onFinalizedTurn?.(textToSend, turnLanguage);
+        }
       } else {
         partialTurnRef.current = transcript.text;
       }
@@ -202,7 +212,7 @@ export default function useVoiceDictation(args: {
 
     window.addEventListener(NATIVE_STT_EVENT, handleBridgeEvent);
     return () => window.removeEventListener(NATIVE_STT_EVENT, handleBridgeEvent);
-  }, [emitDraft, ownerKey]);
+  }, [emitDraft, language, onFinalizedTurn, ownerKey]);
 
   useEffect(() => () => {
     if (!isNativeSttOwner(ownerKey)) return;

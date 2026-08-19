@@ -74,6 +74,7 @@ type ConversationChannelRecord = {
   createdAt: Date;
   updatedAt: Date;
   pausedAt: Date | null;
+  members: { userId: string; user: { name: string | null; handle: string | null } }[];
 };
 
 type ListConversationChannelsForUserOptions = {
@@ -93,7 +94,28 @@ const conversationChannelSelect = {
   createdAt: true,
   updatedAt: true,
   pausedAt: true,
+  members: {
+    select: {
+      userId: true,
+      user: { select: { name: true, handle: true } },
+    },
+  },
 } satisfies Prisma.AppConversationChannelSelect;
+
+/**
+ * A room shared with exactly one other person shows that person's name in
+ * the list, not the generic "Room #3" title — the same room reads as a
+ * different label to each side, so this can never be the stored `title`.
+ */
+function resolveDmPartnerTitle(
+  members: { userId: string; user: { name: string | null; handle: string | null } }[] | undefined,
+  viewerId: string,
+): string | null {
+  if (!members || members.length !== 2) return null;
+  const partner = members.find((member) => member.userId !== viewerId);
+  if (!partner) return null;
+  return partner.user.name?.trim() || partner.user.handle?.trim() || null;
+}
 
 function buildVisibleConversationWhere(): Prisma.AppConversationChannelWhereInput {
   return {
@@ -157,17 +179,19 @@ function serializeConversationChannel(
   latestSpeakerAvatarSeed?: string | null,
   latestSpeakerAvatarIndex?: number | null,
   messageCount?: number,
+  viewerId?: string,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
     ? [...record.speechLanguages]
     : [...selectedLanguages];
   const translationLanguagesLinked = record.translationLanguagesLinked !== false;
+  const dmPartnerTitle = viewerId ? resolveDmPartnerTitle(record.members, viewerId) : null;
 
   return {
     id: record.id,
     sequenceNumber: record.sequenceNumber,
-    title: record.title,
+    title: dmPartnerTitle || record.title,
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
     ...(typeof messageCount === "number"
@@ -331,6 +355,7 @@ async function serializeConversationChannelWithPreview(
 async function listConversationChannelsForOwner(
   ownerWhere: Prisma.AppConversationChannelWhereInput,
   options: ListConversationChannelsForUserOptions = {},
+  viewerId?: string,
 ): Promise<ConversationChannelSummary[]> {
   const records = await prisma.appConversationChannel.findMany({
     where: {
@@ -349,7 +374,9 @@ async function listConversationChannelsForOwner(
   }
 
   if (options.includeMessageSummaries === false) {
-    return records.map((record) => serializeConversationChannel(record));
+    return records.map((record) => serializeConversationChannel(
+      record, undefined, undefined, undefined, undefined, undefined, undefined, viewerId,
+    ));
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
@@ -369,6 +396,7 @@ async function listConversationChannelsForOwner(
         latestMessage?.speakerAvatarSeed,
         latestMessage?.speakerAvatarIndex,
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
+        viewerId,
       );
     })
     .sort((left, right) => {
@@ -387,7 +415,7 @@ export async function listConversationChannelsForUser(
   // membership row, so solo rooms resolve exactly as they did before.
   return listConversationChannelsForOwner({
     members: { some: { userId } },
-  }, options);
+  }, options, userId);
 }
 
 export async function listConversationChannelsForExternalUserId(

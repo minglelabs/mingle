@@ -157,10 +157,10 @@ export default function LanguageOnboardingModal({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[1rem] font-semibold tracking-[-0.01em] text-slate-950">
-            {lang.localizedName}
+            {lang.nativeName}
           </span>
           <span className="mt-0.5 block truncate text-[0.9rem] text-slate-500">
-            {lang.secondaryLabel}
+            {lang.localizedName}
           </span>
         </span>
         <span

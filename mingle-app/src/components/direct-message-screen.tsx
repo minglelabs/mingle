@@ -10,7 +10,8 @@ import useConversationDisplayLanguages from "@/components/use-conversation-displ
 import useConversationRealtime from "@/components/use-conversation-realtime";
 import useDirectMessageThread, { type DirectMessage } from "@/components/use-direct-message-thread";
 import useVoiceDictation from "@/components/use-voice-dictation";
-import { ChevronLeft, Languages, Loader2, Mic, SendHorizontal, Square } from "lucide-react";
+import VoiceModeBottomBar from "@/components/LivePhoneDemo/VoiceModeBottomBar";
+import { ChevronLeft, Languages, Loader2, Mic, SendHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -55,6 +56,8 @@ function getCopy(locale: AppLocale) {
     dictationError: isKorean
       ? "음성을 인식하지 못했어요. 다시 시도해 주세요."
       : "Could not hear that. Please try again.",
+    switchToTextInput: isKorean ? "키보드로 입력" : "Switch to keyboard",
+    switchToVoiceInput: isKorean ? "음성으로 전환" : "Switch to voice",
   };
 }
 
@@ -97,17 +100,16 @@ function DirectMessageRow({
 
   return (
     <li>
-      <div className={`flex ${message.isMine ? "flex-row-reverse" : ""}`}>
-        <ChatBubble
-          utterance={toUtterance(message, senderName)}
-          uiLocale={locale}
-          isDraft={message.isPending}
-          avatarSrc={avatarSrc}
-          avatarAlt={senderName}
-          shouldAnimateEntrance={false}
-          onAvatarClick={senderId ? () => onOpenProfile(senderId) : undefined}
-        />
-      </div>
+      <ChatBubble
+        utterance={toUtterance(message, senderName)}
+        uiLocale={locale}
+        isDraft={message.isPending}
+        avatarSrc={avatarSrc}
+        avatarAlt={senderName}
+        shouldAnimateEntrance={false}
+        align={message.isMine ? "end" : "start"}
+        onAvatarClick={senderId ? () => onOpenProfile(senderId) : undefined}
+      />
       {message.hasFailed ? (
         <div className={`flex ${message.isMine ? "justify-end" : "justify-start"}`}>
           <button
@@ -137,6 +139,10 @@ export default function DirectMessageScreen({
 
   const [draft, setDraft] = useState("");
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  // Voice-first by default, matching the interpreter room — text mode is an
+  // explicit switch, not the default composer.
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   // Set while the draft is what the recognizer heard, so the message is sent
   // in the language actually spoken rather than the sender's signup language.
   const [dictatedLanguage, setDictatedLanguage] = useState("");
@@ -157,14 +163,36 @@ export default function DirectMessageScreen({
     setDraft(nextDraft.slice(0, TEXT_MAX_LENGTH));
   }, []);
 
+  // Each finalized turn sends on its own, the same as speaking into the
+  // interpreter room — dictation never waits for a manual send here.
+  const handleDictatedTurn = useCallback((text: string, spokenLanguage: string) => {
+    const trimmed = text.trim().slice(0, TEXT_MAX_LENGTH);
+    if (!trimmed) return;
+    void thread.send(trimmed, spokenLanguage || undefined);
+  }, [thread]);
+
   const dictation = useVoiceDictation({
     conversationId,
     onDraftChange: handleDictationDraft,
+    onFinalizedTurn: handleDictatedTurn,
   });
 
   useEffect(() => {
     if (dictation.language) setDictatedLanguage(dictation.language);
   }, [dictation.language]);
+
+  // Same elapsed-time readout as the interpreter room's bottom bar.
+  useEffect(() => {
+    if (!dictation.isRecording) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [dictation.isRecording]);
 
   useEffect(() => {
     const node = scrollRef.current;
@@ -319,43 +347,56 @@ export default function DirectMessageScreen({
           </p>
         ) : null}
 
-        <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(event) => handleDraftTyped(event.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            placeholder={copy.placeholder}
-            aria-label={copy.placeholder}
-            className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl border border-gray-200 px-3 py-2 text-[14px] leading-snug outline-none focus:border-amber-400"
-          />
-          {dictation.isSupported ? (
+        {dictation.isSupported && !showTextInput ? (
+          <div className="px-3 py-2">
+            <VoiceModeBottomBar
+              isRecording={dictation.isRecording}
+              elapsedSeconds={elapsedSeconds}
+              messageCount={thread.messages.length}
+              onMicClick={() => (dictation.isRecording ? dictation.stop() : dictation.start(""))}
+              onToggleKeyboard={() => {
+                dictation.cancel();
+                setShowTextInput(true);
+              }}
+              keyboardLabel={copy.switchToTextInput}
+            />
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(event) => handleDraftTyped(event.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder={copy.placeholder}
+              aria-label={copy.placeholder}
+              autoFocus={showTextInput}
+              className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl border border-gray-200 px-3 py-2 text-[14px] leading-snug outline-none focus:border-amber-400"
+            />
+            {dictation.isSupported ? (
+              <button
+                type="button"
+                onClick={() => {
+                  dictation.cancel();
+                  setShowTextInput(false);
+                }}
+                aria-label={copy.switchToVoiceInput}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-slate-700 transition active:bg-gray-200"
+              >
+                <Mic size={18} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+            ) : null}
             <button
-              type="button"
-              onClick={() => (dictation.isRecording ? dictation.stop() : dictation.start(draft))}
-              aria-label={dictation.isRecording ? copy.stopDictation : copy.startDictation}
-              aria-pressed={dictation.isRecording}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
-                dictation.isRecording
-                  ? "bg-red-500 text-white active:bg-red-600"
-                  : "bg-gray-100 text-slate-700 active:bg-gray-200"
-              }`}
+              type="submit"
+              disabled={!draft.trim() || thread.isSending}
+              aria-label={copy.send}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition active:bg-amber-600 disabled:opacity-40"
             >
-              {dictation.isRecording
-                ? <Square size={16} strokeWidth={2.4} aria-hidden="true" />
-                : <Mic size={18} strokeWidth={2.2} aria-hidden="true" />}
+              <SendHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
             </button>
-          ) : null}
-          <button
-            type="submit"
-            disabled={!draft.trim() || thread.isSending}
-            aria-label={copy.send}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition active:bg-amber-600 disabled:opacity-40"
-          >
-            <SendHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
