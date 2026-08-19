@@ -12,6 +12,9 @@ const {
   mockAppEventLogFindFirst,
   mockChannelMemberFindMany,
   mockChannelMemberCreateMany,
+  mockChannelMemberUpdate,
+  mockFindConversationUniqueOrThrow,
+  mockUserFindUnique,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
@@ -24,6 +27,9 @@ const {
   mockAppEventLogFindFirst: vi.fn(),
   mockChannelMemberFindMany: vi.fn(),
   mockChannelMemberCreateMany: vi.fn(),
+  mockChannelMemberUpdate: vi.fn(),
+  mockFindConversationUniqueOrThrow: vi.fn(),
+  mockUserFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => {
@@ -31,6 +37,7 @@ vi.mock("@/lib/prisma", () => {
     appConversationChannel: {
       findMany: mockFindConversationMany,
       findFirst: mockFindConversationFirst,
+      findUniqueOrThrow: mockFindConversationUniqueOrThrow,
       update: mockUpdateConversation,
       updateMany: mockUpdateManyConversation,
       create: mockCreateConversation,
@@ -38,6 +45,10 @@ vi.mock("@/lib/prisma", () => {
     appConversationChannelMember: {
       findMany: mockChannelMemberFindMany,
       createMany: mockChannelMemberCreateMany,
+      update: mockChannelMemberUpdate,
+    },
+    user: {
+      findUnique: mockUserFindUnique,
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
@@ -72,6 +83,8 @@ import {
   getConversationHydrationStateForUser,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
+  updateConversationChannelDefaultDisplayLanguage,
+  updateConversationChannelStatus,
   updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 
@@ -82,6 +95,7 @@ describe("app-conversations", () => {
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
     mockChannelMemberFindMany.mockResolvedValue([]);
     mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
+    mockUserFindUnique.mockResolvedValue(null);
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -156,6 +170,135 @@ describe("app-conversations", () => {
     });
 
     expect(state?.conversation.title).toBe("Bob");
+  });
+
+  it("pauses every other room the caller is a member of, not just ones they own", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-a",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    await updateConversationChannelStatus({
+      conversationId: "conv-a",
+      userId: "user-1",
+      status: "active",
+    });
+
+    expect(mockUpdateManyConversation).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        members: { some: { userId: "user-1" } },
+        id: { not: "conv-a" },
+        status: "active",
+      }),
+    }));
+  });
+
+  it("writes a multi-member room's display language to the caller's own membership row", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-dm", selectedLanguages: ["en", "ko"] });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, user: { name: "Bob", handle: "bob" } },
+    ]);
+    mockFindConversationUniqueOrThrow.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en", "ko"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      defaultDisplayLanguage: null,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    await updateConversationChannelDefaultDisplayLanguage({
+      conversationId: "conv-dm",
+      userId: "user-1",
+      defaultDisplayLanguage: "ko",
+    });
+
+    expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "conv-dm", userId: "user-1" } },
+      data: { displayLanguage: "ko" },
+    });
+    expect(mockUpdateConversation).not.toHaveBeenCalled();
+  });
+
+  it("keeps writing the channel-wide display language for solo (1-member) rooms", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-solo", selectedLanguages: ["en", "ko"] });
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-solo", userId: "user-1", displayLanguage: null, user: { name: "Alice", handle: "alice" } },
+    ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-solo",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-solo",
+      selectedLanguages: ["en", "ko"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      defaultDisplayLanguage: "ko",
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    await updateConversationChannelDefaultDisplayLanguage({
+      conversationId: "conv-solo",
+      userId: "user-1",
+      defaultDisplayLanguage: "ko",
+    });
+
+    expect(mockUpdateConversation).toHaveBeenCalledWith(expect.objectContaining({
+      data: { defaultDisplayLanguage: "ko" },
+    }));
+    expect(mockChannelMemberUpdate).not.toHaveBeenCalled();
+  });
+
+  it("resolves the internal viewer id and per-viewer title on the external-identity list path", async () => {
+    mockUserFindUnique.mockResolvedValue({ id: "user-1" });
+    mockFindConversationMany.mockResolvedValue([
+      {
+        id: "conv-dm",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "active",
+        sessionKey: "session-dm",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: null,
+      },
+    ]);
+    mockAppMessageFindMany.mockResolvedValue([]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", displayLanguage: null, user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", displayLanguage: null, user: { name: "Bob", handle: "bob" } },
+    ]);
+
+    const conversations = await listConversationChannelsForExternalUserId("anon_local_storage_user");
+
+    expect(mockUserFindUnique).toHaveBeenCalledWith({
+      where: { externalUserId: "anon_local_storage_user" },
+      select: { id: true },
+    });
+    expect(conversations[0]?.title).toBe("Bob");
   });
 
   it("can list conversations directly by the stable external user identity", async () => {

@@ -138,6 +138,7 @@ type ChannelMemberProfile = {
   userId: string;
   name: string | null;
   handle: string | null;
+  displayLanguage: string | null;
 };
 
 async function listChannelMembersByChannelId(
@@ -152,6 +153,7 @@ async function listChannelMembersByChannelId(
     select: {
       channelId: true,
       userId: true,
+      displayLanguage: true,
       user: { select: { name: true, handle: true } },
     },
   });
@@ -159,7 +161,12 @@ async function listChannelMembersByChannelId(
   const membersByChannelId = new Map<string, ChannelMemberProfile[]>();
   for (const row of rows) {
     const members = membersByChannelId.get(row.channelId) ?? [];
-    members.push({ userId: row.userId, name: row.user.name, handle: row.user.handle });
+    members.push({
+      userId: row.userId,
+      name: row.user.name,
+      handle: row.user.handle,
+      displayLanguage: row.displayLanguage,
+    });
     membersByChannelId.set(row.channelId, members);
   }
   return membersByChannelId;
@@ -177,6 +184,20 @@ function resolveViewerFacingTitle(
   const partner = members.find((member) => member.userId !== viewerUserId);
   if (!partner) return storedTitle;
   return partner.name?.trim() || partner.handle?.trim() || storedTitle;
+}
+
+// Once a room has 2+ real members, one shared "display language" can't
+// represent everyone's own reading preference — each member reads translated
+// bubbles in their own language, sourced from their own membership row.
+// Solo rooms (0-1 members) keep using the channel-wide value untouched.
+function resolveViewerFacingDisplayLanguage(
+  channelWideValue: string | null,
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): string | null {
+  if (!viewerUserId || !members || members.length < 2) return channelWideValue;
+  const viewerMember = members.find((member) => member.userId === viewerUserId);
+  return viewerMember?.displayLanguage?.trim() || channelWideValue;
 }
 
 function createConversationSessionKey(): string {
@@ -215,6 +236,7 @@ function serializeConversationChannel(
   latestSpeakerAvatarIndex?: number | null,
   messageCount?: number,
   viewerFacingTitle?: string,
+  viewerFacingDisplayLanguage?: string | null,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
@@ -234,7 +256,9 @@ function serializeConversationChannel(
     selectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
-    defaultDisplayLanguage: record.defaultDisplayLanguage?.trim() || null,
+    defaultDisplayLanguage: viewerFacingDisplayLanguage !== undefined
+      ? (viewerFacingDisplayLanguage?.trim() || null)
+      : (record.defaultDisplayLanguage?.trim() || null),
     latestMessagePreview,
     latestMessageAt: latestMessageAt || null,
     latestSpeaker: latestSpeaker || null,
@@ -389,6 +413,7 @@ async function serializeConversationChannelWithPreview(
     latestMessage?.speakerAvatarIndex,
     undefined,
     resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
+    resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
   );
 }
 
@@ -427,6 +452,7 @@ async function listConversationChannelsForMember(
       undefined,
       undefined,
       resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
+      resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
     ));
   }
 
@@ -448,6 +474,7 @@ async function listConversationChannelsForMember(
         latestMessage?.speakerAvatarIndex,
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
         resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
+        resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
       );
     })
     .sort((left, right) => {
@@ -471,11 +498,19 @@ export async function listConversationChannelsForExternalUserId(
   const normalizedExternalUserId = externalUserId.trim();
   if (!normalizedExternalUserId) return [];
 
+  // Resolve the real internal user id so per-viewer title/display-language
+  // overrides (which key off userId, not externalUserId) still apply on this
+  // native-tracking-identity path.
+  const user = await prisma.user.findUnique({
+    where: { externalUserId: normalizedExternalUserId },
+    select: { id: true },
+  });
+
   return listConversationChannelsForMember({
     members: {
       some: { user: { is: { externalUserId: normalizedExternalUserId } } },
     },
-  }, options);
+  }, options, user?.id);
 }
 
 export async function createConversationChannelForUser(
@@ -589,9 +624,13 @@ export async function updateConversationChannelStatus(args: {
   const record = await prisma.$transaction(async (tx) => {
     if (args.status === APP_CONVERSATION_STATUS_ACTIVE) {
       const pausedAt = new Date();
+      // Pause every OTHER room this caller is in, not just the ones they own —
+      // otherwise activating a shared room only pauses the owner's own solo
+      // rooms, leaving the caller's other active rooms (owned by someone else)
+      // untouched, and the caller can end up with more than one active room.
       await tx.appConversationChannel.updateMany({
         where: {
-          ownerUserId: args.userId,
+          ...buildVisibleMembershipWhere(args.userId),
           id: { not: args.conversationId },
           status: APP_CONVERSATION_STATUS_ACTIVE,
           ...buildVisibleConversationWhere(),
@@ -613,7 +652,7 @@ export async function updateConversationChannelStatus(args: {
     });
   });
 
-  return serializeConversationChannelWithPreview(record);
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function updateConversationChannelSelectedLanguages(args: {
@@ -648,7 +687,7 @@ export async function updateConversationChannelSelectedLanguages(args: {
     select: conversationChannelSelect,
   });
 
-  return serializeConversationChannelWithPreview(record);
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function updateConversationChannelSpeechLanguages(args: {
@@ -682,7 +721,7 @@ export async function updateConversationChannelSpeechLanguages(args: {
     select: conversationChannelSelect,
   });
 
-  return serializeConversationChannelWithPreview(record);
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function updateConversationChannelTranslationLanguagesLinked(args: {
@@ -711,7 +750,7 @@ export async function updateConversationChannelTranslationLanguagesLinked(args: 
     select: conversationChannelSelect,
   });
 
-  return serializeConversationChannelWithPreview(record);
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function updateConversationChannelDefaultDisplayLanguage(args: {
@@ -753,15 +792,34 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
     }
   }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
-    },
-    select: conversationChannelSelect,
-  });
+  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
+  const isMultiMember = (membersByChannelId.get(args.conversationId)?.length ?? 0) >= 2;
 
-  return serializeConversationChannelWithPreview(record);
+  // Once there's more than one real member, each person reads translations in
+  // their own language — a single channel-wide value can't represent that, so
+  // this becomes the caller's own membership preference instead of a shared
+  // setting. Solo rooms keep writing the channel-wide field as before.
+  let record: ConversationChannelRecord;
+  if (isMultiMember) {
+    await prisma.appConversationChannelMember.update({
+      where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
+      data: { displayLanguage: normalizedDefaultDisplayLanguage },
+    });
+    record = await prisma.appConversationChannel.findUniqueOrThrow({
+      where: { id: args.conversationId },
+      select: conversationChannelSelect,
+    });
+  } else {
+    record = await prisma.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
+        defaultDisplayLanguage: normalizedDefaultDisplayLanguage,
+      },
+      select: conversationChannelSelect,
+    });
+  }
+
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function updateConversationChannelTitle(args: {
@@ -796,7 +854,7 @@ export async function updateConversationChannelTitle(args: {
     select: conversationChannelSelect,
   });
 
-  return serializeConversationChannelWithPreview(record);
+  return serializeConversationChannelWithPreview(record, args.userId);
 }
 
 export async function getConversationHydrationStateForUser(args: {
@@ -939,6 +997,11 @@ export async function getConversationHydrationStateForUser(args: {
       undefined,
       undefined,
       resolveViewerFacingTitle(conversationRecord.title, membersByChannelId.get(conversationRecord.id), args.userId),
+      resolveViewerFacingDisplayLanguage(
+        conversationRecord.defaultDisplayLanguage,
+        membersByChannelId.get(conversationRecord.id),
+        args.userId,
+      ),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,
