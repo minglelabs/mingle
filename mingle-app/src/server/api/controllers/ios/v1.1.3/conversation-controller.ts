@@ -6,4 +6,6 @@ export {
   getConversationRouteForIosV1_1_0 as getConversationRouteForIosV1_1_3,
   patchConversationForIosV1_1_0 as patchConversationForIosV1_1_3,
   patchConversationRouteForIosV1_1_0 as patchConversationRouteForIosV1_1_3,
+  getConversationRealtimeTokenForIosV1_1_0 as getConversationRealtimeTokenForIosV1_1_3,
+  getConversationRealtimeTokenRouteForIosV1_1_0 as getConversationRealtimeTokenRouteForIosV1_1_3,
 } from "@/server/api/controllers/ios/v1.1.0/conversation-controller";
