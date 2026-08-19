@@ -1,14 +1,16 @@
 "use client";
 
 import type { AppDictionary, AppLocale } from "@/i18n";
-import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import ChatBubble, { type Utterance } from "@/components/LivePhoneDemo/ChatBubble";
 import DirectMessageLanguageSheet from "@/components/direct-message-language-sheet";
 import PublicUserProfileScreen from "@/components/public-user-profile-screen";
-import type { SttLanguageCode } from "@/lib/stt-languages";
-import { ChevronLeft, Languages, Loader2, SendHorizontal } from "lucide-react";
+import useConversationDisplayLanguages from "@/components/use-conversation-display-languages";
+import useConversationRealtime from "@/components/use-conversation-realtime";
+import useDirectMessageThread, { type DirectMessage } from "@/components/use-direct-message-thread";
+import useVoiceDictation from "@/components/use-voice-dictation";
+import { ChevronLeft, Languages, Loader2, Mic, SendHorizontal, Square } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -26,27 +28,6 @@ type DirectMessageScreenProps = {
   conversationId: string;
 };
 
-type DirectMessageAuthor = {
-  id: string;
-  handle: string | null;
-  name: string | null;
-  image: string | null;
-};
-
-type DirectMessage = {
-  id: string;
-  clientMessageId: string | null;
-  originalText: string;
-  sourceLanguage: string;
-  translations: Record<string, string>;
-  createdAt: string;
-  sender: DirectMessageAuthor | null;
-  isMine: boolean;
-  isPending?: boolean;
-  hasFailed?: boolean;
-};
-
-const POLL_INTERVAL_MS = 4000;
 const TEXT_MAX_LENGTH = 4000;
 
 function getCopy(locale: AppLocale) {
@@ -63,19 +44,18 @@ function getCopy(locale: AppLocale) {
     addLanguage: isKorean ? "언어 추가" : "Add language",
     languageSheetTitle: isKorean ? "번역 언어" : "Translation languages",
     languageSheetDescription: isKorean
-      ? "선택한 언어로 상대의 메시지가 함께 번역돼요. 가입할 때 고른 언어는 기본으로 포함돼요."
-      : "Messages from others are also translated into the languages you pick here. Your signup language is included by default.",
+      ? "선택한 언어로 상대의 메시지가 함께 번역돼요. 가입할 때 고른 언어는 기본으로 띄워드려요."
+      : "Messages from others are also translated into the languages you pick here. Your signup language is pre-selected to start.",
     languageSheetDone: isKorean ? "완료" : "Done",
     defaultLanguageBadge: isKorean ? "기본 " : "Default: ",
     close: isKorean ? "닫기" : "Close",
+    startDictation: isKorean ? "음성으로 입력" : "Dictate",
+    stopDictation: isKorean ? "받아쓰기 중지" : "Stop dictating",
+    listening: isKorean ? "듣는 중… 말한 내용이 글로 적혀요" : "Listening… your words appear as text",
+    dictationError: isKorean
+      ? "음성을 인식하지 못했어요. 다시 시도해 주세요."
+      : "Could not hear that. Please try again.",
   };
-}
-
-function createClientMessageId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return `dm_${crypto.randomUUID().replaceAll("-", "")}`;
-  }
-  return `dm_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
 /** Maps a stored DM into the same shape the interpreter room's bubble reads, so
@@ -155,199 +135,61 @@ export default function DirectMessageScreen({
     [locale],
   );
 
-  const [messages, setMessages] = useState<DirectMessage[]>([]);
-  const [partner, setPartner] = useState<DirectMessageAuthor | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  const [isLanguageSheetOpen, setIsLanguageSheetOpen] = useState(false);
-  const [defaultLanguage, setDefaultLanguage] = useState("");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [isSavingLanguages, setIsSavingLanguages] = useState(false);
+  // Set while the draft is what the recognizer heard, so the message is sent
+  // in the language actually spoken rather than the sender's signup language.
+  const [dictatedLanguage, setDictatedLanguage] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesPath = useMemo(
-    () => buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/messages`),
-    [conversationId],
-  );
-  const displayLanguagesPath = useMemo(
-    () => buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/display-languages`),
-    [conversationId],
-  );
 
-  const scrollToBottom = useCallback(() => {
+  const thread = useDirectMessageThread(conversationId);
+  useConversationRealtime({ conversationId, onMessage: thread.refreshNow });
+  const languages = useConversationDisplayLanguages({
+    conversationId,
+    // Adding a language backfills translations for messages already in the
+    // thread, so the badges only appear once the thread is re-read.
+    onSaved: thread.reload,
+  });
+
+  const handleDictationDraft = useCallback((nextDraft: string) => {
+    setDraft(nextDraft.slice(0, TEXT_MAX_LENGTH));
+  }, []);
+
+  const dictation = useVoiceDictation({
+    conversationId,
+    onDraftChange: handleDictationDraft,
+  });
+
+  useEffect(() => {
+    if (dictation.language) setDictatedLanguage(dictation.language);
+  }, [dictation.language]);
+
+  useEffect(() => {
     const node = scrollRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  }, []);
-
-  const loadMessages = useCallback(async (options?: { silent?: boolean }) => {
-    if (!options?.silent) setIsLoading(true);
-    try {
-      const response = await fetch(messagesPath, { cache: "no-store" });
-      if (!response.ok) throw new Error("load_failed");
-      const payload = await response.json() as {
-        messages?: DirectMessage[];
-        partner?: DirectMessageAuthor | null;
-      };
-      setPartner(payload.partner ?? null);
-      // Server rows replace confirmed history but must not drop the optimistic
-      // rows still waiting for their POST to come back.
-      setMessages((current) => {
-        const serverMessages = Array.isArray(payload.messages) ? payload.messages : [];
-        const confirmedClientIds = new Set(
-          serverMessages.map((message) => message.clientMessageId).filter(Boolean),
-        );
-        const stillPending = current.filter((message) => (
-          (message.isPending || message.hasFailed)
-          && !confirmedClientIds.has(message.clientMessageId)
-        ));
-        return [...serverMessages, ...stillPending];
-      });
-      setLoadError(false);
-    } catch {
-      if (!options?.silent) setLoadError(true);
-    } finally {
-      if (!options?.silent) setIsLoading(false);
-    }
-  }, [messagesPath]);
-
-  useEffect(() => {
-    void loadMessages();
-  }, [loadMessages]);
-
-  // Simplest workable delivery: poll while the room is open and visible.
-  // This is the seam a realtime channel replaces later.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const tick = () => {
-      if (document.visibilityState !== "visible") return;
-      void loadMessages({ silent: true });
-    };
-    const timer = window.setInterval(tick, POLL_INTERVAL_MS);
-    document.addEventListener("visibilitychange", tick);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", tick);
-    };
-  }, [loadMessages]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  const openLanguageSheet = useCallback(async () => {
-    setIsLanguageSheetOpen(true);
-    try {
-      const response = await fetch(displayLanguagesPath, { cache: "no-store" });
-      if (!response.ok) return;
-      const payload = await response.json() as { displayLanguages?: string[]; defaultLanguage?: string };
-      const nextDefault = payload.defaultLanguage || "";
-      setDefaultLanguage(nextDefault);
-      // The signup language is only a starting suggestion, pre-checked the
-      // first time this member has nothing saved yet. Once they've saved a
-      // selection — even one that drops the signup language — that choice
-      // is respected instead of forcing the default back in.
-      const existing = Array.isArray(payload.displayLanguages) ? payload.displayLanguages : [];
-      setSelectedLanguages(existing.length > 0 ? existing : (nextDefault ? [nextDefault] : []));
-    } catch {
-      // Sheet stays open with whatever was already selected; saving will
-      // just retry the network call.
-    }
-  }, [displayLanguagesPath]);
-
-  const toggleLanguage = useCallback((code: SttLanguageCode) => {
-    setSelectedLanguages((current) => (
-      current.includes(code)
-        ? current.filter((language) => language !== code)
-        : [...current, code]
-    ));
-  }, []);
-
-  const closeLanguageSheet = useCallback(async () => {
-    setIsSavingLanguages(true);
-    try {
-      await fetch(displayLanguagesPath, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayLanguages: selectedLanguages }),
-      });
-    } catch {
-      // Best-effort: the sheet still closes, and reopening it re-fetches
-      // whatever actually made it to the server.
-    } finally {
-      setIsSavingLanguages(false);
-      setIsLanguageSheetOpen(false);
-    }
-  }, [displayLanguagesPath, selectedLanguages]);
-
-  const sendMessage = useCallback(async (text: string, clientMessageId: string) => {
-    setMessages((current) => current.map((message) => (
-      message.clientMessageId === clientMessageId
-        ? { ...message, isPending: true, hasFailed: false }
-        : message
-    )));
-
-    try {
-      const response = await fetch(messagesPath, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, clientMessageId }),
-      });
-      if (!response.ok) throw new Error("send_failed");
-      const payload = await response.json() as { message?: DirectMessage };
-      if (!payload.message) throw new Error("send_failed");
-
-      setMessages((current) => current.map((message) => (
-        message.clientMessageId === clientMessageId
-          ? { ...payload.message!, isPending: false, hasFailed: false }
-          : message
-      )));
-    } catch {
-      setMessages((current) => current.map((message) => (
-        message.clientMessageId === clientMessageId
-          ? { ...message, isPending: false, hasFailed: true }
-          : message
-      )));
-    }
-  }, [messagesPath]);
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [thread.messages]);
 
   const handleSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || isSending) return;
+    if (!text || thread.isSending) return;
 
-    const clientMessageId = createClientMessageId();
-    setMessages((current) => [...current, {
-      id: clientMessageId,
-      clientMessageId,
-      originalText: text,
-      sourceLanguage: "",
-      translations: {},
-      createdAt: new Date().toISOString(),
-      sender: null,
-      isMine: true,
-      isPending: true,
-    }]);
+    // Discard anything still in flight from the recognizer, or a transcript
+    // arriving after the send would repopulate the composer the user just
+    // emptied.
+    dictation.cancel();
+
+    const spokenLanguage = dictatedLanguage;
     setDraft("");
-    setIsSending(true);
+    setDictatedLanguage("");
     try {
-      await sendMessage(text, clientMessageId);
+      await thread.send(text, spokenLanguage || undefined);
     } finally {
-      setIsSending(false);
       textareaRef.current?.focus({ preventScroll: true });
     }
-  }, [draft, isSending, sendMessage]);
-
-  const handleRetry = useCallback((message: DirectMessage) => {
-    if (!message.clientMessageId || message.isPending) return;
-    void sendMessage(message.originalText, message.clientMessageId);
-  }, [sendMessage]);
+  }, [dictatedLanguage, dictation, draft, thread]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || event.shiftKey) return;
@@ -355,8 +197,16 @@ export default function DirectMessageScreen({
     event.currentTarget.form?.requestSubmit();
   }, []);
 
-  const partnerName = partner?.name?.trim() || copy.userFallback;
-  const partnerHandle = partner?.handle ? formatHandle(partner.handle) : "";
+  const handleDraftTyped = useCallback((value: string) => {
+    setDraft(value.slice(0, TEXT_MAX_LENGTH));
+    // Typing makes the text no longer purely what was heard, so the recognizer's
+    // language guess stops applying and the sender's own language takes over.
+    setDictatedLanguage("");
+    dictation.cancel();
+  }, [dictation]);
+
+  const partnerName = thread.partner?.name?.trim() || copy.userFallback;
+  const partnerHandle = thread.partner?.handle ? formatHandle(thread.partner.handle) : "";
 
   return (
     <div className="absolute inset-0 flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950">
@@ -369,7 +219,7 @@ export default function DirectMessageScreen({
         />
       ) : null}
 
-      {isLanguageSheetOpen ? (
+      {languages.isOpen ? (
         <DirectMessageLanguageSheet
           locale={locale}
           copy={{
@@ -385,11 +235,11 @@ export default function DirectMessageScreen({
             sortAlphabeticalLabel: languageSelectorCopy.languageSelectorSortAlphabeticalLabel,
             noResultsLabel: languageSelectorCopy.languageSelectorNoResultsLabel,
           }}
-          defaultLanguage={defaultLanguage}
-          selectedLanguages={selectedLanguages}
-          onToggleLanguage={toggleLanguage}
-          onClose={() => void closeLanguageSheet()}
-          isSaving={isSavingLanguages}
+          defaultLanguage={languages.defaultLanguage}
+          selectedLanguages={languages.selectedLanguages}
+          onToggleLanguage={languages.toggle}
+          onClose={() => void languages.close()}
+          isSaving={languages.isSaving}
         />
       ) : null}
 
@@ -416,7 +266,7 @@ export default function DirectMessageScreen({
         </div>
         <button
           type="button"
-          onClick={() => void openLanguageSheet()}
+          onClick={() => void languages.open()}
           className="flex h-10 w-10 items-center justify-center justify-self-end rounded-full transition active:bg-gray-100"
           aria-label={copy.addLanguage}
         >
@@ -425,21 +275,21 @@ export default function DirectMessageScreen({
       </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {isLoading ? (
+        {thread.isLoading ? (
           <div className="flex h-full items-center justify-center text-gray-400">
             <Loader2 size={20} className="animate-spin" aria-label={copy.loading} />
           </div>
-        ) : loadError ? (
+        ) : thread.loadError ? (
           <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500" role="alert">
             {copy.loadError}
           </p>
-        ) : messages.length === 0 ? (
+        ) : thread.messages.length === 0 ? (
           <p className="rounded-xl bg-gray-50 px-4 py-5 text-center text-[13px] text-gray-500">
             {copy.empty}
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {messages.map((message) => (
+            {thread.messages.map((message) => (
               <DirectMessageRow
                 key={message.clientMessageId || message.id}
                 message={message}
@@ -447,37 +297,66 @@ export default function DirectMessageScreen({
                 userFallbackLabel={copy.userFallback}
                 sendErrorLabel={copy.sendError}
                 onOpenProfile={setProfileUserId}
-                onRetry={handleRetry}
+                onRetry={thread.retry}
               />
             ))}
           </ul>
         )}
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-end gap-2 border-t border-gray-100 px-3 py-2"
+      <div
+        className="shrink-0 border-t border-gray-100"
         style={{ paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}
       >
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value.slice(0, TEXT_MAX_LENGTH))}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          placeholder={copy.placeholder}
-          aria-label={copy.placeholder}
-          className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl border border-gray-200 px-3 py-2 text-[14px] leading-snug outline-none focus:border-amber-400"
-        />
-        <button
-          type="submit"
-          disabled={!draft.trim() || isSending}
-          aria-label={copy.send}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition active:bg-amber-600 disabled:opacity-40"
-        >
-          <SendHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
-        </button>
-      </form>
+        {dictation.isRecording ? (
+          <p className="flex items-center gap-2 px-4 pt-2 text-[12px] font-medium text-amber-600" role="status">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
+            {copy.listening}
+          </p>
+        ) : dictation.error ? (
+          <p className="px-4 pt-2 text-[12px] text-red-500" role="alert">
+            {copy.dictationError}
+          </p>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(event) => handleDraftTyped(event.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder={copy.placeholder}
+            aria-label={copy.placeholder}
+            className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl border border-gray-200 px-3 py-2 text-[14px] leading-snug outline-none focus:border-amber-400"
+          />
+          {dictation.isSupported ? (
+            <button
+              type="button"
+              onClick={() => (dictation.isRecording ? dictation.stop() : dictation.start(draft))}
+              aria-label={dictation.isRecording ? copy.stopDictation : copy.startDictation}
+              aria-pressed={dictation.isRecording}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+                dictation.isRecording
+                  ? "bg-red-500 text-white active:bg-red-600"
+                  : "bg-gray-100 text-slate-700 active:bg-gray-200"
+              }`}
+            >
+              {dictation.isRecording
+                ? <Square size={16} strokeWidth={2.4} aria-hidden="true" />
+                : <Mic size={18} strokeWidth={2.2} aria-hidden="true" />}
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            disabled={!draft.trim() || thread.isSending}
+            aria-label={copy.send}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white transition active:bg-amber-600 disabled:opacity-40"
+          >
+            <SendHorizontal size={18} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ const {
   mockContentUpsert,
   mockCreateChannelForUser,
   mockTranslateText,
+  mockNotifyConversationMessage,
 } = vi.hoisted(() => ({
   mockUserBlockFindFirst: vi.fn(),
   mockMemberFindUnique: vi.fn(),
@@ -36,6 +37,7 @@ const {
   mockContentUpsert: vi.fn(),
   mockCreateChannelForUser: vi.fn(),
   mockTranslateText: vi.fn(),
+  mockNotifyConversationMessage: vi.fn(),
 }));
 
 const txClient = {
@@ -61,6 +63,9 @@ vi.mock("@/lib/prisma", () => ({
       update: mockChannelUpdate,
     },
     appMessage: { findMany: mockMessageFindMany },
+    // Backfilling a translation for a message already in the thread writes
+    // outside the send transaction, so this is reached directly too.
+    appMessageContent: { upsert: mockContentUpsert },
     $transaction: (fn: (tx: typeof txClient) => unknown) => fn(txClient),
   },
 }));
@@ -75,6 +80,10 @@ vi.mock("@/server/translate-text", () => ({
   translateText: mockTranslateText,
 }));
 
+vi.mock("@/server/conversation-realtime", () => ({
+  notifyConversationMessage: mockNotifyConversationMessage,
+}));
+
 import {
   CONVERSATION_MAX_PARTICIPANTS,
   CONVERSATION_MESSAGE_TEXT_MAX_LENGTH,
@@ -86,6 +95,7 @@ import {
   markConversationRead,
   sendConversationMessage,
   setMemberDisplayLanguages,
+  TRANSLATION_BACKFILL_MESSAGE_LIMIT,
 } from "@/server/conversation-messages";
 
 const CHANNEL_ROW = {
@@ -285,6 +295,9 @@ describe("listConversationMessages", () => {
     // Default viewer: no extra languages added, signup language "en" — tests
     // that care about which translations surface override this explicitly.
     mockMemberFindUnique.mockResolvedValue({ displayLanguages: [], user: { primaryLanguages: ["en"] } });
+    // Default to a provider that yields nothing, so reads exercise only what
+    // is already stored unless a test opts into backfill explicitly.
+    mockTranslateText.mockResolvedValue({});
   });
 
   it("rejects a non-member before reading anything", async () => {
@@ -390,6 +403,143 @@ describe("listConversationMessages", () => {
     expect(after[0].translations).toEqual({ ja: "こんにちは" });
   });
 
+  it("translates and stores a language added after the message was already sent", async () => {
+    // The thread predates the viewer adding Japanese, so nothing Japanese was
+    // ever written for this message. Reading it must produce the badge anyway.
+    mockMessageFindMany.mockResolvedValue([{
+      id: "msg-1",
+      clientMessageId: null,
+      kind: "text",
+      sourceLanguage: "ko",
+      createdAt: new Date("2026-08-18T00:00:01.000Z"),
+      senderId: "u2",
+      sender: { id: "u2", handle: "bee", name: "Bee", image: null },
+      contents: [{ contentType: "SOURCE", language: "ko", text: "안녕" }],
+    }]);
+    mockMemberFindUnique.mockResolvedValue({
+      displayLanguages: ["ja"],
+      user: { primaryLanguages: ["ko"] },
+    });
+    mockTranslateText.mockResolvedValue({ ja: "こんにちは" });
+
+    const messages = await listConversationMessages({ conversationId: "conv-1", viewerId: "u1", backfillTranslations: true });
+
+    expect(mockTranslateText).toHaveBeenCalledWith(expect.objectContaining({
+      text: "안녕",
+      sourceLanguage: "ko",
+      targetLanguages: ["ja"],
+    }));
+    expect(messages[0].translations).toEqual({ ja: "こんにちは" });
+    // Persisted, so the next read costs nothing.
+    expect(mockContentUpsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
+        messageId: "msg-1",
+        contentType: "TRANSLATION_FINAL",
+        language: "ja",
+        text: "こんにちは",
+      }),
+    }));
+  });
+
+  it("never re-translates a language already stored, or the source language itself", async () => {
+    mockMessageFindMany.mockResolvedValue([{
+      id: "msg-1",
+      clientMessageId: null,
+      kind: "text",
+      sourceLanguage: "ko",
+      createdAt: new Date("2026-08-18T00:00:01.000Z"),
+      senderId: "u2",
+      sender: { id: "u2", handle: "bee", name: "Bee", image: null },
+      contents: [
+        { contentType: "SOURCE", language: "ko", text: "안녕" },
+        { contentType: "TRANSLATION_FINAL", language: "ja", text: "こんにちは" },
+      ],
+    }]);
+    mockMemberFindUnique.mockResolvedValue({
+      displayLanguages: ["ja", "ko"],
+      user: { primaryLanguages: ["ko"] },
+    });
+
+    const messages = await listConversationMessages({ conversationId: "conv-1", viewerId: "u1", backfillTranslations: true });
+
+    expect(mockTranslateText).not.toHaveBeenCalled();
+    expect(mockContentUpsert).not.toHaveBeenCalled();
+    expect(messages[0].translations).toEqual({ ja: "こんにちは" });
+  });
+
+  it("leaves the gap for a later read when the translation provider fails", async () => {
+    mockMessageFindMany.mockResolvedValue([{
+      id: "msg-1",
+      clientMessageId: null,
+      kind: "text",
+      sourceLanguage: "ko",
+      createdAt: new Date("2026-08-18T00:00:01.000Z"),
+      senderId: "u2",
+      sender: { id: "u2", handle: "bee", name: "Bee", image: null },
+      contents: [{ contentType: "SOURCE", language: "ko", text: "안녕" }],
+    }]);
+    mockMemberFindUnique.mockResolvedValue({
+      displayLanguages: ["ja"],
+      user: { primaryLanguages: ["ko"] },
+    });
+    mockTranslateText.mockResolvedValue({});
+
+    const messages = await listConversationMessages({ conversationId: "conv-1", viewerId: "u1", backfillTranslations: true });
+
+    // The read still succeeds — a translation outage must never blank a thread.
+    expect(messages[0].originalText).toBe("안녕");
+    expect(messages[0].translations).toEqual({});
+    expect(mockContentUpsert).not.toHaveBeenCalled();
+  });
+
+  it("does not translate anything on an ordinary read, so polling stays cheap", async () => {
+    mockMessageFindMany.mockResolvedValue([{
+      id: "msg-1",
+      clientMessageId: null,
+      kind: "text",
+      sourceLanguage: "ko",
+      createdAt: new Date("2026-08-18T00:00:01.000Z"),
+      senderId: "u2",
+      sender: { id: "u2", handle: "bee", name: "Bee", image: null },
+      contents: [{ contentType: "SOURCE", language: "ko", text: "안녕" }],
+    }]);
+    mockMemberFindUnique.mockResolvedValue({
+      displayLanguages: ["ja"],
+      user: { primaryLanguages: ["ko"] },
+    });
+    mockTranslateText.mockResolvedValue({ ja: "こんにちは" });
+
+    // No backfillTranslations flag — this is what the 4-second poll sends.
+    await listConversationMessages({ conversationId: "conv-1", viewerId: "u1" });
+
+    expect(mockTranslateText).not.toHaveBeenCalled();
+    expect(mockContentUpsert).not.toHaveBeenCalled();
+  });
+
+  it("bounds how many messages one read will backfill", async () => {
+    mockMessageFindMany.mockResolvedValue(
+      Array.from({ length: TRANSLATION_BACKFILL_MESSAGE_LIMIT + 5 }, (_unused, index) => ({
+        id: `msg-${index}`,
+        clientMessageId: null,
+        kind: "text",
+        sourceLanguage: "ko",
+        createdAt: new Date("2026-08-18T00:00:01.000Z"),
+        senderId: "u2",
+        sender: { id: "u2", handle: "bee", name: "Bee", image: null },
+        contents: [{ contentType: "SOURCE", language: "ko", text: "안녕" }],
+      })),
+    );
+    mockMemberFindUnique.mockResolvedValue({
+      displayLanguages: ["ja"],
+      user: { primaryLanguages: ["ko"] },
+    });
+    mockTranslateText.mockResolvedValue({ ja: "こんにちは" });
+
+    await listConversationMessages({ conversationId: "conv-1", viewerId: "u1", backfillTranslations: true });
+
+    expect(mockTranslateText).toHaveBeenCalledTimes(TRANSLATION_BACKFILL_MESSAGE_LIMIT);
+  });
+
   it("returns an empty translations map when no translation landed", async () => {
     mockMessageFindMany.mockResolvedValue([{
       id: "msg-1",
@@ -463,6 +613,49 @@ describe("sendConversationMessage", () => {
       select: { id: true },
     });
     expect(mockMessageCreate).not.toHaveBeenCalled();
+  });
+
+  it("notifies mingle-stt so anyone watching this conversation can be pushed the new message", async () => {
+    const message = await sendConversationMessage({ conversationId: "conv-1", senderId: "u1", text: "hi" });
+
+    expect(mockNotifyConversationMessage).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      messageId: message.id,
+    });
+  });
+
+  it("sends in the language that was actually spoken, not the sender's signup language", async () => {
+    // u1 signed up in Korean but dictated this message in Spanish. Labelling it
+    // "ko" would both mistranslate it and skip translating it into Spanish.
+    const message = await sendConversationMessage({
+      conversationId: "conv-1",
+      senderId: "u1",
+      text: "hola",
+      sourceLanguage: "es",
+    });
+
+    expect(message.sourceLanguage).toBe("es");
+    expect(mockTranslateText).toHaveBeenCalledWith(expect.objectContaining({
+      sourceLanguage: "es",
+      targetLanguages: ["ko", "en"],
+    }));
+  });
+
+  it("falls back to the signup language when the spoken language is absent or unrecognized", async () => {
+    const withoutSpoken = await sendConversationMessage({
+      conversationId: "conv-1",
+      senderId: "u1",
+      text: "안녕",
+    });
+    const withGarbage = await sendConversationMessage({
+      conversationId: "conv-1",
+      senderId: "u1",
+      text: "안녕",
+      sourceLanguage: "   ",
+    });
+
+    expect(withoutSpoken.sourceLanguage).toBe("ko");
+    expect(withGarbage.sourceLanguage).toBe("ko");
   });
 
   it("upserts on the client message id so a retry cannot duplicate", async () => {

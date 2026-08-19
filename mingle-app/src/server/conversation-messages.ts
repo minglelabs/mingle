@@ -5,6 +5,8 @@ import {
   type ConversationChannelSummary,
 } from "@/lib/app-conversations";
 import { translateText } from "@/server/translate-text";
+import { canonicalizeTranslationLanguageCode } from "@/lib/translation-languages";
+import { notifyConversationMessage } from "@/server/conversation-realtime";
 
 export const CONVERSATION_MESSAGE_TEXT_MAX_LENGTH = 4000;
 export const CONVERSATION_MESSAGE_PAGE_SIZE = 50;
@@ -283,10 +285,105 @@ async function loadConversationSummary(conversationId: string): Promise<Conversa
   };
 }
 
+/**
+ * Translations are written when a message is sent, against the languages the
+ * members had chosen *at that moment*. Someone who adds a language later would
+ * otherwise never see a badge on anything already in the thread, so the gap is
+ * filled in on read and persisted — each (message, language) pair costs one
+ * translation call once, and every later read finds it stored.
+ *
+ * Only the newest few messages are filled in per read: scrolling back through a
+ * long thread should not fan out into hundreds of provider calls at once, and
+ * the rest catch up over subsequent reads.
+ */
+export const TRANSLATION_BACKFILL_MESSAGE_LIMIT = 20;
+
+type BackfillCandidate = {
+  id: string;
+  sourceLanguage: string;
+  contents: { contentType: string; language: string; text: string }[];
+};
+
+export function resolveMissingTranslationLanguages(
+  message: BackfillCandidate,
+  viewerLanguages: readonly string[],
+): string[] {
+  const present = new Set(
+    message.contents
+      .filter((content) => content.contentType === "TRANSLATION_FINAL")
+      .map((content) => content.language),
+  );
+
+  return viewerLanguages.filter((language) => (
+    language !== message.sourceLanguage && !present.has(language)
+  ));
+}
+
+async function backfillMissingTranslations(args: {
+  conversationId: string;
+  messages: BackfillCandidate[];
+  viewerLanguages: readonly string[];
+}): Promise<Map<string, Record<string, string>>> {
+  const filled = new Map<string, Record<string, string>>();
+  if (args.viewerLanguages.length === 0) return filled;
+
+  const pending = args.messages
+    .slice(0, TRANSLATION_BACKFILL_MESSAGE_LIMIT)
+    .map((message) => ({
+      message,
+      missing: resolveMissingTranslationLanguages(message, args.viewerLanguages),
+      sourceText: message.contents.find((content) => content.contentType === "SOURCE")?.text ?? "",
+    }))
+    .filter((entry) => entry.missing.length > 0 && entry.sourceText.trim());
+
+  for (const entry of pending) {
+    const translations = await translateText({
+      text: entry.sourceText,
+      sourceLanguage: entry.message.sourceLanguage,
+      targetLanguages: entry.missing,
+      sessionKey: args.conversationId,
+    });
+    if (Object.keys(translations).length === 0) continue;
+
+    // Persisted so the next read is free. A failed provider call simply leaves
+    // the gap for a later read to retry.
+    await Promise.all(Object.entries(translations).map(([language, text]) => (
+      prisma.appMessageContent.upsert({
+        where: {
+          messageId_contentType_language: {
+            messageId: entry.message.id,
+            contentType: "TRANSLATION_FINAL",
+            language,
+          },
+        },
+        create: {
+          messageId: entry.message.id,
+          contentType: "TRANSLATION_FINAL",
+          language,
+          isDeleted: false,
+          text,
+        },
+        update: { isDeleted: false, text },
+      })
+    )));
+    filled.set(entry.message.id, translations);
+  }
+
+  return filled;
+}
+
 export async function listConversationMessages(args: {
   conversationId: string;
   viewerId: string;
   limit?: number;
+  /**
+   * Fill in translations missing for the viewer's current languages. Off by
+   * default because the thread is polled: a provider outage would otherwise
+   * retry every message on every poll forever. Callers turn it on for the
+   * reads that can actually reveal something new — opening the room, and
+   * re-reading right after the language selection changed.
+   */
+  backfillTranslations?: boolean;
 }): Promise<ConversationMessage[]> {
   const viewerMember = await prisma.appConversationMember.findUnique({
     where: memberWhereUnique(args.conversationId, args.viewerId),
@@ -329,6 +426,14 @@ export async function listConversationMessages(args: {
     },
   });
 
+  const backfilled = args.backfillTranslations
+    ? await backfillMissingTranslations({
+        conversationId: args.conversationId,
+        messages,
+        viewerLanguages: [...viewerLanguages],
+      })
+    : new Map<string, Record<string, string>>();
+
   return messages
     .map((message) => {
       const source = message.contents.find((content) => content.contentType === "SOURCE");
@@ -338,6 +443,7 @@ export async function listConversationMessages(args: {
           translations[content.language] = content.text;
         }
       }
+      Object.assign(translations, backfilled.get(message.id) ?? {});
 
       return {
         id: message.id,
@@ -359,6 +465,12 @@ export async function sendConversationMessage(args: {
   senderId: string;
   text: string;
   clientMessageId?: string | null;
+  /**
+   * What the speech recognizer actually detected, when the message was
+   * dictated. Overrides the sender's signup language, which would otherwise
+   * mislabel — and mistranslate — anything spoken in another language.
+   */
+  sourceLanguage?: string | null;
 }): Promise<ConversationMessage> {
   const text = args.text.trim().slice(0, CONVERSATION_MESSAGE_TEXT_MAX_LENGTH);
   if (!text) {
@@ -380,7 +492,9 @@ export async function sendConversationMessage(args: {
   const sender = members.find((member) => member.userId === args.senderId);
   const senderUser = sender?.user
     ?? await prisma.user.findUnique({ where: { id: args.senderId }, select: { primaryLanguages: true } });
-  const sourceLanguage = senderUser?.primaryLanguages[0] || "unknown";
+  const sourceLanguage = canonicalizeTranslationLanguageCode(args.sourceLanguage || "")
+    || senderUser?.primaryLanguages[0]
+    || "unknown";
   const clientMessageId = (args.clientMessageId || "").trim() || null;
 
   // Every member's chosen reading languages — the sender included, so their
@@ -461,6 +575,8 @@ export async function sendConversationMessage(args: {
 
     return created;
   });
+
+  notifyConversationMessage({ conversationId: args.conversationId, messageId: message.id });
 
   const senderProfile = await prisma.user.findUnique({
     where: { id: args.senderId },

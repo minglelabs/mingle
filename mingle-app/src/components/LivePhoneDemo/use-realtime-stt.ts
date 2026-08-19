@@ -33,6 +33,12 @@ import {
   splitNativeSttMessagesForConversation,
   type NativeSttQueuedMessage,
 } from '@/lib/native-stt-event-queue'
+import {
+  claimNativeSttOwner,
+  hasNativeSttOwner,
+  isNativeSttOwner,
+  releaseNativeSttOwner,
+} from '@/lib/native-stt-owner'
 
 export {
   buildStorageKey,
@@ -99,21 +105,6 @@ const RECENT_TURN_CONTEXT_WINDOW_MS = 10_000
 const LIVE_TRANSLATE_CLIENT_BUNDLE_REV = 'translation-debug-20260320-1'
 const DEFAULT_PARTIAL_TRANSLATE_INTERVAL_MS = 2_000
 const DEFAULT_PARTIAL_TRANSLATE_STEP = 20
-let activeNativeSttOwnerKey: string | null = null
-
-function claimNativeSttOwner(ownerKey: string): void {
-  activeNativeSttOwnerKey = ownerKey
-}
-
-function releaseNativeSttOwner(ownerKey: string): void {
-  if (activeNativeSttOwnerKey !== ownerKey) return
-  activeNativeSttOwnerKey = null
-}
-
-function isNativeSttOwner(ownerKey: string): boolean {
-  return activeNativeSttOwnerKey === ownerKey
-}
-
 type NativeAppUpdateWindow = Window & {
   __MINGLE_NATIVE_APP_UPDATE_STATUS?: unknown
   __MINGLE_LAST_NATIVE_STT_STATUS?: unknown
@@ -2504,7 +2495,7 @@ export default function useRealtimeSTT({
   ), [])
 
   const claimCurrentNativeSttOwnerIfUnclaimed = useCallback(() => {
-    if (!activeNativeSttOwnerKey) {
+    if (!hasNativeSttOwner()) {
       claimCurrentNativeSttOwner()
     }
     return isCurrentNativeSttOwner()
@@ -2540,7 +2531,7 @@ export default function useRealtimeSTT({
     if (!nextConnectionStatus) return
     if (nextConnectionStatus === 'connecting' || nextConnectionStatus === 'ready') {
       if (!claimCurrentNativeSttOwnerIfUnclaimed()) return
-    } else if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) {
+    } else if (hasNativeSttOwner() && !isCurrentNativeSttOwner()) {
       return
     }
     if (nextConnectionStatus === 'ready') {
@@ -2582,7 +2573,7 @@ export default function useRealtimeSTT({
       }
 
       if (nextConnectionStatus === 'idle' || nextConnectionStatus === 'error') {
-        if (activeNativeSttOwnerKey && !isCurrentNativeSttOwner()) return
+        if (hasNativeSttOwner() && !isCurrentNativeSttOwner()) return
         setConnectionStatus(nextConnectionStatus)
       }
     }

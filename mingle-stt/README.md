@@ -19,6 +19,31 @@ Standalone STT relay server for Mingle.
 - `SONIOX_MANUAL_FINALIZE_COOLDOWN_MS` (optional, default: `1200`, range: `300..5000`)
 - `SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL` (optional, default: `0`, range: `0..3`)
 - `SONIOX_ENDPOINT_SENSITIVITY` (optional, default: `0`, range: `-1..1`)
+- `MINGLE_REALTIME_SECRET` (optional) — shared with mingle-app, authenticates
+  direct-message push delivery. See "Conversation event push" below.
+
+## Conversation event push
+
+Direct messages are delivered to an open thread over a small WebSocket
+channel here, separate from STT — mingle-app is deployed serverless and
+cannot hold a socket open itself, so mingle-app asks this already-persistent
+process to do it instead. There is no database involved on this side.
+
+- `GET /conversation-events?token=...` — a client subscribes to one
+  conversation. `token` is HMAC-signed by mingle-app under
+  `MINGLE_REALTIME_SECRET`, carrying `{ conversationId, userId, exp }`.
+  mingle-app checks room membership once, at mint time; this side only checks
+  the signature and expiry.
+- `POST /conversation-events/publish` — mingle-app calls this right after a
+  message is stored, with `Authorization: Bearer <MINGLE_REALTIME_SECRET>`
+  and `{ conversationId, messageId }`. Every socket subscribed to that
+  conversation gets `{ type: "message", conversationId, messageId }`; the
+  client re-fetches the message itself over its normal authenticated route.
+
+Subscriber state is in-memory and per-process, so a restart or redeploy drops
+every open connection. This is deliberate: the client already polls on a
+slower interval as a fallback, so a dropped push is late by at most one poll,
+never lost.
 
 Soniox segmentation resolves to one effective runtime mode:
 

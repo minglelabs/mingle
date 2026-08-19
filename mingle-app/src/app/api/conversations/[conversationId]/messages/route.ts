@@ -1,9 +1,13 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { getAuthOptions } from "@/lib/auth-options";
+import { type NextRequest } from "next/server";
+import {
+  conversationFailureResponse,
+  conversationJson,
+  normalizeRouteId,
+  requireSessionUserId,
+  unauthorizedResponse,
+} from "@/server/api/conversation-route-helpers";
 import {
   CONVERSATION_MESSAGE_TEXT_MAX_LENGTH,
-  ConversationMessageError,
   listConversationMessages,
   listConversationParticipants,
   markConversationRead,
@@ -18,64 +22,30 @@ type MessagesRouteProps = {
   }>;
 };
 
-const FAILURE_STATUS: Record<string, number> = {
-  not_a_member: 403,
-  conversation_not_found: 404,
-  user_not_found: 404,
-  user_blocked: 409,
-  cannot_message_self: 400,
-  no_participants: 400,
-  too_many_participants: 400,
-  empty_text: 400,
-};
-
-function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
-  return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
-}
-
-function responseJson(payload: object, init?: ResponseInit): NextResponse {
-  return NextResponse.json(payload, {
-    ...init,
-    headers: {
-      "Cache-Control": "private, no-store",
-      ...init?.headers,
-    },
-  });
-}
-
-function failureResponse(error: unknown): NextResponse {
-  if (error instanceof ConversationMessageError) {
-    return responseJson(
-      { error: error.reason },
-      { status: FAILURE_STATUS[error.reason] ?? 400 },
-    );
-  }
-  throw error;
-}
-
 export async function GET(request: NextRequest, { params }: MessagesRouteProps) {
-  const viewerId = getSessionUserId(await getServerSession(getAuthOptions()));
-  if (!viewerId) return responseJson({ error: "unauthorized" }, { status: 401 });
+  const viewerId = await requireSessionUserId();
+  if (!viewerId) return unauthorizedResponse();
 
-  const { conversationId } = await params;
-  const normalizedId = conversationId.trim();
-  if (!normalizedId) {
-    return responseJson({ error: "invalid_conversation_id" }, { status: 400 });
+  const conversationId = normalizeRouteId((await params).conversationId);
+  if (!conversationId) {
+    return conversationJson({ error: "invalid_conversation_id" }, { status: 400 });
   }
 
   const rawLimit = Number(request.nextUrl.searchParams.get("limit"));
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : undefined;
+  // Opt-in, because the thread is polled — see listConversationMessages.
+  const backfillTranslations = request.nextUrl.searchParams.get("backfill") === "1";
 
   try {
     const [messages, participants] = await Promise.all([
-      listConversationMessages({ conversationId: normalizedId, viewerId, limit }),
-      listConversationParticipants(normalizedId),
+      listConversationMessages({ conversationId, viewerId, limit, backfillTranslations }),
+      listConversationParticipants(conversationId),
     ]);
-    await markConversationRead({ conversationId: normalizedId, userId: viewerId });
+    await markConversationRead({ conversationId, userId: viewerId });
 
     const others = participants.filter((participant) => participant.id !== viewerId);
 
-    return responseJson({
+    return conversationJson({
       messages,
       participants,
       // Deprecated aliases kept for the 1:1-era client; new code should use
@@ -84,44 +54,43 @@ export async function GET(request: NextRequest, { params }: MessagesRouteProps) 
       partner: others[0] ?? null,
     });
   } catch (error) {
-    return failureResponse(error);
+    return conversationFailureResponse(error);
   }
 }
 
 export async function POST(request: NextRequest, { params }: MessagesRouteProps) {
-  const senderId = getSessionUserId(await getServerSession(getAuthOptions()));
-  if (!senderId) return responseJson({ error: "unauthorized" }, { status: 401 });
+  const senderId = await requireSessionUserId();
+  if (!senderId) return unauthorizedResponse();
 
-  const { conversationId } = await params;
-  const normalizedId = conversationId.trim();
-  if (!normalizedId) {
-    return responseJson({ error: "invalid_conversation_id" }, { status: 400 });
+  const conversationId = normalizeRouteId((await params).conversationId);
+  if (!conversationId) {
+    return conversationJson({ error: "invalid_conversation_id" }, { status: 400 });
   }
 
-  let body: { text?: unknown; clientMessageId?: unknown };
+  let body: { text?: unknown; clientMessageId?: unknown; sourceLanguage?: unknown };
   try {
-    body = (await request.json()) as { text?: unknown; clientMessageId?: unknown };
+    body = (await request.json()) as typeof body;
   } catch {
-    return responseJson({ error: "invalid_json" }, { status: 400 });
+    return conversationJson({ error: "invalid_json" }, { status: 400 });
   }
 
   if (typeof body.text !== "string") {
-    return responseJson({ error: "invalid_text" }, { status: 400 });
+    return conversationJson({ error: "invalid_text" }, { status: 400 });
   }
   if (body.text.trim().length > CONVERSATION_MESSAGE_TEXT_MAX_LENGTH) {
-    return responseJson({ error: "text_too_long" }, { status: 400 });
+    return conversationJson({ error: "text_too_long" }, { status: 400 });
   }
-  const clientMessageId = typeof body.clientMessageId === "string" ? body.clientMessageId : null;
 
   try {
     const message = await sendConversationMessage({
-      conversationId: normalizedId,
+      conversationId,
       senderId,
       text: body.text,
-      clientMessageId,
+      clientMessageId: typeof body.clientMessageId === "string" ? body.clientMessageId : null,
+      sourceLanguage: typeof body.sourceLanguage === "string" ? body.sourceLanguage : null,
     });
-    return responseJson({ message }, { status: 201 });
+    return conversationJson({ message }, { status: 201 });
   } catch (error) {
-    return failureResponse(error);
+    return conversationFailureResponse(error);
   }
 }

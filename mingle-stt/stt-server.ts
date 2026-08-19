@@ -45,6 +45,13 @@ import {
     type MingleSttModel,
     type MingleSttStopRecordingLifecycle,
 } from './release-runtime';
+import {
+    ConversationEventBus,
+    handleConversationEventsConnection,
+    handleConversationEventsPublish,
+    isConversationEventsRequestUrl,
+    CONVERSATION_EVENTS_PUBLISH_PATH,
+} from './conversation-events';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -73,6 +80,28 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 const server = createServer();
 const wss = new WebSocketServer({ server });
 
+// Shared with mingle-app so it can mint subscribe tokens and authenticate its
+// publish calls. Realtime delivery degrades to the client's polling fallback
+// when this is unset, rather than the server refusing to start — a missing
+// secret should not take STT down with it.
+const CONVERSATION_EVENTS_SECRET = process.env.MINGLE_REALTIME_SECRET || '';
+const conversationEventBus = new ConversationEventBus();
+
+server.on('request', (request, response) => {
+    const path = request.url?.split('?')[0];
+    if (request.method === 'POST' && path === CONVERSATION_EVENTS_PUBLISH_PATH) {
+        if (!CONVERSATION_EVENTS_SECRET) {
+            response.writeHead(503, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'realtime_not_configured' }));
+            return;
+        }
+        void handleConversationEventsPublish(request, response, CONVERSATION_EVENTS_SECRET, conversationEventBus);
+        return;
+    }
+    response.writeHead(404);
+    response.end();
+});
+
 let connectionCounter = 0;
 
 function classifySonioxUpstreamError(errorCode: unknown, errorMessage: unknown): string {
@@ -92,7 +121,16 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
     );
 }
 
-wss.on('connection', (clientWs) => {
+wss.on('connection', (clientWs, request) => {
+    if (isConversationEventsRequestUrl(request.url)) {
+        if (!CONVERSATION_EVENTS_SECRET) {
+            clientWs.close(4503, 'realtime_not_configured');
+            return;
+        }
+        handleConversationEventsConnection(clientWs, request.url, CONVERSATION_EVENTS_SECRET, conversationEventBus);
+        return;
+    }
+
     const connId = ++connectionCounter;
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);
