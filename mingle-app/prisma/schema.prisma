@@ -70,6 +70,7 @@ model User {
   sessions               Session[]
   passwordResetTokens    PasswordResetToken[]
   conversationChannels   AppConversationChannel[]
+  conversationMemberships AppConversationChannelMember[]
   followingRelations     UserFollow[]             @relation("UserFollowing")
   followerRelations      UserFollow[]             @relation("UserFollowers")
   receivedNotifications  UserNotification[]       @relation("UserNotificationsReceived")
@@ -287,12 +288,35 @@ model AppConversationChannel {
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  owner   User                          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members AppConversationChannelMember[]
 
   @@unique([ownerUserId, sequenceNumber], map: "app_conversation_channels_owner_sequence_uidx")
   @@index([ownerUserId, updatedAt], map: "app_conversation_channels_owner_updated_at_idx")
   @@index([ownerUserId, status], map: "app_conversation_channels_owner_status_idx")
   @@map("app_conversation_channels")
+}
+
+model AppConversationChannelMember {
+  id        String   @id @default(cuid())
+  channelId String   @map("channel_id")
+  userId    String   @map("user_id")
+  role      String   @default("member") // "owner" | "member"
+  // This member's own preferred display language for this room, written via
+  // the room's existing "display-language" menu screen. Solo rooms keep
+  // using AppConversationChannel.defaultDisplayLanguage unchanged; this only
+  // applies once a channel has 2+ members, since one channel-wide value
+  // can't represent per-viewer preference.
+  displayLanguage String?  @map("display_language")
+  joinedAt        DateTime @default(now()) @map("joined_at")
+
+  channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId], map: "app_conversation_channel_members_channel_user_uidx")
+  @@index([userId, joinedAt], map: "app_conversation_channel_members_user_joined_idx")
+  @@index([channelId], map: "app_conversation_channel_members_channel_idx")
+  @@map("app_conversation_channel_members")
 }
 
 model AppFeedback {

@@ -10,6 +10,8 @@ const {
   mockAppMessageCount,
   mockAppMessageGroupBy,
   mockAppEventLogFindFirst,
+  mockChannelMemberFindMany,
+  mockChannelMemberCreateMany,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
@@ -20,6 +22,8 @@ const {
   mockAppMessageCount: vi.fn(),
   mockAppMessageGroupBy: vi.fn(),
   mockAppEventLogFindFirst: vi.fn(),
+  mockChannelMemberFindMany: vi.fn(),
+  mockChannelMemberCreateMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => {
@@ -30,6 +34,10 @@ vi.mock("@/lib/prisma", () => {
       update: mockUpdateConversation,
       updateMany: mockUpdateManyConversation,
       create: mockCreateConversation,
+    },
+    appConversationChannelMember: {
+      findMany: mockChannelMemberFindMany,
+      createMany: mockChannelMemberCreateMany,
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
@@ -64,6 +72,7 @@ import {
   getConversationHydrationStateForUser,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
+  updateConversationChannelTitle,
 } from "@/lib/app-conversations";
 
 describe("app-conversations", () => {
@@ -71,6 +80,8 @@ describe("app-conversations", () => {
     vi.clearAllMocks();
     mockAppMessageGroupBy.mockResolvedValue([]);
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
+    mockChannelMemberFindMany.mockResolvedValue([]);
+    mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -81,13 +92,70 @@ describe("app-conversations", () => {
 
     expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        ownerUserId: "user-1",
+        members: { some: { userId: "user-1" } },
         OR: [
           { isDeleted: false },
           { isDeleted: null },
         ],
       },
     }));
+  });
+
+  it("cannot list, read, or update a channel the user isn't a member of", async () => {
+    mockFindConversationMany.mockResolvedValue([]);
+    mockFindConversationFirst.mockResolvedValue(null);
+
+    const listed = await listConversationChannelsForUser("stranger");
+    expect(listed).toEqual([]);
+
+    const hydrated = await getConversationHydrationStateForUser({
+      conversationId: "conv-a",
+      userId: "stranger",
+    });
+    expect(hydrated).toBeNull();
+
+    const updated = await updateConversationChannelTitle({
+      conversationId: "conv-a",
+      userId: "stranger",
+      title: "New title",
+    });
+    expect(updated).toBeNull();
+    expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "conv-a",
+        members: { some: { userId: "stranger" } },
+      }),
+    }));
+  });
+
+  it("resolves a 2-person room's title to the other member's name, per viewer", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-dm", userId: "user-1", user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-dm", userId: "user-2", user: { name: "Bob", handle: "bob" } },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-dm",
+      userId: "user-1",
+    });
+
+    expect(state?.conversation.title).toBe("Bob");
   });
 
   it("can list conversations directly by the stable external user identity", async () => {
@@ -98,8 +166,8 @@ describe("app-conversations", () => {
 
     expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
       where: {
-        owner: {
-          is: { externalUserId: "anon_local_storage_user" },
+        members: {
+          some: { user: { is: { externalUserId: "anon_local_storage_user" } } },
         },
         OR: [
           { isDeleted: false },
@@ -490,6 +558,42 @@ describe("app-conversations", () => {
     expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ sequenceNumber: 1 }),
     }));
+    expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+      data: [{ channelId: "conv-new", userId: "user-1", role: "owner" }],
+      skipDuplicates: true,
+    });
+  });
+
+  it("adds invitees as members alongside the creator when starting a room with other people", async () => {
+    mockFindConversationFirst.mockResolvedValue(null);
+    mockCreateConversation.mockResolvedValue({
+      id: "conv-new",
+      sequenceNumber: 1,
+      title: "ko:1",
+      status: "paused",
+      sessionKey: "session-new",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+    });
+    mockAppMessageFindMany.mockResolvedValue([]);
+
+    await createConversationChannelForUser("user-1", {
+      locale: "ko",
+      inviteeUserIds: ["user-2", "user-3", "user-1"],
+    });
+
+    expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+      data: [
+        { channelId: "conv-new", userId: "user-1", role: "owner" },
+        { channelId: "conv-new", userId: "user-2", role: "member" },
+        { channelId: "conv-new", userId: "user-3", role: "member" },
+      ],
+      skipDuplicates: true,
+    });
   });
 
   it("vacates a stale soft-deleted row that still occupies the next sequence number", async () => {

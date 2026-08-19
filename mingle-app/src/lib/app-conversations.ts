@@ -43,6 +43,10 @@ export type ConversationHydrationUtterance = {
   speaker: string | null;
   speakerAvatarSeed: string | null;
   speakerAvatarIndex: number | null;
+  // The real account that sent this message, if any — lets the client tell
+  // "mine" from "theirs" for bubble alignment. Distinct from `speaker`, which
+  // is a free-text diarization label used inside a single solo session.
+  speakerUserId: string | null;
 };
 
 export type ConversationHydrationCursor = {
@@ -120,6 +124,61 @@ function buildVisibleMessageContentWhere(): Prisma.AppMessageContentWhereInput {
   };
 }
 
+// Every read/update on a channel is gated on membership, not ownership, so a
+// non-owner member (someone invited into a multi-member room) can use it too.
+// ownerUserId stays on the channel purely as creator/admin metadata (it drives
+// sequenceNumber numbering and delete permission) — it is not an auth check.
+function buildVisibleMembershipWhere(userId: string): Prisma.AppConversationChannelWhereInput {
+  return {
+    members: { some: { userId } },
+  };
+}
+
+type ChannelMemberProfile = {
+  userId: string;
+  name: string | null;
+  handle: string | null;
+};
+
+async function listChannelMembersByChannelId(
+  channelIds: string[],
+): Promise<Map<string, ChannelMemberProfile[]>> {
+  if (channelIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await prisma.appConversationChannelMember.findMany({
+    where: { channelId: { in: channelIds } },
+    select: {
+      channelId: true,
+      userId: true,
+      user: { select: { name: true, handle: true } },
+    },
+  });
+
+  const membersByChannelId = new Map<string, ChannelMemberProfile[]>();
+  for (const row of rows) {
+    const members = membersByChannelId.get(row.channelId) ?? [];
+    members.push({ userId: row.userId, name: row.user.name, handle: row.user.handle });
+    membersByChannelId.set(row.channelId, members);
+  }
+  return membersByChannelId;
+}
+
+// A 1:1 room's title should read as "the other person," not a generic
+// auto-generated label — and that label is different depending on who's
+// looking, so it's computed at read time from membership, never stored.
+function resolveViewerFacingTitle(
+  storedTitle: string,
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): string {
+  if (!viewerUserId || !members || members.length !== 2) return storedTitle;
+  const partner = members.find((member) => member.userId !== viewerUserId);
+  if (!partner) return storedTitle;
+  return partner.name?.trim() || partner.handle?.trim() || storedTitle;
+}
+
 function createConversationSessionKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `conv_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -155,6 +214,7 @@ function serializeConversationChannel(
   latestSpeakerAvatarSeed?: string | null,
   latestSpeakerAvatarIndex?: number | null,
   messageCount?: number,
+  viewerFacingTitle?: string,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
@@ -165,7 +225,7 @@ function serializeConversationChannel(
   return {
     id: record.id,
     sequenceNumber: record.sequenceNumber,
-    title: record.title,
+    title: viewerFacingTitle ?? record.title,
     status: normalizeConversationChannelStatus(record.status),
     sessionKey: record.sessionKey,
     ...(typeof messageCount === "number"
@@ -313,8 +373,12 @@ async function listVisibleMessageCountsBySessionKey(
 
 async function serializeConversationChannelWithPreview(
   record: ConversationChannelRecord,
+  viewerUserId?: string | null,
 ): Promise<ConversationChannelSummary> {
-  const summaryBySessionKey = await listLatestMessageSummaryBySessionKey([record.sessionKey]);
+  const [summaryBySessionKey, membersByChannelId] = await Promise.all([
+    listLatestMessageSummaryBySessionKey([record.sessionKey]),
+    viewerUserId ? listChannelMembersByChannelId([record.id]) : Promise.resolve(new Map<string, ChannelMemberProfile[]>()),
+  ]);
   const latestMessage = summaryBySessionKey.get(record.sessionKey);
   return serializeConversationChannel(
     record,
@@ -323,16 +387,19 @@ async function serializeConversationChannelWithPreview(
     latestMessage?.speaker,
     latestMessage?.speakerAvatarSeed,
     latestMessage?.speakerAvatarIndex,
+    undefined,
+    resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
   );
 }
 
-async function listConversationChannelsForOwner(
-  ownerWhere: Prisma.AppConversationChannelWhereInput,
+async function listConversationChannelsForMember(
+  memberWhere: Prisma.AppConversationChannelWhereInput,
   options: ListConversationChannelsForUserOptions = {},
+  viewerUserId?: string | null,
 ): Promise<ConversationChannelSummary[]> {
   const records = await prisma.appConversationChannel.findMany({
     where: {
-      ...ownerWhere,
+      ...memberWhere,
       ...buildVisibleConversationWhere(),
     },
     orderBy: [
@@ -346,8 +413,21 @@ async function listConversationChannelsForOwner(
     return [];
   }
 
+  const membersByChannelId = viewerUserId
+    ? await listChannelMembersByChannelId(records.map((record) => record.id))
+    : new Map<string, ChannelMemberProfile[]>();
+
   if (options.includeMessageSummaries === false) {
-    return records.map((record) => serializeConversationChannel(record));
+    return records.map((record) => serializeConversationChannel(
+      record,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
+    ));
   }
 
   const sessionKeys = [...new Set(records.map((record) => record.sessionKey))];
@@ -367,6 +447,7 @@ async function listConversationChannelsForOwner(
         latestMessage?.speakerAvatarSeed,
         latestMessage?.speakerAvatarIndex,
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
+        resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
       );
     })
     .sort((left, right) => {
@@ -380,7 +461,7 @@ export async function listConversationChannelsForUser(
   userId: string,
   options: ListConversationChannelsForUserOptions = {},
 ): Promise<ConversationChannelSummary[]> {
-  return listConversationChannelsForOwner({ ownerUserId: userId }, options);
+  return listConversationChannelsForMember(buildVisibleMembershipWhere(userId), options, userId);
 }
 
 export async function listConversationChannelsForExternalUserId(
@@ -390,9 +471,9 @@ export async function listConversationChannelsForExternalUserId(
   const normalizedExternalUserId = externalUserId.trim();
   if (!normalizedExternalUserId) return [];
 
-  return listConversationChannelsForOwner({
-    owner: {
-      is: { externalUserId: normalizedExternalUserId },
+  return listConversationChannelsForMember({
+    members: {
+      some: { user: { is: { externalUserId: normalizedExternalUserId } } },
     },
   }, options);
 }
@@ -405,6 +486,7 @@ export async function createConversationChannelForUser(
     selectedLanguages?: string[];
     speechLanguages?: string[];
     translationLanguagesLinked?: boolean;
+    inviteeUserIds?: string[];
   },
 ): Promise<ConversationChannelSummary> {
   const normalizedLocale = (options?.locale || "en").trim() || "en";
@@ -418,6 +500,7 @@ export async function createConversationChannelForUser(
   const resolvedSelectedLanguages = normalizedSelectedLanguages.length > 0
     ? normalizedSelectedLanguages
     : [...resolvedSpeechLanguages];
+  const inviteeUserIds = [...new Set((options?.inviteeUserIds || []).filter((id) => id && id !== userId))];
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -440,7 +523,7 @@ export async function createConversationChannelForUser(
           data: { sequenceNumber: vacatedSequenceNumber },
         });
 
-        return tx.appConversationChannel.create({
+        const created = await tx.appConversationChannel.create({
           data: {
             ownerUserId: userId,
             sequenceNumber,
@@ -454,9 +537,23 @@ export async function createConversationChannelForUser(
           },
           select: conversationChannelSelect,
         });
+
+        await tx.appConversationChannelMember.createMany({
+          data: [
+            { channelId: created.id, userId, role: "owner" },
+            ...inviteeUserIds.map((inviteeUserId) => ({
+              channelId: created.id,
+              userId: inviteeUserId,
+              role: "member",
+            })),
+          ],
+          skipDuplicates: true,
+        });
+
+        return created;
       });
 
-      return serializeConversationChannelWithPreview(record);
+      return serializeConversationChannelWithPreview(record, userId);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError
@@ -479,7 +576,7 @@ export async function updateConversationChannelStatus(args: {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -532,7 +629,7 @@ export async function updateConversationChannelSelectedLanguages(args: {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -567,7 +664,7 @@ export async function updateConversationChannelSpeechLanguages(args: {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -596,7 +693,7 @@ export async function updateConversationChannelTranslationLanguagesLinked(args: 
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -633,7 +730,7 @@ export async function updateConversationChannelDefaultDisplayLanguage(args: {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: {
@@ -680,7 +777,7 @@ export async function updateConversationChannelTitle(args: {
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: { id: true },
@@ -710,7 +807,7 @@ export async function getConversationHydrationStateForUser(args: {
   const conversationRecord = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
-      ownerUserId: args.userId,
+      ...buildVisibleMembershipWhere(args.userId),
       ...buildVisibleConversationWhere(),
     },
     select: conversationChannelSelect,
@@ -774,6 +871,7 @@ export async function getConversationHydrationStateForUser(args: {
         sourceLanguage: true,
         createdAt: true,
         metadata: true,
+        userId: true,
         contents: {
           where: buildVisibleMessageContentWhere(),
           orderBy: { createdAt: "asc" },
@@ -825,11 +923,23 @@ export async function getConversationHydrationStateForUser(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
+      speakerUserId: message.userId,
     };
   }).filter((utterance) => utterance.originalText.length > 0);
 
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+
   return {
-    conversation: serializeConversationChannel(conversationRecord),
+    conversation: serializeConversationChannel(
+      conversationRecord,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      resolveViewerFacingTitle(conversationRecord.title, membersByChannelId.get(conversationRecord.id), args.userId),
+    ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,
     utterances,
@@ -847,6 +957,11 @@ export async function deleteConversationChannel(args: {
   conversationId: string;
   userId: string;
 }): Promise<ConversationChannelSummary | null> {
+  // Delete-for-everyone stays owner-only, unlike every other operation above —
+  // an arbitrary invited member shouldn't be able to remove the room for the
+  // rest of the group. A "leave conversation" mutation (remove just the
+  // caller's own membership row) would be the member-level equivalent; not
+  // needed yet, nothing has asked for it.
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       id: args.conversationId,
