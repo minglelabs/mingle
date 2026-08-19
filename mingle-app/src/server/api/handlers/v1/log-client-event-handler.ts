@@ -19,6 +19,7 @@ import {
   sanitizeTranslations,
 } from '@/app/api/log/client-event/sanitize'
 import { maybeGenerateConversationTitleForSession } from '@/server/conversation-auto-title'
+import { notifyConversationMessage } from '@/server/conversation-realtime'
 
 export const runtime = 'nodejs'
 
@@ -249,6 +250,12 @@ export async function handleLogClientEventV1(request: NextRequest) {
         } catch (error) {
           console.error('Conversation auto title generation failed:', error)
         }
+
+        // Lets any other member's already-open room pick this up without
+        // waiting on their own poll cycle. Fire-and-forget: this is a
+        // latency optimization, never something a message send should fail
+        // on, and a no-op wherever realtime push isn't configured.
+        notifyConversationMessage(tracking.sessionKey)
       }
     }
 

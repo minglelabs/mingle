@@ -45,6 +45,13 @@ import {
     type MingleSttModel,
     type MingleSttStopRecordingLifecycle,
 } from './release-runtime';
+import {
+    ConversationEventBus,
+    CONVERSATION_EVENTS_PUBLISH_PATH,
+    handleConversationEventsConnection,
+    handleConversationEventsPublish,
+    isConversationEventsRequestUrl,
+} from './conversation-events';
 
 const envCandidates = ['.env.local', '.env'];
 for (const filename of envCandidates) {
@@ -72,6 +79,21 @@ const SONIOX_MANUAL_FINALIZE_COOLDOWN_MS = (() => {
 })();
 const server = createServer();
 const wss = new WebSocketServer({ server });
+const REALTIME_SECRET = (process.env.MINGLE_REALTIME_SECRET || '').trim();
+const conversationEventBus = new ConversationEventBus();
+
+// Direct-message rooms push through this one long-lived process instead of
+// polling, since mingle-app itself is serverless and can't hold a socket
+// open. Everything else on this server is the STT relay; this is additive,
+// not a replacement for anything above.
+server.on('request', (request, response) => {
+    if (request.method === 'POST' && request.url?.split('?')[0] === CONVERSATION_EVENTS_PUBLISH_PATH) {
+        void handleConversationEventsPublish(request, response, REALTIME_SECRET, conversationEventBus);
+        return;
+    }
+    response.writeHead(404, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: 'not_found' }));
+});
 
 let connectionCounter = 0;
 
@@ -92,7 +114,12 @@ function getSonioxManualFinalizeResponseTimeoutMs(silenceMs: number): number {
     );
 }
 
-wss.on('connection', (clientWs) => {
+wss.on('connection', (clientWs, request) => {
+    if (isConversationEventsRequestUrl(request.url)) {
+        handleConversationEventsConnection(clientWs, request.url, REALTIME_SECRET, conversationEventBus);
+        return;
+    }
+
     const connId = ++connectionCounter;
     const connectedAt = Date.now();
     console.log(`[conn:${connId}] client connected`);

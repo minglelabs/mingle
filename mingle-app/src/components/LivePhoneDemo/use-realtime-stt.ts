@@ -55,6 +55,16 @@ export const getWsUrl = (): string => {
   }
   return `${protocol}://${host}:${WS_PORT}`
 }
+// Same host/port mingle-stt's STT relay socket already resolves to, just a
+// different path — the one long-lived process in this stack also carries
+// conversation push events, so there is no second server to point at.
+export const getConversationEventsWsUrl = (): string => {
+  try {
+    return `${new URL(getWsUrl()).origin}/conversation-events`
+  } catch {
+    return ''
+  }
+}
 const DEFAULT_USAGE_LIMIT_SEC = 60
 const CONNECTION_ERROR_RESET_DELAY_MS = 1_000
 const NATIVE_STOP_ACK_TIMEOUT_MS = 5_000
@@ -2840,18 +2850,13 @@ export default function useRealtimeSTT({
     persistMessageCountSnapshot(messageCount, storageNamespace)
   }, [messageCount, storageNamespace])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (!conversationId) return
-    if (!isStorageHydrated) return
+  // Shared by the one-shot mount hydration below and by conversation-events
+  // push/poll (a second real member's messages otherwise never appear in an
+  // already-open room, since nothing else here re-fetches after mount).
+  const refreshFromServerHydration = useCallback((): Promise<void> => {
+    if (!conversationId) return Promise.resolve()
 
-    const hydrationKey = `${conversationId}:${sessionKeyOverride || ''}`
-    if (serverHydrationKeyRef.current === hydrationKey) return
-    serverHydrationKeyRef.current = hydrationKey
-
-    let cancelled = false
-
-    void fetch(buildConversationHydrationApiPath(conversationId), {
+    return fetch(buildConversationHydrationApiPath(conversationId), {
       cache: 'no-store',
       headers: buildConversationHydrationHeaders(),
     })
@@ -2860,7 +2865,7 @@ export default function useRealtimeSTT({
         return response.json() as Promise<ConversationHydrationPayload>
       })
       .then((payload) => {
-        if (cancelled || !payload) return
+        if (!payload) return
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -2902,21 +2907,95 @@ export default function useRealtimeSTT({
       .catch(() => {
         // Keep local state when server hydration fails.
       })
-
-    return () => {
-      cancelled = true
-    }
   }, [
     buildConversationHydrationHeaders,
     buildLocalUtteranceCache,
     buildMergedUtterances,
     conversationId,
     hasOlderUtterancesFromRefs,
-    isStorageHydrated,
     mergeServerHydrationUtterances,
     queueHasOlderUtterancesRefresh,
-    sessionKeyOverride,
   ])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+    if (!isStorageHydrated) return
+
+    const hydrationKey = `${conversationId}:${sessionKeyOverride || ''}`
+    if (serverHydrationKeyRef.current === hydrationKey) return
+    serverHydrationKeyRef.current = hydrationKey
+
+    void refreshFromServerHydration()
+  }, [conversationId, isStorageHydrated, refreshFromServerHydration, sessionKeyOverride])
+
+  // Live sync: a solo room never needed this (nothing else can add a
+  // message), but a room shared by more than one real account does — without
+  // it, another member's messages only show up on next mount/reload. Opens a
+  // push channel on mingle-stt (membership-checked token minted by the
+  // server) and re-runs the same fetch+merge above on push; a long-interval
+  // poll is the fallback for whenever the socket is down or push is
+  // unconfigured in this environment.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!conversationId) return
+
+    let cancelled = false
+    let socket: WebSocket | null = null
+    let reconnectTimer: number | null = null
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+    }
+
+    const openSocket = async () => {
+      if (cancelled) return
+      try {
+        const response = await fetch(
+          buildClientApiPath(`/conversations/${encodeURIComponent(conversationId)}/realtime-token` as `/${string}`),
+          { cache: 'no-store', headers: buildConversationHydrationHeaders() },
+        )
+        if (!response.ok || cancelled) return
+        const payload = await response.json() as { token?: string | null }
+        const token = payload.token
+        const wsBase = getConversationEventsWsUrl()
+        if (!token || !wsBase || cancelled) return
+
+        socket = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
+        socket.onmessage = () => {
+          void refreshFromServerHydration()
+        }
+        socket.onclose = () => {
+          if (cancelled) return
+          clearReconnectTimer()
+          reconnectTimer = window.setTimeout(openSocket, 5_000)
+        }
+      } catch {
+        // Realtime push failed to set up — the poll fallback below still runs.
+      }
+    }
+
+    void openSocket()
+
+    const pollIntervalMs = 20_000
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void refreshFromServerHydration()
+    }, pollIntervalMs)
+
+    return () => {
+      cancelled = true
+      clearReconnectTimer()
+      window.clearInterval(pollTimer)
+      if (socket) {
+        socket.onclose = null
+        socket.close()
+      }
+    }
+  }, [buildConversationHydrationHeaders, conversationId, refreshFromServerHydration])
 
   useEffect(() => {
     utterancesRef.current = utterances

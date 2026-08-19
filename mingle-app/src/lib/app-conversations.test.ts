@@ -82,6 +82,7 @@ import {
   deleteConversationChannel,
   findOrCreateDirectConversation,
   getConversationHydrationStateForUser,
+  getConversationSessionKeyForMember,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
   updateConversationChannelDefaultDisplayLanguage,
@@ -768,6 +769,37 @@ describe("app-conversations", () => {
     expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ sequenceNumber: 1 }),
     }));
+  });
+
+  describe("getConversationSessionKeyForMember", () => {
+    it("returns the sessionKey for a real member", async () => {
+      mockFindConversationFirst.mockResolvedValue({ sessionKey: "session-a" });
+
+      const sessionKey = await getConversationSessionKeyForMember({
+        conversationId: "conv-a",
+        userId: "user-1",
+      });
+
+      expect(sessionKey).toBe("session-a");
+      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          id: "conv-a",
+          members: { some: { userId: "user-1" } },
+        }),
+        select: { sessionKey: true },
+      }));
+    });
+
+    it("returns null for a non-member", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+
+      const sessionKey = await getConversationSessionKeyForMember({
+        conversationId: "conv-a",
+        userId: "stranger",
+      });
+
+      expect(sessionKey).toBeNull();
+    });
   });
 
   describe("findOrCreateDirectConversation", () => {

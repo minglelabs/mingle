@@ -7,6 +7,7 @@ import {
   type ConversationHydrationCursor,
   deleteConversationChannel,
   getConversationHydrationStateForUser,
+  getConversationSessionKeyForMember,
   normalizeConversationChannelStatus,
   updateConversationChannelStatus,
   updateConversationChannelSelectedLanguages,
@@ -18,6 +19,7 @@ import {
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { resolveOrCreateUserIdForRequest } from "@/lib/request-user-identity";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
+import { mintConversationRealtimeToken } from "@/server/conversation-realtime";
 
 export const runtime = "nodejs";
 
@@ -283,6 +285,41 @@ export async function getConversationResponse(
   const response = NextResponse.json(conversationState);
   applyTrackingCookies(request, response, trackingHints);
   return response;
+}
+
+/**
+ * Mints the token the client hands mingle-stt to open a push channel for
+ * this conversation. This is the one place membership actually gets
+ * checked — mingle-stt has no database, so everything downstream trusts
+ * this signature.
+ */
+export async function getConversationRealtimeTokenResponse(
+  request: NextRequest,
+  conversationId: string,
+) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const sessionKey = await getConversationSessionKeyForMember({
+    conversationId,
+    userId: resolvedUser.userId,
+  });
+
+  if (!sessionKey) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const token = mintConversationRealtimeToken({ sessionKey, userId: resolvedUser.userId });
+  // Realtime push is unconfigured in this environment — not an error the
+  // caller needs to see, since the client falls back to polling.
+  return NextResponse.json({ token });
 }
 
 export async function deleteConversationResponse(

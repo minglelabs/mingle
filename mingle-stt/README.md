@@ -19,6 +19,12 @@ Standalone STT relay server for Mingle.
 - `SONIOX_MANUAL_FINALIZE_COOLDOWN_MS` (optional, default: `1200`, range: `300..5000`)
 - `SONIOX_ENDPOINT_LATENCY_ADJUSTMENT_LEVEL` (optional, default: `0`, range: `0..3`)
 - `SONIOX_ENDPOINT_SENSITIVITY` (optional, default: `0`, range: `-1..1`)
+- `MINGLE_REALTIME_SECRET` (optional) — shared with mingle-app's own
+  `MINGLE_REALTIME_SECRET` (must match exactly). Lets multi-member
+  conversation rooms push new messages live over `/conversation-events`
+  instead of only picking them up on the client's poll fallback. Leave unset
+  to disable; the token-mint endpoint on mingle-app then returns `token:
+  null` and clients transparently fall back to polling.
 
 Soniox segmentation resolves to one effective runtime mode:
 

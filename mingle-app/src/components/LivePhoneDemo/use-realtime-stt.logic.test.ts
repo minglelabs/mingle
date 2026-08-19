@@ -13,6 +13,7 @@ import {
   classifyRecentFinalizedUtteranceMatch,
   createUtteranceStoreState,
   findRecentMatchingUtteranceIndex,
+  getConversationEventsWsUrl,
   getWsUrl,
   isDuplicateTimedSignature,
   filterTranslationsToTargetLanguages,
@@ -115,6 +116,25 @@ describe('use-realtime-stt pure logic', () => {
       },
     })
     expect(getWsUrl()).toBe('wss://mingle.app:3001')
+  })
+
+  it('derives the conversation-events push URL from the same origin as the STT websocket', () => {
+    process.env.NEXT_PUBLIC_WS_URL = 'wss://mingle-1-1-4-production.up.railway.app/stt'
+    vi.stubGlobal('window', {
+      location: { hostname: 'localhost', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('wss://mingle-1-1-4-production.up.railway.app/conversation-events')
+  })
+
+  it('derives the conversation-events push URL from an inferred (non-env-override) ws URL too', () => {
+    delete process.env.NEXT_PUBLIC_WS_URL
+    delete process.env.NEXT_PUBLIC_WS_PATH
+    vi.stubGlobal('window', {
+      location: { hostname: 'mingle.local', protocol: 'http:' },
+    })
+
+    expect(getConversationEventsWsUrl()).toBe('ws://mingle.local:3001/conversation-events')
   })
 
   it('parses only recent stored utterances without full-history parsing', () => {

@@ -902,6 +902,23 @@ export async function updateConversationChannelTitle(args: {
   return serializeConversationChannelWithPreview(record, args.userId);
 }
 
+// Lightweight membership check + sessionKey lookup for callers (like minting
+// a realtime-push token) that don't need the full hydration payload.
+export async function getConversationSessionKeyForMember(args: {
+  conversationId: string;
+  userId: string;
+}): Promise<string | null> {
+  const record = await prisma.appConversationChannel.findFirst({
+    where: {
+      id: args.conversationId,
+      ...buildVisibleMembershipWhere(args.userId),
+      ...buildVisibleConversationWhere(),
+    },
+    select: { sessionKey: true },
+  });
+  return record?.sessionKey ?? null;
+}
+
 export async function getConversationHydrationStateForUser(args: {
   conversationId: string;
   userId: string;
