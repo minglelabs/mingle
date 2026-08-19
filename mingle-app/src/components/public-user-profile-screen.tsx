@@ -17,6 +17,7 @@ import {
   Check,
   ChevronLeft,
   Loader2,
+  MessageCircle,
   UserRound,
   UserX,
   X,
@@ -70,6 +71,9 @@ function getCopy(dictionary: AppDictionary, locale: AppLocale) {
     following: dictionary.connect.followingAction ?? (isKorean ? "팔로잉" : "Following"),
     block: dictionary.profile.blockAction ?? (isKorean ? "차단" : "Block"),
     unblock: dictionary.profile.unblockAction ?? (isKorean ? "차단 해제" : "Unblock"),
+    message: dictionary.profile.messageAction ?? (isKorean ? "메시지 보내기" : "Message"),
+    messageError: dictionary.profile.messageError
+      ?? (isKorean ? "대화를 시작하지 못했습니다." : "Could not start the conversation."),
     report: dictionary.profile.reportAction ?? (isKorean ? "신고" : "Report"),
     blockConfirm: dictionary.profile.blockConfirm
       ?? (isKorean ? "이 사용자를 차단하시겠습니까?" : "Block this user?"),
@@ -165,6 +169,8 @@ export default function PublicUserProfileScreen({
   const [loadError, setLoadError] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
   const [actionError, setActionError] = useState(false);
+  const [isMessagePending, setIsMessagePending] = useState(false);
+  const [messageError, setMessageError] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<ReportReason>("spam");
   const [reportMessage, setReportMessage] = useState("");
@@ -313,6 +319,28 @@ export default function PublicUserProfileScreen({
     }
   }, [copy.blockConfirm, copy.unblockConfirm, isActionPending, isOwnProfile, profile]);
 
+  const handleMessage = useCallback(async () => {
+    if (isOwnProfile || !profile || isMessagePending || profile.isBlocked) return;
+    setIsMessagePending(true);
+    setMessageError(false);
+    try {
+      const response = await fetch(buildClientApiPath("/conversations/direct"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: profile.id, locale }),
+      });
+      if (!response.ok) throw new Error("direct_conversation_failed");
+      const data = await response.json() as { conversation?: { id?: string } };
+      const conversationId = data.conversation?.id;
+      if (!conversationId) throw new Error("direct_conversation_failed");
+      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversationId)}`);
+    } catch {
+      setMessageError(true);
+    } finally {
+      setIsMessagePending(false);
+    }
+  }, [isMessagePending, isOwnProfile, locale, profile, router]);
+
   const handleReportSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isOwnProfile || !profile || reportPending) return;
@@ -459,6 +487,21 @@ export default function PublicUserProfileScreen({
                     {isActionPending ? "…" : profile.isFollowing ? copy.following : copy.follow}
                   </button>
                 ) : null}
+                {!isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleMessage()}
+                    disabled={isMessagePending || profile.isBlocked}
+                    className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 text-[13px] font-semibold text-slate-900 transition active:bg-gray-100 disabled:opacity-50"
+                  >
+                    {isMessagePending ? "…" : (
+                      <>
+                        <MessageCircle size={16} strokeWidth={2} aria-hidden="true" />
+                        {copy.message}
+                      </>
+                    )}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleOpenProfileShare}
@@ -495,6 +538,9 @@ export default function PublicUserProfileScreen({
               ) : null}
               {actionError ? (
                 <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.blockError}</p>
+              ) : null}
+              {messageError ? (
+                <p className="mt-2 text-center text-[13px] text-red-500" role="alert">{copy.messageError}</p>
               ) : null}
             </section>
           </>

@@ -110,6 +110,8 @@ export const koDictionary: BaseAppDictionarySource = {
     unblockConfirm: "차단을 해제하시겠습니까?",
     blockConfirm: "이 사용자를 차단하시겠습니까?",
     blockError: "차단 상태를 변경하지 못했습니다.",
+    messageAction: "메시지 보내기",
+    messageError: "대화를 시작하지 못했습니다.",
     reportAction: "신고",
     reportTitle: "사용자 신고",
     reportReasonLabel: "신고 사유",

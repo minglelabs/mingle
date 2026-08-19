@@ -603,6 +603,51 @@ export async function createConversationChannelForUser(
   throw new Error("conversation_channel_create_conflict");
 }
 
+// The entry point for "message this person": reuses whatever 1:1 room
+// already exists between the two accounts instead of spawning a duplicate
+// every time someone taps the button on a profile they've messaged before.
+export async function findOrCreateDirectConversation(args: {
+  userId: string;
+  targetUserId: string;
+  locale?: string;
+}): Promise<ConversationChannelSummary> {
+  const targetUserId = args.targetUserId.trim();
+  if (!targetUserId || targetUserId === args.userId) {
+    throw new Error("invalid_target_user");
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true },
+  });
+  if (!targetUser) {
+    throw new Error("target_user_not_found");
+  }
+
+  const existing = await prisma.appConversationChannel.findFirst({
+    where: {
+      ...buildVisibleConversationWhere(),
+      members: { some: { userId: args.userId } },
+      AND: [
+        { members: { some: { userId: targetUserId } } },
+        // Exactly these two — a channel where either has picked up extra
+        // members (a future group chat) is not "the" 1:1 room anymore.
+        { members: { none: { userId: { notIn: [args.userId, targetUserId] } } } },
+      ],
+    },
+    select: conversationChannelSelect,
+  });
+
+  if (existing) {
+    return serializeConversationChannelWithPreview(existing, args.userId);
+  }
+
+  return createConversationChannelForUser(args.userId, {
+    locale: args.locale,
+    inviteeUserIds: [targetUserId],
+  });
+}
+
 export async function updateConversationChannelStatus(args: {
   conversationId: string;
   userId: string;

@@ -80,6 +80,7 @@ import {
   CONVERSATION_HYDRATION_MESSAGE_LIMIT,
   createConversationChannelForUser,
   deleteConversationChannel,
+  findOrCreateDirectConversation,
   getConversationHydrationStateForUser,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
@@ -767,5 +768,89 @@ describe("app-conversations", () => {
     expect(mockCreateConversation).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ sequenceNumber: 1 }),
     }));
+  });
+
+  describe("findOrCreateDirectConversation", () => {
+    it("reuses an existing 1:1 room instead of creating a duplicate", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-existing",
+        sequenceNumber: 1,
+        title: "Conversation (1)",
+        status: "paused",
+        sessionKey: "session-existing",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+      });
+
+      const conversation = await findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+      });
+
+      expect(conversation.id).toBe("conv-existing");
+      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          members: { some: { userId: "user-1" } },
+          AND: [
+            { members: { some: { userId: "user-2" } } },
+            { members: { none: { userId: { notIn: ["user-1", "user-2"] } } } },
+          ],
+        }),
+      }));
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+    });
+
+    it("creates a new 1:1 room when none exists yet", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockFindConversationFirst
+        .mockResolvedValueOnce(null) // no existing 1:1 room
+        .mockResolvedValueOnce(null); // sequenceNumber lookup inside createConversationChannelForUser
+      mockCreateConversation.mockResolvedValue({
+        id: "conv-new-dm",
+        sequenceNumber: 1,
+        title: "en:1",
+        status: "paused",
+        sessionKey: "session-new-dm",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+      });
+      mockAppMessageFindMany.mockResolvedValue([]);
+
+      await findOrCreateDirectConversation({ userId: "user-1", targetUserId: "user-2" });
+
+      expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
+        data: [
+          { channelId: "conv-new-dm", userId: "user-1", role: "owner" },
+          { channelId: "conv-new-dm", userId: "user-2", role: "member" },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it("rejects a target user that doesn't exist", async () => {
+      mockUserFindUnique.mockResolvedValue(null);
+
+      await expect(findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "ghost",
+      })).rejects.toThrow("target_user_not_found");
+    });
+
+    it("rejects messaging yourself", async () => {
+      await expect(findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-1",
+      })).rejects.toThrow("invalid_target_user");
+      expect(mockUserFindUnique).not.toHaveBeenCalled();
+    });
   });
 });

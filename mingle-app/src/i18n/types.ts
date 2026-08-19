@@ -148,6 +148,8 @@ export type BaseAppDictionarySource = {
     unblockConfirm?: string;
     blockConfirm?: string;
     blockError?: string;
+    messageAction?: string;
+    messageError?: string;
     reportAction?: string;
     reportTitle?: string;
     reportReasonLabel?: string;

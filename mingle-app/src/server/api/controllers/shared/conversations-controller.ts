@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
   createConversationChannelForUser,
+  findOrCreateDirectConversation,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
 } from "@/lib/app-conversations";
@@ -141,6 +142,62 @@ export async function postConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
   const response = NextResponse.json({ conversation }, { status: 201 });
+  applyTrackingCookies(request, response, trackingHints);
+  return response;
+}
+
+export async function postDirectConversationResponse(request: NextRequest) {
+  const session = await getServerSession(getAuthOptions());
+  const resolvedUser = await resolveOrCreateUserIdForRequest({
+    request,
+    session,
+  });
+
+  if (!resolvedUser.userId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let body: { targetUserId?: unknown; locale?: unknown } | null = null;
+  try {
+    body = await request.json();
+  } catch {
+    body = null;
+  }
+
+  const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId.trim() : "";
+  if (!targetUserId) {
+    return NextResponse.json({ error: "invalid_target_user" }, { status: 400 });
+  }
+
+  const locale = typeof body?.locale === "string" && isSupportedLocale(body.locale.trim())
+    ? body.locale.trim()
+    : "en";
+
+  const trackingHints = resolvedUser.tracking
+    ? {
+        externalUserId: resolvedUser.tracking.externalUserId,
+        sessionKey: resolvedUser.tracking.sessionKey,
+      }
+    : resolvedUser.identity;
+
+  let conversation;
+  try {
+    conversation = await findOrCreateDirectConversation({
+      userId: resolvedUser.userId,
+      targetUserId,
+      locale,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "target_user_not_found") {
+      return NextResponse.json({ error: "target_user_not_found" }, { status: 404 });
+    }
+    if (error instanceof Error && error.message === "invalid_target_user") {
+      return NextResponse.json({ error: "invalid_target_user" }, { status: 400 });
+    }
+    console.error("[conversations/direct] create_failed", error);
+    return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
+  }
+  const response = NextResponse.json({ conversation }, { status: 200 });
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }
