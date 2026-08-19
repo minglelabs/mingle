@@ -58,6 +58,11 @@ export interface Utterance {
   speaker?: string
   speakerAvatarSeed?: string
   speakerAvatarIndex?: number
+  // The real account that sent this message, if known — distinct from
+  // `speaker`, which is a free-text diarization label used within one
+  // solo session. Lets the bubble tell "mine" from "theirs" in a room
+  // shared by more than one real account.
+  speakerUserId?: string | null
   originalText: string
   originalLang: string
   sourceLanguagesMixed?: boolean
@@ -81,6 +86,14 @@ interface ChatBubbleProps {
   bubbleTextClassName?: string
   speakingPlaybackKey?: string
   shouldAnimateEntrance?: boolean
+  /**
+   * The current viewer's own account id. When it matches the utterance's
+   * `speakerUserId`, the bubble renders on the right (avatar after the
+   * bubble) instead of the room's default left-anchored layout — used by
+   * rooms with more than one real member. Omitted (or non-matching) keeps
+   * today's solo-room layout exactly as-is.
+   */
+  viewerUserId?: string | null
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -378,7 +391,11 @@ function ChatBubble({
   bubbleTextClassName = 'text-sm',
   speakingPlaybackKey,
   shouldAnimateEntrance = true,
+  viewerUserId,
 }: ChatBubbleProps) {
+  const isOwnMessage = Boolean(
+    viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
+  )
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
     utterance.originalLang,
     [
@@ -543,63 +560,68 @@ function ChatBubble({
     </CopyableBubbleSurface>
   )
 
-  const bubbleContent = (
-    <>
-      <div data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
-        <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-          <Image
-            src={avatar.src}
-            alt={`${speakerLabel} ${avatar.name} avatar`}
-            className="h-8 w-8 rounded-full bg-white object-cover"
-            width={32}
-            height={32}
-            unoptimized
-          />
-        </div>
-        {hasTimestamp && (
-          <ChatBubbleTimestamp
-            createdAtMs={utterance.createdAtMs}
-            uiLocale={uiLocale}
-            align="center"
-            minWidth="2.5rem"
-            className="text-[10px] text-black/[0.3]"
-          />
-        )}
-      </div>
-      <div className="flex min-w-0 flex-1 items-end gap-1.5">
-        <div
-          data-chat-message-bubble-stack
-          style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
-          className="min-w-0 w-fit"
-        >
-          <div
-            data-chat-message-bubble
-            data-display-language={activeLanguage}
-            data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
-            className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
-          >
-            <div
-              data-original-bubble-row
-              data-translation-bubble-row
-              className="w-full"
-            >
-              {activeBubbleBody}
-            </div>
-          </div>
-        </div>
-
-        <MessageCopyButton
-          label={copyActionCopy.copyBubbleLabel}
-          text={activeText}
-          className="mb-3 h-5 self-end items-start pb-1"
+  const avatarColumn = (
+    <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
+      <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
+        <Image
+          src={avatar.src}
+          alt={`${speakerLabel} ${avatar.name} avatar`}
+          className="h-8 w-8 rounded-full bg-white object-cover"
+          width={32}
+          height={32}
+          unoptimized
         />
       </div>
-    </>
+      {hasTimestamp && (
+        <ChatBubbleTimestamp
+          createdAtMs={utterance.createdAtMs}
+          uiLocale={uiLocale}
+          align="center"
+          minWidth="2.5rem"
+          className="text-[10px] text-black/[0.3]"
+        />
+      )}
+    </div>
   )
+
+  const messageColumn = (
+    <div key="message" className={`flex min-w-0 flex-1 items-end gap-1.5 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+      <div
+        data-chat-message-bubble-stack
+        style={{ maxWidth: MESSAGE_BUBBLE_MAX_WIDTH }}
+        className="min-w-0 w-fit"
+      >
+        <div
+          data-chat-message-bubble
+          data-display-language={activeLanguage}
+          data-translation-state={isOriginalLanguageSelected ? undefined : activeTranslationEntry?.state}
+          className="w-fit max-w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-2 shadow-sm"
+        >
+          <div
+            data-original-bubble-row
+            data-translation-bubble-row
+            className="w-full"
+          >
+            {activeBubbleBody}
+          </div>
+        </div>
+      </div>
+
+      <MessageCopyButton
+        label={copyActionCopy.copyBubbleLabel}
+        text={activeText}
+        className="mb-3 h-5 self-end items-start pb-1"
+      />
+    </div>
+  )
+
+  const bubbleContent = isOwnMessage
+    ? <>{messageColumn}{avatarColumn}</>
+    : <>{avatarColumn}{messageColumn}</>
 
   if (!shouldAnimateEntrance) {
     return (
-      <div className="flex items-start gap-1.5">
+      <div className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}>
         {bubbleContent}
       </div>
     )
@@ -610,7 +632,7 @@ function ChatBubble({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="flex items-start gap-1.5"
+      className={`flex items-start gap-1.5 ${isOwnMessage ? 'w-full justify-end' : ''}`}
     >
       {bubbleContent}
     </motion.div>
@@ -627,6 +649,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
   if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+  if (prev.viewerUserId !== next.viewerUserId) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
@@ -635,6 +658,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speaker !== nu.speaker) return false
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
+    if (pu.speakerUserId !== nu.speakerUserId) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false

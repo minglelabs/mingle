@@ -267,6 +267,69 @@ describe('ChatBubble', () => {
     expect(html).not.toContain('data-message-tts-button')
   })
 
+  it('keeps the solo-room left-anchored layout when there is no viewer/speaker account match', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-solo',
+          originalText: 'Solo room message',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-a',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-b',
+      }),
+    )
+
+    expect(html).not.toContain('justify-end')
+    expect(html).not.toContain('flex-row-reverse')
+    expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
+      html.indexOf('data-chat-message-bubble-stack'),
+    )
+  })
+
+  it('renders the avatar unaffected when speakerUserId/viewerUserId are simply absent', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-no-account',
+          originalText: 'No account info',
+          originalLang: 'en',
+          translations: {},
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).not.toContain('justify-end')
+    expect(html.indexOf('data-speaker-avatar-column')).toBeLessThan(
+      html.indexOf('data-chat-message-bubble-stack'),
+    )
+  })
+
+  it('right-aligns the bubble and moves the avatar after it when the viewer is the sender', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-own',
+          originalText: 'My own message',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-a',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-a',
+      }),
+    )
+
+    expect(html).toContain('justify-end')
+    expect(html).toContain('flex-row-reverse')
+    expect(html.indexOf('data-chat-message-bubble-stack')).toBeLessThan(
+      html.indexOf('data-speaker-avatar-column'),
+    )
+  })
+
   it('does not render visible tts icon buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {

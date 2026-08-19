@@ -2,6 +2,7 @@
 
 import { memo, useState, useRef, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, useCallback, useMemo, useId, useSyncExternalStore, type CSSProperties, type ChangeEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { useSession } from 'next-auth/react'
 import { Mic, Loader2, ChevronDown, Check, Menu, LogOut, Trash2, Download, ChevronLeft, ChevronRight, Keyboard, Instagram } from 'lucide-react'
 import ConversationParticipantsPanel from '@/components/LivePhoneDemo/conversation-participants-panel'
 import { toast } from 'sonner'
@@ -1230,6 +1231,7 @@ type LivePhoneDemoChatMessageRowProps = {
   bubbleTextClassName: string
   speakingPlaybackKey?: string
   shouldAnimateEntrance: boolean
+  viewerUserId?: string | null
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1260,6 +1262,7 @@ function LivePhoneDemoChatMessageRow({
   bubbleTextClassName,
   speakingPlaybackKey,
   shouldAnimateEntrance,
+  viewerUserId,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1280,6 +1283,7 @@ function LivePhoneDemoChatMessageRow({
         bubbleTextClassName={bubbleTextClassName}
         speakingPlaybackKey={speakingPlaybackKey}
         shouldAnimateEntrance={shouldAnimateEntrance}
+        viewerUserId={viewerUserId}
       />
     </div>
   )
@@ -1299,6 +1303,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.onPlayTranslation !== next.onPlayTranslation) return false
     if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
     if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
+    if (prev.viewerUserId !== next.viewerUserId) return false
 
     const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
     const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
@@ -1414,6 +1419,10 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   onDefaultDisplayLanguageChange,
   onOpenProfile,
 }, ref) {
+  // Only used to tell "my" bubbles from "theirs" in a room shared by more
+  // than one real account — the solo room's own layout never depends on it.
+  const { data: session } = useSession()
+  const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
@@ -3521,6 +3530,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     sessionKeyOverride,
     storageNamespace,
     translationModel: requestTranslationModel,
+    viewerUserId,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
@@ -6411,6 +6421,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   bubbleTextClassName={chatBubbleTextClassName}
                   speakingPlaybackKey={activeBubblePlaybackKey}
                   shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
+                  viewerUserId={viewerUserId}
                 />
               ))}
 

@@ -689,6 +689,9 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
         ...(typeof record.speakerAvatarIndex === 'number'
           ? { speakerAvatarIndex: record.speakerAvatarIndex }
           : {}),
+        ...(typeof record.speakerUserId === 'string' && record.speakerUserId.trim()
+          ? { speakerUserId: record.speakerUserId.trim() }
+          : {}),
       })
     })
     .filter((utterance) => utterance.id && utterance.originalText.trim())
@@ -963,6 +966,10 @@ export interface BuildFinalizedUtterancePayloadInput {
   speaker?: string
   speakerAvatarSeed?: string
   speakerAvatarIndex?: number
+  // The viewer's own real account id — a locally-produced utterance is
+  // always "mine" by definition, so this is stamped at creation time rather
+  // than waiting on a server round trip.
+  speakerUserId?: string | null
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -1022,6 +1029,7 @@ export function buildFinalizedUtterancePayload(
     speaker: (input.speaker || '').trim() || 'unknown',
     ...(input.speakerAvatarSeed?.trim() ? { speakerAvatarSeed: input.speakerAvatarSeed.trim() } : {}),
     ...(typeof input.speakerAvatarIndex === 'number' ? { speakerAvatarIndex: input.speakerAvatarIndex } : {}),
+    ...(input.speakerUserId ? { speakerUserId: input.speakerUserId } : {}),
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -1055,6 +1063,10 @@ interface UseRealtimeSTTOptions {
   sessionKeyOverride?: string
   storageNamespace?: string
   translationModel?: UserSelectableTranslationModel
+  // The signed-in viewer's own account id, stamped onto every locally
+  // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
+  // room has more than one real member. Unused by solo rooms.
+  viewerUserId?: string | null
 }
 
 type StopRecordingOptions = {
@@ -2212,6 +2224,7 @@ export default function useRealtimeSTT({
   sessionKeyOverride,
   storageNamespace,
   translationModel,
+  viewerUserId = null,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -3464,6 +3477,7 @@ export default function useRealtimeSTT({
       speaker: options?.speaker,
       speakerAvatarSeed: options?.speakerAvatarSeed,
       speakerAvatarIndex: options?.speakerAvatarIndex,
+      speakerUserId: viewerUserId,
       rawText,
       rawLanguage: rawLang,
       languages: targetLanguages,
@@ -3522,7 +3536,7 @@ export default function useRealtimeSTT({
       speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
       speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
-  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages])
+  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, viewerUserId])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -4266,6 +4280,7 @@ export default function useRealtimeSTT({
               ? pendingTurn.speakerAvatarIndex
               : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
           ),
+          speakerUserId: viewerUserId,
           rawText,
           rawLanguage: lang,
           languages: targetLanguages,
@@ -4453,6 +4468,7 @@ export default function useRealtimeSTT({
     removePendingTurn,
     startAudioProcessing,
     syncVisiblePendingTurn,
+    viewerUserId,
   ])
 
   const startRecording = useCallback(async () => {
