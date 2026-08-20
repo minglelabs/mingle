@@ -14,6 +14,14 @@
    Data change: None. This is an Android navigation and UI consistency audit.
    Verification: Source-level route/state inventory and handler-path audit completed. The connected Android device is currently logged out after the release reinstall, so signed-in interaction checks for every listed surface remain pending.
 
+### `2026-08-20-android-system-back-installed-build-follow-up` | UI/UX issue found
+
+1. **The installed Android build still exited from surfaces previously classified as handled**
+   User report: The current installed build appeared to finish the app from My Page settings, profile editing, profile image preview, settings subpages and account dialogs, room menu/language/room-management controls, ordinary room-to-list back, follow list, and profile share. This invalidated the earlier source-only classification; all listed surfaces must be treated as failing until a signed-in physical-device pass confirms otherwise.
+   Remediation: Added a shared Android back capability poster that preserves the existing iOS history signal. ConversationList now advertises the active room and its local overlays, handles row-action/list dialogs, and keeps the topmost list surface in the native back stack. Public profiles, follow lists, and profile sharing now register their existing animated back actions directly. Public-profile report/image-preview states close before the profile. The room handler now closes account deletion and text-composer surfaces. Authentication sheets and language-onboarding steps also register local handlers. The My Page handler now uses the same shared poster.
+   Data change: None. This is an Android navigation and UI consistency fix.
+   Verification: Web and React Native TypeScript checks, focused RN contract/external-navigation tests, and the web navigation contract suite passed. No Android device is currently connected to this workstation, so the rebuilt APK still needs signed-in physical-device verification.
+
 ## 2026-08-20 Android system back exits from tab-root panels
 
 ### `2026-08-20-android-system-back-navigation` | UI/UX issue found

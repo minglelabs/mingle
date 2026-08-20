@@ -9,6 +9,10 @@ import { motion, useAnimationControls } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 
 export type FollowListTab = "followers" | "following";
 
@@ -105,6 +109,18 @@ export default function FollowListScreen({
     await motionControls.start({ x: "100%", transition: FOLLOW_LIST_TRANSITION });
     if (isMountedRef.current) navigateBack();
   }, [motionControls, navigateBack]);
+
+  useEffect(() => {
+    postNativeAndroidBackCapability(true);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    void handleBack();
+    return true;
+  }, 20), [handleBack]);
 
   const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const touch = event.touches[0];

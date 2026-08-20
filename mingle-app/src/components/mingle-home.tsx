@@ -28,6 +28,10 @@ import {
   type AuthPanelStep,
 } from "@/components/mingle-home.auth-contract";
 import { buildPathWithCurrentSearchParams } from "@/lib/build-path-with-search-params";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { getSilenceSliderUpgradeCopy } from "@/i18n/silence-slider-upgrade-copy";
 import {
   readPendingBirthDate,
@@ -1122,6 +1126,45 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
     handleSocialSignIn,
     hasAgreedAllRequiredTerms,
     selectedProvider,
+  ]);
+
+  useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      legalSheetKind
+      || isEmailSheetOpen
+      || authPanelStep === "terms"
+    );
+    if (!props.authOnly && !canHandleAndroidBack) return;
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [authPanelStep, isEmailSheetOpen, legalSheetKind, props.authOnly]);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (legalSheetKind) {
+      handleCloseLegalSheet();
+      return true;
+    }
+    if (isEmailSheetOpen) {
+      handleCloseEmailSheet();
+      return true;
+    }
+    if (authPanelStep === "terms") {
+      handleBackToProviderSelect();
+      return true;
+    }
+    if (isSigningIn || isEmailSubmitting) return true;
+    return false;
+  }, 30), [
+    authPanelStep,
+    handleBackToProviderSelect,
+    handleCloseEmailSheet,
+    handleCloseLegalSheet,
+    isEmailSheetOpen,
+    isEmailSubmitting,
+    isSigningIn,
+    legalSheetKind,
   ]);
 
   useEffect(() => {

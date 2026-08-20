@@ -23,6 +23,7 @@ import {
   shuffleDiscoverySourceCodes,
   type DiscoverySource,
 } from "@/lib/discovery-source";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 
 const DEFAULT_ONBOARDING_BIRTH_DATE: BirthDateParts = {
   year: 2000,
@@ -141,6 +142,13 @@ export default function LanguageOnboardingModal({
     if (isConfirming) return;
     setStep((currentStep) => currentStep === "discovery-source" ? "birth-date" : "language");
   };
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (isConfirming) return true;
+    if (step === "language") return true;
+    handleStepBack();
+    return true;
+  }, 30), [isConfirming, step]);
 
   const handleFinalConfirm = async () => {
     if (isConfirming || !isEligibleAge || !discoverySource) return;

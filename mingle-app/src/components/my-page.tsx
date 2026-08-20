@@ -27,7 +27,10 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
-import { registerNativeBackHandler } from "@/lib/native-back-handler";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildProfileImageTransform,
@@ -172,25 +175,6 @@ function isNativeAppRuntimeSignalPresent(): boolean {
   const nativeWindow = window as NativeAppUpdateWindow;
   return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
-}
-
-function postAndroidBackCapability(canHandleAndroidBack: boolean): void {
-  if (typeof window === "undefined") return;
-  const nativeWindow = window as NativeAppUpdateWindow;
-  const postMessage = nativeWindow.ReactNativeWebView?.postMessage;
-  if (typeof postMessage !== "function") return;
-
-  try {
-    postMessage(JSON.stringify({
-      type: "native_navigation_state",
-      payload: {
-        canHandleAndroidBack,
-        url: window.location.href,
-      },
-    }));
-  } catch {
-    // Keep browser navigation unchanged when the native bridge is unavailable.
-  }
 }
 
 function NativeAppUpdateCard({
@@ -1712,9 +1696,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
 
   useEffect(() => {
     const canHandleAndroidBack = showProfileEdit || showProfileImagePreview || showProfileSettings;
-    postAndroidBackCapability(canHandleAndroidBack);
+    postNativeAndroidBackCapability(canHandleAndroidBack);
     return () => {
-      postAndroidBackCapability(false);
+      postNativeAndroidBackCapability(false);
     };
   }, [showProfileEdit, showProfileImagePreview, showProfileSettings]);
 

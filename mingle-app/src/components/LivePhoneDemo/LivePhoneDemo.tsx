@@ -3000,6 +3000,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
+    if (deleteAccountDialogOpen) {
+      if (!isAuthActionPending) {
+        closeDeleteAccountDialog()
+      }
+      return true
+    }
+
     if (renameConversationDialogOpen) {
       if (!isRenamingConversation) {
         closeRenameConversationDialog()
@@ -3024,6 +3031,12 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
       return true
     }
 
+    if (isComposerOpen) {
+      setIsComposerOpen(false)
+      composerTextareaRef.current?.blur()
+      return true
+    }
+
     if (menuHistoryDepthRef.current > 0 || menuOpen) {
       requestMenuBackStep()
       return true
@@ -3032,9 +3045,13 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     return false
   }, 10), [
     closeDeleteConversationDialog,
+    closeDeleteAccountDialog,
     closeLanguageSelector,
     closeRenameConversationDialog,
+    deleteAccountDialogOpen,
     deleteConversationDialogOpen,
+    isAuthActionPending,
+    isComposerOpen,
     isDeletingConversation,
     isRenamingConversation,
     langSelectorOpen,

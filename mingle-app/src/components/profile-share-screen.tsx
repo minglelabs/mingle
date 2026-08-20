@@ -17,6 +17,10 @@ import { buildProfileLinkUrl, parseMingleProfileLink } from "@/lib/profile-link"
 import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls } from "framer-motion";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 
 type ProfileShareScreenProps = {
   dictionary: AppDictionary;
@@ -205,6 +209,18 @@ export default function ProfileShareScreen({
     await motionControls.start({ x: "100%", transition: PROFILE_SHARE_TRANSITION });
     if (isMountedRef.current) navigateBack();
   }, [motionControls, navigateBack]);
+
+  useEffect(() => {
+    postNativeAndroidBackCapability(true);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    void handleBack();
+    return true;
+  }, 20), [handleBack]);
 
   const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLElement>) => {
     const touch = event.touches[0];

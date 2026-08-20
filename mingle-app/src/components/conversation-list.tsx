@@ -117,6 +117,7 @@ import {
 } from "@/components/conversation-list-cache";
 import {
   NATIVE_HISTORY_BACK_ANIMATE_FLAG,
+  postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
 import {
@@ -3908,6 +3909,35 @@ export default function ConversationList({
     closeConversationOverlay(activeConversation, { animateExit: true, replaceUrl: true });
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
+  useEffect(() => {
+    const canHandleAndroidBack = Boolean(
+      (activeConversation && !isCreatingConversation)
+      || showSearch
+      || showNotifications
+      || notificationProfileId
+      || conversationProfileId
+      || rowActionMenu
+      || renameDialogConversationId
+      || deleteDialogConversationId
+      || languageOnboardingModalOpen
+    );
+    postNativeAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, [
+    activeConversation,
+    conversationProfileId,
+    deleteDialogConversationId,
+    isCreatingConversation,
+    languageOnboardingModalOpen,
+    notificationProfileId,
+    renameDialogConversationId,
+    rowActionMenu,
+    showNotifications,
+    showSearch,
+  ]);
+
   useEffect(() => registerNativeBackHandler(() => {
     if (conversationProfileId) {
       closeConversationProfile();
@@ -3921,8 +3951,28 @@ export default function ConversationList({
       closeNotifications();
       return true;
     }
-    if (showSearch && !activeConversation) {
+    if (showSearch) {
       closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
+      return true;
+    }
+    if (rowActionMenu) {
+      setRowActionMenu(null);
+      return true;
+    }
+    if (renameDialogConversationId) {
+      if (!isRenamingConversation) {
+        setRenameDialogConversationId(null);
+        setRenameConversationValue("");
+      }
+      return true;
+    }
+    if (deleteDialogConversationId) {
+      if (!isDeletingConversation) {
+        setDeleteDialogConversationId(null);
+      }
+      return true;
+    }
+    if (languageOnboardingModalOpen) {
       return true;
     }
     if (!activeConversation || isCreatingConversation) return false;
@@ -3936,8 +3986,14 @@ export default function ConversationList({
     closeNotificationProfile,
     closeSearchOverlay,
     conversationProfileId,
+    deleteDialogConversationId,
+    isDeletingConversation,
+    isRenamingConversation,
     isCreatingConversation,
+    languageOnboardingModalOpen,
     notificationProfileId,
+    renameDialogConversationId,
+    rowActionMenu,
     showNotifications,
     showSearch,
   ]);

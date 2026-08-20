@@ -25,6 +25,10 @@ import { motion, useAnimationControls, type PanInfo } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  postNativeAndroidBackCapability,
+  registerNativeBackHandler,
+} from "@/lib/native-back-handler";
 
 type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
@@ -255,6 +259,26 @@ export default function PublicUserProfileScreen({
     await motionControls.start({ x: "100%", transition: PROFILE_TRANSITION });
     if (isMountedRef.current) navigateBack();
   }, [motionControls, navigateBack]);
+
+  useEffect(() => {
+    postNativeAndroidBackCapability(true);
+    return () => {
+      postNativeAndroidBackCapability(false);
+    };
+  }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (showProfileImagePreview) {
+      setShowProfileImagePreview(false);
+      return true;
+    }
+    if (reportOpen) {
+      setReportOpen(false);
+      return true;
+    }
+    void handleBack();
+    return true;
+  }, 30), [handleBack, reportOpen, showProfileImagePreview]);
 
   const handleDragEnd = useCallback((_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (!isMountedRef.current || isLeavingRef.current) return;

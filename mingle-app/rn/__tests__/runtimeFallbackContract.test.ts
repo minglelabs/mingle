@@ -71,12 +71,30 @@ describe('runtime fallback contract', () => {
   it('keeps Android panel back handling separate from iOS WebView history state', () => {
     const appSource = readWorkspaceFile('App.tsx');
     const myPageSource = readWorkspaceFile('../src/components/my-page.tsx');
+    const conversationListSource = readWorkspaceFile('../src/components/conversation-list.tsx');
+    const publicProfileSource = readWorkspaceFile('../src/components/public-user-profile-screen.tsx');
+    const followListSource = readWorkspaceFile('../src/components/follow-list-screen.tsx');
+    const profileShareSource = readWorkspaceFile('../src/components/profile-share-screen.tsx');
+    const livePhoneSource = readWorkspaceFile('../src/components/LivePhoneDemo/LivePhoneDemo.tsx');
+    const languageOnboardingSource = readWorkspaceFile('../src/components/LivePhoneDemo/LanguageOnboardingModal.tsx');
+    const mingleHomeSource = readWorkspaceFile('../src/components/mingle-home.tsx');
 
     expect(appSource).toContain('canHandleAndroidBack?: boolean;');
     expect(appSource).toContain(
       '!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen',
     );
     expect(myPageSource).toContain('registerNativeBackHandler');
-    expect(myPageSource).toContain('postAndroidBackCapability(canHandleAndroidBack);');
+    expect(myPageSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(conversationListSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(conversationListSource).toContain('if (rowActionMenu) {');
+    expect(publicProfileSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(publicProfileSource).toContain('if (showProfileImagePreview) {');
+    expect(followListSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(profileShareSource).toContain('postNativeAndroidBackCapability(true);');
+    expect(livePhoneSource).toContain('if (deleteAccountDialogOpen) {');
+    expect(livePhoneSource).toContain('if (isComposerOpen) {');
+    expect(languageOnboardingSource).toContain('handleStepBack();');
+    expect(mingleHomeSource).toContain('postNativeAndroidBackCapability(canHandleAndroidBack);');
+    expect(mingleHomeSource).toContain('if (authPanelStep === "terms") {');
   });
 });
