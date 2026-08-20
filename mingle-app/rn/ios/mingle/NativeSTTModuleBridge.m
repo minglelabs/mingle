@@ -46,6 +46,15 @@ RCT_EXTERN_METHOD(clearConversationRestoreUrl:(RCTPromiseResolveBlock)resolve
 
 RCT_EXTERN_METHOD(recordHistoryDebug:(NSString *)payload)
 
+RCT_EXTERN_METHOD(checkLocationPermission:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(requestLocationPermission:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(getCurrentLocation:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end
 
 @interface RCT_EXTERN_MODULE(NativePushNotificationModule, RCTEventEmitter)

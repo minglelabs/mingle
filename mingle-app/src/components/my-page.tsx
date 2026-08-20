@@ -8,6 +8,7 @@ import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileFeedbackContent from "@/components/profile-feedback-content";
 import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileLocation from "@/components/profile-location";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
 import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
@@ -56,6 +57,14 @@ import {
   type BirthDateParts,
 } from "@/lib/birth-date";
 import { resolveSignupCopy } from "@/i18n/signup-copy";
+import { checkProfileLocationPermission } from "@/components/profile-location";
+import {
+  normalizeProfileLocation,
+  type ProfileLocationRecord,
+} from "@/lib/profile-location";
+import {
+  type NativeLocationPermission,
+} from "@/lib/native-location";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
@@ -79,6 +88,7 @@ type ProfileRecord = {
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
+  location: ProfileLocationRecord | null;
   birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
@@ -1670,6 +1680,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     nationality: null,
     primaryLanguages: [],
     defaultConversationLanguages: [],
+    location: null,
     birthDate: null,
     followersCount: 0,
     followingCount: 0,
@@ -1677,6 +1688,16 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+  const [isLocationMapOpen, setIsLocationMapOpen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<NativeLocationPermission | "checking">(
+    () => "checking",
+  );
+  const locationPermissionRef = useRef<NativeLocationPermission | "checking">(locationPermission);
+  const locationPermissionSyncVersionRef = useRef(0);
+
+  useEffect(() => {
+    locationPermissionRef.current = locationPermission;
+  }, [locationPermission]);
 
   useEffect(() => registerNativeBackHandler(() => {
     if (showProfileImagePreview) {
@@ -1695,12 +1716,12 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   }, 10), [showProfileEdit, showProfileImagePreview, showProfileSettings]);
 
   useEffect(() => {
-    const canHandleAndroidBack = showProfileEdit || showProfileImagePreview || showProfileSettings;
+    const canHandleAndroidBack = showProfileEdit || showProfileImagePreview || showProfileSettings || isLocationMapOpen;
     postNativeAndroidBackCapability(canHandleAndroidBack);
     return () => {
       postNativeAndroidBackCapability(false);
     };
-  }, [showProfileEdit, showProfileImagePreview, showProfileSettings]);
+  }, [isLocationMapOpen, showProfileEdit, showProfileImagePreview, showProfileSettings]);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;
@@ -1759,6 +1780,9 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
+          location: locationPermissionRef.current !== "granted"
+            ? null
+            : normalizeProfileLocation(data.location),
           birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
@@ -1772,6 +1796,93 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
       cancelled = true;
     };
   }, [sessionUserId]);
+
+  const syncLocationPermission = useCallback(async () => {
+    if (!sessionUserId) return;
+    const syncVersion = ++locationPermissionSyncVersionRef.current;
+    const nextPermission = await checkProfileLocationPermission();
+    if (syncVersion !== locationPermissionSyncVersionRef.current) return;
+    locationPermissionRef.current = nextPermission;
+    setLocationPermission(nextPermission);
+    if (nextPermission === "granted") {
+      try {
+        await fetch(buildClientApiPath("/profile"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locationPermissionStatus: "granted" }),
+        });
+      } catch {
+        // The native permission remains authoritative for the current screen.
+      }
+      return;
+    }
+    setProfile((current) => ({ ...current, location: null }));
+    const cleanupStatus = nextPermission === "unknown" ? "unavailable" : nextPermission;
+    try {
+      await fetch(buildClientApiPath("/profile"), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationPermissionStatus: cleanupStatus }),
+      });
+    } catch {
+      // The local profile is cleared immediately even if the cleanup request is retried later.
+    }
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    const initialSyncTimer = window.setTimeout(() => {
+      void syncLocationPermission();
+    }, 0);
+
+    const handlePageVisible = () => {
+      if (document.visibilityState === "hidden") return;
+      void syncLocationPermission();
+    };
+    window.addEventListener("pageshow", handlePageVisible);
+    document.addEventListener("visibilitychange", handlePageVisible);
+    return () => {
+      window.clearTimeout(initialSyncTimer);
+      window.removeEventListener("pageshow", handlePageVisible);
+      document.removeEventListener("visibilitychange", handlePageVisible);
+    };
+  }, [sessionUserId, syncLocationPermission]);
+
+  const handleSaveLocation = useCallback(async (nextLocation: ProfileLocationRecord) => {
+    locationPermissionSyncVersionRef.current += 1;
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location: nextLocation,
+        locationPermissionStatus: "granted",
+      }),
+    });
+    if (!response.ok) throw new Error("location_save_failed");
+    const data = await response.json() as { location?: unknown };
+    const savedLocation = normalizeProfileLocation(data.location) ?? nextLocation;
+    locationPermissionRef.current = "granted";
+    setLocationPermission("granted");
+    setProfile((current) => ({ ...current, location: savedLocation }));
+  }, []);
+
+  const handleClearLocation = useCallback(async () => {
+    locationPermissionSyncVersionRef.current += 1;
+    locationPermissionRef.current = "denied";
+    setLocationPermission("denied");
+    setProfile((current) => ({ ...current, location: null }));
+    const response = await fetch(buildClientApiPath("/profile"), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationPermissionStatus: "denied" }),
+    });
+    if (!response.ok) throw new Error("location_clear_failed");
+  }, []);
+
+  const handleLocationMapOpenChange = useCallback((open: boolean) => {
+    if (open) locationPermissionSyncVersionRef.current += 1;
+    setIsLocationMapOpen(open);
+  }, []);
 
   const handleSaveProfile = useCallback(async (draft: ProfileDraft): Promise<ProfileSaveResult> => {
     try {
@@ -2024,6 +2135,14 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           <div className="mt-4 pl-2">
             <p className="text-[15px] font-semibold text-slate-950">{name}</p>
             {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+            <ProfileLocation
+              profileLocation={locationPermission === "granted" ? profile.location : null}
+              locale={locale}
+              isOwnProfile
+              onSaveLocation={handleSaveLocation}
+              onClearLocation={handleClearLocation}
+              onMapOpenChange={handleLocationMapOpenChange}
+            />
             {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
           </div>
 

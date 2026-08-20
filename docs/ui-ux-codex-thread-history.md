@@ -996,3 +996,17 @@
   - Keep a Mingle icon fallback when the linked profile preview is unavailable, so the install action remains usable.
 - Data contract: No schema or API changes. The existing profile data is read server-side for the public shared-link preview.
 - Testing notes: Verify a shared link shows the correct profile photo, name, and handle, the button uses the Mingle icon and key color, and a missing preview still leaves the app-opening action available.
+
+## 2026-08-20 - Add permission-aware profile locations
+
+- Surface: The location row below the handle on the authenticated My Page and public user profiles.
+- Issue: Profiles had no city-level location context, and a previously saved location could remain visible after the user disabled location access in the device settings.
+- User impact: Users could not share a useful, approximate location or open it on a map, and a stale profile location could be shown after permission was revoked.
+- Resolution:
+  - Show a localized location row below the handle. The authenticated user sees an add/update action; other profiles show the city and country or a localized empty state.
+  - Open a localized OpenStreetMap view from the row, with reverse-geocoded city and country labels requested in the active UI language.
+  - Keep the location permission request deferred until the user taps the add/update action. Page entry and page visibility changes perform a silent permission check only.
+  - Clear the saved location locally and through the profile API whenever native or browser permission is not granted. Store only rounded city-level coordinates and labels, never a precise address.
+  - Add native Location When In Use permission declarations and bridges for both iOS and Android; the existing iOS and Android back behavior closes the map modal first.
+- Data contract: Add nullable city-level location fields and permission verification timestamps to `app_users`; the existing v2.0.0 profile endpoints expose the nested location object.
+- Testing notes: Verify add/update requests the system permission only after the button tap, denied permission removes the row after returning from Settings, each primary UI language localizes the row and map labels, and Android back closes the map before exiting the screen.

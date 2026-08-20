@@ -52,6 +52,8 @@
 	<string>Mingle uses your microphone for real-time speech translation.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Mingle uses your camera to scan profile QR codes.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Mingle uses your location only when you choose to add or update your profile location.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Mingle saves QR codes to your Photos.</string>
 	<key>MingleWebAppBaseURL</key>

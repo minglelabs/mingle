@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreLocation
 import Foundation
 import React
 import UIKit
@@ -1111,12 +1112,18 @@ class NativeSTTModule: RCTEventEmitter {
 }
 
 @objc(NativeRuntimeConfigModule)
-class NativeRuntimeConfigModule: NSObject {
+class NativeRuntimeConfigModule: NSObject, CLLocationManagerDelegate {
     private static let conversationRestoreUrlKey = "mingle.nativeConversationRestore.url"
     private static let conversationRestoreConversationIdKey = "mingle.nativeConversationRestore.conversationId"
     private static let conversationRestoreCreatedAtMsKey = "mingle.nativeConversationRestore.createdAtMs"
     private static let pendingProfileLinkUrlKey = "mingle.nativeProfileLink.url"
     private static let pendingProfileLinkSequenceKey = "mingle.nativeProfileLink.sequence"
+
+    private var locationManager: CLLocationManager?
+    private var pendingLocationPermissionResolve: RCTPromiseResolveBlock?
+    private var pendingLocationResolve: RCTPromiseResolveBlock?
+    private var pendingLocationReject: RCTPromiseRejectBlock?
+    private var locationTimeoutWorkItem: DispatchWorkItem?
 
     @objc
     static func requiresMainQueueSetup() -> Bool {
@@ -1217,6 +1224,145 @@ class NativeRuntimeConfigModule: NSObject {
         rejecter reject: RCTPromiseRejectBlock
     ) {
         resolve(Self.runtimeConfigPayload())
+    }
+
+    private func locationPermissionStatus() -> String {
+        guard CLLocationManager.locationServicesEnabled() else { return "unavailable" }
+        let status: CLAuthorizationStatus
+        if #available(iOS 14.0, *) {
+            status = locationManager?.authorizationStatus ?? CLLocationManager.authorizationStatus()
+        } else {
+            status = CLLocationManager.authorizationStatus()
+        }
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return "granted"
+        case .notDetermined:
+            return "not_determined"
+        case .denied, .restricted:
+            return "blocked"
+        @unknown default:
+            return "unavailable"
+        }
+    }
+
+    private func locationPermissionPayload(_ override: String? = nil) -> [String: Any] {
+        [
+            "permission": override ?? locationPermissionStatus(),
+            "platform": "ios",
+        ]
+    }
+
+    @objc(checkLocationPermission:rejecter:)
+    func checkLocationPermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            resolve(self?.locationPermissionPayload() ?? ["permission": "unavailable", "platform": "ios"])
+        }
+    }
+
+    @objc(requestLocationPermission:rejecter:)
+    func requestLocationPermission(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter _: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                resolve(["permission": "unavailable", "platform": "ios"])
+                return
+            }
+            guard CLLocationManager.locationServicesEnabled() else {
+                resolve(self.locationPermissionPayload("unavailable"))
+                return
+            }
+            let status = self.locationPermissionStatus()
+            guard status == "not_determined" else {
+                resolve(self.locationPermissionPayload(status))
+                return
+            }
+
+            self.pendingLocationPermissionResolve = resolve
+            let manager = self.locationManager ?? CLLocationManager()
+            self.locationManager = manager
+            manager.delegate = self
+            manager.requestWhenInUseAuthorization()
+        }
+    }
+
+    @objc(getCurrentLocation:rejecter:)
+    func getCurrentLocation(
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        rejecter reject: @escaping RCTPromiseRejectBlock
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                reject("location_unavailable", "Location manager is unavailable", nil)
+                return
+            }
+            guard self.locationPermissionStatus() == "granted" else {
+                reject("location_permission", "Location permission is not granted", nil)
+                return
+            }
+            guard CLLocationManager.locationServicesEnabled() else {
+                reject("location_unavailable", "Location services are disabled", nil)
+                return
+            }
+
+            self.locationTimeoutWorkItem?.cancel()
+            self.pendingLocationResolve = resolve
+            self.pendingLocationReject = reject
+            let manager = self.locationManager ?? CLLocationManager()
+            self.locationManager = manager
+            manager.delegate = self
+            manager.desiredAccuracy = kCLLocationAccuracyKilometer
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, self.pendingLocationResolve != nil else { return }
+                self.pendingLocationResolve = nil
+                self.pendingLocationReject = nil
+                reject("location_timeout", "Timed out while getting current location", nil)
+            }
+            self.locationTimeoutWorkItem = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
+            manager.requestLocation()
+        }
+    }
+
+    private func resolvePendingLocationPermission() {
+        guard let resolve = pendingLocationPermissionResolve else { return }
+        pendingLocationPermissionResolve = nil
+        resolve(locationPermissionPayload())
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        resolvePendingLocationPermission()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        resolvePendingLocationPermission()
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last, let resolve = pendingLocationResolve else { return }
+        locationTimeoutWorkItem?.cancel()
+        locationTimeoutWorkItem = nil
+        pendingLocationResolve = nil
+        pendingLocationReject = nil
+        resolve([
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "accuracy": location.horizontalAccuracy,
+        ])
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        guard let reject = pendingLocationReject else { return }
+        locationTimeoutWorkItem?.cancel()
+        locationTimeoutWorkItem = nil
+        pendingLocationResolve = nil
+        pendingLocationReject = nil
+        reject("location_failed", error.localizedDescription, error)
     }
 
     @objc(getPendingProfileLink:rejecter:)

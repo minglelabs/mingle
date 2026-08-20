@@ -50,6 +50,13 @@ model User {
   nationality           String?
   primaryLanguages      String[]  @default([]) @map("primary_languages")
   defaultConversationLanguages String[] @default([]) @map("default_conversation_languages")
+  locationLatitude      Float?    @map("location_latitude")
+  locationLongitude     Float?    @map("location_longitude")
+  locationCity          String?   @map("location_city")
+  locationCountry       String?   @map("location_country")
+  locationCountryCode   String?   @map("location_country_code")
+  locationUpdatedAt     DateTime? @map("location_updated_at")
+  locationPermissionVerifiedAt DateTime? @map("location_permission_verified_at")
   birthDate             DateTime? @db.Date @map("birth_date")
   discoverySource       String?   @map("discovery_source")
   isActive              Boolean   @default(true) @map("is_active")

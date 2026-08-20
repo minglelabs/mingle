@@ -6,6 +6,7 @@ import { formatHandle } from "@/lib/handles";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
+import ProfileLocation from "@/components/profile-location";
 import {
   STT_LANGUAGE_OPTIONS,
   canonicalizeSttLanguageCode,
@@ -29,6 +30,7 @@ import {
   postNativeAndroidBackCapability,
   registerNativeBackHandler,
 } from "@/lib/native-back-handler";
+import { normalizeProfileLocation, type ProfileLocationRecord } from "@/lib/profile-location";
 
 type PublicUserProfileScreenProps = {
   dictionary: AppDictionary;
@@ -48,6 +50,7 @@ type PublicUserProfile = {
   bio: string | null;
   nationality: string | null;
   primaryLanguages: string[];
+  location: ProfileLocationRecord | null;
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
@@ -195,6 +198,7 @@ export default function PublicUserProfileScreen({
         const data = await response.json() as Partial<PublicUserProfile>;
         return {
           ...data,
+          location: normalizeProfileLocation(data.location),
           isFollowing: data.isFollowing === true,
           isBlocked: data.isBlocked === true,
         } as PublicUserProfile;
@@ -467,6 +471,13 @@ export default function PublicUserProfileScreen({
               <div className="mt-4 pl-2">
                 <p className="text-[15px] font-semibold text-slate-950">{name}</p>
                 {profile.handle ? <p className="mt-0.5 text-[13px] text-gray-500">{formatHandle(profile.handle)}</p> : null}
+                {!isOwnProfile ? (
+                  <ProfileLocation
+                    profileLocation={profile.location}
+                    locale={locale}
+                    isOwnProfile={false}
+                  />
+                ) : null}
                 {bio ? <p className="mt-1 text-[14px] leading-snug text-slate-700">{bio}</p> : null}
               </div>
 

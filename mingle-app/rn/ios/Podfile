@@ -12,7 +12,7 @@ require Pod::Executable.execute_command('node', ['-p',
 
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
-setup_permissions(['Camera'])
+setup_permissions(['Camera', 'LocationWhenInUse'])
 
 # Do not embed prebuilt RN framework dSYMs inside the app bundle.
 # The archive still contains symbols, but App Store validation rejects bundled dSYMs.

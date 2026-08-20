@@ -38,6 +38,11 @@ const userProfileSelect = {
   bio: true,
   nationality: true,
   primaryLanguages: true,
+  locationLatitude: true,
+  locationLongitude: true,
+  locationCity: true,
+  locationCountry: true,
+  locationCountryCode: true,
   _count: {
     select: {
       followerRelations: {
@@ -126,6 +131,18 @@ export async function GET(_request: NextRequest, { params }: UserProfileRoutePro
       user.primaryLanguages,
       user.nationality ? [user.nationality] : [],
     ),
+    location: typeof user.locationLatitude === "number"
+      && Number.isFinite(user.locationLatitude)
+      && typeof user.locationLongitude === "number"
+      && Number.isFinite(user.locationLongitude)
+      ? {
+          latitude: user.locationLatitude,
+          longitude: user.locationLongitude,
+          city: user.locationCity,
+          country: user.locationCountry,
+          countryCode: user.locationCountryCode,
+        }
+      : null,
     followersCount: user._count.followerRelations,
     followingCount: user._count.followingRelations,
     isFollowing: user.followerRelations.length > 0,
