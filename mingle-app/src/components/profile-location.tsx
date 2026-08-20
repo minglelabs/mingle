@@ -68,15 +68,9 @@ export default function ProfileLocation({
 
   useEffect(() => {
     let cancelled = false;
-    const resetTimer = setTimeout(() => {
-      if (cancelled) return;
-      setLocalizedLocation(profileLocation);
-      setError(null);
-    }, 0);
     if (!profileLocation) {
       return () => {
         cancelled = true;
-        clearTimeout(resetTimer);
       };
     }
 
@@ -87,7 +81,6 @@ export default function ProfileLocation({
 
     return () => {
       cancelled = true;
-      clearTimeout(resetTimer);
     };
   }, [locale, profileLocation]);
 

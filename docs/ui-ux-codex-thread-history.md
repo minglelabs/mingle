@@ -1023,3 +1023,12 @@
   - Narrow the OpenStreetMap embed bounds to keep city labels readable at the larger panel size.
 - Data contract: None.
 - Testing notes: Verify the panel enters from the right on iOS and Android, the top-left back button and Android back close only the panel, the map labels are readable, and the enlarged controls remain localized in all supported UI languages.
+
+## 2026-08-20 - Preserve viewer-language profile location labels after remount
+
+- Surface: The localized city and country label on another user's profile.
+- Issue: The first visit could briefly show the profile owner's stored language before the viewer-language reverse-geocoding response arrived. On later visits, a cached reverse-geocoding result could be overwritten by a zero-delay fallback reset, leaving the label in the stored language.
+- User impact: An English viewer could see a Korean location label again after leaving and reopening the same profile.
+- Resolution: Keep the current profile data as the render fallback and remove the delayed fallback reset. The viewer-language result now wins consistently for both network and cached responses.
+- Data contract: None. The server still stores the profile's fallback city and country; the client resolves display labels with the viewer's locale.
+- Testing notes: Verify the first render can transition from the stored label to the viewer-language label, reopening the profile preserves the viewer-language label, and a failed reverse-geocoding request still falls back safely.
