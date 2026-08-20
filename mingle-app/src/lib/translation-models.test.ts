@@ -23,6 +23,11 @@ describe('translation model catalog', () => {
         label: 'qwen3.5-9b',
         badge: 'Slow',
       },
+      {
+        value: 'qwen/qwen3.7-flash',
+        label: 'qwen3.7-flash',
+        badge: 'Slow',
+      },
     ]))
   })
 
@@ -40,11 +45,23 @@ describe('translation model catalog', () => {
     expect(normalizeSelectableTranslationModel('gemma-4-31b-it (openrouter)')).toBeNull()
   })
 
+  it('normalizes Qwen 3.7 Flash aliases', () => {
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.7-flash')).toBe('qwen/qwen3.7-flash')
+    expect(normalizeSelectableTranslationModel('qwen3.7-flash')).toBe('qwen/qwen3.7-flash')
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.7-flash (openrouter)')).toBe('qwen/qwen3.7-flash')
+  })
+
   it('resolves runtime selections for the new models', () => {
     expect(resolveTranslationRuntimeSelection('gemma-4-31b-it')).toMatchObject({
       engineProvider: 'gemma',
       infrastructureProvider: 'google',
       runtimeModel: 'gemma-4-31b-it',
+    })
+    expect(resolveTranslationRuntimeSelection('qwen/qwen3.7-flash')).toMatchObject({
+      engineProvider: 'qwen',
+      infrastructureProvider: 'openrouter',
+      runtimeModel: 'qwen/qwen3.7-flash',
+      baseUrl: 'https://openrouter.ai/api/v1',
     })
   })
 })

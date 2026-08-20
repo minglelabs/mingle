@@ -169,6 +169,15 @@ TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
 TRANSLATE_API_KEY=your_openrouter_key
 ```
 
+Qwen 3.7 Flash via OpenRouter:
+
+```bash
+TRANSLATE_PROVIDER=qwen
+TRANSLATE_MODEL=qwen/qwen3.7-flash
+TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
+TRANSLATE_API_KEY=your_openrouter_key
+```
+
 Gemma 4 31B via Google Generative AI:
 
 ```bash

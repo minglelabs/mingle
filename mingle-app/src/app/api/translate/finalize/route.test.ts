@@ -878,6 +878,54 @@ describe('/api/translate/finalize route', () => {
     expect(modelConfig.model).toBe('gemma-4-31b-it')
   })
 
+  it('uses Qwen 3.7 Flash through OpenRouter on the v1.1.4 route', async () => {
+    setAuthenticatedTranslationModel('qwen/qwen3.7-flash')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"sourceLanguage":"en","sourceLanguagesMixed":false,"sourceTextHasForeignScript":false,"ko":"안녕하세요"}',
+              },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {},
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ))
+
+    vi.stubGlobal('fetch', fetchMock)
+    vi.resetModules()
+    setGeminiTranslateEnv()
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key'
+    process.env.INWORLD_RUNTIME_BASE64_CREDENTIAL = 'ZmFrZTpmYWtl'
+    process.env.INWORLD_TTS_DEFAULT_VOICE_ID = 'Ashley'
+    process.env.INWORLD_TTS_MODEL_ID = 'inworld-tts-1.5-mini'
+
+    const { POST } = await import('@/app/api/ios/v1.1.4/translate/finalize/route')
+
+    const res = await POST(makeJsonRequest({
+      text: 'hello',
+      sourceLanguage: 'en',
+      targetLanguages: ['ko'],
+      isFinal: true,
+    }, undefined, 'http://localhost:3000/api/ios/v1.1.4/translate/finalize') as never)
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.provider).toBe('qwen')
+    expect(json.infrastructureProvider).toBe('openrouter')
+    expect(json.model).toBe('qwen/qwen3.7-flash')
+    expect(mockGenerateContent).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(requestInit.body)) as { model?: string }
+    expect(body.model).toBe('qwen/qwen3.7-flash')
+  })
+
   it('uses the request translation model before falling back to the DB preference lookup', async () => {
     setAuthenticatedTranslationModel('qwen/qwen3.5-9b')
     mockGenerateContent.mockResolvedValue({

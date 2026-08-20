@@ -6,6 +6,7 @@ export type UserSelectableTranslationModel =
   | 'gemini-2.5-flash-lite'
   | 'gemma-4-31b-it'
   | 'qwen/qwen3.5-9b'
+  | 'qwen/qwen3.7-flash'
 
 export type TranslationModelBadge = 'Best' | 'Slow'
 
@@ -41,6 +42,11 @@ export const TRANSLATION_MODEL_OPTIONS: TranslationModelOption[] = [
     label: 'qwen3.5-9b',
     badge: 'Slow',
   },
+  {
+    value: 'qwen/qwen3.7-flash',
+    label: 'qwen3.7-flash',
+    badge: 'Slow',
+  },
 ]
 
 const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, TranslationRuntimeSelection> = {
@@ -61,6 +67,13 @@ const TRANSLATION_RUNTIME_SELECTIONS: Record<UserSelectableTranslationModel, Tra
     engineProvider: 'qwen',
     infrastructureProvider: 'openrouter',
     runtimeModel: 'qwen/qwen3.5-9b',
+    baseUrl: 'https://openrouter.ai/api/v1',
+  },
+  'qwen/qwen3.7-flash': {
+    value: 'qwen/qwen3.7-flash',
+    engineProvider: 'qwen',
+    infrastructureProvider: 'openrouter',
+    runtimeModel: 'qwen/qwen3.7-flash',
     baseUrl: 'https://openrouter.ai/api/v1',
   },
 }
@@ -96,7 +109,13 @@ function canonicalizeTranslationModel(rawValue: string): UserSelectableTranslati
     return 'qwen/qwen3.5-9b'
   }
 
-  if (normalized === 'qwen/qwen3.5-9b') return 'qwen/qwen3.5-9b'
+  if (
+    normalized === 'qwen/qwen3.7-flash'
+    || normalized === 'qwen3.7-flash'
+    || normalized === 'qwen/qwen3.7-flash (openrouter)'
+  ) {
+    return 'qwen/qwen3.7-flash'
+  }
 
   return null
 }

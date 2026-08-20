@@ -1,5 +1,13 @@
 # UI/UX Codex Thread History
 
+## 2026-08-20 - Qwen 3.7 Flash Translation Model Option
+
+- Surface: `mingle-app/src/lib/translation-models.ts`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemo.tsx`, `mingle-app/src/components/LivePhoneDemo/LivePhoneDemoLegacy.tsx`
+- Issue: The 1.1.4 translation model menu did not expose Qwen 3.7 Flash, even though the service already supported OpenRouter-compatible Qwen requests. Users could not choose the newer model from the live translator, and the menu gave no latency expectation for this additional model.
+- User impact: Users interested in Qwen 3.7 Flash had to rely on an unavailable or manually configured model value, while the lack of a visible `Slow` badge made the expected response-time tradeoff unclear before selection.
+- Resolution: Added `qwen/qwen3.7-flash` as an OpenRouter-backed selectable model and marked it with the existing `Slow` badge. The existing default model and existing model order remain unchanged, and the 1.1.4 route now has coverage through the same preference-to-provider path.
+- Tests: Added catalog normalization/runtime mapping coverage and a v1.1.4 OpenRouter request contract test.
+
 ## 2026-08-16 - Admin Dashboard Daily Metric Loading Delay
 
 - Surface: `mingle-app/src/app/admin/dashboard/page.tsx`, `mingle-app/src/lib/admin-dashboard-query.ts`, `mingle-app/prisma/schema.prisma`

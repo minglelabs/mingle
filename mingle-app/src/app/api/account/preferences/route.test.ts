@@ -345,6 +345,33 @@ describe("/api/account/preferences route", () => {
     });
   });
 
+  it("persists Qwen 3.7 Flash through PATCH", async () => {
+    mockGetServerSession.mockResolvedValue({
+      user: {
+        id: "user_123",
+        email: "user@example.com",
+      },
+    });
+    mockUserUpdateMany.mockResolvedValue({ count: 1 });
+
+    const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({
+        translationModel: "qwen/qwen3.7-flash",
+      }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json).toEqual({ ok: true });
+    expect(mockUserUpdateMany).toHaveBeenCalledWith({
+      where: { id: "user_123" },
+      data: {
+        translationModel: "qwen/qwen3.7-flash",
+      },
+    });
+  });
+
   it("persists the supported gemma 4 translation model through PATCH", async () => {
     mockGetServerSession.mockResolvedValue({
       user: {
