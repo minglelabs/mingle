@@ -35,6 +35,10 @@ function profileResponse(profile: UserProfile): NextResponse {
   });
 }
 
+function serializePrivateBirthDate(value: Date | null | undefined): string | null {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
 function getSessionUserId(session: { user?: { id?: unknown } } | null): string {
   return typeof session?.user?.id === "string" ? session.user.id.trim() : "";
 }
@@ -108,7 +112,14 @@ export async function GET() {
     return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
   }
 
-  return profileResponse(profile);
+  const privateFields = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { birthDate: true },
+  });
+  return profileResponse({
+    ...profile,
+    birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+  });
 }
 
 export async function PATCH(request: NextRequest) {
@@ -265,7 +276,14 @@ export async function PATCH(request: NextRequest) {
       data,
       select: userProfileSelect,
     });
-    return profileResponse(serializeUserProfile(updated));
+    const privateFields = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { birthDate: true },
+    });
+    return profileResponse({
+      ...serializeUserProfile(updated),
+      birthDate: serializePrivateBirthDate(privateFields?.birthDate),
+    });
   } catch (error) {
     if (
       typeof error === "object"

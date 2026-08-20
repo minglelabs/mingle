@@ -10,6 +10,7 @@ import ProfileUsageContent from "@/components/profile-usage-content";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
 import LanguagePreferencePicker from "@/components/language-preference-picker";
 import LanguageFlag from "@/components/language-flag";
+import SignupBirthDatePicker from "@/components/signup-birth-date-picker";
 import { resolveLivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import { resolveLivePhoneDemoFeedbackCopy } from "@/components/LivePhoneDemo/live-phone-demo.feedback-copy";
 import {
@@ -44,6 +45,13 @@ import {
   type SttLanguageCode,
 } from "@/lib/stt-languages";
 import { formatHandle, HANDLE_MAX_LENGTH } from "@/lib/handles";
+import {
+  formatBirthDate,
+  isOldEnoughForSignup,
+  parseBirthDate,
+  type BirthDateParts,
+} from "@/lib/birth-date";
+import { resolveSignupCopy } from "@/i18n/signup-copy";
 import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { BarChart3, Check, ChevronLeft, ChevronRight, Download, Languages, Loader2, LogOut, Menu, MessageCircle, Siren, UserRound, UserRoundX, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
@@ -67,6 +75,7 @@ type ProfileRecord = {
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
+  birthDate?: BirthDateParts | null;
   followersCount: number;
   followingCount: number;
 };
@@ -79,7 +88,25 @@ type ProfileDraft = {
   bio: string;
   nationality: SttLanguageCode | null;
   primaryLanguages: SttLanguageCode[];
+  birthDate: BirthDateParts | null;
 };
+
+const DEFAULT_PROFILE_EDIT_BIRTH_DATE: BirthDateParts = {
+  year: 2000,
+  month: 1,
+  day: 1,
+};
+
+function parseProfileBirthDate(value: unknown): BirthDateParts | null {
+  const parsed = parseBirthDate(value);
+  return parsed
+    ? {
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        day: parsed.getUTCDate(),
+      }
+    : null;
+}
 
 type ProfileSaveResult = "saved" | "handle_taken" | "handle_invalid" | "failed";
 
@@ -1266,6 +1293,7 @@ function ProfileEditPanel({
   initialName,
   initialHandle,
   initialPrimaryLanguages,
+  initialBirthDate,
   onClose,
   onSave,
   open,
@@ -1278,6 +1306,7 @@ function ProfileEditPanel({
   initialName: string;
   initialHandle: string;
   initialPrimaryLanguages: readonly string[];
+  initialBirthDate?: BirthDateParts | null;
   onClose: () => void;
   onSave: (draft: ProfileDraft) => Promise<ProfileSaveResult>;
   open: boolean;
@@ -1292,6 +1321,8 @@ function ProfileEditPanel({
   const [primaryLanguages, setPrimaryLanguages] = useState<SttLanguageCode[]>(() => (
     sanitizeSttLanguageSelection(initialPrimaryLanguages)
   ));
+  const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+  const [hasBirthDate, setHasBirthDate] = useState(Boolean(initialBirthDate));
   const [imageDraft, setImageDraft] = useState<ProfileImageCropperChange>({
     file: null,
     crop: { ...DEFAULT_PROFILE_IMAGE_CROP },
@@ -1315,6 +1346,8 @@ function ProfileEditPanel({
     handleTaken: dictionary.profile.handleTakenMessage ?? (locale === "ko" ? "이미 사용 중인 아이디입니다." : "That handle is already taken."),
     handleInvalid: dictionary.profile.handleInvalidMessage ?? (locale === "ko" ? "아이디는 영문, 숫자, 밑줄(_)과 마침표(.)만 사용할 수 있습니다." : "Use only letters, numbers, underscores (_), and periods (.)."),
   };
+  const signupCopy = useMemo(() => resolveSignupCopy(locale), [locale]);
+  const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
   const languageCopy = useMemo(() => resolveLivePhoneDemoRoomManagementCopy(locale), [locale]);
   const initialImageCropScale = initialImageCrop?.scale;
   const initialImageCropX = initialImageCrop?.x;
@@ -1334,12 +1367,14 @@ function ProfileEditPanel({
     setHandle(initialHandle);
     setBio(initialBio);
     setPrimaryLanguages(sanitizeSttLanguageSelection(initialPrimaryLanguages));
+    setBirthDate(initialBirthDate ?? DEFAULT_PROFILE_EDIT_BIRTH_DATE);
+    setHasBirthDate(Boolean(initialBirthDate));
     setImageDraft({
       file: null,
       crop: normalizedInitialImageCrop,
     });
     setSaveError(null);
-  }, [initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
+  }, [initialBirthDate, initialBio, initialHandle, initialName, initialPrimaryLanguages, normalizedInitialImageCrop, open]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -1374,6 +1409,7 @@ function ProfileEditPanel({
         bio: bio.trim(),
         nationality: primaryLanguages[0] ?? null,
         primaryLanguages,
+        birthDate: hasBirthDate ? birthDate : null,
       });
       if (saved === "saved") {
         onClose();
@@ -1385,7 +1421,7 @@ function ProfileEditPanel({
     } finally {
       setIsSaving(false);
     }
-  }, [bio, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
+  }, [bio, birthDate, copy.handleInvalid, copy.handleTaken, copy.saveError, handle, hasBirthDate, imageDraft, isSaving, name, onClose, onSave, primaryLanguages]);
 
   const handleBack = useCallback(async () => {
     if (isSaving || isLeavingRef.current || !isMountedRef.current) return;
@@ -1450,7 +1486,7 @@ function ProfileEditPanel({
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={isSaving}
+              disabled={isSaving || !isEligibleAge}
               className="min-w-[52px] text-[15px] font-semibold text-blue-600 transition active:opacity-60 disabled:opacity-50"
             >
               {isSaving ? "…" : copy.saveAction}
@@ -1514,6 +1550,30 @@ function ProfileEditPanel({
               </label>
 
               <fieldset className="min-w-0 w-full max-w-full">
+                <legend className="mb-2 text-[13px] font-semibold text-gray-600">
+                  {signupCopy.birthDateTitle}
+                </legend>
+                <SignupBirthDatePicker
+                  value={birthDate}
+                  onChange={(nextBirthDate) => {
+                    setBirthDate(nextBirthDate);
+                    setHasBirthDate(true);
+                  }}
+                  yearLabel={signupCopy.yearLabel}
+                  monthLabel={signupCopy.monthLabel}
+                  dayLabel={signupCopy.dayLabel}
+                />
+                <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
+                  {signupCopy.birthDateDescription}
+                </p>
+                {!isEligibleAge ? (
+                  <p className="mt-2 text-[12px] font-medium text-rose-600" role="alert">
+                    {signupCopy.birthDateUnderage}
+                  </p>
+                ) : null}
+              </fieldset>
+
+              <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.primaryLanguagesLabel}</legend>
                 <LanguagePreferencePicker
                   selectedLanguages={primaryLanguages}
@@ -1563,6 +1623,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
     nationality: null,
     primaryLanguages: [],
     defaultConversationLanguages: [],
+    birthDate: null,
     followersCount: 0,
     followingCount: 0,
   }));
@@ -1627,6 +1688,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
             typeof data.nationality === "string" && data.nationality ? [data.nationality] : [],
           ),
           defaultConversationLanguages: sanitizeSttLanguageSelection(data.defaultConversationLanguages),
+          birthDate: parseProfileBirthDate(data.birthDate),
           followersCount: typeof data.followersCount === "number" ? data.followersCount : 0,
           followingCount: typeof data.followingCount === "number" ? data.followingCount : 0,
         });
@@ -1674,6 +1736,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
           bio: draft.bio,
           nationality: draft.nationality,
           primaryLanguages: draft.primaryLanguages,
+          birthDate: draft.birthDate ? formatBirthDate(draft.birthDate) : null,
           imageCropScale: draft.imageCrop.scale,
           imageCropX: draft.imageCrop.x,
           imageCropY: draft.imageCrop.y,
@@ -1693,6 +1756,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         ...current,
         handle: typeof saved.handle === "string" ? saved.handle : current.handle,
         bio: typeof saved.bio === "string" ? saved.bio : current.bio,
+        birthDate: parseProfileBirthDate(saved.birthDate) ?? current.birthDate,
         nationality: typeof saved.nationality === "string" ? saved.nationality : current.nationality,
         primaryLanguages: sanitizeSttLanguageSelection(
           saved.primaryLanguages,
@@ -1792,6 +1856,7 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
         initialName={name}
         initialHandle={profile.handle ?? ""}
         initialPrimaryLanguages={primaryLanguages}
+        initialBirthDate={profile.birthDate}
         onClose={() => setShowProfileEdit(false)}
         onSave={handleSaveProfile}
         open={showProfileEdit}
