@@ -14,7 +14,7 @@ describe('buildHydratedAccountPreferences', () => {
     expect(buildHydratedAccountPreferences({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
-      translationModel: 'qwen/qwen3.5-flash',
+      translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -22,7 +22,7 @@ describe('buildHydratedAccountPreferences', () => {
     }, false)).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1200,
-      translationModel: 'qwen/qwen3.5-flash',
+      translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -115,7 +115,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
-        translationModel: 'qwen/qwen3.5-flash',
+        translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
         inputMode: 'text',
         speakerEnabled: true,
@@ -141,7 +141,7 @@ describe('shouldScheduleAccountPreferencesSync', () => {
       currentPreferences: {
         textSizeLevel: 4,
         sonioxManualFinalizeSilenceMs: 700,
-        translationModel: 'qwen/qwen3.5-flash',
+        translationModel: 'qwen/qwen3.5-9b',
         adBannerPosition: 'bottom',
         inputMode: 'text',
         speakerEnabled: true,
@@ -204,7 +204,7 @@ describe('buildAccountPreferencesPatchBody', () => {
     expect(buildAccountPreferencesPatchBody({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
-      translationModel: 'qwen/qwen3.5-flash',
+      translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,
@@ -212,7 +212,7 @@ describe('buildAccountPreferencesPatchBody', () => {
     })).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 700,
-      translationModel: 'qwen/qwen3.5-flash',
+      translationModel: 'qwen/qwen3.5-9b',
       adBannerPosition: 'bottom',
       inputMode: 'text',
       speakerEnabled: true,

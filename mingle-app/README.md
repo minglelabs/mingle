@@ -160,17 +160,14 @@ Default configuration:
 - `GEMINI_API_KEY=...`
 - optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
 
-Qwen 3.5 Flash via QwenCloud:
+Qwen 3.5 9B via OpenRouter:
 
 ```bash
 TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=qwen/qwen3.5-flash
-TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-QWEN_CLOUD_API_KEY=your_qwencloud_key
+TRANSLATE_MODEL=qwen/qwen3.5-9b
+TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=your_openrouter_key
 ```
-
-`qwen/qwen3.5-9b` remains accepted as a legacy preference alias and is routed to
-QwenCloud's `qwen3.5-flash` model.
 
 Qwen 3.7 Flash via QwenCloud:
 
@@ -192,9 +189,9 @@ GEMINI_API_KEY=your_google_ai_key
 Notes:
 
 - When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
-- The selectable Qwen models use QwenCloud's international OpenAI-compatible endpoint and send `enable_thinking=false`.
-- QwenCloud Flash models use JSON Object output mode because QwenCloud currently limits JSON Schema mode to selected Max/Plus models.
-- For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false`.
+- Qwen 3.5 9B continues to use OpenRouter, while Qwen 3.7 Flash uses QwenCloud's international OpenAI-compatible endpoint.
+- QwenCloud Flash requests use JSON Object output mode because QwenCloud currently limits JSON Schema mode to selected Max/Plus models.
+- For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false` when configured.
 - You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.
 - If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer QwenCloud from `QWEN_CLOUD_API_KEY` or the legacy `DASHSCOPE_API_KEY`.
 

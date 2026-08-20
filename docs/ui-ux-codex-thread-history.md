@@ -326,3 +326,14 @@
   - Existing `qwen/qwen3.5-9b` preference values remain accepted as compatibility aliases and resolve to the available QwenCloud `qwen3.5-flash` model.
   - QwenCloud Flash requests use JSON Object output mode, which matches the provider's structured-output support for Flash models and keeps translation parsing stable.
 - Tests: Translation catalog, account preference, client-event persistence, versioned finalize route, QwenCloud endpoint, model ID, API-key header, and JSON output contract coverage were updated.
+
+## 2026-08-20 - Qwen 3.5 OpenRouter Compatibility Correction
+
+- Surface: `mingle-app/src/lib/translation-models.ts`, translation model menu, and `/api/{namespace}/translate/finalize`.
+- Issue: The previous provider migration treated the existing `qwen/qwen3.5-9b` preference as a compatibility alias for a new `qwen3.5-flash` QwenCloud model. That changed the provider and model behind an existing user selection, and introduced a selectable model that is not part of the requested product lineup.
+- User impact: Users selecting `qwen3.5-9b` could unexpectedly use QwenCloud billing and rate limits, while `qwen3.5-flash` could remain visible or persisted even though it was not intended to be a supported selectable option.
+- Resolution:
+  - Restored `qwen/qwen3.5-9b` as the `Slow` OpenRouter option and kept its OpenRouter runtime model and endpoint unchanged.
+  - Removed `qwen/qwen3.5-flash` from the selectable catalog and stopped normalizing it as a compatibility alias.
+  - Kept `qwen/qwen3.7-flash` as the `Slow` QwenCloud option with its QwenCloud API key and JSON Object request mode.
+- Tests: Catalog normalization, account preference persistence, client-event provider metadata, OpenRouter 3.5 request contracts, and QwenCloud 3.7 versioned-route coverage were updated.

@@ -39,8 +39,8 @@ export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
-const DEFAULT_QWEN_MODEL = 'qwen3.5-flash'
-const DEFAULT_QWEN_CLOUD_MODEL = 'qwen3.5-flash'
+const DEFAULT_QWEN_MODEL = 'qwen/qwen3.5-9b'
+const DEFAULT_QWEN_CLOUD_MODEL = 'qwen3.7-flash'
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
@@ -516,7 +516,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
       }
     }
 
-    const baseUrl = requestedModelSelection.baseUrl || QWEN_CLOUD_BASE_URL
+    const baseUrl = requestedModelSelection.baseUrl || OPENROUTER_BASE_URL
     const apiKey = resolveOpenAICompatibleApiKey(baseUrl)
     if (!apiKey) {
       return {
