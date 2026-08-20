@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client/index'
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { getAuthOptions } from '@/lib/auth-options'
 import { prisma } from '@/lib/prisma'
 import {
   createTrackedEventLog,
@@ -8,6 +10,7 @@ import {
   sanitizeNonNegativeInt,
   upsertTrackedUser,
 } from '@/lib/app-analytics'
+import { resolveSessionAwareUserId } from '@/lib/request-user-identity'
 import {
   CONVERSATION_HISTORY_CLEARED_EVENT_TYPE,
   parseConversationMessageCreatedAtMs,
@@ -114,7 +117,9 @@ export async function handleLogClientEventV1(request: NextRequest) {
   const tracking = ensureTrackingContext(request, response, { sessionKeyHint })
 
   try {
-    const userId = await upsertTrackedUser({ tracking, clientContext })
+    const trackedUserId = await upsertTrackedUser({ tracking, clientContext })
+    const session = await getServerSession(getAuthOptions())
+    const userId = await resolveSessionAwareUserId({ session, fallbackUserId: trackedUserId })
     let messageId: string | null = null
 
     if (eventType === 'stt_turn_finalized' && clientMessageId && sourceText) {

@@ -10,6 +10,8 @@ const {
   mockUpsertTrackedUser,
   mockMaybeGenerateConversationTitleForSession,
   mockNotifyConversationMessage,
+  mockGetServerSession,
+  mockResolveSessionAwareUserId,
 } = vi.hoisted(() => ({
   mockAppMessageUpsert: vi.fn(),
   mockAppMessageContentUpsert: vi.fn(),
@@ -19,6 +21,20 @@ const {
   mockUpsertTrackedUser: vi.fn(),
   mockMaybeGenerateConversationTitleForSession: vi.fn(),
   mockNotifyConversationMessage: vi.fn(),
+  mockGetServerSession: vi.fn(),
+  mockResolveSessionAwareUserId: vi.fn(),
+}));
+
+vi.mock("next-auth", () => ({
+  getServerSession: mockGetServerSession,
+}));
+
+vi.mock("@/lib/auth-options", () => ({
+  getAuthOptions: () => ({}),
+}));
+
+vi.mock("@/lib/request-user-identity", () => ({
+  resolveSessionAwareUserId: mockResolveSessionAwareUserId,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -61,6 +77,10 @@ describe("handleLogClientEventV1", () => {
     vi.clearAllMocks();
     mockEnsureTrackingContext.mockReturnValue({ sessionKey: "sess_123" });
     mockUpsertTrackedUser.mockResolvedValue("user_123");
+    mockGetServerSession.mockResolvedValue(null);
+    mockResolveSessionAwareUserId.mockImplementation(
+      async ({ fallbackUserId }: { fallbackUserId: string }) => fallbackUserId,
+    );
     mockAppMessageUpsert.mockResolvedValue({ id: "message_123" });
     mockAppMessageContentUpsert.mockResolvedValue({});
     mockAppEventLogFindFirst.mockResolvedValue(null);
@@ -183,5 +203,44 @@ describe("handleLogClientEventV1", () => {
       }),
     );
     expect(mockNotifyConversationMessage).not.toHaveBeenCalled();
+  });
+
+  it("attributes a finalized turn to the account resolveSessionAwareUserId resolves, not the raw tracked id", async () => {
+    const session = { user: { id: "user_session_real" } };
+    mockGetServerSession.mockResolvedValue(session);
+    mockResolveSessionAwareUserId.mockResolvedValue("user_session_real");
+
+    const request = new NextRequest("https://example.com/api/ios/v1.0.6/log/client-event", {
+      method: "POST",
+      body: JSON.stringify({
+        eventType: "stt_turn_finalized",
+        sessionKey: "sess_123",
+        clientMessageId: "client_message_456",
+        sourceLanguage: "ko",
+        sourceText: "안녕하세요",
+        translations: {},
+      }),
+    });
+
+    const response = await handleLogClientEventV1(request);
+
+    expect(response.status).toBe(200);
+    expect(mockAppMessageUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          user: { connect: { id: "user_session_real" } },
+        }),
+        update: expect.objectContaining({
+          user: { connect: { id: "user_session_real" } },
+        }),
+      }),
+    );
+    expect(mockCreateTrackedEventLog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_session_real" }),
+    );
+    expect(mockResolveSessionAwareUserId).toHaveBeenCalledWith({
+      session,
+      fallbackUserId: "user_123",
+    });
   });
 });

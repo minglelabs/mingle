@@ -1205,6 +1205,11 @@ export function buildLiveUtterance(input: {
   partialLang?: string | null
   partialTranslations: Record<string, string>
   languages: string[]
+  // A live/pending turn is always produced by this device's own mic input —
+  // there is no cross-device streaming of another member's in-progress
+  // speech — so it's always "mine" by definition, same as a locally
+  // finalized utterance.
+  viewerUserId?: string | null
 }): Utterance | null {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
@@ -1230,6 +1235,7 @@ export function buildLiveUtterance(input: {
     speaker: input.pendingTurn.speaker,
     speakerAvatarSeed: input.pendingTurn.speakerAvatarSeed,
     speakerAvatarIndex: input.pendingTurn.speakerAvatarIndex,
+    speakerUserId: input.viewerUserId,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages,
@@ -1244,6 +1250,7 @@ export function buildLiveUtterance(input: {
 export function buildLiveUtterances(input: {
   pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>>
   languages: string[]
+  viewerUserId?: string | null
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
     const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
@@ -1259,6 +1266,7 @@ export function buildLiveUtterances(input: {
       partialLang: pendingTurn.language,
       partialTranslations: pendingTurn.partialTranslations,
       languages: input.languages,
+      viewerUserId: input.viewerUserId,
     })
     return utterance ? [utterance] : []
   })
@@ -5226,19 +5234,22 @@ export default function useRealtimeSTT({
   const liveUtterances = useMemo(() => buildLiveUtterances({
     pendingTurns: pendingTurnSnapshots,
     languages: liveUtteranceLanguages,
-  }), [pendingTurnSnapshots, liveUtteranceLanguages])
+    viewerUserId,
+  }), [pendingTurnSnapshots, liveUtteranceLanguages, viewerUserId])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,
     partialLang: activePendingTurn?.language || partialLang,
     partialTranslations: activePendingTurn?.partialTranslations || partialTranslations,
     languages: liveUtteranceLanguages,
+    viewerUserId,
   }), [
     activePendingTurn,
     partialLang,
     partialTranscript,
     partialTranslations,
     liveUtteranceLanguages,
+    viewerUserId,
   ])
 
   return {
