@@ -948,6 +948,44 @@ describe('use-realtime-stt pure logic', () => {
     })).toBeNull()
   })
 
+  it('stamps a live utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildLiveUtterance({
+      pendingTurn: {
+        utteranceId: 'u-live',
+        createdAtMs: 1700000000999,
+        speaker: 'speaker-2',
+        speakerAvatarSeed: 'avatar_seed_a',
+        speakerAvatarIndex: 7,
+        language: 'en',
+      },
+      partialTranscript: 'Still speaking',
+      partialLang: 'en-US',
+      partialTranslations: {},
+      languages: ['en'],
+      viewerUserId: 'user-1',
+      viewerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.speakerUserId).toBe('user-1')
+    expect(built?.speakerImage).toBe('https://cdn/me.jpg')
+  })
+
+  it('stamps a locally finalized utterance with the viewer\'s own account id and real photo', () => {
+    const built = buildFinalizedUtterancePayload({
+      rawText: 'hello',
+      rawLanguage: 'en',
+      languages: ['en'],
+      partialTranslations: {},
+      utteranceSerial: 1,
+      nowMs: 1700000000000,
+      speakerUserId: 'user-1',
+      speakerImage: 'https://cdn/me.jpg',
+    })
+
+    expect(built?.utterance.speakerUserId).toBe('user-1')
+    expect(built?.utterance.speakerImage).toBe('https://cdn/me.jpg')
+  })
+
   it('builds live utterances for all pending speakers in chronological order', () => {
     expect(buildLiveUtterances({
       pendingTurns: [

@@ -28,6 +28,12 @@ export type BaseAppDictionarySource = {
     notificationsFollowingAction?: string;
     notificationsLoadError?: string;
     notificationsFollowError?: string;
+    startAloneOptionLabel?: string;
+    inviteFriendsOptionLabel?: string;
+    inviteFriendsPageTitle?: string;
+    inviteFriendsStartButtonLabel?: string;
+    inviteFriendsMaxMembersReachedMessage?: string;
+    inviteFriendsCreateErrorMessage?: string;
   };
   demo: {
     tapPlayToStart: string;

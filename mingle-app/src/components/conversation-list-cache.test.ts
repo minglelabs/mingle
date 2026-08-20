@@ -35,6 +35,7 @@ function buildConversation(): ConversationChannelSummary {
     title: "Team sync",
     status: "paused",
     sessionKey: "session-1",
+    isMultiMember: false,
     messageCount: 431,
     selectedLanguages: ["ko", "en"],
     speechLanguages: ["ko", "en"],

@@ -39,6 +39,7 @@ vi.mock("@/lib/app-conversations", () => ({
   listConversationChannelsForExternalUserId: mockListConversationChannelsForExternalUserId,
   listConversationChannelsForUser: mockListConversationChannelsForUser,
   createConversationChannelForUser: mockCreateConversationChannelForUser,
+  MAX_CONVERSATION_MEMBERS: 10,
 }));
 
 vi.mock("@/lib/app-analytics", () => ({
@@ -234,6 +235,7 @@ describe("/api/conversations route", () => {
       selectedLanguages: [],
       speechLanguages: [],
       translationLanguagesLinked: true,
+      inviteeUserIds: [],
     });
   });
 
@@ -297,6 +299,7 @@ describe("/api/conversations route", () => {
       selectedLanguages: [],
       speechLanguages: [],
       translationLanguagesLinked: true,
+      inviteeUserIds: [],
     });
   });
 
@@ -338,6 +341,7 @@ describe("/api/conversations route", () => {
       selectedLanguages: ["en", "fr"],
       speechLanguages: ["ko", "ja"],
       translationLanguagesLinked: false,
+      inviteeUserIds: [],
     });
   });
 

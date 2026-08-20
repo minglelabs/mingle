@@ -330,6 +330,97 @@ describe('ChatBubble', () => {
     )
   })
 
+  it('renders the real photo instead of the animal avatar when speakerImage is set', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-photo',
+          originalText: 'Hi there',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-b',
+          speakerImage: 'https://cdn.example.com/bob.jpg',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-a',
+      }),
+    )
+
+    expect(html).toContain('https://cdn.example.com/bob.jpg')
+    expect(html).not.toContain('/avatars/animals/')
+  })
+
+  it('renders a neutral placeholder, not the animal avatar, for a shared-room member with no photo', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-no-photo',
+          originalText: 'Hi there',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-b',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-a',
+      }),
+    )
+
+    expect(html).not.toContain('/avatars/animals/')
+  })
+
+  it('keeps the animal avatar for a true solo-room turn with no speakerUserId', () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-solo-diarized',
+          originalText: 'Hi there',
+          originalLang: 'en',
+          translations: {},
+        },
+        uiLocale: 'en',
+      }),
+    )
+
+    expect(html).toContain('/avatars/animals/')
+  })
+
+  it('makes another member\'s avatar an onOpenProfile button, but never the viewer\'s own avatar', () => {
+    const otherHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-other',
+          originalText: 'Hi there',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-b',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-a',
+        onOpenProfile: () => {},
+      }),
+    )
+    expect(otherHtml).toContain('<button')
+    expect(otherHtml).toContain('data-speaker-avatar-column')
+
+    const ownHtml = renderToStaticMarkup(
+      createElement(ChatBubble, {
+        utterance: {
+          id: 'u-self',
+          originalText: 'Hi there',
+          originalLang: 'en',
+          translations: {},
+          speakerUserId: 'user-a',
+        },
+        uiLocale: 'en',
+        viewerUserId: 'user-a',
+        onOpenProfile: () => {},
+      }),
+    )
+    const avatarColumnStart = ownHtml.indexOf('data-speaker-avatar-column')
+    const avatarColumnHtml = ownHtml.slice(avatarColumnStart, avatarColumnStart + 400)
+    expect(avatarColumnHtml).not.toContain('<button')
+  })
+
   it('does not render visible tts icon buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ChatBubble, {

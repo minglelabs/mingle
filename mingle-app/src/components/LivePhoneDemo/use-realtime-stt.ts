@@ -649,6 +649,9 @@ type ConversationHydrationPayload = {
   utterances?: ConversationHydrationUtterance[]
   hasMoreUtterances?: boolean
   oldestMessageCursor?: ConversationHydrationCursor | null
+  conversation?: {
+    isMultiMember?: boolean
+  }
 }
 
 function normalizeConversationHydrationCursor(rawCursor: unknown): ConversationHydrationCursor | null {
@@ -701,6 +704,9 @@ function normalizeConversationHydrationUtterances(rawUtterances: unknown): Utter
           : {}),
         ...(typeof record.speakerUserId === 'string' && record.speakerUserId.trim()
           ? { speakerUserId: record.speakerUserId.trim() }
+          : {}),
+        ...(typeof record.speakerImage === 'string' && record.speakerImage.trim()
+          ? { speakerImage: record.speakerImage.trim() }
           : {}),
       })
     })
@@ -980,6 +986,9 @@ export interface BuildFinalizedUtterancePayloadInput {
   // always "mine" by definition, so this is stamped at creation time rather
   // than waiting on a server round trip.
   speakerUserId?: string | null
+  // The viewer's own real profile photo, stamped alongside speakerUserId for
+  // the same reason — no round trip needed to know your own photo.
+  speakerImage?: string | null
   rawText: string
   rawLanguage: string
   languages: string[]
@@ -1040,6 +1049,7 @@ export function buildFinalizedUtterancePayload(
     ...(input.speakerAvatarSeed?.trim() ? { speakerAvatarSeed: input.speakerAvatarSeed.trim() } : {}),
     ...(typeof input.speakerAvatarIndex === 'number' ? { speakerAvatarIndex: input.speakerAvatarIndex } : {}),
     ...(input.speakerUserId ? { speakerUserId: input.speakerUserId } : {}),
+    ...(input.speakerImage ? { speakerImage: input.speakerImage } : {}),
     originalText: text,
     originalLang: language,
     targetLanguages,
@@ -1077,6 +1087,10 @@ interface UseRealtimeSTTOptions {
   // finalized utterance so ChatBubble can tell "mine" from "theirs" once a
   // room has more than one real member. Unused by solo rooms.
   viewerUserId?: string | null
+  // The signed-in viewer's own real profile photo, stamped alongside
+  // viewerUserId so a locally finalized "own" bubble shows the real photo
+  // immediately, without waiting on a server round trip.
+  viewerImage?: string | null
 }
 
 type StopRecordingOptions = {
@@ -1210,6 +1224,7 @@ export function buildLiveUtterance(input: {
   // speech — so it's always "mine" by definition, same as a locally
   // finalized utterance.
   viewerUserId?: string | null
+  viewerImage?: string | null
 }): Utterance | null {
   const transcript = input.partialTranscript.trim()
   if (!input.pendingTurn || !transcript) return null
@@ -1236,6 +1251,7 @@ export function buildLiveUtterance(input: {
     speakerAvatarSeed: input.pendingTurn.speakerAvatarSeed,
     speakerAvatarIndex: input.pendingTurn.speakerAvatarIndex,
     speakerUserId: input.viewerUserId,
+    speakerImage: input.viewerImage,
     originalText: input.partialTranscript,
     originalLang: sourceLanguage,
     targetLanguages,
@@ -1251,6 +1267,7 @@ export function buildLiveUtterances(input: {
   pendingTurns: Array<Pick<PendingSpeakerTurn, 'utteranceId' | 'createdAtMs' | 'speaker' | 'speakerAvatarSeed' | 'speakerAvatarIndex' | 'language' | 'text' | 'partialTranslations'>>
   languages: string[]
   viewerUserId?: string | null
+  viewerImage?: string | null
 }): Utterance[] {
   const sortedPendingTurns = [...input.pendingTurns].sort((left, right) => {
     const leftCreatedAt = typeof left.createdAtMs === 'number' ? left.createdAtMs : 0
@@ -1267,6 +1284,7 @@ export function buildLiveUtterances(input: {
       partialTranslations: pendingTurn.partialTranslations,
       languages: input.languages,
       viewerUserId: input.viewerUserId,
+      viewerImage: input.viewerImage,
     })
     return utterance ? [utterance] : []
   })
@@ -2243,6 +2261,7 @@ export default function useRealtimeSTT({
   storageNamespace,
   translationModel,
   viewerUserId = null,
+  viewerImage = null,
 }: UseRealtimeSTTOptions) {
   const effectiveTargetLanguages = useMemo(
     () => targetLanguages ?? languages ?? [],
@@ -2273,6 +2292,14 @@ export default function useRealtimeSTT({
   const [volume, setVolume] = useState(0)
   const [usageSec, setUsageSec] = useState(0)
   const [messageCount, setMessageCount] = useState(0)
+  // Whether the server confirms this room has 2+ real members. Starts false
+  // (solo-room behavior) until the first hydration response lands, then
+  // gates whether locally produced utterances get stamped with the
+  // viewer's real account id/photo at all — a true solo room's diarized
+  // "speaker" turns must never be treated as the viewer's own account.
+  const [isSharedRoom, setIsSharedRoom] = useState(false)
+  const effectiveViewerUserId = isSharedRoom ? viewerUserId : null
+  const effectiveViewerImage = isSharedRoom ? viewerImage : null
   const localUtteranceCacheLimit = conversationId ? LOCAL_UTTERANCE_CACHE_LIMIT : undefined
   const buildLocalUtteranceCache = useCallback((items: Utterance[]) => (
     buildPersistedUtteranceCache(items, localUtteranceCacheLimit)
@@ -2768,6 +2795,9 @@ export default function useRealtimeSTT({
       if (!response.ok) return false
 
       const payload = await response.json() as ConversationHydrationPayload
+      if (payload.conversation) {
+        setIsSharedRoom(payload.conversation.isMultiMember === true)
+      }
       const nextMessageCount = normalizePersistedMessageCount(
         typeof payload.messageCount === 'number' ? payload.messageCount : Number(payload.messageCount),
       )
@@ -2874,6 +2904,10 @@ export default function useRealtimeSTT({
       })
       .then((payload) => {
         if (!payload) return
+
+        if (payload.conversation) {
+          setIsSharedRoom(payload.conversation.isMultiMember === true)
+        }
 
         const nextUsageSec = (
           typeof payload.usageSec === 'number'
@@ -3564,7 +3598,8 @@ export default function useRealtimeSTT({
       speaker: options?.speaker,
       speakerAvatarSeed: options?.speakerAvatarSeed,
       speakerAvatarIndex: options?.speakerAvatarIndex,
-      speakerUserId: viewerUserId,
+      speakerUserId: effectiveViewerUserId,
+      speakerImage: effectiveViewerImage,
       rawText,
       rawLanguage: rawLang,
       languages: targetLanguages,
@@ -3623,7 +3658,7 @@ export default function useRealtimeSTT({
       speakerAvatarSeed: localPayload.utterance.speakerAvatarSeed,
       speakerAvatarIndex: localPayload.utterance.speakerAvatarIndex,
     }
-  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, viewerUserId])
+  }, [bumpMessageCountForNewUtterance, getCurrentTargetLanguages, effectiveViewerUserId, effectiveViewerImage])
 
   const buildLocalFinalizeOptionsForSpeaker = useCallback((speaker: string, fallbackLanguage: string) => {
     const pendingTurn = pendingTurnsBySpeakerRef.current[speaker] || null
@@ -4367,7 +4402,8 @@ export default function useRealtimeSTT({
               ? pendingTurn.speakerAvatarIndex
               : ensureSpeakerAvatarAssignment(speaker).speakerAvatarIndex
           ),
-          speakerUserId: viewerUserId,
+          speakerUserId: effectiveViewerUserId,
+          speakerImage: effectiveViewerImage,
           rawText,
           rawLanguage: lang,
           languages: targetLanguages,
@@ -4555,7 +4591,8 @@ export default function useRealtimeSTT({
     removePendingTurn,
     startAudioProcessing,
     syncVisiblePendingTurn,
-    viewerUserId,
+    effectiveViewerUserId,
+    effectiveViewerImage,
   ])
 
   const startRecording = useCallback(async () => {
@@ -5234,22 +5271,25 @@ export default function useRealtimeSTT({
   const liveUtterances = useMemo(() => buildLiveUtterances({
     pendingTurns: pendingTurnSnapshots,
     languages: liveUtteranceLanguages,
-    viewerUserId,
-  }), [pendingTurnSnapshots, liveUtteranceLanguages, viewerUserId])
+    viewerUserId: effectiveViewerUserId,
+    viewerImage: effectiveViewerImage,
+  }), [pendingTurnSnapshots, liveUtteranceLanguages, effectiveViewerUserId, effectiveViewerImage])
   const liveUtterance = useMemo(() => buildLiveUtterance({
     pendingTurn: activePendingTurn,
     partialTranscript: activePendingTurn?.text || partialTranscript,
     partialLang: activePendingTurn?.language || partialLang,
     partialTranslations: activePendingTurn?.partialTranslations || partialTranslations,
     languages: liveUtteranceLanguages,
-    viewerUserId,
+    viewerUserId: effectiveViewerUserId,
+    viewerImage: effectiveViewerImage,
   }), [
     activePendingTurn,
     partialLang,
     partialTranscript,
     partialTranslations,
     liveUtteranceLanguages,
-    viewerUserId,
+    effectiveViewerUserId,
+    effectiveViewerImage,
   ])
 
   return {

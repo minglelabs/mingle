@@ -3,6 +3,7 @@
 import { memo, useState } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
+import { UserRound } from 'lucide-react'
 import { canonicalizeTranslationLanguageCode } from '@/lib/translation-languages'
 import { getSttLanguageFlag } from '@/lib/stt-languages'
 import LanguageFlag from '@/components/language-flag'
@@ -63,6 +64,11 @@ export interface Utterance {
   // solo session. Lets the bubble tell "mine" from "theirs" in a room
   // shared by more than one real account.
   speakerUserId?: string | null
+  // The sender's real uploaded profile photo. Populated only once the room
+  // has 2+ real members — a real photo (not the generated animal avatar) is
+  // what makes a shared room read as "a conversation with a person" rather
+  // than a solo interpreter session.
+  speakerImage?: string | null
   originalText: string
   originalLang: string
   sourceLanguagesMixed?: boolean
@@ -94,6 +100,12 @@ interface ChatBubbleProps {
    * today's solo-room layout exactly as-is.
    */
   viewerUserId?: string | null
+  /**
+   * Opens the given real account's profile. Called when the viewer taps
+   * another member's avatar in a shared room — never for the viewer's own
+   * avatar, since the profile route rejects viewing your own id there.
+   */
+  onOpenProfile?: (userId: string) => void
 }
 
 function normalizeLanguageCode(rawLanguage: string): string {
@@ -392,10 +404,16 @@ function ChatBubble({
   speakingPlaybackKey,
   shouldAnimateEntrance = true,
   viewerUserId,
+  onOpenProfile,
 }: ChatBubbleProps) {
   const isOwnMessage = Boolean(
     viewerUserId && utterance.speakerUserId && utterance.speakerUserId === viewerUserId,
   )
+  // A real, identified account only exists once speakerUserId is populated
+  // — the server only sets it once the room has 2+ real members, so this
+  // doubles as "is this a shared-room bubble" without a separate prop.
+  const isSharedRoomMember = Boolean(utterance.speakerUserId)
+  const canOpenSpeakerProfile = isSharedRoomMember && !isOwnMessage && typeof onOpenProfile === 'function'
   const originalDisplayLanguage = resolveOriginalDisplayLanguage(
     utterance.originalLang,
     [
@@ -560,17 +578,53 @@ function ChatBubble({
     </CopyableBubbleSurface>
   )
 
+  const avatarImage = utterance.speakerImage ? (
+    <Image
+      src={utterance.speakerImage}
+      alt={speakerLabel}
+      className="h-8 w-8 rounded-full bg-white object-cover"
+      width={32}
+      height={32}
+      unoptimized
+    />
+  ) : isSharedRoomMember ? (
+    // A real shared-room member with no uploaded photo gets a neutral
+    // placeholder, never the generated animal avatar — that system is for
+    // solo-session speaker diarization, not real account identity.
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
+      <UserRound size={18} className="text-gray-400" aria-hidden="true" />
+    </div>
+  ) : (
+    <Image
+      src={avatar.src}
+      alt={`${speakerLabel} ${avatar.name} avatar`}
+      className="h-8 w-8 rounded-full bg-white object-cover"
+      width={32}
+      height={32}
+      unoptimized
+    />
+  )
+
   const avatarColumn = (
     <div key="avatar" data-speaker-avatar-column className="mt-0.5 flex w-10 shrink-0 flex-col items-center gap-1">
       <div className="rounded-full bg-gradient-to-br from-rose-50 via-white to-amber-50 p-0.5 shadow-sm ring-1 ring-black/5">
-        <Image
-          src={avatar.src}
-          alt={`${speakerLabel} ${avatar.name} avatar`}
-          className="h-8 w-8 rounded-full bg-white object-cover"
-          width={32}
-          height={32}
-          unoptimized
-        />
+        {canOpenSpeakerProfile && utterance.speakerUserId ? (
+          <button
+            type="button"
+            onClick={() => onOpenProfile?.(utterance.speakerUserId as string)}
+            // The visual avatar is a 32px circle, well under Apple's 44pt
+            // minimum touch target — this padding/negative-margin pair
+            // expands the tappable hit area without shifting layout, since
+            // a precise desktop mouse click can land on a 32px circle but a
+            // real finger tap on a small mobile screen often can't.
+            className="-m-2 block rounded-full p-2"
+            aria-label={speakerLabel}
+          >
+            {avatarImage}
+          </button>
+        ) : (
+          avatarImage
+        )}
       </div>
       {hasTimestamp && (
         <ChatBubbleTimestamp
@@ -650,6 +704,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
   if (prev.speakingPlaybackKey !== next.speakingPlaybackKey) return false
   if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
   if (prev.viewerUserId !== next.viewerUserId) return false
+  if (prev.onOpenProfile !== next.onOpenProfile) return false
 
   if (prev.utterance !== next.utterance) {
     const pu = prev.utterance
@@ -659,6 +714,7 @@ function chatBubbleAreEqual(prev: ChatBubbleProps, next: ChatBubbleProps): boole
     if (pu.speakerAvatarSeed !== nu.speakerAvatarSeed) return false
     if (pu.speakerAvatarIndex !== nu.speakerAvatarIndex) return false
     if (pu.speakerUserId !== nu.speakerUserId) return false
+    if (pu.speakerImage !== nu.speakerImage) return false
     if (pu.createdAtMs !== nu.createdAtMs) return false
     if (pu.originalText !== nu.originalText) return false
     if (pu.originalLang !== nu.originalLang) return false

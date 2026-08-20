@@ -184,6 +184,37 @@ describe("app-conversations", () => {
     expect(state?.conversation.title).toBe("Bob");
   });
 
+  it("resolves a 3+ person room's title to a comma-joined list of every other member's name", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-group",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-group",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-group", userId: "user-1", user: { name: "Alice", handle: "alice" } },
+      { channelId: "conv-group", userId: "user-2", user: { name: "Bob", handle: "bob" } },
+      { channelId: "conv-group", userId: "user-3", user: { name: "Carol", handle: "carol" } },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-group",
+      userId: "user-1",
+    });
+
+    expect(state?.conversation.title).toBe("Bob, Carol");
+  });
+
   it("pauses every other SOLO room the caller is a member of, not just ones they own", async () => {
     mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
     // 1st findMany call: conv-a's own members (target is solo).
@@ -626,6 +657,87 @@ describe("app-conversations", () => {
     });
   });
 
+  it("populates speakerImage from membership only once the room has 2+ real members", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-group",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-group",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        id: "msg-1",
+        clientMessageId: "u-1",
+        sourceLanguage: "en",
+        createdAt: new Date("2026-04-12T09:00:00.000Z"),
+        userId: "user-2",
+        contents: [{ contentType: "SOURCE", language: "en", text: "hi" }],
+      },
+    ]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-group", userId: "user-1", user: { name: "Alice", handle: "alice", image: null } },
+      { channelId: "conv-group", userId: "user-2", user: { name: "Bob", handle: "bob", image: "https://cdn/bob.jpg" } },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-group",
+      userId: "user-1",
+    });
+
+    expect(state?.utterances[0]?.speakerImage).toBe("https://cdn/bob.jpg");
+    expect(state?.utterances[0]?.speakerUserId).toBe("user-2");
+    expect(state?.conversation.isMultiMember).toBe(true);
+  });
+
+  it("nulls out speakerUserId/speakerImage for a solo room, even when the message has a real userId", async () => {
+    mockFindConversationFirst.mockResolvedValue({
+      id: "conv-solo",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-solo",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+    mockAppEventLogFindFirst.mockResolvedValue(null);
+    mockAppMessageCount.mockResolvedValue(0);
+    mockAppMessageFindMany.mockResolvedValue([
+      {
+        id: "msg-1",
+        clientMessageId: "u-1",
+        sourceLanguage: "en",
+        createdAt: new Date("2026-04-12T09:00:00.000Z"),
+        userId: "user-1",
+        contents: [{ contentType: "SOURCE", language: "en", text: "hi" }],
+      },
+    ]);
+    mockChannelMemberFindMany.mockResolvedValue([
+      { channelId: "conv-solo", userId: "user-1", user: { name: "Alice", handle: "alice", image: "https://cdn/alice.jpg" } },
+    ]);
+
+    const state = await getConversationHydrationStateForUser({
+      conversationId: "conv-solo",
+      userId: "user-1",
+    });
+
+    expect(state?.utterances[0]?.speakerUserId).toBeNull();
+    expect(state?.utterances[0]?.speakerImage).toBeNull();
+    expect(state?.conversation.isMultiMember).toBe(false);
+  });
+
   it("applies the before cursor when hydrating older server messages", async () => {
     mockFindConversationFirst.mockResolvedValue({
       id: "conv-a",
@@ -849,6 +961,24 @@ describe("app-conversations", () => {
       ],
       skipDuplicates: true,
     });
+  });
+
+  it("rejects starting a room with more than 10 total members", async () => {
+    const inviteeUserIds = Array.from({ length: 10 }, (_, index) => `user-${index + 2}`);
+
+    await expect(
+      createConversationChannelForUser("user-1", { locale: "ko", inviteeUserIds }),
+    ).rejects.toThrow("too_many_invitees");
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+  });
+
+  it("rejects inviting a user blocked in either direction", async () => {
+    mockUserBlockFindFirst.mockResolvedValue({ blockerId: "user-2" });
+
+    await expect(
+      createConversationChannelForUser("user-1", { locale: "ko", inviteeUserIds: ["user-2"] }),
+    ).rejects.toThrow("target_user_blocked");
+    expect(mockCreateConversation).not.toHaveBeenCalled();
   });
 
   it("vacates a stale soft-deleted row that still occupies the next sequence number", async () => {

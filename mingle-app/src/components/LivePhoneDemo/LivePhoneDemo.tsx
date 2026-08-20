@@ -1232,6 +1232,7 @@ type LivePhoneDemoChatMessageRowProps = {
   speakingPlaybackKey?: string
   shouldAnimateEntrance: boolean
   viewerUserId?: string | null
+  onOpenProfile?: (userId: string) => void
 }
 
 function resolveUtteranceCreatedAtDataAttribute(utterance: Utterance): string {
@@ -1263,6 +1264,7 @@ function LivePhoneDemoChatMessageRow({
   speakingPlaybackKey,
   shouldAnimateEntrance,
   viewerUserId,
+  onOpenProfile,
 }: LivePhoneDemoChatMessageRowProps) {
   return (
     <div
@@ -1284,6 +1286,7 @@ function LivePhoneDemoChatMessageRow({
         speakingPlaybackKey={speakingPlaybackKey}
         shouldAnimateEntrance={shouldAnimateEntrance}
         viewerUserId={viewerUserId}
+        onOpenProfile={onOpenProfile}
       />
     </div>
   )
@@ -1304,6 +1307,7 @@ const MemoizedLivePhoneDemoChatMessageRow = memo(
     if (prev.bubbleTextClassName !== next.bubbleTextClassName) return false
     if (prev.shouldAnimateEntrance !== next.shouldAnimateEntrance) return false
     if (prev.viewerUserId !== next.viewerUserId) return false
+    if (prev.onOpenProfile !== next.onOpenProfile) return false
 
     const wasSpeakingThisUtterance = isPlaybackKeyForUtterance(prev.speakingPlaybackKey, prev.utterance.id)
     const isSpeakingThisUtterance = isPlaybackKeyForUtterance(next.speakingPlaybackKey, next.utterance.id)
@@ -1423,6 +1427,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
   // than one real account — the solo room's own layout never depends on it.
   const { data: session } = useSession()
   const viewerUserId = typeof session?.user?.id === 'string' ? session.user.id : null
+  const viewerImage = typeof session?.user?.image === 'string' ? session.user.image : null
   const fallbackLanguages = useMemo(() => resolveDefaultSelectedLanguages(uiLocale), [uiLocale])
   const conversationSelectedLanguages = useMemo(
     () => sanitizeSttLanguageSelection(initialSelectedLanguages, fallbackLanguages),
@@ -3531,6 +3536,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
     storageNamespace,
     translationModel: requestTranslationModel,
     viewerUserId,
+    viewerImage,
   })
   const isSttSessionRunning = isNativeAppRuntime
     ? (isNativeSttSessionOwner && (isConnecting || isReady || isActive))
@@ -6422,6 +6428,7 @@ const LivePhoneDemo = forwardRef<LivePhoneDemoRef, LivePhoneDemoProps>(function 
                   speakingPlaybackKey={activeBubblePlaybackKey}
                   shouldAnimateEntrance={animatedDisplayUtteranceIds.has(u.id)}
                   viewerUserId={viewerUserId}
+                  onOpenProfile={onOpenProfile}
                 />
               ))}
 

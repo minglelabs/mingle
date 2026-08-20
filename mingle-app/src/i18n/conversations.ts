@@ -50,6 +50,12 @@ const ENGLISH_CONVERSATION_DICTIONARY: ConversationDictionary = {
   notificationsFollowingAction: "Following",
   notificationsLoadError: "Could not load notifications.",
   notificationsFollowError: "Could not follow this user.",
+  startAloneOptionLabel: "Start alone",
+  inviteFriendsOptionLabel: "Invite friends",
+  inviteFriendsPageTitle: "Choose who to talk to",
+  inviteFriendsStartButtonLabel: "Start Conversation!",
+  inviteFriendsMaxMembersReachedMessage: "You can add up to 10 people, including you.",
+  inviteFriendsCreateErrorMessage: "Failed to start the conversation.",
 };
 
 const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary>> = {
@@ -82,6 +88,12 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
     notificationsFollowingAction: "팔로잉",
     notificationsLoadError: "알림을 불러오지 못했습니다.",
     notificationsFollowError: "팔로우하지 못했습니다.",
+    startAloneOptionLabel: "혼자서 시작하기",
+    inviteFriendsOptionLabel: "친구 초대하기",
+    inviteFriendsPageTitle: "대화 상대 고르기",
+    inviteFriendsStartButtonLabel: "대화 시작하기",
+    inviteFriendsMaxMembersReachedMessage: "나를 포함해 최대 10명까지 초대할 수 있어요.",
+    inviteFriendsCreateErrorMessage: "대화를 시작하지 못했습니다.",
   },
   en: ENGLISH_CONVERSATION_DICTIONARY,
   ja: {

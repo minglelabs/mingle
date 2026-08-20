@@ -7,6 +7,7 @@ import { getConversationDictionary } from "@/i18n/conversations";
 import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { buildClientApiPath, clientApiNamespace } from "@/lib/api-contract";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   forwardRef,
   lazy,
@@ -1636,6 +1637,7 @@ export default function ConversationList({
   googleOAuthEnabled,
 }: ConversationListProps) {
   const { data: session, status: sessionStatus } = useSession();
+  const router = useRouter();
   const authenticatedUserId = typeof session?.user?.id === "string"
     ? session.user.id.trim()
     : "";
@@ -1683,6 +1685,7 @@ export default function ConversationList({
   const [conversationProfileId, setConversationProfileId] = useState<string | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
   const [mutatingConversationId, setMutatingConversationId] = useState<string | null>(null);
   const [isHydratingConversations, setIsHydratingConversations] = useState(
     !initialListState.hasSnapshot,
@@ -4643,7 +4646,7 @@ export default function ConversationList({
       >
         <button
           type="button"
-          onClick={handleCreateConversation}
+          onClick={() => setIsCreateChoiceModalOpen(true)}
           disabled={actionDisabled}
           className="relative flex w-full items-center justify-center px-5 pt-4 text-[1rem] font-semibold text-white transition active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60"
           aria-label={copy.newConversationButtonLabel}
@@ -4946,6 +4949,59 @@ export default function ConversationList({
                   {isDeletingConversation
                     ? deleteConversationCopy.deletingLabel
                     : deleteConversationCopy.confirmLabel}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+        {isCreateChoiceModalOpen ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="absolute inset-0 z-[120] flex items-center justify-center bg-black/40 px-5"
+            onClick={() => setIsCreateChoiceModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              role="dialog"
+              aria-modal="true"
+              aria-label={copy.newConversationButtonLabel}
+              onClick={(event) => event.stopPropagation()}
+              className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+            >
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    void handleCreateConversation();
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl border border-gray-300 text-[15px] font-semibold text-gray-800 transition-colors hover:bg-gray-100"
+                >
+                  {copy.startAloneOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateChoiceModalOpen(false);
+                    router.push(`/${locale}/conversations/new-group`);
+                  }}
+                  className="inline-flex h-12 items-center justify-center rounded-xl text-[15px] font-semibold text-white transition-colors"
+                  style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+                >
+                  {copy.inviteFriendsOptionLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateChoiceModalOpen(false)}
+                  className="mt-1 inline-flex h-10 items-center justify-center rounded-lg text-[14px] font-medium text-gray-500 transition-colors hover:bg-gray-100"
+                >
+                  {copy.cancelAction}
                 </button>
               </div>
             </motion.div>

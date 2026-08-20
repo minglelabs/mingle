@@ -6,6 +6,9 @@ import { formatLocalizedConversationTitle } from "@/i18n/conversations";
 export const APP_CONVERSATION_STATUS_ACTIVE = "active";
 export const APP_CONVERSATION_STATUS_PAUSED = "paused";
 export const CONVERSATION_HYDRATION_MESSAGE_LIMIT = 100;
+// Total people in a room, including the creator — matches the invite
+// picker's selection cap.
+export const MAX_CONVERSATION_MEMBERS = 10;
 
 export type AppConversationChannelStatus =
   | typeof APP_CONVERSATION_STATUS_ACTIVE
@@ -17,6 +20,11 @@ export type ConversationChannelSummary = {
   title: string;
   status: AppConversationChannelStatus;
   sessionKey: string;
+  // True once the room has 2+ real members. Solo (0-1 member) rooms use the
+  // generated per-speaker-turn diarization avatar system instead of real
+  // account identity, so the client needs this to decide which avatar
+  // system a bubble belongs to.
+  isMultiMember: boolean;
   messageCount?: number;
   selectedLanguages?: string[];
   speechLanguages?: string[];
@@ -47,6 +55,10 @@ export type ConversationHydrationUtterance = {
   // "mine" from "theirs" for bubble alignment. Distinct from `speaker`, which
   // is a free-text diarization label used inside a single solo session.
   speakerUserId: string | null;
+  // The sender's real uploaded profile photo, populated only once the room
+  // has 2+ real members. Null in a solo room, where bubbles keep using the
+  // generated animal avatar instead.
+  speakerImage: string | null;
 };
 
 export type ConversationHydrationCursor = {
@@ -138,6 +150,7 @@ type ChannelMemberProfile = {
   userId: string;
   name: string | null;
   handle: string | null;
+  image: string | null;
   displayLanguage: string | null;
   status: string;
   pausedAt: Date | null;
@@ -158,7 +171,7 @@ async function listChannelMembersByChannelId(
       displayLanguage: true,
       status: true,
       pausedAt: true,
-      user: { select: { name: true, handle: true } },
+      user: { select: { name: true, handle: true, image: true } },
     },
   });
 
@@ -169,6 +182,7 @@ async function listChannelMembersByChannelId(
       userId: row.userId,
       name: row.user.name,
       handle: row.user.handle,
+      image: row.user.image,
       displayLanguage: row.displayLanguage,
       status: row.status,
       pausedAt: row.pausedAt,
@@ -178,18 +192,22 @@ async function listChannelMembersByChannelId(
   return membersByChannelId;
 }
 
-// A 1:1 room's title should read as "the other person," not a generic
+// A shared room's title should read as "who else is in it," not a generic
 // auto-generated label — and that label is different depending on who's
 // looking, so it's computed at read time from membership, never stored.
+// 2 members: the other person's name. 3+: every other member's name,
+// comma-joined (e.g. "a, b, c"). Solo (0-1 members) keeps the stored title.
 function resolveViewerFacingTitle(
   storedTitle: string,
   members: ChannelMemberProfile[] | undefined,
   viewerUserId: string | null | undefined,
 ): string {
-  if (!viewerUserId || !members || members.length !== 2) return storedTitle;
-  const partner = members.find((member) => member.userId !== viewerUserId);
-  if (!partner) return storedTitle;
-  return partner.name?.trim() || partner.handle?.trim() || storedTitle;
+  if (!viewerUserId || !members || members.length < 2) return storedTitle;
+  const others = members.filter((member) => member.userId !== viewerUserId);
+  if (others.length === 0) return storedTitle;
+  const names = others.map((member) => member.name?.trim() || member.handle?.trim() || "").filter(Boolean);
+  if (names.length === 0) return storedTitle;
+  return names.join(", ");
 }
 
 // Once a room has 2+ real members, one shared "display language" can't
@@ -228,6 +246,26 @@ function resolveViewerFacingPausedAt(
   if (!viewerUserId || !members || members.length < 2) return channelWideValue;
   const viewerMember = members.find((member) => member.userId === viewerUserId);
   return viewerMember ? viewerMember.pausedAt : channelWideValue;
+}
+
+// Shared by both the 1:1 "message this person" entry point and the
+// invite-friends group-creation flow — without it, knowing someone's user id
+// is enough to bypass a block and reach (or create) shared room membership
+// with them.
+async function assertNoBlockAmong(userId: string, otherUserIds: string[]): Promise<void> {
+  if (otherUserIds.length === 0) return;
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: otherUserIds.flatMap((otherUserId) => [
+        { blockerId: userId, blockedId: otherUserId },
+        { blockerId: otherUserId, blockedId: userId },
+      ]),
+    },
+    select: { blockerId: true },
+  });
+  if (block) {
+    throw new Error("target_user_blocked");
+  }
 }
 
 function createConversationSessionKey(): string {
@@ -269,6 +307,7 @@ function serializeConversationChannel(
   viewerFacingDisplayLanguage?: string | null,
   viewerFacingStatus?: string,
   viewerFacingPausedAt?: Date | null,
+  isMultiMember?: boolean,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
@@ -282,6 +321,7 @@ function serializeConversationChannel(
     title: viewerFacingTitle ?? record.title,
     status: normalizeConversationChannelStatus(viewerFacingStatus ?? record.status),
     sessionKey: record.sessionKey,
+    isMultiMember: isMultiMember === true,
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
       : {}),
@@ -448,6 +488,7 @@ async function serializeConversationChannelWithPreview(
     resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
+    (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
   );
 }
 
@@ -489,6 +530,7 @@ async function listConversationChannelsForMember(
       resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
       resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
+      (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
     ));
   }
 
@@ -513,6 +555,7 @@ async function listConversationChannelsForMember(
         resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
+        (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
       );
     })
     .sort((left, right) => {
@@ -574,6 +617,10 @@ export async function createConversationChannelForUser(
     ? normalizedSelectedLanguages
     : [...resolvedSpeechLanguages];
   const inviteeUserIds = [...new Set((options?.inviteeUserIds || []).filter((id) => id && id !== userId))];
+  if (inviteeUserIds.length > MAX_CONVERSATION_MEMBERS - 1) {
+    throw new Error("too_many_invitees");
+  }
+  await assertNoBlockAmong(userId, inviteeUserIds);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const record = await prisma.$transaction(async (tx) => {
@@ -668,21 +715,7 @@ export async function findOrCreateDirectConversation(args: {
     throw new Error("target_user_not_found");
   }
 
-  // Same mutual-block check the profile/search/follow paths already run —
-  // without it, knowing a target's id is enough to bypass a block and reach
-  // (or create) shared room membership with them.
-  const block = await prisma.userBlock.findFirst({
-    where: {
-      OR: [
-        { blockerId: args.userId, blockedId: targetUserId },
-        { blockerId: targetUserId, blockedId: args.userId },
-      ],
-    },
-    select: { blockerId: true },
-  });
-  if (block) {
-    throw new Error("target_user_blocked");
-  }
+  await assertNoBlockAmong(args.userId, [targetUserId]);
 
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
@@ -1104,6 +1137,15 @@ export async function getConversationHydrationStateForUser(args: {
   const messages = messagesWithLookahead.slice(0, CONVERSATION_HYDRATION_MESSAGE_LIMIT);
   const oldestMessage = messages.at(-1) ?? null;
   const orderedMessages = [...messages].reverse();
+
+  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
+  const members = membersByChannelId.get(conversationRecord.id);
+  // A real photo only makes sense once there's more than one real account in
+  // the room — a solo session's diarized "speaker" turns aren't a second
+  // real identity, so they keep the generated animal avatar unchanged.
+  const isMultiMember = (members?.length ?? 0) >= 2;
+  const imageByUserId = new Map((members ?? []).map((member) => [member.userId, member.image]));
+
   const utterances: ConversationHydrationUtterance[] = orderedMessages.map((message) => {
     const sourceContents = message.contents.filter((content) => content.contentType === "SOURCE");
     const sourceContent = sourceContents.find((content) => content.language === message.sourceLanguage)
@@ -1138,11 +1180,16 @@ export async function getConversationHydrationStateForUser(args: {
         readStringValue(clientMetadata?.speakerAvatarSeed) ?? readStringValue(metadata?.speakerAvatarSeed),
       speakerAvatarIndex:
         readIntegerValue(clientMetadata?.speakerAvatarIndex) ?? readIntegerValue(metadata?.speakerAvatarIndex),
-      speakerUserId: message.userId,
+      // Gated the same way as speakerImage: a solo session's diarized
+      // "speaker" turns all resolve to the SAME single real account (the
+      // one signed-in device), so leaving this populated there would make
+      // every bubble compare equal to the viewer and force a right-aligned
+      // "own message" layout onto what is actually a left/right speaker
+      // distinction unrelated to account identity.
+      speakerUserId: isMultiMember ? message.userId : null,
+      speakerImage: isMultiMember && message.userId ? (imageByUserId.get(message.userId) ?? null) : null,
     };
   }).filter((utterance) => utterance.originalText.length > 0);
-
-  const membersByChannelId = await listChannelMembersByChannelId([conversationRecord.id]);
 
   return {
     conversation: serializeConversationChannel(
@@ -1169,6 +1216,7 @@ export async function getConversationHydrationStateForUser(args: {
         membersByChannelId.get(conversationRecord.id),
         args.userId,
       ),
+      isMultiMember,
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,

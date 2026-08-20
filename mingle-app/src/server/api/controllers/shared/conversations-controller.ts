@@ -6,6 +6,7 @@ import {
   findOrCreateDirectConversation,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
+  MAX_CONVERSATION_MEMBERS,
 } from "@/lib/app-conversations";
 import { ensureTrackingContext } from "@/lib/app-analytics";
 import { sanitizeSttLanguageSelection } from "@/lib/stt-languages";
@@ -103,6 +104,7 @@ export async function postConversationResponse(request: NextRequest) {
     selectedLanguages?: unknown;
     speechLanguages?: unknown;
     translationLanguagesLinked?: unknown;
+    inviteeUserIds?: unknown;
   } | null = null;
   try {
     body = await request.json();
@@ -121,6 +123,19 @@ export async function postConversationResponse(request: NextRequest) {
   const translationLanguagesLinked = typeof body?.translationLanguagesLinked === "boolean"
     ? body.translationLanguagesLinked
     : true;
+  const inviteeUserIds = Array.isArray(body?.inviteeUserIds)
+    ? [...new Set(
+        body.inviteeUserIds
+          .filter((id): id is string => typeof id === "string")
+          .map((id) => id.trim())
+          .filter((id) => id && id !== resolvedUser.userId),
+      )]
+    : [];
+
+  // 10 people total including the creator, matching the invite picker's cap.
+  if (inviteeUserIds.length > MAX_CONVERSATION_MEMBERS - 1) {
+    return NextResponse.json({ error: "too_many_invitees" }, { status: 400 });
+  }
 
   const trackingHints = resolvedUser.tracking
     ? {
@@ -136,8 +151,12 @@ export async function postConversationResponse(request: NextRequest) {
       selectedLanguages,
       speechLanguages,
       translationLanguagesLinked,
+      inviteeUserIds,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
     console.error("[conversations] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
