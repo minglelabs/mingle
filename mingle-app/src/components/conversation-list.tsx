@@ -35,13 +35,16 @@ import {
   LS_KEY_LANGUAGES,
   LS_KEY_PENDING_BIRTH_DATE,
   LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES,
+  LS_KEY_PENDING_DISCOVERY_SOURCE,
   LS_KEY_PENDING_PRIMARY_LANGUAGES,
   LS_KEY_SPEECH_LANGUAGES,
   LS_KEY_TRANSLATION_LANGUAGES_LINKED,
   DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT,
   clearPendingBirthDate,
+  clearPendingDiscoverySource,
   normalizeLivePhoneDemoAdBannerPosition,
   readPendingBirthDate,
+  readPendingDiscoverySource,
   readPersistedBooleanPreference,
   readPersistedLivePhoneDemoPreferences,
   type LivePhoneDemoAdBannerPosition,
@@ -1906,8 +1909,9 @@ export default function ConversationList({
     const pendingDefaultLanguages = readPendingDefaultConversationLanguages();
     const pendingPrimaryLanguages = readPendingPrimaryLanguages();
     const pendingBirthDate = readPendingBirthDate();
+    const pendingDiscoverySource = readPendingDiscoverySource();
 
-    if (pendingDefaultLanguages.length === 0 && !pendingBirthDate) return;
+    if (pendingDefaultLanguages.length === 0 && !pendingBirthDate && !pendingDiscoverySource) return;
 
     const onboardingPrimaryLanguages = pendingPrimaryLanguages.length > 0
       ? pendingPrimaryLanguages
@@ -1937,6 +1941,9 @@ export default function ConversationList({
         if (pendingBirthDate) {
           patchPayload.birthDate = pendingBirthDate;
         }
+        if (pendingDiscoverySource) {
+          patchPayload.discoverySource = pendingDiscoverySource;
+        }
 
         if (Object.keys(patchPayload).length === 0) {
           defaultConversationLanguagesSyncVersionRef.current += 1;
@@ -1944,6 +1951,7 @@ export default function ConversationList({
           setDefaultSelectedLanguages(resolvedPreferences.defaultConversationLanguages);
           clearPendingLanguagePreferences();
           clearPendingBirthDate();
+          clearPendingDiscoverySource();
           return;
         }
 
@@ -1967,6 +1975,7 @@ export default function ConversationList({
         setDefaultSelectedLanguages(savedPreferences.defaultConversationLanguages);
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingDiscoverySource();
       } catch {
         // Keep the pending marker so a later authenticated launch can retry the claim.
       }
@@ -4267,6 +4276,7 @@ export default function ConversationList({
   ) => {
     const languageCode = typeof payload === "string" ? payload : payload.language;
     const birthDateParts = typeof payload === "object" && payload ? payload.birthDate : null;
+    const discoverySource = typeof payload === "object" && payload ? payload.discoverySource : null;
     const formattedBirthDate = birthDateParts ? formatBirthDate(birthDateParts) : null;
 
     // Seed the room's default output languages from the chosen app language the
@@ -4291,6 +4301,9 @@ export default function ConversationList({
       );
       if (formattedBirthDate) {
         window.localStorage.setItem(LS_KEY_PENDING_BIRTH_DATE, formattedBirthDate);
+      }
+      if (discoverySource) {
+        window.localStorage.setItem(LS_KEY_PENDING_DISCOVERY_SOURCE, discoverySource);
       }
     } catch {
       // Ignore storage failures; the onboarding modal will simply reopen next launch.
@@ -4318,6 +4331,9 @@ export default function ConversationList({
         if (formattedBirthDate) {
           patchPayload.birthDate = formattedBirthDate;
         }
+        if (discoverySource) {
+          patchPayload.discoverySource = discoverySource;
+        }
 
         if (Object.keys(patchPayload).length > 0) {
           const saveResponse = await fetch(buildClientApiPath("/profile"), {
@@ -4339,6 +4355,7 @@ export default function ConversationList({
         savedDefaultLanguages = resolvedPreferences.defaultConversationLanguages;
         clearPendingLanguagePreferences();
         clearPendingBirthDate();
+        clearPendingDiscoverySource();
       } catch {
         return;
       }

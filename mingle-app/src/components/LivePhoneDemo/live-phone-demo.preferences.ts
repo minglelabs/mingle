@@ -1,4 +1,5 @@
 import { sanitizeSttLanguageSelection } from '@/lib/stt-languages'
+import { isDiscoverySource, type DiscoverySource } from '@/lib/discovery-source'
 
 export const LS_KEY_LANGUAGES = 'mingle_demo_languages'
 export const LS_KEY_SPEECH_LANGUAGES = 'mingle_demo_speech_languages'
@@ -6,6 +7,7 @@ export const LS_KEY_TRANSLATION_LANGUAGES_LINKED = 'mingle_demo_translation_lang
 export const LS_KEY_PENDING_DEFAULT_CONVERSATION_LANGUAGES = 'mingle_demo_pending_default_conversation_languages'
 export const LS_KEY_PENDING_PRIMARY_LANGUAGES = 'mingle_demo_pending_primary_languages'
 export const LS_KEY_PENDING_BIRTH_DATE = 'mingle_demo_pending_birth_date'
+export const LS_KEY_PENDING_DISCOVERY_SOURCE = 'mingle_demo_pending_discovery_source'
 export const DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT = 'mingle:default-conversation-languages-sync'
 export const LS_KEY_TEXT_SIZE_LEVEL = 'mingle_demo_text_size_level'
 export const LS_KEY_AD_BANNER_POSITION = 'mingle_demo_ad_banner_position'
@@ -59,6 +61,27 @@ export function clearPendingBirthDate(): void {
   if (!storage) return
   try {
     storage.removeItem(LS_KEY_PENDING_BIRTH_DATE)
+  } catch {
+    // Ignore storage failures
+  }
+}
+
+export function readPendingDiscoverySource(): DiscoverySource | null {
+  const storage = getLocalStorage()
+  if (!storage) return null
+  try {
+    const rawValue = storage.getItem(LS_KEY_PENDING_DISCOVERY_SOURCE)
+    return isDiscoverySource(rawValue) ? rawValue : null
+  } catch {
+    return null
+  }
+}
+
+export function clearPendingDiscoverySource(): void {
+  const storage = getLocalStorage()
+  if (!storage) return
+  try {
+    storage.removeItem(LS_KEY_PENDING_DISCOVERY_SOURCE)
   } catch {
     // Ignore storage failures
   }

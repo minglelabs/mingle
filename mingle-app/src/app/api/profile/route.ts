@@ -12,6 +12,7 @@ import {
   isOldEnoughForSignup,
   parseBirthDate,
 } from "@/lib/birth-date";
+import { isDiscoverySource, type DiscoverySource } from "@/lib/discovery-source";
 import {
   PROFILE_IMAGE_MAX_SCALE,
   PROFILE_IMAGE_MIN_SCALE,
@@ -135,6 +136,7 @@ export async function PATCH(request: NextRequest) {
     primaryLanguages?: string[];
     defaultConversationLanguages?: string[];
     birthDate?: Date | null;
+    discoverySource?: DiscoverySource | null;
     imageCropScale?: number | null;
     imageCropX?: number | null;
     imageCropY?: number | null;
@@ -212,6 +214,16 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "minimum_age_required" }, { status: 400 });
       }
       data.birthDate = birthDate;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "discoverySource")) {
+    if (body.discoverySource === null) {
+      data.discoverySource = null;
+    } else if (!isDiscoverySource(body.discoverySource)) {
+      return NextResponse.json({ error: "invalid_discovery_source" }, { status: 400 });
+    } else {
+      data.discoverySource = body.discoverySource;
     }
   }
 

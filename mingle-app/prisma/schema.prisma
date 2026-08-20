@@ -51,6 +51,7 @@ model User {
   primaryLanguages      String[]  @default([]) @map("primary_languages")
   defaultConversationLanguages String[] @default([]) @map("default_conversation_languages")
   birthDate             DateTime? @db.Date @map("birth_date")
+  discoverySource       String?   @map("discovery_source")
   isActive              Boolean   @default(true) @map("is_active")
   deactivatedAt         DateTime? @map("deactivated_at")
   withdrawnAt           DateTime? @map("withdrawn_at")
