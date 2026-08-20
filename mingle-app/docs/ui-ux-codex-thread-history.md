@@ -1,5 +1,19 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-20 Android system back audit across all 2.0.0 surfaces
+
+### `2026-08-20-android-system-back-full-surface-audit` | UI/UX issue found
+
+1. **The Android back behavior is inconsistent across tab-root overlays and nested surfaces**
+   Scope: The active Android 2.0.0 native flow has six user-facing URL route files (`conversations`, `connect`, `mypage`, `mypage/follows`, `mypage/share`, and `users/[userId]`) and seven visible screen types when the conversation-room overlay is counted separately from the conversations list. The current implementation contains 20 active `role="dialog"` panel/dialog surfaces. Additional non-dialog transient surfaces are the conversation search overlay, the conversation-row action popover, the text-size dropdown, the translation-model dropdown, and the text composer mode.
+   Navigation boundary: The three top-level tabs intentionally carry `nativeTabRoot=1`, so Android WebView history reports no back target at a tab root. A local React state panel must therefore register a native back handler and separately advertise an Android back capability; browser `pushState` alone is not sufficient.
+   Confirmed working surfaces: My Page settings, its seven management pages, account-action confirmation dialogs, profile editing, and the My Page image preview use the Android capability signal and native back-handler stack added in `2b29af15`. The active conversation's room menu (root plus feedback, conversation management, participants, and display-language pages), language selector, text-size dropdown, translation-model dropdown, rename dialog, delete-conversation dialog, and normal room-to-list close path already have native handlers. Follow list and profile share return to the previous route when entered through their normal in-app history path; the native QR scanner closes first through the React Native shell.
+   Known failing or incomplete surfaces: Conversation-list search, notifications, conversation/notification profile overlays, row-action popovers, list rename/delete dialogs, and the mandatory language-onboarding modal do not advertise Android back capability at the tab root. The logged-out authentication gate and its privacy/terms and email sheets have the same gap. In a public profile route, report and image-preview modals have no native handler, so Android history can leave the entire profile instead of closing only the top modal. In the conversation room, the delete-account dialog and text composer are not in the room back handler; depending on history availability, Android can close the room or finish the activity instead of closing only that surface.
+   Expected root behavior: Pressing Android back on an unobstructed top-level Chats, Explore, or My Page tab exits the app because there is intentionally no prior in-tab screen at that navigation boundary. This is distinct from the failing behavior where a visible overlay is present.
+   Product direction: Preserve the tab-root boundary and iOS behavior. Extend the existing Android-only capability signal and native back-handler stack to the remaining local overlays, with one back press closing exactly the topmost visible surface before any route history or activity exit is considered.
+   Data change: None. This is an Android navigation and UI consistency audit.
+   Verification: Source-level route/state inventory and handler-path audit completed. The connected Android device is currently logged out after the release reinstall, so signed-in interaction checks for every listed surface remain pending.
+
 ## 2026-08-20 Android system back exits from tab-root panels
 
 ### `2026-08-20-android-system-back-navigation` | UI/UX issue found
