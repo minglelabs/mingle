@@ -1032,3 +1032,12 @@
 - Resolution: Keep the current profile data as the render fallback and remove the delayed fallback reset. The viewer-language result now wins consistently for both network and cached responses.
 - Data contract: None. The server still stores the profile's fallback city and country; the client resolves display labels with the viewer's locale.
 - Testing notes: Verify the first render can transition from the stored label to the viewer-language label, reopening the profile preserves the viewer-language label, and a failed reverse-geocoding request still falls back safely.
+
+## 2026-08-20 - Localize profile map labels with Google Maps Embed
+
+- Surface: The full-screen map opened from a profile's city and country label.
+- Issue: The profile label was localized for the viewer, but the embedded OpenStreetMap standard layer could continue rendering local-language map labels because its standard raster tiles are not selected per viewer locale.
+- User impact: An English viewer could see `Seoul, South Korea` above a map that still displayed Korean place labels.
+- Resolution: Replace the standard OpenStreetMap iframe with Google Maps Embed and pass the viewer's primary locale through the `language` parameter. Keep the existing coordinates and full-screen panel interaction unchanged.
+- Data contract: None. Profile coordinates and localized reverse-geocoded labels remain unchanged.
+- Testing notes: Verify English, Korean, and the remaining primary UI locales render the Google map with the requested language when `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY` is configured. Verify the panel shows the existing map-unavailable fallback when the key is absent.

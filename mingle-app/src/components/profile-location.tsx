@@ -14,7 +14,7 @@ import {
   type NativeLocationPermission,
 } from "@/lib/native-location";
 import {
-  buildOpenStreetMapEmbedUrl,
+  buildGoogleMapsEmbedUrl,
   normalizeProfileLocation,
   reverseGeocodeProfileLocation,
   type ProfileLocationRecord,
@@ -215,7 +215,7 @@ export default function ProfileLocation({
     ? localizedLocation
     : profileLocation;
   const displayLabel = locationLabel(displayLocation);
-  const embedUrl = displayLocation ? buildOpenStreetMapEmbedUrl(displayLocation, locale) : null;
+  const embedUrl = displayLocation ? buildGoogleMapsEmbedUrl(displayLocation, locale) : null;
   const canOpenSettings = isNativeLocationBridgeAvailable() && (permission === "denied" || permission === "blocked");
 
   return (
@@ -288,7 +288,7 @@ export default function ProfileLocation({
                   src={embedUrl}
                   className="h-[min(66vh,640px)] min-h-[360px] w-full shrink-0 border-0 bg-slate-100"
                   loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
+                  referrerPolicy="strict-origin-when-cross-origin"
                 />
               ) : (
                 <div className="flex min-h-[300px] items-center justify-center px-6 text-center text-[16px] text-gray-500">

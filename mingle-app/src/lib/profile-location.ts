@@ -104,20 +104,18 @@ export async function reverseGeocodeProfileLocation(
   }
 }
 
-export function buildOpenStreetMapEmbedUrl(location: ProfileLocationRecord, locale: AppLocale): string {
-  // Keep the map focused on the city area so labels remain readable in the full-screen panel.
-  const latitudePadding = 0.035;
-  const longitudePadding = 0.045;
-  const minLatitude = Math.max(-90, location.latitude - latitudePadding);
-  const maxLatitude = Math.min(90, location.latitude + latitudePadding);
-  const minLongitude = Math.max(-180, location.longitude - longitudePadding);
-  const maxLongitude = Math.min(180, location.longitude + longitudePadding);
+export function buildGoogleMapsEmbedUrl(location: ProfileLocationRecord, locale: AppLocale): string | null {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY?.trim();
+  if (!apiKey) return null;
+
   const primary = resolvePrimaryUiLocale(locale);
   const params = new URLSearchParams({
-    bbox: `${minLongitude},${minLatitude},${maxLongitude},${maxLatitude}`,
-    layer: "mapnik",
-    marker: `${location.latitude},${location.longitude}`,
-    lang: primary,
+    key: apiKey,
+    q: `${location.latitude},${location.longitude}`,
+    center: `${location.latitude},${location.longitude}`,
+    zoom: "12",
+    maptype: "roadmap",
+    language: primary,
   });
-  return `https://www.openstreetmap.org/export/embed.html?${params.toString()}`;
+  return `https://www.google.com/maps/embed/v1/place?${params.toString()}`;
 }

@@ -40,7 +40,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "위치를 확인하지 못했습니다.",
     mapUnavailable: "지도를 불러오지 못했습니다.",
     closeAction: "닫기",
-    attribution: "지도 © OpenStreetMap 기여자",
+    attribution: "지도 © Google Maps",
   },
   en: {
     label: "Location",
@@ -58,7 +58,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Could not determine your location.",
     mapUnavailable: "The map could not be loaded.",
     closeAction: "Close",
-    attribution: "Map © OpenStreetMap contributors",
+    attribution: "Map © Google Maps",
   },
   ja: {
     label: "位置情報",
@@ -76,7 +76,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "位置情報を確認できませんでした。",
     mapUnavailable: "地図を読み込めませんでした。",
     closeAction: "閉じる",
-    attribution: "地図 © OpenStreetMap 貢献者",
+    attribution: "地図 © Google Maps",
   },
   "zh-CN": {
     label: "位置",
@@ -94,7 +94,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "无法确定你的位置。",
     mapUnavailable: "无法加载地图。",
     closeAction: "关闭",
-    attribution: "地图 © OpenStreetMap 贡献者",
+    attribution: "地图 © Google Maps",
   },
   "zh-TW": {
     label: "位置",
@@ -112,7 +112,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "無法確認你的位置。",
     mapUnavailable: "無法載入地圖。",
     closeAction: "關閉",
-    attribution: "地圖 © OpenStreetMap 貢獻者",
+    attribution: "地圖 © Google Maps",
   },
   fr: {
     label: "Localisation",
@@ -130,7 +130,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Impossible de déterminer votre position.",
     mapUnavailable: "Impossible de charger la carte.",
     closeAction: "Fermer",
-    attribution: "Carte © contributeurs OpenStreetMap",
+    attribution: "Carte © Google Maps",
   },
   de: {
     label: "Standort",
@@ -148,7 +148,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Ihr Standort konnte nicht ermittelt werden.",
     mapUnavailable: "Die Karte konnte nicht geladen werden.",
     closeAction: "Schließen",
-    attribution: "Karte © OpenStreetMap-Mitwirkende",
+    attribution: "Karte © Google Maps",
   },
   es: {
     label: "Ubicación",
@@ -166,7 +166,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "No se pudo determinar tu ubicación.",
     mapUnavailable: "No se pudo cargar el mapa.",
     closeAction: "Cerrar",
-    attribution: "Mapa © colaboradores de OpenStreetMap",
+    attribution: "Mapa © Google Maps",
   },
   pt: {
     label: "Localização",
@@ -184,7 +184,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Não foi possível determinar sua localização.",
     mapUnavailable: "Não foi possível carregar o mapa.",
     closeAction: "Fechar",
-    attribution: "Mapa © colaboradores do OpenStreetMap",
+    attribution: "Mapa © Google Maps",
   },
   it: {
     label: "Posizione",
@@ -202,7 +202,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Non è stato possibile determinare la tua posizione.",
     mapUnavailable: "Non è stato possibile caricare la mappa.",
     closeAction: "Chiudi",
-    attribution: "Mappa © contributori di OpenStreetMap",
+    attribution: "Mappa © Google Maps",
   },
   ru: {
     label: "Местоположение",
@@ -220,7 +220,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Не удалось определить ваше местоположение.",
     mapUnavailable: "Не удалось загрузить карту.",
     closeAction: "Закрыть",
-    attribution: "Карта © участники OpenStreetMap",
+    attribution: "Карта © Google Maps",
   },
   ar: {
     label: "الموقع",
@@ -238,7 +238,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "تعذر تحديد موقعك.",
     mapUnavailable: "تعذر تحميل الخريطة.",
     closeAction: "إغلاق",
-    attribution: "الخريطة © مساهمو OpenStreetMap",
+    attribution: "الخريطة © Google Maps",
   },
   hi: {
     label: "स्थान",
@@ -256,7 +256,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "आपका स्थान निर्धारित नहीं किया जा सका।",
     mapUnavailable: "मानचित्र लोड नहीं हो सका।",
     closeAction: "बंद करें",
-    attribution: "मानचित्र © OpenStreetMap योगदानकर्ता",
+    attribution: "मानचित्र © Google Maps",
   },
   th: {
     label: "ตำแหน่ง",
@@ -274,7 +274,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "ไม่สามารถระบุตำแหน่งของคุณได้",
     mapUnavailable: "โหลดแผนที่ไม่ได้",
     closeAction: "ปิด",
-    attribution: "แผนที่ © ผู้ร่วมจัดทำ OpenStreetMap",
+    attribution: "แผนที่ © Google Maps",
   },
   vi: {
     label: "Vị trí",
@@ -292,7 +292,7 @@ const PROFILE_LOCATION_COPY: Record<PrimaryUiLocale, ProfileLocationCopy> = {
     locationError: "Không thể xác định vị trí của bạn.",
     mapUnavailable: "Không thể tải bản đồ.",
     closeAction: "Đóng",
-    attribution: "Bản đồ © cộng đồng OpenStreetMap",
+    attribution: "Bản đồ © Google Maps",
   },
 };
 
