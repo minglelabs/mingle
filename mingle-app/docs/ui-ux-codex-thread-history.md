@@ -6,9 +6,9 @@
 
 1. **Android system back should match the visible in-page back action**
    Problem: The React Native back listener dispatches the WebView back bridge only when `canWebViewGoBack` is true or a native menu overlay is open. The tab bar marks top-level tab URLs with `nativeTabRoot=1` and reports `canGoBack: false`, while My page settings and feedback panels are local React state and do not register a native back handler. Android therefore receives `false` and finishes the activity instead of closing the visible panel with its upper-left back button.
-   Planned fix: Keep the tab-root history boundary for cross-tab navigation, but dispatch the WebView native-back bridge for a ready WebView and register panel-specific handlers for local screens. Hardware back should close the active panel first and exit only at the top-level tab root.
+   Fix: Kept the tab-root history boundary and existing iOS `canGoBack` state unchanged. Android now receives a separate panel-back capability signal, and My page panels register handlers that close the active panel first. Hardware back remains available to exit only at the top-level tab root.
    Data change: None. This is an Android navigation and UI consistency issue.
-   Verification: Confirmed by tracing the Android `BackHandler`, the tab-root navigation state message, and the My page panel state transitions.
+   Verification: TypeScript checks, focused native runtime contract tests, and an Android 2.0.0 release build/install passed. The connected device remains logged out of Mingle, so the panel interaction still needs a signed-in manual check.
 
 ## 2026-08-20 Android Instagram feedback link fallback regression
 

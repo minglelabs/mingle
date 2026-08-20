@@ -67,4 +67,16 @@ describe('runtime fallback contract', () => {
       'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
     );
   });
+
+  it('keeps Android panel back handling separate from iOS WebView history state', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+    const myPageSource = readWorkspaceFile('../src/components/my-page.tsx');
+
+    expect(appSource).toContain('canHandleAndroidBack?: boolean;');
+    expect(appSource).toContain(
+      '!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen',
+    );
+    expect(myPageSource).toContain('registerNativeBackHandler');
+    expect(myPageSource).toContain('postAndroidBackCapability(canHandleAndroidBack);');
+  });
 });

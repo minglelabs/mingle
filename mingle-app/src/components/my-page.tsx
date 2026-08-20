@@ -27,6 +27,7 @@ import { storeAppLocale } from "@/components/app-locale-preference-sync";
 import { DEFAULT_CONVERSATION_LANGUAGES_SYNC_EVENT } from "@/components/LivePhoneDemo/live-phone-demo.preferences";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { unregisterNativePushToken } from "@/lib/native-push";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import {
   buildProfileImageTransform,
@@ -171,6 +172,25 @@ function isNativeAppRuntimeSignalPresent(): boolean {
   const nativeWindow = window as NativeAppUpdateWindow;
   return typeof nativeWindow.ReactNativeWebView?.postMessage === "function"
     || isNativeUiBridgeEnabledFromSearch(window.location.search || "");
+}
+
+function postAndroidBackCapability(canHandleAndroidBack: boolean): void {
+  if (typeof window === "undefined") return;
+  const nativeWindow = window as NativeAppUpdateWindow;
+  const postMessage = nativeWindow.ReactNativeWebView?.postMessage;
+  if (typeof postMessage !== "function") return;
+
+  try {
+    postMessage(JSON.stringify({
+      type: "native_navigation_state",
+      payload: {
+        canHandleAndroidBack,
+        url: window.location.href,
+      },
+    }));
+  } catch {
+    // Keep browser navigation unchanged when the native bridge is unavailable.
+  }
 }
 
 function NativeAppUpdateCard({
@@ -464,6 +484,35 @@ function ProfileSettingsPanel({
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!open) return false;
+    if (isWithdrawConfirmModalOpen) {
+      setIsWithdrawConfirmModalOpen(false);
+      return true;
+    }
+    if (isDeactivateModalOpen) {
+      setIsDeactivateModalOpen(false);
+      return true;
+    }
+    if (isAccountActionModalOpen) {
+      setIsAccountActionModalOpen(false);
+      return true;
+    }
+    if (managementPage) {
+      setManagementPage(null);
+      return true;
+    }
+    onClose();
+    return true;
+  }, 20), [
+    isAccountActionModalOpen,
+    isDeactivateModalOpen,
+    isWithdrawConfirmModalOpen,
+    managementPage,
+    onClose,
+    open,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1387,6 +1436,13 @@ function ProfileEditPanel({
     };
   }, []);
 
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!open) return false;
+    if (isSaving) return true;
+    onClose();
+    return true;
+  }, 20), [isSaving, onClose, open]);
+
   useEffect(() => {
     if (!open || !isMountedRef.current) return;
     isLeavingRef.current = false;
@@ -1637,6 +1693,30 @@ export default function MyPage({ dictionary, initialProfile, locale }: MyPagePro
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showProfileSettings, setShowProfileSettings] = useState(false);
   const [showProfileImagePreview, setShowProfileImagePreview] = useState(false);
+
+  useEffect(() => registerNativeBackHandler(() => {
+    if (showProfileImagePreview) {
+      setShowProfileImagePreview(false);
+      return true;
+    }
+    if (showProfileEdit) {
+      setShowProfileEdit(false);
+      return true;
+    }
+    if (showProfileSettings) {
+      setShowProfileSettings(false);
+      return true;
+    }
+    return false;
+  }, 10), [showProfileEdit, showProfileImagePreview, showProfileSettings]);
+
+  useEffect(() => {
+    const canHandleAndroidBack = showProfileEdit || showProfileImagePreview || showProfileSettings;
+    postAndroidBackCapability(canHandleAndroidBack);
+    return () => {
+      postAndroidBackCapability(false);
+    };
+  }, [showProfileEdit, showProfileImagePreview, showProfileSettings]);
 
   const sessionUserId = session?.user?.id ?? "";
   const fallbackName = session?.user?.name?.trim() || dictionary.titles.my;

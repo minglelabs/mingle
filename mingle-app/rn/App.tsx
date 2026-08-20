@@ -682,6 +682,7 @@ type NativeNavigationStateCommand = {
   payload?: {
     canGoBack?: boolean;
     canGoForward?: boolean;
+    canHandleAndroidBack?: boolean;
     url?: string;
   };
 };
@@ -1766,6 +1767,7 @@ function AppInner(): React.JSX.Element {
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
+  const [canWebViewHandleAndroidBack, setCanWebViewHandleAndroidBack] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
@@ -1877,7 +1879,7 @@ function AppInner(): React.JSX.Element {
       if (versionGate.status === 'force_update') {
         return false;
       }
-      if (!canWebViewGoBack && !isNativeMenuOverlayOpen) {
+      if (!canWebViewGoBack && !canWebViewHandleAndroidBack && !isNativeMenuOverlayOpen) {
         return false;
       }
       webViewRef.current?.injectJavaScript(`
@@ -1904,7 +1906,7 @@ function AppInner(): React.JSX.Element {
     return () => {
       subscription.remove();
     };
-  }, [canWebViewGoBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
+  }, [canWebViewGoBack, canWebViewHandleAndroidBack, isNativeMenuOverlayOpen, qrScannerRequest, versionGate.status]);
 
   const presentRecommendPrompt = useCallback((prompt: RecommendUpdatePrompt) => {
     if (prompt.updateUrl) {
@@ -2815,6 +2817,9 @@ function AppInner(): React.JSX.Element {
       }
       if (typeof parsed.payload?.canGoForward === 'boolean') {
         setCanWebViewGoForward(parsed.payload.canGoForward);
+      }
+      if (typeof parsed.payload?.canHandleAndroidBack === 'boolean') {
+        setCanWebViewHandleAndroidBack(parsed.payload.canHandleAndroidBack);
       }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
