@@ -160,22 +160,25 @@ Default configuration:
 - `GEMINI_API_KEY=...`
 - optional `TRANSLATE_MODEL=gemini-2.5-flash-lite`
 
-Qwen 3.5 9B via OpenRouter:
+Qwen 3.5 Flash via QwenCloud:
 
 ```bash
 TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=qwen/qwen3.5-9b
-TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
-TRANSLATE_API_KEY=your_openrouter_key
+TRANSLATE_MODEL=qwen/qwen3.5-flash
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+QWEN_CLOUD_API_KEY=your_qwencloud_key
 ```
 
-Qwen 3.7 Flash via OpenRouter:
+`qwen/qwen3.5-9b` remains accepted as a legacy preference alias and is routed to
+QwenCloud's `qwen3.5-flash` model.
+
+Qwen 3.7 Flash via QwenCloud:
 
 ```bash
 TRANSLATE_PROVIDER=qwen
 TRANSLATE_MODEL=qwen/qwen3.7-flash
-TRANSLATE_BASE_URL=https://openrouter.ai/api/v1
-TRANSLATE_API_KEY=your_openrouter_key
+TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+QWEN_CLOUD_API_KEY=your_qwencloud_key
 ```
 
 Gemma 4 31B via Google Generative AI:
@@ -186,40 +189,14 @@ TRANSLATE_MODEL=gemma-4-31b-it
 GEMINI_API_KEY=your_google_ai_key
 ```
 
-Qwen 3.5 9B via Together:
-
-```bash
-TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=Qwen/Qwen3.5-9B
-TRANSLATE_BASE_URL=https://api.together.xyz/v1
-TRANSLATE_API_KEY=your_together_key
-```
-
-Qwen 3.5 9B via DashScope / Model Studio:
-
-```bash
-TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=Qwen3.5-9B
-TRANSLATE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-TRANSLATE_API_KEY=your_dashscope_key
-```
-
-For Singapore / international DashScope, use:
-
-```bash
-TRANSLATE_PROVIDER=qwen
-TRANSLATE_MODEL=Qwen3.5-9B
-TRANSLATE_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-TRANSLATE_API_KEY=your_dashscope_key
-```
-
 Notes:
 
 - When `TRANSLATE_PROVIDER=qwen`, the server automatically disables Qwen thinking mode by default.
-- For DashScope, the handler sends `enable_thinking=false`.
+- The selectable Qwen models use QwenCloud's international OpenAI-compatible endpoint and send `enable_thinking=false`.
+- QwenCloud Flash models use JSON Object output mode because QwenCloud currently limits JSON Schema mode to selected Max/Plus models.
 - For OpenRouter, Together, vLLM, and SGLang style endpoints, the handler sends `chat_template_kwargs.enable_thinking=false`.
 - You can override or extend the OpenAI-compatible request body with `TRANSLATE_EXTRA_BODY` as a JSON object.
-- If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer them from `OPENROUTER_API_KEY`, `TOGETHER_API_KEY`, or `DASHSCOPE_API_KEY`.
+- If `TRANSLATE_BASE_URL` and `TRANSLATE_API_KEY` are omitted, the server can infer QwenCloud from `QWEN_CLOUD_API_KEY` or the legacy `DASHSCOPE_API_KEY`.
 
 ### Live E2E suites
 

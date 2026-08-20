@@ -72,8 +72,8 @@ describe("handleLogClientEventV1", () => {
         sourceLanguage: "ko",
         sourceText: "안녕하세요",
         provider: "qwen",
-        infrastructureProvider: "openrouter",
-        model: "qwen/qwen3.5-9b",
+        infrastructureProvider: "qwencloud",
+        model: "qwen/qwen3.5-flash",
         translationPromptTokens: 321,
         translationCompletionTokens: 123,
         translationTotalTokens: 444,
@@ -92,15 +92,15 @@ describe("handleLogClientEventV1", () => {
     expect(mockAppMessageUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          translationProvider: "openrouter",
-          translationModel: "qwen/qwen3.5-9b",
+          translationProvider: "qwencloud",
+          translationModel: "qwen/qwen3.5-flash",
           translationPromptTokens: 321,
           translationCompletionTokens: 123,
           translationTotalTokens: 444,
         }),
         update: expect.objectContaining({
-          translationProvider: "openrouter",
-          translationModel: "qwen/qwen3.5-9b",
+          translationProvider: "qwencloud",
+          translationModel: "qwen/qwen3.5-flash",
           translationPromptTokens: 321,
           translationCompletionTokens: 123,
           translationTotalTokens: 444,
@@ -111,8 +111,8 @@ describe("handleLogClientEventV1", () => {
       expect.objectContaining({
         create: expect.objectContaining({
           contentType: "SOURCE",
-          provider: "openrouter",
-          model: "qwen/qwen3.5-9b",
+          provider: "qwencloud",
+          model: "qwen/qwen3.5-flash",
         }),
       }),
     );
@@ -121,8 +121,8 @@ describe("handleLogClientEventV1", () => {
         create: expect.objectContaining({
           contentType: "TRANSLATION_FINAL",
           language: "en",
-          provider: "openrouter",
-          model: "qwen/qwen3.5-9b",
+          provider: "qwencloud",
+          model: "qwen/qwen3.5-flash",
         }),
       }),
     );
@@ -131,8 +131,8 @@ describe("handleLogClientEventV1", () => {
         create: expect.objectContaining({
           contentType: "TRANSLATION_FINAL",
           language: "ja",
-          provider: "openrouter",
-          model: "qwen/qwen3.5-9b",
+          provider: "qwencloud",
+          model: "qwen/qwen3.5-flash",
         }),
       }),
     );

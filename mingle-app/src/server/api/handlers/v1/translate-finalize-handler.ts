@@ -39,8 +39,8 @@ export const runtime = 'nodejs'
 
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite'
 const DEFAULT_GEMMA_MODEL = 'gemma-4-31b-it'
-const DEFAULT_QWEN_MODEL = 'Qwen/Qwen3.5-9B'
-const DEFAULT_DASHSCOPE_QWEN_MODEL = 'Qwen3.5-9B'
+const DEFAULT_QWEN_MODEL = 'qwen3.5-flash'
+const DEFAULT_QWEN_CLOUD_MODEL = 'qwen3.5-flash'
 const DEFAULT_TTS_MODEL_ID = process.env.INWORLD_TTS_MODEL_ID || 'inworld-tts-1.5-mini'
 const DEFAULT_TTS_SPEAKING_RATE = Number(process.env.INWORLD_TTS_SPEAKING_RATE || '1.3')
 const IMMEDIATE_PREVIOUS_TURN_MAX_AGE_MS = 5_000
@@ -51,7 +51,7 @@ const OPENAI_COMPATIBLE_FINAL_TIMEOUT_MS = 5_000
 const ENABLE_VERBOSE_TRANSLATE_LOGS = process.env.MINGLE_VERBOSE_TRANSLATE_LOGS === '1'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const TOGETHER_BASE_URL = 'https://api.together.xyz/v1'
-const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+const QWEN_CLOUD_BASE_URL = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
 const providerRateLimitCooldowns = new Map<string, ProviderRateLimitCooldown>()
 
 
@@ -233,7 +233,7 @@ function isTogetherBaseUrl(baseUrl: string): boolean {
 function resolveOpenAICompatibleInfrastructureProvider(baseUrl: string): string {
   if (isOpenRouterBaseUrl(baseUrl)) return 'openrouter'
   if (isTogetherBaseUrl(baseUrl)) return 'together'
-  if (isDashScopeBaseUrl(baseUrl)) return 'dashscope'
+  if (isDashScopeBaseUrl(baseUrl)) return 'qwencloud'
   return 'openai-compatible'
 }
 
@@ -409,19 +409,32 @@ async function resolveSelectedTranslationModel(
 function resolveOpenAICompatibleBaseUrl(provider: TranslationProvider): string {
   const explicitBaseUrl = readTranslateEnv('TRANSLATE_BASE_URL').trim()
   if (explicitBaseUrl) return explicitBaseUrl
+  if (
+    provider === 'qwen'
+    && ((process.env.QWEN_CLOUD_API_KEY || '').trim() || (process.env.DASHSCOPE_API_KEY || '').trim())
+  ) {
+    return QWEN_CLOUD_BASE_URL
+  }
   if ((process.env.OPENROUTER_API_KEY || '').trim()) return OPENROUTER_BASE_URL
   if ((process.env.TOGETHER_API_KEY || '').trim()) return TOGETHER_BASE_URL
-  if ((process.env.DASHSCOPE_API_KEY || '').trim()) return DASHSCOPE_BASE_URL
+  if ((process.env.DASHSCOPE_API_KEY || '').trim()) return QWEN_CLOUD_BASE_URL
   if (provider === 'qwen' && readTranslateEnv('TRANSLATE_API_KEY').trim()) return OPENROUTER_BASE_URL
   return (process.env.OPENAI_BASE_URL || '').trim()
 }
 
 function resolveOpenAICompatibleApiKey(baseUrl: string): string {
   const explicitApiKey = readTranslateEnv('TRANSLATE_API_KEY').trim()
+  if (isDashScopeBaseUrl(baseUrl)) {
+    return (
+      process.env.QWEN_CLOUD_API_KEY
+      || process.env.DASHSCOPE_API_KEY
+      || explicitApiKey
+      || ''
+    ).trim()
+  }
   if (explicitApiKey) return explicitApiKey
   if (isOpenRouterBaseUrl(baseUrl)) return (process.env.OPENROUTER_API_KEY || '').trim()
   if (isTogetherBaseUrl(baseUrl)) return (process.env.TOGETHER_API_KEY || '').trim()
-  if (isDashScopeBaseUrl(baseUrl)) return (process.env.DASHSCOPE_API_KEY || '').trim()
   return (process.env.OPENAI_API_KEY || '').trim()
 }
 
@@ -434,7 +447,7 @@ function resolveTranslationModel(config: {
   if (config.provider === 'gemini') return DEFAULT_GEMINI_MODEL
   if (config.provider === 'gemma') return DEFAULT_GEMMA_MODEL
   if (config.provider === 'qwen' && config.baseUrl && isDashScopeBaseUrl(config.baseUrl)) {
-    return DEFAULT_DASHSCOPE_QWEN_MODEL
+    return DEFAULT_QWEN_CLOUD_MODEL
   }
   if (config.provider === 'qwen') return DEFAULT_QWEN_MODEL
   return ''
@@ -503,7 +516,7 @@ function resolveTranslationProviderConfig(requestedModelRaw?: unknown): Translat
       }
     }
 
-    const baseUrl = requestedModelSelection.baseUrl || OPENROUTER_BASE_URL
+    const baseUrl = requestedModelSelection.baseUrl || QWEN_CLOUD_BASE_URL
     const apiKey = resolveOpenAICompatibleApiKey(baseUrl)
     if (!apiKey) {
       return {
@@ -1313,6 +1326,10 @@ async function createOpenAICompatibleCompletion(
       effort: 'none',
       exclude: true,
     }
+  } else if (config.provider === 'qwen' && isDashScopeBaseUrl(config.baseUrl)) {
+    // QwenCloud's Flash models support JSON Object mode, while JSON Schema
+    // mode is currently limited to the Qwen 3.7 Max/Plus families.
+    payload.response_format = { type: 'json_object' }
   }
 
   if (config.extraBody) {

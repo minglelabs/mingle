@@ -170,7 +170,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 4,
       demoSilenceFinalizeMs: 1000,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "bottom",
       demoInputMode: "text",
       demoSpeakerEnabled: true,
@@ -184,7 +184,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "bottom",
       inputMode: "text",
       speakerEnabled: true,
@@ -217,7 +217,7 @@ describe("/api/account/preferences route", () => {
         id: "user_123",
         demoTextSizeLevel: 4,
         demoSilenceFinalizeMs: 1000,
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
         demoInputMode: null,
       })
       .mockResolvedValueOnce({
@@ -242,7 +242,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 4,
       sonioxManualFinalizeSilenceMs: 1000,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -330,7 +330,7 @@ describe("/api/account/preferences route", () => {
     const response = await PATCH(new NextRequest("https://example.com/api/account/preferences", {
       method: "PATCH",
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -340,7 +340,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_123" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });
@@ -484,7 +484,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 1500,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "top",
       demoInputMode: "text",
       demoSpeakerEnabled: true,
@@ -502,7 +502,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 1500,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "top",
       inputMode: "text",
       speakerEnabled: true,
@@ -533,7 +533,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-user-id": "anon_test_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -543,7 +543,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { externalUserId: "anon_test_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });
@@ -558,7 +558,7 @@ describe("/api/account/preferences route", () => {
     mockUserFindUnique.mockResolvedValue({
       demoTextSizeLevel: 3,
       demoSilenceFinalizeMs: 900,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "bottom",
       demoInputMode: "voice",
       demoSpeakerEnabled: false,
@@ -576,7 +576,7 @@ describe("/api/account/preferences route", () => {
     expect(json).toEqual({
       textSizeLevel: 3,
       sonioxManualFinalizeSilenceMs: 900,
-      translationModel: "qwen/qwen3.5-9b",
+      translationModel: "qwen/qwen3.5-flash",
       adBannerPosition: "bottom",
       inputMode: "voice",
       speakerEnabled: false,
@@ -620,7 +620,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_test_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -630,7 +630,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenCalledWith({
       where: { id: "user_from_session" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });
@@ -653,7 +653,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_local_storage_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -663,14 +663,14 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { externalUserId: "anon_local_storage_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(2, {
       where: { id: "user_from_session" },
       data: {
         externalUserId: "anon_local_storage_user",
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });
@@ -685,7 +685,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_new_desktop_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -717,7 +717,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
       where: { id: "seeded_user_id" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });
@@ -737,7 +737,7 @@ describe("/api/account/preferences route", () => {
         "x-mingle-session-key": "sess_local_storage_user",
       },
       body: JSON.stringify({
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       }),
     }));
     const json = await response.json();
@@ -747,7 +747,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenNthCalledWith(1, {
       where: { externalUserId: "anon_local_storage_user" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
     expect(mockUpsertTrackedUser).toHaveBeenCalledWith({
@@ -775,7 +775,7 @@ describe("/api/account/preferences route", () => {
     expect(mockUserUpdateMany).toHaveBeenLastCalledWith({
       where: { id: "seeded_user_id" },
       data: {
-        translationModel: "qwen/qwen3.5-9b",
+        translationModel: "qwen/qwen3.5-flash",
       },
     });
   });

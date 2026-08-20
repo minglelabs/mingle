@@ -315,3 +315,14 @@
 - User impact: Pressing Stop could briefly show the mic as stopped, then running/connecting again, then stopped. Recording ultimately stopped, but the control visually flickered and made the action feel unreliable.
 - Resolution: Added a stop-pending guard for native bridge status/activity handling. While `isStopping` or `nativeStopRequested` is true, the web layer now ignores native statuses and ready server messages that would re-enter a live UI state and suppresses transcript-activity promotion, while still allowing terminal idle/close/error and `stop_recording_ack` handling to complete.
 - Tests: `scripts/devbox test --target app -- src/components/LivePhoneDemo/use-realtime-stt.logic.test.ts` covers the stop-pending status and activity-promotion guard.
+
+## 2026-08-20 - Qwen Translation Provider Label And Runtime Drift
+
+- Surface: `mingle-app/src/lib/translation-models.ts`, translation model menu, and `/api/{namespace}/translate/finalize`.
+- Issue: The selectable Qwen models were labeled and persisted around an OpenRouter model ID (`qwen/qwen3.5-9b` / `qwen/qwen3.7-flash`), while the product decision moved Qwen traffic to the direct QwenCloud API. Keeping the old IDs would make the UI look like it was using one model while the backend was actually using a different provider, and QwenCloud does not expose the old 3.5 9B model ID.
+- User impact: A user selecting a Qwen option could unknowingly hit OpenRouter's shared Alibaba pool, causing intermittent translation failures and making the visible model choice inconsistent with the configured billing and rate limits.
+- Resolution:
+  - The menu now exposes `qwen3.5-flash` and `qwen3.7-flash`, both marked `Slow`, and routes them through QwenCloud's international OpenAI-compatible endpoint.
+  - Existing `qwen/qwen3.5-9b` preference values remain accepted as compatibility aliases and resolve to the available QwenCloud `qwen3.5-flash` model.
+  - QwenCloud Flash requests use JSON Object output mode, which matches the provider's structured-output support for Flash models and keeps translation parsing stable.
+- Tests: Translation catalog, account preference, client-event persistence, versioned finalize route, QwenCloud endpoint, model ID, API-key header, and JSON output contract coverage were updated.

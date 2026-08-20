@@ -19,8 +19,8 @@ describe('translation model catalog', () => {
         badge: 'Slow',
       },
       {
-        value: 'qwen/qwen3.5-9b',
-        label: 'qwen3.5-9b',
+        value: 'qwen/qwen3.5-flash',
+        label: 'qwen3.5-flash',
         badge: 'Slow',
       },
       {
@@ -51,6 +51,11 @@ describe('translation model catalog', () => {
     expect(normalizeSelectableTranslationModel('qwen/qwen3.7-flash (openrouter)')).toBe('qwen/qwen3.7-flash')
   })
 
+  it('maps the legacy Qwen 3.5 9B aliases to the QwenCloud Flash model', () => {
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.5-9b')).toBe('qwen/qwen3.5-flash')
+    expect(normalizeSelectableTranslationModel('qwen/qwen3.5-9b:free')).toBe('qwen/qwen3.5-flash')
+  })
+
   it('resolves runtime selections for the new models', () => {
     expect(resolveTranslationRuntimeSelection('gemma-4-31b-it')).toMatchObject({
       engineProvider: 'gemma',
@@ -59,9 +64,18 @@ describe('translation model catalog', () => {
     })
     expect(resolveTranslationRuntimeSelection('qwen/qwen3.7-flash')).toMatchObject({
       engineProvider: 'qwen',
-      infrastructureProvider: 'openrouter',
-      runtimeModel: 'qwen/qwen3.7-flash',
-      baseUrl: 'https://openrouter.ai/api/v1',
+      infrastructureProvider: 'qwencloud',
+      runtimeModel: 'qwen3.7-flash',
+      baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+    })
+  })
+
+  it('resolves the legacy Qwen 3.5 selection to QwenCloud', () => {
+    expect(resolveTranslationRuntimeSelection('qwen/qwen3.5-9b')).toMatchObject({
+      value: 'qwen/qwen3.5-flash',
+      infrastructureProvider: 'qwencloud',
+      runtimeModel: 'qwen3.5-flash',
+      baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     })
   })
 })
