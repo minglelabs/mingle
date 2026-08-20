@@ -29,7 +29,11 @@ export const runtime = "nodejs";
 const MAX_NAME_LENGTH = 40;
 const MAX_BIO_LENGTH = 160;
 
-function profileResponse(profile: UserProfile): NextResponse {
+type PrivateProfileResponse = UserProfile & {
+  birthDate?: string | null;
+};
+
+function profileResponse(profile: PrivateProfileResponse): NextResponse {
   return NextResponse.json(profile, {
     headers: { "Cache-Control": "private, no-store" },
   });
