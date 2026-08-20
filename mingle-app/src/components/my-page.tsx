@@ -1340,6 +1340,10 @@ function ProfileEditPanel({
     primaryLanguagesLabel: dictionary.profile.primaryLanguagesLabel
       ?? dictionary.profile.nationalityLabel
       ?? "Primary languages",
+    primaryLanguagesDescription: dictionary.profile.primaryLanguagesDescription
+      ?? (locale === "ko"
+        ? "프로필에 표시할 주 사용 언어를 원하는 순서대로 최대 5개 선택하세요."
+        : "Choose up to five primary languages in the order they should appear on your profile."),
     saveAction: dictionary.profile.saveAction ?? "Save",
     cancelAction: dictionary.profile.cancelAction ?? "Cancel",
     saveError: dictionary.profile.profileSaveError ?? "Could not save your profile.",
@@ -1575,6 +1579,9 @@ function ProfileEditPanel({
 
               <fieldset className="min-w-0 w-full max-w-full">
                 <legend className="mb-2 text-[13px] font-semibold text-gray-600">{copy.primaryLanguagesLabel}</legend>
+                <p className="mb-3 text-[12px] leading-relaxed text-gray-500">
+                  {copy.primaryLanguagesDescription}
+                </p>
                 <LanguagePreferencePicker
                   selectedLanguages={primaryLanguages}
                   onToggleLanguage={(code) => {
