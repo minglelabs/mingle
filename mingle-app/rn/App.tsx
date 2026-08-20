@@ -77,6 +77,10 @@ import {
   shouldFallbackHttpStatus,
 } from './src/fallbackTargets';
 import {
+  extractAndroidIntentBrowserFallbackUrl,
+  shouldOpenNativeExternalUrl,
+} from './src/externalNavigation';
+import {
   buildConversationRestoreWebUrl,
   classifyConversationWebUrl,
   readNativeConversationRestorePayload,
@@ -376,6 +380,17 @@ function formatWebViewLoadError(description: string, currentWebUrl: string): str
     return normalizedDescription;
   }
   return `${normalizedDescription} (현재 앱 URL이 ${currentWebUrl} 입니다. 실기기에서는 127.0.0.1/localhost에 접속할 수 없습니다. scripts/devbox profile --profile device 후 --device-app-env prod 또는 dev로 설치해 주세요.)`;
+}
+
+function openNativeExternalUrl(rawUrl: string): void {
+  void Linking.openURL(rawUrl).catch(() => {
+    const fallbackUrl = extractAndroidIntentBrowserFallbackUrl(rawUrl);
+    if (!fallbackUrl || fallbackUrl === rawUrl) return;
+
+    void Linking.openURL(fallbackUrl).catch(() => {
+      // Ignore external app/browser failures so the Mingle WebView remains intact.
+    });
+  });
 }
 
 const RN_RUNTIME_OS = Platform.OS;
@@ -1522,6 +1537,10 @@ function AppInner(): React.JSX.Element {
     const rawUrl = typeof request.url === 'string' ? request.url.trim() : '';
     if (rawUrl && handleIncomingProfileLinkOnce(rawUrl)) {
       recordProfileLinkTrace('webview_profile_link_intercepted');
+      return false;
+    }
+    if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {
+      openNativeExternalUrl(rawUrl);
       return false;
     }
     return true;
@@ -3203,7 +3222,7 @@ function AppInner(): React.JSX.Element {
   }, [emitAppUpdateToWeb, emitBannerLayoutToWeb, emitCurrentMicPermissionToWeb, emitToWeb, flushPendingAuthToWeb, flushPendingNativePushRegistrationsToWeb, flushPendingNativeSttMessagesToWeb, flushPendingProfileLinkToWeb, flushPendingQrScannerEventsToWeb, flushPendingRecommendPrompt, rememberCurrentWebUrl, updateSafeAreaPalette, webUrl]);
 
   const handleLoadError = useCallback((event: WebViewLoadErrorEvent) => {
-    if (activateWebFallback()) return;
+    if (!initialLoadSettledRef.current && activateWebFallback()) return;
 
     if (!initialLoadSettledRef.current) {
       initialLoadSettledRef.current = true;
@@ -3216,6 +3235,7 @@ function AppInner(): React.JSX.Element {
   const handleHttpError = useCallback((event: WebViewHttpStatusEvent) => {
     if (
       shouldFallbackHttpStatus(event.nativeEvent.statusCode)
+      && !initialLoadSettledRef.current
       && !isPageReadyRef.current
       && activateWebFallback()
     ) {

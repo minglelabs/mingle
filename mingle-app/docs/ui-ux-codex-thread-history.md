@@ -1,5 +1,15 @@
 # Mingle App Codex Thread-by-Thread UI/UX Audit
 
+## 2026-08-20 Android Instagram feedback link fallback regression
+
+### `2026-08-20-android-instagram-feedback-external-navigation` | UI/UX issue found
+
+1. **The Instagram feedback action could replace the 2.0.0 WebView with the legacy web app on Android**
+   Problem: The feedback link opened inside the Android WebView. When Instagram was not installed, or when Instagram's logged-out web flow emitted an Android `intent://` navigation, the WebView load error activated the generic legacy-host fallback. Users then saw the old `mingle-app-xi.vercel.app` UI even though the installed native app was version 2.0.0.
+   Fix: Instagram web and Android intent URLs are now handed to native linking, and WebView fallback activation is limited to failures during the initial Mingle host load. External app/browser failures no longer replace the active Mingle WebView with the legacy host.
+   Data change: None. This is a native external-navigation and WebView recovery fix.
+   Verification: Reproduced on Android 2.0.0 build 82 without Instagram installed; the post-fix release build was installed on the same device, and the Instagram web/intent handling is covered by focused tests and TypeScript validation. The device remained logged out of Mingle after reinstall, so the complete feedback tap could not be repeated without signing in.
+
 ## 2026-08-17 Shared English US/UK flag in language selectors
 
 ### `2026-08-17-english-us-uk-language-flag` | UI/UX issue found

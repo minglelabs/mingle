@@ -53,4 +53,18 @@ describe('runtime fallback contract', () => {
       ].join('\n'),
     );
   });
+
+  it('does not activate the legacy host after the initial Mingle page settles', () => {
+    const appSource = readWorkspaceFile('App.tsx');
+
+    expect(appSource).toContain(
+      'if (!initialLoadSettledRef.current && activateWebFallback()) return;',
+    );
+    expect(appSource).toContain(
+      '&& !initialLoadSettledRef.current\n      && !isPageReadyRef.current',
+    );
+    expect(appSource).toContain(
+      'if (rawUrl && shouldOpenNativeExternalUrl(rawUrl)) {',
+    );
+  });
 });
