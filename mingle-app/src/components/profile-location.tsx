@@ -20,7 +20,8 @@ import {
   type ProfileLocationRecord,
 } from "@/lib/profile-location";
 import { registerNativeBackHandler } from "@/lib/native-back-handler";
-import { LocateFixed, Loader2, MapPin, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, LocateFixed, Loader2, MapPin } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ProfileLocationProps = {
@@ -30,6 +31,11 @@ type ProfileLocationProps = {
   onSaveLocation?: (location: ProfileLocationRecord) => Promise<void>;
   onClearLocation?: () => Promise<void>;
   onMapOpenChange?: (open: boolean) => void;
+};
+
+const PROFILE_LOCATION_PANEL_TRANSITION = {
+  duration: 0.32,
+  ease: [0.22, 1, 0.36, 1] as const,
 };
 
 function locationLabel(
@@ -247,79 +253,87 @@ export default function ProfileLocation({
         </p>
       )}
 
-      {isMapOpen ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/45 p-3 sm:items-center"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setMapOpen(false);
-          }}
-        >
-          <section
+      <AnimatePresence initial={false}>
+        {isMapOpen ? (
+          <motion.section
+            key="profile-location-panel"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={PROFILE_LOCATION_PANEL_TRANSITION}
+            className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950 shadow-2xl"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="profile-location-title"
-            className="flex max-h-[90vh] w-full max-w-[520px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            aria-label={copy.mapTitle}
           >
-            <header className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <div className="min-w-0">
-                <h2 id="profile-location-title" className="text-[16px] font-semibold text-slate-950">{copy.mapTitle}</h2>
-                {displayLabel ? <p className="mt-0.5 truncate text-[13px] text-gray-500">{displayLabel}</p> : null}
-              </div>
+            <header
+              className="grid shrink-0 grid-cols-[44px_1fr_44px] items-center border-b border-gray-100 px-4"
+              style={{
+                height: "calc(56px + env(safe-area-inset-top, 44px))",
+                paddingTop: "env(safe-area-inset-top, 44px)",
+              }}
+            >
               <button
                 type="button"
                 onClick={() => setMapOpen(false)}
-                className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100 active:bg-gray-200"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 active:bg-gray-200"
                 aria-label={copy.closeAction}
               >
-                <X size={19} strokeWidth={2} />
+                <ArrowLeft size={24} strokeWidth={2} aria-hidden="true" />
               </button>
+              <div className="min-w-0 text-center">
+                <h2 id="profile-location-title" className="truncate text-[18px] font-bold text-slate-950">{copy.mapTitle}</h2>
+                {displayLabel ? <p className="mt-0.5 truncate text-[15px] text-gray-500">{displayLabel}</p> : null}
+              </div>
+              <div aria-hidden="true" />
             </header>
 
-            {embedUrl ? (
-              <iframe
-                title={copy.mapTitle}
-                src={embedUrl}
-                className="h-[min(58vh,390px)] w-full border-0 bg-slate-100"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            ) : (
-              <div className="flex min-h-[220px] items-center justify-center px-6 text-center text-[14px] text-gray-500">
-                {copy.mapUnavailable}
-              </div>
-            )}
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              {embedUrl ? (
+                <iframe
+                  title={copy.mapTitle}
+                  src={embedUrl}
+                  className="h-[min(66vh,640px)] min-h-[360px] w-full shrink-0 border-0 bg-slate-100"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="flex min-h-[300px] items-center justify-center px-6 text-center text-[16px] text-gray-500">
+                  {copy.mapUnavailable}
+                </div>
+              )}
 
-            <div className="space-y-3 px-4 pb-4 pt-3">
-              {isOwnProfile ? (
-                <>
-                  <p className="text-[13px] text-gray-500">{copy.permissionDescription}</p>
-                  <button
-                    type="button"
-                    onClick={() => void requestCurrentLocation()}
-                    disabled={isRequesting}
-                    className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-[13px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isRequesting ? <Loader2 size={16} className="animate-spin" /> : <LocateFixed size={16} />}
-                    <span>{isRequesting ? copy.requestingLocation : (displayLocation ? copy.updateAction : copy.addAction)}</span>
-                  </button>
-                  {error ? <p role="alert" className="text-[13px] text-red-500">{error}</p> : null}
-                  {canOpenSettings ? (
+              <div className="space-y-4 px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-5">
+                {isOwnProfile ? (
+                  <>
+                    <p className="text-[15px] leading-6 text-gray-500">{copy.permissionDescription}</p>
                     <button
                       type="button"
-                      onClick={() => { postNativeLocationSettings(); }}
-                      className="w-full text-center text-[13px] font-medium text-slate-600 underline underline-offset-2"
+                      onClick={() => void requestCurrentLocation()}
+                      disabled={isRequesting}
+                      className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-[15px] font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
                     >
-                      {copy.openSettingsAction}
+                      {isRequesting ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <LocateFixed size={18} aria-hidden="true" />}
+                      <span>{isRequesting ? copy.requestingLocation : (displayLocation ? copy.updateAction : copy.addAction)}</span>
                     </button>
-                  ) : null}
-                </>
-              ) : null}
-              <p className="text-center text-[11px] text-gray-400">{copy.attribution}</p>
+                    {error ? <p role="alert" className="text-[14px] text-red-500">{error}</p> : null}
+                    {canOpenSettings ? (
+                      <button
+                        type="button"
+                        onClick={() => { postNativeLocationSettings(); }}
+                        className="w-full text-center text-[14px] font-medium text-slate-600 underline underline-offset-2"
+                      >
+                        {copy.openSettingsAction}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+                <p className="text-center text-[12px] text-gray-400">{copy.attribution}</p>
+              </div>
             </div>
-          </section>
-        </div>
-      ) : null}
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }

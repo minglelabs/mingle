@@ -1010,3 +1010,16 @@
   - Add native Location When In Use permission declarations and bridges for both iOS and Android; the existing iOS and Android back behavior closes the map modal first.
 - Data contract: Add nullable city-level location fields and permission verification timestamps to `app_users`; the existing v2.0.0 profile endpoints expose the nested location object.
 - Testing notes: Verify add/update requests the system permission only after the button tap, denied permission removes the row after returning from Settings, each primary UI language localizes the row and map labels, and Android back closes the map before exiting the screen.
+
+## 2026-08-20 - Present profile locations as a full-screen side panel
+
+- Surface: The profile location map opened from My Page or another user's profile.
+- Issue: The map opened as a compact bottom-sheet-style dialog, which made the map and supporting text feel cramped and inconsistent with the app's existing menu pages.
+- User impact: Users had less map context and the title, location label, permission description, and actions were difficult to read.
+- Resolution:
+  - Replace the compact dialog with a full-screen panel that slides in from the right using the same transition direction as the profile and settings menus.
+  - Use a menu-style top-left back button and preserve the native back handler so Android back closes the map panel before the underlying profile or app.
+  - Increase the map panel typography and action target sizes, and allocate more vertical space to the map.
+  - Narrow the OpenStreetMap embed bounds to keep city labels readable at the larger panel size.
+- Data contract: None.
+- Testing notes: Verify the panel enters from the right on iOS and Android, the top-left back button and Android back close only the panel, the map labels are readable, and the enlarged controls remain localized in all supported UI languages.

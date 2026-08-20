@@ -105,8 +105,9 @@ export async function reverseGeocodeProfileLocation(
 }
 
 export function buildOpenStreetMapEmbedUrl(location: ProfileLocationRecord, locale: AppLocale): string {
-  const latitudePadding = 0.08;
-  const longitudePadding = 0.1;
+  // Keep the map focused on the city area so labels remain readable in the full-screen panel.
+  const latitudePadding = 0.035;
+  const longitudePadding = 0.045;
   const minLatitude = Math.max(-90, location.latitude - latitudePadding);
   const maxLatitude = Math.min(90, location.latitude + latitudePadding);
   const minLongitude = Math.max(-180, location.longitude - longitudePadding);
