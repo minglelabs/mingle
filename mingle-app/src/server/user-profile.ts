@@ -57,6 +57,7 @@ export type UserProfile = {
   nationality: string | null;
   primaryLanguages: string[];
   defaultConversationLanguages: string[];
+  birthDate?: string | null;
   followersCount: number;
   followingCount: number;
 };

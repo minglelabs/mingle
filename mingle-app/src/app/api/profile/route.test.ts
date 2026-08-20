@@ -71,6 +71,7 @@ describe("/api/profile route", () => {
       nationality: "ko",
       primaryLanguages: ["ko"],
       defaultConversationLanguages: [],
+      birthDate: null,
       followersCount: 2,
       followingCount: 3,
     });
