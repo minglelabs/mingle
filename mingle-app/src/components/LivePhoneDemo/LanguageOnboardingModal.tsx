@@ -20,6 +20,7 @@ import {
 } from "@/lib/birth-date";
 import {
   resolveDiscoverySourceCopy,
+  shuffleDiscoverySourceCodes,
   type DiscoverySource,
 } from "@/lib/discovery-source";
 
@@ -62,6 +63,7 @@ export default function LanguageOnboardingModal({
   const [language, setLanguage] = useState(initialLanguage);
   const [birthDate, setBirthDate] = useState<BirthDateParts>(initialBirthDate);
   const [discoverySource, setDiscoverySource] = useState<DiscoverySource | null>(null);
+  const [discoveryOptionCodes, setDiscoveryOptionCodes] = useState(shuffleDiscoverySourceCodes);
   const [isConfirming, setIsConfirming] = useState(false);
 
   // The modal's own copy previews in whichever language is tentatively tapped
@@ -70,6 +72,12 @@ export default function LanguageOnboardingModal({
   const copy = useMemo(() => resolveLanguageOnboardingCopy(language), [language]);
   const signupCopy = useMemo(() => resolveSignupCopy(language), [language]);
   const discoveryCopy = useMemo(() => resolveDiscoverySourceCopy(language), [language]);
+  const discoveryOptions = useMemo(() => {
+    const optionsByCode = new Map(discoveryCopy.options.map((option) => [option.code, option]));
+    return discoveryOptionCodes
+      .map((code) => optionsByCode.get(code))
+      .filter((option): option is (typeof discoveryCopy.options)[number] => Boolean(option));
+  }, [discoveryCopy.options, discoveryOptionCodes]);
   const isEligibleAge = useMemo(() => isOldEnoughForSignup(birthDate), [birthDate]);
 
   useEffect(() => {
@@ -96,6 +104,10 @@ export default function LanguageOnboardingModal({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [dismissible, isConfirming, onClose]);
+
+  useEffect(() => {
+    setDiscoveryOptionCodes(shuffleDiscoverySourceCodes());
+  }, []);
 
   // The list stays in the app's current ui locale regardless of which output
   // language is tentatively selected -- unlike the old "my language" step, this
@@ -364,7 +376,7 @@ export default function LanguageOnboardingModal({
             style={{ paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))" }}
           >
             <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
-              {discoveryCopy.options.map((option) => {
+              {discoveryOptions.map((option) => {
                 const isSelected = discoverySource === option.code;
                 return (
                   <button

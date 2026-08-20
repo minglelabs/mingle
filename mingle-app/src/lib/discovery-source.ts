@@ -5,14 +5,35 @@ import {
 
 export const DISCOVERY_SOURCE_CODES = [
   "friend",
-  "social_media",
-  "search",
-  "app_store",
+  "hellotalk",
+  "threads",
+  "social_media_other",
+  "online_ad",
+  "google_search",
+  "ai_recommendation",
+  "app_store_search",
   "community",
   "other",
 ] as const;
 
-export type DiscoverySource = (typeof DISCOVERY_SOURCE_CODES)[number];
+const LEGACY_DISCOVERY_SOURCE_CODES = [
+  "social_media",
+  "search",
+  "app_store",
+] as const;
+
+export type DiscoverySource =
+  | (typeof DISCOVERY_SOURCE_CODES)[number]
+  | (typeof LEGACY_DISCOVERY_SOURCE_CODES)[number];
+
+export function shuffleDiscoverySourceCodes(): readonly (typeof DISCOVERY_SOURCE_CODES)[number][] {
+  const shuffled = [...DISCOVERY_SOURCE_CODES].filter((code) => code !== "other");
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return [...shuffled, "other"];
+}
 
 export type DiscoverySourceCopy = {
   step: string;
@@ -25,7 +46,7 @@ export type DiscoverySourceCopy = {
 };
 
 const DISCOVERY_SOURCE_LABELS: Record<PrimaryUiLocale, Omit<DiscoverySourceCopy, "options"> & {
-  options: Record<DiscoverySource, string>;
+    options: Partial<Record<DiscoverySource, string>>;
 }> = {
   ko: {
     step: "밍글을 알게 된 경로",
@@ -33,11 +54,18 @@ const DISCOVERY_SOURCE_LABELS: Record<PrimaryUiLocale, Omit<DiscoverySourceCopy,
     description: "더 나은 서비스를 만드는 데 참고할게요.",
     options: {
       friend: "친구나 지인의 추천",
-      social_media: "SNS나 온라인 광고",
-      search: "검색으로 찾았어요",
-      app_store: "앱스토어·플레이스토어",
+      hellotalk: "HelloTalk",
+      threads: "Threads",
+      social_media_other: "그 외 소셜 미디어",
+      online_ad: "온라인 광고",
+      google_search: "구글 검색",
+      ai_recommendation: "ChatGPT 등 AI의 추천",
+      app_store_search: "앱스토어·플레이스토어 검색",
       community: "온라인 커뮤니티·학교·회사",
       other: "기타",
+      social_media: "그 외 소셜 미디어",
+      search: "구글 검색",
+      app_store: "앱스토어·플레이스토어 검색",
     },
   },
   en: {
@@ -46,11 +74,18 @@ const DISCOVERY_SOURCE_LABELS: Record<PrimaryUiLocale, Omit<DiscoverySourceCopy,
     description: "Your answer helps us improve Mingle.",
     options: {
       friend: "A friend or family member",
-      social_media: "Social media or an online ad",
-      search: "Search",
-      app_store: "The App Store or Google Play",
+      hellotalk: "HelloTalk",
+      threads: "Threads",
+      social_media_other: "Other social media",
+      online_ad: "An online ad",
+      google_search: "Google Search",
+      ai_recommendation: "ChatGPT or another AI",
+      app_store_search: "App Store or Google Play search",
       community: "An online community, school, or workplace",
       other: "Other",
+      social_media: "Other social media",
+      search: "Google Search",
+      app_store: "App Store or Google Play search",
     },
   },
   ja: {
@@ -238,7 +273,7 @@ export function resolveDiscoverySourceCopy(rawLocale: string): DiscoverySourceCo
     description: copy.description,
     options: DISCOVERY_SOURCE_CODES.map((code) => ({
       code,
-      label: copy.options[code],
+      label: copy.options[code] ?? DISCOVERY_SOURCE_LABELS.en.options[code] ?? code,
     })),
   };
 }
