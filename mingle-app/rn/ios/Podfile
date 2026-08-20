@@ -11,6 +11,9 @@ require Pod::Executable.execute_command('node', ['-p',
   )', __dir__]).strip
 
 platform :ios, min_ios_version_supported
+# React Native 0.84's prebuilt core omits Fabric symbols required by the
+# New Architecture pods used by the app (including Google Mobile Ads).
+ENV['RCT_USE_PREBUILT_RNCORE'] = '0'
 prepare_react_native_project!
 setup_permissions(['Camera', 'LocationWhenInUse'])
 
