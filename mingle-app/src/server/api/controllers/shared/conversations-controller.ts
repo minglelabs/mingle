@@ -194,6 +194,9 @@ export async function postDirectConversationResponse(request: NextRequest) {
     if (error instanceof Error && error.message === "invalid_target_user") {
       return NextResponse.json({ error: "invalid_target_user" }, { status: 400 });
     }
+    if (error instanceof Error && error.message === "target_user_blocked") {
+      return NextResponse.json({ error: "target_user_blocked" }, { status: 403 });
+    }
     console.error("[conversations/direct] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }

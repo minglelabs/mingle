@@ -102,6 +102,20 @@ describe("/api/conversations/direct route", () => {
     expect(json).toEqual({ error: "target_user_not_found" });
   });
 
+  it("returns 403 when the target user is blocked in either direction", async () => {
+    mockFindOrCreateDirectConversation.mockRejectedValue(new Error("target_user_blocked"));
+
+    const response = await POST(new NextRequest("https://example.com/api/conversations/direct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetUserId: "user-2" }),
+    }));
+    const json = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(json).toEqual({ error: "target_user_blocked" });
+  });
+
   it("returns unauthorized when the request identity cannot resolve to a user", async () => {
     mockResolveOrCreateUserIdForRequest.mockResolvedValue({
       userId: "",

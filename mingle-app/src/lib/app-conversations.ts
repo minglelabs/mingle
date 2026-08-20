@@ -139,6 +139,8 @@ type ChannelMemberProfile = {
   name: string | null;
   handle: string | null;
   displayLanguage: string | null;
+  status: string;
+  pausedAt: Date | null;
 };
 
 async function listChannelMembersByChannelId(
@@ -154,6 +156,8 @@ async function listChannelMembersByChannelId(
       channelId: true,
       userId: true,
       displayLanguage: true,
+      status: true,
+      pausedAt: true,
       user: { select: { name: true, handle: true } },
     },
   });
@@ -166,6 +170,8 @@ async function listChannelMembersByChannelId(
       name: row.user.name,
       handle: row.user.handle,
       displayLanguage: row.displayLanguage,
+      status: row.status,
+      pausedAt: row.pausedAt,
     });
     membersByChannelId.set(row.channelId, members);
   }
@@ -198,6 +204,30 @@ function resolveViewerFacingDisplayLanguage(
   if (!viewerUserId || !members || members.length < 2) return channelWideValue;
   const viewerMember = members.find((member) => member.userId === viewerUserId);
   return viewerMember?.displayLanguage?.trim() || channelWideValue;
+}
+
+// "One active room per account" is a per-person invariant, so once a room
+// has 2+ real members, the channel-wide status/pausedAt can't represent it —
+// Alice pausing her other rooms shouldn't pause the shared room for Bob, and
+// vice versa. Solo rooms (0-1 members) keep using the channel-wide fields.
+function resolveViewerFacingStatus(
+  channelWideValue: string,
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): string {
+  if (!viewerUserId || !members || members.length < 2) return channelWideValue;
+  const viewerMember = members.find((member) => member.userId === viewerUserId);
+  return viewerMember?.status || channelWideValue;
+}
+
+function resolveViewerFacingPausedAt(
+  channelWideValue: Date | null,
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): Date | null {
+  if (!viewerUserId || !members || members.length < 2) return channelWideValue;
+  const viewerMember = members.find((member) => member.userId === viewerUserId);
+  return viewerMember ? viewerMember.pausedAt : channelWideValue;
 }
 
 function createConversationSessionKey(): string {
@@ -237,6 +267,8 @@ function serializeConversationChannel(
   messageCount?: number,
   viewerFacingTitle?: string,
   viewerFacingDisplayLanguage?: string | null,
+  viewerFacingStatus?: string,
+  viewerFacingPausedAt?: Date | null,
 ): ConversationChannelSummary {
   const selectedLanguages = [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
@@ -248,7 +280,7 @@ function serializeConversationChannel(
     id: record.id,
     sequenceNumber: record.sequenceNumber,
     title: viewerFacingTitle ?? record.title,
-    status: normalizeConversationChannelStatus(record.status),
+    status: normalizeConversationChannelStatus(viewerFacingStatus ?? record.status),
     sessionKey: record.sessionKey,
     ...(typeof messageCount === "number"
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
@@ -269,7 +301,7 @@ function serializeConversationChannel(
         : null,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
-    pausedAt: record.pausedAt?.toISOString() ?? null,
+    pausedAt: (viewerFacingPausedAt !== undefined ? viewerFacingPausedAt : record.pausedAt)?.toISOString() ?? null,
   };
 }
 
@@ -414,6 +446,8 @@ async function serializeConversationChannelWithPreview(
     undefined,
     resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
     resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
+    resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
+    resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
   );
 }
 
@@ -453,6 +487,8 @@ async function listConversationChannelsForMember(
       undefined,
       resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
       resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
+      resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
+      resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
     ));
   }
 
@@ -475,6 +511,8 @@ async function listConversationChannelsForMember(
         messageCountBySessionKey.get(record.sessionKey) ?? 0,
         resolveViewerFacingTitle(record.title, membersByChannelId.get(record.id), viewerUserId),
         resolveViewerFacingDisplayLanguage(record.defaultDisplayLanguage, membersByChannelId.get(record.id), viewerUserId),
+        resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
+        resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
       );
     })
     .sort((left, right) => {
@@ -573,13 +611,19 @@ export async function createConversationChannelForUser(
           select: conversationChannelSelect,
         });
 
+        // Mirror the channel's own just-created status/pausedAt onto every
+        // member row, rather than relying on the column's schema default —
+        // a shared room's members must start out paused exactly like a solo
+        // room does, until someone explicitly activates it.
         await tx.appConversationChannelMember.createMany({
           data: [
-            { channelId: created.id, userId, role: "owner" },
+            { channelId: created.id, userId, role: "owner", status: created.status, pausedAt: created.pausedAt },
             ...inviteeUserIds.map((inviteeUserId) => ({
               channelId: created.id,
               userId: inviteeUserId,
               role: "member",
+              status: created.status,
+              pausedAt: created.pausedAt,
             })),
           ],
           skipDuplicates: true,
@@ -624,6 +668,22 @@ export async function findOrCreateDirectConversation(args: {
     throw new Error("target_user_not_found");
   }
 
+  // Same mutual-block check the profile/search/follow paths already run —
+  // without it, knowing a target's id is enough to bypass a block and reach
+  // (or create) shared room membership with them.
+  const block = await prisma.userBlock.findFirst({
+    where: {
+      OR: [
+        { blockerId: args.userId, blockedId: targetUserId },
+        { blockerId: targetUserId, blockedId: args.userId },
+      ],
+    },
+    select: { blockerId: true },
+  });
+  if (block) {
+    throw new Error("target_user_blocked");
+  }
+
   const existing = await prisma.appConversationChannel.findFirst({
     where: {
       ...buildVisibleConversationWhere(),
@@ -666,33 +726,68 @@ export async function updateConversationChannelStatus(args: {
     return null;
   }
 
+  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
+  const isTargetMultiMember = (membersByChannelId.get(args.conversationId)?.length ?? 0) >= 2;
+  const pausedAt = args.status === APP_CONVERSATION_STATUS_PAUSED ? new Date() : null;
+
   const record = await prisma.$transaction(async (tx) => {
     if (args.status === APP_CONVERSATION_STATUS_ACTIVE) {
-      const pausedAt = new Date();
-      // Pause every OTHER room this caller is in, not just the ones they own —
-      // otherwise activating a shared room only pauses the owner's own solo
-      // rooms, leaving the caller's other active rooms (owned by someone else)
-      // untouched, and the caller can end up with more than one active room.
-      await tx.appConversationChannel.updateMany({
+      // Pause every OTHER room this caller is in, not just the ones they
+      // own. "One active room per account" is a per-person invariant, so
+      // for a shared (2+-member) room this must check and pause the
+      // caller's OWN membership status, never the channel-wide status —
+      // that field reflects some other member's state, not this caller's.
+      const otherMemberships = await tx.appConversationChannelMember.findMany({
         where: {
-          ...buildVisibleMembershipWhere(args.userId),
-          id: { not: args.conversationId },
-          status: APP_CONVERSATION_STATUS_ACTIVE,
-          ...buildVisibleConversationWhere(),
+          userId: args.userId,
+          channelId: { not: args.conversationId },
+          channel: { ...buildVisibleConversationWhere() },
         },
-        data: {
-          status: APP_CONVERSATION_STATUS_PAUSED,
-          pausedAt,
+        select: {
+          channelId: true,
+          status: true,
+          channel: { select: { status: true, _count: { select: { members: true } } } },
         },
+      });
+
+      const soloChannelIdsToPause: string[] = [];
+      const memberRowChannelIdsToPause: string[] = [];
+      for (const membership of otherMemberships) {
+        const isMultiMember = membership.channel._count.members >= 2;
+        const effectiveStatus = isMultiMember ? membership.status : membership.channel.status;
+        if (effectiveStatus !== APP_CONVERSATION_STATUS_ACTIVE) continue;
+        (isMultiMember ? memberRowChannelIdsToPause : soloChannelIdsToPause).push(membership.channelId);
+      }
+
+      const nowPausedAt = new Date();
+      if (soloChannelIdsToPause.length > 0) {
+        await tx.appConversationChannel.updateMany({
+          where: { id: { in: soloChannelIdsToPause } },
+          data: { status: APP_CONVERSATION_STATUS_PAUSED, pausedAt: nowPausedAt },
+        });
+      }
+      if (memberRowChannelIdsToPause.length > 0) {
+        await tx.appConversationChannelMember.updateMany({
+          where: { userId: args.userId, channelId: { in: memberRowChannelIdsToPause } },
+          data: { status: APP_CONVERSATION_STATUS_PAUSED, pausedAt: nowPausedAt },
+        });
+      }
+    }
+
+    if (isTargetMultiMember) {
+      await tx.appConversationChannelMember.update({
+        where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
+        data: { status: args.status, pausedAt },
+      });
+      return tx.appConversationChannel.findUniqueOrThrow({
+        where: { id: args.conversationId },
+        select: conversationChannelSelect,
       });
     }
 
     return tx.appConversationChannel.update({
       where: { id: args.conversationId },
-      data: {
-        status: args.status,
-        pausedAt: args.status === APP_CONVERSATION_STATUS_PAUSED ? new Date() : null,
-      },
+      data: { status: args.status, pausedAt },
       select: conversationChannelSelect,
     });
   });
@@ -1061,6 +1156,16 @@ export async function getConversationHydrationStateForUser(args: {
       resolveViewerFacingTitle(conversationRecord.title, membersByChannelId.get(conversationRecord.id), args.userId),
       resolveViewerFacingDisplayLanguage(
         conversationRecord.defaultDisplayLanguage,
+        membersByChannelId.get(conversationRecord.id),
+        args.userId,
+      ),
+      resolveViewerFacingStatus(
+        conversationRecord.status,
+        membersByChannelId.get(conversationRecord.id),
+        args.userId,
+      ),
+      resolveViewerFacingPausedAt(
+        conversationRecord.pausedAt,
         membersByChannelId.get(conversationRecord.id),
         args.userId,
       ),

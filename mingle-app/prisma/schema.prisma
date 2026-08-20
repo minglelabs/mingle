@@ -308,7 +308,15 @@ model AppConversationChannelMember {
   // applies once a channel has 2+ members, since one channel-wide value
   // can't represent per-viewer preference.
   displayLanguage String?  @map("display_language")
-  joinedAt        DateTime @default(now()) @map("joined_at")
+  // This member's own active/paused state for a shared (2+-member) room.
+  // "One active room per account" is a per-person invariant, not a per-room
+  // one — a single channel-wide status can't represent "active for Alice,
+  // paused for Bob" once a room has more than one real account in it. Solo
+  // rooms (0-1 members) keep using AppConversationChannel.status/pausedAt
+  // unchanged, same split as displayLanguage above.
+  status   String    @default("active") @map("status")
+  pausedAt DateTime? @map("paused_at")
+  joinedAt DateTime  @default(now()) @map("joined_at")
 
   channel AppConversationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)

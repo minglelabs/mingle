@@ -13,8 +13,10 @@ const {
   mockChannelMemberFindMany,
   mockChannelMemberCreateMany,
   mockChannelMemberUpdate,
+  mockChannelMemberUpdateMany,
   mockFindConversationUniqueOrThrow,
   mockUserFindUnique,
+  mockUserBlockFindFirst,
 } = vi.hoisted(() => ({
   mockFindConversationMany: vi.fn(),
   mockFindConversationFirst: vi.fn(),
@@ -28,8 +30,10 @@ const {
   mockChannelMemberFindMany: vi.fn(),
   mockChannelMemberCreateMany: vi.fn(),
   mockChannelMemberUpdate: vi.fn(),
+  mockChannelMemberUpdateMany: vi.fn(),
   mockFindConversationUniqueOrThrow: vi.fn(),
   mockUserFindUnique: vi.fn(),
+  mockUserBlockFindFirst: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => {
@@ -46,9 +50,13 @@ vi.mock("@/lib/prisma", () => {
       findMany: mockChannelMemberFindMany,
       createMany: mockChannelMemberCreateMany,
       update: mockChannelMemberUpdate,
+      updateMany: mockChannelMemberUpdateMany,
     },
     user: {
       findUnique: mockUserFindUnique,
+    },
+    userBlock: {
+      findFirst: mockUserBlockFindFirst,
     },
     appMessage: {
       findMany: mockAppMessageFindMany,
@@ -97,7 +105,9 @@ describe("app-conversations", () => {
     mockUpdateManyConversation.mockResolvedValue({ count: 0 });
     mockChannelMemberFindMany.mockResolvedValue([]);
     mockChannelMemberCreateMany.mockResolvedValue({ count: 0 });
+    mockChannelMemberUpdateMany.mockResolvedValue({ count: 0 });
     mockUserFindUnique.mockResolvedValue(null);
+    mockUserBlockFindFirst.mockResolvedValue(null);
   });
 
   it("treats isDeleted = null as visible when listing conversations", async () => {
@@ -174,8 +184,15 @@ describe("app-conversations", () => {
     expect(state?.conversation.title).toBe("Bob");
   });
 
-  it("pauses every other room the caller is a member of, not just ones they own", async () => {
+  it("pauses every other SOLO room the caller is a member of, not just ones they own", async () => {
     mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+    // 1st findMany call: conv-a's own members (target is solo).
+    // 2nd findMany call (inside the transaction): the caller's OTHER rooms.
+    mockChannelMemberFindMany
+      .mockResolvedValueOnce([{ channelId: "conv-a", userId: "user-1", user: {} }])
+      .mockResolvedValueOnce([
+        { channelId: "conv-b", status: "active", channel: { status: "active", _count: { members: 1 } } },
+      ]);
     mockUpdateConversation.mockResolvedValue({
       id: "conv-a",
       sequenceNumber: 1,
@@ -197,12 +214,81 @@ describe("app-conversations", () => {
     });
 
     expect(mockUpdateManyConversation).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        members: { some: { userId: "user-1" } },
-        id: { not: "conv-a" },
-        status: "active",
-      }),
+      where: { id: { in: ["conv-b"] } },
+      data: expect.objectContaining({ status: "paused" }),
     }));
+    expect(mockChannelMemberUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("pauses only the caller's own membership in another SHARED room, leaving other members untouched", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-a" });
+    mockChannelMemberFindMany
+      .mockResolvedValueOnce([{ channelId: "conv-a", userId: "user-1", user: {} }])
+      .mockResolvedValueOnce([
+        {
+          channelId: "conv-shared",
+          status: "active",
+          channel: { status: "active", _count: { members: 2 } },
+        },
+      ]);
+    mockUpdateConversation.mockResolvedValue({
+      id: "conv-a",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-a",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    await updateConversationChannelStatus({
+      conversationId: "conv-a",
+      userId: "user-1",
+      status: "active",
+    });
+
+    expect(mockChannelMemberUpdateMany).toHaveBeenCalledWith({
+      where: { userId: "user-1", channelId: { in: ["conv-shared"] } },
+      data: expect.objectContaining({ status: "paused" }),
+    });
+    expect(mockUpdateManyConversation).not.toHaveBeenCalled();
+  });
+
+  it("writes a shared room's own status/pausedAt to the caller's membership row, not the channel", async () => {
+    mockFindConversationFirst.mockResolvedValue({ id: "conv-dm" });
+    mockChannelMemberFindMany.mockResolvedValueOnce([
+      { channelId: "conv-dm", userId: "user-1", user: {} },
+      { channelId: "conv-dm", userId: "user-2", user: {} },
+    ]);
+    mockFindConversationUniqueOrThrow.mockResolvedValue({
+      id: "conv-dm",
+      sequenceNumber: 1,
+      title: "Conversation (1)",
+      status: "active",
+      sessionKey: "session-dm",
+      selectedLanguages: ["en"],
+      speechLanguages: ["en"],
+      translationLanguagesLinked: true,
+      createdAt: new Date("2026-04-12T08:00:00.000Z"),
+      updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+      pausedAt: null,
+    });
+
+    await updateConversationChannelStatus({
+      conversationId: "conv-dm",
+      userId: "user-1",
+      status: "paused",
+    });
+
+    expect(mockChannelMemberUpdate).toHaveBeenCalledWith({
+      where: { channelId_userId: { channelId: "conv-dm", userId: "user-1" } },
+      data: expect.objectContaining({ status: "paused" }),
+    });
+    expect(mockUpdateConversation).not.toHaveBeenCalled();
   });
 
   it("writes a multi-member room's display language to the caller's own membership row", async () => {
@@ -704,7 +790,13 @@ describe("app-conversations", () => {
       data: expect.objectContaining({ sequenceNumber: 1 }),
     }));
     expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
-      data: [{ channelId: "conv-new", userId: "user-1", role: "owner" }],
+      data: [{
+        channelId: "conv-new",
+        userId: "user-1",
+        role: "owner",
+        status: "paused",
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+      }],
       skipDuplicates: true,
     });
   });
@@ -733,9 +825,27 @@ describe("app-conversations", () => {
 
     expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
       data: [
-        { channelId: "conv-new", userId: "user-1", role: "owner" },
-        { channelId: "conv-new", userId: "user-2", role: "member" },
-        { channelId: "conv-new", userId: "user-3", role: "member" },
+        {
+          channelId: "conv-new",
+          userId: "user-1",
+          role: "owner",
+          status: "paused",
+          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        },
+        {
+          channelId: "conv-new",
+          userId: "user-2",
+          role: "member",
+          status: "paused",
+          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        },
+        {
+          channelId: "conv-new",
+          userId: "user-3",
+          role: "member",
+          status: "paused",
+          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        },
       ],
       skipDuplicates: true,
     });
@@ -861,8 +971,20 @@ describe("app-conversations", () => {
 
       expect(mockChannelMemberCreateMany).toHaveBeenCalledWith({
         data: [
-          { channelId: "conv-new-dm", userId: "user-1", role: "owner" },
-          { channelId: "conv-new-dm", userId: "user-2", role: "member" },
+          {
+            channelId: "conv-new-dm",
+            userId: "user-1",
+            role: "owner",
+            status: "paused",
+            pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+          },
+          {
+            channelId: "conv-new-dm",
+            userId: "user-2",
+            role: "member",
+            status: "paused",
+            pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+          },
         ],
         skipDuplicates: true,
       });
@@ -875,6 +997,28 @@ describe("app-conversations", () => {
         userId: "user-1",
         targetUserId: "ghost",
       })).rejects.toThrow("target_user_not_found");
+    });
+
+    it("rejects starting a conversation with a user blocked in either direction", async () => {
+      mockUserFindUnique.mockResolvedValue({ id: "user-2" });
+      mockUserBlockFindFirst.mockResolvedValue({ blockerId: "user-2" });
+
+      await expect(findOrCreateDirectConversation({
+        userId: "user-1",
+        targetUserId: "user-2",
+      })).rejects.toThrow("target_user_blocked");
+
+      expect(mockUserBlockFindFirst).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { blockerId: "user-1", blockedId: "user-2" },
+            { blockerId: "user-2", blockedId: "user-1" },
+          ],
+        },
+        select: { blockerId: true },
+      });
+      expect(mockFindConversationFirst).not.toHaveBeenCalled();
+      expect(mockCreateConversation).not.toHaveBeenCalled();
     });
 
     it("rejects messaging yourself", async () => {
