@@ -668,6 +668,13 @@ type NativeNavigationStateCommand = {
     canGoBack?: boolean;
     canGoForward?: boolean;
     url?: string;
+    // Full-screen overlays (e.g. the profile screen) that render on top of a
+    // conversation room without changing the URL need to temporarily disable
+    // iOS's screen-edge swipe-back gesture themselves — otherwise a tap near
+    // the left edge (where another member's chat-bubble avatar sits) can be
+    // captured by WKWebView's own edge-pan recognizer instead, popping the
+    // room's back-forward list and silently dismissing the overlay.
+    suppressEdgeSwipe?: boolean;
   };
 };
 
@@ -1747,6 +1754,7 @@ function AppInner(): React.JSX.Element {
   ));
   const [canWebViewGoBack, setCanWebViewGoBack] = useState(false);
   const [canWebViewGoForward, setCanWebViewGoForward] = useState(false);
+  const [isEdgeSwipeSuppressedByWeb, setIsEdgeSwipeSuppressedByWeb] = useState(false);
   const [isNativeMenuOverlayOpen, setIsNativeMenuOverlayOpen] = useState(false);
   const [qrScannerRequest, setQrScannerRequest] = useState<NativeQrScannerRequest | null>(null);
   const canRenderNativeBanner = versionGate.status === 'ready';
@@ -2797,6 +2805,9 @@ function AppInner(): React.JSX.Element {
       if (typeof parsed.payload?.canGoForward === 'boolean') {
         setCanWebViewGoForward(parsed.payload.canGoForward);
       }
+      if (typeof parsed.payload?.suppressEdgeSwipe === 'boolean') {
+        setIsEdgeSwipeSuppressedByWeb(parsed.payload.suppressEdgeSwipe);
+      }
       prepareBannerZoneTransition(url);
       updateSafeAreaPalette(url);
       return;
@@ -3287,7 +3298,7 @@ function AppInner(): React.JSX.Element {
             automaticallyAdjustContentInsets={false}
             contentInsetAdjustmentBehavior="never"
             injectedJavaScriptBeforeContentLoaded={nativeQaBridgeBootstrapScript}
-            allowsBackForwardNavigationGestures={shouldEnableIosWebViewBackForwardNavigation({
+            allowsBackForwardNavigationGestures={!isEdgeSwipeSuppressedByWeb && shouldEnableIosWebViewBackForwardNavigation({
               isIosPlatform: Platform.OS === 'ios',
               canGoBack: canWebViewGoBack,
               canGoForward: canWebViewGoForward,

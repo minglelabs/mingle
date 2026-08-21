@@ -233,14 +233,25 @@ export default function PublicUserProfileScreen({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      window.ReactNativeWebView?.postMessage(JSON.stringify({
-        type: "native_navigation_state",
-        payload: { canGoBack: window.history.length > 1, url: window.location.href },
-      }));
-    } catch {
-      // Keep browser navigation available when the native bridge is unavailable.
-    }
+    // This screen overlays the active room without changing the URL, so it
+    // must tell native to disable its own edge-swipe-back gesture for as
+    // long as it's mounted. Otherwise a tap near the left edge (where a
+    // shared-room peer's chat-bubble avatar sits, which is what opens this
+    // screen) can be captured by WKWebView's edge-pan recognizer instead of
+    // the tap handler, popping the room's back-forward list and silently
+    // dismissing this screen right after it opens.
+    const postNavigationState = (suppressEdgeSwipe: boolean) => {
+      try {
+        window.ReactNativeWebView?.postMessage(JSON.stringify({
+          type: "native_navigation_state",
+          payload: { canGoBack: window.history.length > 1, url: window.location.href, suppressEdgeSwipe },
+        }));
+      } catch {
+        // Keep browser navigation available when the native bridge is unavailable.
+      }
+    };
+    postNavigationState(true);
+    return () => postNavigationState(false);
   }, []);
 
   const navigateBack = useCallback(() => {
