@@ -53,6 +53,8 @@ type MingleHomeProps = {
   sessionKeyOverride?: string;
   storageNamespace?: string;
   initialSelectedLanguages?: string[];
+  initialOwnSelectedLanguages?: string[];
+  selectedLanguagesAttribution?: Record<string, string[]>;
   initialSpeechLanguages?: string[];
   initialTranslationLanguagesLinked?: boolean;
   initialDefaultDisplayLanguage?: string | null;
@@ -1847,6 +1849,8 @@ const MingleHome = forwardRef<MingleHomeRef, MingleHomeProps>(function MingleHom
           sessionKeyOverride={props.sessionKeyOverride}
           storageNamespace={props.storageNamespace}
           initialSelectedLanguages={props.initialSelectedLanguages}
+          initialOwnSelectedLanguages={props.initialOwnSelectedLanguages}
+          selectedLanguagesAttribution={props.selectedLanguagesAttribution}
           initialSpeechLanguages={props.initialSpeechLanguages}
           initialTranslationLanguagesLinked={props.initialTranslationLanguagesLinked}
           initialDefaultDisplayLanguage={props.initialDefaultDisplayLanguage}

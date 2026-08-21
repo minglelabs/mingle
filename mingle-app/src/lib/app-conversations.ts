@@ -27,6 +27,14 @@ export type ConversationChannelSummary = {
   isMultiMember: boolean;
   messageCount?: number;
   selectedLanguages?: string[];
+  // language code -> ids of the members who picked it. Only populated for
+  // multi-member rooms; empty for solo rooms (nothing to attribute).
+  selectedLanguagesAttribution?: Record<string, string[]>;
+  // The caller's OWN selected languages, distinct from `selectedLanguages`
+  // (the room union) above once a room has 2+ members — this is what a tap
+  // on the language picker should add/remove from, and what gets PATCHed
+  // back. Solo rooms: identical to `selectedLanguages`.
+  viewerSelectedLanguages?: string[];
   speechLanguages?: string[];
   translationLanguagesLinked?: boolean;
   defaultDisplayLanguage?: string | null;
@@ -155,6 +163,7 @@ type ChannelMemberProfile = {
   imageCropX: number | null;
   imageCropY: number | null;
   displayLanguage: string | null;
+  selectedLanguages: string[];
   status: string;
   pausedAt: Date | null;
 };
@@ -173,6 +182,7 @@ async function listChannelMembersByChannelId(
       channelId: true,
       userId: true,
       displayLanguage: true,
+      selectedLanguages: true,
       status: true,
       pausedAt: true,
       user: {
@@ -200,6 +210,7 @@ async function listChannelMembersByChannelId(
       imageCropX: row.user.imageCropX,
       imageCropY: row.user.imageCropY,
       displayLanguage: row.displayLanguage,
+      selectedLanguages: row.selectedLanguages,
       status: row.status,
       pausedAt: row.pausedAt,
     });
@@ -238,6 +249,66 @@ function resolveViewerFacingDisplayLanguage(
   if (!viewerUserId || !members || members.length < 2) return channelWideValue;
   const viewerMember = members.find((member) => member.userId === viewerUserId);
   return viewerMember?.displayLanguage?.trim() || channelWideValue;
+}
+
+// Once a room has 2+ real members, one person's language selection
+// shouldn't hide another member's still-wanted language from the shared
+// picker — the picker shows the UNION of everyone's own selectedLanguages,
+// each row attributed to whoever picked it. A member who hasn't set their
+// own selection yet (e.g. right after the multi-member transition) falls
+// back to the channel-wide list so they don't silently contribute nothing.
+// Solo rooms (0-1 members) keep the channel-wide list as-is, no attribution.
+function resolveRoomLanguageUnion(
+  channelWideSelectedLanguages: string[],
+  members: ChannelMemberProfile[] | undefined,
+): { languages: string[]; attribution: Record<string, string[]> } {
+  if (!members || members.length < 2) {
+    return { languages: [...channelWideSelectedLanguages], attribution: {} };
+  }
+
+  const attribution: Record<string, string[]> = {};
+  const languageOrder: string[] = [];
+  for (const member of members) {
+    // A member who has never opened the language picker contributes nothing —
+    // NOT the channel-wide value. Falling back to channel-wide here would
+    // make any language in that stale field stick forever: every other
+    // member's removal would still find this untouched member "still wanting"
+    // it, since they'd be attributed to a language they never actually
+    // picked. The channel's own value is only the room's *starting* value,
+    // mirrored onto the owner's row at creation (see
+    // createConversationChannelForUser) — it is not an ongoing fallback.
+    for (const language of member.selectedLanguages) {
+      if (!attribution[language]) {
+        attribution[language] = [];
+        languageOrder.push(language);
+      }
+      attribution[language].push(member.userId);
+    }
+  }
+
+  return { languages: languageOrder, attribution };
+}
+
+// The picker's checked state and translation targets read the room UNION
+// (resolveRoomLanguageUnion above), but deciding what a tap on a language row
+// should DO — add or remove — has to read the caller's OWN picks, not the
+// union: tapping a language that's only checked because another member
+// picked it should add the caller as a co-picker, never remove it from the
+// room. Solo rooms (0-1 members) have no distinction — own is the same list
+// as the channel-wide value.
+function resolveViewerOwnSelectedLanguages(
+  channelWideValue: string[],
+  members: ChannelMemberProfile[] | undefined,
+  viewerUserId: string | null | undefined,
+): string[] {
+  if (!viewerUserId || !members || members.length < 2) return [...channelWideValue];
+  const viewerMember = members.find((member) => member.userId === viewerUserId);
+  // No fallback to the channel-wide value here: an empty own list means the
+  // viewer hasn't picked anything themselves (see resolveRoomLanguageUnion's
+  // comment for why inheriting channel-wide is wrong once a room has 2+
+  // members). A missing membership row shouldn't happen, but falls back
+  // defensively rather than throwing.
+  return viewerMember ? [...viewerMember.selectedLanguages] : [...channelWideValue];
 }
 
 // "One active room per account" is a per-person invariant, so once a room
@@ -324,8 +395,12 @@ function serializeConversationChannel(
   viewerFacingStatus?: string,
   viewerFacingPausedAt?: Date | null,
   isMultiMember?: boolean,
+  viewerFacingSelectedLanguages?: { languages: string[]; attribution: Record<string, string[]> },
+  viewerOwnSelectedLanguages?: string[],
 ): ConversationChannelSummary {
-  const selectedLanguages = [...record.selectedLanguages];
+  const selectedLanguages = viewerFacingSelectedLanguages
+    ? [...viewerFacingSelectedLanguages.languages]
+    : [...record.selectedLanguages];
   const speechLanguages = record.speechLanguages.length > 0
     ? [...record.speechLanguages]
     : [...selectedLanguages];
@@ -342,6 +417,8 @@ function serializeConversationChannel(
       ? { messageCount: normalizeConversationMessageCount(messageCount) }
       : {}),
     selectedLanguages,
+    selectedLanguagesAttribution: viewerFacingSelectedLanguages?.attribution ?? {},
+    viewerSelectedLanguages: viewerOwnSelectedLanguages ? [...viewerOwnSelectedLanguages] : selectedLanguages,
     speechLanguages,
     translationLanguagesLinked,
     defaultDisplayLanguage: viewerFacingDisplayLanguage !== undefined
@@ -505,6 +582,8 @@ async function serializeConversationChannelWithPreview(
     resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
     resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
     (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
+    resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id)),
+    resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId),
   );
 }
 
@@ -547,6 +626,8 @@ async function listConversationChannelsForMember(
       resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
       resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
       (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
+      resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id)),
+      resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId),
     ));
   }
 
@@ -572,6 +653,8 @@ async function listConversationChannelsForMember(
         resolveViewerFacingStatus(record.status, membersByChannelId.get(record.id), viewerUserId),
         resolveViewerFacingPausedAt(record.pausedAt, membersByChannelId.get(record.id), viewerUserId),
         (membersByChannelId.get(record.id)?.length ?? 0) >= 2,
+        resolveRoomLanguageUnion(record.selectedLanguages, membersByChannelId.get(record.id)),
+        resolveViewerOwnSelectedLanguages(record.selectedLanguages, membersByChannelId.get(record.id), viewerUserId),
       );
     })
     .sort((left, right) => {
@@ -677,10 +760,21 @@ export async function createConversationChannelForUser(
         // Mirror the channel's own just-created status/pausedAt onto every
         // member row, rather than relying on the column's schema default —
         // a shared room's members must start out paused exactly like a solo
-        // room does, until someone explicitly activates it.
+        // room does, until someone explicitly activates it. The owner's row
+        // also mirrors the channel's starting selectedLanguages so the room's
+        // union isn't empty the moment it becomes multi-member — invitees
+        // start with no picks of their own (schema default []) until they
+        // open the language screen themselves; see resolveRoomLanguageUnion.
         await tx.appConversationChannelMember.createMany({
           data: [
-            { channelId: created.id, userId, role: "owner", status: created.status, pausedAt: created.pausedAt },
+            {
+              channelId: created.id,
+              userId,
+              role: "owner",
+              status: created.status,
+              pausedAt: created.pausedAt,
+              selectedLanguages: resolvedSelectedLanguages,
+            },
             ...inviteeUserIds.map((inviteeUserId) => ({
               channelId: created.id,
               userId: inviteeUserId,
@@ -867,14 +961,35 @@ export async function updateConversationChannelSelectedLanguages(args: {
     return null;
   }
 
-  const record = await prisma.appConversationChannel.update({
-    where: { id: args.conversationId },
-    data: {
-      selectedLanguages: normalizedSelectedLanguages,
-      translationLanguagesLinked: false,
-    },
-    select: conversationChannelSelect,
-  });
+  const membersByChannelId = await listChannelMembersByChannelId([args.conversationId]);
+  const isMultiMember = (membersByChannelId.get(args.conversationId)?.length ?? 0) >= 2;
+
+  // Once there's more than one real member, the picker shows the union of
+  // everyone's own selection (see resolveRoomLanguageUnion) — a single
+  // channel-wide write would blow away whatever the other members picked, so
+  // this becomes the caller's own membership preference instead. Solo rooms
+  // keep writing the channel-wide field as before.
+  let record: ConversationChannelRecord;
+  if (isMultiMember) {
+    await prisma.appConversationChannelMember.update({
+      where: { channelId_userId: { channelId: args.conversationId, userId: args.userId } },
+      data: { selectedLanguages: normalizedSelectedLanguages },
+    });
+    record = await prisma.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: { translationLanguagesLinked: false },
+      select: conversationChannelSelect,
+    });
+  } else {
+    record = await prisma.appConversationChannel.update({
+      where: { id: args.conversationId },
+      data: {
+        selectedLanguages: normalizedSelectedLanguages,
+        translationLanguagesLinked: false,
+      },
+      select: conversationChannelSelect,
+    });
+  }
 
   return serializeConversationChannelWithPreview(record, args.userId);
 }
@@ -1071,6 +1186,10 @@ export type ConversationMemberSummary = {
   imageCropScale: number | null;
   imageCropX: number | null;
   imageCropY: number | null;
+  // This member's own selected languages for this room (not the union) — the
+  // client derives the union + per-language attribution shown in the picker
+  // from these per-member lists, avoiding a second endpoint for the same data.
+  selectedLanguages: string[];
 };
 
 // Membership-gated: returns null (not an empty list) when the caller isn't a
@@ -1105,6 +1224,7 @@ export async function listConversationMembersForUser(args: {
     imageCropScale: member.imageCropScale,
     imageCropX: member.imageCropX,
     imageCropY: member.imageCropY,
+    selectedLanguages: member.selectedLanguages,
   }));
 }
 
@@ -1278,6 +1398,12 @@ export async function getConversationHydrationStateForUser(args: {
         args.userId,
       ),
       isMultiMember,
+      resolveRoomLanguageUnion(conversationRecord.selectedLanguages, membersByChannelId.get(conversationRecord.id)),
+      resolveViewerOwnSelectedLanguages(
+        conversationRecord.selectedLanguages,
+        membersByChannelId.get(conversationRecord.id),
+        args.userId,
+      ),
     ),
     usageSec: Math.max(0, latestUsageEvent?.usageSec ?? 0),
     messageCount: Number.isFinite(totalMessageCount) ? Math.max(0, totalMessageCount) : 0,

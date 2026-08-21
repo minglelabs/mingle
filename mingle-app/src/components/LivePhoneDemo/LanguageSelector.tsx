@@ -28,6 +28,10 @@ import {
 } from "@/components/LivePhoneDemo/language-selector.logic";
 import type { LivePhoneDemoRoomManagementCopy } from "@/components/LivePhoneDemo/live-phone-demo.room-management-copy";
 import LanguageFlag from "@/components/language-flag";
+import LanguageRowAvatarStack, {
+  type LanguageRowAttributionMember,
+} from "@/components/LivePhoneDemo/language-row-avatar-stack";
+import { buildClientApiPath } from "@/lib/api-contract";
 
 const MAX_LANGS = 5;
 const MIN_LANGS = 1;
@@ -55,6 +59,37 @@ interface LanguageSelectorProps {
   copy: LivePhoneDemoRoomManagementCopy;
   disabled?: boolean;
   triggerRef?: RefObject<HTMLElement | null>;
+  // Only present for multi-member rooms — drives the small per-row avatar
+  // attribution ("who picked this"). Solo rooms pass nothing and no avatar
+  // UI renders.
+  conversationId?: string;
+  selectedLanguagesAttribution?: Record<string, string[]>;
+  // The viewer's OWN picks, as opposed to `selectedLanguages` (the room
+  // union). Only a language the viewer picked themselves renders as
+  // "selected" (amber); a language that's only in the union because another
+  // member picked it renders in a distinct, non-amber state instead, so
+  // amber always means "I chose this." Solo rooms pass nothing — own and
+  // union are the same list there, so it falls back to `selectedLanguages`.
+  viewerSelectedLanguages?: string[];
+}
+
+function isConversationMemberRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseLanguageRowAttributionMember(value: unknown): LanguageRowAttributionMember | null {
+  if (!isConversationMemberRecord(value) || typeof value.userId !== "string" || !value.userId.trim()) {
+    return null;
+  }
+  const finiteOrNull = (input: unknown) => (typeof input === "number" && Number.isFinite(input) ? input : null);
+  return {
+    userId: value.userId.trim(),
+    image: typeof value.image === "string" && value.image.trim() ? value.image.trim() : null,
+    imageCropScale: finiteOrNull(value.imageCropScale),
+    imageCropX: finiteOrNull(value.imageCropX),
+    imageCropY: finiteOrNull(value.imageCropY),
+    name: typeof value.name === "string" && value.name.trim() ? value.name.trim() : null,
+  };
 }
 
 export default function LanguageSelector({
@@ -66,6 +101,9 @@ export default function LanguageSelector({
   copy,
   disabled,
   triggerRef,
+  conversationId,
+  selectedLanguagesAttribution,
+  viewerSelectedLanguages,
 }: LanguageSelectorProps) {
   const titleId = useId();
   const recentStripRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +112,12 @@ export default function LanguageSelector({
   const searchFieldRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const selectedLanguagesRef = useRef<string[]>(selectedLanguages);
+  const [attributionMembersById, setAttributionMembersById] = useState<
+    Map<string, LanguageRowAttributionMember>
+  >(new Map());
+  const hasAttribution = Boolean(
+    selectedLanguagesAttribution && Object.keys(selectedLanguagesAttribution).length > 0,
+  );
   const [query, setQuery] = useState("");
   const [recentTranslationLanguageCodes, setRecentTranslationLanguageCodes] = useState<string[]>(() =>
     readRecentLanguageCodes(RECENT_LANGUAGE_CODES_STORAGE_KEY),
@@ -108,6 +152,7 @@ export default function LanguageSelector({
     [localeInfo.locale],
   );
   const activeSelectedLanguages = selectedLanguages;
+  const activeOwnSelectedLanguages = viewerSelectedLanguages ?? selectedLanguages;
   const recentLanguageCodes = recentTranslationLanguageCodes;
   const recentLanguageItems = useMemo(() => {
     const itemMap = new Map<string, (typeof languageItems)[number]>(
@@ -178,6 +223,40 @@ export default function LanguageSelector({
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !hasAttribution || !conversationId) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          buildClientApiPath(`/conversations/${conversationId}/members`),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("language_selector_members_load_failed");
+        const payload: unknown = await response.json();
+        const rawMembers = isConversationMemberRecord(payload) && Array.isArray(payload.members)
+          ? payload.members
+          : [];
+        if (cancelled) return;
+        const nextMembersById = new Map<string, LanguageRowAttributionMember>();
+        for (const rawMember of rawMembers) {
+          const member = parseLanguageRowAttributionMember(rawMember);
+          if (member) nextMembersById.set(member.userId, member);
+        }
+        setAttributionMembersById(nextMembersById);
+      } catch {
+        if (!cancelled) setAttributionMembersById(new Map());
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, hasAttribution, isOpen]);
 
   useEffect(() => {
     setSortMode(defaultSortMode);
@@ -274,6 +353,11 @@ export default function LanguageSelector({
 
   const renderLanguageOption = (lang: (typeof languageItems)[number]) => {
     const isSelected = activeSelectedLanguages.includes(lang.code);
+    const isOwnSelected = activeOwnSelectedLanguages.includes(lang.code);
+    // Amber means "I picked this." A language only in the union because
+    // another member picked it gets a distinct sky-blue state instead, never
+    // amber — see the `viewerSelectedLanguages` prop doc.
+    const isOthersOnlySelected = isSelected && !isOwnSelected;
     const isDisabled =
       disabled
       || (!isSelected && atMax)
@@ -286,9 +370,11 @@ export default function LanguageSelector({
         onClick={() => handleToggleRequest(lang.code)}
         disabled={isDisabled}
         className={`flex w-full items-center gap-4 rounded-[1.6rem] border px-4 py-3 text-left transition ${
-          isSelected
+          isOwnSelected
             ? "border-amber-400 bg-amber-50/95 shadow-[0_16px_32px_rgba(245,158,11,0.12)]"
-            : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
+            : isOthersOnlySelected
+              ? "border-sky-300 bg-sky-50/95 shadow-[0_16px_32px_rgba(14,165,233,0.1)]"
+              : "border-[#ece6db] bg-white shadow-[0_12px_30px_rgba(15,23,42,0.05)]"
         } ${
           isDisabled && !isSelected
             ? "cursor-not-allowed opacity-45"
@@ -301,9 +387,11 @@ export default function LanguageSelector({
       >
         <span
           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border shadow-sm ${
-            isSelected
+            isOwnSelected
               ? "border-amber-300 bg-white shadow-[0_6px_14px_rgba(245,158,11,0.08)]"
-              : "border-[#e5dfd5] bg-[#faf7f1]"
+              : isOthersOnlySelected
+                ? "border-sky-200 bg-white shadow-[0_6px_14px_rgba(14,165,233,0.08)]"
+                : "border-[#e5dfd5] bg-[#faf7f1]"
           }`}
         >
           <LanguageFlag language={lang.code} className="text-[2rem] leading-none" />
@@ -316,11 +404,19 @@ export default function LanguageSelector({
             {lang.secondaryLabel}
           </span>
         </span>
+        {hasAttribution ? (
+          <LanguageRowAvatarStack
+            memberIds={selectedLanguagesAttribution?.[lang.code] ?? []}
+            membersById={attributionMembersById}
+          />
+        ) : null}
         <span
           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
-            isSelected
+            isOwnSelected
               ? "border-amber-500 bg-amber-500 text-white"
-              : "border-slate-300 text-transparent"
+              : isOthersOnlySelected
+                ? "border-sky-500 bg-sky-500 text-white"
+                : "border-slate-300 text-transparent"
           }`}
         >
           <svg
@@ -403,6 +499,8 @@ export default function LanguageSelector({
                 <div className="flex min-w-max items-center gap-2 px-1">
                   {recentLanguageItems.map((lang) => {
                     const isSelected = activeSelectedLanguages.includes(lang.code);
+                    const isOwnSelected = activeOwnSelectedLanguages.includes(lang.code);
+                    const isOthersOnlySelected = isSelected && !isOwnSelected;
                     const isDisabled =
                       disabled
                       || (!isSelected && atMax)
@@ -421,9 +519,11 @@ export default function LanguageSelector({
                         aria-label={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         title={`${lang.localizedName} · ${lang.secondaryLabel}`}
                         className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full transition ${
-                          isSelected
+                          isOwnSelected
                             ? "border-2 border-amber-400 bg-white shadow-[0_14px_28px_rgba(245,158,11,0.14)]"
-                            : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
+                            : isOthersOnlySelected
+                              ? "border-2 border-sky-300 bg-white shadow-[0_14px_28px_rgba(14,165,233,0.12)]"
+                              : "border border-[#e4ded3] bg-[#f5f2ec] shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]"
                         } ${
                           isDisabled
                             ? "cursor-not-allowed opacity-50"
