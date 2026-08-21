@@ -102,9 +102,7 @@ import {
   isAbortLikeMutationError,
   logConversationMutationFailure,
 } from "@/components/conversation-list.diagnostics";
-import NotificationPanel from "@/components/notification-panel";
 import NativePushRegistration from "@/components/native-push-registration";
-import PublicUserProfileScreen from "@/components/public-user-profile-screen";
 import {
   readConversationListCache,
   readConversationListMemoryCache,
@@ -127,7 +125,7 @@ import {
   shouldExposeNativeQaBridge,
 } from "@/lib/native-qa-bridge";
 import { takeNativeRemountRestoreConversation } from "@/lib/native-remount-restore";
-import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX } from "@/components/bottom-tab-bar";
+import BottomTabBar, { BOTTOM_TAB_BAR_HEIGHT_PX, buildNativeAwareTabPath } from "@/components/bottom-tab-bar";
 import LanguageFlag from "@/components/language-flag";
 import type { MingleHomeRef } from "@/components/mingle-home";
 import type { LatestUtterancePayload } from "@/components/LivePhoneDemo/LivePhoneDemo";
@@ -142,8 +140,6 @@ const RECENT_SEARCHES_SYNC_EVENT = "mingle:conversation-searches-sync";
 const SEARCH_OVERLAY_HISTORY_CLOSE_ANIMATE_FLAG = "__MINGLE_SEARCH_HISTORY_CLOSE_ANIMATE__";
 const NATIVE_STT_EVENT = "mingle:native-stt";
 const LEGACY_SINGLE_ROOM_MIGRATION_MARKER_KEY_PREFIX = "mingle:legacy-single-room-migrated";
-const NOTIFICATION_PROFILE_HISTORY_KEY = "__MINGLE_NOTIFICATION_PROFILE__";
-const CONVERSATION_PROFILE_HISTORY_KEY = "__MINGLE_CONVERSATION_PROFILE__";
 const EMPTY_RECENT_SEARCHES: string[] = [];
 const CONVERSATION_QUERY_KEY = "conversation";
 const LEGACY_SINGLE_ROOM_UTTERANCES_KEY = "mingle_demo_utterances";
@@ -1680,9 +1676,6 @@ export default function ConversationList({
   );
   const [showSearch, setShowSearch] = useState(false);
   const [searchTransitionMode, setSearchTransitionMode] = useState<SearchOverlayTransitionMode>("animate");
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationProfileId, setNotificationProfileId] = useState<string | null>(null);
-  const [conversationProfileId, setConversationProfileId] = useState<string | null>(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isCreateChoiceModalOpen, setIsCreateChoiceModalOpen] = useState(false);
@@ -1811,8 +1804,6 @@ export default function ConversationList({
   const [deleteDialogConversationId, setDeleteDialogConversationId] = useState<string | null>(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const searchOverlayRef = useRef<SearchOverlayHandle>(null);
-  const notificationProfileIdRef = useRef<string | null>(null);
-  const conversationProfileIdRef = useRef<string | null>(null);
   const conversationListScrollRef = useRef<HTMLDivElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const conversationRoomRefs = useRef(new Map<string, MingleHomeRef | null>());
@@ -2856,104 +2847,27 @@ export default function ConversationList({
     openSearchOverlay({ transitionMode: "animate", syncHistory: "push" });
   }, [openSearchOverlay]);
 
-  const closeNotifications = useCallback(() => {
-    setShowNotifications(false);
-  }, []);
-
-  const openNotificationProfile = useCallback((userId: string) => {
-    postNativeBannerZone("hidden");
-    notificationProfileIdRef.current = userId;
-    if (typeof window !== "undefined") {
-      const currentState = window.history.state;
-      const nextState = currentState && typeof currentState === "object"
-        ? { ...currentState, [NOTIFICATION_PROFILE_HISTORY_KEY]: userId }
-        : { [NOTIFICATION_PROFILE_HISTORY_KEY]: userId };
-      window.history.pushState(nextState, "", window.location.href);
-    }
-    setShowNotifications(true);
-    setNotificationProfileId(userId);
-  }, []);
-
   const openConversationProfile = useCallback((userId: string) => {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) return;
 
     postNativeBannerZone("hidden");
-    conversationProfileIdRef.current = normalizedUserId;
-    if (typeof window !== "undefined") {
-      const currentState = window.history.state;
-      const nextState = currentState && typeof currentState === "object"
-        ? { ...currentState, [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId }
-        : { [CONVERSATION_PROFILE_HISTORY_KEY]: normalizedUserId };
-      window.history.pushState(nextState, "", window.location.href);
-    }
-    setConversationProfileId(normalizedUserId);
-  }, []);
+    const searchParams = typeof window === "undefined"
+      ? new URLSearchParams()
+      : new URLSearchParams(window.location.search);
+    router.push(buildNativeAwareTabPath(
+      `/${locale}/users/${encodeURIComponent(normalizedUserId)}`,
+      searchParams,
+    ));
+  }, [locale, router]);
 
-  const closeNotificationProfile = useCallback(() => {
-    postNativeBannerZone("list");
-    if (
-      typeof window !== "undefined"
-      && window.history.state
-      && typeof window.history.state === "object"
-      && NOTIFICATION_PROFILE_HISTORY_KEY in window.history.state
-    ) {
-      window.history.back();
-      return;
-    }
-    notificationProfileIdRef.current = null;
-    setNotificationProfileId(null);
-  }, []);
-
-  const closeConversationProfile = useCallback(() => {
+  const openNotifications = useCallback(() => {
     postNativeBannerZone("hidden");
-    if (
-      typeof window !== "undefined"
-      && window.history.state
-      && typeof window.history.state === "object"
-      && CONVERSATION_PROFILE_HISTORY_KEY in window.history.state
-    ) {
-      window.history.back();
-      return;
-    }
-    conversationProfileIdRef.current = null;
-    setConversationProfileId(null);
-  }, []);
-
-  useEffect(() => {
-    notificationProfileIdRef.current = notificationProfileId;
-  }, [notificationProfileId]);
-
-  useEffect(() => {
-    conversationProfileIdRef.current = conversationProfileId;
-  }, [conversationProfileId]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleNotificationProfilePopState = () => {
-      if (!notificationProfileIdRef.current) return;
-      postNativeBannerZone("list");
-      setNotificationProfileId(null);
-    };
-
-    window.addEventListener("popstate", handleNotificationProfilePopState);
-    return () => window.removeEventListener("popstate", handleNotificationProfilePopState);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleConversationProfilePopState = () => {
-      if (!conversationProfileIdRef.current) return;
-      postNativeBannerZone("hidden");
-      conversationProfileIdRef.current = null;
-      setConversationProfileId(null);
-    };
-
-    window.addEventListener("popstate", handleConversationProfilePopState);
-    return () => window.removeEventListener("popstate", handleConversationProfilePopState);
-  }, []);
+    const searchParams = typeof window === "undefined"
+      ? new URLSearchParams()
+      : new URLSearchParams(window.location.search);
+    router.push(buildNativeAwareTabPath(`/${locale}/notifications`, searchParams));
+  }, [locale, router]);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -3011,6 +2925,32 @@ export default function ConversationList({
   }, [activeConversation]);
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(buildClientApiPath("/notifications?limit=1"), { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("notification_count_load_failed");
+        return response.json() as Promise<{ unreadCount?: unknown }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const nextUnreadCount = typeof payload.unreadCount === "number" ? payload.unreadCount : 0;
+        setUnreadNotificationCount(Math.max(0, Math.floor(nextUnreadCount)));
+      })
+      .catch(() => {
+        if (!cancelled) setUnreadNotificationCount(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
 
     if (activeConversation) {
@@ -3046,7 +2986,6 @@ export default function ConversationList({
     setConversations([]);
     setConversationInterimPreviews({});
     setConversationLocalStats({});
-    setShowNotifications(false);
     setUnreadNotificationCount(0);
   }, [sessionStatus]);
 
@@ -3903,18 +3842,6 @@ export default function ConversationList({
   }, [activeConversation, closeConversationOverlay, isCreatingConversation]);
 
   useEffect(() => registerNativeBackHandler(() => {
-    if (conversationProfileId) {
-      closeConversationProfile();
-      return true;
-    }
-    if (notificationProfileId) {
-      closeNotificationProfile();
-      return true;
-    }
-    if (showNotifications) {
-      closeNotifications();
-      return true;
-    }
     if (showSearch && !activeConversation) {
       closeSearchOverlay({ transitionMode: "animate", syncHistory: "back" });
       return true;
@@ -3925,14 +3852,8 @@ export default function ConversationList({
   }, 5), [
     activeConversation,
     closeConversationOverlay,
-    closeConversationProfile,
-    closeNotifications,
-    closeNotificationProfile,
     closeSearchOverlay,
-    conversationProfileId,
     isCreatingConversation,
-    notificationProfileId,
-    showNotifications,
     showSearch,
   ]);
 
@@ -4442,35 +4363,6 @@ export default function ConversationList({
         />
       ) : null}
 
-      <NotificationPanel
-        open={showNotifications}
-        enabled={sessionStatus === "authenticated"}
-        locale={locale}
-        dictionary={dictionary}
-        nativeTopInsetPx={effectiveNativeTopInsetPx}
-        onClose={closeNotifications}
-        onOpenProfile={openNotificationProfile}
-        onUnreadCountChange={setUnreadNotificationCount}
-      />
-
-      {notificationProfileId ? (
-        <PublicUserProfileScreen
-          dictionary={dictionary}
-          locale={locale}
-          userId={notificationProfileId}
-          onClose={closeNotificationProfile}
-        />
-      ) : null}
-
-      {conversationProfileId ? (
-        <PublicUserProfileScreen
-          dictionary={dictionary}
-          locale={locale}
-          userId={conversationProfileId}
-          onClose={closeConversationProfile}
-        />
-      ) : null}
-
       <header
         className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4"
         style={{
@@ -4491,7 +4383,7 @@ export default function ConversationList({
           </button>
           <button
             type="button"
-            onClick={() => setShowNotifications(true)}
+            onClick={openNotifications}
             className="relative flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full p-3 transition active:bg-gray-100"
             aria-label={copy.notificationsButtonLabel ?? (locale === "ko" ? "알림" : "Notifications")}
           >

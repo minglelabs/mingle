@@ -5,19 +5,18 @@ import { getConversationDictionary } from "@/i18n/conversations";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { isLeftEdgeSwipeStart } from "@/lib/edge-swipe";
 import { formatHandle } from "@/lib/handles";
-import { AnimatePresence, motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
+import { motion, useAnimationControls, useDragControls, type PanInfo } from "framer-motion";
 import { ArrowLeft, Check, Loader2, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 type NotificationPanelProps = {
-  open: boolean;
   enabled: boolean;
   locale: AppLocale;
   dictionary: AppDictionary;
   nativeTopInsetPx?: number;
   onClose: () => void;
   onOpenProfile: (userId: string) => void;
-  onUnreadCountChange: (count: number) => void;
+  onUnreadCountChange?: (count: number) => void;
 };
 
 type NotificationRecord = {
@@ -154,7 +153,6 @@ function NotificationAvatar({
 }
 
 export default function NotificationPanel({
-  open,
   enabled,
   locale,
   dictionary,
@@ -186,7 +184,7 @@ export default function NotificationPanel({
   }, []);
 
   useEffect(() => {
-    if (!open || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
     isLeavingRef.current = false;
     const syncViewportWidth = () => setViewportWidth(Math.max(1, window.innerWidth));
     syncViewportWidth();
@@ -199,12 +197,12 @@ export default function NotificationPanel({
       window.cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", syncViewportWidth);
     };
-  }, [motionControls, open]);
+  }, [motionControls]);
 
   const updateUnreadCount = useCallback((nextCount: number) => {
     const normalizedCount = Math.max(0, Math.floor(nextCount));
     setUnreadCount(normalizedCount);
-    onUnreadCountChange(normalizedCount);
+    onUnreadCountChange?.(normalizedCount);
   }, [onUnreadCountChange]);
 
   const markAllNotificationsAsRead = useCallback(() => {
@@ -267,12 +265,6 @@ export default function NotificationPanel({
       return;
     }
 
-    void loadNotifications();
-    return () => abortControllerRef.current?.abort();
-  }, [enabled, loadNotifications, updateUnreadCount]);
-
-  useEffect(() => {
-    if (!open || !enabled) return;
     let isCurrent = true;
     void loadNotifications().then((result) => {
       if (!isCurrent || !result || result.unreadCount <= 0) return;
@@ -280,18 +272,17 @@ export default function NotificationPanel({
     });
     return () => {
       isCurrent = false;
+      abortControllerRef.current?.abort();
     };
-  }, [enabled, loadNotifications, markAllNotificationsAsRead, open]);
+  }, [enabled, loadNotifications, markAllNotificationsAsRead, updateUnreadCount]);
 
   useEffect(() => {
-    if (!open) return;
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+  }, [onClose]);
 
   const handlePanelPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const localClientX = event.clientX - event.currentTarget.getBoundingClientRect().left;
@@ -424,42 +415,25 @@ export default function NotificationPanel({
   };
 
   return (
-    <AnimatePresence initial={false}>
-      {open ? (
-        <motion.div
-          className="absolute inset-0 z-[100] overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-          role="presentation"
-        >
-          <button
-            type="button"
-            className="absolute inset-0 h-full w-full bg-slate-950/25"
-            onClick={onClose}
-            aria-label={copy.closeAction}
-          />
-          <motion.aside
-            initial={{ x: "100%" }}
-            animate={motionControls}
-            exit={{ x: "100%" }}
-            transition={PANEL_TRANSITION}
-            drag="x"
-            dragControls={dragControls}
-            dragDirectionLock
-            dragListener={false}
-            dragConstraints={{ left: 0, right: viewportWidth }}
-            dragElastic={0.08}
-            dragMomentum={false}
-            onPointerDown={handlePanelPointerDown}
-            onDragEnd={handleDragEnd}
-            className="absolute inset-y-0 right-0 flex w-full max-w-[430px] flex-col bg-white shadow-2xl"
-            style={{ touchAction: "pan-y" }}
-            role="dialog"
-            aria-modal="true"
-            aria-label={copy.title}
-          >
+    <motion.main
+      initial={{ x: "100%" }}
+      animate={motionControls}
+      transition={PANEL_TRANSITION}
+      drag="x"
+      dragControls={dragControls}
+      dragDirectionLock
+      dragListener={false}
+      dragConstraints={{ left: 0, right: viewportWidth }}
+      dragElastic={0.08}
+      dragMomentum={false}
+      onPointerDown={handlePanelPointerDown}
+      onDragEnd={handleDragEnd}
+      className="fixed inset-0 z-[100] flex min-h-0 w-full flex-col bg-white text-slate-950 shadow-2xl"
+      style={{ touchAction: "pan-y" }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={copy.title}
+    >
             <header
               className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-4"
               style={{
@@ -524,9 +498,6 @@ export default function NotificationPanel({
                 </div>
               )}
             </div>
-          </motion.aside>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    </motion.main>
   );
 }
