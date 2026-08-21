@@ -1006,3 +1006,14 @@
 - Resolution: Reuse the existing `onOpenProfile` callback for both own and other identified member avatars. The profile screen selects `/profile` for the signed-in user and `/users/{id}` for another member; solo-room bubbles without a real account ID remain non-navigable generated speaker avatars.
 - Data contract: None. The existing member IDs and profile endpoints are sufficient.
 - Status: Implemented in-thread on 2026-08-21. Unit verification passed; Release and QA-bridge Debug builds both installed and launched on the connected iPhone. Appium still exposed only `NATIVE_APP`, so direct WebView interaction for this surface remains blocked by the local device automation environment.
+
+## 2026-08-21 - Keep the conversation room behind a profile route
+
+- Surface: The profile detail opened by tapping a participant avatar inside a conversation room.
+- Issue: A room restored by native STT could be visible while the browser history still pointed at the conversation list. Opening the profile route from that state left the list as the back target, so an iOS swipe-back dismissed the room instead of returning to it.
+- Resolution:
+  - Ensure the active conversation has a marked `conversation` history entry before pushing the profile route.
+  - Preserve the active conversation query on the nested profile URL so the return context is not discarded by the native-query path builder.
+  - Keep top-level tab navigation behavior unchanged; only nested profile navigation opts into conversation preservation.
+- Data contract: None. No database or API changes.
+- Testing notes: Verify the profile opens from a restored room and that the header back action and iOS edge-swipe both return to the same conversation room.

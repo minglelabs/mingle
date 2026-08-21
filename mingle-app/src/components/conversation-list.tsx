@@ -863,6 +863,50 @@ function replaceConversationOverlayUrl(
   }
 }
 
+function ensureConversationHistoryEntryForProfile(conversationId: string): void {
+  if (typeof window === "undefined") return;
+
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) return;
+
+  try {
+    const currentConversationId = readConversationIdFromLocation();
+    const nextUrl = buildConversationOverlayUrl(normalizedConversationId);
+    if (!nextUrl) return;
+
+    if (currentConversationId === normalizedConversationId) {
+      if (readConversationHistoryRouteFromState(window.history.state) === normalizedConversationId) {
+        return;
+      }
+
+      window.history.replaceState(
+        buildConversationHistoryState(normalizedConversationId, window.history.state),
+        "",
+        nextUrl,
+      );
+      notifyLocationSearchSync();
+      return;
+    }
+
+    // A room restored from native STT can be visible while the list URL is
+    // still the current history entry. Add the room entry before opening a
+    // profile route so iOS back/edge-swipe returns to the room instead of
+    // leaving the conversations tab entirely.
+    window.history.pushState(
+      buildConversationHistoryState(normalizedConversationId, window.history.state),
+      "",
+      nextUrl,
+    );
+    postConversationHistoryDebug("ensure-conversation-history-before-profile", {
+      conversationId: normalizedConversationId,
+      previousConversationId: currentConversationId,
+    });
+    notifyLocationSearchSync();
+  } catch {
+    // Keep profile navigation available when history is restricted.
+  }
+}
+
 function pushSearchOverlayHistoryState(): void {
   if (typeof window === "undefined") return;
 
@@ -2852,12 +2896,17 @@ export default function ConversationList({
     if (!normalizedUserId) return;
 
     postNativeBannerZone("hidden");
+    const activeConversationId = activeConversationRef.current?.id.trim() || "";
+    if (activeConversationId) {
+      ensureConversationHistoryEntryForProfile(activeConversationId);
+    }
     const searchParams = typeof window === "undefined"
       ? new URLSearchParams()
       : new URLSearchParams(window.location.search);
     router.push(buildNativeAwareTabPath(
       `/${locale}/users/${encodeURIComponent(normalizedUserId)}`,
       searchParams,
+      { preserveConversation: Boolean(activeConversationId) },
     ));
   }, [locale, router]);
 

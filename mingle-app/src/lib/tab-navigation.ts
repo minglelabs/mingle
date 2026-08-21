@@ -29,6 +29,7 @@ export function buildNativeAwareTabPath(
   pathname: string,
   searchParams: Pick<URLSearchParams, "getAll">,
   options?: {
+    preserveConversation?: boolean;
     skipConversationRestore?: boolean;
     tabRoot?: boolean;
   },
@@ -38,6 +39,12 @@ export function buildNativeAwareTabPath(
   for (const key of PRESERVED_NATIVE_QUERY_KEYS) {
     for (const value of searchParams.getAll(key)) {
       nextSearchParams.append(key, value);
+    }
+  }
+
+  if (options?.preserveConversation) {
+    for (const value of searchParams.getAll("conversation")) {
+      nextSearchParams.append("conversation", value);
     }
   }
 
