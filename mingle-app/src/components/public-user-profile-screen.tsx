@@ -3,6 +3,7 @@
 import type { AppDictionary, AppLocale } from "@/i18n";
 import { buildClientApiPath } from "@/lib/api-contract";
 import { formatHandle } from "@/lib/handles";
+import { registerNativeBackHandler } from "@/lib/native-back-handler";
 import { buildProfileImageTransform, type ProfileImageCropInput } from "@/lib/profile-image-crop";
 import ProfileImagePreview from "@/components/profile-image-preview";
 import ProfileLanguageFlagStack from "@/components/profile-language-flag-stack";
@@ -285,6 +286,12 @@ export default function PublicUserProfileScreen({
     void motionControls.start({ x: 0, transition: PROFILE_TRANSITION });
   }, [handleBack, motionControls, viewportWidth]);
 
+  useEffect(() => registerNativeBackHandler(() => {
+    if (!isMountedRef.current || isLeavingRef.current) return true;
+    void handleBack();
+    return true;
+  }, 20), [handleBack]);
+
   const handleToggleFollow = useCallback(async () => {
     if (isOwnProfile || !profile || isActionPending || profile.isBlocked) return;
     setIsActionPending(true);
@@ -404,11 +411,11 @@ export default function PublicUserProfileScreen({
     <motion.main
       initial={{ x: "100%" }}
       animate={motionControls}
-      drag="x"
-      dragConstraints={{ left: 0, right: viewportWidth }}
+      drag={suppressNativeEdgeSwipe ? "x" : false}
+      dragConstraints={suppressNativeEdgeSwipe ? { left: 0, right: viewportWidth } : undefined}
       dragElastic={0.08}
       dragMomentum={false}
-      onDragEnd={handleDragEnd}
+      onDragEnd={suppressNativeEdgeSwipe ? handleDragEnd : undefined}
       className="fixed inset-0 z-[110] flex min-h-0 w-full flex-col overflow-hidden bg-white text-slate-950"
       style={{ touchAction: "pan-y" }}
     >
