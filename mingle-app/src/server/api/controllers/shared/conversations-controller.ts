@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getAuthOptions } from "@/lib/auth-options";
 import {
   createConversationChannelForUser,
+  findExistingConversationWithExactMembers,
   findOrCreateDirectConversation,
   listConversationChannelsForExternalUserId,
   listConversationChannelsForUser,
@@ -106,6 +107,7 @@ export async function postConversationResponse(request: NextRequest) {
     speechLanguages?: unknown;
     translationLanguagesLinked?: unknown;
     inviteeUserIds?: unknown;
+    force?: unknown;
   } | null = null;
   try {
     body = await request.json();
@@ -138,12 +140,32 @@ export async function postConversationResponse(request: NextRequest) {
     return NextResponse.json({ error: "too_many_invitees" }, { status: 400 });
   }
 
+  const force = body?.force === true;
+
   const trackingHints = resolvedUser.tracking
     ? {
         externalUserId: resolvedUser.tracking.externalUserId,
         sessionKey: resolvedUser.tracking.sessionKey,
       }
     : resolvedUser.identity;
+
+  // Group-start flow only (inviteeUserIds.length > 0) — plain "start alone"
+  // always creates fresh, and a 1:1 "message this person" already reuses
+  // silently via findOrCreateDirectConversation. Here the client gets a
+  // choice instead: `force` lets the "create new anyway" button skip this
+  // check and always create a duplicate on purpose.
+  if (inviteeUserIds.length > 0 && !force) {
+    const existing = await findExistingConversationWithExactMembers({
+      userId: resolvedUser.userId,
+      otherUserIds: inviteeUserIds,
+    });
+    if (existing) {
+      const response = NextResponse.json({ conversation: existing, reused: true }, { status: 200 });
+      applyTrackingCookies(request, response, trackingHints);
+      return response;
+    }
+  }
+
   let conversation;
   try {
     conversation = await createConversationChannelForUser(resolvedUser.userId, {
@@ -161,7 +183,7 @@ export async function postConversationResponse(request: NextRequest) {
     console.error("[conversations] create_failed", error);
     return NextResponse.json({ error: "conversation_channel_create_conflict" }, { status: 409 });
   }
-  const response = NextResponse.json({ conversation }, { status: 201 });
+  const response = NextResponse.json({ conversation, reused: false }, { status: 201 });
   applyTrackingCookies(request, response, trackingHints);
   return response;
 }

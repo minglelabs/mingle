@@ -34,6 +34,10 @@ export type BaseAppDictionarySource = {
     inviteFriendsStartButtonLabel?: string;
     inviteFriendsMaxMembersReachedMessage?: string;
     inviteFriendsCreateErrorMessage?: string;
+    inviteFriendsExistingConversationTitle?: string;
+    inviteFriendsExistingConversationMessage?: string;
+    inviteFriendsCreateNewAction?: string;
+    inviteFriendsContinuePreviousAction?: string;
   };
   demo: {
     tapPlayToStart: string;

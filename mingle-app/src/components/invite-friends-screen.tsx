@@ -68,6 +68,7 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [capMessageVisible, setCapMessageVisible] = useState(false);
+  const [existingConversationId, setExistingConversationId] = useState<string | null>(null);
 
   const copy = useMemo(() => getConversationDictionary(locale, dictionary), [dictionary, locale]);
   const labels = useMemo(() => ({
@@ -120,30 +121,67 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
     });
   }, []);
 
+  const requestConversationStart = useCallback(async (force: boolean) => {
+    const response = await fetch(buildClientApiPath("/conversations"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locale,
+        inviteeUserIds: selectedUsers.map((user) => user.id),
+        force,
+      }),
+    });
+    if (!response.ok) throw new Error("group_conversation_create_failed");
+    const data = await response.json() as { conversation?: { id?: string }; reused?: boolean };
+    const conversationId = data.conversation?.id;
+    if (!conversationId) throw new Error("group_conversation_create_failed");
+    return { conversationId, reused: data.reused === true };
+  }, [locale, selectedUsers]);
+
+  const navigateToConversation = useCallback((conversationId: string) => {
+    router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversationId)}`);
+  }, [locale, router]);
+
+  // Same set of people already has a room together — offer a choice instead
+  // of silently reusing it (which would be confusing for a group, unlike
+  // the 1:1 "message this person" flow) or silently spawning a duplicate.
   const handleStartConversation = useCallback(async () => {
     if (isStarting || selectedUsers.length === 0) return;
     setIsStarting(true);
     setStartError(null);
     try {
-      const response = await fetch(buildClientApiPath("/conversations"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          locale,
-          inviteeUserIds: selectedUsers.map((user) => user.id),
-        }),
-      });
-      if (!response.ok) throw new Error("group_conversation_create_failed");
-      const data = await response.json() as { conversation?: { id?: string } };
-      const conversationId = data.conversation?.id;
-      if (!conversationId) throw new Error("group_conversation_create_failed");
-      router.push(`/${locale}/conversations?conversation=${encodeURIComponent(conversationId)}`);
+      const { conversationId, reused } = await requestConversationStart(false);
+      if (reused) {
+        setExistingConversationId(conversationId);
+        return;
+      }
+      navigateToConversation(conversationId);
     } catch {
       setStartError(copy.inviteFriendsCreateErrorMessage ?? null);
     } finally {
       setIsStarting(false);
     }
-  }, [copy.inviteFriendsCreateErrorMessage, isStarting, locale, router, selectedUsers]);
+  }, [copy.inviteFriendsCreateErrorMessage, isStarting, navigateToConversation, requestConversationStart, selectedUsers]);
+
+  const handleContinuePreviousConversation = useCallback(() => {
+    if (!existingConversationId) return;
+    navigateToConversation(existingConversationId);
+  }, [existingConversationId, navigateToConversation]);
+
+  const handleCreateNewDespiteExisting = useCallback(async () => {
+    if (isStarting) return;
+    setIsStarting(true);
+    setStartError(null);
+    try {
+      const { conversationId } = await requestConversationStart(true);
+      setExistingConversationId(null);
+      navigateToConversation(conversationId);
+    } catch {
+      setStartError(copy.inviteFriendsCreateErrorMessage ?? null);
+    } finally {
+      setIsStarting(false);
+    }
+  }, [copy.inviteFriendsCreateErrorMessage, isStarting, navigateToConversation, requestConversationStart]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -375,6 +413,61 @@ export default function InviteFriendsScreen({ dictionary, locale }: InviteFriend
           </button>
         </div>
       </motion.main>
+
+      {existingConversationId ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="absolute inset-0 z-[110] flex items-center justify-center bg-black/40 px-5"
+          onClick={() => {
+            if (isStarting) return;
+            setExistingConversationId(null);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy.inviteFriendsExistingConversationTitle}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-[19rem] rounded-2xl border border-gray-200 bg-white p-4 shadow-xl"
+          >
+            <p className="text-sm font-semibold text-gray-900">
+              {copy.inviteFriendsExistingConversationTitle}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              {copy.inviteFriendsExistingConversationMessage}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCreateNewDespiteExisting()}
+                disabled={isStarting}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {copy.inviteFriendsCreateNewAction}
+              </button>
+              <button
+                type="button"
+                onClick={handleContinuePreviousConversation}
+                disabled={isStarting}
+                autoFocus
+                className="inline-flex h-10 items-center justify-center rounded-lg text-sm font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundImage: "linear-gradient(90deg, #f59e0b 0%, #f97316 100%)" }}
+              >
+                {isStarting
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : copy.inviteFriendsContinuePreviousAction}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
     </div>
   );
 }

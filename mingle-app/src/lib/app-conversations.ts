@@ -1016,6 +1016,57 @@ export async function findOrCreateDirectConversation(args: {
   });
 }
 
+// Generalizes findOrCreateDirectConversation's exact-membership match to any
+// number of invitees, for the "invite friends" group-start flow — lets the
+// caller offer "continue in the previous room" instead of silently
+// spawning a duplicate when the exact same set of people already has a
+// room together. A superset or subset doesn't count as "the same" room.
+export async function findExistingConversationWithExactMembers(args: {
+  userId: string;
+  otherUserIds: string[];
+}): Promise<ConversationChannelSummary | null> {
+  const otherUserIds = [...new Set(args.otherUserIds.map((id) => id.trim()).filter((id) => id && id !== args.userId))];
+  if (otherUserIds.length === 0) return null;
+  const allUserIds = [args.userId, ...otherUserIds];
+
+  const materializedMatch = await prisma.appConversationChannel.findFirst({
+    where: {
+      ...buildVisibleConversationWhere(),
+      members: { some: { userId: args.userId } },
+      AND: [
+        ...otherUserIds.map((otherUserId) => ({ members: { some: { userId: otherUserId } } })),
+        { members: { none: { userId: { notIn: allUserIds } } } },
+      ],
+    },
+    select: conversationChannelSelect,
+  });
+  if (materializedMatch) {
+    return serializeConversationChannelWithPreview(materializedMatch, args.userId);
+  }
+
+  // Nobody's sent a first message yet — the owner is the only real member
+  // and everyone else is still in pendingInviteeUserIds (see that field's
+  // doc comment). Set membership on that array can't be expressed exactly
+  // in a Prisma where clause (order can differ between two invite
+  // attempts), so prefilter with hasEvery and confirm an exact-size match
+  // in application code.
+  const pendingCandidates = await prisma.appConversationChannel.findMany({
+    where: {
+      ...buildVisibleConversationWhere(),
+      ownerUserId: args.userId,
+      members: { none: { userId: { not: args.userId } } },
+      pendingInviteeUserIds: { hasEvery: otherUserIds },
+    },
+    select: conversationChannelSelect,
+    take: 20,
+  });
+  const pendingMatch = pendingCandidates.find(
+    (candidate) => candidate.pendingInviteeUserIds.length === otherUserIds.length,
+  );
+
+  return pendingMatch ? serializeConversationChannelWithPreview(pendingMatch, args.userId) : null;
+}
+
 // Turns any still-pending invitees on a channel into real members the moment
 // the owner's first message actually lands — see AppConversationChannel's
 // pendingInviteeUserIds doc comment for why this doesn't happen at invite

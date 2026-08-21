@@ -98,6 +98,7 @@ import {
   CONVERSATION_HYDRATION_MESSAGE_LIMIT,
   createConversationChannelForUser,
   deleteConversationChannel,
+  findExistingConversationWithExactMembers,
   findOrCreateDirectConversation,
   getConversationHydrationStateForUser,
   getConversationSessionKeyForMember,
@@ -1712,6 +1713,114 @@ describe("app-conversations", () => {
         targetUserId: "user-1",
       })).rejects.toThrow("invalid_target_user");
       expect(mockUserFindUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("findExistingConversationWithExactMembers", () => {
+    it("returns null immediately when there are no other user ids", async () => {
+      const result = await findExistingConversationWithExactMembers({ userId: "user-1", otherUserIds: [] });
+
+      expect(result).toBeNull();
+      expect(mockFindConversationFirst).not.toHaveBeenCalled();
+      expect(mockFindConversationMany).not.toHaveBeenCalled();
+    });
+
+    it("finds a room whose real members exactly match the requested set", async () => {
+      mockFindConversationFirst.mockResolvedValue({
+        id: "conv-group",
+        sequenceNumber: 1,
+        title: "Alice, Bob",
+        status: "paused",
+        sessionKey: "session-group",
+        selectedLanguages: ["en"],
+        speechLanguages: ["en"],
+        translationLanguagesLinked: true,
+        pendingInviteeUserIds: [],
+        createdAt: new Date("2026-04-12T08:00:00.000Z"),
+        updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+        pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+      });
+
+      const result = await findExistingConversationWithExactMembers({
+        userId: "user-1",
+        otherUserIds: ["user-2", "user-3"],
+      });
+
+      expect(result?.id).toBe("conv-group");
+      expect(mockFindConversationFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          members: { some: { userId: "user-1" } },
+          AND: [
+            { members: { some: { userId: "user-2" } } },
+            { members: { some: { userId: "user-3" } } },
+            { members: { none: { userId: { notIn: ["user-1", "user-2", "user-3"] } } } },
+          ],
+        }),
+      }));
+      expect(mockFindConversationMany).not.toHaveBeenCalled();
+    });
+
+    it("falls back to a still-pending invite match when nobody's sent a first message yet", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+      mockFindConversationMany.mockResolvedValue([
+        {
+          id: "conv-pending",
+          sequenceNumber: 1,
+          title: "Conversation (1)",
+          status: "paused",
+          sessionKey: "session-pending",
+          selectedLanguages: ["en"],
+          speechLanguages: ["en"],
+          translationLanguagesLinked: true,
+          pendingInviteeUserIds: ["user-3", "user-2"],
+          createdAt: new Date("2026-04-12T08:00:00.000Z"),
+          updatedAt: new Date("2026-04-12T08:00:00.000Z"),
+          pausedAt: new Date("2026-04-12T08:00:00.000Z"),
+        },
+      ]);
+
+      const result = await findExistingConversationWithExactMembers({
+        userId: "user-1",
+        otherUserIds: ["user-2", "user-3"],
+      });
+
+      expect(result?.id).toBe("conv-pending");
+      expect(mockFindConversationMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          ownerUserId: "user-1",
+          members: { none: { userId: { not: "user-1" } } },
+          pendingInviteeUserIds: { hasEvery: ["user-2", "user-3"] },
+        }),
+      }));
+    });
+
+    it("ignores a pending-invite candidate whose set is a superset of what's requested", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+      mockFindConversationMany.mockResolvedValue([
+        {
+          id: "conv-pending-superset",
+          pendingInviteeUserIds: ["user-2", "user-3", "user-4"],
+        },
+      ]);
+
+      const result = await findExistingConversationWithExactMembers({
+        userId: "user-1",
+        otherUserIds: ["user-2", "user-3"],
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when neither a materialized nor a pending match exists", async () => {
+      mockFindConversationFirst.mockResolvedValue(null);
+      mockFindConversationMany.mockResolvedValue([]);
+
+      const result = await findExistingConversationWithExactMembers({
+        userId: "user-1",
+        otherUserIds: ["user-2"],
+      });
+
+      expect(result).toBeNull();
     });
   });
 

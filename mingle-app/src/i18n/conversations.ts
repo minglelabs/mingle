@@ -56,6 +56,10 @@ const ENGLISH_CONVERSATION_DICTIONARY: ConversationDictionary = {
   inviteFriendsStartButtonLabel: "Start Conversation!",
   inviteFriendsMaxMembersReachedMessage: "You can add up to 10 people, including you.",
   inviteFriendsCreateErrorMessage: "Failed to start the conversation.",
+  inviteFriendsExistingConversationTitle: "You already have a conversation",
+  inviteFriendsExistingConversationMessage: "You already have a room with these people.",
+  inviteFriendsCreateNewAction: "Create new",
+  inviteFriendsContinuePreviousAction: "Continue",
 };
 
 const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary>> = {
@@ -94,6 +98,10 @@ const conversationDictionaries: Partial<Record<AppLocale, ConversationDictionary
     inviteFriendsStartButtonLabel: "대화 시작하기",
     inviteFriendsMaxMembersReachedMessage: "나를 포함해 최대 10명까지 초대할 수 있어요.",
     inviteFriendsCreateErrorMessage: "대화를 시작하지 못했습니다.",
+    inviteFriendsExistingConversationTitle: "이미 대화방이 있어요",
+    inviteFriendsExistingConversationMessage: "선택한 사람들과의 대화방이 이미 있어요.",
+    inviteFriendsCreateNewAction: "새로 만들기",
+    inviteFriendsContinuePreviousAction: "이어하기",
   },
   en: ENGLISH_CONVERSATION_DICTIONARY,
   ja: {
